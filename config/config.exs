@@ -11,6 +11,15 @@ config :sequin_stream,
   ecto_repos: [SequinStream.Repo],
   generators: [timestamp_type: :utc_datetime]
 
+config :sequin_stream, SequinStream.Repo,
+  migration_primary_key: [
+    name: :id,
+    type: :binary_id,
+    autogenerate: false,
+    read_after_writes: true,
+    default: {:fragment, "uuid_generate_v4()"}
+  ]
+
 # Configures the endpoint
 config :sequin_stream, SequinStreamWeb.Endpoint,
   url: [host: "localhost"],

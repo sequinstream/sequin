@@ -54,7 +54,10 @@ defmodule Sequin.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.2"},
-      {:typed_ecto_schema, "~> 0.4.1"}
+      {:typed_ecto_schema, "~> 0.4.1"},
+      {:yesql, "~> 1.0"},
+      {:faker, "~> 0.18.0", [only: :test]},
+      {:uuid, "~> 1.1"}
     ]
   end
 

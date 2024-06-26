@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: "postgres:16.3"
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: sequin_stream_dev
+
+  redis:
+    image: "redis:7.2.5"
+    ports:
+      - "6379:6379"

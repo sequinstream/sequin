@@ -10,7 +10,7 @@ import Config
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",
-  sequin_stream: [
+  sequin: [
     args: ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
@@ -31,9 +31,9 @@ config :phoenix, :json_library, Jason
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :sequin_stream, SequinStream.Mailer, adapter: Swoosh.Adapters.Local
+config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
-config :sequin_stream, SequinStream.Repo,
+config :sequin, Sequin.Repo,
   migration_primary_key: [
     name: :id,
     type: :binary_id,
@@ -43,24 +43,24 @@ config :sequin_stream, SequinStream.Repo,
   ]
 
 # Configures the endpoint
-config :sequin_stream, SequinStreamWeb.Endpoint,
+config :sequin, SequinWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: SequinStreamWeb.ErrorHTML, json: SequinStreamWeb.ErrorJSON],
+    formats: [html: SequinWeb.ErrorHTML, json: SequinWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: SequinStream.PubSub,
+  pubsub_server: Sequin.PubSub,
   live_view: [signing_salt: "Sm59ovfq"]
 
-config :sequin_stream,
-  ecto_repos: [SequinStream.Repo],
+config :sequin,
+  ecto_repos: [Sequin.Repo],
   generators: [timestamp_type: :utc_datetime]
 
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "3.4.0",
-  sequin_stream: [
+  sequin: [
     args: ~w(
       --config=tailwind.config.js
       --input=css/app.css

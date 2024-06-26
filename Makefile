@@ -1,6 +1,6 @@
 .PHONY: help
 
-APP_NAME ?= sequin_stream
+APP_NAME ?= sequin
 APP_VSN ?= `grep 'version:' mix.exs | cut -d '"' -f2`
 BUILD ?= `git rev-parse --short HEAD`
 THIS_USER := $(shell cat .secrets.json | jq -r '.["username"]')

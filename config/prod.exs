@@ -7,10 +7,10 @@ import Config
 # before starting your production server.
 config :logger, level: :info
 
-config :sequin_stream, SequinStreamWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
+config :sequin, SequinWeb.Endpoint, cache_static_manifest: "priv/static/cache_manifest.json"
 
 # Configures Swoosh API Client
-config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: SequinStream.Finch
+config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Sequin.Finch
 
 # Disable Swoosh Local Memory Storage
 config :swoosh, local: false

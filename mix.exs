@@ -1,9 +1,9 @@
-defmodule SequinStream.MixProject do
+defmodule Sequin.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :sequin_stream,
+      app: :sequin,
       version: "0.1.0",
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -18,7 +18,7 @@ defmodule SequinStream.MixProject do
   # Type `mix help compile.app` for more information.
   def application do
     [
-      mod: {SequinStream.Application, []},
+      mod: {Sequin.Application, []},
       extra_applications: [:logger, :runtime_tools]
     ]
   end
@@ -71,10 +71,10 @@ defmodule SequinStream.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["tailwind sequin_stream", "esbuild sequin_stream"],
+      "assets.build": ["tailwind sequin", "esbuild sequin"],
       "assets.deploy": [
-        "tailwind sequin_stream --minify",
-        "esbuild sequin_stream --minify",
+        "tailwind sequin --minify",
+        "esbuild sequin --minify",
         "phx.digest"
       ]
     ]

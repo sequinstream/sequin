@@ -1,2 +1,2 @@
 ExUnit.start()
-Ecto.Adapters.SQL.Sandbox.mode(SequinStream.Repo, :manual)
+Ecto.Adapters.SQL.Sandbox.mode(Sequin.Repo, :manual)

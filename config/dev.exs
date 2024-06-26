@@ -10,11 +10,11 @@ config :phoenix_live_view,
   debug_heex_annotations: true,
   enable_expensive_runtime_checks: true
 
-config :sequin_stream, SequinStream.Repo,
+config :sequin, Sequin.Repo,
   username: "postgres",
   password: "postgres",
   hostname: "localhost",
-  database: "sequin_stream_dev",
+  database: "sequin_dev",
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
@@ -25,7 +25,7 @@ config :sequin_stream, SequinStream.Repo,
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :sequin_stream, SequinStreamWeb.Endpoint,
+config :sequin, SequinWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
@@ -34,8 +34,8 @@ config :sequin_stream, SequinStreamWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "F9DmzIZCZ4Kl17OcwJgcvsRRH34s2lkEvq8HTA0IORAMsEMuWd+pSNUFsX4V9no/",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:sequin_stream, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:sequin_stream, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:sequin, ~w(--watch)]}
   ]
 
 # ## SSL Support
@@ -62,17 +62,17 @@ config :sequin_stream, SequinStreamWeb.Endpoint,
 # different ports.
 
 # Watch static and templates for browser reloading.
-config :sequin_stream, SequinStreamWeb.Endpoint,
+config :sequin, SequinWeb.Endpoint,
   live_reload: [
     patterns: [
       ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
       ~r"priv/gettext/.*(po)$",
-      ~r"lib/sequin_stream_web/(controllers|live|components)/.*(ex|heex)$"
+      ~r"lib/sequin_web/(controllers|live|components)/.*(ex|heex)$"
     ]
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :sequin_stream, dev_routes: true
+config :sequin, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 

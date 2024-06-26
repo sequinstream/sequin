@@ -1,4 +1,4 @@
-defmodule SequinStream.Repo.Migrations.CreateStreamTables do
+defmodule Sequin.Repo.Migrations.CreateStreamTables do
   use Ecto.Migration
 
   def change do

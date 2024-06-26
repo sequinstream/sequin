@@ -1,4 +1,4 @@
-defmodule SequinStreamWeb.ConnCase do
+defmodule SequinWeb.ConnCase do
   @moduledoc """
   This module defines the test case to be used by
   tests that require setting up a connection.
@@ -11,7 +11,7 @@ defmodule SequinStreamWeb.ConnCase do
   we enable the SQL sandbox, so changes done to the database
   are reverted at the end of every test. If you are using
   PostgreSQL, you can even run database tests asynchronously
-  by setting `use SequinStreamWeb.ConnCase, async: true`, although
+  by setting `use SequinWeb.ConnCase, async: true`, although
   this option is not recommended for other databases.
   """
 
@@ -19,20 +19,20 @@ defmodule SequinStreamWeb.ConnCase do
 
   using do
     quote do
-      use SequinStreamWeb, :verified_routes
+      use SequinWeb, :verified_routes
 
       import Phoenix.ConnTest
       import Plug.Conn
-      import SequinStreamWeb.ConnCase
+      import SequinWeb.ConnCase
       # The default endpoint for testing
-      @endpoint SequinStreamWeb.Endpoint
+      @endpoint SequinWeb.Endpoint
 
       # Import conveniences for testing with connections
     end
   end
 
   setup tags do
-    SequinStream.DataCase.setup_sandbox(tags)
+    Sequin.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

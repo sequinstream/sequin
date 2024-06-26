@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: "postgres:16.3"
+    image: "hbontempo/postgres-hll@sha256:356274403972d6c12fb3a77b5f6f7a0e87c3fb1113f298e5509d8e2051711730"
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048
     ports:
       - "5432:5432"

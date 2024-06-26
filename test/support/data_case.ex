@@ -18,12 +18,13 @@ defmodule Sequin.DataCase do
 
   alias Ecto.Adapters.SQL.Sandbox
 
-  using do
+  using opts do
     quote do
+      use Sequin.Case, unquote(opts)
+
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
-      import Sequin.DataCase
 
       alias Sequin.Repo
     end

@@ -8,7 +8,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    execute "create sequence if not exists stream_idx_seq start with 1 increment by 1",
+    execute "create sequence if not exists stream_idx_seq start with 10000 increment by 1",
             "drop sequence if exists stream_idx_seq"
 
     create table(:streams) do
@@ -31,7 +31,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :stream_id, :uuid, null: false, primary_key: true
       add :data_hash, :text, null: false
       add :data, :text, null: false
-      add :seq, :bigint, null: false
+      add :seq, :bigint, null: true
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -111,5 +111,10 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     end
 
     create unique_index(:outstanding_messages_count, [:consumer_id], prefix: "streams")
+
+    if Application.get_env(:sequin, :env) == :test do
+      execute "CREATE TABLE streams.messages_default PARTITION OF streams.messages DEFAULT;",
+              "select 1"
+    end
   end
 end

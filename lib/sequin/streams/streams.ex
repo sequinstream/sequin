@@ -1,6 +1,9 @@
 defmodule Sequin.Streams do
   @moduledoc false
+  import Ecto.Query
+
   alias Sequin.Repo
+  alias Sequin.Streams.Message
   alias Sequin.Streams.Stream
 
   def list, do: Repo.all(Stream)
@@ -47,5 +50,27 @@ defmodule Sequin.Streams do
     Repo.query!("""
     DROP TABLE IF EXISTS streams.messages_#{stream.idx};
     """)
+  end
+
+  # Messages
+
+  def get!(key, stream_id) do
+    key
+    |> Message.where_key_and_stream(stream_id)
+    |> Repo.one!()
+  end
+
+  def assign_message_seqs(limit \\ 10_000) do
+    subquery =
+      from(m in Message,
+        where: is_nil(m.seq),
+        order_by: [asc: m.updated_at],
+        select: %{key: m.key, stream_id: m.stream_id},
+        limit: ^limit
+      )
+
+    Repo.update_all(from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
+      set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]
+    )
   end
 end

@@ -17,8 +17,9 @@ defmodule SequinWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
-  using do
+  using opts do
     quote do
+      use Sequin.DataCase, unquote(opts)
       use SequinWeb, :verified_routes
 
       import Phoenix.ConnTest
@@ -31,8 +32,7 @@ defmodule SequinWeb.ConnCase do
     end
   end
 
-  setup tags do
-    Sequin.DataCase.setup_sandbox(tags)
+  setup _tags do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

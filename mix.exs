@@ -57,7 +57,8 @@ defmodule Sequin.MixProject do
       {:typed_ecto_schema, "~> 0.4.1"},
       {:yesql, "~> 1.0"},
       {:faker, "~> 0.18.0", [only: :test]},
-      {:uuid, "~> 1.1"}
+      {:uuid, "~> 1.1"},
+      {:mix_test_interactive, "~> 2.0", [only: :dev, runtime: false]}
     ]
   end
 

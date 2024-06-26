@@ -55,6 +55,7 @@ config :sequin, SequinWeb.Endpoint,
 
 config :sequin,
   ecto_repos: [Sequin.Repo],
+  env: Mix.env(),
   generators: [timestamp_type: :utc_datetime]
 
 # Configure tailwind (the version is required)

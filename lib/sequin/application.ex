@@ -7,7 +7,25 @@ defmodule Sequin.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
+    env = Application.get_env(:sequin, :env)
+    children = children(env)
+
+    # See https://hexdocs.pm/elixir/Supervisor.html
+    # for other strategies and supported options
+    opts = [strategy: :one_for_one, name: Sequin.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+
+  defp children(:test) do
+    base_children()
+  end
+
+  defp children(_) do
+    base_children() ++ [Sequin.Streams.Supervisor]
+  end
+
+  defp base_children do
+    [
       SequinWeb.Telemetry,
       Sequin.Repo,
       {DNSCluster, query: Application.get_env(:sequin, :dns_cluster_query) || :ignore},
@@ -19,11 +37,6 @@ defmodule Sequin.Application do
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]
-
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Sequin.Supervisor]
-    Supervisor.start_link(children, opts)
   end
 
   # Tell Phoenix to update the endpoint configuration

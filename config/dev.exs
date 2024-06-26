@@ -2,6 +2,9 @@ import Config
 
 config :logger, :console, format: "[$level] $message\n"
 
+config :mix_test_interactive,
+  clear: true
+
 config :phoenix, :plug_init_mode, :runtime
 config :phoenix, :stacktrace_depth, 20
 

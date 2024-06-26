@@ -60,6 +60,22 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
+  def assign_message_seqs_with_lock(limit \\ 10_000) do
+    lock_key = :erlang.phash2("assign_message_seqs_with_lock")
+
+    Repo.transact(fn ->
+      case acquire_lock(lock_key) do
+        :ok ->
+          assign_message_seqs(limit)
+
+          :ok
+
+        {:error, :locked} ->
+          {:error, :locked}
+      end
+    end)
+  end
+
   def assign_message_seqs(limit \\ 10_000) do
     subquery =
       from(m in Message,
@@ -72,5 +88,12 @@ defmodule Sequin.Streams do
     Repo.update_all(from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
       set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]
     )
+  end
+
+  defp acquire_lock(lock_key) do
+    case Repo.query("SELECT pg_try_advisory_xact_lock($1)", [lock_key]) do
+      {:ok, %{rows: [[true]]}} -> :ok
+      _ -> {:error, :locked}
+    end
   end
 end

@@ -19,15 +19,15 @@ defmodule SequinStreamWeb.ConnCase do
 
   using do
     quote do
+      use SequinStreamWeb, :verified_routes
+
+      import Phoenix.ConnTest
+      import Plug.Conn
+      import SequinStreamWeb.ConnCase
       # The default endpoint for testing
       @endpoint SequinStreamWeb.Endpoint
 
-      use SequinStreamWeb, :verified_routes
-
       # Import conveniences for testing with connections
-      import Plug.Conn
-      import Phoenix.ConnTest
-      import SequinStreamWeb.ConnCase
     end
   end
 

@@ -1,5 +1,7 @@
 defmodule SequinStreamWeb.Telemetry do
+  @moduledoc false
   use Supervisor
+
   import Telemetry.Metrics
 
   def start_link(arg) do
@@ -70,8 +72,7 @@ defmodule SequinStreamWeb.Telemetry do
       ),
       summary("sequin_stream.repo.query.idle_time",
         unit: {:native, :millisecond},
-        description:
-          "The time the connection spent waiting before being checked out for the query"
+        description: "The time the connection spent waiting before being checked out for the query"
       ),
 
       # VM Metrics

@@ -1,6 +1,15 @@
 import Config
 
-# Configure your database
+config :logger, :console, format: "[$level] $message\n"
+
+config :phoenix, :plug_init_mode, :runtime
+config :phoenix, :stacktrace_depth, 20
+
+config :phoenix_live_view,
+  # Configure your database
+  debug_heex_annotations: true,
+  enable_expensive_runtime_checks: true
+
 config :sequin_stream, SequinStream.Repo,
   username: "postgres",
   password: "postgres",
@@ -66,20 +75,13 @@ config :sequin_stream, SequinStreamWeb.Endpoint,
 config :sequin_stream, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
-config :logger, :console, format: "[$level] $message\n"
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.
-config :phoenix, :stacktrace_depth, 20
 
 # Initialize plugs at runtime for faster development compilation
-config :phoenix, :plug_init_mode, :runtime
-
-config :phoenix_live_view,
-  # Include HEEx debug annotations as HTML comments in rendered markup
-  debug_heex_annotations: true,
-  # Enable helpful, but potentially expensive runtime checks
-  enable_expensive_runtime_checks: true
+# Include HEEx debug annotations as HTML comments in rendered markup
+# Enable helpful, but potentially expensive runtime checks
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false

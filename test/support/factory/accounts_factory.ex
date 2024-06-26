@@ -9,8 +9,8 @@ defmodule Sequin.Factory.AccountsFactory do
   def account(attrs \\ []) do
     merge_attributes(
       %Account{
-        inserted_at: Factory.timestamp(),
-        updated_at: Factory.timestamp()
+        inserted_at: Factory.utc_datetime(),
+        updated_at: Factory.utc_datetime()
       },
       attrs
     )

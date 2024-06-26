@@ -38,6 +38,11 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     create unique_index(:messages, [:stream_id, :seq], prefix: "streams")
 
+    create index(:messages, [:stream_id, :seq, :updated_at],
+             prefix: "streams",
+             where: "seq IS NULL"
+           )
+
     execute "create sequence streams.messages_seq owned by streams.messages.seq;",
             "drop sequence if exists streams.messages_seq"
 

@@ -3,6 +3,7 @@ defmodule Sequin.Factory.StreamsFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Factory
+  alias Sequin.Factory.AccountsFactory
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerState
@@ -49,7 +50,7 @@ defmodule Sequin.Factory.StreamsFactory do
         stream_id: Factory.uuid(),
         data_hash: Faker.Lorem.sentence(),
         data: Jason.encode!(%{sample: "data"}),
-        seq: Enum.random(1..1000)
+        seq: :erlang.unique_integer([:positive])
       },
       attrs
     )
@@ -86,7 +87,12 @@ defmodule Sequin.Factory.StreamsFactory do
   end
 
   def insert_consumer_state!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {consumer_id, attrs} = Map.pop_lazy(attrs, :consumer_id, fn -> insert_consumer!().id end)
+
     attrs
+    |> Map.put(:consumer_id, consumer_id)
     |> consumer_state()
     |> Repo.insert!()
   end
@@ -114,7 +120,14 @@ defmodule Sequin.Factory.StreamsFactory do
   end
 
   def insert_consumer!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+    {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!(account_id: account_id).id end)
+
     attrs
+    |> Map.put(:stream_id, stream_id)
+    |> Map.put(:account_id, account_id)
     |> consumer()
     |> Repo.insert!()
   end
@@ -138,7 +151,12 @@ defmodule Sequin.Factory.StreamsFactory do
   end
 
   def insert_stream!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
     attrs
+    |> Map.put(:account_id, account_id)
     |> stream()
     |> Repo.insert!()
   end

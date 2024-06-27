@@ -11,6 +11,8 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Streams.OutstandingMessage
   alias Sequin.Streams.Stream
 
+  def message_data, do: Faker.Lorem.sentence()
+
   # OutstandingMessage
 
   def outstanding_message(attrs \\ []) do
@@ -44,12 +46,14 @@ defmodule Sequin.Factory.StreamsFactory do
   # Message
 
   def message(attrs \\ []) do
+    {data, attrs} = Map.pop_lazy(attrs, :data, fn -> message_data() end)
+
     merge_attributes(
       %Message{
         key: Factory.uuid(),
         stream_id: Factory.uuid(),
-        data_hash: Faker.Lorem.sentence(),
-        data: Jason.encode!(%{sample: "data"}),
+        data_hash: Base.encode64(:crypto.hash(:sha256, data)),
+        data: data,
         seq: :erlang.unique_integer([:positive])
       },
       attrs

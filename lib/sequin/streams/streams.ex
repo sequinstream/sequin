@@ -97,9 +97,9 @@ defmodule Sequin.Streams do
 
   # Messages
 
-  def get!(key, stream_id) do
+  def message!(key, stream_id) do
     key
-    |> Message.where_key_and_stream(stream_id)
+    |> Message.where_key_and_stream_id(stream_id)
     |> Repo.one!()
   end
 
@@ -138,6 +138,54 @@ defmodule Sequin.Streams do
       {:ok, %{rows: [[true]]}} -> :ok
       _ -> {:error, :locked}
     end
+  end
+
+  def upsert_messages(messages, is_retry? \\ false) do
+    messages =
+      Enum.map(messages, fn message ->
+        message
+        |> Sequin.Map.from_ecto()
+        |> Message.put_data_hash()
+        |> Map.put(:updated_at, DateTime.utc_now())
+        |> Map.put(:inserted_at, DateTime.utc_now())
+        |> Map.put(:seq, nil)
+      end)
+
+    on_conflict =
+      from(m in Message,
+        where: fragment("? IS DISTINCT FROM ?", m.data_hash, fragment("EXCLUDED.data_hash")),
+        update: [
+          set: [
+            data: fragment("EXCLUDED.data"),
+            data_hash: fragment("EXCLUDED.data_hash"),
+            updated_at: fragment("EXCLUDED.updated_at"),
+            seq: nil
+          ]
+        ]
+      )
+
+    {count, nil} =
+      Repo.insert_all(
+        Message,
+        messages,
+        on_conflict: on_conflict,
+        conflict_target: [:key, :stream_id],
+        timeout: :timer.seconds(30)
+      )
+
+    {:ok, count}
+  rescue
+    e in Postgrex.Error ->
+      if e.postgres.code == :character_not_in_repertoire and is_retry? == false do
+        messages =
+          Enum.map(messages, fn %{data: data} = message ->
+            Map.put(message, :data, String.replace(data, "\u0000", ""))
+          end)
+
+        upsert_messages(messages, true)
+      else
+        reraise e, __STACKTRACE__
+      end
   end
 
   # Outstanding Messages

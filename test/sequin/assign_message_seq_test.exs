@@ -13,10 +13,10 @@ defmodule Sequin.AssignMessageSeqTest do
 
       Streams.assign_message_seqs()
 
-      new_messages = Enum.map(new_messages, &Streams.get!(&1.key, &1.stream_id))
+      new_messages = Enum.map(new_messages, &Streams.message!(&1.key, &1.stream_id))
 
       updated_existing_message_seqs =
-        existing_messages |> Enum.map(&Streams.get!(&1.key, &1.stream_id)) |> Enum.map(& &1.seq)
+        existing_messages |> Enum.map(&Streams.message!(&1.key, &1.stream_id)) |> Enum.map(& &1.seq)
 
       assert Enum.all?(new_messages, &(not is_nil(&1.seq)))
       assert_lists_equal(existing_message_seqs, updated_existing_message_seqs)
@@ -33,7 +33,7 @@ defmodule Sequin.AssignMessageSeqTest do
 
       assert_receive {AssignMessageSeqServer, :assign_done}
 
-      messages = Enum.map(messages, &Streams.get!(&1.key, &1.stream_id))
+      messages = Enum.map(messages, &Streams.message!(&1.key, &1.stream_id))
 
       assert Enum.all?(messages, & &1.seq)
     end

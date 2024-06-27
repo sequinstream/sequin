@@ -24,7 +24,11 @@ defmodule Sequin.Streams.Message do
     |> validate_required([:stream_id, :key, :data, :data_hash])
   end
 
-  def where_key_and_stream(query \\ base_query(), key, stream_id) do
+  def put_data_hash(msg) do
+    Map.put(msg, :data_hash, Base.encode64(:crypto.hash(:sha256, msg.data)))
+  end
+
+  def where_key_and_stream_id(query \\ base_query(), key, stream_id) do
     from([message: m] in query, where: m.key == ^key and m.stream_id == ^stream_id)
   end
 

@@ -45,6 +45,29 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              where: "seq IS NULL"
            )
 
+    # The following trigger+func ensures that `seq` is set to null on updates, if it's not already.
+    # This is to prevent mistakes in situations where `messages` is updated directly, bypassing `AssignMessageSeqWorker`.
+
+    execute """
+            create or replace function streams.reset_seq_on_update()
+            returns trigger as $$
+            begin
+                new.seq := null;
+                return new;
+            end;
+            $$ language plpgsql;
+            """,
+            "drop function if exists streams.reset_seq_on_update()"
+
+    execute """
+            create trigger trg_reset_seq_on_update
+            before update on streams.messages
+            for each row
+            when (old.seq is not null and new.seq is not null)
+            execute function streams.reset_seq_on_update();
+            """,
+            "drop trigger if exists trg_reset_seq_on_update on streams.messages"
+
     execute "create sequence streams.messages_seq owned by streams.messages.seq;",
             "drop sequence if exists streams.messages_seq"
 

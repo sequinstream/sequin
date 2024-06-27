@@ -16,6 +16,8 @@ defmodule Sequin.Streams.OutstandingMessage do
     field :not_visible_until, :utc_datetime_usec
     field :state, Ecto.Enum, values: [:delivered, :available, :pending_redelivery]
 
+    field :message, :map, virtual: true
+
     timestamps(type: :utc_datetime_usec)
   end
 
@@ -36,6 +38,16 @@ defmodule Sequin.Streams.OutstandingMessage do
 
   def where_consumer_id(query \\ base_query(), consumer_id) do
     from([outstanding_message: om] in query, where: om.consumer_id == ^consumer_id)
+  end
+
+  def where_deliverable(query \\ base_query()) do
+    now = DateTime.utc_now()
+
+    from([outstanding_message: om] in query,
+      where:
+        om.state == :available or
+          (om.state in [:delivered, :pending_redelivery] and om.not_visible_until <= ^now)
+    )
   end
 
   defp base_query(query \\ __MODULE__) do

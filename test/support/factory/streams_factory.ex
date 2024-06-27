@@ -16,6 +16,14 @@ defmodule Sequin.Factory.StreamsFactory do
   # OutstandingMessage
 
   def outstanding_message(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {state, attrs} = Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:delivered, :available, :pending_redelivery]) end)
+
+    not_visible_until =
+      unless state == :available do
+        Factory.utc_datetime_usec()
+      end
+
     merge_attributes(
       %OutstandingMessage{
         consumer_id: Factory.uuid(),
@@ -24,8 +32,8 @@ defmodule Sequin.Factory.StreamsFactory do
         message_key: Factory.uuid(),
         message_seq: Enum.random(1..1000),
         message_stream_id: Factory.uuid(),
-        not_visible_until: Factory.timestamp(),
-        state: Factory.one_of([:delivered, :available, :pending_redelivery])
+        not_visible_until: not_visible_until,
+        state: state
       },
       attrs
     )
@@ -38,7 +46,19 @@ defmodule Sequin.Factory.StreamsFactory do
   end
 
   def insert_outstanding_message!(attrs \\ []) do
-    attrs
+    attrs = Map.new(attrs)
+
+    {message, attrs} = Map.pop(attrs, :message)
+
+    message_attrs =
+      if message do
+        %{message_key: message.key, message_stream_id: message.stream_id, message_seq: message.seq}
+      else
+        %{}
+      end
+
+    message_attrs
+    |> Map.merge(attrs)
     |> outstanding_message()
     |> Repo.insert!()
   end
@@ -46,6 +66,8 @@ defmodule Sequin.Factory.StreamsFactory do
   # Message
 
   def message(attrs \\ []) do
+    attrs = Map.new(attrs)
+
     {data, attrs} = Map.pop_lazy(attrs, :data, fn -> message_data() end)
 
     merge_attributes(

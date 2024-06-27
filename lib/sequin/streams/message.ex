@@ -32,6 +32,15 @@ defmodule Sequin.Streams.Message do
     from([message: m] in query, where: m.key == ^key and m.stream_id == ^stream_id)
   end
 
+  def where_key_and_stream_id_in(query \\ base_query(), key_stream_id_pairs) do
+    {keys, stream_ids} = Enum.unzip(key_stream_id_pairs)
+    stream_ids = Enum.map(stream_ids, &UUID.string_to_binary!/1)
+
+    from([message: m] in query,
+      where: fragment("(?, ?) IN (SELECT UNNEST(?::text[]), UNNEST(?::uuid[]))", m.key, m.stream_id, ^keys, ^stream_ids)
+    )
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(m in query, as: :message)
   end

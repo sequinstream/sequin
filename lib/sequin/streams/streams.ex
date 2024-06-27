@@ -95,6 +95,55 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
+  def next_for_consumer(%Consumer{} = consumer, opts \\ []) do
+    batch_size = Keyword.get(opts, :batch_size, 100)
+    not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
+    now = NaiveDateTime.utc_now()
+
+    # Subquery to select ids of outstanding messages
+    subquery =
+      consumer.id
+      |> OutstandingMessage.where_consumer_id()
+      |> OutstandingMessage.where_deliverable()
+      |> order_by([om], asc_nulls_first: om.last_delivered_at)
+      |> limit(^batch_size)
+      |> select([om], om.id)
+
+    # Update the selected outstanding messages
+    {_count, outstanding_messages} =
+      from(om in OutstandingMessage, where: om.id in subquery(subquery))
+      |> select([om], om)
+      |> Repo.update_all(
+        set: [
+          state: :delivered,
+          not_visible_until: not_visible_until,
+          deliver_count: dynamic([om], om.deliver_count + 1),
+          last_delivered_at: now
+        ]
+      )
+
+    message_key_and_stream_ids = Enum.map(outstanding_messages, fn om -> {om.message_key, om.message_stream_id} end)
+
+    # Retrieve messages and outstanding message info in one query
+    messages =
+      message_key_and_stream_ids
+      |> Message.where_key_and_stream_id_in()
+      |> Repo.all()
+
+    # Wrap messages with outstanding message info
+    wrapped =
+      Enum.map(messages, fn message ->
+        om =
+          Sequin.Enum.find!(outstanding_messages, fn om ->
+            om.message_key == message.key and om.message_stream_id == message.stream_id
+          end)
+
+        %{om | message: message}
+      end)
+
+    {:ok, wrapped}
+  end
+
   # Messages
 
   def message!(key, stream_id) do

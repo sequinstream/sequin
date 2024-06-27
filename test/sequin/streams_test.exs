@@ -74,6 +74,197 @@ defmodule Sequin.StreamsTest do
     end
   end
 
+  describe "next_for_consumer/2" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+      consumer = StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
+      {:ok, stream: stream, consumer: consumer}
+    end
+
+    test "returns nothing if outstanding messages is empty", %{consumer: consumer} do
+      assert {:ok, []} = Streams.next_for_consumer(consumer)
+    end
+
+    test "delivers available outstanding messages", %{stream: stream, consumer: consumer} do
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      outstanding_message =
+        StreamsFactory.insert_outstanding_message!(%{
+          consumer_id: consumer.id,
+          message: message,
+          state: :available,
+          deliver_count: 0
+        })
+
+      assert {:ok, [delivered]} = Streams.next_for_consumer(consumer)
+      assert delivered.id == outstanding_message.id
+      assert delivered.state == :delivered
+      assert delivered.not_visible_until
+      assert delivered.deliver_count == 1
+      assert delivered.last_delivered_at
+      assert delivered.message == message
+    end
+
+    test "redelivers expired outstanding messages", %{stream: stream, consumer: consumer} do
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      outstanding_message =
+        StreamsFactory.insert_outstanding_message!(%{
+          consumer_id: consumer.id,
+          message: message,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), -1, :second),
+          deliver_count: 1
+        })
+
+      assert {:ok, [redelivered]} = Streams.next_for_consumer(consumer)
+      assert redelivered.id == outstanding_message.id
+      assert redelivered.state == :delivered
+      assert redelivered.not_visible_until
+      assert redelivered.deliver_count == 2
+      assert redelivered.last_delivered_at
+      assert redelivered.message == message
+    end
+
+    test "does not redeliver unexpired outstanding messages", %{stream: stream, consumer: consumer} do
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+      })
+
+      assert {:ok, []} = Streams.next_for_consumer(consumer)
+    end
+
+    test "delivers only up to batch_size", %{stream: stream, consumer: consumer} do
+      for _ <- 1..3 do
+        message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+        StreamsFactory.insert_outstanding_message!(%{
+          consumer_id: consumer.id,
+          message: message,
+          state: :available
+        })
+      end
+
+      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
+    end
+
+    test "does not deliver outstanding messages for another consumer", %{stream: stream, consumer: consumer} do
+      other_consumer = StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: other_consumer.id,
+        message: message,
+        state: :available
+      })
+
+      assert {:ok, []} = Streams.next_for_consumer(consumer)
+    end
+
+    test "with a mix of available and unavailble messages, delivers only available outstanding messages", %{
+      stream: stream,
+      consumer: consumer
+    } do
+      # Available messages
+      available =
+        for _ <- 1..3 do
+          msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+          StreamsFactory.insert_outstanding_message!(%{
+            consumer_id: consumer.id,
+            message: msg,
+            state: :available
+          })
+        end
+
+      redeliver =
+        for _ <- 1..3 do
+          msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+          StreamsFactory.insert_outstanding_message!(%{
+            consumer_id: consumer.id,
+            message: msg,
+            state: :delivered,
+            not_visible_until: DateTime.add(DateTime.utc_now(), -30, :second)
+          })
+        end
+
+      # Not available message
+      for _ <- 1..3 do
+        msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+        StreamsFactory.insert_outstanding_message!(%{
+          consumer_id: consumer.id,
+          message: msg,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        })
+      end
+
+      assert {:ok, messages} = Streams.next_for_consumer(consumer)
+      assert length(messages) == length(available ++ redeliver)
+      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:id]))
+    end
+
+    test "delivers messages according to asc last_delivered_at nulls first", %{stream: stream, consumer: consumer} do
+      now = DateTime.utc_now()
+
+      # Available message (null last_delivered_at)
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message1,
+        state: :available,
+        last_delivered_at: nil
+      })
+
+      # Oldest delivered message
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message2,
+        state: :delivered,
+        last_delivered_at: DateTime.add(now, -2, :minute),
+        not_visible_until: DateTime.add(now, -1, :minute)
+      })
+
+      # Second oldest delivered message
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message3,
+        state: :delivered,
+        last_delivered_at: DateTime.add(now, -1, :minute),
+        not_visible_until: DateTime.add(now, -1, :minute)
+      })
+
+      # Newest delivered message (should not be returned)
+      message4 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message4,
+        state: :delivered,
+        last_delivered_at: now,
+        not_visible_until: DateTime.add(now, -1, :minute)
+      })
+
+      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 3)
+      assert length(delivered) == 3
+      delivered_message_keys = Enum.map(delivered, & &1.message.key)
+      assert_lists_equal(delivered_message_keys, [message1.key, message2.key, message3.key])
+    end
+  end
+
   test "updating a message resets its seq to nil via a trigger" do
     msg = StreamsFactory.insert_message!(%{seq: 1})
 

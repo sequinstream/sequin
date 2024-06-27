@@ -39,3 +39,5 @@ npm-debug.log
 .DS_Store
 
 .secrets.json
+
+.vscode/settings.json

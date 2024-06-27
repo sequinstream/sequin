@@ -19,6 +19,8 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     end
 
     create unique_index(:streams, [:idx])
+    # Required for composite foreign keys pointing to this table
+    create unique_index(:streams, [:id, :account_id])
 
     execute "create schema if not exists streams", "drop schema if exists streams"
 
@@ -46,12 +48,20 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     execute "create sequence streams.messages_seq owned by streams.messages.seq;",
             "drop sequence if exists streams.messages_seq"
 
-    execute "create type streams.message_state as enum ('delivered', 'available', 'pending_redelivery');",
-            "drop type if exists streams.message_state"
+    execute "create type streams.outstanding_message_state as enum ('delivered', 'available', 'pending_redelivery');",
+            "drop type if exists streams.outstanding_message_state"
 
     create table(:consumers) do
-      add :stream_id, references(:streams, on_delete: :delete_all), null: false
-      add :account_id, references(:accounts, on_delete: :delete_all), null: false
+      # Using a composite foreign key for stream_id
+      add :account_id, :uuid, null: false
+
+      add :stream_id,
+          references(:streams,
+            on_delete: :delete_all,
+            with: [account_id: :account_id],
+            match: :full
+          ),
+          null: false
 
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000
@@ -66,16 +76,26 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     create table(:consumer_states, prefix: "streams", primary_key: false) do
       add :consumer_id, :uuid, null: false, primary_key: true
       add :message_seq_cursor, :bigint, null: false, default: 0
+      add :count_pulled_into_outstanding, :bigint, null: false, default: 0
 
       timestamps()
     end
 
+    create unique_index(:consumer_states, [:consumer_id], prefix: "streams")
+
+    create table(:consumer_pending_messages_count, prefix: "streams") do
+      add :consumer_id, :uuid, null: false, primary_key: true
+      add :count, :integer, null: false
+    end
+
+    create unique_index(:consumer_pending_messages_count, [:consumer_id], prefix: "streams")
+
     create table(:outstanding_messages, prefix: "streams") do
-      add :consumer_id, :text, null: false
+      add :consumer_id, :uuid, null: false
       add :message_seq, :bigint, null: false
       add :message_key, :text, null: false
       add :message_stream_id, :uuid, null: false
-      add :state, :"streams.message_state", null: false
+      add :state, :"streams.outstanding_message_state", null: false
       add :not_visible_until, :utc_datetime_usec
       add :deliver_count, :integer, null: false, default: 0
       add :last_delivered_at, :utc_datetime_usec
@@ -104,13 +124,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              ],
              prefix: "streams"
            )
-
-    create table(:outstanding_messages_count, prefix: "streams") do
-      add :consumer_id, :text, null: false
-      add :count, :integer, null: false
-    end
-
-    create unique_index(:outstanding_messages_count, [:consumer_id], prefix: "streams")
 
     if Application.get_env(:sequin, :env) == :test do
       execute "CREATE TABLE streams.messages_default PARTITION OF streams.messages DEFAULT;",

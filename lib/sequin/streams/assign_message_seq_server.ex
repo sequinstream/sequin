@@ -34,7 +34,7 @@ defmodule Sequin.Streams.AssignMessageSeqServer do
 
   @impl GenServer
   def init(opts) do
-    interval = Keyword.get(opts, :interval_ms, 50)
+    interval = Keyword.get(opts, :interval_ms, 1)
     test_pid = Keyword.get(opts, :test_pid, nil)
 
     if test_pid do

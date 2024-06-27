@@ -3,7 +3,11 @@ defmodule Sequin.Streams do
   import Ecto.Query
 
   alias Sequin.Repo
+  alias Sequin.Streams.Consumer
+  alias Sequin.Streams.ConsumerState
   alias Sequin.Streams.Message
+  alias Sequin.Streams.OutstandingMessage
+  alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
 
   def list, do: Repo.all(Stream)
@@ -52,6 +56,41 @@ defmodule Sequin.Streams do
     """)
   end
 
+  # Consumers
+
+  def consumer!(consumer_id) do
+    consumer_id
+    |> Consumer.where_id()
+    |> Repo.one!()
+  end
+
+  def create_consumer_with_lifecycle(attrs) do
+    Repo.transact(fn ->
+      with {:ok, consumer} <- create_consumer(attrs),
+           {:ok, _} <- create_consumer_state(consumer) do
+        {:ok, consumer}
+      end
+    end)
+  end
+
+  def create_consumer(attrs) do
+    %Consumer{}
+    |> Consumer.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def create_consumer_state(%Consumer{} = consumer) do
+    %ConsumerState{}
+    |> ConsumerState.create_changeset(%{consumer_id: consumer.id})
+    |> Repo.insert()
+  end
+
+  def consumer_state(consumer_id) do
+    consumer_id
+    |> ConsumerState.where_consumer_id()
+    |> Repo.one!()
+  end
+
   # Messages
 
   def get!(key, stream_id) do
@@ -95,5 +134,36 @@ defmodule Sequin.Streams do
       {:ok, %{rows: [[true]]}} -> :ok
       _ -> {:error, :locked}
     end
+  end
+
+  # Outstanding Messages
+
+  def outstanding_messages_for_consumer(consumer_id) do
+    consumer_id
+    |> OutstandingMessage.where_consumer_id()
+    |> Repo.all()
+  end
+
+  def populate_outstanding_messages(%Consumer{} = consumer) do
+    now = NaiveDateTime.utc_now()
+
+    res =
+      Query.populate_outstanding_messages(
+        consumer_id: UUID.string_to_binary!(consumer.id),
+        stream_id: UUID.string_to_binary!(consumer.stream_id),
+        now: now,
+        max_slots: consumer.max_ack_pending * 5,
+        table_schema: "streams"
+      )
+
+    case res do
+      {:ok, _} -> :ok
+      error -> error
+    end
+  end
+
+  def populate_outstanding_messages(consumer_id) do
+    consumer = consumer!(consumer_id)
+    populate_outstanding_messages(consumer)
   end
 end

@@ -3,10 +3,11 @@ defmodule Sequin.Streams.OutstandingMessage do
   use Sequin.Schema
 
   import Ecto.Changeset
+  import Ecto.Query
 
   @schema_prefix "streams"
   typed_schema "outstanding_messages" do
-    field :consumer_id, :string
+    field :consumer_id, Ecto.UUID
     field :deliver_count, :integer
     field :last_delivered_at, :utc_datetime_usec
     field :message_key, :string
@@ -31,5 +32,13 @@ defmodule Sequin.Streams.OutstandingMessage do
       :last_delivered_at
     ])
     |> validate_required([:consumer_id, :message_seq, :message_key, :message_stream_id, :state, :deliver_count])
+  end
+
+  def where_consumer_id(query \\ base_query(), consumer_id) do
+    from([outstanding_message: om] in query, where: om.consumer_id == ^consumer_id)
+  end
+
+  defp base_query(query \\ __MODULE__) do
+    from(om in query, as: :outstanding_message)
   end
 end

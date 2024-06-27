@@ -26,7 +26,7 @@ defmodule Sequin.Streams do
 
   defp create_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    CREATE TABLE streams.records_#{stream.idx} PARTITION OF streams.records FOR VALUES IN ('#{stream.id}');
+    CREATE TABLE streams.messages_#{stream.idx} PARTITION OF streams.messages FOR VALUES IN ('#{stream.id}');
     """)
   end
 
@@ -45,7 +45,7 @@ defmodule Sequin.Streams do
 
   defp drop_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    DROP TABLE IF EXISTS streams.records_#{stream.idx};
+    DROP TABLE IF EXISTS streams.messages_#{stream.idx};
     """)
   end
 end

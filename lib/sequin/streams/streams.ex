@@ -58,6 +58,10 @@ defmodule Sequin.Streams do
 
   # Consumers
 
+  def all_consumers do
+    Repo.all(Consumer)
+  end
+
   def consumer!(consumer_id) do
     consumer_id
     |> Consumer.where_id()
@@ -142,6 +146,22 @@ defmodule Sequin.Streams do
     consumer_id
     |> OutstandingMessage.where_consumer_id()
     |> Repo.all()
+  end
+
+  def populate_outstanding_messages_with_lock(consumer_id) do
+    lock_key = :erlang.phash2(["populate_outstanding_messages_with_lock", consumer_id])
+
+    Repo.transact(fn ->
+      case acquire_lock(lock_key) do
+        :ok ->
+          populate_outstanding_messages(consumer_id)
+
+          :ok
+
+        {:error, :locked} ->
+          {:error, :locked}
+      end
+    end)
   end
 
   def populate_outstanding_messages(%Consumer{} = consumer) do

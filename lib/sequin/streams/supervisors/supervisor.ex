@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.Supervisor do
+defmodule Sequin.Streams.Supervisors.Supervisor do
   @moduledoc """
   """
   use Supervisor
@@ -15,7 +15,9 @@ defmodule Sequin.Streams.Supervisor do
 
   defp children do
     [
-      Sequin.Streams.AssignMessageSeqServer
+      Sequin.Streams.AssignMessageSeqServer,
+      Sequin.Streams.Supervisors.ConsumerSupervisor,
+      Sequin.Streams.Supervisors.ConsumerSupervisorStarter
     ]
   end
 end

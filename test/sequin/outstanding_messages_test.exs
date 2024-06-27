@@ -3,6 +3,7 @@ defmodule Sequin.OutstandingMessagesTest do
 
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
+  alias Sequin.Streams.PopulateOutstandingMessagesServer
 
   describe "buffering messages into outstanding messages" do
     @max_ack_pending 10
@@ -108,6 +109,55 @@ defmodule Sequin.OutstandingMessagesTest do
       :ok = Streams.populate_outstanding_messages(consumer)
 
       assert %{count_pulled_into_outstanding: 0, message_seq_cursor: 0} = Streams.consumer_state(consumer.id)
+    end
+  end
+
+  describe "PopulateOutstandingMessagesServer" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+
+      {:ok, consumer} =
+        [stream_id: stream.id, account_id: stream.account_id]
+        |> StreamsFactory.consumer_attrs()
+        |> Streams.create_consumer_with_lifecycle()
+
+      %{consumer: consumer}
+    end
+
+    test "populates outstanding messages for a consumer", %{consumer: consumer} do
+      messages = for n <- 1..5, do: StreamsFactory.insert_message!(%{stream_id: consumer.stream_id, seq: n})
+
+      # Use a long interval to prevent the server from querying the db while it's being
+      # killed, which produces noisy logs
+      start_supervised!(
+        {PopulateOutstandingMessagesServer, consumer_id: consumer.id, test_pid: self(), interval_ms: 5_000}
+      )
+
+      assert_receive {PopulateOutstandingMessagesServer, :populate_done}
+
+      outstanding_messages = Streams.outstanding_messages_for_consumer(consumer.id)
+      assert length(outstanding_messages) == 5
+
+      for message <- messages do
+        assert Enum.any?(outstanding_messages, fn om ->
+                 om.message_key == message.key && om.message_seq == message.seq &&
+                   om.message_stream_id == message.stream_id
+               end)
+      end
+    end
+
+    test "updates consumer state after populating outstanding messages", %{consumer: consumer} do
+      for n <- 1..5, do: StreamsFactory.insert_message!(%{stream_id: consumer.stream_id, seq: n})
+
+      start_supervised!(
+        {PopulateOutstandingMessagesServer, consumer_id: consumer.id, test_pid: self(), interval_ms: 5_000}
+      )
+
+      assert_receive {PopulateOutstandingMessagesServer, :populate_done}
+
+      consumer_state = Streams.consumer_state(consumer.id)
+      assert consumer_state.message_seq_cursor == 5
+      assert consumer_state.count_pulled_into_outstanding == 5
     end
   end
 end

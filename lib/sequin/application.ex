@@ -21,11 +21,12 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++ [Sequin.Streams.Supervisor]
+    base_children() ++ [Sequin.Streams.Supervisors.Supervisor]
   end
 
   defp base_children do
     [
+      Sequin.ProcessRegistry,
       SequinWeb.Telemetry,
       Sequin.Repo,
       {DNSCluster, query: Application.get_env(:sequin, :dns_cluster_query) || :ignore},

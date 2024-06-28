@@ -54,6 +54,15 @@ func SaveContext(ctx Context) error {
 }
 
 func LoadContext(name string) (*Context, error) {
+	if name == "" {
+		// Return default context if no name is specified
+		return &Context{
+			Name:        "default",
+			Description: "default context",
+			ServerURL:   "http://localhost:4000",
+		}, nil
+	}
+
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("could not get user home directory: %w", err)

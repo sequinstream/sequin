@@ -29,9 +29,11 @@ type Stream struct {
 
 // AddStreamCommands adds all stream-related commands to the given app
 func AddStreamCommands(app *fisk.Application, config *Config) {
-	streamCmd := app.Command("stream", "Stream related commands")
+	stream := app.Command("stream", "Stream related commands")
 
-	streamCmd.Command("ls", "List streams").Action(func(c *fisk.ParseContext) error {
+	addCheat("stream", stream)
+
+	stream.Command("ls", "List streams").Action(func(c *fisk.ParseContext) error {
 		return streamLs(c, config)
 	})
 }

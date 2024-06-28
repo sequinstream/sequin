@@ -16,11 +16,9 @@ var (
 )
 
 func main() {
-	help := `Sequin Utility
+	help := `Sequin CLI
 
-Sequin Server and JetStream administration.
-
-See 'nats cheat' for a quick cheatsheet of commands`
+See 'sequin cheat' for a quick cheatsheet of commands`
 
 	scli := fisk.New("sequin", help)
 	scli.Author("Sequin Authors <founders@sequin.io>")

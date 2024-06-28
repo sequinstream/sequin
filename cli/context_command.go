@@ -22,9 +22,12 @@ type ctxCommand struct {
 	serverURL   string
 }
 
-func AddContextCommands(app *fisk.Application, _ *Config) {
+func AddContextCommands(app *fisk.Application, _config *Config) {
 	cmd := &ctxCommand{}
 	ctx := app.Command("context", "Manage sequin configuration contexts")
+
+	// Add cheats
+	addCheat("context", ctx)
 
 	create := ctx.Command("create", "Create or update a context").Action(cmd.createAction)
 	create.Arg("name", "The context name").Required().StringVar(&cmd.name)

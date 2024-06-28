@@ -39,9 +39,8 @@ defmodule SequinWeb.ConnCase do
   end
 
   def authenticated_conn(%{conn: conn}) do
+    # TODO: Right now, FetchUser just uses this - in future, we'll need to add to conn here
     account = AccountsFactory.insert_account!()
-    # TODO: Move out of assigns when we have a proper authentication system
-    conn = Plug.Conn.assign(conn, :account_id, account.id)
     {:ok, conn: conn, account: account}
   end
 end

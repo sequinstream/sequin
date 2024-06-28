@@ -1,6 +1,8 @@
 defmodule SequinWeb.Router do
   use SequinWeb, :router
 
+  alias SequinWeb.Plugs.FetchUser
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -12,6 +14,7 @@ defmodule SequinWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug FetchUser
   end
 
   scope "/api", SequinWeb do

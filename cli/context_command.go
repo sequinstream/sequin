@@ -2,7 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"strings"
+	"text/tabwriter"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
 
 	"sequin-cli/context"
@@ -26,7 +30,13 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	create.Flag("description", "Set a friendly description for this context").StringVar(&cmd.description)
 	create.Flag("server-url", "The server URL for this context").Required().StringVar(&cmd.serverURL)
 
-	// Add more subcommands like list, show, delete as needed
+	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
+
+	info := ctx.Command("info", "Show details of a specific context").Action(cmd.infoAction)
+	info.Arg("name", "The context name").StringVar(&cmd.name)
+
+	rm := ctx.Command("rm", "Remove a context").Action(cmd.removeAction)
+	rm.Arg("name", "The context name").StringVar(&cmd.name)
 }
 
 func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
@@ -42,5 +52,89 @@ func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
 	}
 
 	fmt.Printf("Context '%s' created successfully.\n", c.name)
+	return nil
+}
+
+func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
+	contexts, err := context.ListContexts()
+	if err != nil {
+		return fmt.Errorf("could not list contexts: %w", err)
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "NAME\tDESCRIPTION\tSERVER URL")
+	for _, ctx := range contexts {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", ctx.Name, ctx.Description, ctx.ServerURL)
+	}
+	w.Flush()
+	return nil
+}
+
+func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
+	if c.name == "" {
+		err := c.pickContext("Choose a context to show info for:")
+		if err != nil {
+			return err
+		}
+	}
+
+	ctx, err := context.LoadContext(c.name)
+	if err != nil {
+		return fmt.Errorf("could not load context: %w", err)
+	}
+
+	fmt.Printf("Name: %s\n", ctx.Name)
+	fmt.Printf("Description: %s\n", ctx.Description)
+	fmt.Printf("Server URL: %s\n", ctx.ServerURL)
+	return nil
+}
+
+func (c *ctxCommand) removeAction(_ *fisk.ParseContext) error {
+	if c.name == "" {
+		err := c.pickContext("Choose a context to remove:")
+		if err != nil {
+			return err
+		}
+	}
+
+	err := context.RemoveContext(c.name)
+	if err != nil {
+		return fmt.Errorf("could not remove context: %w", err)
+	}
+
+	fmt.Printf("Context '%s' removed successfully.\n", c.name)
+	return nil
+}
+
+func (c *ctxCommand) pickContext(message string) error {
+	contexts, err := context.ListContexts()
+	if err != nil {
+		return fmt.Errorf("could not list contexts: %w", err)
+	}
+
+	if len(contexts) == 0 {
+		return fmt.Errorf("no contexts available")
+	}
+
+	options := make([]string, len(contexts))
+	for i, ctx := range contexts {
+		options[i] = fmt.Sprintf("%s (%s)", ctx.Name, ctx.Description)
+	}
+
+	prompt := &survey.Select{
+		Message: message,
+		Options: options,
+		Filter: func(filterValue string, optValue string, index int) bool {
+			return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
+		},
+	}
+
+	var choice string
+	err = survey.AskOne(prompt, &choice)
+	if err != nil {
+		return err
+	}
+
+	c.name = strings.SplitN(choice, " ", 2)[0]
 	return nil
 }

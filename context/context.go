@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Context struct {
@@ -25,6 +26,7 @@ func GetServerURL(ctx *Context) (string, error) {
 
 	return ctx.ServerURL, nil
 }
+
 func SaveContext(ctx Context) error {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -70,4 +72,45 @@ func LoadContext(name string) (*Context, error) {
 	}
 
 	return &ctx, nil
+}
+
+func ListContexts() ([]Context, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("could not get user home directory: %w", err)
+	}
+
+	dir := filepath.Join(home, ".sequin", "contexts")
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("could not read contexts directory: %w", err)
+	}
+
+	var contexts []Context
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".json" {
+			ctx, err := LoadContext(strings.TrimSuffix(file.Name(), ".json"))
+			if err != nil {
+				return nil, fmt.Errorf("could not load context %s: %w", file.Name(), err)
+			}
+			contexts = append(contexts, *ctx)
+		}
+	}
+
+	return contexts, nil
+}
+
+func RemoveContext(name string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("could not get user home directory: %w", err)
+	}
+
+	file := filepath.Join(home, ".sequin", "contexts", name+".json")
+	err = os.Remove(file)
+	if err != nil {
+		return fmt.Errorf("could not remove context file: %w", err)
+	}
+
+	return nil
 }

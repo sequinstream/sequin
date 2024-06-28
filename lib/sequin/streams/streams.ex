@@ -228,6 +228,46 @@ defmodule Sequin.Streams do
 
   # Outstanding Messages
 
+  def all_outstanding_messages do
+    Repo.all(OutstandingMessage)
+  end
+
+  def get_outstanding_message!(id) do
+    Repo.get!(OutstandingMessage, id)
+  end
+
+  def ack_messages(consumer_id, message_ids) do
+    Repo.transact(fn ->
+      {_, _} =
+        consumer_id
+        |> OutstandingMessage.where_consumer_id()
+        |> OutstandingMessage.where_ids(message_ids)
+        |> OutstandingMessage.where_state(:pending_redelivery)
+        |> Repo.update_all(set: [state: :available, not_visible_until: nil])
+
+      {_, _} =
+        consumer_id
+        |> OutstandingMessage.where_consumer_id()
+        |> OutstandingMessage.where_ids(message_ids)
+        |> OutstandingMessage.where_state(:delivered)
+        |> Repo.delete_all()
+
+      :ok
+    end)
+
+    :ok
+  end
+
+  def nack_messages(consumer_id, message_ids) do
+    {_, _} =
+      consumer_id
+      |> OutstandingMessage.where_consumer_id()
+      |> OutstandingMessage.where_ids(message_ids)
+      |> Repo.update_all(set: [state: :available, not_visible_until: nil])
+
+    :ok
+  end
+
   def list_outstanding_messages_for_consumer(consumer_id) do
     consumer_id
     |> OutstandingMessage.where_consumer_id()

@@ -1,6 +1,7 @@
 defmodule Sequin.StreamsTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Factory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
 
@@ -331,5 +332,148 @@ defmodule Sequin.StreamsTest do
     updated_msg = Streams.get_message!(msg.key, msg.stream_id)
     assert is_nil(updated_msg.seq)
     assert updated_msg.data == new_data
+  end
+
+  describe "ack_messages/2" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+      consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+      %{stream: stream, consumer: consumer}
+    end
+
+    test "acks delivered messages and ignores non-existent message_ids", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(stream_id: stream.id)
+      message2 = StreamsFactory.insert_message!(stream_id: stream.id)
+
+      om1 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          message: message1
+        })
+
+      om2 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          message: message2
+        })
+
+      non_existent_id = Factory.uuid()
+
+      :ok = Streams.ack_messages(consumer.id, [om1.id, om2.id, non_existent_id])
+
+      assert Streams.all_outstanding_messages() == []
+    end
+
+    test "ignores messages with different consumer_id", %{stream: stream, consumer: consumer} do
+      other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+
+      om1 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered
+        })
+
+      om2 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: other_consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered
+        })
+
+      :ok = Streams.ack_messages(consumer.id, [om1.id, om2.id])
+
+      outstanding = Streams.all_outstanding_messages()
+      assert length(outstanding) == 1
+      assert List.first(outstanding).id == om2.id
+    end
+
+    test "flips pending_redelivery messages to available", %{stream: stream, consumer: consumer} do
+      om =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :pending_redelivery,
+          not_visible_until: DateTime.utc_now()
+        })
+
+      :ok = Streams.ack_messages(consumer.id, [om.id])
+
+      updated_om = Streams.get_outstanding_message!(om.id)
+      assert updated_om.state == :available
+      refute updated_om.not_visible_until
+    end
+  end
+
+  describe "nack_messages/2" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+      consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+      %{stream: stream, consumer: consumer}
+    end
+
+    test "nacks messages and ignores unknown message ID", %{stream: stream, consumer: consumer} do
+      om1 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          not_visible_until: DateTime.utc_now()
+        })
+
+      om2 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          not_visible_until: DateTime.utc_now()
+        })
+
+      non_existent_id = Factory.uuid()
+
+      :ok = Streams.nack_messages(consumer.id, [om1.id, om2.id, non_existent_id])
+
+      updated_om1 = Repo.reload(om1)
+      updated_om2 = Repo.reload(om2)
+
+      assert updated_om1.state == :available
+      refute updated_om1.not_visible_until
+      assert updated_om2.state == :available
+      refute updated_om2.not_visible_until
+    end
+
+    test "does not nack messages belonging to another consumer", %{stream: stream, consumer: consumer} do
+      other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+
+      om1 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          not_visible_until: DateTime.utc_now()
+        })
+
+      om2 =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: other_consumer.id,
+          message_stream_id: stream.id,
+          state: :delivered,
+          not_visible_until: DateTime.utc_now()
+        })
+
+      :ok = Streams.nack_messages(consumer.id, [om1.id, om2.id])
+
+      updated_om1 = Repo.reload(om1)
+      updated_om2 = Repo.reload(om2)
+
+      assert updated_om1.state == :available
+      refute updated_om1.not_visible_until
+      assert updated_om2.state == :delivered
+      assert DateTime.compare(updated_om2.not_visible_until, om2.not_visible_until) == :eq
+    end
   end
 end

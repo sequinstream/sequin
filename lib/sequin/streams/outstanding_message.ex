@@ -38,6 +38,14 @@ defmodule Sequin.Streams.OutstandingMessage do
     from([outstanding_message: om] in query, where: om.consumer_id == ^consumer_id)
   end
 
+  def where_ids(query \\ base_query(), ids) do
+    where(query, [outstanding_message: om], om.id in ^ids)
+  end
+
+  def where_state(query \\ base_query(), state) do
+    where(query, [outstanding_message: om], om.state == ^state)
+  end
+
   def where_deliverable(query \\ base_query()) do
     now = DateTime.utc_now()
 

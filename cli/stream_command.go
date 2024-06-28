@@ -11,6 +11,7 @@ import (
 	"github.com/choria-io/fisk"
 
 	"sequin-cli/api"
+	"sequin-cli/context"
 )
 
 // AddStreamCommands adds all stream-related commands to the given app
@@ -30,7 +31,12 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
-	streams, err := api.FetchStreams(&config.Context)
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	streams, err := api.FetchStreams(ctx)
 	if err != nil {
 		return err
 	}
@@ -58,7 +64,12 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 
 func streamInfo(_ *fisk.ParseContext, config *Config) error {
 	if config.StreamID == "" {
-		streams, err := api.FetchStreams(&config.Context)
+		ctx, err := context.LoadContext(config.ContextName)
+		if err != nil {
+			return err
+		}
+
+		streams, err := api.FetchStreams(ctx)
 		if err != nil {
 			return err
 		}
@@ -87,7 +98,12 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 }
 
 func displayStreamInfo(config *Config) error {
-	streamResponse, err := api.FetchStreamInfo(config.StreamID, &config.Context)
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	streamResponse, err := api.FetchStreamInfo(config.StreamID, ctx)
 	if err != nil {
 		return err
 	}

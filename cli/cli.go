@@ -2,7 +2,6 @@ package cli
 
 import (
 	"embed"
-	"sequin-cli/context"
 )
 
 var (
@@ -11,6 +10,6 @@ var (
 )
 
 type Config struct {
-	Context  context.Context
-	StreamID string
+	ContextName string
+	StreamID    string
 }

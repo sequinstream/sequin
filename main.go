@@ -28,10 +28,10 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	scli.WithCheats().CheatCommand.Hidden()
 
 	// Add global context flag
-	scli.Flag("context", "Use a specific context").StringVar(&config.Context.Name)
+	scli.Flag("context", "Use a specific context").StringVar(&config.ContextName)
 
-	cli.AddStreamCommands(scli, &config)
 	cli.AddContextCommands(scli, &config)
+	cli.AddStreamCommands(scli, &config)
 
 	log.SetFlags(log.Ltime)
 

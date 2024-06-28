@@ -31,8 +31,8 @@ type Stream struct {
 }
 
 // FetchStreams retrieves all streams from the API
-func FetchStreams(config *context.Context) ([]Stream, error) {
-	serverURL, err := config.GetServerURL()
+func FetchStreams(ctx *context.Context) ([]Stream, error) {
+	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func FetchStreams(config *context.Context) ([]Stream, error) {
 
 // FetchStreamInfo retrieves information for a specific stream from the API
 func FetchStreamInfo(streamID string, ctx *context.Context) (*StreamResponse, error) {
-	serverURL, err := ctx.GetServerURL()
+	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}

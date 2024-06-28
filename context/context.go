@@ -14,14 +14,13 @@ type Context struct {
 }
 
 // GetServerURL returns the server URL based on the current context
-func (c *Context) GetServerURL() (string, error) {
-	if c.ServerURL == "" {
+func GetServerURL(ctx *Context) (string, error) {
+	if ctx.Name == "" {
 		return "http://localhost:4000", nil
 	}
 
-	ctx, err := LoadContext(c.Name)
-	if err != nil {
-		return "", err
+	if ctx.ServerURL == "" {
+		return "", fmt.Errorf("server URL is not set")
 	}
 
 	return ctx.ServerURL, nil

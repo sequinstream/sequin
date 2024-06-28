@@ -1,6 +1,6 @@
 # Development
 
 ```
-go build
-./sequin-cli --help
+make build
+sequin --help
 ```

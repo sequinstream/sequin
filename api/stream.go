@@ -10,14 +10,9 @@ import (
 	"sequin-cli/context"
 )
 
-// StreamResponse represents the structure of the API response for a single stream
-type StreamResponse struct {
-	Stream Stream `json:"stream"`
-}
-
 // StreamsResponse represents the structure of the API response for a list
 type StreamsResponse struct {
-	Streams []Stream `json:"streams"`
+	Streams []Stream `json:"data"`
 }
 
 // Stream represents the structure of a stream returned by the API
@@ -26,7 +21,7 @@ type Stream struct {
 	Idx           int       `json:"idx"`
 	ConsumerCount int       `json:"consumer_count"`
 	MessageCount  int       `json:"message_count"`
-	CreatedAt     time.Time `json:"created_at"`
+	CreatedAt     time.Time `json:"inserted_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
@@ -58,7 +53,7 @@ func FetchStreams(ctx *context.Context) ([]Stream, error) {
 }
 
 // FetchStreamInfo retrieves information for a specific stream from the API
-func FetchStreamInfo(streamID string, ctx *context.Context) (*StreamResponse, error) {
+func FetchStreamInfo(streamID string, ctx *context.Context) (*Stream, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -75,7 +70,7 @@ func FetchStreamInfo(streamID string, ctx *context.Context) (*StreamResponse, er
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
-	var streamResponse StreamResponse
+	var streamResponse Stream
 	err = json.Unmarshal(body, &streamResponse)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)

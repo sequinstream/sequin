@@ -103,19 +103,19 @@ func displayStreamInfo(config *Config) error {
 		return err
 	}
 
-	streamResponse, err := api.FetchStreamInfo(config.StreamID, ctx)
+	stream, err := api.FetchStreamInfo(config.StreamID, ctx)
 	if err != nil {
 		return err
 	}
 
 	// Display stream info
 	fmt.Printf("Stream Information:\n")
-	fmt.Printf("ID: %s\n", streamResponse.Stream.ID)
-	fmt.Printf("Index: %d\n", streamResponse.Stream.Idx)
-	fmt.Printf("Consumers: %d\n", streamResponse.Stream.ConsumerCount)
-	fmt.Printf("Messages: %d\n", streamResponse.Stream.MessageCount)
-	fmt.Printf("Created At: %s\n", streamResponse.Stream.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("Updated At: %s\n", streamResponse.Stream.UpdatedAt.Format(time.RFC3339))
+	fmt.Printf("ID: %s\n", stream.ID)
+	fmt.Printf("Index: %d\n", stream.Idx)
+	fmt.Printf("Consumers: %d\n", stream.ConsumerCount)
+	fmt.Printf("Messages: %d\n", stream.MessageCount)
+	fmt.Printf("Created At: %s\n", stream.CreatedAt.Format(time.RFC3339))
+	fmt.Printf("Updated At: %s\n", stream.UpdatedAt.Format(time.RFC3339))
 
 	return nil
 }

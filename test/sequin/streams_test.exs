@@ -77,7 +77,10 @@ defmodule Sequin.StreamsTest do
   describe "next_for_consumer/2" do
     setup do
       stream = StreamsFactory.insert_stream!()
-      consumer = StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
+
+      consumer =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 1_000})
+
       {:ok, stream: stream, consumer: consumer}
     end
 
@@ -89,7 +92,7 @@ defmodule Sequin.StreamsTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       ack_wait_ms = consumer.ack_wait_ms
 
-      outstanding_message =
+      om =
         StreamsFactory.insert_outstanding_message!(%{
           consumer_id: consumer.id,
           message: message,
@@ -97,21 +100,22 @@ defmodule Sequin.StreamsTest do
           deliver_count: 0
         })
 
-      assert {:ok, [delivered]} = Streams.next_for_consumer(consumer)
+      assert {:ok, [delivered_message]} = Streams.next_for_consumer(consumer)
       # Add a buffer for the comparison
       not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
-      assert delivered.id == outstanding_message.id
-      assert delivered.state == :delivered
-      assert DateTime.after?(delivered.not_visible_until, not_visible_until)
-      assert delivered.deliver_count == 1
-      assert delivered.last_delivered_at
-      assert delivered.message == message
+      assert delivered_message.ack_id == om.id
+      assert delivered_message.key == message.key
+      updated_om = Repo.reload(om)
+      assert updated_om.state == :delivered
+      assert DateTime.after?(updated_om.not_visible_until, not_visible_until)
+      assert updated_om.deliver_count == 1
+      assert updated_om.last_delivered_at
     end
 
     test "redelivers expired outstanding messages", %{stream: stream, consumer: consumer} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      outstanding_message =
+      om =
         StreamsFactory.insert_outstanding_message!(%{
           consumer_id: consumer.id,
           message: message,
@@ -121,13 +125,14 @@ defmodule Sequin.StreamsTest do
           last_delivered_at: DateTime.add(DateTime.utc_now(), -30, :second)
         })
 
-      assert {:ok, [redelivered]} = Streams.next_for_consumer(consumer)
-      assert redelivered.id == outstanding_message.id
-      assert redelivered.state == :delivered
-      assert DateTime.compare(redelivered.not_visible_until, outstanding_message.not_visible_until) != :eq
-      assert redelivered.deliver_count == 2
-      assert DateTime.compare(redelivered.last_delivered_at, outstanding_message.last_delivered_at) != :eq
-      assert redelivered.message == message
+      assert {:ok, [redelivered_msg]} = Streams.next_for_consumer(consumer)
+      assert redelivered_msg.key == message.key
+      assert redelivered_msg.ack_id == om.id
+      updated_om = Repo.reload(om)
+      assert updated_om.state == :delivered
+      assert DateTime.compare(updated_om.not_visible_until, om.not_visible_until) != :eq
+      assert updated_om.deliver_count == 2
+      assert DateTime.compare(updated_om.last_delivered_at, om.last_delivered_at) != :eq
     end
 
     test "does not redeliver unexpired outstanding messages", %{stream: stream, consumer: consumer} do
@@ -186,6 +191,8 @@ defmodule Sequin.StreamsTest do
             message: msg,
             state: :available
           })
+
+          msg
         end
 
       redeliver =
@@ -198,6 +205,8 @@ defmodule Sequin.StreamsTest do
             state: :delivered,
             not_visible_until: DateTime.add(DateTime.utc_now(), -30, :second)
           })
+
+          msg
         end
 
       # Not available message
@@ -210,11 +219,13 @@ defmodule Sequin.StreamsTest do
           state: :delivered,
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
         })
+
+        msg
       end
 
       assert {:ok, messages} = Streams.next_for_consumer(consumer)
       assert length(messages) == length(available ++ redeliver)
-      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:id]))
+      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:key, :stream_id]))
     end
 
     test "delivers messages according to asc last_delivered_at nulls last", %{stream: stream, consumer: consumer} do
@@ -265,8 +276,45 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
-      delivered_message_keys = Enum.map(delivered, & &1.message.key)
+      delivered_message_keys = Enum.map(delivered, & &1.key)
       assert_lists_equal(delivered_message_keys, [message1.key, message2.key])
+    end
+
+    test "respect's a consumer's max_ack_pending", %{consumer: consumer} do
+      max_ack_pending = 3
+      consumer = %{consumer | max_ack_pending: max_ack_pending}
+
+      om =
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: consumer.stream_id,
+          state: :available
+        })
+
+      # These messages can't be delivered
+      for _ <- 1..2 do
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: consumer.stream_id,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        })
+      end
+
+      # These messages *can* be delivered, but are outside max_ack_pending
+      for _ <- 1..2 do
+        StreamsFactory.insert_outstanding_message_with_message!(%{
+          consumer_id: consumer.id,
+          message_stream_id: consumer.stream_id,
+          state: :available
+        })
+      end
+
+      assert {:ok, delivered} = Streams.next_for_consumer(consumer)
+      assert length(delivered) == 1
+      delivered = List.last(delivered)
+      assert delivered.key == om.message_key
+      assert {:ok, []} = Streams.next_for_consumer(consumer)
     end
   end
 

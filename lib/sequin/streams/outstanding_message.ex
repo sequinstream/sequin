@@ -16,8 +16,6 @@ defmodule Sequin.Streams.OutstandingMessage do
     field :not_visible_until, :utc_datetime_usec
     field :state, Ecto.Enum, values: [:delivered, :available, :pending_redelivery]
 
-    field :message, :map, virtual: true
-
     timestamps(type: :utc_datetime_usec)
   end
 

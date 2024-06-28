@@ -15,6 +15,8 @@ defmodule Sequin.Streams.Message do
     field :data, :string
     field :seq, :integer
 
+    field :ack_id, :string, virtual: true
+
     timestamps(type: :utc_datetime_usec)
   end
 

@@ -65,6 +65,21 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
+  def insert_outstanding_message_with_message!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {message_stream_id, attrs} = Map.pop(attrs, :message_stream_id)
+
+    {message, attrs} =
+      Map.pop_lazy(attrs, :message, fn ->
+        %{}
+        |> Sequin.Map.put_if_present(:stream_id, message_stream_id)
+        |> insert_message!()
+      end)
+
+    insert_outstanding_message!(Map.put(attrs, :message, message))
+  end
+
   # Message
 
   def message(attrs \\ []) do

@@ -110,47 +110,32 @@ defmodule Sequin.Streams do
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
 
-    # Subquery to select ids of outstanding messages
-    subquery =
-      consumer.id
-      |> OutstandingMessage.where_consumer_id()
-      |> OutstandingMessage.where_deliverable()
-      |> order_by([om], asc_nulls_last: om.last_delivered_at)
-      |> limit(^batch_size)
-      |> select([om], om.id)
+    params = %{
+      consumer_id: UUID.string_to_binary!(consumer.id),
+      max_ack_pending: consumer.max_ack_pending,
+      batch_size: batch_size,
+      not_visible_until: not_visible_until,
+      now: now
+    }
 
-    # Update the selected outstanding messages
-    {_count, outstanding_messages} =
-      from(om in OutstandingMessage, where: om.id in subquery(subquery))
-      |> select([om], om)
-      |> Repo.update_all(
-        set: [
-          state: :delivered,
-          not_visible_until: not_visible_until,
-          deliver_count: dynamic([om], om.deliver_count + 1),
-          last_delivered_at: now
-        ]
-      )
+    case Query.next_for_consumer(params) do
+      {:ok, results} ->
+        # Comes back mashed together
+        results =
+          Enum.map(results, fn message ->
+            message =
+              message
+              |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
+              |> Map.update!(:stream_id, &UUID.binary_to_string!/1)
 
-    message_key_and_stream_ids = Enum.map(outstanding_messages, fn om -> {om.message_key, om.message_stream_id} end)
-
-    messages =
-      message_key_and_stream_ids
-      |> Message.where_key_and_stream_id_in()
-      |> Repo.all()
-
-    # Wrap messages with outstanding message info
-    wrapped =
-      Enum.map(messages, fn message ->
-        om =
-          Sequin.Enum.find!(outstanding_messages, fn om ->
-            om.message_key == message.key and om.message_stream_id == message.stream_id
+            struct!(Message, message)
           end)
 
-        %{om | message: message}
-      end)
+        {:ok, results}
 
-    {:ok, wrapped}
+      error ->
+        error
+    end
   end
 
   # Messages

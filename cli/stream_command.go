@@ -22,22 +22,27 @@ type Stream struct {
 	ID            string    `json:"id"`
 	Idx           int       `json:"idx"`
 	ConsumerCount int       `json:"consumer_count"`
+	MessageCount  int       `json:"message_count"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
-	MessageCount  int       `json:"message_count"`
 }
 
 // AddStreamCommands adds all stream-related commands to the given app
-func AddStreamCommands(app *fisk.Application) {
+func AddStreamCommands(app *fisk.Application, config *Config) {
 	streamCmd := app.Command("stream", "Stream related commands")
 
 	streamCmd.Command("ls", "List streams").Action(func(c *fisk.ParseContext) error {
-		return streamLs(c)
+		return streamLs(c, config)
 	})
 }
 
-func streamLs(_ *fisk.ParseContext) error {
-	resp, err := http.Get("http://localhost:4000/api/streams")
+func streamLs(_ *fisk.ParseContext, config *Config) error {
+	serverURL, err := config.GetServerURL()
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Get(serverURL + "/api/streams")
 	if err != nil {
 		return fmt.Errorf("error making request: %w", err)
 	}

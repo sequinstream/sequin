@@ -1,9 +1,15 @@
 defmodule SequinWeb.StreamJSON do
-  def render("show.json", %{stream: stream}) do
-    %{stream: stream}
-  end
+  @moduledoc false
 
   def render("index.json", %{streams: streams}) do
-    %{streams: streams}
+    %{data: streams}
+  end
+
+  def render("show.json", %{stream: stream}) do
+    stream
+  end
+
+  def render("delete.json", %{stream: stream}) do
+    %{id: stream.id, deleted: true}
   end
 end

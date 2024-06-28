@@ -3,10 +3,12 @@ defmodule Sequin.Streams.Stream do
   use Sequin.Schema
 
   import Ecto.Changeset
+  import Ecto.Query
 
   alias Sequin.Accounts.Account
   alias Sequin.Streams.Stream
 
+  @derive {Jason.Encoder, only: [:id, :idx, :account_id, :inserted_at, :updated_at]}
   typed_schema "streams" do
     field :idx, :integer, read_after_writes: true
     belongs_to :account, Account
@@ -16,7 +18,19 @@ defmodule Sequin.Streams.Stream do
 
   def changeset(%Stream{} = stream, attrs) do
     stream
-    |> cast(attrs, [:account_id])
-    |> validate_required([:account_id])
+    |> cast(attrs, [])
+    |> validate_required([])
+  end
+
+  def where_id(query \\ base_query(), id) do
+    from(s in query, where: s.id == ^id)
+  end
+
+  def where_account_id(query \\ __MODULE__, account_id) do
+    from(s in query, where: s.account_id == ^account_id)
+  end
+
+  defp base_query(query \\ __MODULE__) do
+    from(s in query, as: :stream)
   end
 end

@@ -14,12 +14,11 @@ defmodule SequinWeb.Router do
     plug :accepts, ["json"]
   end
 
-  scope "/", SequinWeb do
-    pipe_through :browser
+  scope "/api", SequinWeb do
+    pipe_through :api
 
-    get "/", PageController, :home
-
-    resources "api/streams", StreamController, only: [:index, :show]
+    resources "/streams", StreamController, except: [:new, :edit]
+    resources "/consumers", ConsumerController, except: [:new, :edit]
   end
 
   # Other scopes may use custom stacks.

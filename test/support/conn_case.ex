@@ -17,6 +17,8 @@ defmodule SequinWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  alias Sequin.Factory.AccountsFactory
+
   using opts do
     quote do
       use Sequin.DataCase, unquote(opts)
@@ -34,5 +36,12 @@ defmodule SequinWeb.ConnCase do
 
   setup _tags do
     {:ok, conn: Phoenix.ConnTest.build_conn()}
+  end
+
+  def authenticated_conn(%{conn: conn}) do
+    account = AccountsFactory.insert_account!()
+    # TODO: Move out of assigns when we have a proper authentication system
+    conn = Plug.Conn.assign(conn, :account_id, account.id)
+    {:ok, conn: conn, account: account}
   end
 end

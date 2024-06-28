@@ -2,6 +2,7 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
+  alias Sequin.Error
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
@@ -20,17 +21,22 @@ defmodule Sequin.Streams do
 
   # Streams
 
-  def all_streams, do: Repo.all(Stream)
-
-  def create(attrs) do
-    %Stream{}
-    |> Stream.changeset(attrs)
-    |> Repo.insert()
+  def list_streams_for_account(account_id) do
+    account_id |> Stream.where_account_id() |> Repo.all()
   end
 
-  def create_with_lifecycle(attrs) do
+  def get_stream_for_account(account_id, id) do
+    res = account_id |> Stream.where_account_id() |> Stream.where_id(id) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :stream)}
+      stream -> {:ok, stream}
+    end
+  end
+
+  def create_stream_for_account_with_lifecycle(account_id, attrs) do
     Repo.transaction(fn ->
-      case create(attrs) do
+      case create_stream(account_id, attrs) do
         {:ok, stream} ->
           create_records_partition(stream)
           stream
@@ -41,23 +47,35 @@ defmodule Sequin.Streams do
     end)
   end
 
+  def delete_stream_with_lifecycle(%Stream{} = stream) do
+    Repo.transaction(fn ->
+      case delete_stream(stream) do
+        {:ok, stream} ->
+          drop_records_partition(stream)
+          stream
+
+        {:error, changes} ->
+          Repo.rollback(changes)
+      end
+    end)
+  end
+
+  def all_streams, do: Repo.all(Stream)
+
+  def create_stream(account_id, attrs) do
+    %Stream{account_id: account_id}
+    |> Stream.changeset(attrs)
+    |> Repo.insert()
+  end
+
   defp create_records_partition(%Stream{} = stream) do
     Repo.query!("""
     CREATE TABLE streams.messages_#{stream.idx} PARTITION OF streams.messages FOR VALUES IN ('#{stream.id}');
     """)
   end
 
-  def delete(%Stream{} = stream) do
+  def delete_stream(%Stream{} = stream) do
     Repo.delete(stream)
-  end
-
-  def delete_with_lifecycle(%Stream{} = stream) do
-    Repo.transaction(fn ->
-      with {:ok, stream} <- delete(stream) do
-        drop_records_partition(stream)
-        stream
-      end
-    end)
   end
 
   defp drop_records_partition(%Stream{} = stream) do
@@ -78,17 +96,55 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
-  def create_consumer_with_lifecycle(attrs) do
+  def list_consumers_for_account(account_id) do
+    account_id |> Consumer.where_account_id() |> Repo.all()
+  end
+
+  def get_consumer_for_account(account_id, id) do
+    res = account_id |> Consumer.where_account_id() |> Consumer.where_id(id) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def create_consumer_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
-      with {:ok, consumer} <- create_consumer(attrs),
+      with {:ok, consumer} <- create_consumer(account_id, attrs),
            {:ok, _} <- create_consumer_state(consumer) do
         {:ok, consumer}
       end
     end)
   end
 
-  def create_consumer(attrs) do
-    %Consumer{}
+  def create_consumer_with_lifecycle(attrs) do
+    account_id = Map.fetch!(attrs, :account_id)
+
+    create_consumer_for_account_with_lifecycle(account_id, attrs)
+  end
+
+  def delete_consumer_with_lifecycle(consumer) do
+    Repo.transact(fn ->
+      case delete_consumer(consumer) do
+        :ok ->
+          delete_consumer_state(consumer)
+          consumer
+
+        error ->
+          error
+      end
+    end)
+  end
+
+  def update_consumer_with_lifecycle(%Consumer{} = consumer, attrs) do
+    consumer
+    |> Consumer.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def create_consumer(account_id, attrs) do
+    %Consumer{account_id: account_id}
     |> Consumer.create_changeset(attrs)
     |> Repo.insert()
   end
@@ -97,6 +153,14 @@ defmodule Sequin.Streams do
     %ConsumerState{}
     |> ConsumerState.create_changeset(%{consumer_id: consumer.id})
     |> Repo.insert()
+  end
+
+  def delete_consumer(%Consumer{} = consumer) do
+    Repo.delete(consumer)
+  end
+
+  def delete_consumer_state(%Consumer{} = consumer) do
+    consumer.id |> ConsumerState.where_consumer_id() |> Repo.delete()
   end
 
   def get_consumer_state(consumer_id) do

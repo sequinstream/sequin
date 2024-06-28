@@ -12,6 +12,10 @@ defmodule Sequin.Map do
     Map.new(map, fn {k, v} -> {to_string(k), v} end)
   end
 
+  def atomize_keys(map) do
+    Map.new(map, fn {k, v} -> {String.to_existing_atom(k), v} end)
+  end
+
   def put_if_present(map, key, value) do
     if is_nil(value) do
       map

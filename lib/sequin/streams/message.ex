@@ -5,6 +5,7 @@ defmodule Sequin.Streams.Message do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
+  @derive {Jason.Encoder, only: [:key, :stream_id, :data_hash, :data, :seq]}
   @primary_key false
   @schema_prefix "streams"
   typed_schema "messages" do

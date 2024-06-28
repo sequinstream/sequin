@@ -5,6 +5,19 @@ defmodule Sequin.Error do
 
   require Logger
 
+  defmodule BadRequestError do
+    @moduledoc false
+    @derive Jason.Encoder
+    @enforce_keys [:message]
+    defexception [:message]
+
+    @type t :: %__MODULE__{
+            message: String.t()
+          }
+
+    def from_json(json), do: JSON.struct(json, __MODULE__)
+  end
+
   defmodule NotFoundError do
     @moduledoc false
     @derive Jason.Encoder
@@ -177,7 +190,8 @@ defmodule Sequin.Error do
 
   # STEP 3: Add the new error module to this type definition:
   @type t ::
-          NotFoundError.t()
+          BadRequestError.t()
+          | NotFoundError.t()
           | ServiceError.t()
           | TimeoutError.t()
           | UnauthorizedError.t()
@@ -190,6 +204,10 @@ defmodule Sequin.Error do
 
   # STEP 6: Add a `call` clause (and tests) for the new error type in
   # IxWeb.ApiFallbackPlug.
+
+  @spec bad_request([opt]) :: BadRequestError.t()
+        when opt: {:message, String.t()}
+  def bad_request(opts), do: BadRequestError.exception(opts)
 
   @spec not_found([opt]) :: NotFoundError.t()
         when opt:

@@ -19,6 +19,10 @@ defmodule SequinWeb.Router do
 
     resources "/streams", StreamController, except: [:new, :edit]
     resources "/consumers", ConsumerController, except: [:new, :edit]
+    post "/consumers/:id/next", PullController, :next
+    get "/consumers/:id/next", PullController, :next
+    post "/consumers/:id/ack", PullController, :ack
+    post "/consumers/:id/nack", PullController, :nack
   end
 
   # Other scopes may use custom stacks.

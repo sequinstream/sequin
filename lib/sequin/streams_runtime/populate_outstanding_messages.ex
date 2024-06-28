@@ -38,7 +38,7 @@ defmodule Sequin.StreamsRuntime.PopulateOutstandingMessages do
   end
 
   def via_tuple(consumer_id) do
-    Sequin.ProcessRegistry.via_tuple({__MODULE__, consumer_id})
+    Sequin.Registry.via_tuple({__MODULE__, consumer_id})
   end
 
   @impl GenServer

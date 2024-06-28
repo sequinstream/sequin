@@ -43,7 +43,7 @@ defmodule Sequin.StreamsRuntime.AssignMessageSeq do
   end
 
   def via_tuple(stream_id) do
-    Sequin.ProcessRegistry.via_tuple({__MODULE__, stream_id})
+    Sequin.Registry.via_tuple({__MODULE__, stream_id})
   end
 
   @impl GenServer

@@ -26,7 +26,7 @@ defmodule Sequin.Application do
 
   defp base_children do
     [
-      Sequin.ProcessRegistry,
+      Sequin.Registry,
       SequinWeb.Telemetry,
       Sequin.Repo,
       {DNSCluster, query: Application.get_env(:sequin, :dns_cluster_query) || :ignore},

@@ -3,7 +3,6 @@
 APP_NAME ?= sequin
 APP_VSN ?= `grep 'version:' mix.exs | cut -d '"' -f2`
 BUILD ?= `git rev-parse --short HEAD`
-THIS_USER := $(shell cat .secrets.json | jq -r '.["username"]')
 
 help:
 	@echo "$(APP_NAME):$(APP_VSN)-$(BUILD)"
@@ -31,14 +30,8 @@ dev: ## Run the app locally
 deviex: ## Open an IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
 
-devlive: ## Run the app locally with livebook
-	cd ../livebook && iex --sname sequin-stream-livebook-dev --cookie sequin-stream-dev -S mix phx.server
-
 connect:
 	scripts/prod_ssh.sh
 
 remiex:
 	scripts/prod_ix.sh remote
-
-addip:
-	mix addip $(THIS_USER)

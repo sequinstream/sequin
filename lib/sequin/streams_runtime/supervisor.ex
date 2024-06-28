@@ -49,8 +49,8 @@ defmodule Sequin.StreamsRuntime.Supervisor do
   defp children do
     [
       Sequin.StreamsRuntime.Starter,
-      {Sequin.DynamicSupervisor, name: Sequin.StreamsRuntime.ConsumerSupervisor},
-      {Sequin.DynamicSupervisor, name: Sequin.StreamsRuntime.StreamSupervisor}
+      Sequin.DynamicSupervisor.child_spec(name: Sequin.StreamsRuntime.ConsumerSupervisor),
+      Sequin.DynamicSupervisor.child_spec(name: Sequin.StreamsRuntime.StreamSupervisor)
     ]
   end
 end

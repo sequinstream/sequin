@@ -8,7 +8,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    execute "create sequence if not exists stream_idx_seq start with 10000 increment by 1",
+    execute "create sequence if not exists stream_idx_seq start with 1 increment by 1",
             "drop sequence if exists stream_idx_seq"
 
     create table(:streams) do
@@ -40,6 +40,9 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     create unique_index(:messages, [:stream_id, :seq], prefix: "streams")
 
+    execute "create sequence streams.messages_seq owned by streams.messages.seq;",
+            "drop sequence if exists streams.messages_seq"
+
     create index(:messages, [:stream_id, :seq, :updated_at],
              prefix: "streams",
              where: "seq IS NULL"
@@ -67,9 +70,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             execute function streams.reset_seq_on_update();
             """,
             "drop trigger if exists trg_reset_seq_on_update on streams.messages"
-
-    execute "create sequence streams.messages_seq owned by streams.messages.seq;",
-            "drop sequence if exists streams.messages_seq"
 
     execute "create type streams.outstanding_message_state as enum ('delivered', 'available', 'pending_redelivery');",
             "drop type if exists streams.outstanding_message_state"
@@ -103,8 +103,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       timestamps()
     end
-
-    create unique_index(:consumer_states, [:consumer_id], prefix: "streams")
 
     create table(:consumer_pending_messages_count, prefix: "streams") do
       add :consumer_id, :uuid, null: false, primary_key: true
@@ -147,10 +145,5 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              ],
              prefix: "streams"
            )
-
-    if Application.get_env(:sequin, :env) == :test do
-      execute "CREATE TABLE streams.messages_default PARTITION OF streams.messages DEFAULT;",
-              "select 1"
-    end
   end
 end

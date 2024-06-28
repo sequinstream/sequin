@@ -22,11 +22,11 @@ defmodule Sequin.StreamsTest do
     end
 
     test "updates existing message when data_hash changes" do
-      msg = StreamsFactory.insert_message!(%{seq: 1})
+      msg = StreamsFactory.insert_message!()
       new_data = StreamsFactory.message_data()
 
       assert {:ok, 1} = Streams.upsert_messages([%{msg | data: new_data, data_hash: nil}])
-      updated_msg = Streams.message!(msg.key, msg.stream_id)
+      updated_msg = Streams.get_message!(msg.key, msg.stream_id)
 
       assert updated_msg.data == new_data
       assert is_binary(updated_msg.data_hash)
@@ -35,12 +35,12 @@ defmodule Sequin.StreamsTest do
     end
 
     test "does not update existing message when data_hash is the same" do
-      msg = StreamsFactory.insert_message!(%{seq: 1})
+      msg = StreamsFactory.insert_message!()
 
       assert {:ok, 0} = Streams.upsert_messages([msg])
 
-      updated_msg = Streams.message!(msg.key, msg.stream_id)
-      assert updated_msg.seq == 1
+      updated_msg = Streams.get_message!(msg.key, msg.stream_id)
+      assert updated_msg.seq == msg.seq
       assert updated_msg.data == msg.data
       assert updated_msg.data_hash == msg.data_hash
       assert updated_msg.updated_at == msg.updated_at
@@ -50,16 +50,16 @@ defmodule Sequin.StreamsTest do
       stream1 = StreamsFactory.insert_stream!()
       stream2 = StreamsFactory.insert_stream!()
 
-      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, key: "same_key", seq: 1})
+      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, key: "same_key"})
       msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, key: "same_key"})
 
       assert {:ok, 1} = Streams.upsert_messages([msg2_attrs])
 
-      unchanged_msg1 = Streams.message!(msg1.key, msg1.stream_id)
-      assert unchanged_msg1.seq == 1
+      unchanged_msg1 = Streams.get_message!(msg1.key, msg1.stream_id)
+      assert unchanged_msg1.seq == msg1.seq
       assert unchanged_msg1.data == msg1.data
 
-      new_msg2 = Streams.message!(msg2_attrs.key, msg2_attrs.stream_id)
+      new_msg2 = Streams.get_message!(msg2_attrs.key, msg2_attrs.stream_id)
       assert new_msg2.data == msg2_attrs.data
     end
 
@@ -69,7 +69,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages([msg_attrs])
 
-      inserted_msg = Streams.message!(msg_attrs.key, msg_attrs.stream_id)
+      inserted_msg = Streams.get_message!(msg_attrs.key, msg_attrs.stream_id)
       assert inserted_msg.data == "data with null byte "
     end
   end
@@ -87,6 +87,7 @@ defmodule Sequin.StreamsTest do
 
     test "delivers available outstanding messages", %{stream: stream, consumer: consumer} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      ack_wait_ms = consumer.ack_wait_ms
 
       outstanding_message =
         StreamsFactory.insert_outstanding_message!(%{
@@ -97,9 +98,11 @@ defmodule Sequin.StreamsTest do
         })
 
       assert {:ok, [delivered]} = Streams.next_for_consumer(consumer)
+      # Add a buffer for the comparison
+      not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
       assert delivered.id == outstanding_message.id
       assert delivered.state == :delivered
-      assert delivered.not_visible_until
+      assert DateTime.after?(delivered.not_visible_until, not_visible_until)
       assert delivered.deliver_count == 1
       assert delivered.last_delivered_at
       assert delivered.message == message
@@ -114,15 +117,16 @@ defmodule Sequin.StreamsTest do
           message: message,
           state: :delivered,
           not_visible_until: DateTime.add(DateTime.utc_now(), -1, :second),
-          deliver_count: 1
+          deliver_count: 1,
+          last_delivered_at: DateTime.add(DateTime.utc_now(), -30, :second)
         })
 
       assert {:ok, [redelivered]} = Streams.next_for_consumer(consumer)
       assert redelivered.id == outstanding_message.id
       assert redelivered.state == :delivered
-      assert redelivered.not_visible_until
+      assert DateTime.compare(redelivered.not_visible_until, outstanding_message.not_visible_until) != :eq
       assert redelivered.deliver_count == 2
-      assert redelivered.last_delivered_at
+      assert DateTime.compare(redelivered.last_delivered_at, outstanding_message.last_delivered_at) != :eq
       assert redelivered.message == message
     end
 
@@ -152,6 +156,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
+      assert length(Streams.list_outstanding_messages_for_consumer(consumer.id)) == 3
     end
 
     test "does not deliver outstanding messages for another consumer", %{stream: stream, consumer: consumer} do
@@ -212,61 +217,61 @@ defmodule Sequin.StreamsTest do
       assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:id]))
     end
 
-    test "delivers messages according to asc last_delivered_at nulls first", %{stream: stream, consumer: consumer} do
+    test "delivers messages according to asc last_delivered_at nulls last", %{stream: stream, consumer: consumer} do
       now = DateTime.utc_now()
 
-      # Available message (null last_delivered_at)
+      # Oldest delivered message
       message1 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
       StreamsFactory.insert_outstanding_message!(%{
         consumer_id: consumer.id,
         message: message1,
-        state: :available,
-        last_delivered_at: nil
-      })
-
-      # Oldest delivered message
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id})
-
-      StreamsFactory.insert_outstanding_message!(%{
-        consumer_id: consumer.id,
-        message: message2,
         state: :delivered,
         last_delivered_at: DateTime.add(now, -2, :minute),
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
       # Second oldest delivered message
-      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
       StreamsFactory.insert_outstanding_message!(%{
         consumer_id: consumer.id,
-        message: message3,
+        message: message2,
         state: :delivered,
         last_delivered_at: DateTime.add(now, -1, :minute),
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
       # Newest delivered message (should not be returned)
-      message4 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
       StreamsFactory.insert_outstanding_message!(%{
         consumer_id: consumer.id,
-        message: message4,
+        message: message3,
         state: :delivered,
         last_delivered_at: now,
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
-      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 3)
-      assert length(delivered) == 3
+      # Available message (null last_delivered_at)
+      message4 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+
+      StreamsFactory.insert_outstanding_message!(%{
+        consumer_id: consumer.id,
+        message: message4,
+        state: :available,
+        last_delivered_at: nil
+      })
+
+      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
       delivered_message_keys = Enum.map(delivered, & &1.message.key)
-      assert_lists_equal(delivered_message_keys, [message1.key, message2.key, message3.key])
+      assert_lists_equal(delivered_message_keys, [message1.key, message2.key])
     end
   end
 
   test "updating a message resets its seq to nil via a trigger" do
-    msg = StreamsFactory.insert_message!(%{seq: 1})
+    msg = StreamsFactory.insert_message!()
 
     new_data = StreamsFactory.message_data()
 
@@ -275,7 +280,7 @@ defmodule Sequin.StreamsTest do
       |> Streams.Message.where_key_and_stream_id(msg.stream_id)
       |> Repo.update_all(set: [data: new_data])
 
-    updated_msg = Streams.message!(msg.key, msg.stream_id)
+    updated_msg = Streams.get_message!(msg.key, msg.stream_id)
     assert is_nil(updated_msg.seq)
     assert updated_msg.data == new_data
   end

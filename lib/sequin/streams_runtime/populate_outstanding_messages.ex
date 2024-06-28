@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.PopulateOutstandingMessagesServer do
+defmodule Sequin.StreamsRuntime.PopulateOutstandingMessages do
   @moduledoc """
   This GenServer pulls messages from the `messages` table into `outstanding_messages` for a given consumer.
 
@@ -21,6 +21,15 @@ defmodule Sequin.Streams.PopulateOutstandingMessagesServer do
       field :interval_ms, non_neg_integer()
       field :test_pid, pid() | nil
     end
+  end
+
+  def child_spec(opts) do
+    consumer_id = Keyword.fetch!(opts, :consumer_id)
+
+    %{
+      id: via_tuple(consumer_id),
+      start: {__MODULE__, :start_link, [opts]}
+    }
   end
 
   def start_link(opts) do
@@ -59,7 +68,7 @@ defmodule Sequin.Streams.PopulateOutstandingMessagesServer do
         :ok
 
       {:error, reason} ->
-        Logger.error("[PopulateOutstandingMessagesServer] Error populating outstanding messages",
+        Logger.error("[PopulateOutstandingMessages] Error populating outstanding messages",
           error: reason,
           consumer_id: state.consumer_id
         )
@@ -77,7 +86,7 @@ defmodule Sequin.Streams.PopulateOutstandingMessagesServer do
         reraise error, __STACKTRACE__
       end
 
-      Logger.error("[PopulateOutstandingMessagesServer] Error populating outstanding messages",
+      Logger.error("[PopulateOutstandingMessages] Error populating outstanding messages",
         error: error,
         consumer_id: state.consumer_id
       )

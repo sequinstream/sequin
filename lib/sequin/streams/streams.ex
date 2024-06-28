@@ -2,6 +2,7 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
+  alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerState
@@ -10,7 +11,16 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
 
-  def list, do: Repo.all(Stream)
+  # General
+
+  def reload(%Message{} = msg) do
+    # Repo.reload/2 does not support compound pks
+    msg.key |> Message.where_key_and_stream_id(msg.stream_id) |> Repo.one()
+  end
+
+  # Streams
+
+  def all_streams, do: Repo.all(Stream)
 
   def create(attrs) do
     %Stream{}
@@ -62,7 +72,7 @@ defmodule Sequin.Streams do
     Repo.all(Consumer)
   end
 
-  def consumer!(consumer_id) do
+  def get_consumer!(consumer_id) do
     consumer_id
     |> Consumer.where_id()
     |> Repo.one!()
@@ -89,7 +99,7 @@ defmodule Sequin.Streams do
     |> Repo.insert()
   end
 
-  def consumer_state(consumer_id) do
+  def get_consumer_state(consumer_id) do
     consumer_id
     |> ConsumerState.where_consumer_id()
     |> Repo.one!()
@@ -105,7 +115,7 @@ defmodule Sequin.Streams do
       consumer.id
       |> OutstandingMessage.where_consumer_id()
       |> OutstandingMessage.where_deliverable()
-      |> order_by([om], asc_nulls_first: om.last_delivered_at)
+      |> order_by([om], asc_nulls_last: om.last_delivered_at)
       |> limit(^batch_size)
       |> select([om], om.id)
 
@@ -124,7 +134,6 @@ defmodule Sequin.Streams do
 
     message_key_and_stream_ids = Enum.map(outstanding_messages, fn om -> {om.message_key, om.message_stream_id} end)
 
-    # Retrieve messages and outstanding message info in one query
     messages =
       message_key_and_stream_ids
       |> Message.where_key_and_stream_id_in()
@@ -146,19 +155,19 @@ defmodule Sequin.Streams do
 
   # Messages
 
-  def message!(key, stream_id) do
+  def get_message!(key, stream_id) do
     key
     |> Message.where_key_and_stream_id(stream_id)
     |> Repo.one!()
   end
 
-  def assign_message_seqs_with_lock(limit \\ 10_000) do
-    lock_key = :erlang.phash2("assign_message_seqs_with_lock")
+  def assign_message_seqs_with_lock(stream_id, limit \\ 10_000) do
+    lock_key = {"assign_message_seqs_with_lock", stream_id}
 
     Repo.transact(fn ->
-      case acquire_lock(lock_key) do
+      case Postgres.try_advisory_xact_lock(lock_key) do
         :ok ->
-          assign_message_seqs(limit)
+          assign_message_seqs(stream_id, limit)
 
           :ok
 
@@ -168,10 +177,10 @@ defmodule Sequin.Streams do
     end)
   end
 
-  def assign_message_seqs(limit \\ 10_000) do
+  def assign_message_seqs(stream_id, limit \\ 10_000) do
     subquery =
       from(m in Message,
-        where: is_nil(m.seq),
+        where: is_nil(m.seq) and m.stream_id == ^stream_id,
         order_by: [asc: m.updated_at],
         select: %{key: m.key, stream_id: m.stream_id},
         limit: ^limit
@@ -182,21 +191,16 @@ defmodule Sequin.Streams do
     )
   end
 
-  defp acquire_lock(lock_key) do
-    case Repo.query("SELECT pg_try_advisory_xact_lock($1)", [lock_key]) do
-      {:ok, %{rows: [[true]]}} -> :ok
-      _ -> {:error, :locked}
-    end
-  end
-
   def upsert_messages(messages, is_retry? \\ false) do
+    now = DateTime.utc_now()
+
     messages =
       Enum.map(messages, fn message ->
         message
         |> Sequin.Map.from_ecto()
         |> Message.put_data_hash()
-        |> Map.put(:updated_at, DateTime.utc_now())
-        |> Map.put(:inserted_at, DateTime.utc_now())
+        |> Map.put(:updated_at, now)
+        |> Map.put(:inserted_at, now)
         |> Map.put(:seq, nil)
       end)
 
@@ -239,17 +243,17 @@ defmodule Sequin.Streams do
 
   # Outstanding Messages
 
-  def outstanding_messages_for_consumer(consumer_id) do
+  def list_outstanding_messages_for_consumer(consumer_id) do
     consumer_id
     |> OutstandingMessage.where_consumer_id()
     |> Repo.all()
   end
 
   def populate_outstanding_messages_with_lock(consumer_id) do
-    lock_key = :erlang.phash2(["populate_outstanding_messages_with_lock", consumer_id])
+    lock_key = {"populate_outstanding_messages_with_lock", consumer_id}
 
     Repo.transact(fn ->
-      case acquire_lock(lock_key) do
+      case Postgres.try_advisory_xact_lock(lock_key) do
         :ok ->
           populate_outstanding_messages(consumer_id)
 
@@ -269,7 +273,7 @@ defmodule Sequin.Streams do
         consumer_id: UUID.string_to_binary!(consumer.id),
         stream_id: UUID.string_to_binary!(consumer.stream_id),
         now: now,
-        max_slots: consumer.max_ack_pending * 5,
+        max_outstanding_message_count: consumer.max_ack_pending * 5,
         table_schema: "streams"
       )
 
@@ -280,7 +284,7 @@ defmodule Sequin.Streams do
   end
 
   def populate_outstanding_messages(consumer_id) do
-    consumer = consumer!(consumer_id)
+    consumer = get_consumer!(consumer_id)
     populate_outstanding_messages(consumer)
   end
 end

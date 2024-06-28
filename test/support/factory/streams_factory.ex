@@ -4,14 +4,16 @@ defmodule Sequin.Factory.StreamsFactory do
 
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Postgres
   alias Sequin.Repo
+  alias Sequin.Streams
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerState
   alias Sequin.Streams.Message
   alias Sequin.Streams.OutstandingMessage
   alias Sequin.Streams.Stream
 
-  def message_data, do: Faker.Lorem.sentence()
+  def message_data, do: Faker.String.base64(24)
 
   # OutstandingMessage
 
@@ -76,7 +78,7 @@ defmodule Sequin.Factory.StreamsFactory do
         stream_id: Factory.uuid(),
         data_hash: Base.encode64(:crypto.hash(:sha256, data)),
         data: data,
-        seq: :erlang.unique_integer([:positive])
+        seq: Postgres.sequence_nextval("streams.messages_seq")
       },
       attrs
     )
@@ -89,14 +91,18 @@ defmodule Sequin.Factory.StreamsFactory do
   end
 
   def insert_message!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!().id end)
+
     attrs
+    |> Map.put(:stream_id, stream_id)
     |> message()
     |> Repo.insert!()
   end
 
   # ConsumerState
 
-  def consumer_state(attrs \\ []) do
+  def get_consumer_state(attrs \\ []) do
     merge_attributes(
       %ConsumerState{
         consumer_id: Factory.uuid(),
@@ -106,9 +112,9 @@ defmodule Sequin.Factory.StreamsFactory do
     )
   end
 
-  def consumer_state_attrs(attrs \\ []) do
+  def get_consumer_state_attrs(attrs \\ []) do
     attrs
-    |> consumer_state()
+    |> get_consumer_state()
     |> Sequin.Map.from_ecto()
   end
 
@@ -119,7 +125,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     attrs
     |> Map.put(:consumer_id, consumer_id)
-    |> consumer_state()
+    |> get_consumer_state()
     |> Repo.insert!()
   end
 
@@ -181,9 +187,12 @@ defmodule Sequin.Factory.StreamsFactory do
 
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    attrs
-    |> Map.put(:account_id, account_id)
-    |> stream()
-    |> Repo.insert!()
+    {:ok, stream} =
+      attrs
+      |> Map.put(:account_id, account_id)
+      |> stream_attrs()
+      |> Streams.create_with_lifecycle()
+
+    stream
   end
 end

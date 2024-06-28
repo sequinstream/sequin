@@ -6,13 +6,13 @@ WITH current_outstanding_count AS (
   WHERE
     consumer_id = :consumer_id
 ),
-max_new_messages AS (
+max_new_outstanding_messages AS (
   SELECT
-    :max_slots -(
+    :max_outstanding_message_count -(
       SELECT
         count
       FROM
-        current_outstanding_count) AS max_new_messages
+        current_outstanding_count) AS max_new_outstanding_messages
 ),
 consumer_state AS (
   SELECT
@@ -38,9 +38,9 @@ new_messages AS (
       m.seq ASC
     LIMIT (
       SELECT
-        max_new_messages
+        max_new_outstanding_messages
       FROM
-        max_new_messages)
+        max_new_outstanding_messages)
 ),
 new_outstanding_messages AS (
 INSERT INTO streams.outstanding_messages AS om(consumer_id, message_key, message_seq, message_stream_id, state, inserted_at, updated_at)
@@ -70,7 +70,10 @@ UPDATE
 SET
   message_seq_cursor =(
     SELECT
-      coalesce(max(seq), 0)
+      coalesce(max(seq),(
+          SELECT
+            message_seq_cursor
+          FROM consumer_state))
     FROM
       new_messages),
   count_pulled_into_outstanding = count_pulled_into_outstanding +(

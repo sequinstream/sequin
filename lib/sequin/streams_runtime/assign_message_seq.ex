@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.AssignMessageSeqServer do
+defmodule Sequin.StreamsRuntime.AssignMessageSeq do
   @moduledoc """
   This GenServer updates messages in the message table that are missing a `seq`. It updates them
   with a `seq`.
@@ -23,42 +23,57 @@ defmodule Sequin.Streams.AssignMessageSeqServer do
 
     typedstruct do
       field :interval_ms, non_neg_integer()
+      field :stream_id, String.t(), enforce: true
       field :test_pid, pid()
     end
   end
 
+  def child_spec(opts) do
+    stream_id = Keyword.fetch!(opts, :stream_id)
+
+    %{
+      id: via_tuple(stream_id),
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
   def start_link(opts) do
-    name = Keyword.get(opts, :name, AssignMessageSeqServer)
-    GenServer.start_link(AssignMessageSeqServer, opts, name: name)
+    stream_id = Keyword.fetch!(opts, :stream_id)
+    GenServer.start_link(AssignMessageSeq, opts, name: via_tuple(stream_id))
+  end
+
+  def via_tuple(stream_id) do
+    Sequin.ProcessRegistry.via_tuple({__MODULE__, stream_id})
   end
 
   @impl GenServer
   def init(opts) do
     interval = Keyword.get(opts, :interval_ms, 1)
     test_pid = Keyword.get(opts, :test_pid, nil)
+    stream_id = Keyword.fetch!(opts, :stream_id)
 
     if test_pid do
       :ok = Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
-    state = %State{interval_ms: interval, test_pid: test_pid}
+    state = %State{interval_ms: interval, test_pid: test_pid, stream_id: stream_id}
     Process.send_after(self(), :poll, 0)
     {:ok, state}
   end
 
   @impl GenServer
   def handle_info(:poll, state) do
-    case Streams.assign_message_seqs_with_lock() do
+    case Streams.assign_message_seqs_with_lock(state.stream_id) do
       {:ok, _} ->
         :ok
 
       {:error, :locked} ->
-        Logger.warning("[AssignMessageSeqServer] Tried to assign message seqs, but another process already has the lock")
+        Logger.warning("[AssignMessageSeq] Tried to assign message seqs, but another process already has the lock")
         :ok
     end
 
     if state.test_pid do
-      send(state.test_pid, {AssignMessageSeqServer, :assign_done})
+      send(state.test_pid, {AssignMessageSeq, :assign_done})
     end
 
     schedule_poll(state)
@@ -70,7 +85,7 @@ defmodule Sequin.Streams.AssignMessageSeqServer do
         reraise error, __STACKTRACE__
       end
 
-      Logger.error("[AssignMessageSeqServer] Error assigning message seqs", error: error)
+      Logger.error("[AssignMessageSeq] Error assigning message seqs", error: error)
       schedule_poll(state)
 
       {:noreply, state}

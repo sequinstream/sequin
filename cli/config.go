@@ -2,7 +2,8 @@ package cli
 
 // Config holds the global configuration for the CLI
 type Config struct {
-	Context string
+	Context  string
+	StreamID string
 }
 
 // GetServerURL returns the server URL based on the current context

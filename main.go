@@ -28,7 +28,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	scli.WithCheats().CheatCommand.Hidden()
 
 	// Add global context flag
-	scli.Flag("context", "Use a specific context").StringVar(&config.Context)
+	scli.Flag("context", "Use a specific context").StringVar(&config.Context.Name)
 
 	cli.AddStreamCommands(scli, &config)
 	cli.AddContextCommands(scli, &config)

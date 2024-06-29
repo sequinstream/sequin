@@ -4,20 +4,16 @@ defmodule Sequin.DynamicSupervisor do
 
   def start_link(init_args) do
     {name, init_args} = Keyword.pop!(init_args, :name)
-    DynamicSupervisor.start_link(__MODULE__, init_args, name: via_tuple(name))
+    DynamicSupervisor.start_link(__MODULE__, init_args, name: name)
   end
 
   def child_spec(opts) do
     name = Keyword.fetch!(opts, :name)
 
     %{
-      id: via_tuple(name),
+      id: name,
       start: {__MODULE__, :start_link, [opts]}
     }
-  end
-
-  def via_tuple(name) do
-    {:via, Registry, {Sequin.Registry, name}}
   end
 
   @impl DynamicSupervisor

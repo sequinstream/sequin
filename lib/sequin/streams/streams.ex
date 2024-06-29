@@ -213,17 +213,20 @@ defmodule Sequin.Streams do
   def assign_message_seqs_with_lock(stream_id, limit \\ 10_000) do
     lock_key = {"assign_message_seqs_with_lock", stream_id}
 
-    Repo.transact(fn ->
-      case Postgres.try_advisory_xact_lock(lock_key) do
-        :ok ->
-          assign_message_seqs(stream_id, limit)
+    Repo.transact(
+      fn ->
+        case Postgres.try_advisory_xact_lock(lock_key) do
+          :ok ->
+            assign_message_seqs(stream_id, limit)
 
-          :ok
+            :ok
 
-        {:error, :locked} ->
-          {:error, :locked}
-      end
-    end)
+          {:error, :locked} ->
+            {:error, :locked}
+        end
+      end,
+      log: false
+    )
   end
 
   def assign_message_seqs(stream_id, limit \\ 10_000) do
@@ -235,8 +238,10 @@ defmodule Sequin.Streams do
         limit: ^limit
       )
 
-    Repo.update_all(from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
-      set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]
+    Repo.update_all(
+      from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
+      [set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]],
+      log: false
     )
   end
 
@@ -341,17 +346,20 @@ defmodule Sequin.Streams do
   def populate_outstanding_messages_with_lock(consumer_id) do
     lock_key = {"populate_outstanding_messages_with_lock", consumer_id}
 
-    Repo.transact(fn ->
-      case Postgres.try_advisory_xact_lock(lock_key) do
-        :ok ->
-          populate_outstanding_messages(consumer_id)
+    Repo.transact(
+      fn ->
+        case Postgres.try_advisory_xact_lock(lock_key) do
+          :ok ->
+            populate_outstanding_messages(consumer_id)
 
-          :ok
+            :ok
 
-        {:error, :locked} ->
-          {:error, :locked}
-      end
-    end)
+          {:error, :locked} ->
+            {:error, :locked}
+        end
+      end,
+      log: false
+    )
   end
 
   def populate_outstanding_messages(%Consumer{} = consumer) do

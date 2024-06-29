@@ -36,7 +36,8 @@ defmodule Sequin.Application do
       # Start a worker by calling: Sequin.Worker.start_link(arg)
       # {Sequin.Worker, arg},
       # Start to serve requests, typically the last entry
-      SequinWeb.Endpoint
+      SequinWeb.Endpoint,
+      {Task.Supervisor, name: Sequin.TaskSupervisor}
     ]
   end
 

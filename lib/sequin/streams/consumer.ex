@@ -47,6 +47,10 @@ defmodule Sequin.Streams.Consumer do
     from([consumer: c] in query, where: c.account_id == ^account_id)
   end
 
+  def where_stream_id(query \\ base_query(), stream_id) do
+    from([consumer: c] in query, where: c.stream_id == ^stream_id)
+  end
+
   def where_id(query \\ base_query(), id) do
     from([consumer: c] in query, where: c.id == ^id)
   end

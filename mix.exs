@@ -60,7 +60,8 @@ defmodule Sequin.MixProject do
       {:faker, "~> 0.18.0", [only: :test]},
       {:uuid, "~> 1.1"},
       {:mix_test_interactive, "~> 2.0", [only: :dev, runtime: false]},
-      {:uxid, "~> 0.2"}
+      {:uxid, "~> 0.2"},
+      {:flow, "~> 1.2"}
     ]
   end
 

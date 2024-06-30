@@ -40,7 +40,8 @@ config :sequin, Sequin.Repo,
     autogenerate: false,
     read_after_writes: true,
     default: {:fragment, "uuid_generate_v4()"}
-  ]
+  ],
+  log: false
 
 # Configures the endpoint
 config :sequin, SequinWeb.Endpoint,

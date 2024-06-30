@@ -10,7 +10,7 @@ defmodule SequinWeb.Plugs.FetchUser do
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    case List.first(Accounts.list()) do
+    case List.first(Accounts.list_accounts()) do
       %Account{} = account ->
         conn
         |> assign(:account, account)

@@ -5,7 +5,7 @@ defmodule Sequin.Postgres do
   def try_advisory_xact_lock(term) do
     lock_key = :erlang.phash2(term)
 
-    case Repo.query("SELECT pg_try_advisory_xact_lock($1)", [lock_key], log: false) do
+    case Repo.query("SELECT pg_try_advisory_xact_lock($1)", [lock_key]) do
       {:ok, %{rows: [[true]]}} -> :ok
       {:ok, %{rows: [[false]]}} -> {:error, :locked}
     end

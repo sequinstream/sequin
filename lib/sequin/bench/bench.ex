@@ -19,32 +19,31 @@ defmodule Sequin.Bench do
 
   ```elixir
   # Run the benchmark
-  map_fun = fn i -> [i, i * i] end
   Sequin.Bench.run(
     [
-      {"flat_map", fn input -> Enum.flat_map(input, map_fun) end},
-      {"map.flatten", fn input -> input |> Enum.map(map_fun) |> List.flatten() end}
+      {"flat_map", fn [input, batch_size] -> Enum.flat_map(input, &List.duplicate(&1, batch_size)) end},
+      {"map.flatten", fn [input, batch_size] -> input |> Enum.map(&List.duplicate(&1, batch_size)) |> List.flatten() end}
     ],
     max_time_ms: 3000,
     warmup_time_ms: 1000,
     parallel: [1, 4],
     inputs: [
-      {"Small", Enum.to_list(1..1_000)},
-      {"Medium", Enum.to_list(1..10_000)},
-      {"Large", Enum.to_list(1..100_000)}
+      {"Small_Batch_2", [Enum.to_list(1..1_000), 2]},
+      {"Medium_Batch_5", [Enum.to_list(1..10_000), 5]},
+      {"Large_Batch_10", [Enum.to_list(1..100_000), 10]}
     ]
   )
   ```
 
   This will benchmark two different ways of mapping over a list and flattening the result,
-  with three different input sizes and two levels of parallelization.
+  with three different input sizes and batch sizes, and two levels of parallelization.
 
   ## Options
 
   - `:max_time_ms` - Maximum time in milliseconds to run each scenario (default: 10000)
   - `:warmup_time_ms` - Time in milliseconds to warm up before starting measurements (default: 1000)
   - `:parallel` - List of parallelization levels to test (default: [1])
-  - `:inputs` - List of inputs to test, each as a tuple of {name, input} (default: [{"Default", nil}])
+  - `:inputs` - List of inputs to test, each as a tuple of {name, input_args} where input_args is a list (default: [{"Default", []}])
 
   ## Output
 
@@ -56,10 +55,19 @@ defmodule Sequin.Bench do
   require Logger
 
   def run(scenarios, options) do
+    scenarios =
+      Enum.map(
+        scenarios,
+        fn
+          {name, fun} -> {name, fun, []}
+          {name, fun, opts} -> {name, fun, opts}
+        end
+      )
+
     max_time_ms = Keyword.get(options, :max_time_ms, 10_000)
     warmup_time_ms = Keyword.get(options, :warmup_time_ms, 1000)
     parallel_list = Keyword.get(options, :parallel, [1])
-    inputs = Keyword.get(options, :inputs, [{"Default", nil}])
+    inputs = Keyword.get(options, :inputs, [{"Default", []}])
     out_dir = Keyword.get(options, :out_dir, File.cwd!())
     print_results = Keyword.get(options, :print_results, true)
 
@@ -68,15 +76,21 @@ defmodule Sequin.Bench do
     File.write!(csv_path, csv_header())
 
     results =
-      for {scenario_name, scenario_fun} <- scenarios,
-          {input_name, input} <- inputs,
+      for {scenario_name, scenario_fun, scenario_opts} <- scenarios,
+          {input_name, input_args} <- inputs,
           parallel <- parallel_list do
+        if before_fun = scenario_opts[:before] do
+          Logger.info("Prepare scenario with before function.")
+          before_fun.(input_args)
+          Logger.info("Prepared.")
+        end
+
         result =
           run_scenario(
             scenario_name,
             scenario_fun,
             input_name,
-            input,
+            input_args,
             parallel,
             max_time_ms,
             warmup_time_ms,
@@ -89,12 +103,21 @@ defmodule Sequin.Bench do
         end
       end
 
-    Logger.info("\nBenchmark results have been written to: #{csv_filename}")
+    Logger.info("\nBenchmark results have been written to: #{csv_path}")
 
     results
   end
 
-  defp run_scenario(scenario_name, scenario_fun, input_name, input, parallel, max_time_ms, warmup_time_ms, print_results) do
+  defp run_scenario(
+         scenario_name,
+         scenario_fun,
+         input_name,
+         input_args,
+         parallel,
+         max_time_ms,
+         warmup_time_ms,
+         print_results
+       ) do
     Logger.info("Starting scenario: #{scenario_name} (Input: #{input_name}, Parallel: #{parallel})")
     start_time = System.monotonic_time(:millisecond)
 
@@ -103,7 +126,7 @@ defmodule Sequin.Bench do
     tasks =
       Enum.map(1..parallel, fn _ ->
         Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-          run_scenario_task(scenario_fun, input, max_time_ms, warmup_time_ms)
+          run_scenario_task(scenario_fun, input_args, max_time_ms, warmup_time_ms)
         end)
       end)
 
@@ -143,14 +166,14 @@ defmodule Sequin.Bench do
     StatsTracker.stop(StatsTracker)
   end
 
-  defp run_scenario_task(scenario_fun, input, max_time_ms, warmup_time_ms) do
+  defp run_scenario_task(scenario_fun, input_args, max_time_ms, warmup_time_ms) do
     start_time = System.monotonic_time(:millisecond)
     end_time = start_time + max_time_ms + warmup_time_ms
 
-    run_loop(scenario_fun, input, start_time, end_time, warmup_time_ms)
+    run_loop(scenario_fun, input_args, start_time, end_time, warmup_time_ms)
   end
 
-  defp run_loop(scenario_fun, input, start_time, end_time, warmup_time_ms) do
+  defp run_loop(scenario_fun, input_args, start_time, end_time, warmup_time_ms) do
     current_time = System.monotonic_time(:millisecond)
 
     cond do
@@ -158,22 +181,22 @@ defmodule Sequin.Bench do
         :ok
 
       current_time - start_time <= warmup_time_ms ->
-        exec_fun(scenario_fun, input)
-        run_loop(scenario_fun, input, start_time, end_time, warmup_time_ms)
+        exec_fun(scenario_fun, input_args)
+        run_loop(scenario_fun, input_args, start_time, end_time, warmup_time_ms)
 
       true ->
-        execution_time_ms = exec_fun(scenario_fun, input)
+        execution_time_ms = exec_fun(scenario_fun, input_args)
 
         if StatsTracker.add_datapoint(StatsTracker, execution_time_ms) do
           :ok
         else
-          run_loop(scenario_fun, input, start_time, end_time, warmup_time_ms)
+          run_loop(scenario_fun, input_args, start_time, end_time, warmup_time_ms)
         end
     end
   end
 
-  defp exec_fun(scenario_fun, input) do
-    {execution_time, _result} = :timer.tc(fn -> scenario_fun.(input) end)
+  defp exec_fun(scenario_fun, input_args) do
+    {execution_time, _result} = :timer.tc(fn -> apply(scenario_fun, input_args) end)
     execution_time / 1000
   end
 

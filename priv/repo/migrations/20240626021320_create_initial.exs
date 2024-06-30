@@ -43,7 +43,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     execute "create sequence streams.messages_seq owned by streams.messages.seq;",
             "drop sequence if exists streams.messages_seq"
 
-    create index(:messages, [:stream_id, :seq, :updated_at],
+    create index(:messages, [:stream_id, :updated_at],
              prefix: "streams",
              where: "seq IS NULL"
            )
@@ -124,16 +124,9 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    execute """
-            alter table streams.outstanding_messages
-            add constraint fk_outstanding_messages_messages
-            foreign key (message_key, message_stream_id)
-            references streams.messages(key, stream_id)
-            """,
-            "alter table streams.outstanding_messages drop constraint if exists fk_outstanding_messages_messages"
-
     create unique_index(:outstanding_messages, [:consumer_id, :message_key], prefix: "streams")
     create index(:outstanding_messages, [:message_key], prefix: "streams")
+    create index(:outstanding_messages, [:consumer_id], prefix: "streams")
 
     create index(
              :outstanding_messages,

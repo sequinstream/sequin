@@ -11,6 +11,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.OutstandingMessage
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
+  alias Sequin.StreamsRuntime
 
   # General
 
@@ -100,6 +101,10 @@ defmodule Sequin.Streams do
     account_id |> Consumer.where_account_id() |> Repo.all()
   end
 
+  def list_consumers_for_stream(stream_id) do
+    stream_id |> Consumer.where_stream_id() |> Repo.all()
+  end
+
   def get_consumer_for_account(account_id, id) do
     res = account_id |> Consumer.where_account_id() |> Consumer.where_id(id) |> Repo.one()
 
@@ -128,6 +133,7 @@ defmodule Sequin.Streams do
     Repo.transact(fn ->
       case delete_consumer(consumer) do
         :ok ->
+          StreamsRuntime.Supervisor.stop_for_consumer(consumer.id)
           delete_consumer_state(consumer)
           consumer
 
@@ -173,33 +179,55 @@ defmodule Sequin.Streams do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
+    max_ack_pending = consumer.max_ack_pending
 
-    params = %{
-      consumer_id: UUID.string_to_binary!(consumer.id),
-      max_ack_pending: consumer.max_ack_pending,
-      batch_size: batch_size,
-      not_visible_until: not_visible_until,
-      now: now
-    }
+    available_oms =
+      consumer.id
+      |> OutstandingMessage.where_consumer_id()
+      |> order_by([om], asc: om.message_seq)
+      |> limit(^max_ack_pending)
 
-    case Query.next_for_consumer(params) do
-      {:ok, results} ->
-        # Comes back mashed together
-        results =
-          Enum.map(results, fn message ->
-            message =
-              message
-              |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
-              |> Map.update!(:stream_id, &UUID.binary_to_string!/1)
+    available_oms_query =
+      from(aom in subquery(available_oms), as: :outstanding_message)
+      |> OutstandingMessage.where_deliverable()
+      |> order_by([aom], asc: aom.message_seq)
+      |> limit(^batch_size)
+      |> lock("FOR UPDATE SKIP LOCKED")
+      |> select([aom], aom.id)
 
-            struct!(Message, message)
-          end)
+    Repo.transact(fn ->
+      case Repo.all(available_oms_query) do
+        aom_ids when aom_ids != [] ->
+          {_, messages} =
+            Repo.update_all(
+              from(om in OutstandingMessage,
+                where: om.id in ^aom_ids,
+                join: m in Message,
+                on: m.key == om.message_key and m.stream_id == om.message_stream_id,
+                select: %{ack_id: om.id, message: m}
+              ),
+              set: [
+                state: "delivered",
+                not_visible_until: not_visible_until,
+                deliver_count: dynamic([om], om.deliver_count + 1),
+                last_delivered_at: now
+              ]
+            )
 
-        {:ok, results}
+          messages =
+            Enum.map(messages, fn %{ack_id: ack_id, message: message} ->
+              %{message | ack_id: ack_id}
+            end)
 
-      error ->
-        error
-    end
+          {:ok, messages}
+
+        [] ->
+          {:ok, []}
+
+        error ->
+          error
+      end
+    end)
   end
 
   # Messages
@@ -210,7 +238,7 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
-  def assign_message_seqs_with_lock(stream_id, limit \\ 10_000) do
+  def assign_message_seqs_with_lock(stream_id, limit \\ 1_000) do
     lock_key = {"assign_message_seqs_with_lock", stream_id}
 
     Repo.transact(
@@ -225,11 +253,11 @@ defmodule Sequin.Streams do
             {:error, :locked}
         end
       end,
-      log: false
+      timeout: :timer.seconds(20)
     )
   end
 
-  def assign_message_seqs(stream_id, limit \\ 10_000) do
+  def assign_message_seqs(stream_id, limit \\ 1_000) do
     subquery =
       from(m in Message,
         where: is_nil(m.seq) and m.stream_id == ^stream_id,
@@ -238,11 +266,17 @@ defmodule Sequin.Streams do
         limit: ^limit
       )
 
-    Repo.update_all(
-      from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
-      [set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]],
-      log: false
-    )
+    {count, msgs} =
+      Repo.update_all(
+        select(
+          from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
+          [m],
+          %{key: m.key, seq: m.seq}
+        ),
+        set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]
+      )
+
+    {count, msgs}
   end
 
   def upsert_messages(messages, is_retry? \\ false) do
@@ -346,20 +380,17 @@ defmodule Sequin.Streams do
   def populate_outstanding_messages_with_lock(consumer_id) do
     lock_key = {"populate_outstanding_messages_with_lock", consumer_id}
 
-    Repo.transact(
-      fn ->
-        case Postgres.try_advisory_xact_lock(lock_key) do
-          :ok ->
-            populate_outstanding_messages(consumer_id)
+    Repo.transact(fn ->
+      case Postgres.try_advisory_xact_lock(lock_key) do
+        :ok ->
+          populate_outstanding_messages(consumer_id)
 
-            :ok
+          :ok
 
-          {:error, :locked} ->
-            {:error, :locked}
-        end
-      end,
-      log: false
-    )
+        {:error, :locked} ->
+          {:error, :locked}
+      end
+    end)
   end
 
   def populate_outstanding_messages(%Consumer{} = consumer) do

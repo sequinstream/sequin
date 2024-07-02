@@ -102,6 +102,59 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     create index(:messages, [:stream_id, :token8], prefix: "streams", where: "token8 IS NOT NULL")
     create index(:messages, [:stream_id, :token9], prefix: "streams", where: "token9 IS NOT NULL")
 
+    execute """
+            CREATE OR REPLACE FUNCTION streams.validate_message_subject(subject text)
+            RETURNS boolean
+            LANGUAGE plpgsql
+             IMMUTABLE
+            AS $function$
+            DECLARE
+                parts TEXT[];
+                part TEXT;
+            BEGIN
+                -- Check if subject is not empty and doesn't start with a period
+                IF subject IS NULL OR subject = '' OR subject LIKE '.%' THEN
+                    RETURN FALSE;
+                END IF;
+
+                -- Split the subject into parts
+                parts := string_to_array(subject, '.');
+
+                -- Check if there's at least one part
+                IF array_length(parts, 1) = 0 THEN
+                    RETURN FALSE;
+                END IF;
+
+                -- Check each part
+                FOREACH part IN ARRAY parts
+                LOOP
+                    -- Check if part is empty
+                    IF part = '' THEN
+                        RETURN FALSE;
+                    END IF;
+
+                    -- Check for disallowed characters
+                    IF part ~ '[.* >]' THEN
+                        RETURN FALSE;
+                    END IF;
+
+                    -- Check for non-ASCII characters
+                    IF part ~ '[^ -~]' THEN
+                        RETURN FALSE;
+                    END IF;
+                END LOOP;
+
+                -- All checks passed
+                RETURN TRUE;
+            END;
+            $function$
+            """,
+            """
+            drop function if exists streams.validate_message_subject;
+            """
+
+    execute "alter table streams.messages add constraint validate_message_subject check (streams.validate_message_subject(subject));"
+
     create index(:messages, [:stream_id, :token10],
              prefix: "streams",
              where: "token10 IS NOT NULL"

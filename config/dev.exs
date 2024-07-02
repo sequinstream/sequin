@@ -23,6 +23,23 @@ config :sequin, Sequin.Repo,
   # High for dev, for benchmarking
   pool_size: 30
 
+config :sequin, Sequin.Vault,
+  ciphers: [
+    # In AES.GCM, it is important to specify 12-byte IV length for
+    # interoperability with other encryption software. See this GitHub issue
+    # for more details: https://github.com/danielberkompas/cloak/issues/93
+    #
+    # In Cloak 2.0, this will be the default iv length for AES.GCM.
+    aes_gcm:
+      {Cloak.Ciphers.AES.GCM,
+       tag: "AES.GCM.V1",
+       key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP"),
+       iv_length: 12},
+    aes_ctr:
+      {Cloak.Ciphers.AES.CTR,
+       tag: "AES.CTR.V1", key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP")}
+  ]
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #

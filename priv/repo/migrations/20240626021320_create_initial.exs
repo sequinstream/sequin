@@ -257,5 +257,21 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              ],
              prefix: "streams"
            )
+
+    create table(:postgres_databases) do
+      add :dbname, :string, null: false
+      add :host, :string, null: false
+      add :pool_size, :integer, default: 10, null: false
+      add :port, :integer, null: false
+      add :queue_interval, :integer, default: 50, null: false
+      add :queue_target, :integer, default: 100, null: false
+      add :ssl, :boolean, default: false, null: false
+      add :user, :string, null: false
+      add :password, :binary, null: false
+
+      add :account_id, references(:accounts), null: false
+
+      timestamps()
+    end
   end
 end

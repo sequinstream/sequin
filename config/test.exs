@@ -22,6 +22,24 @@ config :sequin, Sequin.Repo,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: System.schedulers_online() * 2
 
+config :sequin, Sequin.Vault,
+  ciphers: [
+    aes_gcm: {
+      Cloak.Ciphers.AES.GCM,
+      # In AES.GCM, it is important to specify 12-byte IV length for
+      # interoperability with other encryption software. See this GitHub issue
+      # for more details: https://github.com/danielberkompas/cloak/issues/93
+      #
+      # In Cloak 2.0, this will be the default iv length for AES.GCM.
+      tag: "AES.GCM.V1",
+      key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP"),
+      iv_length: 12
+    },
+    aes_ctr:
+      {Cloak.Ciphers.AES.CTR,
+       tag: "AES.CTR.V1", key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP")}
+  ]
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :sequin, SequinWeb.Endpoint,

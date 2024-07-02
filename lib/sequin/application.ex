@@ -37,7 +37,8 @@ defmodule Sequin.Application do
       # {Sequin.Worker, arg},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint,
-      {Task.Supervisor, name: Sequin.TaskSupervisor}
+      {Task.Supervisor, name: Sequin.TaskSupervisor},
+      {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity}
     ]
   end
 

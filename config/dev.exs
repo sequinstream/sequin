@@ -21,7 +21,7 @@ config :sequin, Sequin.Repo,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
   # High for dev, for benchmarking
-  pool_size: 300
+  pool_size: 30
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

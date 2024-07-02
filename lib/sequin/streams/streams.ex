@@ -2,6 +2,7 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
+  alias Sequin.Cache
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
@@ -110,6 +111,20 @@ defmodule Sequin.Streams do
     stream_id |> Consumer.where_stream_id() |> Repo.all()
   end
 
+  def cached_list_consumers_for_stream(stream_id) do
+    Cache.get_or_store(
+      list_consumers_for_stream_cache_key(stream_id),
+      fn -> list_consumers_for_stream(stream_id) end,
+      :timer.minutes(10)
+    )
+  end
+
+  def delete_cached_list_consumers_for_stream(stream_id) do
+    Cache.delete(list_consumers_for_stream_cache_key(stream_id))
+  end
+
+  defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
+
   def get_consumer_for_account(account_id, id) do
     res = account_id |> Consumer.where_account_id() |> Consumer.where_id(id) |> Repo.one()
 
@@ -120,12 +135,22 @@ defmodule Sequin.Streams do
   end
 
   def create_consumer_for_account_with_lifecycle(account_id, attrs) do
-    Repo.transact(fn ->
-      with {:ok, consumer} <- create_consumer(account_id, attrs),
-           :ok <- create_consumer_partition(consumer) do
+    res =
+      Repo.transact(fn ->
+        with {:ok, consumer} <- create_consumer(account_id, attrs),
+             :ok <- create_consumer_partition(consumer) do
+          {:ok, consumer}
+        end
+      end)
+
+    case res do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
         {:ok, consumer}
-      end
-    end)
+
+      error ->
+        error
+    end
   end
 
   def create_consumer_with_lifecycle(attrs) do
@@ -135,23 +160,41 @@ defmodule Sequin.Streams do
   end
 
   def delete_consumer_with_lifecycle(consumer) do
-    Repo.transact(fn ->
-      case delete_consumer(consumer) do
-        :ok ->
-          StreamsRuntime.Supervisor.stop_for_consumer(consumer.id)
-          :ok = delete_consumer_partition(consumer)
-          consumer
+    res =
+      Repo.transact(fn ->
+        case delete_consumer(consumer) do
+          :ok ->
+            StreamsRuntime.Supervisor.stop_for_consumer(consumer.id)
+            :ok = delete_consumer_partition(consumer)
+            consumer
 
-        error ->
-          error
-      end
-    end)
+          error ->
+            error
+        end
+      end)
+
+    case res do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
+        {:ok, consumer}
+
+      error ->
+        error
+    end
   end
 
   def update_consumer_with_lifecycle(%Consumer{} = consumer, attrs) do
     consumer
     |> Consumer.update_changeset(attrs)
     |> Repo.update()
+    |> case do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
+        {:ok, consumer}
+
+      error ->
+        error
+    end
   end
 
   def create_consumer(account_id, attrs) do
@@ -250,7 +293,7 @@ defmodule Sequin.Streams do
         ]
       )
 
-    consumers = list_consumers_for_stream(stream_id)
+    consumers = cached_list_consumers_for_stream(stream_id)
 
     Repo.transact(fn ->
       {count, messages} =

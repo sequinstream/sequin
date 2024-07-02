@@ -8,6 +8,7 @@ defmodule Sequin.Extensions.Replication do
 
   use Postgrex.ReplicationConnection
 
+  alias __MODULE__
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
@@ -27,31 +28,71 @@ defmodule Sequin.Extensions.Replication do
     use TypedStruct
 
     typedstruct do
-      field :slot_name, String.t()
+      field :current_xid, nil | integer()
+      field :current_xaction_lsn, nil | integer()
+      field :current_commit_ts, nil | integer()
+      field :last_committed_lsn, integer(), default: 0
       field :publication, String.t()
-      field :tid, :ets.tid()
+      field :slot_name, String.t()
       field :step, :disconnected | :streaming
-      field :ts, nil | integer()
+      field :test_pid, pid()
+      field :tid, :ets.tid()
+      field :handle_message_fun, (map() -> any())
     end
   end
 
   def start_link(args) do
+    id = Keyword.fetch!(args, :id)
     connection = Keyword.fetch!(args, :connection)
     publication = Keyword.fetch!(args, :publication)
     slot_name = Keyword.fetch!(args, :slot_name)
+    test_pid = Keyword.get(args, :test_pid)
+    handle_message_fun = Keyword.get(args, :handle_message_fun)
 
-    opts = Keyword.merge([auto_reconnect: true], connection)
+    opts = Keyword.merge([auto_reconnect: true, name: via_tuple(id)], connection)
 
     init = %State{
       publication: publication,
-      slot_name: slot_name
+      slot_name: slot_name,
+      test_pid: test_pid,
+      handle_message_fun: handle_message_fun
     }
 
-    Postgrex.ReplicationConnection.start_link(__MODULE__, init, opts)
+    Postgrex.ReplicationConnection.start_link(Replication, init, opts)
+  end
+
+  def child_spec(opts) do
+    id = Keyword.fetch!(opts, :id)
+
+    %{
+      id: via_tuple(id),
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
+  def via_tuple(id) do
+    {:via, Registry, {Sequin.Registry, {Replication, id}}}
   end
 
   @impl Postgrex.ReplicationConnection
-  def handle_connect(%State{} = state) do
+  def init(%State{} = state) do
+    tid = :ets.new(Replication, [:public, :set])
+    {:ok, %{state | tid: tid, step: :disconnected}}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_connect(state) do
+    query = "CREATE_REPLICATION_SLOT #{state.slot_name} LOGICAL pgoutput NOEXPORT_SNAPSHOT"
+
+    {:query, query, %{state | step: :create_slot}}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_result([%Postgrex.Result{command: :create}], %{step: :create_slot} = state) do
+    if state.test_pid do
+      send(state.test_pid, {Replication, :slot_created})
+    end
+
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 
@@ -59,6 +100,17 @@ defmodule Sequin.Extensions.Replication do
   end
 
   @impl Postgrex.ReplicationConnection
+  def handle_result(%Postgrex.Error{postgres: %{code: :duplicate_object}}, %{step: :create_slot} = state) do
+    if state.test_pid do
+      send(state.test_pid, {Replication, :slot_created})
+    end
+
+    query =
+      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
+
+    {:stream, query, [], %{state | step: :streaming}}
+  end
+
   def handle_result(result, state) do
     Logger.error("Unknown result: #{inspect(result)}")
     {:noreply, state}
@@ -68,23 +120,17 @@ defmodule Sequin.Extensions.Replication do
   def stop(pid), do: GenServer.stop(pid)
 
   @impl Postgrex.ReplicationConnection
-  def init(%State{} = state) do
-    tid = :ets.new(__MODULE__, [:public, :set])
-    {:ok, %{state | tid: tid, step: :disconnected}}
-  end
-
-  @impl Postgrex.ReplicationConnection
-  def handle_data(<<?w, _header::192, msg::binary>>, state) do
-    new_state =
+  def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
+    next_state =
       msg
       |> Decoder.decode_message()
       |> process_message(state)
 
-    {:noreply, new_state}
+    {:noreply, next_state}
   end
 
   # keepalive
-  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, state) do
+  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
     messages =
       case reply do
         1 -> [<<?r, wal_end + 1::64, wal_end + 1::64, wal_end + 1::64, current_time()::64, 0>>]
@@ -99,7 +145,7 @@ defmodule Sequin.Extensions.Replication do
     {:noreply, state}
   end
 
-  defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, state) do
+  defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     columns =
       Enum.map(columns, fn %{name: name, type: type} ->
         %{name: name, type: type}
@@ -109,12 +155,16 @@ defmodule Sequin.Extensions.Replication do
     state
   end
 
-  defp process_message(%Begin{commit_timestamp: ts}, state) do
-    %{state | ts: ts}
+  defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{} = state) do
+    %{state | current_commit_ts: ts, current_xaction_lsn: lsn, current_xid: xid}
   end
 
-  defp process_message(%Commit{}, state) do
-    %{state | ts: nil}
+  # Ensure we do not have an out-of-order bug by asserting equality
+  defp process_message(
+         %Commit{lsn: lsn, commit_timestamp: ts},
+         %State{current_xaction_lsn: lsn, current_commit_ts: ts} = state
+       ) do
+    %{state | last_committed_lsn: lsn, current_xaction_lsn: nil, current_xid: nil, current_commit_ts: nil}
   end
 
   defp process_message(%Insert{} = msg, state) do
@@ -122,7 +172,7 @@ defmodule Sequin.Extensions.Replication do
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     record = %NewRecord{
-      commit_timestamp: state.ts,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       schema: schema,
       table: table,
@@ -130,12 +180,12 @@ defmodule Sequin.Extensions.Replication do
       type: "insert"
     }
 
-    publish(record)
+    handle_message(state, record)
 
     state
   end
 
-  defp process_message(%Update{} = msg, state) do
+  defp process_message(%Update{} = msg, %State{} = state) do
     Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
@@ -152,7 +202,7 @@ defmodule Sequin.Extensions.Replication do
     #        }
 
     record = %UpdatedRecord{
-      commit_timestamp: state.ts,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       schema: schema,
       table: table,
@@ -161,19 +211,17 @@ defmodule Sequin.Extensions.Replication do
       type: "update"
     }
 
-    # -    broadcast(record, state.tenant)
-
-    publish(record)
+    handle_message(state, record)
 
     state
   end
 
-  defp process_message(%Delete{} = msg, state) do
+  defp process_message(%Delete{} = msg, %State{} = state) do
     Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     record = %DeletedRecord{
-      commit_timestamp: state.ts,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       schema: schema,
       table: table,
@@ -195,7 +243,7 @@ defmodule Sequin.Extensions.Replication do
     #   -    broadcast(record, state.tenant)
     #   +    publish(record)
 
-    publish(record)
+    handle_message(state, record)
 
     state
   end
@@ -220,30 +268,17 @@ defmodule Sequin.Extensions.Replication do
   #   subscription_ids: nil,
   #   type: "UPDATE"
   # }
-  def publish(change) do
-    # # -    |> Enum.each(fn params ->
-    # # -      inspect({params, change})
-    # # -      # Phoenix.PubSub.broadcast_from(
-    # # -      #   Realtime.PubSub,
-    # # -      #   self(),
-    # # -      #   PostgresCdcStream.topic(tenant, params),
-    # # -      #   change,
-    # # -      #   PostgresCdcStream.MessageDispatcher
-    # # -      # )
-    # # -    end)
-    # kind =
-    #   case change do
-    #     %NewRecord{} -> "insert"
-    #     %UpdatedRecord{} -> "update"
-    #     %DeletedRecord{} -> "delete"
-    #   end
+  defp handle_message(%State{} = state, change) do
+    if state.handle_message_fun do
+      # For DI in test
+      state.handle_message_fun.(change)
+    else
+      change
+      |> JSON.encode_struct_with_type()
+      |> Jason.encode!()
 
-    # json =
-    change
-    |> JSON.encode_struct_with_type()
-    |> Jason.encode!()
-
-    # TODO
+      :ok
+    end
   end
 
   def data_tuple_to_map(column, tuple_data) do

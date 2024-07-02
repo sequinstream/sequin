@@ -39,7 +39,8 @@ defmodule Sequin.Application do
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint,
       {Task.Supervisor, name: Sequin.TaskSupervisor},
-      {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity}
+      {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
+      {Oban, Application.fetch_env!(:sequin, Oban)}
     ]
   end
 

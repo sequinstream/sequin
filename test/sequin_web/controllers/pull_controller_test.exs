@@ -7,11 +7,16 @@ defmodule SequinWeb.PullControllerTest do
 
   setup :authenticated_conn
 
+  @one_day_ago DateTime.add(DateTime.utc_now(), -24, :hour)
+
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
     stream = StreamsFactory.insert_stream!(account_id: account.id)
     other_stream = StreamsFactory.insert_stream!(account_id: other_account.id)
-    consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+
+    consumer =
+      StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id, backfill_completed_at: @one_day_ago)
+
     other_consumer = StreamsFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
     %{stream: stream, consumer: consumer, other_consumer: other_consumer}
   end

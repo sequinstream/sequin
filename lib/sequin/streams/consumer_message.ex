@@ -16,7 +16,7 @@ defmodule Sequin.Streams.ConsumerMessage do
     field :last_delivered_at, :utc_datetime_usec
     field :message_seq, :integer
     field :not_visible_until, :utc_datetime_usec
-    field :state, Ecto.Enum, values: [:delivered, :available, :pending_redelivery]
+    field :state, Ecto.Enum, values: [:acked, :available, :delivered, :pending_redelivery]
 
     timestamps(type: :utc_datetime_usec)
   end

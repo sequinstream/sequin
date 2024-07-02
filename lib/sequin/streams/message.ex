@@ -157,6 +157,15 @@ defmodule Sequin.Streams.Message do
     )
   end
 
+  @spec where_state(Ecto.Query.t(), atom()) :: Ecto.Query.t()
+  def where_state(query \\ base_query(), state) do
+    from([message: m] in query, where: m.state == ^state)
+  end
+
+  def where_seq_gt(query \\ base_query(), seq) do
+    from([message: m] in query, where: m.seq > ^seq)
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(m in query, as: :message)
   end

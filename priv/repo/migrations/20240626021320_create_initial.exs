@@ -193,7 +193,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     ## TODO: Add indexes to subject space
 
-    execute "create type streams.consumer_message_state as enum ('delivered', 'available', 'pending_redelivery');",
+    execute "create type streams.consumer_message_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
             "drop type if exists streams.consumer_message_state"
 
     create table(:consumers) do
@@ -210,6 +210,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       add :slug, :text, null: false
       add :filter_subject, :text, null: false
+      add :backfill_completed_at, :utc_datetime_usec
 
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000

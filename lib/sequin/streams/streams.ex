@@ -6,6 +6,7 @@ defmodule Sequin.Streams do
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
+  alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
@@ -133,11 +134,15 @@ defmodule Sequin.Streams do
     end
   end
 
-  def create_consumer_for_account_with_lifecycle(account_id, attrs) do
+  def create_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
     res =
       Repo.transact(fn ->
         with {:ok, consumer} <- create_consumer(account_id, attrs),
              :ok <- create_consumer_partition(consumer) do
+          unless opts[:no_backfill] do
+            {:ok, _} = ConsumerBackfillWorker.create(consumer.id)
+          end
+
           {:ok, consumer}
         end
       end)
@@ -145,6 +150,7 @@ defmodule Sequin.Streams do
     case res do
       {:ok, consumer} ->
         delete_cached_list_consumers_for_stream(consumer.stream_id)
+
         {:ok, consumer}
 
       error ->
@@ -152,10 +158,10 @@ defmodule Sequin.Streams do
     end
   end
 
-  def create_consumer_with_lifecycle(attrs) do
+  def create_consumer_with_lifecycle(attrs, opts \\ []) do
     account_id = Map.fetch!(attrs, :account_id)
 
-    create_consumer_for_account_with_lifecycle(account_id, attrs)
+    create_consumer_for_account_with_lifecycle(account_id, attrs, opts)
   end
 
   def delete_consumer_with_lifecycle(consumer) do
@@ -259,6 +265,24 @@ defmodule Sequin.Streams do
 
   # Messages
 
+  def list_messages_for_stream(stream_id, params \\ []) do
+    params
+    |> Enum.reduce(Message.where_stream_id(stream_id), fn
+      {:seq_gt, seq}, query ->
+        Message.where_seq_gt(query, seq)
+
+      {:limit, limit}, query ->
+        limit(query, ^limit)
+
+      {:select, select}, query ->
+        select(query, ^select)
+
+      {:order_by, order_by}, query ->
+        order_by(query, ^order_by)
+    end)
+    |> Repo.all()
+  end
+
   def get_message!(subject, stream_id) do
     subject
     |> Message.where_subject_and_stream_id(stream_id)
@@ -286,8 +310,8 @@ defmodule Sequin.Streams do
           set: [
             data: fragment("EXCLUDED.data"),
             data_hash: fragment("EXCLUDED.data_hash"),
-            updated_at: fragment("EXCLUDED.updated_at"),
-            seq: fragment("nextval('streams.messages_seq')")
+            seq: fragment("nextval('streams.messages_seq')"),
+            updated_at: fragment("EXCLUDED.updated_at")
           ]
         ]
       )
@@ -305,26 +329,16 @@ defmodule Sequin.Streams do
           returning: [:subject, :stream_id, :seq]
         )
 
-      {consumer_ids, message_subjects, message_seqs} =
-        consumers
-        |> Enum.flat_map(fn consumer ->
-          messages
-          |> Enum.filter(fn message ->
-            Consumer.filter_matches_subject?(consumer.filter_subject, message.subject)
-          end)
-          |> Enum.map(fn message ->
-            {UUID.string_to_binary!(consumer.id), message.subject, message.seq}
-          end)
+      consumers
+      |> Enum.reject(&(&1.backfill_completed_at == nil))
+      |> Enum.flat_map(fn consumer ->
+        messages
+        |> Enum.filter(fn message -> Consumer.filter_matches_subject?(consumer.filter_subject, message.subject) end)
+        |> Enum.map(fn message ->
+          %ConsumerMessage{consumer_id: consumer.id, message_subject: message.subject, message_seq: message.seq}
         end)
-        |> Enum.reduce({[], [], []}, fn {consumer_id, message_subject, message_seq}, {ids, subjects, seqs} ->
-          {[consumer_id | ids], [message_subject | subjects], [message_seq | seqs]}
-        end)
-
-      Query.upsert_consumer_messages(
-        consumer_ids: consumer_ids,
-        message_subjects: message_subjects,
-        message_seqs: message_seqs
-      )
+      end)
+      |> upsert_consumer_messages()
 
       {:ok, count}
     end)
@@ -342,13 +356,7 @@ defmodule Sequin.Streams do
       end
   end
 
-  def list_messages_for_stream(stream_id) do
-    stream_id
-    |> Message.where_stream_id()
-    |> Repo.all()
-  end
-
-  # Outstanding Messages
+  # Consumer Messages
 
   def all_consumer_messages do
     Repo.all(ConsumerMessage)
@@ -362,21 +370,66 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
-  def ack_messages(consumer_id, ack_ids) do
+  def upsert_consumer_messages([]), do: {:ok, []}
+
+  def upsert_consumer_messages(consumer_messages) do
+    {consumer_ids, message_subjects, message_seqs} =
+      consumer_messages
+      |> Enum.map(fn message ->
+        {message.consumer_id, message.message_subject, message.message_seq}
+      end)
+      |> Enum.reduce({[], [], []}, fn {consumer_id, message_subject, message_seq}, {ids, subjects, seqs} ->
+        {[consumer_id | ids], [message_subject | subjects], [message_seq | seqs]}
+      end)
+
+    Query.upsert_consumer_messages(
+      consumer_ids: Enum.map(consumer_ids, &UUID.string_to_binary!/1),
+      message_subjects: message_subjects,
+      message_seqs: message_seqs
+    )
+  end
+
+  def delete_acked_consumer_messages_for_consumer(consumer_id, limit \\ 1000) do
+    subquery =
+      consumer_id
+      |> ConsumerMessage.where_consumer_id()
+      |> ConsumerMessage.where_state(:acked)
+      |> limit(^limit)
+
+    query =
+      from(cm in ConsumerMessage,
+        join: acm in subquery(subquery),
+        on: cm.consumer_id == acm.consumer_id and cm.message_subject == acm.message_subject
+      )
+
+    Repo.delete_all(query)
+  end
+
+  @spec ack_messages(Sequin.Streams.Consumer.t(), any()) :: :ok
+  def ack_messages(%Consumer{} = consumer, ack_ids) do
     Repo.transact(fn ->
       {_, _} =
-        consumer_id
+        consumer.id
         |> ConsumerMessage.where_consumer_id()
         |> ConsumerMessage.where_ack_ids(ack_ids)
         |> ConsumerMessage.where_state(:pending_redelivery)
         |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
-      {_, _} =
-        consumer_id
-        |> ConsumerMessage.where_consumer_id()
-        |> ConsumerMessage.where_ack_ids(ack_ids)
-        |> ConsumerMessage.where_state(:delivered)
-        |> Repo.delete_all()
+      if Consumer.should_delete_acked_messages?(consumer) do
+        {_, _} =
+          consumer.id
+          |> ConsumerMessage.where_consumer_id()
+          |> ConsumerMessage.where_ack_ids(ack_ids)
+          |> ConsumerMessage.where_state(:delivered)
+          |> Repo.delete_all()
+      else
+        {_, _} =
+          consumer.id
+          |> ConsumerMessage.where_consumer_id()
+          |> ConsumerMessage.where_ack_ids(ack_ids)
+          |> ConsumerMessage.where_state(:delivered)
+          |> Repo.update_all(set: [state: :acked])
+      end
 
       :ok
     end)
@@ -384,9 +437,10 @@ defmodule Sequin.Streams do
     :ok
   end
 
-  def nack_messages(consumer_id, ack_ids) do
+  @spec nack_messages(Sequin.Streams.Consumer.t(), any()) :: :ok
+  def nack_messages(%Consumer{} = consumer, ack_ids) do
     {_, _} =
-      consumer_id
+      consumer.id
       |> ConsumerMessage.where_consumer_id()
       |> ConsumerMessage.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])

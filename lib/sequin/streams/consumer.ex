@@ -5,6 +5,7 @@ defmodule Sequin.Streams.Consumer do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Streams.Stream
 
@@ -23,6 +24,7 @@ defmodule Sequin.Streams.Consumer do
            ]}
   typed_schema "consumers" do
     field :slug, :string
+    field :backfill_completed_at, :utc_datetime_usec
     field :ack_wait_ms, :integer, default: 30_000
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
@@ -37,13 +39,22 @@ defmodule Sequin.Streams.Consumer do
 
   def create_changeset(consumer, attrs) do
     consumer
-    |> cast(attrs, [:stream_id, :ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :slug, :filter_subject])
+    |> cast(attrs, [
+      :stream_id,
+      :ack_wait_ms,
+      :max_ack_pending,
+      :max_deliver,
+      :max_waiting,
+      :slug,
+      :filter_subject,
+      :backfill_completed_at
+    ])
     |> validate_required([:stream_id, :slug, :filter_subject])
     |> foreign_key_constraint(:stream_id)
   end
 
   def update_changeset(consumer, attrs) do
-    cast(consumer, attrs, [:ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting])
+    cast(consumer, attrs, [:ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :backfill_completed_at])
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -92,5 +103,16 @@ defmodule Sequin.Streams.Consumer do
     |> Enum.all?(fn {filter_token, subject_token} ->
       filter_token == "*" or filter_token == subject_token
     end)
+  end
+
+  @backfill_completed_at_threshold :timer.minutes(5)
+  def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
+
+  def should_delete_acked_messages?(%Consumer{backfill_completed_at: nil}, _now), do: false
+
+  def should_delete_acked_messages?(%Consumer{backfill_completed_at: backfill_completed_at}, now) do
+    backfill_completed_at
+    |> DateTime.add(@backfill_completed_at_threshold, :millisecond)
+    |> DateTime.compare(now) == :lt
   end
 end

@@ -18,7 +18,9 @@ defmodule Sequin.Factory.StreamsFactory do
 
   def consumer_message(attrs \\ []) do
     attrs = Map.new(attrs)
-    {state, attrs} = Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:delivered, :available, :pending_redelivery]) end)
+
+    {state, attrs} =
+      Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:acked, :available, :delivered, :pending_redelivery]) end)
 
     not_visible_until =
       unless state == :available do
@@ -123,6 +125,7 @@ defmodule Sequin.Factory.StreamsFactory do
     merge_attributes(
       %Consumer{
         slug: generate_slug(),
+        backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
@@ -153,7 +156,7 @@ defmodule Sequin.Factory.StreamsFactory do
       |> Map.put(:account_id, account_id)
       |> consumer_attrs()
 
-    {:ok, consumer} = Streams.create_consumer_for_account_with_lifecycle(account_id, attrs)
+    {:ok, consumer} = Streams.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
     consumer
   end
 

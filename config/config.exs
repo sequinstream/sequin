@@ -31,6 +31,10 @@ config :phoenix, :json_library, Jason
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
+config :sequin, Oban,
+  queues: [default: 10],
+  repo: Sequin.Repo
+
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
 config :sequin, Sequin.Repo,

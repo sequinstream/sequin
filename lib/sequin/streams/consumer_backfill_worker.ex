@@ -1,0 +1,76 @@
+defmodule Sequin.Streams.ConsumerBackfillWorker do
+  @moduledoc false
+  use Oban.Worker
+
+  alias Sequin.Streams
+  alias Sequin.Streams.Consumer
+  alias Sequin.Streams.ConsumerMessage
+
+  require Logger
+
+  @limit 10_000
+
+  def create(consumer_id, seq \\ 0)
+
+  def create(consumer_id, seq) do
+    %{consumer_id: consumer_id, seq: seq}
+    |> new()
+    |> Oban.insert()
+  end
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"consumer_id" => consumer_id, "seq" => seq}}) do
+    consumer = Streams.get_consumer!(consumer_id)
+
+    if Consumer.should_delete_acked_messages?(consumer) do
+      delete_acked_messages(consumer)
+    else
+      backfill_messages(consumer, seq)
+    end
+  end
+
+  def backfill_messages(consumer, seq) do
+    messages =
+      Streams.list_messages_for_stream(consumer.stream_id,
+        seq_gt: seq,
+        limit: @limit,
+        order_by: [asc: :seq],
+        select: [:subject, :seq]
+      )
+
+    {:ok, _} =
+      messages
+      |> Enum.filter(fn message ->
+        Consumer.filter_matches_subject?(consumer.filter_subject, message.subject)
+      end)
+      |> Enum.map(fn message ->
+        %ConsumerMessage{
+          consumer_id: consumer.id,
+          message_subject: message.subject,
+          message_seq: message.seq
+        }
+      end)
+      |> Streams.upsert_consumer_messages()
+
+    case messages do
+      messages when length(messages) < @limit ->
+        {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+        create(consumer.id, nil)
+
+      _ ->
+        next_seq = Enum.max_by(messages, fn message -> message.seq end).seq
+        create(consumer.id, next_seq)
+    end
+  end
+
+  defp delete_acked_messages(consumer) do
+    case Streams.delete_acked_consumer_messages_for_consumer(consumer.id, @limit) do
+      {0, nil} ->
+        :ok
+
+      {count, nil} ->
+        Logger.info("Deleted #{count} acked messages for consumer #{consumer.id}")
+        create(consumer.id, nil)
+    end
+  end
+end

@@ -65,6 +65,7 @@ defmodule Sequin.MixProject do
       {:con_cache, "~> 1.1"},
       {:cloak_ecto, "~> 1.3.0"},
       {:mox, "~> 1.0"},
+      {:oban, "~> 2.17"},
       {:hammox, "~> 0.7", [only: :test]}
     ]
   end

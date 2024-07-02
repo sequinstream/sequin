@@ -27,7 +27,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id),
          {:ok, message_ids} <- parse_ack_tokens(params),
-         :ok <- Streams.ack_messages(consumer.id, message_ids) do
+         :ok <- Streams.ack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")
     end
   end
@@ -38,7 +38,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id),
          {:ok, message_ids} <- parse_ack_tokens(params),
-         :ok <- Streams.nack_messages(consumer.id, message_ids) do
+         :ok <- Streams.nack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")
     end
   end

@@ -1,22 +1,15 @@
+# This file draws heavily from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres/adapters/postgres/decoder/decoder.ex
+# which in turns draws from https://github.com/cainophile/pgoutput_decoder
+# License: https://github.com/cainophile/pgoutput_decoder/blob/master/LICENSE
+
 defmodule Sequin.Extensions.PostgresAdapter.Decoder do
   @moduledoc """
   Functions for decoding different types of logical replication messages.
-
-  This file draws heavily from https://github.com/cainophile/pgoutput_decoder
-  License: https://github.com/cainophile/pgoutput_decoder/blob/master/LICENSE
   """
-  alias Extensions.PostgresAdapter.Decoder.Messages.Begin
-  alias Extensions.PostgresAdapter.Decoder.Messages.Commit
-  alias Extensions.PostgresAdapter.Decoder.Messages.Delete
-  alias Extensions.PostgresAdapter.Decoder.Messages.Insert
-  alias Extensions.PostgresAdapter.Decoder.Messages.Origin
-  alias Extensions.PostgresAdapter.Decoder.Messages.Relation
-  alias Extensions.PostgresAdapter.Decoder.Messages.Relation.Column
-  alias Extensions.PostgresAdapter.Decoder.Messages.Truncate
-  alias Extensions.PostgresAdapter.Decoder.Messages.Type
-  alias Extensions.PostgresAdapter.Decoder.Messages.Unsupported
-  alias Extensions.PostgresAdapter.Decoder.Messages.Update
-  alias Extensions.PostgresAdapter.OidDatabase
+
+  alias Sequin.Extensions.PostgresAdapter.OidDatabase
+
+  require Logger
 
   defmodule Messages do
     @moduledoc """
@@ -143,19 +136,6 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       """
       defstruct [:data]
     end
-
-    # TODO: Already defined above?
-    # defmodule Relation.Column do
-    #   @moduledoc """
-    #   Struct representing a column in a relation in PostgreSQL's logical decoding output.
-
-    #   * `flags` - Column flags.
-    #   * `name` - The name of the column.
-    #   * `type` - The OID of the column type.
-    #   * `type_modifier` - The type modifier of the column.
-    #   """
-    #   defstruct [:flags, :name, :type, :type_modifier]
-    # end
   end
 
   @pg_epoch DateTime.from_iso8601("2000-01-01T00:00:00Z")
@@ -175,7 +155,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
   end
 
   defp decode_message_impl(<<"B", lsn::binary-8, timestamp::integer-64, xid::integer-32>>) do
-    %Begin{
+    %Messages.Begin{
       final_lsn: decode_lsn(lsn),
       commit_timestamp: pgtimestamp_to_timestamp(timestamp),
       xid: xid
@@ -183,7 +163,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
   end
 
   defp decode_message_impl(<<"C", _flags::binary-1, lsn::binary-8, end_lsn::binary-8, timestamp::integer-64>>) do
-    %Commit{
+    %Messages.Commit{
       flags: [],
       lsn: decode_lsn(lsn),
       end_lsn: decode_lsn(end_lsn),
@@ -193,7 +173,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
 
   # TODO: Verify this is correct with real data from Postgres
   defp decode_message_impl(<<"O", lsn::binary-8, name::binary>>) do
-    %Origin{
+    %Messages.Origin{
       origin_commit_lsn: decode_lsn(lsn),
       name: name
     }
@@ -214,7 +194,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
         "i" -> :index
       end
 
-    %Relation{
+    %Messages.Relation{
       id: id,
       namespace: namespace,
       name: name,
@@ -226,7 +206,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
   defp decode_message_impl(<<"I", relation_id::integer-32, "N", number_of_columns::integer-16, tuple_data::binary>>) do
     {<<>>, decoded_tuple_data} = decode_tuple_data(tuple_data, number_of_columns)
 
-    %Insert{
+    %Messages.Insert{
       relation_id: relation_id,
       tuple_data: decoded_tuple_data
     }
@@ -235,7 +215,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
   defp decode_message_impl(<<"U", relation_id::integer-32, "N", number_of_columns::integer-16, tuple_data::binary>>) do
     {<<>>, decoded_tuple_data} = decode_tuple_data(tuple_data, number_of_columns)
 
-    %Update{
+    %Messages.Update{
       relation_id: relation_id,
       tuple_data: decoded_tuple_data
     }
@@ -250,7 +230,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
 
     {<<>>, decoded_tuple_data} = decode_tuple_data(new_tuple_binary, new_number_of_columns)
 
-    base_update_msg = %Update{
+    base_update_msg = %Messages.Update{
       relation_id: relation_id,
       tuple_data: decoded_tuple_data
     }
@@ -267,7 +247,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
        when key_or_old == "K" or key_or_old == "O" do
     {<<>>, decoded_tuple_data} = decode_tuple_data(tuple_data, number_of_columns)
 
-    base_delete_msg = %Delete{
+    base_delete_msg = %Messages.Delete{
       relation_id: relation_id
     }
 
@@ -290,7 +270,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
         3 -> [:cascade, :restart_identity]
       end
 
-    %Truncate{
+    %Messages.Truncate{
       number_of_relations: number_of_relations,
       options: decoded_options,
       truncated_relations: truncated_relations
@@ -301,14 +281,14 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
     [namespace, name_with_null] = :binary.split(namespace_and_name, <<0>>)
     name = String.slice(name_with_null, 0..-2//1)
 
-    %Type{
+    %Messages.Type{
       id: data_type_id,
       namespace: namespace,
       name: name
     }
   end
 
-  defp decode_message_impl(binary), do: %Unsupported{data: binary}
+  defp decode_message_impl(binary), do: %Messages.Unsupported{data: binary}
 
   defp decode_tuple_data(binary, columns_remaining, accumulator \\ [])
 
@@ -343,7 +323,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       end
 
     decode_columns(columns, [
-      %Column{
+      %Messages.Relation.Column{
         name: name,
         flags: decoded_flags,
         type: OidDatabase.name_for_type_id(data_type_id),

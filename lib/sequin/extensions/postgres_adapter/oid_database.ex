@@ -3,7 +3,7 @@ defmodule Sequin.Extensions.PostgresAdapter.OidDatabase do
   This module maps a numeric PostgreSQL type ID to a descriptive string.
 
   CREDITS
-  This file draws heavily from https://github.com/cainophile/pgoutput_decoder
+  This file draws heavily from supabase/realtime, which draws from https://github.com/cainophile/pgoutput_decoder
   License: https://github.com/cainophile/pgoutput_decoder/blob/master/LICENSE
 
   Lifted from epgsql (src/epgsql_binary.erl), this module licensed under

@@ -11,6 +11,8 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
 
   defmodule NewRecord do
     @moduledoc false
+    alias Sequin.JSON
+
     @derive {Jason.Encoder, except: [:subscription_ids]}
     defstruct [
       :columns,
@@ -22,10 +24,16 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       :subscription_ids,
       :type
     ]
+
+    def from_json(json) do
+      JSON.struct(json, __MODULE__)
+    end
   end
 
   defmodule UpdatedRecord do
     @moduledoc false
+    alias Sequin.JSON
+
     @derive {Jason.Encoder, except: [:subscription_ids]}
     defstruct [
       :columns,
@@ -38,10 +46,16 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       :subscription_ids,
       :type
     ]
+
+    def from_json(json) do
+      JSON.struct(json, __MODULE__)
+    end
   end
 
   defmodule DeletedRecord do
     @moduledoc false
+    alias Sequin.JSON
+
     @derive {Jason.Encoder, except: [:subscription_ids]}
     defstruct [
       :columns,
@@ -53,6 +67,10 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       :subscription_ids,
       :type
     ]
+
+    def from_json(json) do
+      JSON.struct(json, __MODULE__)
+    end
   end
 
   defmodule(TruncatedRelation, do: defstruct([:type, :schema, :table, :commit_timestamp]))

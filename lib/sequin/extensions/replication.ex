@@ -1,21 +1,24 @@
-defmodule Sequin.Extensions.PostgresCdcStream.Replication do
+defmodule Sequin.Extensions.Replication do
   @moduledoc """
   Subscribes to the Postgres replication slot, decodes write ahead log binary messages
-  and broadcasts them to the `MessageDispatcher`.
+  and publishes them to a stream.
+
+  Borrowed heavily from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
   """
 
   use Postgrex.ReplicationConnection
 
-  alias Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Extensions.PostgresAdapter.Changes.NewRecord
-  alias Extensions.PostgresAdapter.Changes.UpdatedRecord
-  alias Extensions.PostgresAdapter.Decoder
-  alias Extensions.PostgresAdapter.Decoder.Messages.Begin
-  alias Extensions.PostgresAdapter.Decoder.Messages.Commit
-  alias Extensions.PostgresAdapter.Decoder.Messages.Delete
-  alias Extensions.PostgresAdapter.Decoder.Messages.Insert
-  alias Extensions.PostgresAdapter.Decoder.Messages.Relation
-  alias Extensions.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
+  alias Sequin.Extensions.PostgresAdapter.Decoder
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Begin
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Commit
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Delete
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.JSON
 
   require Logger
 
@@ -27,15 +30,17 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
       field :slot_name, String.t()
       field :publication, String.t()
       field :tid, :ets.tid()
+      field :step, :disconnected | :streaming
+      field :ts, nil | integer()
     end
   end
 
   def start_link(args) do
-    # TODO
-    # opts = connection_opts(args)
-    opts = []
-    slot_name = Keyword.fetch!(args, :slot_name)
+    connection = Keyword.fetch!(args, :connection)
     publication = Keyword.fetch!(args, :publication)
+    slot_name = Keyword.fetch!(args, :slot_name)
+
+    opts = Keyword.merge([auto_reconnect: true], connection)
 
     init = %State{
       publication: publication,
@@ -45,36 +50,27 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
     Postgrex.ReplicationConnection.start_link(__MODULE__, init, opts)
   end
 
-  @spec stop(pid) :: :ok
-  def stop(pid), do: GenServer.stop(pid)
-
-  @impl Postgrex.ReplicationConnection
-  def init(args) do
-    tid = :ets.new(__MODULE__, [:public, :set])
-    state = %{tid: tid}
-    {:ok, Map.merge(args, state)}
-  end
-
   @impl Postgrex.ReplicationConnection
   def handle_connect(%State{} = state) do
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 
-    # query =
-    # CREATE_REPLICATION_SLOT #{state.slot_name} LOGICAL pgoutput NOEXPORT_SNAPSHOT
-    #   "CREATE_REPLICATION_SLOT #{state.slot_name} TEMPORARY LOGICAL pgoutput NOEXPORT_SNAPSHOT"
-
-    {:query, query, state}
+    {:stream, query, [], %{state | step: :streaming}}
   end
 
-  # def handle_result(results, %{step: :create_slot} = state) when is_list(results) do
-  #   PostgresCdcStream.track_manager(state.tenant, self(), nil)
-  #   {:stream, query, [], %{state | step: :streaming}}
-  # end
+  @impl Postgrex.ReplicationConnection
+  def handle_result(result, state) do
+    Logger.error("Unknown result: #{inspect(result)}")
+    {:noreply, state}
+  end
+
+  @spec stop(pid) :: :ok
+  def stop(pid), do: GenServer.stop(pid)
 
   @impl Postgrex.ReplicationConnection
-  def handle_result(_results, state) do
-    {:noreply, state}
+  def init(%State{} = state) do
+    tid = :ets.new(__MODULE__, [:public, :set])
+    {:ok, %{state | tid: tid, step: :disconnected}}
   end
 
   @impl Postgrex.ReplicationConnection
@@ -126,16 +122,15 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     record = %NewRecord{
-      columns: columns,
       commit_timestamp: state.ts,
       errors: nil,
       schema: schema,
       table: table,
       record: data_tuple_to_map(columns, msg.tuple_data),
-      type: "UPDATE"
+      type: "insert"
     }
 
-    broadcast(record, state.tenant)
+    publish(record)
 
     state
   end
@@ -144,18 +139,31 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
     Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
+    # record = %UpdatedRecord{
+    #   -      columns: columns,
+    #          commit_timestamp: state.ts,
+    #          errors: nil,
+    #          schema: schema,
+    #          table: table,
+    #          old_record: data_tuple_to_map(columns, msg.old_tuple_data),
+    #          record: data_tuple_to_map(columns, msg.tuple_data),
+    #   -      type: "UPDATE"
+    #   +      type: "update"
+    #        }
+
     record = %UpdatedRecord{
-      columns: columns,
       commit_timestamp: state.ts,
       errors: nil,
       schema: schema,
       table: table,
       old_record: data_tuple_to_map(columns, msg.old_tuple_data),
       record: data_tuple_to_map(columns, msg.tuple_data),
-      type: "UPDATE"
+      type: "update"
     }
 
-    broadcast(record, state.tenant)
+    # -    broadcast(record, state.tenant)
+
+    publish(record)
 
     state
   end
@@ -165,16 +173,29 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     record = %DeletedRecord{
-      columns: columns,
       commit_timestamp: state.ts,
       errors: nil,
       schema: schema,
       table: table,
       old_record: data_tuple_to_map(columns, msg.old_tuple_data),
-      type: "UPDATE"
+      type: "delete"
     }
 
-    broadcast(record, state.tenant)
+    # record = %DeletedRecord{
+    #   -      columns: columns,
+    #          commit_timestamp: state.ts,
+    #          errors: nil,
+    #          schema: schema,
+    #          table: table,
+    #          old_record: data_tuple_to_map(columns, msg.old_tuple_data),
+    #   -      type: "UPDATE"
+    #   +      type: "delete"
+    #        }
+
+    #   -    broadcast(record, state.tenant)
+    #   +    publish(record)
+
+    publish(record)
 
     state
   end
@@ -184,35 +205,45 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
     state
   end
 
-  def broadcast(change, _tenant) do
-    [
-      %{"schema" => "*"},
-      %{"schema" => change.schema},
-      %{"schema" => change.schema, "table" => "*"},
-      %{"schema" => change.schema, "table" => change.table}
-    ]
-    |> List.foldl([], fn e, acc ->
-      [Map.put(e, "event", "*"), Map.put(e, "event", change.type) | acc]
-    end)
-    |> List.foldl([], fn e, acc ->
-      if Map.has_key?(change, :record) do
-        Enum.reduce(change.record, [e], fn {k, v}, acc ->
-          [Map.put(e, "filter", "#{k}=eq.#{v}") | acc]
-        end) ++ acc
-      else
-        acc
-      end
-    end)
-    |> Enum.each(fn params ->
-      inspect({params, change})
-      # Phoenix.PubSub.broadcast_from(
-      #   Realtime.PubSub,
-      #   self(),
-      #   PostgresCdcStream.topic(tenant, params),
-      #   change,
-      #   PostgresCdcStream.MessageDispatcher
-      # )
-    end)
+  # Example change event
+  # %Extensions.PostgresAdapter.Changes.NewRecord{
+  #   columns: [
+  #     %{name: "id", type: "int4"},
+  #     %{name: "first_name", type: "text"},
+  #     %{name: "last_name", type: "text"}
+  #   ],
+  #   commit_timestamp: ~U[2024-03-01 16:11:32.272722Z],
+  #   errors: nil,
+  #   schema: "__test_cdc__",
+  #   table: "test_table",
+  #   record: %{"first_name" => "Paul", "id" => "1", "last_name" => "Atreides"},
+  #   subscription_ids: nil,
+  #   type: "UPDATE"
+  # }
+  def publish(change) do
+    # # -    |> Enum.each(fn params ->
+    # # -      inspect({params, change})
+    # # -      # Phoenix.PubSub.broadcast_from(
+    # # -      #   Realtime.PubSub,
+    # # -      #   self(),
+    # # -      #   PostgresCdcStream.topic(tenant, params),
+    # # -      #   change,
+    # # -      #   PostgresCdcStream.MessageDispatcher
+    # # -      # )
+    # # -    end)
+    # kind =
+    #   case change do
+    #     %NewRecord{} -> "insert"
+    #     %UpdatedRecord{} -> "update"
+    #     %DeletedRecord{} -> "delete"
+    #   end
+
+    # json =
+    change
+    |> JSON.encode_struct_with_type()
+    |> Jason.encode!()
+
+    # TODO
   end
 
   def data_tuple_to_map(column, tuple_data) do
@@ -244,17 +275,15 @@ defmodule Sequin.Extensions.PostgresCdcStream.Replication do
   end
 
   defp convert_column_record(record, "timestamp") when is_binary(record) do
-    with {:ok, %NaiveDateTime{} = naive_date_time} <- Timex.parse(record, "{RFC3339}"),
-         %DateTime{} = date_time <- Timex.to_datetime(naive_date_time) do
-      DateTime.to_iso8601(date_time)
-    else
+    case Sequin.Time.parse_timestamp(record) do
+      {:ok, datetime} -> DateTime.to_iso8601(datetime)
       _ -> record
     end
   end
 
   defp convert_column_record(record, "timestamptz") when is_binary(record) do
-    case Timex.parse(record, "{RFC3339}") do
-      {:ok, %DateTime{} = date_time} -> DateTime.to_iso8601(date_time)
+    case Sequin.Time.parse_timestamp(record) do
+      {:ok, datetime} -> DateTime.to_iso8601(datetime)
       _ -> record
     end
   end

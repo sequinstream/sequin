@@ -26,7 +26,7 @@ defmodule Sequin.StreamsIntegrationTest do
       messages_for_stream = for _ <- 1..5, do: StreamsFactory.message_attrs(%{stream_id: stream.id})
       messages_for_other_stream = for _ <- 1..5, do: StreamsFactory.message_attrs(%{stream_id: other_stream.id})
 
-      {:ok, _} = Streams.upsert_messages(messages_for_stream ++ messages_for_other_stream)
+      {:ok, _} = Streams.upsert_messages(stream.id, messages_for_stream ++ messages_for_other_stream)
 
       # Boot AssignMessageSeq
       start_supervised!({AssignMessageSeq, stream_id: stream.id, test_pid: self(), interval_ms: 100})

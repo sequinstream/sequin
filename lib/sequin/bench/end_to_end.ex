@@ -197,7 +197,7 @@ defmodule Sequin.Bench.EndToEnd do
     key = message.key
     Agent.update(key_agent, fn keys -> Map.put(keys, key, true) end)
 
-    upsert_messages(messages)
+    upsert_messages(stream_id, messages)
 
     1..1
     |> Stream.cycle()
@@ -214,8 +214,8 @@ defmodule Sequin.Bench.EndToEnd do
     end)
   end
 
-  def upsert_messages(messages) when is_list(messages) do
-    Streams.upsert_messages(messages)
+  def upsert_messages(stream_id, messages) when is_list(messages) do
+    Streams.upsert_messages(stream_id, messages)
     messages
   end
 
@@ -229,7 +229,7 @@ defmodule Sequin.Bench.EndToEnd do
         }
       end)
 
-    upsert_messages(messages)
+    upsert_messages(stream_id, messages)
   end
 
   defp messages(stream_id, batch_size) do

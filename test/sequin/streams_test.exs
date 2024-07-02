@@ -10,7 +10,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
       messages = for _ <- 1..2, do: StreamsFactory.message_attrs(%{stream_id: stream.id, data_hash: nil})
 
-      assert {:ok, 2} = Streams.upsert_messages(messages)
+      assert {:ok, 2} = Streams.upsert_messages(stream.id, messages)
 
       inserted_messages = Repo.all(Streams.Message)
       assert length(inserted_messages) == 2
@@ -23,10 +23,11 @@ defmodule Sequin.StreamsTest do
     end
 
     test "updates existing message when data_hash changes" do
-      msg = StreamsFactory.insert_message!()
+      stream = StreamsFactory.insert_stream!()
+      msg = StreamsFactory.insert_message!(stream_id: stream.id)
       new_data = StreamsFactory.message_data()
 
-      assert {:ok, 1} = Streams.upsert_messages([%{msg | data: new_data, data_hash: nil}])
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [%{msg | data: new_data, data_hash: nil}])
       updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
 
       assert updated_msg.data == new_data
@@ -35,9 +36,10 @@ defmodule Sequin.StreamsTest do
     end
 
     test "does not update existing message when data_hash is the same" do
-      msg = StreamsFactory.insert_message!()
+      stream = StreamsFactory.insert_stream!()
+      msg = StreamsFactory.insert_message!(stream_id: stream.id)
 
-      assert {:ok, 0} = Streams.upsert_messages([msg])
+      assert {:ok, 0} = Streams.upsert_messages(stream.id, [msg])
 
       updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
       assert updated_msg.seq == msg.seq
@@ -53,7 +55,7 @@ defmodule Sequin.StreamsTest do
       msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, subject: "same_subject"})
       msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, subject: "same_subject"})
 
-      assert {:ok, 1} = Streams.upsert_messages([msg2_attrs])
+      assert {:ok, 1} = Streams.upsert_messages(stream2.id, [msg2_attrs])
 
       unchanged_msg1 = Streams.get_message!(msg1.subject, msg1.stream_id)
       assert unchanged_msg1.seq == msg1.seq
@@ -67,10 +69,132 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
       msg_attrs = StreamsFactory.message_attrs(%{stream_id: stream.id, data: "data with null byte \u0000"})
 
-      assert {:ok, 1} = Streams.upsert_messages([msg_attrs])
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [msg_attrs])
 
       inserted_msg = Streams.get_message!(msg_attrs.subject, msg_attrs.stream_id)
       assert inserted_msg.data == "data with null byte "
+    end
+  end
+
+  describe "upsert_messages/2 with consumer message fan out" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+      {:ok, stream: stream, account_id: stream.account_id}
+    end
+
+    test "also upserts to a matching consumer", %{stream: stream, account_id: account_id} do
+      consumer =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "test.subject", account_id: account_id})
+
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
+
+      message = Streams.get_message!(message.subject, message.stream_id)
+
+      assert [consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert consumer_message.message_subject == message.subject
+      assert consumer_message.ack_id
+      assert consumer_message.message_seq == message.seq
+      assert consumer_message.state == :available
+      assert consumer_message.deliver_count == 0
+      refute consumer_message.last_delivered_at
+      refute consumer_message.not_visible_until
+    end
+
+    test "fans out to multiple consumers", %{stream: stream, account_id: account_id} do
+      consumer1 =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "test.subject", account_id: account_id})
+
+      consumer2 =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "test.subject", account_id: account_id})
+
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
+
+      assert [_] = Streams.list_consumer_messages_for_consumer(consumer1.id)
+      assert [_] = Streams.list_consumer_messages_for_consumer(consumer2.id)
+    end
+
+    test "does not fan out to a consumer in another stream even with matching subjects", %{
+      stream: stream,
+      account_id: account_id
+    } do
+      other_stream = StreamsFactory.insert_stream!(account_id: account_id)
+
+      consumer =
+        StreamsFactory.insert_consumer!(%{
+          stream_id: other_stream.id,
+          filter_subject: "test.subject",
+          account_id: account_id
+        })
+
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
+
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+    end
+
+    test "does not fan out to a consumer in the same stream but without a matching subject", %{
+      stream: stream,
+      account_id: account_id
+    } do
+      consumer =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "other.subject", account_id: account_id})
+
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
+
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+    end
+
+    test "upserts over consumer_messages for a :delivered message", %{stream: stream, account_id: account_id} do
+      consumer =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "test.subject", account_id: account_id})
+
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.subject"})
+
+      # Insert initial consumer message
+      StreamsFactory.insert_consumer_message!(%{
+        consumer_id: consumer.id,
+        message_subject: message.subject,
+        message_seq: 1,
+        state: :delivered
+      })
+
+      # Update the message
+      updated_message = %{message | data: "updated data", data_hash: nil}
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [updated_message])
+
+      [updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert updated_consumer_message.message_seq > 1
+      assert updated_consumer_message.state == :pending_redelivery
+    end
+
+    test "upserts over consumer_messages for a :available message", %{stream: stream, account_id: account_id} do
+      consumer =
+        StreamsFactory.insert_consumer!(%{stream_id: stream.id, filter_subject: "test.subject", account_id: account_id})
+
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.subject"})
+
+      # Test with an available state
+      StreamsFactory.insert_consumer_message!(%{
+        consumer_id: consumer.id,
+        message_subject: message.subject,
+        message_seq: 1,
+        state: :available
+      })
+
+      updated_message = %{message | data: "new data"}
+
+      assert {:ok, 1} = Streams.upsert_messages(stream.id, [updated_message])
+
+      [re_updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert re_updated_consumer_message.message_seq > 1
+      assert re_updated_consumer_message.state == :available
     end
   end
 

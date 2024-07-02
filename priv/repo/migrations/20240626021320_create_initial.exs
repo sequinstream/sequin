@@ -153,7 +153,8 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             drop function if exists streams.validate_message_subject;
             """
 
-    execute "alter table streams.messages add constraint validate_message_subject check (streams.validate_message_subject(subject));"
+    execute "alter table streams.messages add constraint validate_message_subject check (streams.validate_message_subject(subject));",
+            "alter table streams.messages drop constraint validate_message_subject;"
 
     create index(:messages, [:stream_id, :token10],
              prefix: "streams",
@@ -208,6 +209,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           null: false
 
       add :slug, :text, null: false
+      add :filter_subject, :text, null: false
 
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000

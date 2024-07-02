@@ -7,6 +7,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.Message
+  alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
   alias Sequin.StreamsRuntime
 
@@ -252,7 +253,7 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
-  def upsert_messages(messages, is_retry? \\ false) do
+  def upsert_messages(stream_id, messages, is_retry? \\ false) do
     now = DateTime.utc_now()
 
     messages =
@@ -263,6 +264,7 @@ defmodule Sequin.Streams do
         |> Message.put_data_hash()
         |> Map.put(:updated_at, now)
         |> Map.put(:inserted_at, now)
+        |> Map.put(:stream_id, stream_id)
       end)
 
     on_conflict =
@@ -277,16 +279,42 @@ defmodule Sequin.Streams do
         ]
       )
 
-    {count, nil} =
-      Repo.insert_all(
-        Message,
-        messages,
-        on_conflict: on_conflict,
-        conflict_target: [:subject, :stream_id],
-        timeout: :timer.seconds(30)
+    consumers = list_consumers_for_stream(stream_id)
+
+    Repo.transact(fn ->
+      {count, messages} =
+        Repo.insert_all(
+          Message,
+          messages,
+          on_conflict: on_conflict,
+          conflict_target: [:subject, :stream_id],
+          timeout: :timer.seconds(30),
+          returning: [:subject, :stream_id, :seq]
+        )
+
+      {consumer_ids, message_subjects, message_seqs} =
+        consumers
+        |> Enum.flat_map(fn consumer ->
+          messages
+          |> Enum.filter(fn message ->
+            Consumer.filter_matches_subject?(consumer.filter_subject, message.subject)
+          end)
+          |> Enum.map(fn message ->
+            {UUID.string_to_binary!(consumer.id), message.subject, message.seq}
+          end)
+        end)
+        |> Enum.reduce({[], [], []}, fn {consumer_id, message_subject, message_seq}, {ids, subjects, seqs} ->
+          {[consumer_id | ids], [message_subject | subjects], [message_seq | seqs]}
+        end)
+
+      Query.upsert_consumer_messages(
+        consumer_ids: consumer_ids,
+        message_subjects: message_subjects,
+        message_seqs: message_seqs
       )
 
-    {:ok, count}
+      {:ok, count}
+    end)
   rescue
     e in Postgrex.Error ->
       if e.postgres.code == :character_not_in_repertoire and is_retry? == false do
@@ -295,7 +323,7 @@ defmodule Sequin.Streams do
             Map.put(message, :data, String.replace(data, "\u0000", ""))
           end)
 
-        upsert_messages(messages, true)
+        upsert_messages(stream_id, messages, true)
       else
         reraise e, __STACKTRACE__
       end

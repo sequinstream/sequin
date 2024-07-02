@@ -27,6 +27,7 @@ defmodule Sequin.Streams.Consumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
+    field :filter_subject, :string
 
     belongs_to :stream, Stream
     belongs_to :account, Account
@@ -36,8 +37,8 @@ defmodule Sequin.Streams.Consumer do
 
   def create_changeset(consumer, attrs) do
     consumer
-    |> cast(attrs, [:stream_id, :ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :slug])
-    |> validate_required([:stream_id, :slug])
+    |> cast(attrs, [:stream_id, :ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :slug, :filter_subject])
+    |> validate_required([:stream_id, :slug, :filter_subject])
     |> foreign_key_constraint(:stream_id)
   end
 
@@ -59,5 +60,37 @@ defmodule Sequin.Streams.Consumer do
 
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :consumer)
+  end
+
+  @doc """
+  A consumer has a filter_subject field which is a `.` delimited string. Each token in the string is either a token that should be exactly matched, the `*` wildcard, or the `>` character. `>` can only come in the last position and indicates the filter_subject matches any trailing tokens. Without the `>` character, the filter_subject must exactly match in length to a message.subject.
+  """
+  def filter_matches_subject?(filter_subject, subject) do
+    filter_tokens = String.split(filter_subject, ".")
+    subject_tokens = String.split(subject, ".")
+
+    cond do
+      List.last(filter_tokens) == ">" ->
+        match_with_trailing_wildcard(Enum.drop(filter_tokens, -1), subject_tokens)
+
+      length(filter_tokens) != length(subject_tokens) ->
+        false
+
+      true ->
+        match_tokens(filter_tokens, subject_tokens)
+    end
+  end
+
+  defp match_with_trailing_wildcard(filter_tokens, subject_tokens) do
+    length(subject_tokens) > length(filter_tokens) and
+      match_tokens(filter_tokens, Enum.take(subject_tokens, length(filter_tokens)))
+  end
+
+  defp match_tokens(filter_tokens, subject_tokens) do
+    filter_tokens
+    |> Enum.zip(subject_tokens)
+    |> Enum.all?(fn {filter_token, subject_token} ->
+      filter_token == "*" or filter_token == subject_token
+    end)
   end
 end

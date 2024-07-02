@@ -272,6 +272,8 @@ defmodule Sequin.Extensions.Replication do
     if state.handle_message_fun do
       # For DI in test
       state.handle_message_fun.(change)
+
+      :ok
     else
       change
       |> JSON.encode_struct_with_type()

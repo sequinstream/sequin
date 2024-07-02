@@ -8,71 +8,139 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    execute "create sequence if not exists stream_idx_seq start with 1 increment by 1",
-            "drop sequence if exists stream_idx_seq"
-
     create table(:streams) do
-      add :idx, :bigint, default: fragment("nextval('stream_idx_seq')"), null: false
       add :account_id, references(:accounts, on_delete: :delete_all), null: false
+      add :slug, :text, null: false
 
       timestamps()
     end
 
-    create unique_index(:streams, [:idx])
+    create unique_index(:streams, [:slug])
     # Required for composite foreign keys pointing to this table
     create unique_index(:streams, [:id, :account_id])
 
     execute "create schema if not exists streams", "drop schema if exists streams"
+
+    execute "create sequence streams.messages_seq",
+            "drop sequence if exists streams.messages_seq"
+
+    execute """
+            CREATE OR REPLACE FUNCTION subject_from_tokens(VARIADIC text[])
+            RETURNS text AS $$
+            DECLARE
+            result text := '';
+            i integer;
+            BEGIN
+            FOR i IN 1..array_length($1, 1) LOOP
+            IF $1[i] IS NOT NULL AND $1[i] != '' THEN
+                IF result != '' THEN
+                    result := result || '.';
+                END IF;
+                result := result || $1[i];
+            END IF;
+            END LOOP;
+            RETURN result;
+            END;
+            $$ LANGUAGE plpgsql IMMUTABLE;
+            """,
+            """
+            drop function if exists subject_from_tokens;
+            """
 
     create table(:messages,
              primary_key: false,
              prefix: "streams",
              options: "PARTITION BY LIST (stream_id)"
            ) do
-      add :key, :text, null: false, primary_key: true
       add :stream_id, :uuid, null: false, primary_key: true
-      add :data_hash, :text, null: false
+
+      # Generated column which concats tokens
+      add :subject, :text,
+        null: false,
+        primary_key: true,
+        generated: """
+        ALWAYS AS (
+          subject_from_tokens(token1, token2, token3, token4, token5, token6, token7, token8, token9, token10, token11, token12, token13, token14, token15, token16)
+        ) STORED
+        """
+
+      add :seq, :bigint, null: false, default: fragment("nextval('streams.messages_seq')")
+
       add :data, :text, null: false
-      add :seq, :bigint, null: true
+      add :data_hash, :text, null: false
+
+      add :token1, :text, null: false
+      add :token2, :text
+      add :token3, :text
+      add :token4, :text
+      add :token5, :text
+      add :token6, :text
+      add :token7, :text
+      add :token8, :text
+      add :token9, :text
+      add :token10, :text
+      add :token11, :text
+      add :token12, :text
+      add :token13, :text
+      add :token14, :text
+      add :token15, :text
+      add :token16, :text
 
       timestamps(type: :utc_datetime_usec)
     end
 
     create unique_index(:messages, [:stream_id, :seq], prefix: "streams")
+    create unique_index(:messages, [:stream_id, :subject], prefix: "streams")
 
-    execute "create sequence streams.messages_seq owned by streams.messages.seq;",
-            "drop sequence if exists streams.messages_seq"
+    create index(:messages, [:stream_id, :token1], prefix: "streams")
+    create index(:messages, [:stream_id, :token2], prefix: "streams", where: "token2 IS NOT NULL")
+    create index(:messages, [:stream_id, :token3], prefix: "streams", where: "token3 IS NOT NULL")
+    create index(:messages, [:stream_id, :token4], prefix: "streams", where: "token4 IS NOT NULL")
+    create index(:messages, [:stream_id, :token5], prefix: "streams", where: "token5 IS NOT NULL")
+    create index(:messages, [:stream_id, :token6], prefix: "streams", where: "token6 IS NOT NULL")
+    create index(:messages, [:stream_id, :token7], prefix: "streams", where: "token7 IS NOT NULL")
+    create index(:messages, [:stream_id, :token8], prefix: "streams", where: "token8 IS NOT NULL")
+    create index(:messages, [:stream_id, :token9], prefix: "streams", where: "token9 IS NOT NULL")
 
-    create index(:messages, [:stream_id, :updated_at],
+    create index(:messages, [:stream_id, :token10],
              prefix: "streams",
-             where: "seq IS NULL"
+             where: "token10 IS NOT NULL"
            )
 
-    # The following trigger+func ensures that `seq` is set to null on updates, if it's not already.
-    # This is to prevent mistakes in situations where `messages` is updated directly, bypassing `AssignMessageSeqWorker`.
+    create index(:messages, [:stream_id, :token11],
+             prefix: "streams",
+             where: "token11 IS NOT NULL"
+           )
 
-    execute """
-            create or replace function streams.reset_seq_on_update()
-            returns trigger as $$
-            begin
-                new.seq := null;
-                return new;
-            end;
-            $$ language plpgsql;
-            """,
-            "drop function if exists streams.reset_seq_on_update()"
+    create index(:messages, [:stream_id, :token12],
+             prefix: "streams",
+             where: "token12 IS NOT NULL"
+           )
 
-    execute """
-            create trigger trg_reset_seq_on_update
-            before update on streams.messages
-            for each row
-            when (old.seq is not null and new.seq is not null)
-            execute function streams.reset_seq_on_update();
-            """,
-            "drop trigger if exists trg_reset_seq_on_update on streams.messages"
+    create index(:messages, [:stream_id, :token13],
+             prefix: "streams",
+             where: "token13 IS NOT NULL"
+           )
 
-    execute "create type streams.outstanding_message_state as enum ('delivered', 'available', 'pending_redelivery');",
-            "drop type if exists streams.outstanding_message_state"
+    create index(:messages, [:stream_id, :token14],
+             prefix: "streams",
+             where: "token14 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token15],
+             prefix: "streams",
+             where: "token15 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token16],
+             prefix: "streams",
+             where: "token16 IS NOT NULL"
+           )
+
+    ## TODO: Add indexes to subject space
+
+    execute "create type streams.consumer_message_state as enum ('delivered', 'available', 'pending_redelivery');",
+            "drop type if exists streams.consumer_message_state"
 
     create table(:consumers) do
       # Using a composite foreign key for stream_id
@@ -86,6 +154,8 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           ),
           null: false
 
+      add :slug, :text, null: false
+
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000
       add :max_deliver, :integer, null: true
@@ -95,28 +165,20 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     end
 
     create index(:consumers, [:stream_id])
+    create unique_index(:consumers, [:stream_id, :slug])
 
-    create table(:consumer_states, prefix: "streams", primary_key: false) do
+    create table(:consumer_messages,
+             prefix: "streams",
+             primary_key: false,
+             options: "PARTITION BY LIST (consumer_id)"
+           ) do
       add :consumer_id, :uuid, null: false, primary_key: true
-      add :message_seq_cursor, :bigint, null: false, default: 0
-      add :count_pulled_into_outstanding, :bigint, null: false, default: 0
-
-      timestamps()
-    end
-
-    create table(:consumer_pending_messages_count, prefix: "streams") do
-      add :consumer_id, :uuid, null: false, primary_key: true
-      add :count, :integer, null: false
-    end
-
-    create unique_index(:consumer_pending_messages_count, [:consumer_id], prefix: "streams")
-
-    create table(:outstanding_messages, prefix: "streams") do
-      add :consumer_id, :uuid, null: false
+      add :message_subject, :text, null: false, primary_key: true
       add :message_seq, :bigint, null: false
-      add :message_key, :text, null: false
-      add :message_stream_id, :uuid, null: false
-      add :state, :"streams.outstanding_message_state", null: false
+
+      add :ack_id, :uuid, null: false, default: fragment("uuid_generate_v4()")
+
+      add :state, :"streams.consumer_message_state", null: false
       add :not_visible_until, :utc_datetime_usec
       add :deliver_count, :integer, null: false, default: 0
       add :last_delivered_at, :utc_datetime_usec
@@ -124,12 +186,14 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create unique_index(:outstanding_messages, [:consumer_id, :message_key], prefix: "streams")
-    create index(:outstanding_messages, [:message_key], prefix: "streams")
-    create index(:outstanding_messages, [:consumer_id], prefix: "streams")
+    create unique_index(:consumer_messages, [:consumer_id, :message_subject], prefix: "streams")
+    create unique_index(:consumer_messages, [:consumer_id, :ack_id], prefix: "streams")
+
+    create index(:consumer_messages, [:message_subject], prefix: "streams")
+    create index(:consumer_messages, [:consumer_id], prefix: "streams")
 
     create index(
-             :outstanding_messages,
+             :consumer_messages,
              [
                :consumer_id,
                :state,

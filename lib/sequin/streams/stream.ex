@@ -8,9 +8,10 @@ defmodule Sequin.Streams.Stream do
   alias Sequin.Accounts.Account
   alias Sequin.Streams.Stream
 
-  @derive {Jason.Encoder, only: [:id, :idx, :account_id, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :slug, :account_id, :inserted_at, :updated_at]}
   typed_schema "streams" do
-    field :idx, :integer, read_after_writes: true
+    field :slug, :string
+
     belongs_to :account, Account
 
     timestamps()
@@ -18,8 +19,8 @@ defmodule Sequin.Streams.Stream do
 
   def changeset(%Stream{} = stream, attrs) do
     stream
-    |> cast(attrs, [])
-    |> validate_required([])
+    |> cast(attrs, [:slug])
+    |> validate_required([:slug])
   end
 
   def where_id(query \\ base_query(), id) do

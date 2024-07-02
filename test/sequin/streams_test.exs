@@ -15,10 +15,10 @@ defmodule Sequin.StreamsTest do
       inserted_messages = Repo.all(Streams.Message)
       assert length(inserted_messages) == 2
 
-      assert_lists_equal(inserted_messages, messages, &assert_maps_equal(&1, &2, [:key, :stream_id, :data]))
+      assert_lists_equal(inserted_messages, messages, &assert_maps_equal(&1, &2, [:subject, :stream_id, :data]))
 
       assert Enum.all?(inserted_messages, fn message ->
-               is_binary(message.data_hash) and is_nil(message.seq)
+               is_binary(message.data_hash)
              end)
     end
 
@@ -27,12 +27,11 @@ defmodule Sequin.StreamsTest do
       new_data = StreamsFactory.message_data()
 
       assert {:ok, 1} = Streams.upsert_messages([%{msg | data: new_data, data_hash: nil}])
-      updated_msg = Streams.get_message!(msg.key, msg.stream_id)
+      updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
 
       assert updated_msg.data == new_data
       assert is_binary(updated_msg.data_hash)
       refute updated_msg.data_hash == msg.data_hash
-      assert is_nil(updated_msg.seq)
     end
 
     test "does not update existing message when data_hash is the same" do
@@ -40,27 +39,27 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 0} = Streams.upsert_messages([msg])
 
-      updated_msg = Streams.get_message!(msg.key, msg.stream_id)
+      updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
       assert updated_msg.seq == msg.seq
       assert updated_msg.data == msg.data
       assert updated_msg.data_hash == msg.data_hash
       assert updated_msg.updated_at == msg.updated_at
     end
 
-    test "does not affect messages with same key but different stream_id" do
+    test "does not affect messages with same subject but different stream_id" do
       stream1 = StreamsFactory.insert_stream!()
       stream2 = StreamsFactory.insert_stream!()
 
-      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, key: "same_key"})
-      msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, key: "same_key"})
+      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, subject: "same_subject"})
+      msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, subject: "same_subject"})
 
       assert {:ok, 1} = Streams.upsert_messages([msg2_attrs])
 
-      unchanged_msg1 = Streams.get_message!(msg1.key, msg1.stream_id)
+      unchanged_msg1 = Streams.get_message!(msg1.subject, msg1.stream_id)
       assert unchanged_msg1.seq == msg1.seq
       assert unchanged_msg1.data == msg1.data
 
-      new_msg2 = Streams.get_message!(msg2_attrs.key, msg2_attrs.stream_id)
+      new_msg2 = Streams.get_message!(msg2_attrs.subject, msg2_attrs.stream_id)
       assert new_msg2.data == msg2_attrs.data
     end
 
@@ -70,7 +69,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages([msg_attrs])
 
-      inserted_msg = Streams.get_message!(msg_attrs.key, msg_attrs.stream_id)
+      inserted_msg = Streams.get_message!(msg_attrs.subject, msg_attrs.stream_id)
       assert inserted_msg.data == "data with null byte "
     end
   end
@@ -93,8 +92,8 @@ defmodule Sequin.StreamsTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       ack_wait_ms = consumer.ack_wait_ms
 
-      om =
-        StreamsFactory.insert_outstanding_message!(%{
+      cm =
+        StreamsFactory.insert_consumer_message!(%{
           consumer_id: consumer.id,
           message: message,
           state: :available,
@@ -104,9 +103,9 @@ defmodule Sequin.StreamsTest do
       assert {:ok, [delivered_message]} = Streams.next_for_consumer(consumer)
       # Add a buffer for the comparison
       not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
-      assert delivered_message.ack_id == om.id
-      assert delivered_message.key == message.key
-      updated_om = Repo.reload(om)
+      assert delivered_message.ack_id == cm.ack_id
+      assert delivered_message.subject == message.subject
+      updated_om = Streams.reload(cm)
       assert updated_om.state == :delivered
       assert DateTime.after?(updated_om.not_visible_until, not_visible_until)
       assert updated_om.deliver_count == 1
@@ -116,8 +115,8 @@ defmodule Sequin.StreamsTest do
     test "redelivers expired outstanding messages", %{stream: stream, consumer: consumer} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      om =
-        StreamsFactory.insert_outstanding_message!(%{
+      cm =
+        StreamsFactory.insert_consumer_message!(%{
           consumer_id: consumer.id,
           message: message,
           state: :delivered,
@@ -127,19 +126,19 @@ defmodule Sequin.StreamsTest do
         })
 
       assert {:ok, [redelivered_msg]} = Streams.next_for_consumer(consumer)
-      assert redelivered_msg.key == message.key
-      assert redelivered_msg.ack_id == om.id
-      updated_om = Repo.reload(om)
+      assert redelivered_msg.subject == message.subject
+      assert redelivered_msg.ack_id == cm.ack_id
+      updated_om = Streams.reload(cm)
       assert updated_om.state == :delivered
-      assert DateTime.compare(updated_om.not_visible_until, om.not_visible_until) != :eq
+      assert DateTime.compare(updated_om.not_visible_until, cm.not_visible_until) != :eq
       assert updated_om.deliver_count == 2
-      assert DateTime.compare(updated_om.last_delivered_at, om.last_delivered_at) != :eq
+      assert DateTime.compare(updated_om.last_delivered_at, cm.last_delivered_at) != :eq
     end
 
     test "does not redeliver unexpired outstanding messages", %{stream: stream, consumer: consumer} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message,
         state: :delivered,
@@ -153,7 +152,7 @@ defmodule Sequin.StreamsTest do
       for _ <- 1..3 do
         message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-        StreamsFactory.insert_outstanding_message!(%{
+        StreamsFactory.insert_consumer_message!(%{
           consumer_id: consumer.id,
           message: message,
           state: :available
@@ -162,14 +161,14 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
-      assert length(Streams.list_outstanding_messages_for_consumer(consumer.id)) == 3
+      assert length(Streams.list_consumer_messages_for_consumer(consumer.id)) == 3
     end
 
     test "does not deliver outstanding messages for another consumer", %{stream: stream, consumer: consumer} do
       other_consumer = StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: other_consumer.id,
         message: message,
         state: :available
@@ -187,7 +186,7 @@ defmodule Sequin.StreamsTest do
         for _ <- 1..3 do
           msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-          StreamsFactory.insert_outstanding_message!(%{
+          StreamsFactory.insert_consumer_message!(%{
             consumer_id: consumer.id,
             message: msg,
             state: :available
@@ -200,7 +199,7 @@ defmodule Sequin.StreamsTest do
         for _ <- 1..3 do
           msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-          StreamsFactory.insert_outstanding_message!(%{
+          StreamsFactory.insert_consumer_message!(%{
             consumer_id: consumer.id,
             message: msg,
             state: :delivered,
@@ -214,7 +213,7 @@ defmodule Sequin.StreamsTest do
       for _ <- 1..3 do
         msg = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-        StreamsFactory.insert_outstanding_message!(%{
+        StreamsFactory.insert_consumer_message!(%{
           consumer_id: consumer.id,
           message: msg,
           state: :delivered,
@@ -226,7 +225,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, messages} = Streams.next_for_consumer(consumer)
       assert length(messages) == length(available ++ redeliver)
-      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:key, :stream_id]))
+      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:subject, :stream_id]))
     end
 
     test "delivers messages according to asc last_delivered_at nulls last", %{stream: stream, consumer: consumer} do
@@ -235,7 +234,7 @@ defmodule Sequin.StreamsTest do
       # Oldest delivered message
       message1 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message1,
         state: :delivered,
@@ -246,7 +245,7 @@ defmodule Sequin.StreamsTest do
       # Second oldest delivered message
       message2 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message2,
         state: :delivered,
@@ -257,7 +256,7 @@ defmodule Sequin.StreamsTest do
       # Newest delivered message (should not be returned)
       message3 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message3,
         state: :delivered,
@@ -268,7 +267,7 @@ defmodule Sequin.StreamsTest do
       # Available message (null last_delivered_at)
       message4 = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
-      StreamsFactory.insert_outstanding_message!(%{
+      StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message4,
         state: :available,
@@ -277,16 +276,16 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
-      delivered_message_keys = Enum.map(delivered, & &1.key)
-      assert_lists_equal(delivered_message_keys, [message1.key, message2.key])
+      delivered_message_subjects = Enum.map(delivered, & &1.subject)
+      assert_lists_equal(delivered_message_subjects, [message1.subject, message2.subject])
     end
 
     test "respect's a consumer's max_ack_pending", %{consumer: consumer} do
       max_ack_pending = 3
       consumer = %{consumer | max_ack_pending: max_ack_pending}
 
-      om =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+      cm =
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: consumer.stream_id,
           state: :available
@@ -294,7 +293,7 @@ defmodule Sequin.StreamsTest do
 
       # These messages can't be delivered
       for _ <- 1..2 do
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: consumer.stream_id,
           state: :delivered,
@@ -304,7 +303,7 @@ defmodule Sequin.StreamsTest do
 
       # These messages *can* be delivered, but are outside max_ack_pending
       for _ <- 1..2 do
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: consumer.stream_id,
           state: :available
@@ -314,7 +313,7 @@ defmodule Sequin.StreamsTest do
       assert {:ok, delivered} = Streams.next_for_consumer(consumer)
       assert length(delivered) == 1
       delivered = List.last(delivered)
-      assert delivered.key == om.message_key
+      assert delivered.subject == cm.message_subject
       assert {:ok, []} = Streams.next_for_consumer(consumer)
     end
   end
@@ -325,12 +324,11 @@ defmodule Sequin.StreamsTest do
     new_data = StreamsFactory.message_data()
 
     {1, _} =
-      msg.key
-      |> Streams.Message.where_key_and_stream_id(msg.stream_id)
+      msg.subject
+      |> Streams.Message.where_subject_and_stream_id(msg.stream_id)
       |> Repo.update_all(set: [data: new_data])
 
-    updated_msg = Streams.get_message!(msg.key, msg.stream_id)
-    assert is_nil(updated_msg.seq)
+    updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
     assert updated_msg.data == new_data
   end
 
@@ -346,7 +344,7 @@ defmodule Sequin.StreamsTest do
       message2 = StreamsFactory.insert_message!(stream_id: stream.id)
 
       om1 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
@@ -354,7 +352,7 @@ defmodule Sequin.StreamsTest do
         })
 
       om2 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
@@ -363,47 +361,47 @@ defmodule Sequin.StreamsTest do
 
       non_existent_id = Factory.uuid()
 
-      :ok = Streams.ack_messages(consumer.id, [om1.id, om2.id, non_existent_id])
+      :ok = Streams.ack_messages(consumer.id, [om1.ack_id, om2.ack_id, non_existent_id])
 
-      assert Streams.all_outstanding_messages() == []
+      assert Streams.all_consumer_messages() == []
     end
 
     test "ignores messages with different consumer_id", %{stream: stream, consumer: consumer} do
       other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
 
       om1 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered
         })
 
       om2 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: other_consumer.id,
           message_stream_id: stream.id,
           state: :delivered
         })
 
-      :ok = Streams.ack_messages(consumer.id, [om1.id, om2.id])
+      :ok = Streams.ack_messages(consumer.id, [om1.ack_id, om2.ack_id])
 
-      outstanding = Streams.all_outstanding_messages()
+      outstanding = Streams.all_consumer_messages()
       assert length(outstanding) == 1
-      assert List.first(outstanding).id == om2.id
+      assert List.first(outstanding).ack_id == om2.ack_id
     end
 
     test "flips pending_redelivery messages to available", %{stream: stream, consumer: consumer} do
-      om =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+      cm =
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :pending_redelivery,
           not_visible_until: DateTime.utc_now()
         })
 
-      :ok = Streams.ack_messages(consumer.id, [om.id])
+      :ok = Streams.ack_messages(consumer.id, [cm.ack_id])
 
-      updated_om = Streams.get_outstanding_message!(om.id)
+      updated_om = Streams.get_consumer_message!(cm.consumer_id, cm.message_subject)
       assert updated_om.state == :available
       refute updated_om.not_visible_until
     end
@@ -418,7 +416,7 @@ defmodule Sequin.StreamsTest do
 
     test "nacks messages and ignores unknown message ID", %{stream: stream, consumer: consumer} do
       om1 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
@@ -426,7 +424,7 @@ defmodule Sequin.StreamsTest do
         })
 
       om2 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
@@ -435,10 +433,10 @@ defmodule Sequin.StreamsTest do
 
       non_existent_id = Factory.uuid()
 
-      :ok = Streams.nack_messages(consumer.id, [om1.id, om2.id, non_existent_id])
+      :ok = Streams.nack_messages(consumer.id, [om1.ack_id, om2.ack_id, non_existent_id])
 
-      updated_om1 = Repo.reload(om1)
-      updated_om2 = Repo.reload(om2)
+      updated_om1 = Streams.reload(om1)
+      updated_om2 = Streams.reload(om2)
 
       assert updated_om1.state == :available
       refute updated_om1.not_visible_until
@@ -450,7 +448,7 @@ defmodule Sequin.StreamsTest do
       other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
 
       om1 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
@@ -458,17 +456,17 @@ defmodule Sequin.StreamsTest do
         })
 
       om2 =
-        StreamsFactory.insert_outstanding_message_with_message!(%{
+        StreamsFactory.insert_consumer_message_with_message!(%{
           consumer_id: other_consumer.id,
           message_stream_id: stream.id,
           state: :delivered,
           not_visible_until: DateTime.utc_now()
         })
 
-      :ok = Streams.nack_messages(consumer.id, [om1.id, om2.id])
+      :ok = Streams.nack_messages(consumer.id, [om1.ack_id, om2.ack_id])
 
-      updated_om1 = Repo.reload(om1)
-      updated_om2 = Repo.reload(om2)
+      updated_om1 = Streams.reload(om1)
+      updated_om2 = Streams.reload(om2)
 
       assert updated_om1.state == :available
       refute updated_om1.not_visible_until

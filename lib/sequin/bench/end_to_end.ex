@@ -101,7 +101,7 @@ defmodule Sequin.Bench.EndToEnd do
     |> Enum.each(&Streams.delete_consumer_with_lifecycle/1)
 
     Repo.delete_all(from(m in Streams.Message, where: is_nil(m.seq)))
-    Repo.delete_all(from(m in Streams.OutstandingMessage))
+    Repo.delete_all(from(m in Streams.ConsumerMessage))
 
     consumers =
       Enum.map(1..10, fn _ ->
@@ -112,11 +112,6 @@ defmodule Sequin.Bench.EndToEnd do
 
         consumer
       end)
-
-    Repo.update_all(
-      from(c in Streams.ConsumerState),
-      set: [message_seq_cursor: dynamic(fragment("nextval('streams.messages_seq')"))]
-    )
 
     Enum.each(consumers, fn consumer ->
       StreamsRuntime.Supervisor.start_for_consumer(consumer.id)
@@ -183,11 +178,6 @@ defmodule Sequin.Bench.EndToEnd do
            upsert_and_await(stream.id, consumer, batch_size, key_agent)
          end,
          before: fn _input ->
-           Repo.update_all(
-             from(c in Streams.ConsumerState),
-             set: [message_seq_cursor: dynamic(fragment("nextval('streams.messages_seq')"))]
-           )
-
            if current_message_count < 8_000_000 do
              #  populate_messages(stream.id, 10_000_000)
            else

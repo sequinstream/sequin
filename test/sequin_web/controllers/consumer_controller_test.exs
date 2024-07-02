@@ -63,7 +63,7 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   describe "create" do
     test "creates a consumer under the authenticated account", %{conn: conn, stream: stream} do
-      attrs = %{stream_id: stream.id, max_ack_pending: 5000}
+      attrs = StreamsFactory.consumer_attrs(stream_id: stream.id, max_ack_pending: 5000)
 
       conn = post(conn, ~p"/api/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
@@ -86,7 +86,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       stream: stream,
       other_account: other_account
     } do
-      attrs = %{stream_id: stream.id, account_id: other_account.id}
+      attrs = StreamsFactory.consumer_attrs(stream_id: stream.id, account_id: other_account.id)
 
       conn = post(conn, ~p"/api/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)

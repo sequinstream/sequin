@@ -48,8 +48,13 @@ defmodule SequinWeb.StreamControllerTest do
   end
 
   describe "create" do
-    test "creates a stream under the authenticated account", %{conn: conn, account: account} do
-      conn = post(conn, ~p"/api/streams", %{})
+    setup do
+      stream_attrs = StreamsFactory.stream_attrs()
+      %{stream_attrs: stream_attrs}
+    end
+
+    test "creates a stream under the authenticated account", %{conn: conn, account: account, stream_attrs: stream_attrs} do
+      conn = post(conn, ~p"/api/streams", stream_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, stream} = Streams.get_stream_for_account(account.id, id)
@@ -66,9 +71,10 @@ defmodule SequinWeb.StreamControllerTest do
     test "ignores provided account_id and uses authenticated account", %{
       conn: conn,
       account: account,
-      other_account: other_account
+      other_account: other_account,
+      stream_attrs: stream_attrs
     } do
-      conn = post(conn, ~p"/api/streams", %{account_id: other_account.id})
+      conn = post(conn, ~p"/api/streams", %{stream_attrs | account_id: other_account.id})
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, stream} = Streams.get_stream_for_account(account.id, id)

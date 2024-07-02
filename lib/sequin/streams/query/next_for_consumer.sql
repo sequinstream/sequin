@@ -2,7 +2,7 @@ WITH pending_messages AS (
   SELECT
     *
   FROM
-    streams.outstanding_messages
+    streams.consumer_messages
   WHERE
     consumer_id = :consumer_id
   ORDER BY
@@ -24,20 +24,20 @@ deliverable_messages AS (
 ),
 updated_messages AS (
   UPDATE
-    streams.outstanding_messages om
+    streams.consumer_messages cm
   SET
     state = 'delivered',
     not_visible_until = :not_visible_until,
-    deliver_count = om.deliver_count + 1,
+    deliver_count = cm.deliver_count + 1,
     last_delivered_at = :now
   FROM
     deliverable_messages dm
   WHERE
-    om.id = dm.id
+    cm.id = dm.id
   RETURNING
-    om.id AS ack_id,
-    om.message_key,
-    om.message_stream_id
+    cm.id AS ack_id,
+    cm.message_key,
+    cm.message_stream_id
 )
 SELECT
   um.ack_id,

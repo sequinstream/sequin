@@ -3,13 +3,10 @@ defmodule Sequin.Streams do
   import Ecto.Query
 
   alias Sequin.Error
-  alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
-  alias Sequin.Streams.ConsumerState
+  alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.Message
-  alias Sequin.Streams.OutstandingMessage
-  alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
   alias Sequin.StreamsRuntime
 
@@ -17,7 +14,14 @@ defmodule Sequin.Streams do
 
   def reload(%Message{} = msg) do
     # Repo.reload/2 does not support compound pks
-    msg.key |> Message.where_key_and_stream_id(msg.stream_id) |> Repo.one()
+    msg.subject |> Message.where_subject_and_stream_id(msg.stream_id) |> Repo.one()
+  end
+
+  def reload(%ConsumerMessage{} = cm) do
+    cm.consumer_id
+    |> ConsumerMessage.where_consumer_id()
+    |> ConsumerMessage.where_message_subject(cm.message_subject)
+    |> Repo.one()
   end
 
   # Streams
@@ -71,7 +75,7 @@ defmodule Sequin.Streams do
 
   defp create_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    CREATE TABLE streams.messages_#{stream.idx} PARTITION OF streams.messages FOR VALUES IN ('#{stream.id}');
+    CREATE TABLE streams.messages_#{stream.slug} PARTITION OF streams.messages FOR VALUES IN ('#{stream.id}');
     """)
   end
 
@@ -81,7 +85,7 @@ defmodule Sequin.Streams do
 
   defp drop_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    DROP TABLE IF EXISTS streams.messages_#{stream.idx};
+    DROP TABLE IF EXISTS streams.messages_#{stream.slug};
     """)
   end
 
@@ -117,7 +121,7 @@ defmodule Sequin.Streams do
   def create_consumer_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
       with {:ok, consumer} <- create_consumer(account_id, attrs),
-           {:ok, _} <- create_consumer_state(consumer) do
+           :ok <- create_consumer_partition(consumer) do
         {:ok, consumer}
       end
     end)
@@ -134,7 +138,7 @@ defmodule Sequin.Streams do
       case delete_consumer(consumer) do
         :ok ->
           StreamsRuntime.Supervisor.stop_for_consumer(consumer.id)
-          delete_consumer_state(consumer)
+          :ok = delete_consumer_partition(consumer)
           consumer
 
         error ->
@@ -155,24 +159,34 @@ defmodule Sequin.Streams do
     |> Repo.insert()
   end
 
-  def create_consumer_state(%Consumer{} = consumer) do
-    %ConsumerState{}
-    |> ConsumerState.create_changeset(%{consumer_id: consumer.id})
-    |> Repo.insert()
-  end
-
   def delete_consumer(%Consumer{} = consumer) do
     Repo.delete(consumer)
   end
 
-  def delete_consumer_state(%Consumer{} = consumer) do
-    consumer.id |> ConsumerState.where_consumer_id() |> Repo.delete()
+  defp create_consumer_partition(%Consumer{} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    CREATE TABLE streams.consumer_messages_#{consumer.stream.slug}_#{consumer.slug} PARTITION OF streams.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :create_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
   end
 
-  def get_consumer_state(consumer_id) do
-    consumer_id
-    |> ConsumerState.where_consumer_id()
-    |> Repo.one!()
+  defp delete_consumer_partition(%Consumer{} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    DROP TABLE IF EXISTS streams.consumer_messages_#{consumer.stream.slug}_#{consumer.slug};
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :drop_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
   end
 
   def next_for_consumer(%Consumer{} = consumer, opts \\ []) do
@@ -183,33 +197,33 @@ defmodule Sequin.Streams do
 
     available_oms =
       consumer.id
-      |> OutstandingMessage.where_consumer_id()
-      |> order_by([om], asc: om.message_seq)
+      |> ConsumerMessage.where_consumer_id()
+      |> order_by([cm], asc: cm.message_seq)
       |> limit(^max_ack_pending)
 
     available_oms_query =
-      from(aom in subquery(available_oms), as: :outstanding_message)
-      |> OutstandingMessage.where_deliverable()
-      |> order_by([aom], asc: aom.message_seq)
+      from(acm in subquery(available_oms), as: :consumer_message)
+      |> ConsumerMessage.where_deliverable()
+      |> order_by([acm], asc: acm.message_seq)
       |> limit(^batch_size)
       |> lock("FOR UPDATE SKIP LOCKED")
-      |> select([aom], aom.id)
+      |> select([acm], acm.message_subject)
 
     Repo.transact(fn ->
       case Repo.all(available_oms_query) do
-        aom_ids when aom_ids != [] ->
+        aom_subjects when aom_subjects != [] ->
           {_, messages} =
             Repo.update_all(
-              from(om in OutstandingMessage,
-                where: om.id in ^aom_ids,
+              from(cm in ConsumerMessage,
+                where: cm.message_subject in ^aom_subjects,
                 join: m in Message,
-                on: m.key == om.message_key and m.stream_id == om.message_stream_id,
-                select: %{ack_id: om.id, message: m}
+                on: m.subject == cm.message_subject and m.stream_id == ^consumer.stream_id,
+                select: %{ack_id: cm.ack_id, message: m}
               ),
               set: [
                 state: "delivered",
                 not_visible_until: not_visible_until,
-                deliver_count: dynamic([om], om.deliver_count + 1),
+                deliver_count: dynamic([cm], cm.deliver_count + 1),
                 last_delivered_at: now
               ]
             )
@@ -232,51 +246,10 @@ defmodule Sequin.Streams do
 
   # Messages
 
-  def get_message!(key, stream_id) do
-    key
-    |> Message.where_key_and_stream_id(stream_id)
+  def get_message!(subject, stream_id) do
+    subject
+    |> Message.where_subject_and_stream_id(stream_id)
     |> Repo.one!()
-  end
-
-  def assign_message_seqs_with_lock(stream_id, limit \\ 1_000) do
-    lock_key = {"assign_message_seqs_with_lock", stream_id}
-
-    Repo.transact(
-      fn ->
-        case Postgres.try_advisory_xact_lock(lock_key) do
-          :ok ->
-            assign_message_seqs(stream_id, limit)
-
-            :ok
-
-          {:error, :locked} ->
-            {:error, :locked}
-        end
-      end,
-      timeout: :timer.seconds(20)
-    )
-  end
-
-  def assign_message_seqs(stream_id, limit \\ 1_000) do
-    subquery =
-      from(m in Message,
-        where: is_nil(m.seq) and m.stream_id == ^stream_id,
-        order_by: [asc: m.updated_at],
-        select: %{key: m.key, stream_id: m.stream_id},
-        limit: ^limit
-      )
-
-    {count, msgs} =
-      Repo.update_all(
-        select(
-          from(m in Message, join: s in subquery(subquery), on: m.key == s.key and m.stream_id == s.stream_id),
-          [m],
-          %{key: m.key, seq: m.seq}
-        ),
-        set: [seq: dynamic([_m], fragment("nextval('streams.messages_seq')"))]
-      )
-
-    {count, msgs}
   end
 
   def upsert_messages(messages, is_retry? \\ false) do
@@ -286,10 +259,10 @@ defmodule Sequin.Streams do
       Enum.map(messages, fn message ->
         message
         |> Sequin.Map.from_ecto()
+        |> Message.put_tokens()
         |> Message.put_data_hash()
         |> Map.put(:updated_at, now)
         |> Map.put(:inserted_at, now)
-        |> Map.put(:seq, nil)
       end)
 
     on_conflict =
@@ -299,8 +272,7 @@ defmodule Sequin.Streams do
           set: [
             data: fragment("EXCLUDED.data"),
             data_hash: fragment("EXCLUDED.data_hash"),
-            updated_at: fragment("EXCLUDED.updated_at"),
-            seq: nil
+            updated_at: fragment("EXCLUDED.updated_at")
           ]
         ]
       )
@@ -310,7 +282,7 @@ defmodule Sequin.Streams do
         Message,
         messages,
         on_conflict: on_conflict,
-        conflict_target: [:key, :stream_id],
+        conflict_target: [:subject, :stream_id],
         timeout: :timer.seconds(30)
       )
 
@@ -331,28 +303,32 @@ defmodule Sequin.Streams do
 
   # Outstanding Messages
 
-  def all_outstanding_messages do
-    Repo.all(OutstandingMessage)
+  def all_consumer_messages do
+    Repo.all(ConsumerMessage)
   end
 
-  def get_outstanding_message!(id) do
-    Repo.get!(OutstandingMessage, id)
+  def get_consumer_message!(consumer_id, message_subject) do
+    # Repo.get!(ConsumerMessage, consumer_id: consumer_id, message_subject: message_subject)
+    consumer_id
+    |> ConsumerMessage.where_consumer_id()
+    |> ConsumerMessage.where_message_subject(message_subject)
+    |> Repo.one!()
   end
 
-  def ack_messages(consumer_id, message_ids) do
+  def ack_messages(consumer_id, ack_ids) do
     Repo.transact(fn ->
       {_, _} =
         consumer_id
-        |> OutstandingMessage.where_consumer_id()
-        |> OutstandingMessage.where_ids(message_ids)
-        |> OutstandingMessage.where_state(:pending_redelivery)
+        |> ConsumerMessage.where_consumer_id()
+        |> ConsumerMessage.where_ack_ids(ack_ids)
+        |> ConsumerMessage.where_state(:pending_redelivery)
         |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
       {_, _} =
         consumer_id
-        |> OutstandingMessage.where_consumer_id()
-        |> OutstandingMessage.where_ids(message_ids)
-        |> OutstandingMessage.where_state(:delivered)
+        |> ConsumerMessage.where_consumer_id()
+        |> ConsumerMessage.where_ack_ids(ack_ids)
+        |> ConsumerMessage.where_state(:delivered)
         |> Repo.delete_all()
 
       :ok
@@ -361,58 +337,19 @@ defmodule Sequin.Streams do
     :ok
   end
 
-  def nack_messages(consumer_id, message_ids) do
+  def nack_messages(consumer_id, ack_ids) do
     {_, _} =
       consumer_id
-      |> OutstandingMessage.where_consumer_id()
-      |> OutstandingMessage.where_ids(message_ids)
+      |> ConsumerMessage.where_consumer_id()
+      |> ConsumerMessage.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
     :ok
   end
 
-  def list_outstanding_messages_for_consumer(consumer_id) do
+  def list_consumer_messages_for_consumer(consumer_id) do
     consumer_id
-    |> OutstandingMessage.where_consumer_id()
+    |> ConsumerMessage.where_consumer_id()
     |> Repo.all()
-  end
-
-  def populate_outstanding_messages_with_lock(consumer_id) do
-    lock_key = {"populate_outstanding_messages_with_lock", consumer_id}
-
-    Repo.transact(fn ->
-      case Postgres.try_advisory_xact_lock(lock_key) do
-        :ok ->
-          populate_outstanding_messages(consumer_id)
-
-          :ok
-
-        {:error, :locked} ->
-          {:error, :locked}
-      end
-    end)
-  end
-
-  def populate_outstanding_messages(%Consumer{} = consumer) do
-    now = NaiveDateTime.utc_now()
-
-    res =
-      Query.populate_outstanding_messages(
-        consumer_id: UUID.string_to_binary!(consumer.id),
-        stream_id: UUID.string_to_binary!(consumer.stream_id),
-        now: now,
-        max_outstanding_message_count: consumer.max_ack_pending * 5,
-        table_schema: "streams"
-      )
-
-    case res do
-      {:ok, _} -> :ok
-      error -> error
-    end
-  end
-
-  def populate_outstanding_messages(consumer_id) do
-    consumer = get_consumer!(consumer_id)
-    populate_outstanding_messages(consumer)
   end
 end

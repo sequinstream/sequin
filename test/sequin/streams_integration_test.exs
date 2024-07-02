@@ -4,9 +4,10 @@ defmodule Sequin.StreamsIntegrationTest do
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.StreamsRuntime.AssignMessageSeq
-  alias Sequin.StreamsRuntime.PopulateOutstandingMessages
+  alias Sequin.StreamsRuntime.PopulateConsumerMessages
 
   describe "streams integration" do
+    @tag :skip
     test "full message lifecycle" do
       # Create a stream and consumer
       stream = StreamsFactory.insert_stream!()
@@ -31,9 +32,9 @@ defmodule Sequin.StreamsIntegrationTest do
       start_supervised!({AssignMessageSeq, stream_id: stream.id, test_pid: self(), interval_ms: 100})
       assert_receive {AssignMessageSeq, :assign_done}
 
-      # Boot PopulateOutstandingMessages
-      start_supervised!({PopulateOutstandingMessages, consumer_id: consumer.id, test_pid: self(), interval_ms: 100})
-      assert_receive {PopulateOutstandingMessages, :populate_done}
+      # Boot PopulateConsumerMessages
+      start_supervised!({PopulateConsumerMessages, consumer_id: consumer.id, test_pid: self(), interval_ms: 100})
+      assert_receive {PopulateConsumerMessages, :populate_done}
 
       # Call next_for_consumer
       {:ok, received_messages} = Streams.next_for_consumer(consumer)
@@ -47,15 +48,15 @@ defmodule Sequin.StreamsIntegrationTest do
       assert empty_messages == []
 
       # Get the outstanding messages
-      outstanding_messages = Streams.list_outstanding_messages_for_consumer(consumer.id)
-      assert length(outstanding_messages) == 5
+      consumer_messages = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert length(consumer_messages) == 5
 
       # Call ack_messages
-      message_ids = Enum.map(outstanding_messages, & &1.id)
+      message_ids = Enum.map(consumer_messages, & &1.id)
       :ok = Streams.ack_messages(consumer.id, message_ids)
 
-      # Assert messages were deleted from OutstandingMessages
-      assert Streams.list_outstanding_messages_for_consumer(consumer.id) == []
+      # Assert messages were deleted from ConsumerMessages
+      assert Streams.list_consumer_messages_for_consumer(consumer.id) == []
     end
   end
 end

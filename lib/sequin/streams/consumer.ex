@@ -10,6 +10,7 @@ defmodule Sequin.Streams.Consumer do
 
   @derive {Jason.Encoder,
            only: [
+             :slug,
              :ack_wait_ms,
              :max_ack_pending,
              :max_deliver,
@@ -21,6 +22,7 @@ defmodule Sequin.Streams.Consumer do
              :updated_at
            ]}
   typed_schema "consumers" do
+    field :slug, :string
     field :ack_wait_ms, :integer, default: 30_000
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
@@ -34,8 +36,8 @@ defmodule Sequin.Streams.Consumer do
 
   def create_changeset(consumer, attrs) do
     consumer
-    |> cast(attrs, [:stream_id, :ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting])
-    |> validate_required([:stream_id])
+    |> cast(attrs, [:stream_id, :ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :slug])
+    |> validate_required([:stream_id, :slug])
     |> foreign_key_constraint(:stream_id)
   end
 

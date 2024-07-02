@@ -8,16 +8,15 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Repo
   alias Sequin.Streams
   alias Sequin.Streams.Consumer
-  alias Sequin.Streams.ConsumerState
+  alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.Message
-  alias Sequin.Streams.OutstandingMessage
   alias Sequin.Streams.Stream
 
   def message_data, do: Faker.String.base64(24)
 
-  # OutstandingMessage
+  # ConsumerMessage
 
-  def outstanding_message(attrs \\ []) do
+  def consumer_message(attrs \\ []) do
     attrs = Map.new(attrs)
     {state, attrs} = Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:delivered, :available, :pending_redelivery]) end)
 
@@ -27,13 +26,12 @@ defmodule Sequin.Factory.StreamsFactory do
       end
 
     merge_attributes(
-      %OutstandingMessage{
+      %ConsumerMessage{
         consumer_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
-        message_key: Factory.uuid(),
+        message_subject: generate_subject(parts: 3),
         message_seq: Enum.random(1..1000),
-        message_stream_id: Factory.uuid(),
         not_visible_until: not_visible_until,
         state: state
       },
@@ -41,31 +39,31 @@ defmodule Sequin.Factory.StreamsFactory do
     )
   end
 
-  def outstanding_message_attrs(attrs \\ []) do
+  def consumer_message_attrs(attrs \\ []) do
     attrs
-    |> outstanding_message()
+    |> consumer_message()
     |> Sequin.Map.from_ecto()
   end
 
-  def insert_outstanding_message!(attrs \\ []) do
+  def insert_consumer_message!(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {message, attrs} = Map.pop(attrs, :message)
 
     message_attrs =
       if message do
-        %{message_key: message.key, message_stream_id: message.stream_id, message_seq: message.seq}
+        %{message_subject: message.subject, message_seq: message.seq}
       else
         %{}
       end
 
     message_attrs
     |> Map.merge(attrs)
-    |> outstanding_message()
+    |> consumer_message()
     |> Repo.insert!()
   end
 
-  def insert_outstanding_message_with_message!(attrs \\ []) do
+  def insert_consumer_message_with_message!(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {message_stream_id, attrs} = Map.pop(attrs, :message_stream_id)
@@ -77,7 +75,7 @@ defmodule Sequin.Factory.StreamsFactory do
         |> insert_message!()
       end)
 
-    insert_outstanding_message!(Map.put(attrs, :message, message))
+    insert_consumer_message!(Map.put(attrs, :message, message))
   end
 
   # Message
@@ -89,11 +87,11 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Message{
-        key: Factory.uuid(),
         stream_id: Factory.uuid(),
         data_hash: Base.encode64(:crypto.hash(:sha256, data)),
         data: data,
-        seq: Postgres.sequence_nextval("streams.messages_seq")
+        seq: Postgres.sequence_nextval("streams.messages_seq"),
+        subject: generate_subject(parts: 3)
       },
       attrs
     )
@@ -109,38 +107,13 @@ defmodule Sequin.Factory.StreamsFactory do
     attrs = Map.new(attrs)
     {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!().id end)
 
-    attrs
-    |> Map.put(:stream_id, stream_id)
-    |> message()
-    |> Repo.insert!()
-  end
-
-  # ConsumerState
-
-  def get_consumer_state(attrs \\ []) do
-    merge_attributes(
-      %ConsumerState{
-        consumer_id: Factory.uuid(),
-        message_seq_cursor: Enum.random(1..1000)
-      },
+    attrs =
       attrs
-    )
-  end
+      |> Map.put(:stream_id, stream_id)
+      |> message_attrs()
 
-  def get_consumer_state_attrs(attrs \\ []) do
-    attrs
-    |> get_consumer_state()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def insert_consumer_state!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {consumer_id, attrs} = Map.pop_lazy(attrs, :consumer_id, fn -> insert_consumer!().id end)
-
-    attrs
-    |> Map.put(:consumer_id, consumer_id)
-    |> get_consumer_state()
+    %Message{}
+    |> Message.changeset(attrs)
     |> Repo.insert!()
   end
 
@@ -149,6 +122,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def consumer(attrs \\ []) do
     merge_attributes(
       %Consumer{
+        slug: generate_slug(),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
@@ -172,11 +146,14 @@ defmodule Sequin.Factory.StreamsFactory do
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
     {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!(account_id: account_id).id end)
 
-    attrs
-    |> Map.put(:stream_id, stream_id)
-    |> Map.put(:account_id, account_id)
-    |> consumer()
-    |> Repo.insert!()
+    attrs =
+      attrs
+      |> Map.put(:stream_id, stream_id)
+      |> Map.put(:account_id, account_id)
+      |> consumer_attrs()
+
+    {:ok, consumer} = Streams.create_consumer_for_account_with_lifecycle(account_id, attrs)
+    consumer
   end
 
   # Stream
@@ -184,7 +161,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        idx: Enum.random(1..1000),
+        slug: generate_slug(),
         account_id: Factory.uuid()
       },
       attrs
@@ -206,5 +183,13 @@ defmodule Sequin.Factory.StreamsFactory do
       Streams.create_stream_for_account_with_lifecycle(account_id, stream_attrs(attrs))
 
     stream
+  end
+
+  defp generate_subject(parts: parts) do
+    Enum.map_join(1..parts, ".", fn _ -> Faker.Lorem.word() end)
+  end
+
+  defp generate_slug do
+    "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
   end
 end

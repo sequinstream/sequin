@@ -352,50 +352,45 @@ defmodule Sequin.StreamsTest do
       assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:subject, :stream_id]))
     end
 
-    test "delivers messages according to asc last_delivered_at nulls last", %{stream: stream, consumer: consumer} do
+    test "delivers messages according to message_seq asc", %{stream: stream, consumer: consumer} do
       now = DateTime.utc_now()
 
       # Oldest delivered message
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, seq: 1})
 
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message1,
         state: :delivered,
-        last_delivered_at: DateTime.add(now, -2, :minute),
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
       # Second oldest delivered message
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, seq: 2})
 
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message2,
         state: :delivered,
-        last_delivered_at: DateTime.add(now, -1, :minute),
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
       # Newest delivered message (should not be returned)
-      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, seq: 3})
 
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message3,
         state: :delivered,
-        last_delivered_at: now,
         not_visible_until: DateTime.add(now, -1, :minute)
       })
 
-      # Available message (null last_delivered_at)
-      message4 = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message4 = StreamsFactory.insert_message!(%{stream_id: stream.id, seq: 4})
 
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
         message: message4,
-        state: :available,
-        last_delivered_at: nil
+        state: :available
       })
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
@@ -440,20 +435,6 @@ defmodule Sequin.StreamsTest do
       assert delivered.subject == cm.message_subject
       assert {:ok, []} = Streams.next_for_consumer(consumer)
     end
-  end
-
-  test "updating a message resets its seq to nil via a trigger" do
-    msg = StreamsFactory.insert_message!()
-
-    new_data = StreamsFactory.message_data()
-
-    {1, _} =
-      msg.subject
-      |> Streams.Message.where_subject_and_stream_id(msg.stream_id)
-      |> Repo.update_all(set: [data: new_data])
-
-    updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
-    assert updated_msg.data == new_data
   end
 
   describe "ack_messages/2" do

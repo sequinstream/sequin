@@ -196,53 +196,24 @@ defmodule Sequin.Streams do
     now = NaiveDateTime.utc_now()
     max_ack_pending = consumer.max_ack_pending
 
-    available_oms =
-      consumer.id
-      |> ConsumerMessage.where_consumer_id()
-      |> order_by([cm], asc: cm.message_seq)
-      |> limit(^max_ack_pending)
+    {:ok, messages} =
+      Query.next_for_consumer(
+        batch_size: batch_size,
+        consumer_id: UUID.string_to_binary!(consumer.id),
+        max_ack_pending: max_ack_pending,
+        not_visible_until: not_visible_until,
+        now: now
+      )
 
-    available_oms_query =
-      from(acm in subquery(available_oms), as: :consumer_message)
-      |> ConsumerMessage.where_deliverable()
-      |> order_by([acm], asc: acm.message_seq)
-      |> limit(^batch_size)
-      |> lock("FOR UPDATE SKIP LOCKED")
-      |> select([acm], acm.message_subject)
+    messages =
+      Enum.map(messages, fn message ->
+        message
+        |> Map.update!(:stream_id, &UUID.binary_to_string!/1)
+        |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
+        |> then(&struct!(Message, &1))
+      end)
 
-    Repo.transact(fn ->
-      case Repo.all(available_oms_query) do
-        aom_subjects when aom_subjects != [] ->
-          {_, messages} =
-            Repo.update_all(
-              from(cm in ConsumerMessage,
-                where: cm.message_subject in ^aom_subjects,
-                join: m in Message,
-                on: m.subject == cm.message_subject and m.stream_id == ^consumer.stream_id,
-                select: %{ack_id: cm.ack_id, message: m}
-              ),
-              set: [
-                state: "delivered",
-                not_visible_until: not_visible_until,
-                deliver_count: dynamic([cm], cm.deliver_count + 1),
-                last_delivered_at: now
-              ]
-            )
-
-          messages =
-            Enum.map(messages, fn %{ack_id: ack_id, message: message} ->
-              %{message | ack_id: ack_id}
-            end)
-
-          {:ok, messages}
-
-        [] ->
-          {:ok, []}
-
-        error ->
-          error
-      end
-    end)
+    {:ok, messages}
   end
 
   # Messages

@@ -7,23 +7,34 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
   """
   require Protocol
 
-  defmodule(Transaction, do: defstruct([:changes, :commit_timestamp]))
+  defmodule Transaction do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct do
+      field :changes, list(any())
+      field :commit_timestamp, DateTime.t()
+    end
+  end
 
   defmodule NewRecord do
     @moduledoc false
+    use TypedStruct
+
     alias Sequin.JSON
 
     @derive {Jason.Encoder, except: [:subscription_ids]}
-    defstruct [
-      :columns,
-      :commit_timestamp,
-      :errors,
-      :schema,
-      :table,
-      :record,
-      :subscription_ids,
-      :type
-    ]
+
+    typedstruct do
+      field :columns, list(map())
+      field :commit_timestamp, DateTime.t()
+      field :errors, any()
+      field :schema, String.t()
+      field :table, String.t()
+      field :record, map()
+      field :subscription_ids, list(String.t())
+      field :type, String.t()
+    end
 
     def from_json(json) do
       JSON.struct(json, __MODULE__)
@@ -32,20 +43,23 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
 
   defmodule UpdatedRecord do
     @moduledoc false
+    use TypedStruct
+
     alias Sequin.JSON
 
     @derive {Jason.Encoder, except: [:subscription_ids]}
-    defstruct [
-      :columns,
-      :commit_timestamp,
-      :errors,
-      :schema,
-      :table,
-      :old_record,
-      :record,
-      :subscription_ids,
-      :type
-    ]
+
+    typedstruct do
+      field :columns, list(map())
+      field :commit_timestamp, DateTime.t()
+      field :errors, any()
+      field :schema, String.t()
+      field :table, String.t()
+      field :old_record, map()
+      field :record, map()
+      field :subscription_ids, list(String.t())
+      field :type, String.t()
+    end
 
     def from_json(json) do
       JSON.struct(json, __MODULE__)
@@ -54,24 +68,37 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
 
   defmodule DeletedRecord do
     @moduledoc false
+    use TypedStruct
+
     alias Sequin.JSON
 
     @derive {Jason.Encoder, except: [:subscription_ids]}
-    defstruct [
-      :columns,
-      :commit_timestamp,
-      :errors,
-      :schema,
-      :table,
-      :old_record,
-      :subscription_ids,
-      :type
-    ]
+
+    typedstruct do
+      field :columns, list(map())
+      field :commit_timestamp, DateTime.t()
+      field :errors, any()
+      field :schema, String.t()
+      field :table, String.t()
+      field :old_record, map()
+      field :subscription_ids, list(String.t())
+      field :type, String.t()
+    end
 
     def from_json(json) do
       JSON.struct(json, __MODULE__)
     end
   end
 
-  defmodule(TruncatedRelation, do: defstruct([:type, :schema, :table, :commit_timestamp]))
+  defmodule TruncatedRelation do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct do
+      field :type, String.t()
+      field :schema, String.t()
+      field :table, String.t()
+      field :commit_timestamp, DateTime.t()
+    end
+  end
 end

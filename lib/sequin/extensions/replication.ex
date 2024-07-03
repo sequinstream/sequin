@@ -19,7 +19,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
-  alias Sequin.JSON
+  # alias Sequin.JSON
 
   require Logger
 
@@ -28,16 +28,18 @@ defmodule Sequin.Extensions.Replication do
     use TypedStruct
 
     typedstruct do
-      field :current_xid, nil | integer()
-      field :current_xaction_lsn, nil | integer()
       field :current_commit_ts, nil | integer()
+      field :current_xaction_lsn, nil | integer()
+      field :current_xid, nil | integer()
+      field :message_handler_ctx, any()
+      field :message_handler, atom()
+      field :id, String.t()
       field :last_committed_lsn, integer(), default: 0
       field :publication, String.t()
       field :slot_name, String.t()
       field :step, :disconnected | :streaming
       field :test_pid, pid()
       field :tid, :ets.tid()
-      field :handle_message_fun, (map() -> any())
     end
   end
 
@@ -47,15 +49,18 @@ defmodule Sequin.Extensions.Replication do
     publication = Keyword.fetch!(args, :publication)
     slot_name = Keyword.fetch!(args, :slot_name)
     test_pid = Keyword.get(args, :test_pid)
-    handle_message_fun = Keyword.get(args, :handle_message_fun)
+    message_handler_ctx = Keyword.get(args, :message_handler_ctx)
+    message_handler = Keyword.fetch!(args, :message_handler)
 
     opts = Keyword.merge([auto_reconnect: true, name: via_tuple(id)], connection)
 
     init = %State{
+      id: id,
       publication: publication,
       slot_name: slot_name,
       test_pid: test_pid,
-      handle_message_fun: handle_message_fun
+      message_handler_ctx: message_handler_ctx,
+      message_handler: message_handler
     }
 
     Postgrex.ReplicationConnection.start_link(Replication, init, opts)
@@ -76,7 +81,13 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
+    Logger.metadata(replication_id: state.id)
     tid = :ets.new(Replication, [:public, :set])
+
+    if state.test_pid do
+      Mox.allow(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock, state.test_pid, self())
+    end
+
     {:ok, %{state | tid: tid, step: :disconnected}}
   end
 
@@ -112,7 +123,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   def handle_result(result, state) do
-    Logger.error("Unknown result: #{inspect(result)}")
+    Logger.debug("Unknown result: #{inspect(result)}")
     {:noreply, state}
   end
 
@@ -130,11 +141,17 @@ defmodule Sequin.Extensions.Replication do
   end
 
   # keepalive
-  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
+  def handle_data(<<?k, _wal_end::64, _clock::64, reply>>, state) do
     messages =
       case reply do
-        1 -> [<<?r, wal_end + 1::64, wal_end + 1::64, wal_end + 1::64, current_time()::64, 0>>]
-        0 -> []
+        1 ->
+          [
+            <<?r, state.last_committed_lsn::64, state.last_committed_lsn::64, state.last_committed_lsn::64,
+              current_time()::64, 0>>
+          ]
+
+        0 ->
+          []
       end
 
     {:noreply, messages, state}
@@ -269,18 +286,7 @@ defmodule Sequin.Extensions.Replication do
   #   type: "UPDATE"
   # }
   defp handle_message(%State{} = state, change) do
-    if state.handle_message_fun do
-      # For DI in test
-      state.handle_message_fun.(change)
-
-      :ok
-    else
-      change
-      |> JSON.encode_struct_with_type()
-      |> Jason.encode!()
-
-      :ok
-    end
+    state.message_handler.handle_message(state.message_handler_ctx, change)
   end
 
   def data_tuple_to_map(column, tuple_data) do

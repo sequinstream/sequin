@@ -9,10 +9,12 @@ defmodule Sequin.Case do
 
   using do
     quote do
+      import Hammox
       import Sequin.Test.Assertions
       import unquote(__MODULE__)
 
       setup :start_supervisors
+      setup :verify_mox
     end
   end
 
@@ -27,5 +29,10 @@ defmodule Sequin.Case do
       end)
 
     {:ok, supervisors: sup_tree}
+  end
+
+  def verify_mox(_context) do
+    Mox.verify_on_exit!()
+    :ok
   end
 end

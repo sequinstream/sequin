@@ -11,6 +11,20 @@ defmodule Sequin.Databases.PostgresDatabase do
   require Logger
 
   @derive {Inspect, except: [:password]}
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :database,
+             :hostname,
+             :pool_size,
+             :port,
+             :queue_interval,
+             :queue_target,
+             :slug,
+             :ssl,
+             :username,
+             :password
+           ]}
   typed_schema "postgres_databases" do
     field :database, :string
     field :hostname, :string
@@ -42,12 +56,18 @@ defmodule Sequin.Databases.PostgresDatabase do
       :username,
       :password
     ])
+    |> validate_required([:database, :hostname, :port, :username, :password, :slug])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
   def where_account(query \\ base_query(), account_id) do
     from([database: db] in query, where: db.account_id == ^account_id)
+  end
+
+  @spec where_id(Queryable.t(), String.t()) :: Queryable.t()
+  def where_id(query \\ base_query(), id) do
+    from([database: db] in query, where: db.id == ^id)
   end
 
   defp base_query(query \\ PostgresDatabase) do

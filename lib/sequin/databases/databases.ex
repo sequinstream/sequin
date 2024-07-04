@@ -1,9 +1,70 @@
 defmodule Sequin.Databases do
   @moduledoc false
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error
+  alias Sequin.Repo
   alias Sequin.TcpUtils
 
   require Logger
+
+  # PostgresDatabase
+
+  def all_dbs do
+    Repo.all(PostgresDatabase)
+  end
+
+  def list_dbs_for_account(account_id) do
+    account_id
+    |> PostgresDatabase.where_account()
+    |> Repo.all()
+  end
+
+  def get_db(id) do
+    case Repo.get(PostgresDatabase, id) do
+      nil -> {:error, Error.not_found(entity: :postgres_database)}
+      db -> {:ok, db}
+    end
+  end
+
+  def get_db_for_account(account_id, id) do
+    query =
+      account_id
+      |> PostgresDatabase.where_account()
+      |> PostgresDatabase.where_id(id)
+
+    case Repo.one(query) do
+      nil -> {:error, Error.not_found(entity: :postgres_database)}
+      db -> {:ok, db}
+    end
+  end
+
+  def create_db_for_account(account_id, attrs) do
+    res =
+      %PostgresDatabase{account_id: account_id}
+      |> PostgresDatabase.changeset(attrs)
+      |> Repo.insert()
+
+    case res do
+      {:ok, db} -> {:ok, db}
+      {:error, changeset} -> {:error, Error.validation(changeset: changeset)}
+    end
+  end
+
+  def update_db(%PostgresDatabase{} = db, attrs) do
+    res =
+      db
+      |> PostgresDatabase.changeset(attrs)
+      |> Repo.update()
+
+    case res do
+      {:ok, updated_db} -> {:ok, updated_db}
+      {:error, changeset} -> {:error, Error.validation(changeset: changeset)}
+    end
+  end
+
+  def delete_db(%PostgresDatabase{} = db) do
+    Repo.delete(db)
+  end
 
   # PostgresDatabase runtime
 
@@ -17,9 +78,9 @@ defmodule Sequin.Databases do
     |> Postgrex.start_link()
   end
 
-  @spec test_tcp_reachability(%PostgresDatabase{}) :: :ok | {:error, term()}
-  def test_tcp_reachability(%PostgresDatabase{} = db) do
-    TcpUtils.test_reachability(db.hostname, db.port)
+  @spec test_tcp_reachability(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}
+  def test_tcp_reachability(%PostgresDatabase{} = db, timeout \\ 10_000) do
+    TcpUtils.test_reachability(db.hostname, db.port, timeout)
   end
 
   @spec test_connect(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}

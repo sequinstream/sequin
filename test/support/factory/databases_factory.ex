@@ -46,10 +46,8 @@ defmodule Sequin.Factory.DatabasesFactory do
     |> Repo.insert!()
   end
 
-  def insert_configured_postgres_database!(attrs \\ []) do
+  def configured_postgres_database_attrs(attrs \\ []) do
     attrs = Map.new(attrs)
-
-    Repo.config()
 
     Repo.config()
     |> Map.new()
@@ -65,6 +63,12 @@ defmodule Sequin.Factory.DatabasesFactory do
       :pool_size
     ])
     |> Map.merge(attrs)
+    |> postgres_database_attrs()
+  end
+
+  def insert_configured_postgres_database!(attrs \\ []) do
+    attrs
+    |> configured_postgres_database_attrs()
     |> insert_postgres_database!()
   end
 end

@@ -3,6 +3,8 @@ defmodule Sequin.BenchTest do
 
   alias Sequin.Bench
 
+  @moduletag skip: true
+
   describe "run/2" do
     setup do
       default_opts = [

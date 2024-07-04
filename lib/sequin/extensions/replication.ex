@@ -163,6 +163,7 @@ defmodule Sequin.Extensions.Replication do
     high <<< 32 ||| low
   end
 
+  # Used in debugging, worth keeping around.
   # defp lsn_to_tuple(lsn) when is_integer(lsn) do
   #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
   # end

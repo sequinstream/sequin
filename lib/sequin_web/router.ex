@@ -22,6 +22,9 @@ defmodule SequinWeb.Router do
 
     resources "/streams", StreamController, except: [:new, :edit]
     resources "/consumers", ConsumerController, except: [:new, :edit]
+    resources "/databases", DatabaseController, except: [:new, :edit]
+    post "/databases/:id/test_connection", DatabaseController, :test_connection
+    post "/databases/test_connection", DatabaseController, :test_connection_params
     post "/consumers/:id/next", PullController, :next
     get "/consumers/:id/next", PullController, :next
     post "/consumers/:id/ack", PullController, :ack

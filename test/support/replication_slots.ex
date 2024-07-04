@@ -17,8 +17,7 @@ defmodule Sequin.Test.Support.ReplicationSlots do
   """
   def replication_slots do
     %{
-      Sequin.PostgresReplicationTest => "__postgres_replication_test_slot__",
-      Sequin.Extensions.ReplicationTest => "__extensions_replication_test_slot__"
+      Sequin.PostgresReplicationTest => "__postgres_replication_test_slot__"
     }
   end
 

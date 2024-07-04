@@ -5,8 +5,9 @@ defmodule Sequin.Extensions.Replication do
 
   Borrowed heavily from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
   """
-
   use Postgrex.ReplicationConnection
+
+  import Bitwise
 
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
@@ -35,7 +36,7 @@ defmodule Sequin.Extensions.Replication do
       field :message_handler_ctx, any()
       field :message_handler, atom()
       field :id, String.t()
-      field :last_committed_lsn, integer(), default: 0
+      field :last_committed_lsn, tuple(), default: 0
       field :publication, String.t()
       field :slot_name, String.t()
       field :step, :disconnected | :streaming
@@ -127,14 +128,21 @@ defmodule Sequin.Extensions.Replication do
   end
 
   # keepalive
-  def handle_data(<<?k, _wal_end::64, _clock::64, reply>>, state) do
+  # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+  # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
+  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, state) do
     messages =
       case reply do
         1 ->
-          [
-            <<?r, state.last_committed_lsn::64, state.last_committed_lsn::64, state.last_committed_lsn::64,
-              current_time()::64, 0>>
-          ]
+          last_lsn =
+            if state.last_committed_lsn do
+              lsn_to_int(state.last_committed_lsn)
+            else
+              # Use the current WAL end if last_committed_lsn is nil
+              wal_end
+            end
+
+          [<<?r, last_lsn::64, last_lsn::64, last_lsn::64, current_time()::64, 0>>]
 
         0 ->
           []
@@ -147,6 +155,17 @@ defmodule Sequin.Extensions.Replication do
     Logger.error("Unknown data: #{inspect(data)}")
     {:noreply, state}
   end
+
+  # In Postgres, an LSN is typically represented as a 64-bit integer, but it's sometimes split
+  # into two 32-bit parts for easier reading or processing. We'll receive tuples like `{401, 1032909664}`
+  # and we'll need to combine them to get the 64-bit LSN.
+  defp lsn_to_int({high, low}) do
+    high <<< 32 ||| low
+  end
+
+  # defp lsn_to_tuple(lsn) when is_integer(lsn) do
+  #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
+  # end
 
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     columns =
@@ -165,13 +184,13 @@ defmodule Sequin.Extensions.Replication do
   # Ensure we do not have an out-of-order bug by asserting equality
   defp process_message(
          %Commit{lsn: lsn, commit_timestamp: ts},
-         %State{current_xaction_lsn: lsn, current_commit_ts: ts} = state
-       ) do
+         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts} = state
+       )
+       when current_lsn == lsn do
     %{state | last_committed_lsn: lsn, current_xaction_lsn: nil, current_xid: nil, current_commit_ts: nil}
   end
 
   defp process_message(%Insert{} = msg, state) do
-    Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     record = %NewRecord{
@@ -196,7 +215,6 @@ defmodule Sequin.Extensions.Replication do
   #   tuple_data: {"1", "Chani", "Atreides", "Arrakis"}
   # },
   defp process_message(%Update{} = msg, %State{} = state) do
-    Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     old_record =
@@ -229,7 +247,6 @@ defmodule Sequin.Extensions.Replication do
   # Otherwise, in full mode, we'll get old_tuple_data.
 
   defp process_message(%Delete{} = msg, %State{} = state) do
-    Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
     prev_tuple_data =

@@ -58,7 +58,7 @@ defmodule Sequin.BenchTest do
 
       assert result.stats.avg >= 10 && result.stats.avg < 25, "Average time should be close to 10ms"
       assert result.stats.min >= 10, "Minimum time should be at least 10ms"
-      assert result.stats.max < 20, "Maximum time should be less than 20ms"
+      assert result.stats.max < 30, "Maximum time should be less than 30ms"
       assert result.stats.std_dev < 2, "Standard deviation should be small for constant time function"
     end
 

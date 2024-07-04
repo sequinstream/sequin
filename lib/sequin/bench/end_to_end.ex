@@ -6,7 +6,6 @@ defmodule Sequin.Bench.EndToEnd do
   alias Sequin.Bench.Utils
   alias Sequin.Repo
   alias Sequin.Streams
-  alias Sequin.StreamsRuntime
 
   require Logger
 
@@ -39,8 +38,6 @@ defmodule Sequin.Bench.EndToEnd do
       end)
 
     consumer = List.first(consumers)
-
-    StreamsRuntime.Supervisor.start_for_stream(stream.id)
 
     default_opts = [
       max_time_s: 10,
@@ -113,13 +110,7 @@ defmodule Sequin.Bench.EndToEnd do
         consumer
       end)
 
-    Enum.each(consumers, fn consumer ->
-      StreamsRuntime.Supervisor.start_for_consumer(consumer.id)
-    end)
-
     consumer = List.first(consumers)
-
-    StreamsRuntime.Supervisor.start_for_stream(stream.id)
 
     # Keep pressure on the system - this produces ~500 inserts/sec
     # Task.Supervisor.async(Sequin.TaskSupervisor, fn ->

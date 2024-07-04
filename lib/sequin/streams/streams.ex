@@ -10,7 +10,6 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
-  alias Sequin.StreamsRuntime
 
   # General
 
@@ -160,18 +159,16 @@ defmodule Sequin.Streams do
   end
 
   def delete_consumer_with_lifecycle(consumer) do
-    res =
-      Repo.transact(fn ->
-        case delete_consumer(consumer) do
-          :ok ->
-            StreamsRuntime.Supervisor.stop_for_consumer(consumer.id)
-            :ok = delete_consumer_partition(consumer)
-            consumer
+    Repo.transact(fn ->
+      case delete_consumer(consumer) do
+        :ok ->
+          :ok = delete_consumer_partition(consumer)
+          consumer
 
-          error ->
-            error
-        end
-      end)
+        error ->
+          error
+      end
+    end)
 
     case res do
       {:ok, consumer} ->
@@ -288,7 +285,8 @@ defmodule Sequin.Streams do
           set: [
             data: fragment("EXCLUDED.data"),
             data_hash: fragment("EXCLUDED.data_hash"),
-            updated_at: fragment("EXCLUDED.updated_at")
+            updated_at: fragment("EXCLUDED.updated_at"),
+            seq: fragment("nextval('streams.messages_seq')")
           ]
         ]
       )
@@ -341,6 +339,12 @@ defmodule Sequin.Streams do
       else
         reraise e, __STACKTRACE__
       end
+  end
+
+  def list_messages_for_stream(stream_id) do
+    stream_id
+    |> Message.where_stream_id()
+    |> Repo.all()
   end
 
   # Outstanding Messages

@@ -9,6 +9,7 @@ defmodule Sequin.Extensions.Replication do
   use Postgrex.ReplicationConnection
 
   alias __MODULE__
+  alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
@@ -43,16 +44,21 @@ defmodule Sequin.Extensions.Replication do
     end
   end
 
-  def start_link(args) do
-    id = Keyword.fetch!(args, :id)
-    connection = Keyword.fetch!(args, :connection)
-    publication = Keyword.fetch!(args, :publication)
-    slot_name = Keyword.fetch!(args, :slot_name)
-    test_pid = Keyword.get(args, :test_pid)
-    message_handler_ctx = Keyword.get(args, :message_handler_ctx)
-    message_handler = Keyword.fetch!(args, :message_handler)
+  def start_link(opts) do
+    id = Keyword.fetch!(opts, :id)
+    connection = Keyword.fetch!(opts, :connection)
+    publication = Keyword.fetch!(opts, :publication)
+    slot_name = Keyword.fetch!(opts, :slot_name)
+    test_pid = Keyword.get(opts, :test_pid)
+    message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
+    message_handler = Keyword.fetch!(opts, :message_handler)
 
-    opts = Keyword.merge([auto_reconnect: true, name: via_tuple(id)], connection)
+    rep_conn_opts =
+      [auto_reconnect: true, name: via_tuple(id)]
+      |> Keyword.merge(connection)
+      # Very important. If we don't add this, ReplicationConnection will block start_link (and the
+      # calling process!) while it connects.
+      |> Keyword.put(:sync_connect, false)
 
     init = %State{
       id: id,
@@ -63,10 +69,11 @@ defmodule Sequin.Extensions.Replication do
       message_handler: message_handler
     }
 
-    Postgrex.ReplicationConnection.start_link(Replication, init, opts)
+    Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
   end
 
   def child_spec(opts) do
+    # Not used by DynamicSupervisor, but used by Supervisor in test
     id = Keyword.fetch!(opts, :id)
 
     %{
@@ -86,6 +93,7 @@ defmodule Sequin.Extensions.Replication do
 
     if state.test_pid do
       Mox.allow(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock, state.test_pid, self())
+      Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
     {:ok, %{state | tid: tid, step: :disconnected}}
@@ -93,17 +101,6 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_connect(state) do
-    query = "CREATE_REPLICATION_SLOT #{state.slot_name} LOGICAL pgoutput NOEXPORT_SNAPSHOT"
-
-    {:query, query, %{state | step: :create_slot}}
-  end
-
-  @impl Postgrex.ReplicationConnection
-  def handle_result([%Postgrex.Result{command: :create}], %{step: :create_slot} = state) do
-    if state.test_pid do
-      send(state.test_pid, {Replication, :slot_created})
-    end
-
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 
@@ -111,17 +108,6 @@ defmodule Sequin.Extensions.Replication do
   end
 
   @impl Postgrex.ReplicationConnection
-  def handle_result(%Postgrex.Error{postgres: %{code: :duplicate_object}}, %{step: :create_slot} = state) do
-    if state.test_pid do
-      send(state.test_pid, {Replication, :slot_created})
-    end
-
-    query =
-      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
-
-    {:stream, query, [], %{state | step: :streaming}}
-  end
-
   def handle_result(result, state) do
     Logger.debug("Unknown result: #{inspect(result)}")
     {:noreply, state}
@@ -202,28 +188,28 @@ defmodule Sequin.Extensions.Replication do
     state
   end
 
+  # If replication mode is default (not full), we will not get old_tuple_data:
+  # msg: %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update{
+  #   relation_id: 15465878,
+  #   changed_key_tuple_data: nil,
+  #   old_tuple_data: nil,
+  #   tuple_data: {"1", "Chani", "Atreides", "Arrakis"}
+  # },
   defp process_message(%Update{} = msg, %State{} = state) do
     Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
 
-    # record = %UpdatedRecord{
-    #   -      columns: columns,
-    #          commit_timestamp: state.ts,
-    #          errors: nil,
-    #          schema: schema,
-    #          table: table,
-    #          old_record: data_tuple_to_map(columns, msg.old_tuple_data),
-    #          record: data_tuple_to_map(columns, msg.tuple_data),
-    #   -      type: "UPDATE"
-    #   +      type: "update"
-    #        }
+    old_record =
+      if msg.old_tuple_data do
+        data_tuple_to_map(columns, msg.old_tuple_data)
+      end
 
     record = %UpdatedRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       schema: schema,
       table: table,
-      old_record: data_tuple_to_map(columns, msg.old_tuple_data),
+      old_record: old_record,
       record: data_tuple_to_map(columns, msg.tuple_data),
       type: "update"
     }
@@ -233,32 +219,34 @@ defmodule Sequin.Extensions.Replication do
     state
   end
 
+  # When the publication mode is default and we don't get old_tpule_data, we'll get this (first
+  # element is PK):
+  # msg: %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Delete{
+  #   relation_id: 15465677,
+  #   changed_key_tuple_data: {"1", nil, nil, nil},
+  #   old_tuple_data: nil
+  # },
+  # Otherwise, in full mode, we'll get old_tuple_data.
+
   defp process_message(%Delete{} = msg, %State{} = state) do
     Logger.debug("Got message: #{inspect(msg)}")
     [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
+
+    prev_tuple_data =
+      if msg.old_tuple_data do
+        msg.old_tuple_data
+      else
+        msg.changed_key_tuple_data
+      end
 
     record = %DeletedRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       schema: schema,
       table: table,
-      old_record: data_tuple_to_map(columns, msg.old_tuple_data),
+      old_record: data_tuple_to_map(columns, prev_tuple_data),
       type: "delete"
     }
-
-    # record = %DeletedRecord{
-    #   -      columns: columns,
-    #          commit_timestamp: state.ts,
-    #          errors: nil,
-    #          schema: schema,
-    #          table: table,
-    #          old_record: data_tuple_to_map(columns, msg.old_tuple_data),
-    #   -      type: "UPDATE"
-    #   +      type: "delete"
-    #        }
-
-    #   -    broadcast(record, state.tenant)
-    #   +    publish(record)
 
     handle_message(state, record)
 
@@ -287,52 +275,96 @@ defmodule Sequin.Extensions.Replication do
   # }
   defp handle_message(%State{} = state, change) do
     state.message_handler.handle_message(state.message_handler_ctx, change)
+
+    if state.test_pid do
+      send(state.test_pid, {Replication, :message_handled})
+    end
   end
 
-  def data_tuple_to_map(column, tuple_data) do
-    column
-    |> Enum.with_index()
-    |> Enum.reduce_while(%{}, fn {column_map, index}, acc ->
-      case column_map do
-        %{name: column_name, type: column_type}
-        when is_binary(column_name) and is_binary(column_type) ->
-          res =
-            try do
-              {:ok, elem(tuple_data, index)}
-            rescue
-              ArgumentError -> :error
-            end
-
-          case res do
-            {:ok, record} ->
-              {:cont, Map.put(acc, column_name, convert_column_record(record, column_type))}
-
-            :error ->
-              {:halt, acc}
-          end
-
-        _ ->
-          {:cont, acc}
-      end
+  def data_tuple_to_map(columns, tuple_data) do
+    columns
+    |> Enum.zip(Tuple.to_list(tuple_data))
+    |> Map.new(fn {%{name: name, type: type}, value} ->
+      {name, cast_value(type, value)}
     end)
   end
 
-  defp convert_column_record(record, "timestamp") when is_binary(record) do
-    case Sequin.Time.parse_timestamp(record) do
-      {:ok, datetime} -> DateTime.to_iso8601(datetime)
-      _ -> record
+  defp cast_value(type, value) do
+    case Ecto.Type.cast(string_to_ecto_type(type), value) do
+      {:ok, casted_value} -> casted_value
+      # Fallback to original value if casting fails
+      :error -> value
     end
   end
 
-  defp convert_column_record(record, "timestamptz") when is_binary(record) do
-    case Sequin.Time.parse_timestamp(record) do
-      {:ok, datetime} -> DateTime.to_iso8601(datetime)
-      _ -> record
-    end
-  end
+  @postgres_to_ecto_type_mapping %{
+    # Numeric Types
+    "int2" => :integer,
+    "int4" => :integer,
+    "int8" => :integer,
+    "float4" => :float,
+    "float8" => :float,
+    "numeric" => :decimal,
+    "money" => :decimal,
+    # Character Types
+    "char" => :string,
+    "varchar" => :string,
+    "text" => :string,
+    # Binary Data Types
+    "bytea" => :binary,
+    # Date/Time Types
+    "timestamp" => :naive_datetime,
+    "timestamptz" => :utc_datetime,
+    "date" => :date,
+    "time" => :time,
+    "timetz" => :time,
+    # Ecto doesn't have a direct interval type
+    "interval" => :map,
+    # Boolean Type
+    "bool" => :boolean,
+    # Geometric Types
+    "point" => {:array, :float},
+    "line" => :string,
+    "lseg" => :string,
+    "box" => :string,
+    "path" => :string,
+    "polygon" => :string,
+    "circle" => :string,
+    # Network Address Types
+    "inet" => :string,
+    "cidr" => :string,
+    "macaddr" => :string,
+    # Bit String Types
+    "bit" => :string,
+    "bit_varying" => :string,
+    # Text Search Types
+    "tsvector" => :string,
+    "tsquery" => :string,
+    # UUID Type
+    "uuid" => Ecto.UUID,
+    # XML Type
+    "xml" => :string,
+    # JSON Types
+    "json" => :map,
+    "jsonb" => :map,
+    # Arrays
+    "array" => {:array, :any},
+    # Composite Types
+    "composite" => :map,
+    # Range Types
+    "range" => {:array, :any},
+    # Domain Types
+    "domain" => :any,
+    # Object Identifier Types
+    "oid" => :integer,
+    # pg_lsn Type
+    "pg_lsn" => :string,
+    # Pseudotypes
+    "any" => :any
+  }
 
-  defp convert_column_record(record, _column_type) do
-    record
+  defp string_to_ecto_type(type) do
+    Map.get(@postgres_to_ecto_type_mapping, type, :string)
   end
 
   @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)

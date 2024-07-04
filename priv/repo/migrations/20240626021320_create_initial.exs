@@ -259,19 +259,49 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
            )
 
     create table(:postgres_databases) do
-      add :dbname, :string, null: false
-      add :host, :string, null: false
+      add :database, :string, null: false
+      add :hostname, :string, null: false
+      add :password, :binary, null: false
       add :pool_size, :integer, default: 10, null: false
       add :port, :integer, null: false
       add :queue_interval, :integer, default: 50, null: false
       add :queue_target, :integer, default: 100, null: false
+      add :slug, :string, null: false
       add :ssl, :boolean, default: false, null: false
-      add :user, :string, null: false
-      add :password, :binary, null: false
+      add :username, :string, null: false
 
       add :account_id, references(:accounts), null: false
 
       timestamps()
     end
+
+    # This is for the FKs from postgres_replication to this table
+    create unique_index(:postgres_databases, [:id, :account_id])
+
+    execute "create type replication_status as enum ('active', 'disabled');",
+            "drop type if exists replication_status"
+
+    create table(:postgres_replications) do
+      add :publication_name, :string, null: false
+      add :slot_name, :string, null: false
+      add :status, :replication_status, null: false
+
+      add :account_id, references(:accounts, type: :uuid), null: false
+
+      add :postgres_database_id,
+          references(:postgres_databases, with: [account_id: :account_id]),
+          null: false
+
+      add :stream_id,
+          references(:streams, with: [account_id: :account_id]),
+          null: false
+
+      timestamps()
+    end
+
+    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id])
+    create index(:postgres_replications, [:account_id])
+    create index(:postgres_replications, [:postgres_database_id])
+    create index(:postgres_replications, [:stream_id])
   end
 end

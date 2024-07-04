@@ -63,7 +63,8 @@ defmodule Sequin.MixProject do
       {:uxid, "~> 0.2"},
       {:flow, "~> 1.2"},
       {:con_cache, "~> 1.1"},
-      {:cloak_ecto, "~> 1.2.0"},
+      {:cloak_ecto, "~> 1.3.0"},
+      {:mox, "~> 1.0"},
       {:hammox, "~> 0.7", [only: :test]}
     ]
   end

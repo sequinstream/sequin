@@ -8,6 +8,7 @@ defmodule Sequin.Extensions.CreateReplicationSlot do
     {slot_name, opts} = Keyword.pop!(opts, :slot_name)
     {on_finish, opts} = Keyword.pop(opts, :on_finish, fn _ -> :ok end)
     args = [slot_name: slot_name, on_finish: on_finish]
+    opts = Keyword.put(opts, :sync_connect, false)
     Postgrex.ReplicationConnection.start_link(__MODULE__, args, opts)
   end
 

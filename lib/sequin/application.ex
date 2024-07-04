@@ -21,7 +21,7 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++ [Sequin.StreamsRuntime.Supervisor]
+    base_children() ++ [Sequin.SourcesRuntime.Supervisor]
   end
 
   defp base_children do
@@ -29,6 +29,7 @@ defmodule Sequin.Application do
       Sequin.Registry,
       SequinWeb.Telemetry,
       Sequin.Repo,
+      Sequin.Vault,
       {DNSCluster, query: Application.get_env(:sequin, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Sequin.PubSub},
       # Start the Finch HTTP client for sending emails

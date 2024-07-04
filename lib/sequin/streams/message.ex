@@ -133,6 +133,10 @@ defmodule Sequin.Streams.Message do
     Map.put(msg, :data_hash, Base.encode64(:crypto.hash(:sha256, msg.data)))
   end
 
+  def where_stream_id(query \\ base_query(), stream_id) do
+    from([message: m] in query, where: m.stream_id == ^stream_id)
+  end
+
   def where_subject_and_stream_id(query \\ base_query(), subject, stream_id) do
     from([message: m] in query, where: m.subject == ^subject and m.stream_id == ^stream_id)
   end

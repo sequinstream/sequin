@@ -30,14 +30,9 @@ config :sequin, Sequin.Vault,
     # for more details: https://github.com/danielberkompas/cloak/issues/93
     #
     # In Cloak 2.0, this will be the default iv length for AES.GCM.
-    aes_gcm:
+    default:
       {Cloak.Ciphers.AES.GCM,
-       tag: "AES.GCM.V1",
-       key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP"),
-       iv_length: 12},
-    aes_ctr:
-      {Cloak.Ciphers.AES.CTR,
-       tag: "AES.CTR.V1", key: Base.decode64!("IJkUJnZUWOMwA+tM+GXLeGGMDhjZwdDaTCgBCQZnBgF01wCr1ALx0/Cc4rNfxvZP")}
+       tag: "AES.GCM.V1", key: Base.decode64!("2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY="), iv_length: 12}
   ]
 
 # For development, we disable any cache and enable

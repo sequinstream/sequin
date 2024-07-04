@@ -1,4 +1,4 @@
-defmodule Sequin.EncryptedBinary do
+defmodule Sequin.Encrypted.Binary do
   @moduledoc false
   use Cloak.Ecto.Binary, vault: Sequin.Vault
 

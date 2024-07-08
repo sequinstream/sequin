@@ -7,6 +7,8 @@ defmodule Sequin.Sources.PostgresReplication do
 
   alias Ecto.Queryable
 
+  @derive {Jason.Encoder,
+           only: [:id, :slot_name, :publication_name, :status, :account_id, :postgres_database_id, :stream_id]}
   schema "postgres_replications" do
     field :slot_name, :string
     field :publication_name, :string
@@ -24,6 +26,8 @@ defmodule Sequin.Sources.PostgresReplication do
     |> cast(attrs, [:slot_name, :publication_name, :status, :postgres_database_id, :stream_id])
     |> validate_required([:slot_name, :publication_name, :postgres_database_id, :stream_id])
     |> unique_constraint([:slot_name, :postgres_database_id])
+    |> foreign_key_constraint(:postgres_database_id, name: "postgres_replications_postgres_database_id_fkey")
+    |> foreign_key_constraint(:stream_id, name: "postgres_replications_stream_id_fkey")
   end
 
   @spec where_active(Queryable.t()) :: Queryable.t()

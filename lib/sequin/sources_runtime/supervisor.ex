@@ -30,7 +30,7 @@ defmodule Sequin.SourcesRuntime.Supervisor do
       slot_name: pg_replication.slot_name,
       publication: pg_replication.publication_name,
       message_handler_ctx: PostgresReplicationMessageHandler.context(pg_replication),
-      message_handler: PostgresReplicationMessageHandler,
+      message_handler_module: PostgresReplicationMessageHandler,
       connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database)
     ]
 

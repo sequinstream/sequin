@@ -159,16 +159,17 @@ defmodule Sequin.Streams do
   end
 
   def delete_consumer_with_lifecycle(consumer) do
-    Repo.transact(fn ->
-      case delete_consumer(consumer) do
-        :ok ->
-          :ok = delete_consumer_partition(consumer)
-          consumer
+    res =
+      Repo.transact(fn ->
+        case delete_consumer(consumer) do
+          :ok ->
+            :ok = delete_consumer_partition(consumer)
+            consumer
 
-        error ->
-          error
-      end
-    end)
+          error ->
+            error
+        end
+      end)
 
     case res do
       {:ok, consumer} ->

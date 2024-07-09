@@ -34,7 +34,7 @@ defmodule Sequin.Extensions.Replication do
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
       field :message_handler_ctx, any()
-      field :message_handler, atom()
+      field :message_handler_module, atom()
       field :id, String.t()
       field :last_committed_lsn, tuple(), default: 0
       field :publication, String.t()
@@ -52,7 +52,7 @@ defmodule Sequin.Extensions.Replication do
     slot_name = Keyword.fetch!(opts, :slot_name)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
-    message_handler = Keyword.fetch!(opts, :message_handler)
+    message_handler_module = Keyword.fetch!(opts, :message_handler_module)
 
     rep_conn_opts =
       [auto_reconnect: true, name: via_tuple(id)]
@@ -67,7 +67,7 @@ defmodule Sequin.Extensions.Replication do
       slot_name: slot_name,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
-      message_handler: message_handler
+      message_handler_module: message_handler_module
     }
 
     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
@@ -292,7 +292,7 @@ defmodule Sequin.Extensions.Replication do
   #   type: "UPDATE"
   # }
   defp handle_message(%State{} = state, change) do
-    state.message_handler.handle_message(state.message_handler_ctx, change)
+    state.message_handler_module.handle_message(state.message_handler_ctx, change)
 
     if state.test_pid do
       send(state.test_pid, {Replication, :message_handled})

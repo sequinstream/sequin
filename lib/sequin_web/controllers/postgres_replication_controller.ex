@@ -33,7 +33,7 @@ defmodule SequinWeb.PostgresReplicationController do
   def update(conn, %{"id" => id} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, params} <- parse_params(params),
+    with {:ok, params} <- parse_update_params(params),
          {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
          {:ok, updated_postgres_replication} <- Sources.update_pg_replication(postgres_replication, params) do
       render(conn, "show.json", postgres_replication: updated_postgres_replication)
@@ -49,7 +49,7 @@ defmodule SequinWeb.PostgresReplicationController do
     end
   end
 
-  defp parse_params(params) do
+  defp parse_update_params(params) do
     forbidden_keys = ["stream_id", "postgres_database_id"]
 
     if Enum.any?(forbidden_keys, &Map.has_key?(params, &1)) do

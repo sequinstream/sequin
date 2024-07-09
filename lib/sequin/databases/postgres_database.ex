@@ -42,8 +42,8 @@ defmodule Sequin.Databases.PostgresDatabase do
     timestamps()
   end
 
-  def changeset(df, attrs) do
-    df
+  def changeset(pd, attrs) do
+    pd
     |> cast(attrs, [
       :database,
       :hostname,
@@ -62,20 +62,20 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
   def where_account(query \\ base_query(), account_id) do
-    from([database: db] in query, where: db.account_id == ^account_id)
+    from([database: pd] in query, where: pd.account_id == ^account_id)
   end
 
   @spec where_id(Queryable.t(), String.t()) :: Queryable.t()
   def where_id(query \\ base_query(), id) do
-    from([database: db] in query, where: db.id == ^id)
+    from([database: pd] in query, where: pd.id == ^id)
   end
 
   defp base_query(query \\ PostgresDatabase) do
-    from(db in query, as: :database)
+    from(pd in query, as: :database)
   end
 
-  def to_postgrex_opts(%PostgresDatabase{} = db) do
-    db
+  def to_postgrex_opts(%PostgresDatabase{} = pd) do
+    pd
     |> Sequin.Map.from_ecto()
     |> Map.take([:database, :hostname, :pool_size, :port, :queue_interval, :queue_target, :password, :ssl, :username])
     |> Enum.to_list()

@@ -21,8 +21,6 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.JSON
-
     @derive {Jason.Encoder, except: [:subscription_ids]}
 
     typedstruct do
@@ -34,10 +32,6 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :record, map()
       field :subscription_ids, list(String.t())
       field :type, String.t()
-    end
-
-    def from_json(json) do
-      JSON.struct(json, __MODULE__)
     end
   end
 
@@ -45,8 +39,6 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.JSON
-
     @derive {Jason.Encoder, except: [:subscription_ids]}
 
     typedstruct do
@@ -60,17 +52,11 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :subscription_ids, list(String.t())
       field :type, String.t()
     end
-
-    def from_json(json) do
-      JSON.struct(json, __MODULE__)
-    end
   end
 
   defmodule DeletedRecord do
     @moduledoc false
     use TypedStruct
-
-    alias Sequin.JSON
 
     @derive {Jason.Encoder, except: [:subscription_ids]}
 
@@ -83,10 +69,6 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :old_record, map()
       field :subscription_ids, list(String.t())
       field :type, String.t()
-    end
-
-    def from_json(json) do
-      JSON.struct(json, __MODULE__)
     end
   end
 

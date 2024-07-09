@@ -10,7 +10,7 @@ defmodule Sequin.Test.Support.ReplicationSlots do
 
   To navigate around this, we reset and create the slot once before all tests here.
   """
-  alias Sequin.Extensions.CreateReplicationSlot
+  alias Sequin.Test.Support.CreateReplicationSlot
 
   @doc """
   To add a replication slot used in a test, you must register it here.
@@ -114,21 +114,7 @@ defmodule Sequin.Test.Support.ReplicationSlots do
         {:error, %Postgrex.Error{postgres: %{code: :undefined_object}}} -> :ok
       end
 
-      test_pid = self()
-
-      on_finish = fn -> send(test_pid, :done) end
-
-      args = [slot_name: slot_name, on_finish: on_finish]
-      opts = args ++ conn_opts
-      # `CreateReplicationSlot` uses the Postgrex.ReplicationConnection to create the replication
-      # slot. It does not seem we can create a replication slot with a "normal" Postgrex connection.
-      {:ok, _pid} = CreateReplicationSlot.start_link(opts)
-
-      receive do
-        :done -> :ok
-      after
-        5_000 -> raise "Replication slot creation timed out"
-      end
+      CreateReplicationSlot.create_replication_slot(slot_name, conn_opts)
     end)
   after
     GenServer.stop(conn)

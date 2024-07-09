@@ -1,4 +1,4 @@
-defmodule Sequin.Extensions.CreateReplicationSlot do
+defmodule Sequin.Test.Support.CreateReplicationSlot do
   @moduledoc """
   GenServer with the sole purpose of creating a replication slot. Used in test.
   """
@@ -10,6 +10,24 @@ defmodule Sequin.Extensions.CreateReplicationSlot do
     args = [slot_name: slot_name, on_finish: on_finish]
     opts = Keyword.put(opts, :sync_connect, false)
     Postgrex.ReplicationConnection.start_link(__MODULE__, args, opts)
+  end
+
+  def create_replication_slot(slot_name, conn_opts) do
+    pid = self()
+
+    on_finish = fn -> send(pid, :done) end
+
+    args = [slot_name: slot_name, on_finish: on_finish]
+    opts = args ++ conn_opts
+    # `CreateReplicationSlot` uses the Postgrex.ReplicationConnection to create the replication
+    # slot. It does not seem we can create a replication slot with a "normal" Postgrex connection.
+    {:ok, _pid} = start_link(opts)
+
+    receive do
+      :done -> :ok
+    after
+      5_000 -> raise "Replication slot creation timed out"
+    end
   end
 
   @impl Postgrex.ReplicationConnection

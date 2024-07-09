@@ -233,7 +233,7 @@ defmodule Sequin.PostgresReplicationTest do
         send(test_pid, {:change, msg})
       end)
 
-      start_replication!(message_handler: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
       assert_receive {:change, change}, :timer.seconds(5)
 
       assert is_struct(change, NewRecord), "Expected change to be a NewRecord, got: #{inspect(change)}"
@@ -259,7 +259,7 @@ defmodule Sequin.PostgresReplicationTest do
         raise "Simulated crash"
       end)
 
-      start_replication!(message_handler: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       query!(
         conn,
@@ -274,7 +274,7 @@ defmodule Sequin.PostgresReplicationTest do
         send(test_pid, {:change, msg})
       end)
 
-      start_replication!(message_handler: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       assert_receive {:change, change}, :timer.seconds(1)
       assert is_struct(change, NewRecord)
@@ -295,7 +295,7 @@ defmodule Sequin.PostgresReplicationTest do
         send(test_pid, {:change, msg})
       end)
 
-      start_replication!(message_handler: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       # Test create
       query!(
@@ -363,7 +363,7 @@ defmodule Sequin.PostgresReplicationTest do
           slot_name: replication_slot(),
           test_pid: self(),
           id: @server_id,
-          message_handler: ReplicationMessageHandlerMock,
+          message_handler_module: ReplicationMessageHandlerMock,
           message_handler_ctx: nil
         ],
         opts

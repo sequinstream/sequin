@@ -41,3 +41,5 @@ npm-debug.log
 .secrets.json
 
 .vscode/settings.json
+
+.elixir_ls/

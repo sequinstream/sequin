@@ -54,8 +54,12 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
 
     case messages do
       messages when length(messages) < @limit ->
-        {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
-        create(consumer.id, nil)
+        if is_nil(consumer.backfill_completed_at) do
+          {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+        end
+
+        next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> seq end)
+        create(consumer.id, next_seq)
 
       _ ->
         next_seq = Enum.max_by(messages, fn message -> message.seq end).seq

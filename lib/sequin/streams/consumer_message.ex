@@ -51,6 +51,10 @@ defmodule Sequin.Streams.ConsumerMessage do
     where(query, [consumer_message: cm], cm.state == ^state)
   end
 
+  def where_state_not(query \\ base_query(), state) do
+    where(query, [consumer_message: cm], cm.state != ^state)
+  end
+
   def where_deliverable(query \\ base_query()) do
     now = DateTime.utc_now()
 

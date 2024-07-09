@@ -442,6 +442,7 @@ defmodule Sequin.Streams do
     {_, _} =
       consumer.id
       |> ConsumerMessage.where_consumer_id()
+      |> ConsumerMessage.where_state_not(:acked)
       |> ConsumerMessage.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 

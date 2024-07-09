@@ -122,7 +122,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       postgres_replication_attrs: postgres_replication_attrs
     } do
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
-      assert %{"id" => id} = json_response(conn, 201)
+      assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
@@ -143,7 +143,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       }
 
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
-      assert %{"id" => id} = json_response(conn, 201)
+      assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
       postgres_replication = Repo.preload(postgres_replication, :postgres_database)

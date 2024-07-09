@@ -306,5 +306,16 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     create index(:postgres_replications, [:account_id])
     create index(:postgres_replications, [:postgres_database_id])
     create index(:postgres_replications, [:stream_id])
+
+    create table(:api_keys) do
+      add :account_id, references(:accounts, on_delete: :delete_all), null: false
+      add :value, :binary, null: false
+      add :name, :string
+
+      timestamps()
+    end
+
+    create index(:api_keys, [:account_id])
+    create unique_index(:api_keys, [:value])
   end
 end

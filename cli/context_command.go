@@ -91,9 +91,23 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not load context: %w", err)
 	}
 
-	fmt.Printf("Name: %s\n", ctx.Name)
-	fmt.Printf("Description: %s\n", ctx.Description)
-	fmt.Printf("Server URL: %s\n", ctx.ServerURL)
+	fmt.Println()
+
+	cols := newColumns(fmt.Sprintf("Information for Context %s", ctx.Name))
+
+	cols.AddRow("Name", ctx.Name)
+	cols.AddRow("Description", ctx.Description)
+	cols.AddRow("Server URL", ctx.ServerURL)
+
+	cols.Println()
+
+	output, err := cols.Render()
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(output)
+
 	return nil
 }
 

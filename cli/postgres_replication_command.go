@@ -271,12 +271,25 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
-	fmt.Printf("ID: %s\n", replication.ID)
-	fmt.Printf("Slot Name: %s\n", replication.SlotName)
-	fmt.Printf("Publication Name: %s\n", replication.PublicationName)
-	fmt.Printf("Status: %s\n", replication.Status)
-	fmt.Printf("Stream ID: %s\n", replication.StreamID)
-	fmt.Printf("Postgres Database ID: %s\n", replication.PostgresDatabaseID)
+	fmt.Println()
+
+	cols := newColumns(fmt.Sprintf("Information for Postgres Replication %s", replication.ID))
+
+	cols.AddRow("ID", replication.ID)
+	cols.AddRow("Slot Name", replication.SlotName)
+	cols.AddRow("Publication Name", replication.PublicationName)
+	cols.AddRow("Status", replication.Status)
+	cols.AddRow("Stream ID", replication.StreamID)
+	cols.AddRow("Postgres Database ID", replication.PostgresDatabaseID)
+
+	cols.Println()
+
+	output, err := cols.Render()
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(output)
 
 	return nil
 }

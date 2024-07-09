@@ -82,7 +82,7 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 			},
 		}
 		for i, s := range streams {
-			prompt.Options[i] = fmt.Sprintf("%s (Index: %d)", s.ID, s.Idx)
+			prompt.Options[i] = fmt.Sprintf("%s", s.ID)
 		}
 
 		var choice string
@@ -108,14 +108,24 @@ func displayStreamInfo(config *Config) error {
 		return err
 	}
 
-	// Display stream info
-	fmt.Printf("Stream Information:\n")
-	fmt.Printf("ID: %s\n", stream.ID)
-	fmt.Printf("Index: %d\n", stream.Idx)
-	fmt.Printf("Consumers: %d\n", stream.ConsumerCount)
-	fmt.Printf("Messages: %d\n", stream.MessageCount)
-	fmt.Printf("Created At: %s\n", stream.CreatedAt.Format(time.RFC3339))
-	fmt.Printf("Updated At: %s\n", stream.UpdatedAt.Format(time.RFC3339))
+	fmt.Println()
+
+	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
+
+	cols.AddRow("Index", stream.Idx)
+	cols.AddRow("Consumers", stream.ConsumerCount)
+	cols.AddRow("Messages", stream.MessageCount)
+	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
+	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
+
+	cols.Println()
+
+	output, err := cols.Render()
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(output)
 
 	return nil
 }

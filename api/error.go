@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 )
 
 // ValidationError represents an error that occurs during API validation
@@ -68,9 +69,14 @@ func (ae *APIError) PrintAPIError() {
 
 // ParseAPIError determines the type of error and returns the appropriate error struct
 func ParseAPIError(statusCode int, body string) error {
-	var validationErr ValidationError
-	if err := json.Unmarshal([]byte(body), &validationErr); err == nil && (validationErr.Summary != "" || len(validationErr.ValidationErrors) > 0) {
-		return &validationErr
+	switch statusCode {
+	case http.StatusUnprocessableEntity:
+		var validationErr ValidationError
+		if err := json.Unmarshal([]byte(body), &validationErr); err == nil {
+			return &validationErr
+		}
+	default:
+		return NewAPIError(statusCode, body)
 	}
-	return NewAPIError(statusCode, body)
+	return nil
 }

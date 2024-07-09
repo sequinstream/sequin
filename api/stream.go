@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"bytes"
 	"sequin-cli/context"
 )
 
@@ -19,6 +20,7 @@ type StreamsResponse struct {
 type Stream struct {
 	ID            string    `json:"id"`
 	Idx           int       `json:"idx"`
+	Slug          string    `json:"slug"`
 	ConsumerCount int       `json:"consumer_count"`
 	MessageCount  int       `json:"message_count"`
 	CreatedAt     time.Time `json:"inserted_at"`
@@ -77,4 +79,98 @@ func FetchStreamInfo(ctx *context.Context, streamID string) (*Stream, error) {
 	}
 
 	return &streamResponse, nil
+}
+
+// AddStream adds a new stream with the given slug
+func AddStream(ctx *context.Context, slug string) (*Stream, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the request body
+	requestBody := map[string]string{"slug": slug}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling JSON: %w", err)
+	}
+
+	// Create the POST request
+	req, err := http.NewRequest("POST", serverURL+"/api/streams", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read the response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	// Check for successful status code
+	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnprocessableEntity {
+			var errorResponse struct {
+				Summary          string              `json:"summary"`
+				ValidationErrors map[string][]string `json:"validation_errors"`
+			}
+			if err := json.Unmarshal(body, &errorResponse); err == nil {
+				for field, errors := range errorResponse.ValidationErrors {
+					for _, errMsg := range errors {
+						fmt.Printf("`%s` %s\n", field, errMsg)
+					}
+				}
+				return nil, fmt.Errorf("validation failed")
+			}
+		}
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	// Unmarshal the response
+	var stream Stream
+	err = json.Unmarshal(body, &stream)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
+	}
+
+	return &stream, nil
+}
+
+// RemoveStream removes a stream with the given ID
+func RemoveStream(ctx *context.Context, streamID string) error {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Create the DELETE request
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/streams/%s", serverURL, streamID), nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check for successful status code
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }

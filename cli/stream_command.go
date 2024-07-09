@@ -12,6 +12,12 @@ import (
 	"sequin-cli/context"
 )
 
+type StreamAddConfig struct {
+	Slug string
+}
+
+var streamAddConfig StreamAddConfig
+
 // AddStreamCommands adds all stream-related commands to the given app
 func AddStreamCommands(app *fisk.Application, config *Config) {
 	stream := app.Command("stream", "Stream related commands")
@@ -26,6 +32,16 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 		return streamInfo(c, config)
 	})
 	infoCmd.Arg("stream-id", "ID of the stream to show info for").StringVar(&config.StreamID)
+
+	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
+		return streamAdd(c, config)
+	})
+	addCmd.Arg("slug", "Slug of the stream to Add").Required().StringVar(&streamAddConfig.Slug)
+
+	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
+		return streamRm(c, config)
+	})
+	rmCmd.Arg("stream-id", "ID of the stream to remove").StringVar(&config.StreamID)
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
@@ -81,6 +97,11 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 			return err
 		}
 
+		if len(streams) == 0 {
+			fmt.Println("No streams found.")
+			return nil
+		}
+
 		prompt := &survey.Select{
 			Message: "Choose a stream:",
 			Options: make([]string, len(streams)),
@@ -89,7 +110,7 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 			},
 		}
 		for i, s := range streams {
-			prompt.Options[i] = fmt.Sprintf("%s", s.ID)
+			prompt.Options[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
 		}
 
 		var choice string
@@ -98,7 +119,13 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 			return err
 		}
 
-		config.StreamID = strings.Split(choice, " ")[0]
+		// Extract the ID from the format "Slug (ID: StreamID)"
+		parts := strings.Split(choice, "(ID: ")
+		if len(parts) == 2 {
+			config.StreamID = strings.TrimRight(parts[1], ")")
+		} else {
+			return fmt.Errorf("invalid stream choice format")
+		}
 	}
 
 	return displayStreamInfo(config)
@@ -119,6 +146,7 @@ func displayStreamInfo(config *Config) error {
 
 	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
 
+	cols.AddRow("Slug", stream.Slug)
 	cols.AddRow("Index", stream.Idx)
 	cols.AddRow("Consumers", stream.ConsumerCount)
 	cols.AddRow("Messages", stream.MessageCount)
@@ -134,5 +162,103 @@ func displayStreamInfo(config *Config) error {
 
 	fmt.Print(output)
 
+	return nil
+}
+
+func streamAdd(_ *fisk.ParseContext, config *Config) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	// Prompt for slug if not provided
+	if streamAddConfig.Slug == "" {
+		prompt := &survey.Input{
+			Message: "Enter stream slug:",
+		}
+		err = survey.AskOne(prompt, &streamAddConfig.Slug)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add stream
+	stream, err := api.AddStream(ctx, streamAddConfig.Slug)
+	if err != nil {
+		return fmt.Errorf("failed to add stream: %w", err)
+	}
+
+	fmt.Println()
+
+	cols := newColumns(fmt.Sprintf("Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
+
+	cols.AddRow("Slug", stream.Slug)
+	cols.AddRow("Index", stream.Idx)
+	cols.AddRow("Consumers", stream.ConsumerCount)
+	cols.AddRow("Messages", stream.MessageCount)
+	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
+	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
+
+	cols.Println()
+
+	output, err := cols.Render()
+	if err != nil {
+		return err
+	}
+
+	fmt.Print(output)
+
+	return nil
+}
+
+func streamRm(_ *fisk.ParseContext, config *Config) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	if config.StreamID == "" {
+		streams, err := api.FetchStreams(ctx)
+		if err != nil {
+			return err
+		}
+
+		if len(streams) == 0 {
+			fmt.Println("No streams found.")
+			return nil
+		}
+
+		prompt := &survey.Select{
+			Message: "Choose a stream to remove:",
+			Options: make([]string, len(streams)),
+			Filter: func(filterValue string, optValue string, index int) bool {
+				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
+			},
+		}
+		for i, s := range streams {
+			prompt.Options[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
+		}
+
+		var choice string
+		err = survey.AskOne(prompt, &choice)
+		if err != nil {
+			return err
+		}
+
+		// Extract the ID from the format "Slug (ID: StreamID)"
+		parts := strings.Split(choice, "(ID: ")
+		if len(parts) == 2 {
+			config.StreamID = strings.TrimRight(parts[1], ")")
+		} else {
+			return fmt.Errorf("invalid stream choice format")
+		}
+	}
+
+	err = api.RemoveStream(ctx, config.StreamID)
+	if err != nil {
+		return fmt.Errorf("failed to remove stream: %w", err)
+	}
+
+	fmt.Printf("Stream %s has been removed.\n", config.StreamID)
 	return nil
 }

@@ -103,7 +103,7 @@ func displayStreamInfo(config *Config) error {
 		return err
 	}
 
-	stream, err := api.FetchStreamInfo(config.StreamID, ctx)
+	stream, err := api.FetchStreamInfo(ctx, config.StreamID)
 	if err != nil {
 		return err
 	}

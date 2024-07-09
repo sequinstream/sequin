@@ -53,7 +53,7 @@ func FetchStreams(ctx *context.Context) ([]Stream, error) {
 }
 
 // FetchStreamInfo retrieves information for a specific stream from the API
-func FetchStreamInfo(streamID string, ctx *context.Context) (*Stream, error) {
+func FetchStreamInfo(ctx *context.Context, streamID string) (*Stream, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err

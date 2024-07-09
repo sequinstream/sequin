@@ -10,6 +10,7 @@ var (
 )
 
 type Config struct {
-	ContextName string
-	StreamID    string
+	ContextName           string
+	StreamID              string
+	PostgresReplicationID string
 }

@@ -7,10 +7,35 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   alias Sequin.Factory.SourcesFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Sources
+  alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
 
+  @test_schema "__postgres_rep_controller_test_schema__"
+  @test_table "__postgres_rep_controller_test_table__"
+  @publication "__postgres_rep_controller_test_pub__"
+
+  def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
+
   setup %{account: account} do
+    # Controller tests validate that the replication slot and publication exist.  So, we need to
+    # create them for use later. We don't care about the table, but we need it in the database for this to work.
+    create_table_ddl = """
+    create table if not exists #{@test_schema}.#{@test_table} (
+      id serial primary key,
+      name text,
+      value text
+    )
+    """
+
+    ReplicationSlots.setup_each(
+      @test_schema,
+      [@test_table],
+      @publication,
+      replication_slot(),
+      [create_table_ddl]
+    )
+
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
     other_database = DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
@@ -81,7 +106,12 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   describe "create" do
     setup %{database: database, stream: stream} do
       postgres_replication_attrs =
-        SourcesFactory.postgres_replication_attrs(postgres_database_id: database.id, stream_id: stream.id)
+        SourcesFactory.postgres_replication_attrs(
+          postgres_database_id: database.id,
+          stream_id: stream.id,
+          slot_name: replication_slot(),
+          publication_name: @publication
+        )
 
       %{postgres_replication_attrs: postgres_replication_attrs}
     end
@@ -103,11 +133,13 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       account: account,
       stream: stream
     } do
+      db_attrs = DatabasesFactory.configured_postgres_database_attrs()
+
       postgres_replication_attrs = %{
-        slot_name: "test_slot",
-        publication_name: "test_publication",
+        slot_name: replication_slot(),
+        publication_name: @publication,
         stream_id: stream.id,
-        postgres_database: DatabasesFactory.postgres_database_attrs(database: "new_test_db")
+        postgres_database: db_attrs
       }
 
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
@@ -117,7 +149,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       postgres_replication = Repo.preload(postgres_replication, :postgres_database)
       assert postgres_replication.account_id == account.id
       assert %PostgresDatabase{} = postgres_replication.postgres_database
-      assert postgres_replication.postgres_database.database == "new_test_db"
+      assert postgres_replication.postgres_database.database == db_attrs.database
       assert postgres_replication.postgres_database.account_id == account.id
     end
 
@@ -135,7 +167,14 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       other_database: other_database,
       stream: stream
     } do
-      attrs = SourcesFactory.postgres_replication_attrs(postgres_database_id: other_database.id, stream_id: stream.id)
+      attrs =
+        SourcesFactory.postgres_replication_attrs(
+          postgres_database_id: other_database.id,
+          stream_id: stream.id,
+          slot_name: replication_slot(),
+          publication_name: @publication
+        )
+
       conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert json_response(conn, 422)["errors"] != %{}
     end

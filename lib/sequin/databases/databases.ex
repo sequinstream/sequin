@@ -78,6 +78,17 @@ defmodule Sequin.Databases do
     |> Postgrex.start_link()
   end
 
+  @spec with_connection(%PostgresDatabase{}, (pid() -> any())) :: any()
+  def with_connection(%PostgresDatabase{} = db, fun) do
+    with {:ok, conn} <- start_link(db) do
+      try do
+        fun.(conn)
+      after
+        GenServer.stop(conn)
+      end
+    end
+  end
+
   @spec test_tcp_reachability(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}
   def test_tcp_reachability(%PostgresDatabase{} = db, timeout \\ 10_000) do
     TcpUtils.test_reachability(db.hostname, db.port, timeout)

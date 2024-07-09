@@ -39,6 +39,13 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
+	if len(streams) == 0 {
+		fmt.Println()
+		fmt.Println("No streams defined")
+		fmt.Println()
+		return nil
+	}
+
 	table := newTableWriter("Streams")
 
 	table.AddHeaders("ID", "Consumers", "Messages", "Created At", "Updated At")

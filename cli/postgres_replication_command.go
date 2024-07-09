@@ -220,6 +220,13 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
+	if len(replications) == 0 {
+		fmt.Println()
+		fmt.Println("No sources defined")
+		fmt.Println()
+		return nil
+	}
+
 	table := newTableWriter("Postgres Replications")
 
 	table.AddHeaders("ID", "Slot Name", "Publication Name", "Status", "Stream ID")

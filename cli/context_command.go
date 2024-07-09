@@ -59,6 +59,13 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not list contexts: %w", err)
 	}
 
+	if len(contexts) == 0 {
+		fmt.Println()
+		fmt.Println("No contexts defined")
+		fmt.Println()
+		return nil
+	}
+
 	table := newTableWriter("Contexts")
 
 	table.AddHeaders("Name", "Description", "Server URL")

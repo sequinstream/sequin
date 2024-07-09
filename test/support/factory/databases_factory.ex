@@ -12,6 +12,7 @@ defmodule Sequin.Factory.DatabasesFactory do
   def postgres_database(attrs \\ []) do
     merge_attributes(
       %PostgresDatabase{
+        id: Factory.uuid(),
         database: Factory.postgres_object(),
         hostname: Factory.hostname(),
         pool_size: Factory.integer(),

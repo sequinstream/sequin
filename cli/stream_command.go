@@ -2,9 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -41,23 +39,25 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
-	// Create a new tabwriter
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	table := newTableWriter("Streams")
 
-	// Print header
-	fmt.Fprintln(w, "ID\tIndex\tConsumers\tMessages\tCreated At\tUpdated At")
-	fmt.Fprintln(w, "--\t-----\t---------\t--------\t----------\t----------")
-
-	// Print each stream
+	table.AddHeaders("ID", "Consumers", "Messages", "Created At", "Updated At")
+	// Add rows
 	for _, s := range streams {
-		fmt.Fprintf(w, "%s\t%d\t%d\t%d\t%s\t%s\n",
-			s.ID, s.Idx, s.ConsumerCount, s.MessageCount,
+		table.AddRow(
+			s.ID,
+			s.ConsumerCount,
+			s.MessageCount,
 			s.CreatedAt.Format(time.RFC3339),
-			s.UpdatedAt.Format(time.RFC3339))
+			s.UpdatedAt.Format(time.RFC3339),
+		)
 	}
 
-	// Flush the tabwriter
-	w.Flush()
+	// Render the table
+	fmt.Print(table.Render())
+	// Print a couple of empty lines after the table
+	fmt.Println()
+	fmt.Println()
 
 	return nil
 }

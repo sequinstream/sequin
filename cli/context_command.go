@@ -2,9 +2,7 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
@@ -61,12 +59,22 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not list contexts: %w", err)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tDESCRIPTION\tSERVER URL")
+	table := newTableWriter("Contexts")
+
+	table.AddHeaders("Name", "Description", "Server URL")
+
 	for _, ctx := range contexts {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", ctx.Name, ctx.Description, ctx.ServerURL)
+		table.AddRow(
+			ctx.Name,
+			ctx.Description,
+			ctx.ServerURL,
+		)
 	}
-	w.Flush()
+
+	fmt.Println(table.Render())
+	fmt.Println()
+	fmt.Println()
+
 	return nil
 }
 

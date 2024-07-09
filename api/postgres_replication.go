@@ -41,6 +41,7 @@ type PostgresReplicationCreate struct {
 		Port     int    `json:"port"`
 		Username string `json:"username"`
 		Password string `json:"password"`
+		Slug     string `json:"slug"`
 	} `json:"postgres_database"`
 }
 
@@ -60,6 +61,10 @@ func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, err
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
 	var pgReplicationsResponse PostgresReplicationsResponse
@@ -87,6 +92,10 @@ func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
 	var pgReplication PostgresReplication
@@ -121,6 +130,10 @@ func CreatePostgresReplication(ctx *context.Context, replicationData *PostgresRe
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, ParseAPIError(resp.StatusCode, string(body))
+	}
+
 	var pgReplication PostgresReplication
 	err = json.Unmarshal(body, &pgReplication)
 	if err != nil {
@@ -149,7 +162,8 @@ func DeletePostgresReplication(ctx *context.Context, replicationID string) error
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return ParseAPIError(resp.StatusCode, string(body))
 	}
 
 	return nil

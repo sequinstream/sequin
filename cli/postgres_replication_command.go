@@ -11,15 +11,38 @@ import (
 	"sequin-cli/context"
 )
 
+type postgresReplicationConfig struct {
+	StreamID        string
+	Database        string
+	Hostname        string
+	Port            int
+	Username        string
+	Password        string
+	SlotName        string
+	PublicationName string
+	Slug            string
+}
+
 func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 	sources := app.Command("sources", "Source related commands")
 	postgres := sources.Command("postgres", "Postgres replication related commands")
 
 	addCheat("postgres_replication", postgres)
 
-	postgres.Command("add", "Add a new postgres replication").Action(func(c *fisk.ParseContext) error {
-		return postgresReplicationAdd(c, config)
+	c := &postgresReplicationConfig{}
+
+	add := postgres.Command("add", "Add a new postgres replication").Action(func(ctx *fisk.ParseContext) error {
+		return postgresReplicationAdd(ctx, config, c)
 	})
+	add.Arg("stream", "Stream ID to replicate to").StringVar(&c.StreamID)
+	add.Flag("database", "Database name").StringVar(&c.Database)
+	add.Flag("hostname", "Database hostname").StringVar(&c.Hostname)
+	add.Flag("port", "Database port").IntVar(&c.Port)
+	add.Flag("username", "Database username").StringVar(&c.Username)
+	add.Flag("password", "Database password").StringVar(&c.Password)
+	add.Flag("slot-name", "Replication slot name").StringVar(&c.SlotName)
+	add.Flag("publication-name", "Publication name").StringVar(&c.PublicationName)
+	add.Flag("slug", "Database slug").StringVar(&c.Slug)
 
 	postgres.Command("ls", "List postgres replications").Action(func(c *fisk.ParseContext) error {
 		return postgresReplicationList(c, config)
@@ -36,61 +59,63 @@ func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 	rmCmd.Arg("id", "ID of the postgres replication to remove").StringVar(&config.PostgresReplicationID)
 }
 
-func postgresReplicationAdd(_ *fisk.ParseContext, config *Config) error {
+func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresReplicationConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	// Prompt for required information
-	var replication api.PostgresReplicationCreate
+	if c.StreamID == "" {
+		streams, err := api.FetchStreams(ctx)
+		if err != nil {
+			return err
+		}
 
-	// Fetch available streams
-	streams, err := api.FetchStreams(ctx)
-	if err != nil {
-		return err
-	}
+		streamOptions := make([]string, len(streams))
+		for i, s := range streams {
+			streamOptions[i] = fmt.Sprintf("%s (Index: %d)", s.ID, s.Idx)
+		}
 
-	// Prepare stream options
-	streamOptions := make([]string, len(streams))
-	for i, s := range streams {
-		streamOptions[i] = fmt.Sprintf("%s (Index: %d)", s.ID, s.Idx)
-	}
-
-	err = survey.Ask([]*survey.Question{
-		{
-			Name: "StreamID",
-			Prompt: &survey.Select{
-				Message: "Choose a stream:",
-				Options: streamOptions,
-				Filter: func(filterValue string, optValue string, index int) bool {
-					return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-				},
+		prompt := &survey.Select{
+			Message: "Choose a stream:",
+			Options: streamOptions,
+			Filter: func(filterValue string, optValue string, index int) bool {
+				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-			Validate: survey.Required,
-		},
+		}
+
+		var choice string
+		err = survey.AskOne(prompt, &choice)
+		if err != nil {
+			return err
+		}
+
+		c.StreamID = strings.Split(choice, " ")[0]
+	}
+
+	questions := []*survey.Question{
 		{
-			Name:     "PostgresDatabase.Database",
+			Name:     "Database",
 			Prompt:   &survey.Input{Message: "Enter the dbname for the source database:", Default: "postgres", Help: "A single Postgres server can contain multiple databases. This is the name of the database to replicate from."},
 			Validate: survey.Required,
 		},
 		{
-			Name:     "PostgresDatabase.Hostname",
+			Name:     "Hostname",
 			Prompt:   &survey.Input{Message: "Enter the hostname for the source database:", Default: "localhost", Help: "The hostname of the source database. This is the hostname of the Postgres server."},
 			Validate: survey.Required,
 		},
 		{
-			Name:     "PostgresDatabase.Port",
+			Name:     "Port",
 			Prompt:   &survey.Input{Message: "Enter the port for the source database:", Default: "5432", Help: "The port of the source database. This is the port of the Postgres server."},
 			Validate: survey.Required,
 		},
 		{
-			Name:     "PostgresDatabase.Username",
+			Name:     "Username",
 			Prompt:   &survey.Input{Message: "Enter the username for the source database:", Default: "postgres", Help: "The username Sequin should use to connect to the source database."},
 			Validate: survey.Required,
 		},
 		{
-			Name:     "PostgresDatabase.Password",
+			Name:     "Password",
 			Prompt:   &survey.Password{Message: "Enter the password for the source database:"},
 			Validate: survey.Required,
 		},
@@ -104,20 +129,81 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config) error {
 			Prompt:   &survey.Input{Message: "Enter the publication name:", Default: "sequin_replication_publication", Help: "The name of the publication you configured for Sequin to replicate from."},
 			Validate: survey.Required,
 		},
-	}, &replication)
+		{
+			Name:     "Slug",
+			Prompt:   &survey.Input{Message: "Enter a slug for the database:", Help: "A unique identifier for this database."},
+			Validate: survey.Required,
+		},
+	}
 
+	// Filter out questions that have already been answered via flags
+	filteredQuestions := []*survey.Question{}
+	for _, q := range questions {
+		switch q.Name {
+		case "Database":
+			if c.Database == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "Hostname":
+			if c.Hostname == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "Port":
+			if c.Port == 0 {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "Username":
+			if c.Username == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "Password":
+			if c.Password == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "SlotName":
+			if c.SlotName == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "PublicationName":
+			if c.PublicationName == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		case "Slug":
+			if c.Slug == "" {
+				filteredQuestions = append(filteredQuestions, q)
+			}
+		}
+	}
+
+	err = survey.Ask(filteredQuestions, c)
 	if err != nil {
 		return err
 	}
 
-	// Extract the stream ID from the selected option
-	replication.StreamID = strings.Split(replication.StreamID, " ")[0]
-
+	// Convert postgresReplicationConfig to api.PostgresReplicationCreate
+	replication := api.PostgresReplicationCreate{
+		SlotName:        c.SlotName,
+		PublicationName: c.PublicationName,
+		StreamID:        c.StreamID,
+		PostgresDatabase: struct {
+			Database string `json:"database"`
+			Hostname string `json:"hostname"`
+			Port     int    `json:"port"`
+			Username string `json:"username"`
+			Password string `json:"password"`
+			Slug     string `json:"slug"`
+		}{
+			Database: c.Database,
+			Hostname: c.Hostname,
+			Port:     c.Port,
+			Username: c.Username,
+			Password: c.Password,
+			Slug:     c.Slug,
+		},
+	}
 	// Create the postgres replication
 	newReplication, err := api.CreatePostgresReplication(ctx, &replication)
-	if err != nil {
-		return err
-	}
+	fisk.FatalIfError(err, "could not create Postgres replication")
 
 	fmt.Printf("Postgres replication created successfully. ID: %s\n", newReplication.ID)
 	return nil
@@ -194,6 +280,7 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 
 	return nil
 }
+
 func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {

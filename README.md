@@ -11,8 +11,6 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
 
 ## Setup Postgres Replication
 
-## Setup Postgres Replication
-
 To prepare your Postgres database for replication with Sequin, follow these steps:
 
 1. Create a replication slot:

@@ -35,7 +35,7 @@ defmodule Sequin.Sources do
   def create_pg_replication_for_account(account_id, attrs) do
     res =
       %PostgresReplication{account_id: account_id}
-      |> PostgresReplication.changeset(attrs)
+      |> PostgresReplication.create_changeset(attrs)
       |> Repo.insert()
 
     case res do
@@ -45,7 +45,7 @@ defmodule Sequin.Sources do
   end
 
   def update_pg_replication(%PostgresReplication{} = pg_replication, attrs) do
-    res = Repo.update(PostgresReplication.changeset(pg_replication, attrs))
+    res = Repo.update(PostgresReplication.update_changeset(pg_replication, attrs))
 
     case res do
       {:ok, updated_pg_replication} -> {:ok, updated_pg_replication}

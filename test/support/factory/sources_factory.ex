@@ -45,7 +45,7 @@ defmodule Sequin.Factory.SourcesFactory do
       |> postgres_replication_attrs()
 
     %PostgresReplication{account_id: account_id}
-    |> PostgresReplication.changeset(attrs)
+    |> PostgresReplication.create_changeset(attrs)
     |> Repo.insert!()
   end
 end

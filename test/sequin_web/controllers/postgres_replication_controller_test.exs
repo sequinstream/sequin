@@ -1,6 +1,7 @@
 defmodule SequinWeb.PostgresReplicationControllerTest do
   use SequinWeb.ConnCase
 
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.SourcesFactory
@@ -95,6 +96,29 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
 
       {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
+    end
+
+    test "creates a postgres replication with a new postgres database", %{
+      conn: conn,
+      account: account,
+      stream: stream
+    } do
+      postgres_replication_attrs = %{
+        slot_name: "test_slot",
+        publication_name: "test_publication",
+        stream_id: stream.id,
+        postgres_database: DatabasesFactory.postgres_database_attrs(database: "new_test_db")
+      }
+
+      conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
+      assert %{"id" => id} = json_response(conn, 201)
+
+      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      postgres_replication = Repo.preload(postgres_replication, :postgres_database)
+      assert postgres_replication.account_id == account.id
+      assert %PostgresDatabase{} = postgres_replication.postgres_database
+      assert postgres_replication.postgres_database.database == "new_test_db"
+      assert postgres_replication.postgres_database.account_id == account.id
     end
 
     test "returns validation error for invalid attributes", %{

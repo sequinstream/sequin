@@ -32,7 +32,7 @@ defmodule SequinWeb.StreamController do
     account_id = conn.assigns.account_id
 
     with {:ok, stream} <- Streams.get_stream_for_account(account_id, id),
-         {:ok, _stream} <- Streams.delete_stream(stream) do
+         {:ok, _stream} <- Streams.delete_stream_with_lifecycle(stream) do
       render(conn, "delete.json", stream: stream)
     end
   end

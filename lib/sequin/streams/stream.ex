@@ -21,6 +21,18 @@ defmodule Sequin.Streams.Stream do
     stream
     |> cast(attrs, [:slug])
     |> validate_required([:slug])
+    |> validate_slug()
+    |> unique_constraint([:account_id, :slug], error_key: :slug)
+  end
+
+  defp validate_slug(%Ecto.Changeset{valid?: false} = changeset), do: changeset
+
+  defp validate_slug(%Ecto.Changeset{valid?: true, changes: %{slug: slug}} = changeset) do
+    if String.match?(slug, ~r/^[a-zA-Z0-9_]+$/) do
+      changeset
+    else
+      add_error(changeset, :slug, "must contain only alphanumeric characters or underscores")
+    end
   end
 
   def where_id(query \\ base_query(), id) do

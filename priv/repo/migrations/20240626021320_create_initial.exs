@@ -15,7 +15,9 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    create unique_index(:streams, [:slug])
+    # We will need to alter this unique index to account for the database in which the stream lives
+    # This should also probably include account_id
+    create unique_index(:streams, [:account_id, :slug])
     # Required for composite foreign keys pointing to this table
     create unique_index(:streams, [:id, :account_id])
 

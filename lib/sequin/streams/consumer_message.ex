@@ -7,6 +7,17 @@ defmodule Sequin.Streams.ConsumerMessage do
 
   @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   @primary_key false
+  @derive {Jason.Encoder,
+           only: [
+             :consumer_id,
+             :message_subject,
+             :ack_id,
+             :deliver_count,
+             :last_delivered_at,
+             :message_seq,
+             :not_visible_until,
+             :state
+           ]}
   typed_schema "consumer_messages" do
     field :consumer_id, Ecto.UUID, primary_key: true
     field :message_subject, :string, primary_key: true
@@ -17,6 +28,8 @@ defmodule Sequin.Streams.ConsumerMessage do
     field :message_seq, :integer
     field :not_visible_until, :utc_datetime_usec
     field :state, Ecto.Enum, values: [:acked, :available, :delivered, :pending_redelivery]
+
+    field :message, :map, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -63,6 +76,13 @@ defmodule Sequin.Streams.ConsumerMessage do
         cm.state == :available or
           (cm.state in [:delivered, :pending_redelivery] and cm.not_visible_until <= ^now)
     )
+  end
+
+  def join_message(query \\ base_query(), stream_id) do
+    from [consumer_message: cm] in query,
+      join: m in Sequin.Streams.Message,
+      on: m.subject == cm.message_subject and m.stream_id == ^stream_id,
+      as: :message
   end
 
   defp base_query(query \\ __MODULE__) do

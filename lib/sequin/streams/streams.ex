@@ -134,6 +134,15 @@ defmodule Sequin.Streams do
     end
   end
 
+  def get_consumer_for_stream(stream_id, id) do
+    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id(id) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
   def create_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
     res =
       Repo.transact(fn ->
@@ -362,6 +371,28 @@ defmodule Sequin.Streams do
     Repo.all(ConsumerMessage)
   end
 
+  def list_consumer_messages_for_consumer(stream_id, consumer_id, params \\ []) do
+    query =
+      Enum.reduce(params, ConsumerMessage.where_consumer_id(consumer_id), fn
+        {:state, state}, query ->
+          ConsumerMessage.where_state(query, state)
+
+        {:limit, limit}, query ->
+          limit(query, ^limit)
+
+        {:order_by, order_by}, query ->
+          order_by(query, ^order_by)
+      end)
+
+    query
+    |> ConsumerMessage.join_message(stream_id)
+    |> select([cm, m], %{consumer_message: cm, message: m})
+    |> Repo.all()
+    |> Enum.map(fn %{consumer_message: cm, message: m} ->
+      %{cm | message: m}
+    end)
+  end
+
   def get_consumer_message!(consumer_id, message_subject) do
     # Repo.get!(ConsumerMessage, consumer_id: consumer_id, message_subject: message_subject)
     consumer_id
@@ -447,11 +478,5 @@ defmodule Sequin.Streams do
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
     :ok
-  end
-
-  def list_consumer_messages_for_consumer(consumer_id) do
-    consumer_id
-    |> ConsumerMessage.where_consumer_id()
-    |> Repo.all()
   end
 end

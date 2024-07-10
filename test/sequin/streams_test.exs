@@ -97,7 +97,7 @@ defmodule Sequin.StreamsTest do
 
       message = Streams.get_message!(message.subject, message.stream_id)
 
-      assert [consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert consumer_message.message_subject == message.subject
       assert consumer_message.ack_id
       assert consumer_message.message_seq == message.seq
@@ -128,8 +128,8 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
-      assert [_] = Streams.list_consumer_messages_for_consumer(consumer1.id)
-      assert [_] = Streams.list_consumer_messages_for_consumer(consumer2.id)
+      assert [_] = Streams.list_consumer_messages_for_consumer(consumer1.stream_id, consumer1.id)
+      assert [_] = Streams.list_consumer_messages_for_consumer(consumer2.stream_id, consumer2.id)
     end
 
     test "does not fan out to a consumer in another stream even with matching subjects", %{
@@ -150,7 +150,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
-      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
     end
 
     test "does not fan out to a consumer in the same stream but without a matching subject", %{
@@ -169,7 +169,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
-      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
     end
 
     test "upserts over consumer_messages for a :delivered message", %{stream: stream, account_id: account_id} do
@@ -195,7 +195,7 @@ defmodule Sequin.StreamsTest do
       updated_message = %{message | data: "updated data", data_hash: nil}
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [updated_message])
 
-      [updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      [updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert updated_consumer_message.message_seq > message.seq
       assert updated_consumer_message.state == :pending_redelivery
     end
@@ -223,7 +223,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [updated_message])
 
-      [re_updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      [re_updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert re_updated_consumer_message.message_seq > message.seq
       assert re_updated_consumer_message.state == :available
     end
@@ -250,7 +250,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [updated_message])
 
-      [re_updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      [re_updated_consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert re_updated_consumer_message.state == :available
     end
 
@@ -265,7 +265,7 @@ defmodule Sequin.StreamsTest do
 
       message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
-      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
     end
   end
 
@@ -356,7 +356,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
-      assert length(Streams.list_consumer_messages_for_consumer(consumer.id)) == 3
+      assert length(Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)) == 3
     end
 
     test "does not deliver outstanding messages for another consumer", %{stream: stream, consumer: consumer} do

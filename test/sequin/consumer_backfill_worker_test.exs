@@ -118,12 +118,12 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
       StreamsFactory.insert_message!(stream_id: consumer.stream_id, subject: "prefix.matches")
       StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message_subject: "prefix.matches", state: :acked)
 
-      assert [_] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [_] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
 
       # Create and perform the Oban job
       perform_job_for_consumer(consumer)
 
-      assert [] = Streams.list_consumer_messages_for_consumer(consumer.id)
+      assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
 
       # Verify another backfill job was enqueued
       assert_enqueued(

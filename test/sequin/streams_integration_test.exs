@@ -48,7 +48,7 @@ defmodule Sequin.StreamsIntegrationTest do
       assert empty_messages == []
 
       # Get the outstanding messages
-      consumer_messages = Streams.list_consumer_messages_for_consumer(consumer.id)
+      consumer_messages = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert length(consumer_messages) == 5
 
       # Call ack_messages
@@ -56,7 +56,7 @@ defmodule Sequin.StreamsIntegrationTest do
       :ok = Streams.ack_messages(consumer.id, message_ids)
 
       # Assert messages were deleted from ConsumerMessages
-      assert Streams.list_consumer_messages_for_consumer(consumer.id) == []
+      assert Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id) == []
     end
   end
 end

@@ -11,4 +11,8 @@ defmodule Sequin.Keyword do
       Keyword.put(keyword, key, value)
     end
   end
+
+  def reject_nils(keyword) do
+    Enum.reject(keyword, fn {_, v} -> is_nil(v) end)
+  end
 end

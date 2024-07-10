@@ -31,6 +31,9 @@ defmodule SequinWeb.Router do
     get "/consumers/:id/next", PullController, :next
     post "/consumers/:id/ack", PullController, :ack
     post "/consumers/:id/nack", PullController, :nack
+    post "/streams/:stream_id/messages", MessageController, :publish
+    get "/streams/:stream_id/messages", MessageController, :stream_list
+    get "/streams/:stream_id/consumers/:consumer_id/messages", MessageController, :consumer_list
   end
 
   # Other scopes may use custom stacks.

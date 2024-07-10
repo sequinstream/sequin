@@ -73,38 +73,6 @@ defmodule Sequin.Streams.Consumer do
     from(c in query, as: :consumer)
   end
 
-  @doc """
-  A consumer has a filter_subject field which is a `.` delimited string. Each token in the string is either a token that should be exactly matched, the `*` wildcard, or the `>` character. `>` can only come in the last position and indicates the filter_subject matches any trailing tokens. Without the `>` character, the filter_subject must exactly match in length to a message.subject.
-  """
-  def filter_matches_subject?(filter_subject, subject) do
-    filter_tokens = String.split(filter_subject, ".")
-    subject_tokens = String.split(subject, ".")
-
-    cond do
-      List.last(filter_tokens) == ">" ->
-        match_with_trailing_wildcard(Enum.drop(filter_tokens, -1), subject_tokens)
-
-      length(filter_tokens) != length(subject_tokens) ->
-        false
-
-      true ->
-        match_tokens(filter_tokens, subject_tokens)
-    end
-  end
-
-  defp match_with_trailing_wildcard(filter_tokens, subject_tokens) do
-    length(subject_tokens) > length(filter_tokens) and
-      match_tokens(filter_tokens, Enum.take(subject_tokens, length(filter_tokens)))
-  end
-
-  defp match_tokens(filter_tokens, subject_tokens) do
-    filter_tokens
-    |> Enum.zip(subject_tokens)
-    |> Enum.all?(fn {filter_token, subject_token} ->
-      filter_token == "*" or filter_token == subject_token
-    end)
-  end
-
   @backfill_completed_at_threshold :timer.minutes(5)
   def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
 

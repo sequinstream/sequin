@@ -43,16 +43,16 @@ defmodule Sequin.String do
 
   ## Examples
 
-      iex> Sequin.Subject.to_identifier("My Country.My State>My Region")
+      iex> Sequin.Subject.to_subject_token("My Country.My State>My Region")
       "my_country_my_state_my_region"
 
-      iex> Sequin.Subject.to_identifier("Hello, World! 123")
+      iex> Sequin.Subject.to_subject_token("Hello, World! 123")
       "hello_world_123"
 
-      iex> Sequin.Subject.to_identifier("  Spaced  Out  ")
+      iex> Sequin.Subject.to_subject_token("  Spaced  Out  ")
       "spaced_out"
 
-      iex> Sequin.Subject.to_identifier("Unsafe@#$%^&*Characters")
+      iex> Sequin.Subject.to_subject_token("Unsafe@#$%^&*Characters")
       "unsafe_characters"
 
   """

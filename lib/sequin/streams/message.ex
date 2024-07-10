@@ -68,35 +68,9 @@ defmodule Sequin.Streams.Message do
   defp validate_subject(changeset) do
     subject = get_field(changeset, :subject)
 
-    token_count = subject |> String.split(".") |> length()
-    invalid_chars = ~r/[\s*>\/\\\+\{\}\(\)\~\#\@]/
-    contains_invalid_chars? = String.match?(subject, invalid_chars)
-
-    leading_delimiter? = String.starts_with?(subject, ".")
-    trailing_delimiter? = String.ends_with?(subject, ".")
-    empty_tokens? = subject |> String.split(".") |> Enum.any?(&(&1 == ""))
-
-    cond do
-      subject == "" ->
-        add_error(changeset, :subject, "Invalid subject: must not be empty")
-
-      token_count < 1 or token_count > 16 ->
-        add_error(changeset, :subject, "Invalid subject: must contain 1 to 16 tokens")
-
-      leading_delimiter? ->
-        add_error(changeset, :subject, "Invalid subject: must not start with a delimiter")
-
-      trailing_delimiter? ->
-        add_error(changeset, :subject, "Invalid subject: must not end with a delimiter")
-
-      empty_tokens? ->
-        add_error(changeset, :subject, "Invalid subject: must not contain empty tokens")
-
-      contains_invalid_chars? ->
-        add_error(changeset, :subject, "Invalid subject: contains invalid characters")
-
-      true ->
-        changeset
+    case Sequin.Subject.validate_subject(subject) do
+      :ok -> changeset
+      {:error, reason} -> add_error(changeset, :subject, reason)
     end
   end
 

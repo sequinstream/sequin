@@ -41,7 +41,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
     {:ok, _} =
       messages
       |> Enum.filter(fn message ->
-        Consumer.filter_matches_subject?(consumer.filter_subject, message.subject)
+        Sequin.Subject.matches?(consumer.filter_subject, message.subject)
       end)
       |> Enum.map(fn message ->
         %ConsumerMessage{

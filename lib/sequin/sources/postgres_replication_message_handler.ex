@@ -54,8 +54,8 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
     Enum.join(
       [
         subject_prefix,
-        Sequin.String.to_subject_token(message.schema),
-        Sequin.String.to_subject_token(message.table),
+        Sequin.Subject.to_subject_token(message.schema),
+        Sequin.Subject.to_subject_token(message.table),
         record_id
       ],
       "."

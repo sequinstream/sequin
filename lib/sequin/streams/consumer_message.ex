@@ -5,7 +5,7 @@ defmodule Sequin.Streams.ConsumerMessage do
   import Ecto.Changeset
   import Ecto.Query
 
-  @schema_prefix "streams"
+  @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   @primary_key false
   typed_schema "consumer_messages" do
     field :consumer_id, Ecto.UUID, primary_key: true

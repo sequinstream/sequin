@@ -38,6 +38,7 @@ config :sequin, Oban,
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
 config :sequin, Sequin.Repo,
+  schema_prefix: "sequin_",
   migration_primary_key: [
     name: :id,
     type: :binary_id,

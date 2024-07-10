@@ -21,12 +21,18 @@ if System.get_env("PHX_SERVER") do
 end
 
 if config_env() == :prod do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
+  database_config =
+    if database_url = System.get_env("PG_URL") do
+      [url: database_url]
+    else
+      [
+        hostname: System.get_env("PG_HOSTNAME", "localhost"),
+        database: System.get_env("PG_DATABASE", "postgres"),
+        port: String.to_integer(System.get_env("PG_PORT", "5432")),
+        username: System.get_env("PG_USERNAME", "postgres"),
+        password: System.get_env("PG_PASSWORD", "postgres")
+      ]
+    end
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
@@ -40,11 +46,15 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "example.com"
   port = String.to_integer(System.get_env("PORT") || "4000")
 
-  config :sequin, Sequin.Repo,
-    # ssl: true,
-    url: database_url,
-    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
-    socket_options: maybe_ipv6
+  repo_config =
+    Keyword.merge(database_config,
+      ssl: String.to_existing_atom(System.get_env("PG_SSL", "false")),
+      pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "30")),
+      socket_options: maybe_ipv6,
+      schema_prefix: System.get_env("PG_SCHEMA_PREFIX", "sequin_")
+    )
+
+  config :sequin, Sequin.Repo, repo_config
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

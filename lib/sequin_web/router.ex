@@ -27,10 +27,10 @@ defmodule SequinWeb.Router do
     resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]
     post "/databases/:id/test_connection", DatabaseController, :test_connection
     post "/databases/test_connection", DatabaseController, :test_connection_params
-    post "/consumers/:id/next", PullController, :next
-    get "/consumers/:id/next", PullController, :next
-    post "/consumers/:id/ack", PullController, :ack
-    post "/consumers/:id/nack", PullController, :nack
+    post "/streams/:stream_id/consumers/:id/next", PullController, :next
+    get "/streams/:stream_id/consumers/:id/next", PullController, :next
+    post "/streams/:stream_id/consumers/:id/ack", PullController, :ack
+    post "/streams/:stream_id/consumers/:id/nack", PullController, :nack
     post "/streams/:stream_id/messages", MessageController, :publish
     get "/streams/:stream_id/messages", MessageController, :stream_list
     get "/streams/:stream_id/consumers/:consumer_id/messages", MessageController, :consumer_list

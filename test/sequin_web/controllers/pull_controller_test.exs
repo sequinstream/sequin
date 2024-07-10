@@ -18,17 +18,21 @@ defmodule SequinWeb.PullControllerTest do
       StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id, backfill_completed_at: @one_day_ago)
 
     other_consumer = StreamsFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
-    %{stream: stream, consumer: consumer, other_consumer: other_consumer}
+    %{stream: stream, consumer: consumer, other_consumer: other_consumer, other_stream: other_stream}
   end
 
   describe "next" do
-    test "returns 404 if trying to pull for another account's consumer", %{conn: conn, other_consumer: other_consumer} do
-      conn = get(conn, ~p"/api/consumers/#{other_consumer.id}/next")
+    test "returns 404 if trying to pull for another account's consumer", %{
+      conn: conn,
+      other_consumer: other_consumer,
+      other_stream: other_stream
+    } do
+      conn = get(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}/next")
       assert json_response(conn, 404)
     end
 
-    test "returns empty list if no ConsumerMessages to return", %{conn: conn, consumer: consumer} do
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}/next")
+    test "returns empty list if no ConsumerMessages to return", %{conn: conn, consumer: consumer, stream: stream} do
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
       assert %{"data" => []} = json_response(conn, 200)
     end
 
@@ -50,7 +54,7 @@ defmodule SequinWeb.PullControllerTest do
         not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       })
 
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["ack_token"] == cm.ack_id
       assert message["message"]["subject"] == available_message.subject
@@ -62,7 +66,7 @@ defmodule SequinWeb.PullControllerTest do
         StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :available})
       end
 
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}/next", batch_size: 1)
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next", batch_size: 1)
       assert %{"data" => messages} = json_response(conn, 200)
       assert length(messages) == 1
     end
@@ -73,11 +77,11 @@ defmodule SequinWeb.PullControllerTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
       assert response(res_conn, 204)
 
       # Verify the message can't be pulled again
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
       assert %{"data" => []} = json_response(conn, 200)
 
       # Verify it's gone from consumer_messages
@@ -88,24 +92,24 @@ defmodule SequinWeb.PullControllerTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
       assert response(res_conn, 204)
 
-      conn = post(conn, ~p"/api/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
+      conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_tokens: [cm.ack_id])
       assert response(conn, 204)
     end
 
     test "returns 404 when acking a message belonging to another consumer", %{
       conn: conn,
       other_consumer: other_consumer,
-      stream: stream
+      other_stream: other_stream
     } do
-      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message = StreamsFactory.insert_message!(%{stream_id: other_stream.id})
 
       cm =
         StreamsFactory.insert_consumer_message!(%{consumer_id: other_consumer.id, message: message, state: :delivered})
 
-      conn = post(conn, ~p"/api/consumers/#{other_consumer.id}/ack", ack_tokens: [cm.ack_id])
+      conn = post(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}/ack", ack_tokens: [cm.ack_id])
       assert json_response(conn, 404)
     end
   end
@@ -115,14 +119,14 @@ defmodule SequinWeb.PullControllerTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
       assert response(res_conn, 204)
 
       # Verify it's still in consumer_messages
       assert Streams.get_consumer_message!(consumer.id, cm.message_subject).state == :available
 
       # Verify the message reappears
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
       assert %{"data" => [nacked_message]} = json_response(conn, 200)
       assert nacked_message["message"]["subject"] == message.subject
     end
@@ -131,24 +135,24 @@ defmodule SequinWeb.PullControllerTest do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
       assert response(res_conn, 204)
 
-      conn = post(conn, ~p"/api/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
+      conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_tokens: [cm.ack_id])
       assert response(conn, 204)
     end
 
     test "returns 404 when nacking a message belonging to another consumer", %{
       conn: conn,
       other_consumer: other_consumer,
-      stream: stream
+      other_stream: other_stream
     } do
-      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      message = StreamsFactory.insert_message!(%{stream_id: other_stream.id})
 
       cm =
         StreamsFactory.insert_consumer_message!(%{consumer_id: other_consumer.id, message: message, state: :delivered})
 
-      conn = post(conn, ~p"/api/consumers/#{other_consumer.id}/nack", ack_tokens: [cm.ack_id])
+      conn = post(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}/nack", ack_tokens: [cm.ack_id])
       assert json_response(conn, 404)
     end
   end

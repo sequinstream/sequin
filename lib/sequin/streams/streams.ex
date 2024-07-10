@@ -288,6 +288,9 @@ defmodule Sequin.Streams do
 
       {:order_by, order_by}, query ->
         order_by(query, ^order_by)
+
+      {:subject_pattern, pattern}, query ->
+        Message.where_subject_pattern(query, pattern)
     end)
     |> Repo.all()
   end
@@ -372,8 +375,14 @@ defmodule Sequin.Streams do
   end
 
   def list_consumer_messages_for_consumer(stream_id, consumer_id, params \\ []) do
+    base_query =
+      consumer_id
+      |> ConsumerMessage.where_consumer_id()
+      |> ConsumerMessage.join_message(stream_id)
+      |> ConsumerMessage.where_state_not(:acked)
+
     query =
-      Enum.reduce(params, ConsumerMessage.where_consumer_id(consumer_id), fn
+      Enum.reduce(params, base_query, fn
         {:state, state}, query ->
           ConsumerMessage.where_state(query, state)
 
@@ -382,10 +391,12 @@ defmodule Sequin.Streams do
 
         {:order_by, order_by}, query ->
           order_by(query, ^order_by)
+
+        {:subject_pattern, pattern}, query ->
+          ConsumerMessage.where_subject_pattern(query, pattern)
       end)
 
     query
-    |> ConsumerMessage.join_message(stream_id)
     |> select([cm, m], %{consumer_message: cm, message: m})
     |> Repo.all()
     |> Enum.map(fn %{consumer_message: cm, message: m} ->

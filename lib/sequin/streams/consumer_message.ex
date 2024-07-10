@@ -5,6 +5,8 @@ defmodule Sequin.Streams.ConsumerMessage do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Streams.Message
+
   @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   @primary_key false
   @derive {Jason.Encoder,
@@ -83,6 +85,14 @@ defmodule Sequin.Streams.ConsumerMessage do
       join: m in Sequin.Streams.Message,
       on: m.subject == cm.message_subject and m.stream_id == ^stream_id,
       as: :message
+  end
+
+  def where_subject_pattern(query \\ base_query(), pattern) do
+    if has_named_binding?(query, :message) do
+      Message.where_subject_pattern(query, pattern)
+    else
+      raise ArgumentError, "The query must have a joined message before calling where_subject_pattern/2"
+    end
   end
 
   defp base_query(query \\ __MODULE__) do

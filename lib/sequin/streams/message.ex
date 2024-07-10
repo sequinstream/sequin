@@ -3,7 +3,7 @@ defmodule Sequin.Streams.Message do
   use Sequin.Schema
 
   import Ecto.Changeset
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query
 
   @token_keys [
     :token1,
@@ -138,6 +138,44 @@ defmodule Sequin.Streams.Message do
 
   def where_seq_gt(query \\ base_query(), seq) do
     from([message: m] in query, where: m.seq > ^seq)
+  end
+
+  def where_subject_pattern(query \\ base_query(), pattern) do
+    tokens = Sequin.Subject.tokenize_pattern(pattern)
+    trailing_wildcard = List.last(tokens) == ">"
+
+    if trailing_wildcard do
+      tokens
+      |> Enum.with_index(1)
+      |> Enum.reduce(query, fn
+        {"*", _index}, acc ->
+          acc
+
+        {">", _index}, acc ->
+          acc
+
+        {token, index}, acc ->
+          field_name = :"token#{index}"
+          where(acc, [message: m], field(m, ^field_name) == ^token)
+      end)
+    else
+      Enum.reduce(1..16, query, fn index, acc ->
+        token = Enum.at(tokens, index - 1)
+
+        case token do
+          nil ->
+            field_name = :"token#{index}"
+            where(acc, [message: m], is_nil(field(m, ^field_name)))
+
+          "*" ->
+            acc
+
+          t ->
+            field_name = :"token#{index}"
+            where(acc, [message: m], field(m, ^field_name) == ^t)
+        end
+      end)
+    end
   end
 
   defp base_query(query \\ __MODULE__) do

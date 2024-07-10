@@ -10,7 +10,9 @@ defmodule SequinWeb.MessageControllerTest do
     other_account = AccountsFactory.insert_account!()
     stream = StreamsFactory.insert_stream!(account_id: account.id)
     other_stream = StreamsFactory.insert_stream!(account_id: other_account.id)
+
     consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+
     other_consumer = StreamsFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
     %{stream: stream, other_stream: other_stream, consumer: consumer, other_consumer: other_consumer}
   end
@@ -84,6 +86,22 @@ defmodule SequinWeb.MessageControllerTest do
       assert %{"data" => listed_messages} = json_response(conn, 200)
       seqs = Enum.map(listed_messages, & &1["seq"])
       assert Enum.sort(seqs) == seqs
+    end
+
+    test "filters by subject pattern", %{conn: conn, stream: stream} do
+      StreamsFactory.insert_message!(stream_id: stream.id, subject: "orders.new")
+      StreamsFactory.insert_message!(stream_id: stream.id, subject: "orders.update")
+      StreamsFactory.insert_message!(stream_id: stream.id, subject: "users.new")
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=orders.*")
+      assert %{"data" => listed_messages} = json_response(conn, 200)
+      assert length(listed_messages) == 2
+      assert Enum.all?(listed_messages, &String.starts_with?(&1["subject"], "orders."))
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=*.new")
+      assert %{"data" => listed_messages} = json_response(conn, 200)
+      assert length(listed_messages) == 2
+      assert Enum.all?(listed_messages, &String.ends_with?(&1["subject"], ".new"))
     end
   end
 
@@ -159,6 +177,26 @@ defmodule SequinWeb.MessageControllerTest do
       assert %{"data" => listed_messages} = json_response(conn, 200)
       seqs = Enum.map(listed_messages, & &1["message"]["seq"])
       assert Enum.sort(seqs) == seqs
+    end
+
+    test "filters by subject pattern", %{conn: conn, stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(stream_id: stream.id, subject: "orders.new")
+      message2 = StreamsFactory.insert_message!(stream_id: stream.id, subject: "orders.update")
+      message3 = StreamsFactory.insert_message!(stream_id: stream.id, subject: "users.new")
+
+      StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message1, state: :available)
+      StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message2, state: :available)
+      StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message3, state: :available)
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=orders.*")
+      assert %{"data" => listed_messages} = json_response(conn, 200)
+      assert length(listed_messages) == 2
+      assert Enum.all?(listed_messages, &String.starts_with?(&1["message"]["subject"], "orders."))
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=*.new")
+      assert %{"data" => listed_messages} = json_response(conn, 200)
+      assert length(listed_messages) == 2
+      assert Enum.all?(listed_messages, &String.ends_with?(&1["message"]["subject"], ".new"))
     end
   end
 end

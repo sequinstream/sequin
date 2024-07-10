@@ -269,6 +269,133 @@ defmodule Sequin.StreamsTest do
     end
   end
 
+  describe "list_messages_for_stream/2" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+      {:ok, stream: stream}
+    end
+
+    test "filters messages with seq_gt", %{stream: stream} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+
+      results = Streams.list_messages_for_stream(stream.id, seq_gt: message1.seq)
+      assert length(results) == 2
+      assert Enum.map(results, & &1.subject) == ["test.2", "test.3"]
+    end
+
+    test "applies order_by with limit", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+
+      results = Streams.list_messages_for_stream(stream.id, order_by: [desc: :seq], limit: 2)
+      assert length(results) == 2
+      assert Enum.map(results, & &1.subject) == ["test.3", "test.2"]
+    end
+
+    test "filters messages with subject_pattern - exact match", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.b.c")
+      assert length(results) == 1
+      assert hd(results).subject == "a.b.c"
+    end
+
+    test "filters messages with subject_pattern - wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.x.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.*.c")
+      assert length(results) == 2
+      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.x.c"]
+    end
+
+    test "filters messages with subject_pattern - trailing wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.b.>")
+      assert length(results) == 2
+      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d"]
+    end
+  end
+
+  describe "list_consumer_messages_for_consumer/3" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+
+      consumer =
+        StreamsFactory.insert_consumer!(%{
+          stream_id: stream.id,
+          account_id: stream.account_id,
+          backfill_completed_at: DateTime.utc_now()
+        })
+
+      {:ok, stream: stream, consumer: consumer}
+    end
+
+    test "applies order_by with limit", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message3})
+
+      results =
+        Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, order_by: [desc: :message_seq], limit: 2)
+
+      assert length(results) == 2
+      assert Enum.map(results, & &1.message.subject) == ["test.3", "test.2"]
+    end
+
+    test "filters consumer messages with subject_pattern - exact match", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
+
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.b.c")
+      assert length(results) == 1
+      assert hd(results).message.subject == "a.b.c"
+    end
+
+    test "filters consumer messages with subject_pattern - wildcard", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.x.c"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message3})
+
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.*.c")
+      assert length(results) == 2
+      assert results |> Enum.map(& &1.message.subject) |> Enum.sort() == ["a.b.c", "a.x.c"]
+    end
+
+    test "filters consumer messages with subject_pattern - trailing wildcard", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message3})
+
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.b.>")
+      assert length(results) == 2
+      assert results |> Enum.map(& &1.message.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d"]
+    end
+  end
+
   describe "next_for_consumer/2" do
     setup do
       stream = StreamsFactory.insert_stream!()

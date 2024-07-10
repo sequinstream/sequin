@@ -54,16 +54,18 @@ defmodule SequinWeb.MessageController do
 
   defp parse_stream_list_params(params) do
     with {:ok, sort} <- parse_stream_sort(params),
-         {:ok, limit} <- parse_limit(params) do
-      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort)}
+         {:ok, limit} <- parse_limit(params),
+         {:ok, subject_pattern} <- parse_subject_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, subject_pattern: subject_pattern)}
     end
   end
 
   defp parse_consumer_list_params(params) do
     with {:ok, sort} <- parse_consumer_sort(params),
          {:ok, limit} <- parse_limit(params),
-         {:ok, state} <- parse_state(params) do
-      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, state: state)}
+         {:ok, state} <- parse_state(params),
+         {:ok, subject_pattern} <- parse_subject_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, state: state, subject_pattern: subject_pattern)}
     end
   end
 
@@ -90,4 +92,13 @@ defmodule SequinWeb.MessageController do
   defp parse_state(%{"state" => "delivered"}), do: {:ok, [:delivered, :pending_redelivery]}
   defp parse_state(%{"state" => _}), do: {:error, Error.bad_request(message: "Invalid state parameter")}
   defp parse_state(_), do: {:ok, nil}
+
+  defp parse_subject_pattern(%{"subject_pattern" => pattern}) do
+    case Sequin.Subject.validate_subject_pattern(pattern) do
+      :ok -> {:ok, pattern}
+      {:error, reason} -> {:error, Error.bad_request(message: "Invalid subject pattern: #{reason}")}
+    end
+  end
+
+  defp parse_subject_pattern(_), do: {:ok, nil}
 end

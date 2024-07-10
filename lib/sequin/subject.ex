@@ -163,4 +163,20 @@ defmodule Sequin.Subject do
 
   defp validate_token(""), do: "invalid_subject_token"
   defp validate_token(identifier), do: identifier
+
+  @doc """
+  Tokenizes a subject pattern into a list of tokens.
+
+  ## Examples
+
+      iex> Sequin.Subject.tokenize_pattern("orders.*.store123")
+      ["orders", "*", "store123"]
+
+      iex> Sequin.Subject.tokenize_pattern("orders.>")
+      ["orders", ">"]
+
+  """
+  def tokenize_pattern(pattern) do
+    String.split(pattern, ".")
+  end
 end

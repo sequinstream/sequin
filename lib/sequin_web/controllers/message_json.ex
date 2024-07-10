@@ -12,6 +12,8 @@ defmodule SequinWeb.MessageJSON do
   def render("consumer_list.json", %{consumer_messages: consumer_messages}) do
     messages =
       Enum.map(consumer_messages, fn %ConsumerMessage{} = cm ->
+        state = if cm.state == :pending_redelivery, do: :delivered, else: cm.state
+
         %{
           message: cm.message,
           info: %{
@@ -19,7 +21,7 @@ defmodule SequinWeb.MessageJSON do
             deliver_count: cm.deliver_count,
             last_delivered_at: cm.last_delivered_at,
             not_visible_until: cm.not_visible_until,
-            state: cm.state
+            state: state
           }
         }
       end)

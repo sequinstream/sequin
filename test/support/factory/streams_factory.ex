@@ -20,7 +20,7 @@ defmodule Sequin.Factory.StreamsFactory do
     attrs = Map.new(attrs)
 
     {state, attrs} =
-      Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:acked, :available, :delivered, :pending_redelivery]) end)
+      Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:available, :delivered, :pending_redelivery]) end)
 
     not_visible_until =
       unless state == :available do

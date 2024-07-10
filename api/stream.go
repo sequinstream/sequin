@@ -18,13 +18,16 @@ type StreamsResponse struct {
 
 // Stream represents the structure of a stream returned by the API
 type Stream struct {
-	ID            string    `json:"id"`
-	Idx           int       `json:"idx"`
-	Slug          string    `json:"slug"`
-	ConsumerCount int       `json:"consumer_count"`
-	MessageCount  int       `json:"message_count"`
-	CreatedAt     time.Time `json:"inserted_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID    string `json:"id"`
+	Idx   int    `json:"idx"`
+	Slug  string `json:"slug"`
+	Stats struct {
+		ConsumerCount int `json:"consumer_count"`
+		MessageCount  int `json:"message_count"`
+		StorageSize   int `json:"storage_size"`
+	} `json:"stats"`
+	CreatedAt time.Time `json:"inserted_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // FetchStreams retrieves all streams from the API

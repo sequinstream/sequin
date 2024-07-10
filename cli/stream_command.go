@@ -79,13 +79,15 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 
 	table := newTableWriter("Streams")
 
-	table.AddHeaders("ID", "Consumers", "Messages", "Created At", "Updated At")
+	table.AddHeaders("ID", "Slug", "Consumers", "Messages", "Storage Size", "Created At", "Updated At")
 	// Add rows
 	for _, s := range streams {
 		table.AddRow(
 			s.ID,
-			s.ConsumerCount,
-			s.MessageCount,
+			s.Slug,
+			s.Stats.ConsumerCount,
+			s.Stats.MessageCount,
+			formatBytes(s.Stats.StorageSize),
 			s.CreatedAt.Format(time.RFC3339),
 			s.UpdatedAt.Format(time.RFC3339),
 		)
@@ -163,8 +165,9 @@ func displayStreamInfo(config *Config) error {
 
 	cols.AddRow("Slug", stream.Slug)
 	cols.AddRow("Index", stream.Idx)
-	cols.AddRow("Consumers", stream.ConsumerCount)
-	cols.AddRow("Messages", stream.MessageCount)
+	cols.AddRow("Consumers", stream.Stats.ConsumerCount)
+	cols.AddRow("Messages", stream.Stats.MessageCount)
+	cols.AddRow("Storage Size", formatBytes(stream.Stats.StorageSize))
 	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
 	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
 
@@ -209,8 +212,9 @@ func streamAdd(_ *fisk.ParseContext, config *Config) error {
 
 	cols.AddRow("Slug", stream.Slug)
 	cols.AddRow("Index", stream.Idx)
-	cols.AddRow("Consumers", stream.ConsumerCount)
-	cols.AddRow("Messages", stream.MessageCount)
+	cols.AddRow("Consumers", stream.Stats.ConsumerCount)
+	cols.AddRow("Messages", stream.Stats.MessageCount)
+	cols.AddRow("Storage Size", formatBytes(stream.Stats.StorageSize))
 	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
 	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
 

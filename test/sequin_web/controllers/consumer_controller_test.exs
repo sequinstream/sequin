@@ -15,23 +15,22 @@ defmodule SequinWeb.ConsumerControllerTest do
   end
 
   describe "index" do
-    test "lists consumers in the given account", %{conn: conn, account: account, stream: stream} do
+    test "lists consumers for the given stream", %{conn: conn, account: account, stream: stream} do
       consumer1 = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
       consumer2 = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
-      conn = get(conn, ~p"/api/consumers")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers")
       assert %{"data" => consumers} = json_response(conn, 200)
       assert length(consumers) == 2
       atomized_consumers = Enum.map(consumers, &Sequin.Map.atomize_keys/1)
       assert_lists_equal([consumer1, consumer2], atomized_consumers, &(&1.id == &2.id))
     end
 
-    test "does not list consumers from another account", %{conn: conn, other_stream: other_stream} do
+    test "does not list consumers from another account's stream", %{conn: conn, other_stream: other_stream} do
       StreamsFactory.insert_consumer!(account_id: other_stream.account_id, stream_id: other_stream.id)
 
-      conn = get(conn, ~p"/api/consumers")
-      assert %{"data" => consumers} = json_response(conn, 200)
-      assert Enum.empty?(consumers)
+      conn = get(conn, ~p"/api/streams/#{other_stream.id}/consumers")
+      assert json_response(conn, 404)
     end
   end
 
@@ -39,7 +38,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     test "shows consumer details", %{conn: conn, account: account, stream: stream} do
       consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}")
       assert json_response = json_response(conn, 200)
       atomized_response = Sequin.Map.atomize_keys(json_response)
 
@@ -56,7 +55,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     test "returns 404 if consumer belongs to another account", %{conn: conn, other_stream: other_stream} do
       consumer = StreamsFactory.insert_consumer!(account_id: other_stream.account_id, stream_id: other_stream.id)
 
-      conn = get(conn, ~p"/api/consumers/#{consumer.id}")
+      conn = get(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{consumer.id}")
       assert json_response(conn, 404)
     end
   end
@@ -65,7 +64,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     test "creates a consumer under the authenticated account", %{conn: conn, stream: stream} do
       attrs = StreamsFactory.consumer_attrs(stream_id: stream.id, max_ack_pending: 5000)
 
-      conn = post(conn, ~p"/api/consumers", attrs)
+      conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       consumer = Streams.get_consumer!(id)
@@ -75,9 +74,9 @@ defmodule SequinWeb.ConsumerControllerTest do
     end
 
     test "returns validation error for invalid attributes", %{conn: conn, stream: stream} do
-      invalid_attrs = %{stream_id: stream.id, max_ack_pending: "invalid"}
+      invalid_attrs = %{max_ack_pending: "invalid"}
 
-      conn = post(conn, ~p"/api/consumers", invalid_attrs)
+      conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", invalid_attrs)
       assert json_response(conn, 422)["errors"] != %{}
     end
 
@@ -86,9 +85,9 @@ defmodule SequinWeb.ConsumerControllerTest do
       stream: stream,
       other_account: other_account
     } do
-      attrs = StreamsFactory.consumer_attrs(stream_id: stream.id, account_id: other_account.id)
+      attrs = StreamsFactory.consumer_attrs(account_id: other_account.id, max_ack_pending: 5000)
 
-      conn = post(conn, ~p"/api/consumers", attrs)
+      conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       consumer = Streams.get_consumer!(id)
@@ -100,10 +99,10 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn: conn,
       other_stream: other_stream
     } do
-      attrs = %{stream_id: other_stream.id, max_ack_pending: 5000}
+      attrs = %{max_ack_pending: 5000}
 
-      conn = post(conn, ~p"/api/consumers", attrs)
-      assert json_response(conn, 422)["errors"] != %{}
+      conn = post(conn, ~p"/api/streams/#{other_stream.id}/consumers", attrs)
+      assert json_response(conn, 404)
     end
   end
 
@@ -113,32 +112,32 @@ defmodule SequinWeb.ConsumerControllerTest do
       %{consumer: consumer}
     end
 
-    test "updates the consumer with valid attributes", %{conn: conn, consumer: consumer} do
+    test "updates the consumer with valid attributes", %{conn: conn, consumer: consumer, stream: stream} do
       attrs = %{max_ack_pending: 8000}
-      conn = put(conn, ~p"/api/consumers/#{consumer.id}", attrs)
+      conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       updated_consumer = Streams.get_consumer!(id)
       assert updated_consumer.max_ack_pending == 8000
     end
 
-    test "returns validation error for invalid attributes", %{conn: conn, consumer: consumer} do
+    test "returns validation error for invalid attributes", %{conn: conn, consumer: consumer, stream: stream} do
       invalid_attrs = %{max_ack_pending: "invalid"}
-      conn = put(conn, ~p"/api/consumers/#{consumer.id}", invalid_attrs)
+      conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", invalid_attrs)
       assert json_response(conn, 422)["errors"] != %{}
     end
 
     test "returns 404 if consumer belongs to another account", %{conn: conn, other_stream: other_stream} do
       other_consumer = StreamsFactory.insert_consumer!(account_id: other_stream.account_id, stream_id: other_stream.id)
 
-      conn = put(conn, ~p"/api/consumers/#{other_consumer.id}", %{max_ack_pending: 8000})
+      conn = put(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}", %{max_ack_pending: 8000})
       assert json_response(conn, 404)
     end
 
-    test "ignores account_id if provided", %{conn: conn, consumer: consumer, other_account: other_account} do
+    test "ignores account_id if provided", %{conn: conn, consumer: consumer, other_account: other_account, stream: stream} do
       attrs = %{account_id: other_account.id, max_ack_pending: 8000}
 
-      conn = put(conn, ~p"/api/consumers/#{consumer.id}", attrs)
+      conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       updated_consumer = Streams.get_consumer!(id)
@@ -147,14 +146,15 @@ defmodule SequinWeb.ConsumerControllerTest do
       assert updated_consumer.max_ack_pending == 8000
     end
 
-    test "ignores attempt to change a stream to that of another account", %{
+    test "ignores attempt to change a stream", %{
       conn: conn,
       consumer: consumer,
-      other_stream: other_stream
+      other_stream: other_stream,
+      stream: stream
     } do
       attrs = %{stream_id: other_stream.id}
 
-      conn = put(conn, ~p"/api/consumers/#{consumer.id}", attrs)
+      conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", attrs)
       assert json_response(conn, 200)
       assert Repo.reload(consumer).stream_id == consumer.stream_id
     end
@@ -164,7 +164,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     test "deletes the consumer", %{conn: conn, account: account, stream: stream} do
       consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
-      conn = delete(conn, ~p"/api/consumers/#{consumer.id}")
+      conn = delete(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}")
       assert %{"id" => id, "deleted" => true} = json_response(conn, 200)
 
       assert_raise Ecto.NoResultsError, fn -> Streams.get_consumer!(id) end
@@ -173,7 +173,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     test "returns 404 if consumer belongs to another account", %{conn: conn, other_stream: other_stream} do
       other_consumer = StreamsFactory.insert_consumer!(account_id: other_stream.account_id, stream_id: other_stream.id)
 
-      conn = delete(conn, ~p"/api/consumers/#{other_consumer.id}")
+      conn = delete(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}")
       assert json_response(conn, 404)
     end
   end

@@ -21,7 +21,7 @@ defmodule SequinWeb.Router do
     pipe_through :api
 
     resources "/streams", StreamController, except: [:new, :edit]
-    resources "/consumers", ConsumerController, except: [:new, :edit]
+    resources "/streams/:stream_id/consumers", ConsumerController, except: [:new, :edit]
     resources "/databases", DatabaseController, except: [:new, :edit]
     resources "/api_keys", ApiKeyController, only: [:index, :create, :delete]
     resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]

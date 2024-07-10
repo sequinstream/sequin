@@ -144,37 +144,28 @@ defmodule Sequin.Streams.Message do
     tokens = Sequin.Subject.tokenize_pattern(pattern)
     trailing_wildcard = List.last(tokens) == ">"
 
-    if trailing_wildcard do
+    query =
       tokens
       |> Enum.with_index(1)
       |> Enum.reduce(query, fn
         {"*", _index}, acc ->
           acc
 
-        {">", _index}, acc ->
-          acc
+        {">", index}, acc ->
+          field_name = :"token#{index}"
+          where(acc, [message: m], not is_nil(field(m, ^field_name)))
 
         {token, index}, acc ->
           field_name = :"token#{index}"
           where(acc, [message: m], field(m, ^field_name) == ^token)
       end)
+
+    if trailing_wildcard do
+      query
     else
-      Enum.reduce(1..16, query, fn index, acc ->
-        token = Enum.at(tokens, index - 1)
-
-        case token do
-          nil ->
-            field_name = :"token#{index}"
-            where(acc, [message: m], is_nil(field(m, ^field_name)))
-
-          "*" ->
-            acc
-
-          t ->
-            field_name = :"token#{index}"
-            where(acc, [message: m], field(m, ^field_name) == ^t)
-        end
-      end)
+      # If there's no trailing wildcard, we want to make sure the n+1'th token is nil
+      field_name = :"token#{length(tokens) + 1}"
+      where(query, [message: m], is_nil(field(m, ^field_name)))
     end
   end
 

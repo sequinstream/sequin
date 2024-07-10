@@ -1,5 +1,5 @@
 defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
-  use Sequin.DataCase
+  use Sequin.DataCase, async: true
 
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams

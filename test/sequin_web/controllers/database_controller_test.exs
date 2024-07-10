@@ -1,5 +1,5 @@
 defmodule SequinWeb.DatabaseControllerTest do
-  use SequinWeb.ConnCase
+  use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory

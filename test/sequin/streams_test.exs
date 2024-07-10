@@ -305,8 +305,11 @@ defmodule Sequin.StreamsTest do
     end
 
     test "filters messages with subject_pattern - wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.x.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
 
       results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.*.c")
@@ -315,13 +318,15 @@ defmodule Sequin.StreamsTest do
     end
 
     test "filters messages with subject_pattern - trailing wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d.e"})
       StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
 
       results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.b.>")
-      assert length(results) == 2
-      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d"]
+      assert length(results) == 3
+      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d", "a.b.c.d.e"]
     end
   end
 

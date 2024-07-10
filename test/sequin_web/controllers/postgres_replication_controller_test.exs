@@ -1,5 +1,5 @@
 defmodule SequinWeb.PostgresReplicationControllerTest do
-  use SequinWeb.ConnCase
+  use SequinWeb.ConnCase, async: true
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Factory.AccountsFactory

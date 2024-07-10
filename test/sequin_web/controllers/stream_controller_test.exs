@@ -1,5 +1,5 @@
 defmodule SequinWeb.StreamControllerTest do
-  use SequinWeb.ConnCase
+  use SequinWeb.ConnCase, async: true
 
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.StreamsFactory

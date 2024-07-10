@@ -1,5 +1,5 @@
 defmodule SequinWeb.ApiKeyControllerTest do
-  use SequinWeb.ConnCase
+  use SequinWeb.ConnCase, async: true
 
   alias Sequin.Accounts
   alias Sequin.Factory.AccountsFactory

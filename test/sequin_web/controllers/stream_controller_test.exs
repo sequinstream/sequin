@@ -29,6 +29,7 @@ defmodule SequinWeb.StreamControllerTest do
       conn = get(conn, ~p"/api/streams")
       assert %{"data" => streams} = json_response(conn, 200)
       refute Enum.any?(streams, &(&1["id"] == other_stream.id))
+      assert Enum.all?(streams, & &1["stats"])
     end
   end
 
@@ -39,6 +40,12 @@ defmodule SequinWeb.StreamControllerTest do
       atomized_response = Sequin.Map.atomize_keys(json_response)
 
       assert_maps_equal(stream, atomized_response, [:id, :idx, :account_id])
+
+      assert %{
+               message_count: _,
+               consumer_count: _,
+               storage_size: _
+             } = Sequin.Map.atomize_keys(atomized_response.stats)
     end
 
     test "returns 404 if stream belongs to another account", %{conn: conn, other_stream: other_stream} do

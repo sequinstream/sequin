@@ -97,6 +97,10 @@ defmodule Sequin.Streams do
     Repo.all(Consumer)
   end
 
+  def count_consumers_for_stream(stream_id) do
+    stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
+  end
+
   def get_consumer!(consumer_id) do
     consumer_id
     |> Consumer.where_id()
@@ -299,6 +303,44 @@ defmodule Sequin.Streams do
     subject
     |> Message.where_subject_and_stream_id(stream_id)
     |> Repo.one!()
+  end
+
+  def count_messages_for_stream(stream_id) do
+    stream_id
+    |> Message.where_stream_id()
+    |> Repo.aggregate(:count, :subject)
+  end
+
+  @fast_count_threshold 50_000
+  def fast_count_threshold, do: @fast_count_threshold
+
+  def fast_count_messages_for_stream(stream_id) do
+    query = Message.where_stream_id(stream_id)
+
+    # This number can be pretty inaccurate
+    result = Ecto.Adapters.SQL.explain(Repo, :all, query)
+    [_, rows] = Regex.run(~r/rows=(\d+)/, result)
+
+    case String.to_integer(rows) do
+      count when count > @fast_count_threshold ->
+        count
+
+      _ ->
+        count_messages_for_stream(stream_id)
+    end
+  end
+
+  def approximate_storage_size_for_stream(stream_id) do
+    %Stream{slug: slug} = Repo.get!(Stream, stream_id)
+
+    query = """
+    SELECT pg_total_relation_size('streams.messages_#{slug}') AS size
+    """
+
+    case Repo.query(query) do
+      {:ok, %{rows: [[size]]}} -> size
+      _ -> 0
+    end
   end
 
   def upsert_messages(stream_id, messages, is_retry? \\ false) do

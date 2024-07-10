@@ -6,11 +6,14 @@ defmodule Sequin.Streams.Stream do
   import Ecto.Query
 
   alias Sequin.Accounts.Account
+  alias Sequin.Streams
   alias Sequin.Streams.Stream
 
-  @derive {Jason.Encoder, only: [:id, :slug, :account_id, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :slug, :account_id, :stats, :inserted_at, :updated_at]}
   typed_schema "streams" do
     field :slug, :string
+
+    field :stats, :map, virtual: true
 
     belongs_to :account, Account
 
@@ -45,5 +48,16 @@ defmodule Sequin.Streams.Stream do
 
   defp base_query(query \\ __MODULE__) do
     from(s in query, as: :stream)
+  end
+
+  def load_stats(%Stream{id: stream_id} = stream) do
+    %{
+      stream
+      | stats: %{
+          message_count: Streams.fast_count_messages_for_stream(stream_id),
+          consumer_count: Streams.count_consumers_for_stream(stream_id),
+          storage_size: Streams.approximate_storage_size_for_stream(stream_id)
+        }
+    }
   end
 end

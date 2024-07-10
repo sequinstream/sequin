@@ -60,6 +60,15 @@ defmodule SequinWeb.PullControllerTest do
       assert message["message"]["subject"] == available_message.subject
     end
 
+    test "returns an available message by slug", %{conn: conn, consumer: consumer, stream: stream} do
+      db_message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: db_message, state: :available})
+
+      conn = get(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/next")
+      assert %{"data" => [message]} = json_response(conn, 200)
+      assert message["message"]["subject"] == db_message.subject
+    end
+
     test "respects batch_size parameter", %{conn: conn, consumer: consumer, stream: stream} do
       for _ <- 1..3 do
         message = StreamsFactory.insert_message!(%{stream_id: stream.id})
@@ -86,6 +95,14 @@ defmodule SequinWeb.PullControllerTest do
 
       # Verify it's gone from consumer_messages
       assert Streams.all_consumer_messages() == []
+    end
+
+    test "successfully acks a message by consumer slug", %{conn: conn, consumer: consumer, stream: stream} do
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
+
+      res_conn = post(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/ack", ack_tokens: [cm.ack_id])
+      assert response(res_conn, 204)
     end
 
     test "allows acking a message twice", %{conn: conn, consumer: consumer, stream: stream} do
@@ -129,6 +146,14 @@ defmodule SequinWeb.PullControllerTest do
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
       assert %{"data" => [nacked_message]} = json_response(conn, 200)
       assert nacked_message["message"]["subject"] == message.subject
+    end
+
+    test "successfully nacks a message by consumer slug", %{conn: conn, consumer: consumer, stream: stream} do
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id})
+      cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
+
+      res_conn = post(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/nack", ack_tokens: [cm.ack_id])
+      assert response(res_conn, 204)
     end
 
     test "allows nacking a message twice", %{conn: conn, consumer: consumer, stream: stream} do

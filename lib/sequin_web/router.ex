@@ -20,20 +20,20 @@ defmodule SequinWeb.Router do
   scope "/api", SequinWeb do
     pipe_through :api
 
-    resources "/streams", StreamController, except: [:new, :edit]
-    resources "/streams/:stream_id/consumers", ConsumerController, except: [:new, :edit]
+    resources "/streams", StreamController, except: [:new, :edit], param: "id_or_slug"
+    resources "/streams/:stream_id_or_slug/consumers", ConsumerController, except: [:new, :edit], param: "id_or_slug"
     resources "/databases", DatabaseController, except: [:new, :edit]
     resources "/api_keys", ApiKeyController, only: [:index, :create, :delete]
     resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]
     post "/databases/:id/test_connection", DatabaseController, :test_connection
     post "/databases/test_connection", DatabaseController, :test_connection_params
-    post "/streams/:stream_id/consumers/:id/next", PullController, :next
-    get "/streams/:stream_id/consumers/:id/next", PullController, :next
-    post "/streams/:stream_id/consumers/:id/ack", PullController, :ack
-    post "/streams/:stream_id/consumers/:id/nack", PullController, :nack
-    post "/streams/:stream_id/messages", MessageController, :publish
-    get "/streams/:stream_id/messages", MessageController, :stream_list
-    get "/streams/:stream_id/consumers/:consumer_id/messages", MessageController, :consumer_list
+    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/next", PullController, :next
+    get "/streams/:stream_id_or_slug/consumers/:id_or_slug/next", PullController, :next
+    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/ack", PullController, :ack
+    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/nack", PullController, :nack
+    post "/streams/:stream_id_or_slug/messages", MessageController, :publish
+    get "/streams/:stream_id_or_slug/messages", MessageController, :stream_list
+    get "/streams/:stream_id_or_slug/consumers/:consumer_id_or_slug/messages", MessageController, :consumer_list
   end
 
   # Other scopes may use custom stacks.

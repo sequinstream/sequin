@@ -48,6 +48,15 @@ defmodule SequinWeb.StreamControllerTest do
              } = Sequin.Map.atomize_keys(atomized_response.stats)
     end
 
+    test "shows stream details by slug", %{conn: conn, stream: stream} do
+      conn = get(conn, ~p"/api/streams/#{stream.slug}")
+      assert json_response = json_response(conn, 200)
+      atomized_response = Sequin.Map.atomize_keys(json_response)
+
+      assert atomized_response.id == stream.id
+      assert atomized_response.slug == stream.slug
+    end
+
     test "returns 404 if stream belongs to another account", %{conn: conn, other_stream: other_stream} do
       conn = get(conn, ~p"/api/streams/#{other_stream.id}")
       assert json_response(conn, 404)

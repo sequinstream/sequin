@@ -6,48 +6,48 @@ defmodule SequinWeb.ConsumerController do
 
   action_fallback ApiFallbackPlug
 
-  def index(conn, %{"stream_id" => stream_id}) do
+  def index(conn, %{"stream_id_or_slug" => stream_id_or_slug}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id) do
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug) do
       render(conn, "index.json", consumers: Streams.list_consumers_for_stream(stream.id))
     end
   end
 
-  def show(conn, %{"stream_id" => stream_id, "id" => id}) do
+  def show(conn, %{"stream_id_or_slug" => stream_id_or_slug, "id_or_slug" => id_or_slug}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id) do
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id_or_slug) do
       render(conn, "show.json", consumer: consumer)
     end
   end
 
-  def create(conn, %{"stream_id" => stream_id} = params) do
+  def create(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
          {:ok, consumer} <-
            Streams.create_consumer_for_account_with_lifecycle(account_id, Map.put(params, "stream_id", stream.id)) do
       render(conn, "show.json", consumer: consumer)
     end
   end
 
-  def update(conn, %{"stream_id" => stream_id, "id" => id} = params) do
+  def update(conn, %{"stream_id_or_slug" => stream_id_or_slug, "id_or_slug" => id_or_slug} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id_or_slug),
          {:ok, updated_consumer} <- Streams.update_consumer_with_lifecycle(consumer, params) do
       render(conn, "show.json", consumer: updated_consumer)
     end
   end
 
-  def delete(conn, %{"stream_id" => stream_id, "id" => id}) do
+  def delete(conn, %{"stream_id_or_slug" => stream_id_or_slug, "id_or_slug" => id_or_slug}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, id_or_slug),
          {:ok, _consumer} <- Streams.delete_consumer_with_lifecycle(consumer) do
       render(conn, "delete.json", consumer: consumer)
     end

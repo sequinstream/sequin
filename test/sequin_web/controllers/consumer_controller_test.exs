@@ -52,6 +52,15 @@ defmodule SequinWeb.ConsumerControllerTest do
       ])
     end
 
+    test "shows consumer details by slug", %{conn: conn, account: account, stream: stream} do
+      consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+
+      conn = get(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}")
+      assert json_response = json_response(conn, 200)
+      assert json_response["id"] == consumer.id
+      assert json_response["slug"] == consumer.slug
+    end
+
     test "returns 404 if consumer belongs to another account", %{conn: conn, other_stream: other_stream} do
       consumer = StreamsFactory.insert_consumer!(account_id: other_stream.account_id, stream_id: other_stream.id)
 

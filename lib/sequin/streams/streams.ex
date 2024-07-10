@@ -32,8 +32,8 @@ defmodule Sequin.Streams do
     account_id |> Stream.where_account_id() |> Repo.all()
   end
 
-  def get_stream_for_account(account_id, id) do
-    res = account_id |> Stream.where_account_id() |> Stream.where_id(id) |> Repo.one()
+  def get_stream_for_account(account_id, id_or_slug) do
+    res = account_id |> Stream.where_account_id() |> Stream.where_id_or_slug(id_or_slug) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :stream)}
@@ -129,8 +129,8 @@ defmodule Sequin.Streams do
 
   defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
 
-  def get_consumer_for_account(account_id, id) do
-    res = account_id |> Consumer.where_account_id() |> Consumer.where_id(id) |> Repo.one()
+  def get_consumer_for_account(account_id, id_or_slug) do
+    res = account_id |> Consumer.where_account_id() |> Consumer.where_id_or_slug(id_or_slug) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -138,8 +138,8 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_consumer_for_stream(stream_id, id) do
-    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id(id) |> Repo.one()
+  def get_consumer_for_stream(stream_id, id_or_slug) do
+    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id_or_slug(id_or_slug) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}

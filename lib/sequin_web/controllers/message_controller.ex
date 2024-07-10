@@ -7,33 +7,36 @@ defmodule SequinWeb.MessageController do
 
   action_fallback ApiFallbackPlug
 
-  def publish(conn, %{"stream_id" => stream_id} = params) do
+  def publish(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
          {:ok, messages} <- parse_messages(params),
          {:ok, count} <- Streams.upsert_messages(stream.id, messages) do
       render(conn, "publish.json", count: count)
     end
   end
 
-  def stream_list(conn, %{"stream_id" => stream_id} = params) do
+  def stream_list(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
          {:ok, list_params} <- parse_stream_list_params(params) do
       messages = Streams.list_messages_for_stream(stream.id, list_params)
       render(conn, "stream_list.json", messages: messages)
     end
   end
 
-  def consumer_list(conn, %{"stream_id" => stream_id, "consumer_id" => consumer_id} = params) do
+  def consumer_list(
+        conn,
+        %{"stream_id_or_slug" => stream_id_or_slug, "consumer_id_or_slug" => consumer_id_or_slug} = params
+      ) do
     account_id = conn.assigns.account_id
 
-    with {:ok, _stream} <- Streams.get_stream_for_account(account_id, stream_id),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream_id, consumer_id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, consumer_id_or_slug),
          {:ok, list_params} <- parse_consumer_list_params(params) do
-      consumer_messages = Streams.list_consumer_messages_for_consumer(stream_id, consumer.id, list_params)
+      consumer_messages = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, list_params)
       render(conn, "consumer_list.json", consumer_messages: consumer_messages)
     end
   end

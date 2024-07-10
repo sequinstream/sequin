@@ -12,10 +12,10 @@ defmodule SequinWeb.StreamController do
     render(conn, "index.json", streams: Streams.list_streams_for_account(account_id))
   end
 
-  def show(conn, %{"id" => id}) do
+  def show(conn, %{"id_or_slug" => id_or_slug}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, id) do
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, id_or_slug) do
       render(conn, "show.json", stream: stream)
     end
   end
@@ -28,10 +28,10 @@ defmodule SequinWeb.StreamController do
     end
   end
 
-  def delete(conn, %{"id" => id}) do
+  def delete(conn, %{"id_or_slug" => id_or_slug}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, id),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, id_or_slug),
          {:ok, _stream} <- Streams.delete_stream_with_lifecycle(stream) do
       render(conn, "delete.json", stream: stream)
     end

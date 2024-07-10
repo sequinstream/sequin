@@ -70,6 +70,17 @@ defmodule Sequin.Streams.Consumer do
     from([consumer: c] in query, where: c.id == ^id)
   end
 
+  def where_slug(query \\ base_query(), slug) do
+    from([consumer: c] in query, where: c.slug == ^slug)
+  end
+
+  def where_id_or_slug(query \\ base_query(), id_or_slug) do
+    case UUID.info(id_or_slug) do
+      {:ok, [uuid: _, binary: _, type: _, version: 4, variant: :rfc4122]} -> where_id(query, id_or_slug)
+      _ -> where_slug(query, id_or_slug)
+    end
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :consumer)
   end

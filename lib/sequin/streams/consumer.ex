@@ -29,7 +29,7 @@ defmodule Sequin.Streams.Consumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
-    field :filter_subject, :string
+    field :filter_subject_pattern, :string
 
     belongs_to :stream, Stream
     belongs_to :account, Account
@@ -46,10 +46,10 @@ defmodule Sequin.Streams.Consumer do
       :max_deliver,
       :max_waiting,
       :slug,
-      :filter_subject,
+      :filter_subject_pattern,
       :backfill_completed_at
     ])
-    |> validate_required([:stream_id, :slug, :filter_subject])
+    |> validate_required([:stream_id, :slug, :filter_subject_pattern])
     |> foreign_key_constraint(:stream_id)
   end
 

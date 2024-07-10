@@ -17,7 +17,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
 
   describe "perform/1" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(filter_subject: "prefix.>", backfill_completed_at: nil)
+      consumer = StreamsFactory.insert_consumer!(filter_subject_pattern: "prefix.>", backfill_completed_at: nil)
 
       %{consumer: consumer}
     end

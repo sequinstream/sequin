@@ -211,7 +211,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           null: false
 
       add :slug, :text, null: false
-      add :filter_subject, :text, null: false
+      add :filter_subject_pattern, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
 
       add :ack_wait_ms, :integer, null: false, default: 30_000

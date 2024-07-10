@@ -132,7 +132,7 @@ defmodule Sequin.Factory.StreamsFactory do
         max_waiting: 20,
         stream_id: Factory.uuid(),
         account_id: Factory.uuid(),
-        filter_subject: generate_subject(parts: 3)
+        filter_subject_pattern: generate_subject(parts: 3)
       },
       attrs
     )

@@ -86,7 +86,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -111,7 +111,7 @@ defmodule Sequin.StreamsTest do
       consumer1 =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -119,7 +119,7 @@ defmodule Sequin.StreamsTest do
       consumer2 =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -141,7 +141,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: other_stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -160,7 +160,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "other.subject",
+          filter_subject_pattern: "other.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -176,7 +176,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -204,7 +204,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -232,7 +232,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -258,7 +258,7 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject: "test.subject",
+          filter_subject_pattern: "test.subject",
           account_id: account_id,
           backfill_completed_at: nil
         })

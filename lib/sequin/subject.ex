@@ -28,7 +28,7 @@ defmodule Sequin.Subject do
   - "orders.*" would match "orders.new" and "orders.update", but not "orders.new.priority"
   - "orders.>" would match "orders.new", "orders.update", and "orders.new.priority"
 
-  Without the `>` character, the filter_subject must exactly match in length to a message subject.
+  Without the `>` character, the subject_pattern must exactly match in length to a message subject.
 
   It's recommended to use alphanumeric characters, `-` (dash), and `_` (underscore) for subject
   names to ensure compatibility across different systems and configurations.

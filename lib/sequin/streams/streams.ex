@@ -342,7 +342,7 @@ defmodule Sequin.Streams do
       |> Enum.reject(&(&1.backfill_completed_at == nil))
       |> Enum.flat_map(fn consumer ->
         messages
-        |> Enum.filter(fn message -> Sequin.Subject.matches?(consumer.filter_subject, message.subject) end)
+        |> Enum.filter(fn message -> Sequin.Subject.matches?(consumer.filter_subject_pattern, message.subject) end)
         |> Enum.map(fn message ->
           %ConsumerMessage{consumer_id: consumer.id, message_subject: message.subject, message_seq: message.seq}
         end)

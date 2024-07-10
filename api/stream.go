@@ -174,3 +174,47 @@ func RemoveStream(ctx *context.Context, streamID string) error {
 
 	return nil
 }
+
+// PublishMessage publishes a message to a stream
+func PublishMessage(ctx *context.Context, streamID, subject, message string) error {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/api/streams/%s/messages", serverURL, streamID)
+	payload := map[string]interface{}{
+		"messages": []map[string]string{
+			{
+				"subject": subject,
+				"data":    message,
+			},
+		},
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("error marshaling JSON: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}

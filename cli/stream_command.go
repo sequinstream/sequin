@@ -18,6 +18,14 @@ type StreamAddConfig struct {
 
 var streamAddConfig StreamAddConfig
 
+type StreamPublishConfig struct {
+	StreamSlug string
+	Subject    string
+	Message    string
+}
+
+var streamPublishConfig StreamPublishConfig
+
 // AddStreamCommands adds all stream-related commands to the given app
 func AddStreamCommands(app *fisk.Application, config *Config) {
 	stream := app.Command("stream", "Stream related commands")
@@ -42,6 +50,13 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 		return streamRm(c, config)
 	})
 	rmCmd.Arg("stream-id", "ID of the stream to remove").StringVar(&config.StreamID)
+
+	pubCmd := stream.Command("pub", "Publish a message to a stream").Action(func(c *fisk.ParseContext) error {
+		return streamPublish(c, config)
+	})
+	pubCmd.Arg("stream-id-or-slug", "ID or slug of the stream to publish to").Required().StringVar(&streamPublishConfig.StreamSlug)
+	pubCmd.Arg("subject", "Subject of the message").Required().StringVar(&streamPublishConfig.Subject)
+	pubCmd.Arg("message", "Message to publish").Required().StringVar(&streamPublishConfig.Message)
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
@@ -260,5 +275,21 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	fmt.Printf("Stream %s has been removed.\n", config.StreamID)
+	return nil
+}
+
+func streamPublish(_ *fisk.ParseContext, config *Config) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	// Pass the streamSlug directly to the PublishMessage function
+	err = api.PublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Subject, streamPublishConfig.Message)
+	if err != nil {
+		return fmt.Errorf("failed to publish message: %w", err)
+	}
+
+	fmt.Printf("Message published to stream '%s' with subject '%s'\n", streamPublishConfig.StreamSlug, streamPublishConfig.Subject)
 	return nil
 }

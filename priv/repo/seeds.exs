@@ -11,4 +11,4 @@
 # and so on) as they will fail if something goes wrong.
 
 account = Sequin.Repo.insert!(%Sequin.Accounts.Account{})
-Sequin.Repo.insert!(%Sequin.Streams.Stream{slug: "default", account_id: account.id})
+{:ok, _stream} = Sequin.Streams.create_stream_for_account_with_lifecycle(account.id, %{slug: "default"})

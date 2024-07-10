@@ -9,3 +9,6 @@
 #
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
+
+account = Sequin.Repo.insert!(%Sequin.Accounts.Account{})
+Sequin.Repo.insert!(%Sequin.Streams.Stream{slug: "default", account_id: account.id})

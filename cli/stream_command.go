@@ -281,28 +281,23 @@ func streamList(_ *fisk.ParseContext, config *Config, listType string) error {
 		return nil
 	}
 
-	table := newTableWriter(fmt.Sprintf("%s %d Messages in Stream %s", strings.Title(listType), len(messages), streamListConfig.StreamIDOrSlug))
-	table.AddHeaders("Sequence", "Subject", "Data", "Created At", "Updated At")
+	fmt.Printf("%s %d messages in stream %s\n\n", strings.Title(listType), len(messages), streamListConfig.StreamIDOrSlug)
 
 	for _, msg := range messages {
-		table.AddRow(
-			msg.Seq,
-			msg.Subject,
-			truncateString(msg.Data, 50),
-			msg.CreatedAt.Format(time.RFC3339),
-			msg.UpdatedAt.Format(time.RFC3339),
-		)
-	}
+		cols := newColumns(fmt.Sprintf("Message %d", msg.Seq))
+		cols.AddRow("Sequence", fmt.Sprintf("%d", msg.Seq))
+		cols.AddRow("Subject", msg.Subject)
+		cols.AddRow("Created At", msg.CreatedAt.Format(time.RFC3339))
+		cols.AddRow("Updated At", msg.UpdatedAt.Format(time.RFC3339))
 
-	fmt.Print(table.Render())
-	fmt.Println()
+		output, err := cols.Render()
+		if err != nil {
+			return fmt.Errorf("failed to render columns: %w", err)
+		}
+
+		fmt.Print(output)
+		fmt.Printf("\n%s\n\n", msg.Data)
+	}
 
 	return nil
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-3] + "..."
 }

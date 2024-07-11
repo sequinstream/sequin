@@ -42,6 +42,10 @@ sequin consumer peek [stream-id] [consumer-id] --last 20
 
 sequin consumer peek [stream-id] [consumer-id] --first 20
 
-# To acknowledge a message
+# To ack a message
 
-sequin consumer ack [stream-id] [consumer-id] [ack-id]
+sequin consumer ack [stream-id] [consumer-id] [ack-token]
+
+# To nack a message
+
+sequin consumer nack [stream-id] [consumer-id] [ack-token]

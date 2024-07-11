@@ -27,7 +27,7 @@ type consumerConfig struct {
 	PendingOnly          bool
 	LastN                int
 	FirstN               int
-	AckID                string
+	AckToken             string
 	Force                bool
 	UseDefaults          bool
 }
@@ -79,12 +79,19 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	peekCmd.Flag("last", "Show last N messages").IntVar(&c.LastN)
 	peekCmd.Flag("first", "Show first N messages").IntVar(&c.FirstN)
 
-	ackCmd := consumer.Command("ack", "Acknowledge a message").Action(func(ctx *fisk.ParseContext) error {
+	ackCmd := consumer.Command("ack", "Ack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAck(ctx, config, c)
 	})
 	ackCmd.Arg("stream-id", "ID of the stream").StringVar(&c.StreamID)
 	ackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	ackCmd.Arg("ack-id", "ID of the message to acknowledge").StringVar(&c.AckID)
+	ackCmd.Arg("ack-token", "Ack token of the message to ack").StringVar(&c.AckToken)
+
+	nackCmd := consumer.Command("nack", "Nack a message").Action(func(ctx *fisk.ParseContext) error {
+		return consumerNack(ctx, config, c)
+	})
+	nackCmd.Arg("stream-id", "ID of the stream").StringVar(&c.StreamID)
+	nackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	nackCmd.Arg("ack-id", "ID of the message to nack").StringVar(&c.AckToken)
 
 	updateCmd := consumer.Command("edit", "Edit an existing consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerEdit(ctx, config, c)
@@ -290,7 +297,6 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	return nil
 }
-
 func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
@@ -324,21 +330,18 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Message (Ack ID: %s):\n", msg.Info.AckID)
+		fmt.Printf("Message (Ack Token: %s):\n", msg.AckToken)
 		fmt.Printf("Subject: %s\n", msg.Message.Subject)
-		fmt.Printf("Data: %s\n", msg.Message.Data)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
-		fmt.Printf("Deliver Count: %d\n", msg.Info.DeliverCount)
-		fmt.Printf("Last Delivered At: %s\n", msg.Info.LastDeliveredAt)
-		fmt.Printf("State: %s\n", msg.Info.State)
+		fmt.Printf("\n%s\n", msg.Message.Data)
 		fmt.Println()
 
 		if !c.NoAck {
-			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.Info.AckID)
+			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckToken)
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)
 			}
-			fmt.Printf("Message acknowledged: %s\n", msg.Info.AckID)
+			fmt.Printf("Message acknowledged with token %s\n", msg.AckToken)
 		}
 	}
 
@@ -370,9 +373,9 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	options := api.FetchMessagesOptions{
 		StreamID:   c.StreamID,
 		ConsumerID: c.ConsumerID,
-		Pending:    c.PendingOnly,
-		Limit:      10,         // Default limit
-		Order:      "seq_desc", // Default order
+		Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
+		Limit:      10,             // Default limit
+		Order:      "seq_desc",     // Default order
 	}
 
 	if c.LastN > 0 {
@@ -394,13 +397,15 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Message (Ack ID: %s):\n", msg.Info.AckID)
 		fmt.Printf("Subject: %s\n", msg.Message.Subject)
-		fmt.Printf("Data: %s\n", msg.Message.Data)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("Deliver Count: %d\n", msg.Info.DeliverCount)
-		fmt.Printf("Last Delivered At: %s\n", msg.Info.LastDeliveredAt)
-		fmt.Printf("State: %s\n", msg.Info.State)
+		fmt.Printf("Last Delivered At: %s\n", msg.Info.FormatLastDeliveredAt())
+		fmt.Printf("Not Visible Until: %s\n", msg.Info.FormatNotVisibleUntil())
+		if msg.Info.State != "" {
+			fmt.Printf("State: %s\n", msg.Info.State)
+		}
+		fmt.Printf("\n%s\n", msg.Message.Data)
 		fmt.Println()
 	}
 
@@ -413,12 +418,27 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return err
 	}
 
-	err = api.AckMessage(ctx, c.StreamID, c.ConsumerID, c.AckID)
+	err = api.AckMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
 	if err != nil {
 		return fmt.Errorf("failed to acknowledge message: %w", err)
 	}
 
-	fmt.Printf("Message acknowledged: %s\n", c.AckID)
+	fmt.Printf("Message acknowledged with token %s\n", c.AckToken)
+	return nil
+}
+
+func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	err = api.NackMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
+	if err != nil {
+		return fmt.Errorf("failed to nack message: %w", err)
+	}
+
+	fmt.Printf("Message nacked: %s\n", c.AckToken)
 	return nil
 }
 

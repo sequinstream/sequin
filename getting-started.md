@@ -134,11 +134,21 @@ There are plenty of ways to view messages sitting in the stream.
 
 **`stream last`**
 
-Dump the last (i.e. head of the stream) X number messages that match a subject pattern from a stream into your terminal. For instance, `sequin stream last --limit=2 --subject="sqn.test.*" demo_stream` will dump the two most recently added messages that match the subject `sqn.test.*`.
+Dump the last (i.e. head of the stream) X number messages that match a subject pattern from a stream into your terminal:
+
+```bash
+sequin stream last --limit=2 --subject="sqn.test.*" demo_stream
+```
+
+This command will dump the two most recently added messages that match the subject `sqn.test.*`.
 
 **`stream first`**
 
-Similarly, `sequin stream first --limit=2 --subject="sqn.test.*" demo_stream` will dump the two oldest (i.e. tail of the stream) messages that match the subject `sqn.test.*`.
+```bash
+sequin stream first --limit=2 --subject="sqn.test.*" demo_stream
+```
+
+Similarly, `first` will dump the two oldest (i.e. tail of the stream) messages that match the subject `sqn.test.*`.
 
 **`stream tail`**
 
@@ -319,7 +329,9 @@ curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consum
 ```bash
 sequin consumer nack demo_stream demo_consumer [ack_id] --as-curl
 
-CURL EXAMPLE
+curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/nack \
+-H 'Content-Type: application/json' \
+-d '{"ack_tokens":[ack_id]}'
 ```
 
 **Step 5:** ack a message:
@@ -327,11 +339,13 @@ CURL EXAMPLE
 ```bash
 sequin consumer ack demo_stream demo_consumer [ack_id] --as-curl
 
-CURL EXAMPLE
+curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/ack \
+-H 'Content-Type: application/json' \
+-d '{"ack_id":"ack_id"}'
 ```
 
 > [!NOTE]
-> Sequin HTTP push consumers are coming next week. In addition to HTTP pull consumer you just played with, you'll be able to create a consumer with a webhook endpoint. Sequin will then deliver messages to that endpoint.
+> Sequin HTTP push consumers are coming in a couple days. In addition to the HTTP pull consumer you just played with, you'll be able to create a consumer configured with a webhook endpoint. Sequin will then deliver messages to that endpoint.
 
 
 ## Connect your existing tables

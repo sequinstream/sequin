@@ -118,6 +118,21 @@ func consumerLs(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 		c.StreamID = streamID
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildFetchConsumers(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	consumers, err := api.FetchConsumers(ctx, c.StreamID)
 	if err != nil {
 		fisk.Fatalf("failed to fetch consumers: %s", err)
@@ -232,6 +247,21 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		createOptions.MaxWaiting = c.MaxWaiting
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildAddConsumer(ctx, createOptions)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	consumer, err := api.AddConsumer(ctx, createOptions)
 	if err != nil {
 		fisk.Fatalf("failed to add consumer: %s", err)
@@ -288,6 +318,21 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		c.ConsumerID = consumerID
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildFetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	consumer, err := api.FetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
 	if err != nil {
 		fisk.Fatalf("failed to fetch consumer info: %s", err)
@@ -317,6 +362,21 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 			return err
 		}
 		c.ConsumerID = consumerID
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildFetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	messages, err := api.FetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
@@ -370,6 +430,37 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		c.ConsumerID = consumerID
 	}
 
+	if config.AsCurl {
+		options := api.FetchMessagesOptions{
+			StreamID:   c.StreamID,
+			ConsumerID: c.ConsumerID,
+			Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
+			Limit:      10,             // Default limit
+			Order:      "seq_desc",     // Default order
+		}
+
+		if c.LastN > 0 {
+			options.Limit = c.LastN
+			options.Order = "seq_desc"
+		} else if c.FirstN > 0 {
+			options.Limit = c.FirstN
+			options.Order = "seq_asc"
+		}
+
+		req, err := api.BuildFetchMessages(ctx, options)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	options := api.FetchMessagesOptions{
 		StreamID:   c.StreamID,
 		ConsumerID: c.ConsumerID,
@@ -418,6 +509,21 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return err
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildAckMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	err = api.AckMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
 	if err != nil {
 		return fmt.Errorf("failed to acknowledge message: %w", err)
@@ -431,6 +537,21 @@ func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildNackMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	err = api.NackMessage(ctx, c.StreamID, c.ConsumerID, c.AckToken)
@@ -503,6 +624,21 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 	if c.MaxWaiting != 0 {
 		updateOptions.MaxWaiting = c.MaxWaiting
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildEditConsumer(ctx, c.StreamID, c.ConsumerID, updateOptions)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	updatedConsumer, err := api.EditConsumer(ctx, c.StreamID, c.ConsumerID, updateOptions)

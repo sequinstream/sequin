@@ -53,7 +53,7 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
 		return streamAdd(c, config)
 	})
-	addCmd.Arg("slug", "Slug of the stream to Add").Required().StringVar(&streamAddConfig.Slug)
+	addCmd.Arg("slug", "Slug of the stream to Add").StringVar(&streamAddConfig.Slug)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config)
@@ -90,15 +90,30 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildFetchStreams(ctx)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	streams, err := api.FetchStreams(ctx)
 	if err != nil {
 		return err
 	}
 
 	if len(streams) == 0 {
-		fmt.Println()
+
 		fmt.Println("No streams defined")
-		fmt.Println()
+
 		return nil
 	}
 
@@ -128,17 +143,32 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 }
 
 func streamInfo(_ *fisk.ParseContext, config *Config) error {
-	if config.StreamID == "" {
-		ctx, err := context.LoadContext(config.ContextName)
-		if err != nil {
-			return err
-		}
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
 
+	if config.StreamID == "" {
 		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
 		config.StreamID = streamID
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildFetchStreamInfo(ctx, config.StreamID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	return displayStreamInfo(config)
@@ -157,9 +187,9 @@ func displayStreamInfo(config *Config) error {
 
 	fmt.Println()
 
-	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
+	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.Slug, stream.CreatedAt.Format(time.RFC3339)))
 
-	cols.AddRow("Slug", stream.Slug)
+	cols.AddRow("ID", stream.ID)
 	cols.AddRow("Index", stream.Idx)
 	cols.AddRow("Consumers", stream.Stats.ConsumerCount)
 	cols.AddRow("Messages", stream.Stats.MessageCount)
@@ -194,6 +224,21 @@ func streamAdd(_ *fisk.ParseContext, config *Config) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildAddStream(ctx, streamAddConfig.Slug)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	// Add stream
@@ -240,6 +285,21 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 		config.StreamID = streamID
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildRemoveStream(ctx, config.StreamID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
+	}
+
 	err = api.RemoveStream(ctx, config.StreamID)
 	if err != nil {
 		return fmt.Errorf("failed to remove stream: %w", err)
@@ -253,6 +313,21 @@ func streamPublish(_ *fisk.ParseContext, config *Config) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildPublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Subject, streamPublishConfig.Message)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	// Pass the streamSlug directly to the PublishMessage function
@@ -269,6 +344,21 @@ func streamList(_ *fisk.ParseContext, config *Config, listType string) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, streamListConfig.Limit, streamListConfig.Sort, streamListConfig.SubjectPattern)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+
+		return nil
 	}
 
 	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, streamListConfig.Limit, streamListConfig.Sort, streamListConfig.SubjectPattern)

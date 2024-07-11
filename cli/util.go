@@ -2,12 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
+	"moul.io/http2curl"
 )
 
 func addCheat(name string, cmd *fisk.CmdClause) {
@@ -72,4 +74,12 @@ func promptForInt(message string, value *int) error {
 		*value = intValue
 	}
 	return nil
+}
+
+func formatCurl(req *http.Request) (string, error) {
+	curl, err := http2curl.GetCurlCommand(req)
+	if err != nil {
+		return "", fmt.Errorf("error generating curl command: %w", err)
+	}
+	return curl.String(), nil
 }

@@ -29,6 +29,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 
 	// Add global context flag
 	scli.Flag("context", "Use a specific context").StringVar(&config.ContextName)
+	scli.Flag("as-curl", "Output the command as a curl request instead of executing it").BoolVar(&config.AsCurl)
 
 	cli.AddContextCommands(scli, &config)
 	cli.AddStreamCommands(scli, &config)

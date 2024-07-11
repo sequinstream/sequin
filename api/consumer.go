@@ -92,14 +92,30 @@ type MessageWithAckToken struct {
 	AckToken string  `json:"ack_token"`
 }
 
-// FetchConsumers retrieves all consumers for a stream from the API
-func FetchConsumers(ctx *context.Context, streamID string) ([]Consumer, error) {
+// BuildFetchConsumers builds the HTTP request for fetching consumers
+func BuildFetchConsumers(ctx *context.Context, streamID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/api/streams/%s/consumers", serverURL, streamID))
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/streams/%s/consumers", serverURL, streamID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchConsumers retrieves all consumers for a stream from the API
+func FetchConsumers(ctx *context.Context, streamID string) ([]Consumer, error) {
+	req, err := BuildFetchConsumers(ctx, streamID)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch consumers request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -123,14 +139,30 @@ func FetchConsumers(ctx *context.Context, streamID string) ([]Consumer, error) {
 	return consumersResponse.Consumers, nil
 }
 
-// FetchConsumerInfo retrieves information for a specific consumer from the API
-func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Consumer, error) {
+// BuildFetchConsumerInfo builds the HTTP request for fetching consumer info
+func BuildFetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/api/streams/%s/consumers/%s", serverURL, streamID, consumerID))
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/streams/%s/consumers/%s", serverURL, streamID, consumerID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchConsumerInfo retrieves information for a specific consumer from the API
+func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Consumer, error) {
+	req, err := BuildFetchConsumerInfo(ctx, streamID, consumerID)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch consumer info request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -154,8 +186,8 @@ func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Cons
 	return &consumer, nil
 }
 
-// AddConsumer adds a new consumer to a stream
-func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer, error) {
+// BuildAddConsumer builds the HTTP request for adding a new consumer
+func BuildAddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -166,14 +198,22 @@ func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
 	}
 
-	// Create the POST request
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/streams/%s/consumers", serverURL, options.StreamID), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
+	return req, nil
+}
+
+// AddConsumer adds a new consumer to a stream
+func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer, error) {
+	req, err := BuildAddConsumer(ctx, options)
+	if err != nil {
+		return nil, fmt.Errorf("error building add consumer request: %w", err)
+	}
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -181,18 +221,15 @@ func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer
 	}
 	defer resp.Body.Close()
 
-	// Read the response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
-	// Check for successful status code
 	if resp.StatusCode != http.StatusOK {
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	// Unmarshal the response
 	var consumer Consumer
 	err = json.Unmarshal(body, &consumer)
 	if err != nil {
@@ -202,8 +239,8 @@ func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer
 	return &consumer, nil
 }
 
-// EditConsumer updates an existing consumer
-func EditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*Consumer, error) {
+// BuildEditConsumer builds the HTTP request for editing an existing consumer
+func BuildEditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -220,6 +257,16 @@ func EditConsumer(ctx *context.Context, streamID, consumerID string, options Con
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	return req, nil
+}
+
+// EditConsumer updates an existing consumer
+func EditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*Consumer, error) {
+	req, err := BuildEditConsumer(ctx, streamID, consumerID, options)
+	if err != nil {
+		return nil, fmt.Errorf("error building edit consumer request: %w", err)
+	}
+
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -245,14 +292,30 @@ func EditConsumer(ctx *context.Context, streamID, consumerID string, options Con
 	return &consumer, nil
 }
 
-// FetchNextMessages retrieves the next batch of messages for a consumer
-func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckToken, error) {
+// BuildFetchNextMessages builds the HTTP request for fetching next messages
+func BuildFetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/api/streams/%s/consumers/%s/next?batch_size=%d", serverURL, streamID, consumerID, batchSize))
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/streams/%s/consumers/%s/next?batch_size=%d", serverURL, streamID, consumerID, batchSize), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchNextMessages retrieves the next batch of messages for a consumer
+func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckToken, error) {
+	req, err := BuildFetchNextMessages(ctx, streamID, consumerID, batchSize)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch next messages request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -285,8 +348,8 @@ type FetchMessagesOptions struct {
 	Order      string
 }
 
-// FetchMessages retrieves messages for a consumer with optional filters
-func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]MessageWithInfo, error) {
+// BuildFetchMessages builds the HTTP request for fetching messages
+func BuildFetchMessages(ctx *context.Context, options FetchMessagesOptions) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -298,7 +361,23 @@ func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]Messag
 		url += "&visible=false"
 	}
 
-	resp, err := http.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchMessages retrieves messages for a consumer with optional filters
+func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]MessageWithInfo, error) {
+	req, err := BuildFetchMessages(ctx, options)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch messages request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -324,24 +403,34 @@ func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]Messag
 	return result.Data, nil
 }
 
-// AckMessage acknowledges a message for a consumer
-func AckMessage(ctx *context.Context, streamID, consumerID, ackID string) error {
+// BuildAckMessage builds the HTTP request for acknowledging a message
+func BuildAckMessage(ctx *context.Context, streamID, consumerID, ackID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	requestBody := map[string][]string{"ack_tokens": {ackID}}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
-		return fmt.Errorf("error marshaling JSON: %w", err)
+		return nil, fmt.Errorf("error marshaling JSON: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/streams/%s/consumers/%s/ack", serverURL, streamID, consumerID), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// AckMessage acknowledges a message for a consumer
+func AckMessage(ctx *context.Context, streamID, consumerID, ackID string) error {
+	req, err := BuildAckMessage(ctx, streamID, consumerID, ackID)
+	if err != nil {
+		return fmt.Errorf("error building ack message request: %w", err)
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -358,24 +447,34 @@ func AckMessage(ctx *context.Context, streamID, consumerID, ackID string) error 
 	return nil
 }
 
-// NackMessage negative acknowledges a message for a consumer
-func NackMessage(ctx *context.Context, streamID, consumerID, ackID string) error {
+// BuildNackMessage builds the HTTP request for negative acknowledging a message
+func BuildNackMessage(ctx *context.Context, streamID, consumerID, ackID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	requestBody := map[string][]string{"ack_tokens": {ackID}}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
-		return fmt.Errorf("error marshaling JSON: %w", err)
+		return nil, fmt.Errorf("error marshaling JSON: %w", err)
 	}
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/streams/%s/consumers/%s/nack", serverURL, streamID, consumerID), bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// NackMessage negative acknowledges a message for a consumer
+func NackMessage(ctx *context.Context, streamID, consumerID, ackID string) error {
+	req, err := BuildNackMessage(ctx, streamID, consumerID, ackID)
+	if err != nil {
+		return fmt.Errorf("error building nack message request: %w", err)
+	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

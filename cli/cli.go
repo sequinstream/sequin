@@ -14,4 +14,5 @@ type Config struct {
 	StreamID              string
 	PostgresReplicationID string
 	ConsumerID            string
+	AsCurl                bool
 }

@@ -33,7 +33,7 @@ type consumerConfig struct {
 }
 
 func AddConsumerCommands(app *fisk.Application, config *Config) {
-	consumer := app.Command("consumer", "Consumer related commands")
+	consumer := app.Command("consumer", "Consumer related commands").Alias("con").Alias("c")
 
 	addCheat("consumer", consumer)
 

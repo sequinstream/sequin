@@ -37,7 +37,7 @@ var streamListConfig StreamListConfig
 
 // AddStreamCommands adds all stream-related commands to the given app
 func AddStreamCommands(app *fisk.Application, config *Config) {
-	stream := app.Command("stream", "Stream related commands")
+	stream := app.Command("stream", "Stream related commands").Alias("str").Alias("s")
 
 	addCheat("stream", stream)
 

@@ -70,14 +70,14 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	nextCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
 	nextCmd.Flag("no-ack", "Do not acknowledge messages").BoolVar(&c.NoAck)
 
-	messagesCmd := consumer.Command("messages", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
-		return consumerMessages(ctx, config, c)
+	peekCmd := consumer.Command("peek", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
+		return consumerPeek(ctx, config, c)
 	})
-	messagesCmd.Arg("stream-id", "ID of the stream").StringVar(&c.StreamID)
-	messagesCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	messagesCmd.Flag("pending", "Show only pending messages").BoolVar(&c.PendingOnly)
-	messagesCmd.Flag("last", "Show last N messages").IntVar(&c.LastN)
-	messagesCmd.Flag("first", "Show first N messages").IntVar(&c.FirstN)
+	peekCmd.Arg("stream-id", "ID of the stream").StringVar(&c.StreamID)
+	peekCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	peekCmd.Flag("pending", "Show only pending messages").BoolVar(&c.PendingOnly)
+	peekCmd.Flag("last", "Show last N messages").IntVar(&c.LastN)
+	peekCmd.Flag("first", "Show first N messages").IntVar(&c.FirstN)
 
 	ackCmd := consumer.Command("ack", "Acknowledge a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAck(ctx, config, c)
@@ -345,7 +345,7 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	return nil
 }
 
-func consumerMessages(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
+func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -371,21 +371,21 @@ func consumerMessages(_ *fisk.ParseContext, config *Config, c *consumerConfig) e
 		StreamID:   c.StreamID,
 		ConsumerID: c.ConsumerID,
 		Pending:    c.PendingOnly,
-		Limit:      10,     // Default limit
-		Order:      "desc", // Default order
+		Limit:      10,         // Default limit
+		Order:      "seq_desc", // Default order
 	}
 
 	if c.LastN > 0 {
 		options.Limit = c.LastN
-		options.Order = "desc"
+		options.Order = "seq_desc"
 	} else if c.FirstN > 0 {
 		options.Limit = c.FirstN
-		options.Order = "asc"
+		options.Order = "seq_asc"
 	}
 
 	messages, err := api.FetchMessages(ctx, options)
 	if err != nil {
-		return err
+		fisk.Fatalf("Failed to fetch messages: %v", err)
 	}
 
 	if len(messages) == 0 {

@@ -26,21 +26,21 @@ sequin consumer next [stream-id] [consumer-id]
 
 sequin consumer next [stream-id] [consumer-id] --batch-size 10
 
-# To show messages for a consumer (default shows last 10 messages)
+# To peek at messages for a consumer (default shows last 10 messages)
 
-sequin consumer messages [stream-id] [consumer-id]
+sequin consumer peek [stream-id] [consumer-id]
 
-# To show only pending messages for a consumer
+# To peek only at pending messages for a consumer
 
-sequin consumer messages [stream-id] [consumer-id] --pending
+sequin consumer peek [stream-id] [consumer-id] --pending
 
-# To show the last N messages for a consumer
+# To peek at the last N messages for a consumer
 
-sequin consumer messages [stream-id] [consumer-id] --last 20
+sequin consumer peek [stream-id] [consumer-id] --last 20
 
-# To show the first N messages for a consumer
+# To peek at the first N messages for a consumer
 
-sequin consumer messages [stream-id] [consumer-id] --first 20
+sequin consumer peek [stream-id] [consumer-id] --first 20
 
 # To acknowledge a message
 

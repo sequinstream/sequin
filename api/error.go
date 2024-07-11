@@ -59,7 +59,7 @@ func NewAPIError(statusCode int, body string) *APIError {
 
 // Error implements the error interface for APIError
 func (ae *APIError) Error() string {
-	return fmt.Sprintf("API error (status code %d)", ae.StatusCode)
+	return fmt.Sprintf("API error (status code %d):\n%s\n", ae.StatusCode, ae.Body)
 }
 
 // PrintAPIError prints the API error to the console

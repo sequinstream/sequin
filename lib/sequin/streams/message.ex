@@ -24,7 +24,7 @@ defmodule Sequin.Streams.Message do
     :token16
   ]
 
-  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq] ++ @token_keys}
+  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at] ++ @token_keys}
   @primary_key false
   @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   typed_schema "messages" do

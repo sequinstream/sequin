@@ -255,21 +255,31 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
 	}
 
-	replication, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
+	replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println()
 
-	cols := newColumns(fmt.Sprintf("Information for Postgres Replication %s", replication.ID))
+	cols := newColumns(fmt.Sprintf("Information for Postgres Replication %s", replicationWithInfo.PostgresReplication.ID))
 
-	cols.AddRow("ID", replication.ID)
-	cols.AddRow("Slot Name", replication.SlotName)
-	cols.AddRow("Publication Name", replication.PublicationName)
-	cols.AddRow("Status", replication.Status)
-	cols.AddRow("Stream ID", replication.StreamID)
-	cols.AddRow("Postgres Database ID", replication.PostgresDatabaseID)
+	cols.AddRow("ID", replicationWithInfo.PostgresReplication.ID)
+	cols.AddRow("Slot Name", replicationWithInfo.PostgresReplication.SlotName)
+	cols.AddRow("Publication Name", replicationWithInfo.PostgresReplication.PublicationName)
+	cols.AddRow("Status", replicationWithInfo.PostgresReplication.Status)
+	cols.AddRow("Stream ID", replicationWithInfo.PostgresReplication.StreamID)
+	cols.AddRow("Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID)
+
+	// Add the new info fields
+	lastCommittedTS := replicationWithInfo.Info.FormatLastCommittedAt()
+	cols.AddRow("Last Committed Timestamp", lastCommittedTS)
+
+	lagInBytes := "N/A"
+	if replicationWithInfo.Info.LagInBytes != nil {
+		lagInBytes = fmt.Sprintf("%d", *replicationWithInfo.Info.LagInBytes)
+	}
+	cols.AddRow("Lag in Bytes", lagInBytes)
 
 	cols.Println()
 

@@ -45,6 +45,26 @@ type PostgresReplicationCreate struct {
 	} `json:"postgres_database"`
 }
 
+// PostgresReplicationInfo represents the additional info for a PostgresReplication
+type PostgresReplicationInfo struct {
+	LastCommittedAt *time.Time `json:"last_committed_at"`
+	LagInBytes      *int64     `json:"lag_in_bytes"`
+}
+
+// PostgresReplicationWithInfo represents the structure of a PostgresReplication with additional info
+type PostgresReplicationWithInfo struct {
+	PostgresReplication PostgresReplication     `json:"postgres_replication"`
+	Info                PostgresReplicationInfo `json:"info"`
+}
+
+// FormatLastCommittedAt returns a formatted string for LastCommittedAt
+func (pri *PostgresReplicationInfo) FormatLastCommittedAt() string {
+	if pri.LastCommittedAt == nil {
+		return "N/A"
+	}
+	return fmt.Sprintf("%s (%s ago)", pri.LastCommittedAt.Format(time.RFC3339), time.Since(*pri.LastCommittedAt).Round(time.Second))
+}
+
 // FetchPostgresReplications retrieves all PostgresReplications from the API
 func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, error) {
 	serverURL, err := context.GetServerURL(ctx)
@@ -77,7 +97,7 @@ func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, err
 }
 
 // FetchPostgresReplicationInfo retrieves information for a specific PostgresReplication from the API
-func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*PostgresReplication, error) {
+func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*PostgresReplicationWithInfo, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -98,13 +118,13 @@ func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var pgReplication PostgresReplication
-	err = json.Unmarshal(body, &pgReplication)
+	var pgReplicationWithInfo PostgresReplicationWithInfo
+	err = json.Unmarshal(body, &pgReplicationWithInfo)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
 	}
 
-	return &pgReplication, nil
+	return &pgReplicationWithInfo, nil
 }
 
 // AddPostgresReplication creates a new PostgresReplication

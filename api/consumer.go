@@ -30,6 +30,25 @@ type Consumer struct {
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
+// ConsumerCreateOptions represents the options for creating a new consumer
+type ConsumerCreateOptions struct {
+	Slug                 string `json:"slug"`
+	StreamID             string `json:"stream_id"`
+	AckWaitMS            int    `json:"ack_wait_ms,omitempty"`
+	MaxAckPending        int    `json:"max_ack_pending,omitempty"`
+	MaxDeliver           int    `json:"max_deliver,omitempty"`
+	MaxWaiting           int    `json:"max_waiting,omitempty"`
+	FilterSubjectPattern string `json:"filter_subject_pattern"`
+}
+
+// ConsumerUpdateOptions represents the options for updating an existing consumer
+type ConsumerUpdateOptions struct {
+	AckWaitMS     int `json:"ack_wait_ms,omitempty"`
+	MaxAckPending int `json:"max_ack_pending,omitempty"`
+	MaxDeliver    int `json:"max_deliver,omitempty"`
+	MaxWaiting    int `json:"max_waiting,omitempty"`
+}
+
 // FetchConsumers retrieves all consumers for a stream from the API
 func FetchConsumers(ctx *context.Context, streamID string) ([]Consumer, error) {
 	serverURL, err := context.GetServerURL(ctx)
@@ -93,27 +112,19 @@ func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Cons
 }
 
 // AddConsumer adds a new consumer to a stream
-func AddConsumer(ctx *context.Context, streamID, slug string, options map[string]interface{}) (*Consumer, error) {
+func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create the request body
-	requestBody := map[string]interface{}{
-		"slug":      slug,
-		"stream_id": streamID,
-	}
-	for k, v := range options {
-		requestBody[k] = v
-	}
-	jsonBody, err := json.Marshal(requestBody)
+	jsonBody, err := json.Marshal(options)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
 	}
 
 	// Create the POST request
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/streams/%s/consumers", serverURL, streamID), bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/api/streams/%s/consumers", serverURL, options.StreamID), bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -148,8 +159,8 @@ func AddConsumer(ctx *context.Context, streamID, slug string, options map[string
 	return &consumer, nil
 }
 
-// UpdateConsumer updates an existing consumer
-func UpdateConsumer(ctx *context.Context, streamID, consumerID string, options map[string]interface{}) (*Consumer, error) {
+// EditConsumer updates an existing consumer
+func EditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*Consumer, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err

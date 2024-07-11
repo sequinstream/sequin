@@ -205,25 +205,26 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		}
 	}
 
-	params := map[string]interface{}{
-		"slug":                   c.Slug,
-		"filter_subject_pattern": c.FilterSubjectPattern,
+	createOptions := api.ConsumerCreateOptions{
+		Slug:                 c.Slug,
+		StreamID:             c.StreamID,
+		FilterSubjectPattern: c.FilterSubjectPattern,
 	}
 
 	if c.AckWaitMS != 0 {
-		params["ack_wait_ms"] = c.AckWaitMS
+		createOptions.AckWaitMS = c.AckWaitMS
 	}
 	if c.MaxAckPending != 0 {
-		params["max_ack_pending"] = c.MaxAckPending
+		createOptions.MaxAckPending = c.MaxAckPending
 	}
 	if c.MaxDeliver != 0 {
-		params["max_deliver"] = c.MaxDeliver
+		createOptions.MaxDeliver = c.MaxDeliver
 	}
 	if c.MaxWaiting != 0 {
-		params["max_waiting"] = c.MaxWaiting
+		createOptions.MaxWaiting = c.MaxWaiting
 	}
 
-	consumer, err := api.AddConsumer(ctx, c.StreamID, c.Slug, params)
+	consumer, err := api.AddConsumer(ctx, createOptions)
 	if err != nil {
 		fisk.Fatalf("failed to add consumer: %s", err)
 	}
@@ -481,6 +482,7 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	fmt.Printf("Message acknowledged: %s\n", c.AckID)
 	return nil
 }
+
 func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
@@ -528,12 +530,23 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		}
 	}
 
-	updatedConsumer, err := api.UpdateConsumer(ctx, c.StreamID, c.ConsumerID, map[string]interface{}{
-		"ack_wait_ms":     newConfig.AckWaitMS,
-		"max_ack_pending": newConfig.MaxAckPending,
-		"max_deliver":     newConfig.MaxDeliver,
-		"max_waiting":     newConfig.MaxWaiting,
-	})
+	updateOptions := api.ConsumerUpdateOptions{}
+
+	// Update the options with provided values
+	if c.AckWaitMS != 0 {
+		updateOptions.AckWaitMS = c.AckWaitMS
+	}
+	if c.MaxAckPending != 0 {
+		updateOptions.MaxAckPending = c.MaxAckPending
+	}
+	if c.MaxDeliver != 0 {
+		updateOptions.MaxDeliver = c.MaxDeliver
+	}
+	if c.MaxWaiting != 0 {
+		updateOptions.MaxWaiting = c.MaxWaiting
+	}
+
+	updatedConsumer, err := api.EditConsumer(ctx, c.StreamID, c.ConsumerID, updateOptions)
 	if err != nil {
 		return fmt.Errorf("failed to update consumer: %w", err)
 	}

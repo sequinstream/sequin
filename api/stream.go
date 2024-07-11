@@ -222,14 +222,6 @@ func PublishMessage(ctx *context.Context, streamID, subject, message string) err
 	return nil
 }
 
-type Message struct {
-	Seq       int       `json:"seq"`
-	Subject   string    `json:"subject"`
-	Data      string    `json:"data"`
-	CreatedAt time.Time `json:"inserted_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
 type MessagesResponse struct {
 	Messages []Message `json:"data"`
 }

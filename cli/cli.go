@@ -13,4 +13,5 @@ type Config struct {
 	ContextName           string
 	StreamID              string
 	PostgresReplicationID string
+	ConsumerID            string
 }

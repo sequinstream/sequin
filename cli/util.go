@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -41,4 +42,15 @@ func formatBytes(bytes int) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func askConfirmation(prompt string, dflt bool) (bool, error) {
+	ans := dflt
+
+	err := survey.AskOne(&survey.Confirm{
+		Message: prompt,
+		Default: dflt,
+	}, &ans)
+
+	return ans, err
 }

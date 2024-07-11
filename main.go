@@ -33,6 +33,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddContextCommands(scli, &config)
 	cli.AddStreamCommands(scli, &config)
 	cli.AddPostgresReplicationCommands(scli, &config)
+	cli.AddConsumerCommands(scli, &config)
 
 	log.SetFlags(log.Ltime)
 

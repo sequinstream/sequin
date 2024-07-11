@@ -107,8 +107,8 @@ func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*
 	return &pgReplication, nil
 }
 
-// CreatePostgresReplication creates a new PostgresReplication
-func CreatePostgresReplication(ctx *context.Context, replicationData *PostgresReplicationCreate) (*PostgresReplication, error) {
+// AddPostgresReplication creates a new PostgresReplication
+func AddPostgresReplication(ctx *context.Context, replicationData *PostgresReplicationCreate) (*PostgresReplication, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -76,108 +77,107 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 			streamOptions[i] = fmt.Sprintf("%s (Index: %d)", s.ID, s.Idx)
 		}
 
-		prompt := &survey.Select{
+		err = survey.AskOne(&survey.Select{
 			Message: "Choose a stream:",
 			Options: streamOptions,
 			Filter: func(filterValue string, optValue string, index int) bool {
 				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-		}
-
-		var choice string
-		err = survey.AskOne(prompt, &choice)
+		}, &c.StreamID)
 		if err != nil {
 			return err
 		}
-
-		c.StreamID = strings.Split(choice, " ")[0]
+		c.StreamID = strings.Split(c.StreamID, " ")[0]
 	}
 
-	questions := []*survey.Question{
-		{
-			Name:     "Database",
-			Prompt:   &survey.Input{Message: "Enter the dbname for the source database:", Default: "postgres", Help: "A single Postgres server can contain multiple databases. This is the name of the database to replicate from."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "Hostname",
-			Prompt:   &survey.Input{Message: "Enter the hostname for the source database:", Default: "localhost", Help: "The hostname of the source database. This is the hostname of the Postgres server."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "Port",
-			Prompt:   &survey.Input{Message: "Enter the port for the source database:", Default: "5432", Help: "The port of the source database. This is the port of the Postgres server."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "Username",
-			Prompt:   &survey.Input{Message: "Enter the username for the source database:", Default: "postgres", Help: "The username Sequin should use to connect to the source database."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "Password",
-			Prompt:   &survey.Password{Message: "Enter the password for the source database:"},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "SlotName",
-			Prompt:   &survey.Input{Message: "Enter the replication slot's name:", Default: "sequin_replication_slot", Help: "The name of the replication slot you configured for Sequin to replicate from."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "PublicationName",
-			Prompt:   &survey.Input{Message: "Enter the publication name:", Default: "sequin_replication_publication", Help: "The name of the publication you configured for Sequin to replicate from."},
-			Validate: survey.Required,
-		},
-		{
-			Name:     "Slug",
-			Prompt:   &survey.Input{Message: "Enter a slug for the database:", Help: "A unique identifier for this database."},
-			Validate: survey.Required,
-		},
-	}
-
-	// Filter out questions that have already been answered via flags
-	filteredQuestions := []*survey.Question{}
-	for _, q := range questions {
-		switch q.Name {
-		case "Database":
-			if c.Database == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "Hostname":
-			if c.Hostname == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "Port":
-			if c.Port == 0 {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "Username":
-			if c.Username == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "Password":
-			if c.Password == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "SlotName":
-			if c.SlotName == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "PublicationName":
-			if c.PublicationName == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
-		case "Slug":
-			if c.Slug == "" {
-				filteredQuestions = append(filteredQuestions, q)
-			}
+	if c.Database == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the dbname for the source database:",
+			Default: "postgres",
+			Help:    "A single Postgres server can contain multiple databases. This is the name of the database to replicate from.",
+		}, &c.Database, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
 		}
 	}
 
-	err = survey.Ask(filteredQuestions, c)
-	if err != nil {
-		return err
+	if c.Hostname == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the hostname for the source database:",
+			Default: "localhost",
+			Help:    "The hostname of the source database. This is the hostname of the Postgres server.",
+		}, &c.Hostname, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.Port == 0 {
+		var portStr string
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the port for the source database:",
+			Default: "5432",
+			Help:    "The port of the source database. This is the port of the Postgres server.",
+		}, &portStr, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+		c.Port, err = strconv.Atoi(portStr)
+		if err != nil {
+			return fmt.Errorf("invalid port number: %v", err)
+		}
+	}
+
+	if c.Username == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the username for the source database:",
+			Default: "postgres",
+			Help:    "The username Sequin should use to connect to the source database.",
+		}, &c.Username, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.Password == "" {
+		err = survey.AskOne(&survey.Password{
+			Message: "Enter the password for the source database:",
+		}, &c.Password, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.SlotName == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the replication slot's name:",
+			Default: "sequin_replication_slot",
+			Help:    "The name of the replication slot you configured for Sequin to replicate from.",
+		}, &c.SlotName, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.PublicationName == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter the publication name:",
+			Default: "sequin_replication_publication",
+			Help:    "The name of the publication you configured for Sequin to replicate from.",
+		}, &c.PublicationName, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.Slug == "" {
+		err = survey.AskOne(&survey.Input{
+			Message: "Enter a slug for the database:",
+			Help:    "A unique identifier for this database.",
+		}, &c.Slug, survey.WithValidator(survey.Required))
+		if err != nil {
+			return err
+		}
 	}
 
 	// Convert postgresReplicationConfig to api.PostgresReplicationCreate
@@ -202,7 +202,7 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 		},
 	}
 	// Create the postgres replication
-	newReplication, err := api.CreatePostgresReplication(ctx, &replication)
+	newReplication, err := api.AddPostgresReplication(ctx, &replication)
 	fisk.FatalIfError(err, "could not create Postgres replication")
 
 	fmt.Printf("Postgres replication created successfully. ID: %s\n", newReplication.ID)
@@ -253,24 +253,22 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 			return err
 		}
 
-		prompt := &survey.Select{
+		replicationOptions := make([]string, len(replications))
+		for i, r := range replications {
+			replicationOptions[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
+		}
+
+		err = survey.AskOne(&survey.Select{
 			Message: "Choose a postgres replication:",
-			Options: make([]string, len(replications)),
+			Options: replicationOptions,
 			Filter: func(filterValue string, optValue string, index int) bool {
 				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-		}
-		for i, r := range replications {
-			prompt.Options[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
-		}
-
-		var choice string
-		err = survey.AskOne(prompt, &choice)
+		}, &config.PostgresReplicationID)
 		if err != nil {
 			return err
 		}
-
-		config.PostgresReplicationID = strings.Split(choice, " ")[0]
+		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
 	}
 
 	replication, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
@@ -313,24 +311,22 @@ func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {
 			return err
 		}
 
-		prompt := &survey.Select{
+		replicationOptions := make([]string, len(replications))
+		for i, r := range replications {
+			replicationOptions[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
+		}
+
+		err = survey.AskOne(&survey.Select{
 			Message: "Choose a postgres replication to remove:",
-			Options: make([]string, len(replications)),
+			Options: replicationOptions,
 			Filter: func(filterValue string, optValue string, index int) bool {
 				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-		}
-		for i, r := range replications {
-			prompt.Options[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
-		}
-
-		var choice string
-		err = survey.AskOne(prompt, &choice)
+		}, &config.PostgresReplicationID)
 		if err != nil {
 			return err
 		}
-
-		config.PostgresReplicationID = strings.Split(choice, " ")[0]
+		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
 	}
 
 	err = api.DeletePostgresReplication(ctx, config.PostgresReplicationID)

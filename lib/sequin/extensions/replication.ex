@@ -91,6 +91,7 @@ defmodule Sequin.Extensions.Replication do
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(replication_id: state.id)
+    Logger.info("[Replication] Initialized")
 
     if state.test_pid do
       Mox.allow(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock, state.test_pid, self())

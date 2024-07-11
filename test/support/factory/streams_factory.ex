@@ -92,7 +92,7 @@ defmodule Sequin.Factory.StreamsFactory do
         stream_id: Factory.uuid(),
         data_hash: Base.encode64(:crypto.hash(:sha256, data)),
         data: data,
-        seq: Postgres.sequence_nextval("streams.messages_seq"),
+        seq: Postgres.sequence_nextval("#{Streams.stream_schema()}.messages_seq"),
         subject: generate_subject(parts: 3)
       },
       attrs

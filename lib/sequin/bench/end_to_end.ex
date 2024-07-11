@@ -251,7 +251,7 @@ defmodule Sequin.Bench.EndToEnd do
 
     Enum.each(1..num_batches, fn _ ->
       query = """
-      INSERT INTO streams.messages (key, stream_id, data, data_hash, inserted_at, updated_at)
+      INSERT INTO #{Streams.stream_schema()}.messages (key, stream_id, data, data_hash, inserted_at, updated_at)
       SELECT
         encode(decode(substr(md5(random()::text || i::text), 1, 8), 'hex'), 'base64'),
         $1,

@@ -1,6 +1,6 @@
 defmodule Sequin.Accounts.Account do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.ConfigSchema
 
   import Ecto.Changeset
 

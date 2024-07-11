@@ -1,0 +1,27 @@
+services:
+  sequin:
+    image: sequin/sequin:latest
+    ports:
+      - "4000:4000"
+    environment:
+      - PG_HOSTNAME=postgres
+      - PG_DATABASE=sequin
+      - SECRET_KEY_BASE=secret
+      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=sequin
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    command: [ "postgres", "-c", "wal_level=logical" ]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

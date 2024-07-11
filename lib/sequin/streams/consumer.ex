@@ -1,6 +1,6 @@
 defmodule Sequin.Streams.Consumer do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.ConfigSchema
 
   import Ecto.Changeset
   import Ecto.Query
@@ -75,9 +75,10 @@ defmodule Sequin.Streams.Consumer do
   end
 
   def where_id_or_slug(query \\ base_query(), id_or_slug) do
-    case UUID.info(id_or_slug) do
-      {:ok, [uuid: _, binary: _, type: _, version: 4, variant: :rfc4122]} -> where_id(query, id_or_slug)
-      _ -> where_slug(query, id_or_slug)
+    if Sequin.String.is_uuid?(id_or_slug) do
+      where_id(query, id_or_slug)
+    else
+      where_slug(query, id_or_slug)
     end
   end
 

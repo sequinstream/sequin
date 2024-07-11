@@ -7,6 +7,9 @@
 # General application configuration
 import Config
 
+sequin_config_schema = "sequin_config"
+sequin_stream_schema = "sequin_streams"
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.17.11",
@@ -24,6 +27,11 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :sequin, Oban,
+  prefix: sequin_config_schema,
+  queues: [default: 10],
+  repo: Sequin.Repo
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails
@@ -31,14 +39,12 @@ config :phoenix, :json_library, Jason
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :sequin, Oban,
-  queues: [default: 10],
-  repo: Sequin.Repo
-
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 
 config :sequin, Sequin.Repo,
-  schema_prefix: "",
+  config_schema_prefix: sequin_config_schema,
+  stream_schema_prefix: sequin_stream_schema,
+  migration_default_prefix: sequin_config_schema,
   migration_primary_key: [
     name: :id,
     type: :binary_id,

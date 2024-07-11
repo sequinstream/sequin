@@ -3,6 +3,7 @@ defmodule Mix.Tasks.Bench do
   use Mix.Task
 
   alias Sequin.Bench.EndToEnd
+  alias Sequin.Streams
 
   def run(args) do
     Application.ensure_all_started(:sequin)
@@ -16,7 +17,7 @@ defmodule Mix.Tasks.Bench do
 
     if truncate && Application.get_env(:sequin, :env) == :dev do
       IO.puts("Truncating messages")
-      Sequin.Repo.query!("TRUNCATE TABLE streams.messages RESTART IDENTITY CASCADE")
+      Sequin.Repo.query!("TRUNCATE TABLE #{Streams.stream_schema()}.messages RESTART IDENTITY CASCADE")
     end
 
     opts = Sequin.Keyword.put_if_present([], :out_dir, out_dir)

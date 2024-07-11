@@ -93,13 +93,13 @@ defmodule SequinWeb.MessageControllerTest do
       StreamsFactory.insert_message!(stream_id: stream.id, subject: "orders.update")
       StreamsFactory.insert_message!(stream_id: stream.id, subject: "users.new")
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=orders.*")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      orders_conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=orders.*")
+      assert %{"data" => listed_messages} = json_response(orders_conn, 200)
       assert length(listed_messages) == 2
       assert Enum.all?(listed_messages, &String.starts_with?(&1["subject"], "orders."))
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=*.new")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      new_conn = get(conn, ~p"/api/streams/#{stream.id}/messages?subject_pattern=*.new")
+      assert %{"data" => listed_messages} = json_response(new_conn, 200)
       assert length(listed_messages) == 2
       assert Enum.all?(listed_messages, &String.ends_with?(&1["subject"], ".new"))
     end
@@ -149,13 +149,13 @@ defmodule SequinWeb.MessageControllerTest do
         not_visible_until: DateTime.add(DateTime.utc_now(), 60, :second)
       )
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=true")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      visible_conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=true")
+      assert %{"data" => listed_messages} = json_response(visible_conn, 200)
       assert length(listed_messages) == 1
       assert List.first(listed_messages)["info"]["state"] == "available"
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=false")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      invisible_conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=false")
+      assert %{"data" => listed_messages} = json_response(invisible_conn, 200)
       assert length(listed_messages) == 1
       assert List.first(listed_messages)["info"]["state"] == "delivered"
     end
@@ -194,13 +194,13 @@ defmodule SequinWeb.MessageControllerTest do
       StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message2, state: :available)
       StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message3, state: :available)
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=orders.*")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      orders_conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=orders.*")
+      assert %{"data" => listed_messages} = json_response(orders_conn, 200)
       assert length(listed_messages) == 2
       assert Enum.all?(listed_messages, &String.starts_with?(&1["message"]["subject"], "orders."))
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=*.new")
-      assert %{"data" => listed_messages} = json_response(conn, 200)
+      new_conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?subject_pattern=*.new")
+      assert %{"data" => listed_messages} = json_response(new_conn, 200)
       assert length(listed_messages) == 2
       assert Enum.all?(listed_messages, &String.ends_with?(&1["message"]["subject"], ".new"))
     end

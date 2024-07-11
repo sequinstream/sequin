@@ -21,7 +21,7 @@ defmodule Sequin.DataCase do
   using opts do
     quote do
       use Sequin.Case, unquote(opts)
-      use Oban.Testing, repo: Sequin.Repo
+      use Oban.Testing, repo: Sequin.Repo, prefix: Application.get_env(:sequin, Oban)[:prefix]
 
       import Ecto
       import Ecto.Changeset

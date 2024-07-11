@@ -1,13 +1,12 @@
 defmodule Sequin.Streams.ConsumerMessage do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.StreamSchema
 
   import Ecto.Changeset
   import Ecto.Query
 
   alias Sequin.Streams.Message
 
-  @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   @primary_key false
   @derive {Jason.Encoder,
            only: [

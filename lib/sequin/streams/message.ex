@@ -1,6 +1,6 @@
 defmodule Sequin.Streams.Message do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.StreamSchema
 
   import Ecto.Changeset
   import Ecto.Query
@@ -26,7 +26,6 @@ defmodule Sequin.Streams.Message do
 
   @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at] ++ @token_keys}
   @primary_key false
-  @schema_prefix Application.compile_env(:sequin, [Sequin.Repo, :schema_prefix]) <> "streams"
   typed_schema "messages" do
     field :subject, :string, primary_key: true, read_after_writes: true
     field :stream_id, Ecto.UUID, primary_key: true

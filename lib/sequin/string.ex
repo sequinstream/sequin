@@ -38,6 +38,15 @@ defmodule Sequin.String do
     end
   end
 
+  def is_uuid?(str) when is_binary(str) do
+    str
+    |> UUID.info()
+    |> case do
+      {:ok, info} -> info[:version] == 4 and info[:variant] == :rfc4122
+      _ -> false
+    end
+  end
+
   @doc """
   Converts a string into a valid  subject identifier.
 

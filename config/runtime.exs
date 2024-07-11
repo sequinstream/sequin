@@ -50,11 +50,22 @@ if config_env() == :prod do
     Keyword.merge(database_config,
       ssl: String.to_existing_atom(System.get_env("PG_SSL", "false")),
       pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "30")),
-      socket_options: maybe_ipv6,
-      schema_prefix: System.get_env("PG_SCHEMA_PREFIX", "sequin_")
+      socket_options: maybe_ipv6
     )
 
+  vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
+
   config :sequin, Sequin.Repo, repo_config
+
+  config :sequin, Sequin.Vault,
+    ciphers: [
+      # In AES.GCM, it is important to specify 12-byte IV length for
+      # interoperability with other encryption software. See this GitHub issue
+      # for more details: https://github.com/danielberkompas/cloak/issues/93
+      #
+      # In Cloak 2.0, this will be the default iv length for AES.GCM.
+      default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
+    ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

@@ -12,7 +12,7 @@ config :phoenix, :plug_init_mode, :runtime
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
-config :sequin, Oban, testing: :manual
+config :sequin, Oban, testing: :manual, prefix: "sequin_config"
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
 config :sequin, Sequin.Repo,

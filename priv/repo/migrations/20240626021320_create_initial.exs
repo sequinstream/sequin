@@ -1,15 +1,30 @@
 defmodule Sequin.Repo.Migrations.CreateStreamTables do
   use Ecto.Migration
 
+  @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
+  @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+
   def change do
     execute "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";", "select 1;"
 
-    create table(:accounts) do
+    execute "create schema if not exists #{@stream_schema}",
+            "drop schema if exists #{@stream_schema}"
+
+    execute "create schema if not exists #{@config_schema}",
+            "drop schema if exists #{@config_schema}"
+
+    create table(:accounts, prefix: @config_schema) do
       timestamps()
     end
 
-    create table(:streams) do
-      add :account_id, references(:accounts, on_delete: :delete_all), null: false
+    # Create a default account
+    execute "insert into #{@config_schema}.accounts (id, inserted_at, updated_at) values (uuid_generate_v4(), now(), now());",
+            "delete from #{@config_schema}.accounts;"
+
+    create table(:streams, prefix: @config_schema) do
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
       add :slug, :text, null: false
 
       timestamps()
@@ -17,14 +32,12 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     # We will need to alter this unique index to account for the database in which the stream lives
     # This should also probably include account_id
-    create unique_index(:streams, [:account_id, :slug])
+    create unique_index(:streams, [:account_id, :slug], prefix: @config_schema)
     # Required for composite foreign keys pointing to this table
-    create unique_index(:streams, [:id, :account_id])
+    create unique_index(:streams, [:id, :account_id], prefix: @config_schema)
 
-    execute "create schema if not exists streams", "drop schema if exists streams"
-
-    execute "create sequence streams.messages_seq",
-            "drop sequence if exists streams.messages_seq"
+    execute "create sequence #{@stream_schema}.messages_seq",
+            "drop sequence if exists #{@stream_schema}.messages_seq"
 
     execute """
             CREATE OR REPLACE FUNCTION subject_from_tokens(VARIADIC text[])
@@ -51,7 +64,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     create table(:messages,
              primary_key: false,
-             prefix: "streams",
+             prefix: @stream_schema,
              options: "PARTITION BY LIST (stream_id)"
            ) do
       add :stream_id, :uuid, null: false, primary_key: true
@@ -66,7 +79,9 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
         ) STORED
         """
 
-      add :seq, :bigint, null: false, default: fragment("nextval('streams.messages_seq')")
+      add :seq, :bigint,
+        null: false,
+        default: fragment("nextval('#{@stream_schema}.messages_seq')")
 
       add :data, :text, null: false
       add :data_hash, :text, null: false
@@ -91,21 +106,53 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create unique_index(:messages, [:stream_id, :seq], prefix: "streams")
-    create unique_index(:messages, [:stream_id, :subject], prefix: "streams")
+    create unique_index(:messages, [:stream_id, :seq], prefix: @stream_schema)
+    create unique_index(:messages, [:stream_id, :subject], prefix: @stream_schema)
 
-    create index(:messages, [:stream_id, :token1], prefix: "streams")
-    create index(:messages, [:stream_id, :token2], prefix: "streams", where: "token2 IS NOT NULL")
-    create index(:messages, [:stream_id, :token3], prefix: "streams", where: "token3 IS NOT NULL")
-    create index(:messages, [:stream_id, :token4], prefix: "streams", where: "token4 IS NOT NULL")
-    create index(:messages, [:stream_id, :token5], prefix: "streams", where: "token5 IS NOT NULL")
-    create index(:messages, [:stream_id, :token6], prefix: "streams", where: "token6 IS NOT NULL")
-    create index(:messages, [:stream_id, :token7], prefix: "streams", where: "token7 IS NOT NULL")
-    create index(:messages, [:stream_id, :token8], prefix: "streams", where: "token8 IS NOT NULL")
-    create index(:messages, [:stream_id, :token9], prefix: "streams", where: "token9 IS NOT NULL")
+    create index(:messages, [:stream_id, :token1], prefix: @stream_schema)
+
+    create index(:messages, [:stream_id, :token2],
+             prefix: @stream_schema,
+             where: "token2 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token3],
+             prefix: @stream_schema,
+             where: "token3 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token4],
+             prefix: @stream_schema,
+             where: "token4 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token5],
+             prefix: @stream_schema,
+             where: "token5 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token6],
+             prefix: @stream_schema,
+             where: "token6 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token7],
+             prefix: @stream_schema,
+             where: "token7 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token8],
+             prefix: @stream_schema,
+             where: "token8 IS NOT NULL"
+           )
+
+    create index(:messages, [:stream_id, :token9],
+             prefix: @stream_schema,
+             where: "token9 IS NOT NULL"
+           )
 
     execute """
-            CREATE OR REPLACE FUNCTION streams.validate_message_subject(subject text)
+            CREATE OR REPLACE FUNCTION #{@stream_schema}.validate_message_subject(subject text)
             RETURNS boolean
             LANGUAGE plpgsql
              IMMUTABLE
@@ -152,53 +199,53 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             $function$
             """,
             """
-            drop function if exists streams.validate_message_subject;
+            drop function if exists #{@stream_schema}.validate_message_subject;
             """
 
-    execute "alter table streams.messages add constraint validate_message_subject check (streams.validate_message_subject(subject));",
-            "alter table streams.messages drop constraint validate_message_subject;"
+    execute "alter table #{@stream_schema}.messages add constraint validate_message_subject check (#{@stream_schema}.validate_message_subject(subject));",
+            "alter table #{@stream_schema}.messages drop constraint validate_message_subject;"
 
     create index(:messages, [:stream_id, :token10],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token10 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token11],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token11 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token12],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token12 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token13],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token13 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token14],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token14 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token15],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token15 IS NOT NULL"
            )
 
     create index(:messages, [:stream_id, :token16],
-             prefix: "streams",
+             prefix: @stream_schema,
              where: "token16 IS NOT NULL"
            )
 
     ## TODO: Add indexes to subject space
 
-    execute "create type streams.consumer_message_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
-            "drop type if exists streams.consumer_message_state"
+    execute "create type #{@stream_schema}.consumer_message_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
+            "drop type if exists #{@stream_schema}.consumer_message_state"
 
-    create table(:consumers) do
+    create table(:consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
       add :account_id, :uuid, null: false
 
@@ -206,7 +253,8 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           references(:streams,
             on_delete: :delete_all,
             with: [account_id: :account_id],
-            match: :full
+            match: :full,
+            prefix: @config_schema
           ),
           null: false
 
@@ -222,11 +270,11 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    create index(:consumers, [:stream_id])
-    create unique_index(:consumers, [:stream_id, :slug])
+    create index(:consumers, [:stream_id], prefix: @config_schema)
+    create unique_index(:consumers, [:stream_id, :slug], prefix: @config_schema)
 
     create table(:consumer_messages,
-             prefix: "streams",
+             prefix: @stream_schema,
              primary_key: false,
              options: "PARTITION BY LIST (consumer_id)"
            ) do
@@ -236,7 +284,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       add :ack_id, :uuid, null: false, default: fragment("uuid_generate_v4()")
 
-      add :state, :"streams.consumer_message_state", null: false
+      add :state, :"#{@stream_schema}.consumer_message_state", null: false
       add :not_visible_until, :utc_datetime_usec
       add :deliver_count, :integer, null: false, default: 0
       add :last_delivered_at, :utc_datetime_usec
@@ -244,11 +292,14 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create unique_index(:consumer_messages, [:consumer_id, :message_subject], prefix: "streams")
-    create unique_index(:consumer_messages, [:consumer_id, :ack_id], prefix: "streams")
+    create unique_index(:consumer_messages, [:consumer_id, :message_subject],
+             prefix: @stream_schema
+           )
 
-    create index(:consumer_messages, [:message_subject], prefix: "streams")
-    create index(:consumer_messages, [:consumer_id], prefix: "streams")
+    create unique_index(:consumer_messages, [:consumer_id, :ack_id], prefix: @stream_schema)
+
+    create index(:consumer_messages, [:message_subject], prefix: @stream_schema)
+    create index(:consumer_messages, [:consumer_id], prefix: @stream_schema)
 
     create index(
              :consumer_messages,
@@ -258,10 +309,10 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
                :not_visible_until,
                :last_delivered_at
              ],
-             prefix: "streams"
+             prefix: @stream_schema
            )
 
-    create table(:postgres_databases) do
+    create table(:postgres_databases, prefix: @config_schema) do
       add :database, :string, null: false
       add :hostname, :string, null: false
       add :password, :binary, null: false
@@ -273,49 +324,54 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :ssl, :boolean, default: false, null: false
       add :username, :string, null: false
 
-      add :account_id, references(:accounts), null: false
+      add :account_id, references(:accounts, prefix: @config_schema), null: false
 
       timestamps()
     end
 
     # This is for the FKs from postgres_replication to this table
-    create unique_index(:postgres_databases, [:id, :account_id])
+    create unique_index(:postgres_databases, [:id, :account_id], prefix: @config_schema)
 
-    execute "create type replication_status as enum ('active', 'disabled');",
-            "drop type if exists replication_status"
+    execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled');",
+            "drop type if exists #{@config_schema}.replication_status"
 
-    create table(:postgres_replications) do
+    create table(:postgres_replications, prefix: @config_schema) do
       add :publication_name, :string, null: false
       add :slot_name, :string, null: false
-      add :status, :replication_status, null: false
+      add :status, :"#{@config_schema}.replication_status", null: false
 
-      add :account_id, references(:accounts, type: :uuid), null: false
+      add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
 
       add :postgres_database_id,
-          references(:postgres_databases, with: [account_id: :account_id]),
+          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
           null: false
 
       add :stream_id,
-          references(:streams, with: [account_id: :account_id]),
+          references(:streams, with: [account_id: :account_id], prefix: @config_schema),
           null: false
 
       timestamps()
     end
 
-    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id])
-    create index(:postgres_replications, [:account_id])
-    create index(:postgres_replications, [:postgres_database_id])
-    create index(:postgres_replications, [:stream_id])
+    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
+             prefix: @config_schema
+           )
 
-    create table(:api_keys) do
-      add :account_id, references(:accounts, on_delete: :delete_all), null: false
+    create index(:postgres_replications, [:account_id], prefix: @config_schema)
+    create index(:postgres_replications, [:postgres_database_id], prefix: @config_schema)
+    create index(:postgres_replications, [:stream_id], prefix: @config_schema)
+
+    create table(:api_keys, prefix: @config_schema) do
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
       add :value, :binary, null: false
       add :name, :string
 
       timestamps()
     end
 
-    create index(:api_keys, [:account_id])
-    create unique_index(:api_keys, [:value])
+    create index(:api_keys, [:account_id], prefix: @config_schema)
+    create unique_index(:api_keys, [:value], prefix: @config_schema)
   end
 end

@@ -1,6 +1,6 @@
 defmodule Sequin.Accounts.ApiKey do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.ConfigSchema
 
   import Ecto.Changeset
   import Ecto.Query

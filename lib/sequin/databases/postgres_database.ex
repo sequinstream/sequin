@@ -1,6 +1,6 @@
 defmodule Sequin.Databases.PostgresDatabase do
   @moduledoc false
-  use Sequin.Schema
+  use Sequin.ConfigSchema
 
   import Ecto.Changeset
   import Ecto.Query

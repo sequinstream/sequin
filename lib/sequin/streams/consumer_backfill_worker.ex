@@ -52,6 +52,8 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
       end)
       |> Streams.upsert_consumer_messages()
 
+    Logger.info("[ConsumerBackfillWorker] Upserted #{length(messages)} messages for consumer #{consumer.id}")
+
     case messages do
       messages when length(messages) < @limit ->
         if is_nil(consumer.backfill_completed_at) do
@@ -73,7 +75,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
         :ok
 
       {count, nil} ->
-        Logger.info("Deleted #{count} acked messages for consumer #{consumer.id}")
+        Logger.info("[ConsumerBackfillWorker] Deleted #{count} acked messages for consumer #{consumer.id}")
         create(consumer.id, nil)
     end
   end

@@ -12,6 +12,12 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
 
+  @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
+  @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
+
+  def stream_schema, do: @stream_schema
+  def config_schema, do: @config_schema
+
   # General
 
   def reload(%Message{} = msg) do
@@ -77,7 +83,7 @@ defmodule Sequin.Streams do
 
   defp create_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    CREATE TABLE streams.messages_#{stream.slug} PARTITION OF streams.messages FOR VALUES IN ('#{stream.id}');
+    CREATE TABLE #{stream_schema()}.messages_#{stream.slug} PARTITION OF #{stream_schema()}.messages FOR VALUES IN ('#{stream.id}');
     """)
   end
 
@@ -87,7 +93,7 @@ defmodule Sequin.Streams do
 
   defp drop_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    DROP TABLE IF EXISTS streams.messages_#{stream.slug};
+    DROP TABLE IF EXISTS #{stream_schema()}.messages_#{stream.slug};
     """)
   end
 
@@ -228,7 +234,7 @@ defmodule Sequin.Streams do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    CREATE TABLE streams.consumer_messages_#{consumer.stream.slug}_#{consumer.slug} PARTITION OF streams.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.stream.slug}_#{consumer.slug} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -241,7 +247,7 @@ defmodule Sequin.Streams do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS streams.consumer_messages_#{consumer.stream.slug}_#{consumer.slug};
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.stream.slug}_#{consumer.slug};
     """
     |> Repo.query()
     |> case do
@@ -336,7 +342,7 @@ defmodule Sequin.Streams do
     %Stream{slug: slug} = Repo.get!(Stream, stream_id)
 
     query = """
-    SELECT pg_total_relation_size('streams.messages_#{slug}') AS size
+    SELECT pg_total_relation_size('#{stream_schema()}.messages_#{slug}') AS size
     """
 
     case Repo.query(query) do
@@ -359,6 +365,8 @@ defmodule Sequin.Streams do
         |> Map.put(:stream_id, stream_id)
       end)
 
+    seq_nextval = "#{stream_schema()}.messages_seq"
+
     on_conflict =
       from(m in Message,
         where: fragment("? IS DISTINCT FROM ?", m.data_hash, fragment("EXCLUDED.data_hash")),
@@ -366,7 +374,7 @@ defmodule Sequin.Streams do
           set: [
             data: fragment("EXCLUDED.data"),
             data_hash: fragment("EXCLUDED.data_hash"),
-            seq: fragment("nextval('streams.messages_seq')"),
+            seq: fragment("nextval(?::text::regclass)", ^seq_nextval),
             updated_at: fragment("EXCLUDED.updated_at")
           ]
         ]

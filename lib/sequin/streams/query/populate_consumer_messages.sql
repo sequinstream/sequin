@@ -2,7 +2,7 @@ WITH current_outstanding_count AS (
   SELECT
     count(*) AS count
   FROM
-    streams.consumer_messages
+    sequin_streams.consumer_messages
   WHERE
     consumer_id = :consumer_id
 ),
@@ -18,7 +18,7 @@ consumer_state AS (
   SELECT
     *
   FROM
-    streams.consumer_states
+    sequin_streams.consumer_states
   WHERE
     consumer_id = :consumer_id
 ),
@@ -26,7 +26,7 @@ new_messages AS (
   SELECT
     *
   FROM
-    streams.messages m
+    sequin_streams.messages m
   WHERE
     m.stream_id = :stream_id
     AND m.seq >(
@@ -43,7 +43,7 @@ new_messages AS (
         max_new_consumer_messages)
 ),
 new_consumer_messages AS (
-INSERT INTO streams.consumer_messages AS cm(consumer_id, message_key, message_seq, message_stream_id, state, inserted_at, updated_at)
+INSERT INTO sequin_streams.consumer_messages AS cm(consumer_id, message_key, message_seq, message_stream_id, state, inserted_at, updated_at)
   SELECT
     :consumer_id,
     m.key,
@@ -58,15 +58,15 @@ INSERT INTO streams.consumer_messages AS cm(consumer_id, message_key, message_se
     message_key)
     DO UPDATE SET
       state =(
-        CASE WHEN cm.state = 'delivered'::streams.consumer_message_state THEN
-          'pending_redelivery'::streams.consumer_message_state
+        CASE WHEN cm.state = 'delivered'::sequin_streams.consumer_message_state THEN
+          'pending_redelivery'::sequin_streams.consumer_message_state
         ELSE
           cm.state
         END),
       message_seq = excluded.message_seq,
       updated_at = excluded.updated_at)
 UPDATE
-  streams.consumer_states
+  sequin_streams.consumer_states
 SET
   message_seq_cursor =(
     SELECT

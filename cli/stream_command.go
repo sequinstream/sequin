@@ -134,40 +134,11 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 			return err
 		}
 
-		streams, err := api.FetchStreams(ctx)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-
-		if len(streams) == 0 {
-			fmt.Println("No streams found.")
-			return nil
-		}
-
-		prompt := &survey.Select{
-			Message: "Choose a stream:",
-			Options: make([]string, len(streams)),
-			Filter: func(filterValue string, optValue string, index int) bool {
-				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-			},
-		}
-		for i, s := range streams {
-			prompt.Options[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
-		}
-
-		var choice string
-		err = survey.AskOne(prompt, &choice)
-		if err != nil {
-			return err
-		}
-
-		// Extract the ID from the format "Slug (ID: StreamID)"
-		parts := strings.Split(choice, "(ID: ")
-		if len(parts) == 2 {
-			config.StreamID = strings.TrimRight(parts[1], ")")
-		} else {
-			return fmt.Errorf("invalid stream choice format")
-		}
+		config.StreamID = streamID
 	}
 
 	return displayStreamInfo(config)
@@ -262,40 +233,11 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	if config.StreamID == "" {
-		streams, err := api.FetchStreams(ctx)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-
-		if len(streams) == 0 {
-			fmt.Println("No streams found.")
-			return nil
-		}
-
-		prompt := &survey.Select{
-			Message: "Choose a stream to remove:",
-			Options: make([]string, len(streams)),
-			Filter: func(filterValue string, optValue string, index int) bool {
-				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-			},
-		}
-		for i, s := range streams {
-			prompt.Options[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
-		}
-
-		var choice string
-		err = survey.AskOne(prompt, &choice)
-		if err != nil {
-			return err
-		}
-
-		// Extract the ID from the format "Slug (ID: StreamID)"
-		parts := strings.Split(choice, "(ID: ")
-		if len(parts) == 2 {
-			config.StreamID = strings.TrimRight(parts[1], ")")
-		} else {
-			return fmt.Errorf("invalid stream choice format")
-		}
+		config.StreamID = streamID
 	}
 
 	err = api.RemoveStream(ctx, config.StreamID)

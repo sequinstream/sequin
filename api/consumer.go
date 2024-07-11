@@ -246,15 +246,25 @@ func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchS
 	return result.Data, nil
 }
 
+// FetchMessagesOptions represents the options for fetching messages
+type FetchMessagesOptions struct {
+	StreamID   string
+	ConsumerID string
+	Pending    bool
+	Limit      int
+	Order      string
+}
+
 // FetchMessages retrieves messages for a consumer with optional filters
-func FetchMessages(ctx *context.Context, streamID, consumerID string, pending bool, limit int, order string) ([]MessageWithInfo, error) {
+func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]MessageWithInfo, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/api/streams/%s/consumers/%s/messages?limit=%d&sort=%s", serverURL, streamID, consumerID, limit, order)
-	if pending {
+	url := fmt.Sprintf("%s/api/streams/%s/consumers/%s/messages?limit=%d&sort=%s",
+		serverURL, options.StreamID, options.ConsumerID, options.Limit, options.Order)
+	if options.Pending {
 		url += "&state=delivered"
 	}
 

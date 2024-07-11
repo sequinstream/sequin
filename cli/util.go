@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
@@ -53,4 +54,22 @@ func askConfirmation(prompt string, dflt bool) (bool, error) {
 	}, &ans)
 
 	return ans, err
+}
+
+func promptForInt(message string, value *int) error {
+	var strValue string
+	err := survey.AskOne(&survey.Input{
+		Message: message,
+	}, &strValue)
+	if err != nil {
+		return fmt.Errorf("failed to get user input: %w", err)
+	}
+	if strValue != "" {
+		intValue, err := strconv.Atoi(strValue)
+		if err != nil {
+			return fmt.Errorf("invalid integer value: %w", err)
+		}
+		*value = intValue
+	}
+	return nil
 }

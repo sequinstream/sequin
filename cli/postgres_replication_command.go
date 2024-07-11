@@ -67,27 +67,11 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 	}
 
 	if c.StreamID == "" {
-		streams, err := api.FetchStreams(ctx)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-
-		streamOptions := make([]string, len(streams))
-		for i, s := range streams {
-			streamOptions[i] = fmt.Sprintf("%s (Index: %d)", s.ID, s.Idx)
-		}
-
-		err = survey.AskOne(&survey.Select{
-			Message: "Choose a stream:",
-			Options: streamOptions,
-			Filter: func(filterValue string, optValue string, index int) bool {
-				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-			},
-		}, &c.StreamID)
-		if err != nil {
-			return err
-		}
-		c.StreamID = strings.Split(c.StreamID, " ")[0]
+		c.StreamID = streamID
 	}
 
 	if c.Database == "" {

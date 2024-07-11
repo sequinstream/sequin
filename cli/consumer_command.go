@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -105,10 +104,11 @@ func consumerLs(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	}
 
 	if c.StreamID == "" {
-		err = promptForStream(ctx, c)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
+		c.StreamID = streamID
 	}
 
 	consumers, err := api.FetchConsumers(ctx, c.StreamID)
@@ -148,10 +148,11 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 
 	// Always prompt for required fields
 	if c.StreamID == "" {
-		err = promptForStream(ctx, c)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
+		c.StreamID = streamID
 	}
 
 	if c.Slug == "" {
@@ -235,90 +236,6 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	return nil
 }
 
-func promptForStream(ctx *context.Context, c *consumerConfig) error {
-	streams, err := api.FetchStreams(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to fetch streams: %w", err)
-	}
-
-	streamOptions := make([]string, len(streams))
-	for i, s := range streams {
-		streamOptions[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
-	}
-
-	var choice string
-	err = survey.AskOne(&survey.Select{
-		Message: "Choose a stream:",
-		Options: streamOptions,
-		Filter: func(filterValue string, optValue string, index int) bool {
-			return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-		},
-	}, &choice)
-	if err != nil {
-		return fmt.Errorf("failed to get user input: %w", err)
-	}
-
-	parts := strings.Split(choice, "(ID: ")
-	if len(parts) == 2 {
-		c.StreamID = strings.TrimRight(parts[1], ")")
-	} else {
-		return fmt.Errorf("invalid stream choice format")
-	}
-
-	return nil
-}
-
-func promptForConsumer(ctx *context.Context, c *consumerConfig) error {
-	consumers, err := api.FetchConsumers(ctx, c.StreamID)
-	if err != nil {
-		return fmt.Errorf("failed to fetch consumers: %w", err)
-	}
-
-	consumerOptions := make([]string, len(consumers))
-	for i, consumer := range consumers {
-		consumerOptions[i] = fmt.Sprintf("%s (ID: %s)", consumer.Slug, consumer.ID)
-	}
-
-	var choice string
-	err = survey.AskOne(&survey.Select{
-		Message: "Choose a consumer:",
-		Options: consumerOptions,
-		Filter: func(filterValue string, optValue string, index int) bool {
-			return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-		},
-	}, &choice)
-	if err != nil {
-		return fmt.Errorf("failed to get user input: %w", err)
-	}
-
-	parts := strings.Split(choice, "(ID: ")
-	if len(parts) == 2 {
-		c.ConsumerID = strings.TrimRight(parts[1], ")")
-	} else {
-		return fmt.Errorf("invalid consumer choice format")
-	}
-
-	return nil
-}
-
-func promptForInt(message string, value *int) error {
-	var strValue string
-	err := survey.AskOne(&survey.Input{
-		Message: message,
-	}, &strValue)
-	if err != nil {
-		return fmt.Errorf("failed to get user input: %w", err)
-	}
-	if strValue != "" {
-		intValue, err := strconv.Atoi(strValue)
-		if err != nil {
-			return fmt.Errorf("invalid integer value: %w", err)
-		}
-		*value = intValue
-	}
-	return nil
-}
-
 func displayConsumerInfo(consumer *api.Consumer) {
 	fmt.Println()
 	cols := newColumns(fmt.Sprintf("Consumer %s created %s", consumer.ID, consumer.CreatedAt.Format(time.RFC3339)))
@@ -349,17 +266,19 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	if c.StreamID == "" {
-		err = promptForStream(ctx, c)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
+		c.StreamID = streamID
 	}
 
 	if c.ConsumerID == "" {
-		err = promptForConsumer(ctx, c)
+		consumerID, err := promptForConsumer(ctx, c.StreamID)
 		if err != nil {
 			return err
 		}
+		c.ConsumerID = consumerID
 	}
 
 	consumer, err := api.FetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
@@ -379,17 +298,19 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	if c.StreamID == "" {
-		err = promptForStream(ctx, c)
+		streamID, err := promptForStream(ctx)
 		if err != nil {
 			return err
 		}
+		c.StreamID = streamID
 	}
 
 	if c.ConsumerID == "" {
-		err = promptForConsumer(ctx, c)
+		consumerID, err := promptForConsumer(ctx, c.StreamID)
 		if err != nil {
 			return err
 		}
+		c.ConsumerID = consumerID
 	}
 
 	messages, err := api.FetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
@@ -430,21 +351,39 @@ func consumerMessages(_ *fisk.ParseContext, config *Config, c *consumerConfig) e
 		return err
 	}
 
-	var limit int
-	var order string
-
-	if c.LastN > 0 {
-		limit = c.LastN
-		order = "desc"
-	} else if c.FirstN > 0 {
-		limit = c.FirstN
-		order = "asc"
-	} else {
-		limit = 10 // Default limit
-		order = "desc"
+	if c.StreamID == "" {
+		streamID, err := promptForStream(ctx)
+		if err != nil {
+			return err
+		}
+		c.StreamID = streamID
 	}
 
-	messages, err := api.FetchMessages(ctx, c.StreamID, c.ConsumerID, c.PendingOnly, limit, order)
+	if c.ConsumerID == "" {
+		consumerID, err := promptForConsumer(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
+		c.ConsumerID = consumerID
+	}
+
+	options := api.FetchMessagesOptions{
+		StreamID:   c.StreamID,
+		ConsumerID: c.ConsumerID,
+		Pending:    c.PendingOnly,
+		Limit:      10,     // Default limit
+		Order:      "desc", // Default order
+	}
+
+	if c.LastN > 0 {
+		options.Limit = c.LastN
+		options.Order = "desc"
+	} else if c.FirstN > 0 {
+		options.Limit = c.FirstN
+		options.Order = "asc"
+	}
+
+	messages, err := api.FetchMessages(ctx, options)
 	if err != nil {
 		return err
 	}

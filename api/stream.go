@@ -221,3 +221,46 @@ func PublishMessage(ctx *context.Context, streamID, subject, message string) err
 
 	return nil
 }
+
+type Message struct {
+	Seq       int       `json:"seq"`
+	Subject   string    `json:"subject"`
+	Data      string    `json:"data"`
+	CreatedAt time.Time `json:"inserted_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type MessagesResponse struct {
+	Messages []Message `json:"data"`
+}
+
+func ListStreamMessages(ctx *context.Context, streamIDOrSlug string, limit int, sort string, subjectPattern string) ([]Message, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/api/streams/%s/messages?limit=%d&sort=%s", serverURL, streamIDOrSlug, limit, sort)
+	if subjectPattern != "" {
+		url += "&subject_pattern=" + subjectPattern
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var messagesResponse MessagesResponse
+	err = json.NewDecoder(resp.Body).Decode(&messagesResponse)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding JSON: %w", err)
+	}
+
+	return messagesResponse.Messages, nil
+}

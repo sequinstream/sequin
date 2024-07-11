@@ -66,9 +66,10 @@ defmodule SequinWeb.MessageController do
   defp parse_consumer_list_params(params) do
     with {:ok, sort} <- parse_consumer_sort(params),
          {:ok, limit} <- parse_limit(params),
-         {:ok, state} <- parse_state(params),
+         {:ok, visible} <- parse_visible(params),
          {:ok, subject_pattern} <- parse_subject_pattern(params) do
-      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, state: state, subject_pattern: subject_pattern)}
+      {:ok,
+       Sequin.Keyword.reject_nils(limit: limit, order_by: sort, is_deliverable: visible, subject_pattern: subject_pattern)}
     end
   end
 
@@ -91,10 +92,13 @@ defmodule SequinWeb.MessageController do
 
   defp parse_limit(_), do: {:ok, 100}
 
-  defp parse_state(%{"state" => "available"}), do: {:ok, :available}
-  defp parse_state(%{"state" => "delivered"}), do: {:ok, [:delivered, :pending_redelivery]}
-  defp parse_state(%{"state" => _}), do: {:error, Error.bad_request(message: "Invalid state parameter")}
-  defp parse_state(_), do: {:ok, nil}
+  defp parse_visible(%{"visible" => visible}) when visible in [true, false], do: {:ok, visible}
+
+  defp parse_visible(%{"visible" => visible}) when visible in ["true", "false"],
+    do: {:ok, String.to_existing_atom(visible)}
+
+  defp parse_visible(%{"visible" => _}), do: {:error, Error.bad_request(message: "Invalid visible parameter")}
+  defp parse_visible(_), do: {:ok, nil}
 
   defp parse_subject_pattern(%{"subject_pattern" => pattern}) do
     case Sequin.Subject.validate_subject_pattern(pattern) do

@@ -132,7 +132,7 @@ defmodule SequinWeb.MessageControllerTest do
       assert json_response(conn, 404)
     end
 
-    test "filters by state", %{conn: conn, stream: stream, consumer: consumer} do
+    test "filters by visibility", %{conn: conn, stream: stream, consumer: consumer} do
       message1 = StreamsFactory.insert_message!(stream_id: consumer.stream_id)
       message2 = StreamsFactory.insert_message!(stream_id: consumer.stream_id)
 
@@ -145,13 +145,19 @@ defmodule SequinWeb.MessageControllerTest do
       StreamsFactory.insert_consumer_message!(
         consumer_id: consumer.id,
         message: message2,
-        state: :delivered
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 60, :second)
       )
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?state=available")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=true")
       assert %{"data" => listed_messages} = json_response(conn, 200)
       assert length(listed_messages) == 1
       assert List.first(listed_messages)["info"]["state"] == "available"
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages?visible=false")
+      assert %{"data" => listed_messages} = json_response(conn, 200)
+      assert length(listed_messages) == 1
+      assert List.first(listed_messages)["info"]["state"] == "delivered"
     end
 
     test "respects limit parameter", %{conn: conn, stream: stream, consumer: consumer} do
@@ -197,6 +203,24 @@ defmodule SequinWeb.MessageControllerTest do
       assert %{"data" => listed_messages} = json_response(conn, 200)
       assert length(listed_messages) == 2
       assert Enum.all?(listed_messages, &String.ends_with?(&1["message"]["subject"], ".new"))
+    end
+
+    test "correctly reports state for messages with expired visibility", %{conn: conn, stream: stream, consumer: consumer} do
+      message = StreamsFactory.insert_message!(stream_id: stream.id)
+      past_time = DateTime.add(DateTime.utc_now(), -60, :second)
+
+      StreamsFactory.insert_consumer_message!(
+        consumer_id: consumer.id,
+        message: message,
+        state: :delivered,
+        not_visible_until: past_time
+      )
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/messages")
+      assert %{"data" => [listed_message]} = json_response(conn, 200)
+
+      assert listed_message["info"]["state"] == "available"
+      assert listed_message["info"]["not_visible_until"] == nil
     end
   end
 end

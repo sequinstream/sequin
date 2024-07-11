@@ -66,6 +66,10 @@ defmodule Sequin.Streams.ConsumerMessage do
     where(query, [consumer_message: cm], cm.state == ^state)
   end
 
+  def where_state_in(query \\ base_query(), states) do
+    where(query, [consumer_message: cm], cm.state in ^states)
+  end
+
   def where_state_not(query \\ base_query(), state) do
     where(query, [consumer_message: cm], cm.state != ^state)
   end
@@ -77,6 +81,16 @@ defmodule Sequin.Streams.ConsumerMessage do
       where:
         cm.state == :available or
           (cm.state in [:delivered, :pending_redelivery] and cm.not_visible_until <= ^now)
+    )
+  end
+
+  def where_not_visible(query \\ base_query()) do
+    now = DateTime.utc_now()
+
+    from([consumer_message: cm] in query,
+      where:
+        cm.state != :available and
+          (cm.state in [:delivered, :pending_redelivery] and cm.not_visible_until > ^now)
     )
   end
 

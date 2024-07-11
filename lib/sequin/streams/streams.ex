@@ -270,6 +270,8 @@ defmodule Sequin.Streams do
         message
         |> Map.update!(:stream_id, &UUID.binary_to_string!/1)
         |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
+        |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+        |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
         |> then(&struct!(Message, &1))
       end)
 
@@ -427,6 +429,15 @@ defmodule Sequin.Streams do
       Enum.reduce(params, base_query, fn
         {:state, state}, query ->
           ConsumerMessage.where_state(query, state)
+
+        {:state_in, states}, query ->
+          ConsumerMessage.where_state_in(query, states)
+
+        {:is_deliverable, false}, query ->
+          ConsumerMessage.where_not_visible(query)
+
+        {:is_deliverable, true}, query ->
+          ConsumerMessage.where_deliverable(query)
 
         {:limit, limit}, query ->
           limit(query, ^limit)

@@ -12,7 +12,7 @@ defmodule SequinWeb.MessageJSON do
   def render("consumer_list.json", %{consumer_messages: consumer_messages}) do
     messages =
       Enum.map(consumer_messages, fn %ConsumerMessage{} = cm ->
-        state = if cm.state == :pending_redelivery, do: :delivered, else: cm.state
+        {state, not_visible_until} = get_current_state(cm)
 
         %{
           message: cm.message,
@@ -20,12 +20,30 @@ defmodule SequinWeb.MessageJSON do
             ack_id: cm.ack_id,
             deliver_count: cm.deliver_count,
             last_delivered_at: cm.last_delivered_at,
-            not_visible_until: cm.not_visible_until,
+            not_visible_until: not_visible_until,
             state: state
           }
         }
       end)
 
     %{data: messages}
+  end
+
+  defp get_current_state(cm) do
+    now = DateTime.utc_now()
+
+    cond do
+      cm.state == :available ->
+        {:available, nil}
+
+      cm.state in [:delivered, :pending_redelivery] and DateTime.before?(cm.not_visible_until, now) ->
+        {:available, nil}
+
+      cm.state == :pending_redelivery ->
+        {:delivered, cm.not_visible_until}
+
+      true ->
+        {cm.state, cm.not_visible_until}
+    end
   end
 end

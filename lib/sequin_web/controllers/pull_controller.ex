@@ -47,13 +47,15 @@ defmodule SequinWeb.PullController do
     ack_tokens = Map.get(params, "ack_tokens")
 
     with true <- is_list(ack_tokens),
-         true <- length(ack_tokens) > 0 do
+         true <- length(ack_tokens) > 0,
+         true <- Enum.all?(ack_tokens, &(is_binary(&1) and &1 != "")) do
       {:ok, ack_tokens}
     else
       _ ->
         {:error,
          Error.bad_request(
-           message: "Invalid ack_tokens. Must send a top-level `ack_tokens` property that is a non-empty list of strings"
+           message:
+             "Invalid ack_tokens. Must send a top-level `ack_tokens` property that is a non-empty list of non-empty strings"
          )}
     end
   end

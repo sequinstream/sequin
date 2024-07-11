@@ -26,7 +26,7 @@ type postgresReplicationConfig struct {
 
 func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 	sources := app.Command("sources", "Source related commands")
-	postgres := sources.Command("postgres", "Postgres replication related commands")
+	postgres := sources.Command("postgres", "Postgres replication related commands").Alias("pg").Alias("p")
 
 	addCheat("postgres_replication", postgres)
 

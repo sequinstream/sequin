@@ -64,10 +64,10 @@ Streams are ideal for building event-sourcing systems, implementing pub/sub patt
 **Step 1:** In a new terminal, create a new stream:
 
 ```bash
-sequin stream add sequin-demo
+sequin stream add demo_stream
 ```
 
-You just created a new stream called `sequin-demo`.
+You just created a new stream called `demo_stream`.
 
 > [!TIP]
 > By default, the CLI connects to Sequin running on `http://localhost:4000`. You can override this configuration by creating a new context in the CLI:
@@ -78,7 +78,7 @@ You just created a new stream called `sequin-demo`.
 **Step 2:** Now, inspect the stream you just created:
 
 ```bash
-sequin stream info sequin-demo
+sequin stream info demo_stream
 ```
 
 Looks like your stream could use some messages.
@@ -88,10 +88,10 @@ Looks like your stream could use some messages.
 **Step 1:** In your terminal, add a message to your stream:
 
 ```bash
-sequin stream pub sequin-demo sqn.test "Hello World!"
+sequin stream pub demo_stream sqn.test.1 "Hello World"
 ```
 
-You just published a message to your `sequin-demo` stream with the subject of `sqn.test` and a data payload of `Hello World!`.
+You just published a message to your `demo_stream` stream with the subject of `sqn.test` and a data payload of `Hello World!`.
 
 Sequin uses a hierarchical subject structure, similar to [NATS](https://docs.nats.io/nats-concepts/subjects). This allows for flexible message routing and filtering. Here's how they work:
 
@@ -100,10 +100,16 @@ Sequin uses a hierarchical subject structure, similar to [NATS](https://docs.nat
   - Single-level wildcard (`*`): Matches any single token in the subject hierarchy. For example, `orders.*` would match `orders.created`, `orders.updated`, but not `orders.shipping.created`.
   - Multi-level wildcard (`>`): Matches one or more tokens at the end of a subject. For example, `users.>` would match `users.profile.updated`, `users.login`, and any other subject starting with `users.`.
 
-**Step 2:** Check that your message in the stream by running `sequin stream info sequin-demo` again:
+**Step 2:** Check that your message in the stream by running `sequin stream info demo_stream` again:
 
 ```bash
-EXAMPLE
+          Slug: demo_stream
+         Index: 0
+     Consumers: 0
+      Messages: 1
+  Storage Size: 216.0 KB
+    Created At: 2024-07-11T17:04:47Z
+    Updated At: 2024-07-11T17:04:47Z
 ```
 
 Great, the message count has incremented up.
@@ -111,9 +117,15 @@ Great, the message count has incremented up.
 **Step 3:** Publish a couple more messages to help you get a sense of you stream:
 
 ```bash
-sequin stream pub sequin-demo sqn.test "Hello World 2!"
-sequin stream pub sequin-demo sqn.test "Hello World 3!"
-sequin stream pub sequin-demo sqn.foo "bar"
+sequin stream pub demo_stream sqn.test.2 "Hello World 2"
+```
+
+```bash
+sequin stream pub demo_stream sqn.test.3 "Hello World 3"
+```
+
+```bash
+sequin stream pub demo_stream sqn.foo "bar"
 ```
 
 ## Observe your stream
@@ -122,24 +134,24 @@ There are plenty of ways to view messages sitting in the stream.
 
 **`stream last`**
 
-Dump the last (i.e. head of the stream) X number messages that match a subject pattern from a stream into your terminal. For instance, `sequin stream sequin-demo last 2 sqn.test` will dump the two most recently added messages that match the subject `sqn.text`.
+Dump the last (i.e. head of the stream) X number messages that match a subject pattern from a stream into your terminal. For instance, `sequin stream last --limit=2 --subject="sqn.test.*" demo_stream` will dump the two most recently added messages that match the subject `sqn.test.*`.
 
 **`stream first`**
 
-Similarly, `sequin stream sequin-demo first 2 sqn.test` will dump the two oldest (i.e. tail of the stream) messages that match the subject `sqn.test`.
+Similarly, `sequin stream first --limit=2 --subject="sqn.test.*" demo_stream` will dump the two oldest (i.e. tail of the stream) messages that match the subject `sqn.test.*`.
 
 **`stream tail`**
 
 You can also observe your stream live, as messages get published. In a new terminal, run:
 
 ```bash
-sequin stream sequin-demo tail sqn.*
+sequin stream demo_stream tail sqn.*
 ```
 
 Then in your other terminal, publish a new message:
 
 ```bash
-sequin stream pub sequin-demo sqn.live "This is live"
+sequin stream pub demo_stream sqn.live "This is live"
 ```
 
 Go back to your first terminal running `stream tail` and you'll see the message appear:
@@ -171,15 +183,15 @@ Now, let's walk through the process of setting up and using a consumer:
 **Step 1:** Add a consumer to your stream:
 
 ```bash
-sequin consumer add sequin-demo demo-consumer
+sequin consumer add demo_stream demo_consumer
 ```
 
-Here, your creating a new consumer with the slug `demo-consumer` to the `sequin-demo` stream.
+Here, your creating a new consumer with the slug `demo_consumer` to the `demo_stream` stream.
 
 As with streams, you can observe the state of your consumer using the `ls` command:
 
 ```bash
-sequin consumer ls sequin-demo
+sequin consumer ls demo_stream
 ```
 
 You can see that the consumer has pending messages in the stream. Now you are ready to consume messages.
@@ -187,23 +199,23 @@ You can see that the consumer has pending messages in the stream. Now you are re
 **Step 2:** Fetch the next message for a consumer:
 
 ```bash
-sequin consumer next sequin-demo demo-consumer --no-ack
+sequin consumer next demo_stream demo_consumer --no-ack
 ```
 
-The `next` command fetches the next available message for your `demo-consumer` from the `sequin-demo` stream. The `--no-ack` flag tells the consumer to not immediately `ack` the message so you can step through the message lifecycle in this guide.
+The `next` command fetches the next available message for your `demo_consumer` from the `demo_stream` stream. The `--no-ack` flag tells the consumer to not immediately `ack` the message so you can step through the message lifecycle in this guide.
 
 Copy the `ack_id` for this message. You'll use it soon.
 
 Now, when you inspect your consumer with the `info` command, you'll see that there is now an outstanding message:
 
 ```bash
-sequin consumer info sequin-demo demo-consumer
+sequin consumer info demo_stream demo_consumer
 ```
 
 You can introspect this outstanding message further:
 
 ```bash
-sequin consumer messages sequin-demo demo-consumer --pending
+sequin consumer peek demo_stream demo_consumer
 ```
 
 This command dumps your consumer's pending (i.e. delivered but not yet ack'd or nack'd) messages to your terminal. You can see your outstanding message is checked out by the consumer - and no longer available in the stream for other consumer's to work on.
@@ -211,7 +223,7 @@ This command dumps your consumer's pending (i.e. delivered but not yet ack'd or 
 Now, instruct the consumer to `ack` the message:
 
 ```bash
-sequin consumer ack sequin-demo demo-consumer [ack_id]
+sequin consumer ack demo_stream demo_consumer [ack_id]
 ```
 
 You've just consumed and ack'd your first message. When you run `consumer info` you'll now see there are now pending messages, and outstanding messages has decremented by one.
@@ -222,16 +234,16 @@ You just stepped through the process of observing the state of your consumer as 
 
 **`con tap`**
 
-Logs the state of your consumer in your terminal. Run the following command to tap into your `demo-consumer`:
+Logs the state of your consumer in your terminal. Run the following command to tap into your `demo_consumer`:
 
 ```bash
-sequin con tap sequin-demo demo-consumer
+sequin con tap demo_stream demo_consumer
 ```
 
 Then, open another terminal and fetch another message. Skip the `--no-ack` flag this time, so your consumer both fetches and ack's the message:
 
 ```bash
-sequin consumer next sequin-demo demo-consumer
+sequin consumer next demo_stream demo_consumer
 ```
 
 When you return to your other terminal running `con tap` you'll see both the fetch and ack logged.
@@ -257,35 +269,55 @@ sequin keys add [?description]
 With an API token added to your account, you can now generate the `curl` equivalent for any CLI command by passing the `--as-curl` flag:
 
 ```bash
-sequin stream info sequin-demo --as-curl
+sequin stream info demo_stream --as-curl
 ```
 
 If you execute the `curl` command for `stream info`, the Sequin API will return the stats for your stream:
 
 ```bash
-CURL EXAMPLE
+curl -X GET http://localhost:4000/api/streams/demo_stream \
+-H "Content-Type: application/json" \
+-H "Accept: application/json"
+
+{
+  "id": "6f4d2e5c-9c13-4cae-889d-43ffcb008b52",
+  "slug": "demo_stream",
+  "account_id": "1debcf6b-948a-4fa2-b510-ff1d35eea433",
+  "stats": {
+    "consumer_count": 1,
+    "message_count": 4,
+    "storage_size": 221184
+  },
+  "inserted_at": "2024-07-11T17:13:13Z",
+  "updated_at": "2024-07-11T17:13:13Z"
+}
 ```
 
 **Step 2:** publish a message to your stream:
 
 ```bash
-sequin stream pub sequin-demo sqn.test "Hello API" --as-curl
+sequin stream pub demo_stream sqn.test "Hello API" --as-curl
 
-CURL EXAMPLE
+curl -X POST http://localhost:4000/api/streams/demo_stream/messages \
+-H 'Content-Type: application/json' \
+-H 'Accept: application/json' \
+-d '{"messages":[{"subject":"sqn.test","data":"Hello API"}]}'
 ```
 
 **Step 3:** fetch a message for a consumer:
 
 ```bash
-sequin consumer next sequin-demo demo-consumer --no-ack --as-curl
+sequin consumer next demo_stream demo_consumer --no-ack --as-curl
 
-CURL EXAMPLE
+curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/next \
+-H 'Content-Type: application/json' \
+-d '{"batch_size":1}'
 ```
 
 **Step 4:** nack a message:
 
 ```bash
-sequin consumer nack sequin-demo demo-consumer [ack_id] --as-curl
+sequin consumer nack demo_stream demo_consumer [ack_id] --as-curl
 
 CURL EXAMPLE
 ```
@@ -293,7 +325,7 @@ CURL EXAMPLE
 **Step 5:** ack a message:
 
 ```bash
-sequin consumer ack sequin-demo demo-consumer [ack_id] --as-curl
+sequin consumer ack demo_stream demo_consumer [ack_id] --as-curl
 
 CURL EXAMPLE
 ```
@@ -337,7 +369,7 @@ You'll see that your new database source is active and connected to your stream.
 In a new terminal, start monitoring your stream:
 
 ```bash
-sequin stream sequin-demo tail [subject]
+sequin stream demo_stream tail [subject]
 ```
 
 Create a record in the table you just connected to your stream! Then watch a message enter your stream.

@@ -11,15 +11,16 @@ defmodule Sequin.Streams.Consumer do
 
   @derive {Jason.Encoder,
            only: [
-             :slug,
+             :account_id,
              :ack_wait_ms,
+             :filter_subject_pattern,
+             :id,
+             :inserted_at,
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
+             :slug,
              :stream_id,
-             :account_id,
-             :id,
-             :inserted_at,
              :updated_at
            ]}
   typed_schema "consumers" do

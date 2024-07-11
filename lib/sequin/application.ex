@@ -10,6 +10,8 @@ defmodule Sequin.Application do
     env = Application.get_env(:sequin, :env)
     children = children(env)
 
+    :ets.new(Sequin.Extensions.Replication.ets_table(), [:set, :public, :named_table])
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sequin.Supervisor]

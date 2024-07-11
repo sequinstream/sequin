@@ -20,6 +20,8 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.SourcesFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Mocks.Extensions.ReplicationMessageHandlerMock
+  alias Sequin.Sources
+  alias Sequin.Sources.PostgresReplication
   alias Sequin.SourcesRuntime
   alias Sequin.Streams
   alias Sequin.Test.Support.ReplicationSlots
@@ -214,6 +216,26 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_delete_data = Jason.decode!(delete_message.data)
       assert %{"id1" => 1, "id2" => 2} = decoded_delete_data["data"]
       assert decoded_delete_data["deleted"]
+    end
+
+    test "add_info returns correct information", %{conn: conn, pg_replication: pg_replication} do
+      # Insert some data to ensure there's a last committed timestamp
+      query!(
+        conn,
+        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
+      )
+
+      assert_receive {Replication, :message_handled}, 1000
+
+      # Call add_info
+      pg_replication_with_info = Sources.add_info(pg_replication)
+
+      # Assert that the info field is populated
+      assert %PostgresReplication.Info{} = pg_replication_with_info.info
+
+      # Check last_committed_at
+      assert pg_replication_with_info.info.last_committed_at != nil
+      assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
     end
   end
 

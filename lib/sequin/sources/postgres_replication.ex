@@ -8,6 +8,16 @@ defmodule Sequin.Sources.PostgresReplication do
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabase
 
+  defmodule Info do
+    @moduledoc false
+    use TypedStruct
+
+    @derive Jason.Encoder
+    typedstruct do
+      field :last_committed_at, nil | DateTime.t()
+    end
+  end
+
   @derive {Jason.Encoder,
            only: [:id, :slot_name, :publication_name, :status, :account_id, :postgres_database_id, :stream_id]}
   schema "postgres_replications" do
@@ -18,6 +28,8 @@ defmodule Sequin.Sources.PostgresReplication do
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
     belongs_to :stream, Sequin.Streams.Stream
+
+    field :info, :map, virtual: true
 
     timestamps()
   end

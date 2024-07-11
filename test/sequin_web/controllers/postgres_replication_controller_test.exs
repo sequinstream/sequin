@@ -82,7 +82,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   describe "show" do
     test "shows postgres replication details", %{conn: conn, postgres_replication: postgres_replication} do
       conn = get(conn, ~p"/api/postgres_replications/#{postgres_replication.id}")
-      assert json_response = json_response(conn, 200)
+      assert %{"postgres_replication" => json_response} = json_response(conn, 200)
       atomized_response = Sequin.Map.atomize_keys(json_response)
 
       assert_maps_equal(postgres_replication, atomized_response, [

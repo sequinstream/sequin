@@ -25,6 +25,8 @@ defmodule Sequin.Extensions.Replication do
 
   require Logger
 
+  def ets_table, do: __MODULE__
+
   defmodule State do
     @moduledoc false
     use TypedStruct
@@ -41,7 +43,6 @@ defmodule Sequin.Extensions.Replication do
       field :slot_name, String.t()
       field :step, :disconnected | :streaming
       field :test_pid, pid()
-      field :tid, :ets.tid()
     end
   end
 
@@ -90,14 +91,13 @@ defmodule Sequin.Extensions.Replication do
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(replication_id: state.id)
-    tid = :ets.new(Replication, [:public, :set])
 
     if state.test_pid do
       Mox.allow(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
-    {:ok, %{state | tid: tid, step: :disconnected}}
+    {:ok, %{state | step: :disconnected}}
   end
 
   @impl Postgrex.ReplicationConnection
@@ -174,7 +174,7 @@ defmodule Sequin.Extensions.Replication do
         %{name: name, type: type}
       end)
 
-    :ets.insert(state.tid, {id, columns, schema, table})
+    :ets.insert(ets_table(), {{state.id, id}, columns, schema, table})
     state
   end
 
@@ -185,14 +185,15 @@ defmodule Sequin.Extensions.Replication do
   # Ensure we do not have an out-of-order bug by asserting equality
   defp process_message(
          %Commit{lsn: lsn, commit_timestamp: ts},
-         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts} = state
+         %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state
        )
        when current_lsn == lsn do
+    :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
     %{state | last_committed_lsn: lsn, current_xaction_lsn: nil, current_xid: nil, current_commit_ts: nil}
   end
 
   defp process_message(%Insert{} = msg, state) do
-    [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
+    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
 
     record = %NewRecord{
       commit_timestamp: state.current_commit_ts,
@@ -216,7 +217,7 @@ defmodule Sequin.Extensions.Replication do
   #   tuple_data: {"1", "Chani", "Atreides", "Arrakis"}
   # },
   defp process_message(%Update{} = msg, %State{} = state) do
-    [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
+    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
 
     old_record =
       if msg.old_tuple_data do
@@ -248,7 +249,7 @@ defmodule Sequin.Extensions.Replication do
   # Otherwise, in full mode, we'll get old_tuple_data.
 
   defp process_message(%Delete{} = msg, %State{} = state) do
-    [{_, columns, schema, table}] = :ets.lookup(state.tid, msg.relation_id)
+    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
 
     prev_tuple_data =
       if msg.old_tuple_data do
@@ -387,4 +388,12 @@ defmodule Sequin.Extensions.Replication do
 
   @epoch DateTime.to_unix(~U[2000-01-01 00:00:00Z], :microsecond)
   defp current_time, do: System.os_time(:microsecond) - @epoch
+
+  # Add this function to get the last committed timestamp
+  def get_last_committed_at(id) do
+    case :ets.lookup(ets_table(), {id, :last_committed_at}) do
+      [{{^id, :last_committed_at}, ts}] -> ts
+      [] -> nil
+    end
+  end
 end

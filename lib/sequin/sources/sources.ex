@@ -4,6 +4,7 @@ defmodule Sequin.Sources do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Extensions.Replication
   alias Sequin.Repo
   alias Sequin.Sources.PostgresReplication
   alias Sequin.SourcesRuntime
@@ -67,6 +68,18 @@ defmodule Sequin.Sources do
     res = Repo.delete(pg_replication)
     SourcesRuntime.Supervisor.stop_for_pg_replication(pg_replication)
     res
+  end
+
+  def add_info(%PostgresReplication{} = pg_replication) do
+    pg_replication = Repo.preload(pg_replication, :postgres_database)
+
+    last_committed_at = Replication.get_last_committed_at(pg_replication.id)
+
+    info = %PostgresReplication.Info{
+      last_committed_at: last_committed_at
+    }
+
+    %{pg_replication | info: info}
   end
 
   defp get_or_build_postgres_database(account_id, attrs) do

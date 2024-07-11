@@ -205,9 +205,7 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	if len(replications) == 0 {
-		fmt.Println()
 		fmt.Println("No sources defined")
-		fmt.Println()
 		return nil
 	}
 
@@ -219,8 +217,6 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	fmt.Print(table.Render())
-	fmt.Println()
-	fmt.Println()
 
 	return nil
 }
@@ -260,8 +256,6 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
-	fmt.Println()
-
 	cols := newColumns(fmt.Sprintf("Information for Postgres Replication %s", replicationWithInfo.PostgresReplication.ID))
 
 	cols.AddRow("ID", replicationWithInfo.PostgresReplication.ID)
@@ -274,12 +268,6 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 	// Add the new info fields
 	lastCommittedTS := replicationWithInfo.Info.FormatLastCommittedAt()
 	cols.AddRow("Last Committed Timestamp", lastCommittedTS)
-
-	lagInBytes := "N/A"
-	if replicationWithInfo.Info.LagInBytes != nil {
-		lagInBytes = fmt.Sprintf("%d", *replicationWithInfo.Info.LagInBytes)
-	}
-	cols.AddRow("Lag in Bytes", lagInBytes)
 
 	cols.Println()
 

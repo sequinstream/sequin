@@ -158,7 +158,6 @@ func consumerLs(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	}
 
 	fmt.Print(table.Render())
-	fmt.Println()
 	return nil
 }
 
@@ -274,7 +273,6 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 }
 
 func displayConsumerInfo(consumer *api.Consumer) {
-	fmt.Println()
 	cols := newColumns(fmt.Sprintf("Consumer %s created %s", consumer.ID, consumer.CreatedAt.Format(time.RFC3339)))
 	cols.AddRow("ID", consumer.ID)
 	cols.AddRow("Slug", consumer.Slug)
@@ -394,7 +392,6 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		fmt.Printf("Subject: %s\n", msg.Message.Subject)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
-		fmt.Println()
 
 		if !c.NoAck {
 			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckToken)
@@ -497,7 +494,6 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 			fmt.Printf("State: %s\n", msg.Info.State)
 		}
 		fmt.Printf("\n%s\n", msg.Message.Data)
-		fmt.Println()
 	}
 
 	return nil

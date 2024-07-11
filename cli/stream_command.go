@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -28,8 +27,8 @@ var streamPublishConfig StreamPublishConfig
 
 type StreamListConfig struct {
 	StreamIDOrSlug string
-	Limit          int
-	Sort           string
+	Last           int
+	First          int
 	SubjectPattern string
 }
 
@@ -67,21 +66,13 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	pubCmd.Arg("subject", "Subject of the message").Required().StringVar(&streamPublishConfig.Subject)
 	pubCmd.Arg("message", "Message to publish").Required().StringVar(&streamPublishConfig.Message)
 
-	lastCmd := stream.Command("last", "List last messages in a stream").Action(func(c *fisk.ParseContext) error {
-		streamListConfig.Sort = "seq_desc"
-		return streamList(c, config, "last")
+	messagesCmd := stream.Command("messages", "List messages in a stream").Action(func(c *fisk.ParseContext) error {
+		return streamList(c, config)
 	})
-	lastCmd.Arg("stream-id-or-slug", "ID or slug of the stream").Required().StringVar(&streamListConfig.StreamIDOrSlug)
-	lastCmd.Flag("limit", "Limit the number of messages").Default("10").IntVar(&streamListConfig.Limit)
-	lastCmd.Flag("subject", "Filter messages by subject pattern").StringVar(&streamListConfig.SubjectPattern)
-
-	firstCmd := stream.Command("first", "List first messages in a stream").Action(func(c *fisk.ParseContext) error {
-		streamListConfig.Sort = "seq_asc"
-		return streamList(c, config, "first")
-	})
-	firstCmd.Arg("stream-id-or-slug", "ID or slug of the stream").Required().StringVar(&streamListConfig.StreamIDOrSlug)
-	firstCmd.Flag("limit", "Limit the number of messages").Default("10").IntVar(&streamListConfig.Limit)
-	firstCmd.Flag("subject", "Filter messages by subject pattern").StringVar(&streamListConfig.SubjectPattern)
+	messagesCmd.Arg("stream-id-or-slug", "ID or slug of the stream").Required().StringVar(&streamListConfig.StreamIDOrSlug)
+	messagesCmd.Flag("last", "Show last N messages").Default("10").IntVar(&streamListConfig.Last)
+	messagesCmd.Flag("first", "Show first N messages").IntVar(&streamListConfig.First)
+	messagesCmd.Flag("subject", "Filter messages by subject pattern").StringVar(&streamListConfig.SubjectPattern)
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
@@ -111,9 +102,7 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	if len(streams) == 0 {
-
 		fmt.Println("No streams defined")
-
 		return nil
 	}
 
@@ -135,9 +124,6 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 
 	// Render the table
 	fmt.Print(table.Render())
-	// Print a couple of empty lines after the table
-	fmt.Println()
-	fmt.Println()
 
 	return nil
 }
@@ -184,8 +170,6 @@ func displayStreamInfo(config *Config) error {
 	if err != nil {
 		return err
 	}
-
-	fmt.Println()
 
 	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.Slug, stream.CreatedAt.Format(time.RFC3339)))
 
@@ -246,8 +230,6 @@ func streamAdd(_ *fisk.ParseContext, config *Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
-
-	fmt.Println()
 
 	cols := newColumns(fmt.Sprintf("Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
 
@@ -340,14 +322,22 @@ func streamPublish(_ *fisk.ParseContext, config *Config) error {
 	return nil
 }
 
-func streamList(_ *fisk.ParseContext, config *Config, listType string) error {
+func streamList(_ *fisk.ParseContext, config *Config) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
+	limit := streamListConfig.Last
+	sort := "seq_desc"
+
+	if streamListConfig.First > 0 {
+		limit = streamListConfig.First
+		sort = "seq_asc"
+	}
+
 	if config.AsCurl {
-		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, streamListConfig.Limit, streamListConfig.Sort, streamListConfig.SubjectPattern)
+		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.SubjectPattern)
 		if err != nil {
 			return err
 		}
@@ -361,7 +351,7 @@ func streamList(_ *fisk.ParseContext, config *Config, listType string) error {
 		return nil
 	}
 
-	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, streamListConfig.Limit, streamListConfig.Sort, streamListConfig.SubjectPattern)
+	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.SubjectPattern)
 	if err != nil {
 		return fmt.Errorf("failed to list messages: %w", err)
 	}
@@ -371,22 +361,17 @@ func streamList(_ *fisk.ParseContext, config *Config, listType string) error {
 		return nil
 	}
 
-	fmt.Printf("%s %d messages in stream %s\n\n", strings.Title(listType), len(messages), streamListConfig.StreamIDOrSlug)
+	fmt.Printf("Listing %d messages in stream %s\n", len(messages), streamListConfig.StreamIDOrSlug)
 
 	for _, msg := range messages {
-		cols := newColumns(fmt.Sprintf("Message %d", msg.Seq))
-		cols.AddRow("Sequence", fmt.Sprintf("%d", msg.Seq))
-		cols.AddRow("Subject", msg.Subject)
-		cols.AddRow("Created At", msg.CreatedAt.Format(time.RFC3339))
-		cols.AddRow("Updated At", msg.UpdatedAt.Format(time.RFC3339))
-
-		output, err := cols.Render()
-		if err != nil {
-			return fmt.Errorf("failed to render columns: %w", err)
-		}
-
-		fmt.Print(output)
-		fmt.Printf("\n%s\n\n", msg.Data)
+		fmt.Println()
+		fmt.Println()
+		fmt.Printf("Sequence:   %d\n", msg.Seq)
+		fmt.Printf("Subject:    %s\n", msg.Subject)
+		fmt.Printf("Created At: %s\n", msg.CreatedAt.Format(time.RFC3339))
+		fmt.Printf("Updated At: %s\n", msg.UpdatedAt.Format(time.RFC3339))
+		fmt.Println()
+		fmt.Println(msg.Data)
 	}
 
 	return nil

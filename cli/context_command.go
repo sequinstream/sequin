@@ -80,9 +80,7 @@ func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not save context: %w", err)
 	}
 
-	fmt.Println()
 	fmt.Print(text.FgGreen.Sprintf("Context '%s' created successfully.", c.name))
-	fmt.Println()
 	return nil
 }
 
@@ -93,9 +91,7 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 	}
 
 	if len(contexts) == 0 {
-		fmt.Println()
 		fmt.Println(text.FgBlue.Sprint("No contexts defined"))
-		fmt.Println()
 		return nil
 	}
 
@@ -112,8 +108,6 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 	}
 
 	fmt.Println(table.Render())
-	fmt.Println()
-	fmt.Println()
 
 	return nil
 }
@@ -123,9 +117,7 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		err := c.pickContext("Choose a context to show info for:")
 		if err != nil {
 			if err.Error() == "no contexts available" {
-				fmt.Println()
 				fmt.Println(text.FgBlue.Sprint("There are no contexts available."))
-				fmt.Println()
 				return nil
 			}
 			return err
@@ -136,8 +128,6 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 	if err != nil {
 		return fmt.Errorf("could not load context: %w", err)
 	}
-
-	fmt.Println()
 
 	cols := newColumns(fmt.Sprintf("Information for Context %s", ctx.Name))
 
@@ -162,9 +152,7 @@ func (c *ctxCommand) removeAction(_ *fisk.ParseContext) error {
 		err := c.pickContext("Choose a context to remove:")
 		if err != nil {
 			if err.Error() == "no contexts available" {
-				fmt.Println()
 				fmt.Println(text.FgBlue.Sprint("There are no contexts available to delete."))
-				fmt.Println()
 				return nil
 			}
 			return err

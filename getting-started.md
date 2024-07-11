@@ -150,7 +150,7 @@ sequin stream first --limit=2 --subject="sqn.test.*" demo_stream
 
 Similarly, `first` will dump the two oldest (i.e. tail of the stream) messages that match the subject `sqn.test.*`.
 
-**`stream tail`**
+<!-- **`stream tail`**
 
 You can also observe your stream live, as messages get published. In a new terminal, run:
 
@@ -168,14 +168,14 @@ Go back to your first terminal running `stream tail` and you'll see the message 
 
 ```bash
 EXAMPLE
-```
+``` -->
 
 **SQL**
 
 Of course, you can use SQL too. Connect to your `sequin` database using the SQL client of your choice and run:
 
 ```sql
-select * from sequin_stream.streams
+select subject, seq, data from streams.messages_demo_stream;
 ```
 
 ## Consume a message
@@ -242,7 +242,7 @@ You've just consumed and ack'd your first message. When you run `consumer info` 
 
 You just stepped through the process of observing the state of your consumer as you fetched and ack'd a message. There are easier ways to monitor your consumer.
 
-**`con tap`**
+<!-- **`con tap`**
 
 Logs the state of your consumer in your terminal. Run the following command to tap into your `demo_consumer`:
 
@@ -256,27 +256,23 @@ Then, open another terminal and fetch another message. Skip the `--no-ack` flag 
 sequin consumer next demo_stream demo_consumer
 ```
 
-When you return to your other terminal running `con tap` you'll see both the fetch and ack logged.
+When you return to your other terminal running `con tap` you'll see both the fetch and ack logged. -->
 
 **SQL**
 
 As with streams, consumers can be observed through your database as well:
 
 ```sql
-select * from sequin_stream.consumer_messages
+select * from streams.consumer_messages_demo_stream_demo_consumer;
 ```
 
 ## Move to the API
 
 The CLI is built on top of Sequin's HTTP interface. Meaning everything you've done so far is available over HTTP.
 
-**Step 1:** generate an API token for your account:
+**Step 1:** generate curl commands using the `--as-curl` flag
 
-```bash
-sequin keys add [?description]
-```
-
-With an API token added to your account, you can now generate the `curl` equivalent for any CLI command by passing the `--as-curl` flag:
+You can generate the `curl` equivalent for any CLI command by passing the `--as-curl` flag:
 
 ```bash
 sequin stream info demo_stream --as-curl

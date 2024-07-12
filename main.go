@@ -34,6 +34,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddContextCommands(scli, &config)
 	// Hiding Stream commands for now
 	// cli.AddStreamCommands(scli, &config)
+	cli.AddMessageCommands(scli, &config)
 	cli.AddPostgresReplicationCommands(scli, &config)
 	cli.AddConsumerCommands(scli, &config)
 

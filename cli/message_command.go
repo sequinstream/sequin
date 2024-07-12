@@ -159,7 +159,7 @@ func messageList(_ *fisk.ParseContext, config *Config, m *MessageConfig) error {
 
 	for _, msg := range messages {
 		fmt.Println()
-		fmt.Printf("Key:        %s\n", msg.Subject)
+		fmt.Printf("Key:        %s\n", msg.Key)
 		fmt.Printf("Sequence:   %d\n", msg.Seq)
 		fmt.Printf("Created At: %s\n", msg.CreatedAt.Format(time.RFC3339))
 		fmt.Printf("Updated At: %s\n", msg.UpdatedAt.Format(time.RFC3339))

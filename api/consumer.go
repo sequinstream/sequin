@@ -22,27 +22,27 @@ type FetchNextMessagesResponse struct {
 
 // Consumer represents the structure of a consumer returned by the API
 type Consumer struct {
-	ID                   string    `json:"id"`
-	Slug                 string    `json:"slug"`
-	StreamID             string    `json:"stream_id"`
-	AckWaitMS            int       `json:"ack_wait_ms"`
-	MaxAckPending        int       `json:"max_ack_pending"`
-	MaxDeliver           int       `json:"max_deliver"`
-	MaxWaiting           int       `json:"max_waiting"`
-	FilterSubjectPattern string    `json:"filter_subject_pattern"`
-	CreatedAt            time.Time `json:"inserted_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID               string    `json:"id"`
+	Slug             string    `json:"slug"`
+	StreamID         string    `json:"stream_id"`
+	AckWaitMS        int       `json:"ack_wait_ms"`
+	MaxAckPending    int       `json:"max_ack_pending"`
+	MaxDeliver       int       `json:"max_deliver"`
+	MaxWaiting       int       `json:"max_waiting"`
+	FilterKeyPattern string    `json:"filter_subject_pattern"`
+	CreatedAt        time.Time `json:"inserted_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 // ConsumerCreateOptions represents the options for creating a new consumer
 type ConsumerCreateOptions struct {
-	Slug                 string `json:"slug"`
-	StreamID             string `json:"stream_id"`
-	AckWaitMS            int    `json:"ack_wait_ms,omitempty"`
-	MaxAckPending        int    `json:"max_ack_pending,omitempty"`
-	MaxDeliver           int    `json:"max_deliver,omitempty"`
-	MaxWaiting           int    `json:"max_waiting,omitempty"`
-	FilterSubjectPattern string `json:"filter_subject_pattern"`
+	Slug             string `json:"slug"`
+	StreamID         string `json:"stream_id"`
+	AckWaitMS        int    `json:"ack_wait_ms,omitempty"`
+	MaxAckPending    int    `json:"max_ack_pending,omitempty"`
+	MaxDeliver       int    `json:"max_deliver,omitempty"`
+	MaxWaiting       int    `json:"max_waiting,omitempty"`
+	FilterKeyPattern string `json:"filter_subject_pattern"`
 }
 
 // ConsumerUpdateOptions represents the options for updating an existing consumer

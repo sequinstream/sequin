@@ -14,21 +14,21 @@ import (
 )
 
 type consumerConfig struct {
-	ConsumerID           string
-	Slug                 string
-	AckWaitMS            int
-	MaxAckPending        int
-	MaxDeliver           int
-	MaxWaiting           int
-	FilterSubjectPattern string
-	BatchSize            int
-	NoAck                bool
-	PendingOnly          bool
-	LastN                int
-	FirstN               int
-	AckToken             string
-	Force                bool
-	UseDefaults          bool
+	ConsumerID       string
+	Slug             string
+	AckWaitMS        int
+	MaxAckPending    int
+	MaxDeliver       int
+	MaxWaiting       int
+	FilterKeyPattern string
+	BatchSize        int
+	NoAck            bool
+	PendingOnly      bool
+	LastN            int
+	FirstN           int
+	AckToken         string
+	Force            bool
+	UseDefaults      bool
 }
 
 func AddConsumerCommands(app *fisk.Application, config *Config) {
@@ -50,7 +50,7 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	addCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
 	addCmd.Flag("max-deliver", "Maximum number of delivery attempts").IntVar(&c.MaxDeliver)
 	addCmd.Flag("max-waiting", "Maximum number of waiting messages").IntVar(&c.MaxWaiting)
-	addCmd.Flag("filter-subject-pattern", "Subject pattern for message filtering").StringVar(&c.FilterSubjectPattern)
+	addCmd.Flag("filter", "Key pattern for message filtering").StringVar(&c.FilterKeyPattern)
 	addCmd.Flag("defaults", "Use default values for non-required fields").BoolVar(&c.UseDefaults)
 
 	infoCmd := consumer.Command("info", "Show consumer information").Action(func(ctx *fisk.ParseContext) error {
@@ -70,8 +70,8 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	})
 	peekCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	peekCmd.Flag("pending", "Show only pending messages").BoolVar(&c.PendingOnly)
-	peekCmd.Flag("last", "Show last N messages").IntVar(&c.LastN)
-	peekCmd.Flag("first", "Show first N messages").IntVar(&c.FirstN)
+	peekCmd.Flag("last", "Show most recent N messages").IntVar(&c.LastN)
+	peekCmd.Flag("first", "Show least recent N messages").IntVar(&c.FirstN)
 
 	ackCmd := consumer.Command("ack", "Ack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAck(ctx, config, c)
@@ -183,11 +183,11 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		}
 	}
 
-	if c.FilterSubjectPattern == "" {
+	if c.FilterKeyPattern == "" {
 		err = survey.AskOne(&survey.Input{
-			Message: "Enter subject pattern for message filtering:",
-			Help:    "A subject pattern to filter which messages this consumer receives. Use '*' as a wildcard.",
-		}, &c.FilterSubjectPattern, survey.WithValidator(survey.Required))
+			Message: "Enter key pattern for message filtering:",
+			Help:    "A key pattern to filter which messages this consumer receives. Use '*' as a wildcard.",
+		}, &c.FilterKeyPattern, survey.WithValidator(survey.Required))
 		if err != nil {
 			return fmt.Errorf("failed to get user input: %w", err)
 		}
@@ -225,9 +225,9 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	}
 
 	createOptions := api.ConsumerCreateOptions{
-		Slug:                 c.Slug,
-		StreamID:             streamID,
-		FilterSubjectPattern: c.FilterSubjectPattern,
+		Slug:             c.Slug,
+		StreamID:         streamID,
+		FilterKeyPattern: c.FilterKeyPattern,
 	}
 
 	if c.AckWaitMS != 0 {
@@ -278,7 +278,7 @@ func displayConsumerInfo(consumer *api.Consumer) {
 	cols.AddRow("Max Ack Pending", strconv.Itoa(consumer.MaxAckPending))
 	cols.AddRow("Max Deliver", strconv.Itoa(consumer.MaxDeliver))
 	cols.AddRow("Max Waiting", strconv.Itoa(consumer.MaxWaiting))
-	cols.AddRow("Filter Subject Pattern", consumer.FilterSubjectPattern)
+	cols.AddRow("Filter", consumer.FilterKeyPattern)
 	cols.AddRow("Created At", consumer.CreatedAt.Format(time.RFC3339))
 
 	cols.Println()
@@ -380,7 +380,7 @@ func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	for _, msg := range messages {
 		fmt.Printf("Message (Ack Token: %s):\n", msg.AckToken)
-		fmt.Printf("Subject: %s\n", msg.Message.Subject)
+		fmt.Printf("Key: %s\n", msg.Message.Key)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
 
@@ -473,7 +473,7 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Subject: %s\n", msg.Message.Subject)
+		fmt.Printf("Key: %s\n", msg.Message.Key)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("Deliver Count: %d\n", msg.Info.DeliverCount)
 		fmt.Printf("Last Delivered At: %s\n", msg.Info.FormatLastDeliveredAt())

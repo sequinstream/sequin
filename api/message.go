@@ -7,6 +7,6 @@ type Message struct {
 	CreatedAt time.Time `json:"inserted_at"`
 	Data      string    `json:"data"`
 	Seq       int       `json:"seq"`
-	Subject   string    `json:"subject"`
+	Key       string    `json:"subject"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

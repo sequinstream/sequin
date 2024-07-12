@@ -19,7 +19,7 @@ var streamAddConfig StreamAddConfig
 
 type StreamPublishConfig struct {
 	StreamSlug string
-	Subject    string
+	Key        string
 	Message    string
 }
 
@@ -29,7 +29,7 @@ type StreamListConfig struct {
 	StreamIDOrSlug string
 	Last           int
 	First          int
-	SubjectPattern string
+	KeyPattern     string
 }
 
 var streamListConfig StreamListConfig
@@ -63,16 +63,16 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 		return streamPublish(c, config)
 	})
 	pubCmd.Arg("stream-id-or-slug", "ID or slug of the stream to publish to").Required().StringVar(&streamPublishConfig.StreamSlug)
-	pubCmd.Arg("subject", "Subject of the message").Required().StringVar(&streamPublishConfig.Subject)
+	pubCmd.Arg("key", "Key of the message").Required().StringVar(&streamPublishConfig.Key)
 	pubCmd.Arg("message", "Message to publish").Required().StringVar(&streamPublishConfig.Message)
 
 	messagesCmd := stream.Command("messages", "List messages in a stream").Action(func(c *fisk.ParseContext) error {
 		return streamList(c, config)
 	})
 	messagesCmd.Arg("stream-id-or-slug", "ID or slug of the stream").Required().StringVar(&streamListConfig.StreamIDOrSlug)
-	messagesCmd.Flag("last", "Show last N messages").Default("10").IntVar(&streamListConfig.Last)
-	messagesCmd.Flag("first", "Show first N messages").IntVar(&streamListConfig.First)
-	messagesCmd.Flag("subject", "Filter messages by subject pattern").StringVar(&streamListConfig.SubjectPattern)
+	messagesCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&streamListConfig.Last)
+	messagesCmd.Flag("first", "Show least recent N messages").IntVar(&streamListConfig.First)
+	messagesCmd.Flag("filter", "Filter messages by key pattern").StringVar(&streamListConfig.KeyPattern)
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
@@ -298,7 +298,7 @@ func streamPublish(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildPublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Subject, streamPublishConfig.Message)
+		req, err := api.BuildPublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Key, streamPublishConfig.Message)
 		if err != nil {
 			return err
 		}
@@ -313,12 +313,12 @@ func streamPublish(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	// Pass the streamSlug directly to the PublishMessage function
-	err = api.PublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Subject, streamPublishConfig.Message)
+	err = api.PublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Key, streamPublishConfig.Message)
 	if err != nil {
 		return fmt.Errorf("failed to publish message: %w", err)
 	}
 
-	fmt.Printf("Message published to stream '%s' with subject '%s'\n", streamPublishConfig.StreamSlug, streamPublishConfig.Subject)
+	fmt.Printf("Message published to stream '%s' with key '%s'\n", streamPublishConfig.StreamSlug, streamPublishConfig.Key)
 	return nil
 }
 
@@ -337,7 +337,7 @@ func streamList(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.SubjectPattern)
+		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.KeyPattern)
 		if err != nil {
 			return err
 		}
@@ -351,7 +351,7 @@ func streamList(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.SubjectPattern)
+	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.KeyPattern)
 	if err != nil {
 		return fmt.Errorf("failed to list messages: %w", err)
 	}
@@ -367,7 +367,7 @@ func streamList(_ *fisk.ParseContext, config *Config) error {
 		fmt.Println()
 		fmt.Println()
 		fmt.Printf("Sequence:   %d\n", msg.Seq)
-		fmt.Printf("Subject:    %s\n", msg.Subject)
+		fmt.Printf("Key:    %s\n", msg.Key)
 		fmt.Printf("Created At: %s\n", msg.CreatedAt.Format(time.RFC3339))
 		fmt.Printf("Updated At: %s\n", msg.UpdatedAt.Format(time.RFC3339))
 		fmt.Println()

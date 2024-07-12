@@ -17,10 +17,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    # Create a default account
-    execute "insert into #{@config_schema}.accounts (id, inserted_at, updated_at) values (uuid_generate_v4(), now(), now());",
-            "delete from #{@config_schema}.accounts;"
-
     create table(:streams, prefix: @config_schema) do
       add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
         null: false

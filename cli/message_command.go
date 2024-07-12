@@ -35,12 +35,12 @@ func AddMessageCommands(app *fisk.Application, config *Config) {
 		return messageInfo(ctx, config)
 	})
 
-	listCmd := message.Command("list", "List messages").Action(func(ctx *fisk.ParseContext) error {
+	listCmd := message.Command("list", "List messages").Alias("ls").Action(func(ctx *fisk.ParseContext) error {
 		return messageList(ctx, config, m)
 	})
 	listCmd.Flag("filter", "Filter messages by key pattern").StringVar(&m.Filter)
-	listCmd.Flag("last", "Show last N messages").Default("10").IntVar(&m.Last)
-	listCmd.Flag("first", "Show first N messages").IntVar(&m.First)
+	listCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&m.Last)
+	listCmd.Flag("first", "Show least recent N messages").IntVar(&m.First)
 }
 
 func messageUpsert(_ *fisk.ParseContext, config *Config, m *MessageConfig) error {

@@ -37,6 +37,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddMessageCommands(scli, &config)
 	cli.AddPostgresReplicationCommands(scli, &config)
 	cli.AddConsumerCommands(scli, &config)
+	cli.AddObserveCommands(scli, &config)
 
 	log.SetFlags(log.Ltime)
 

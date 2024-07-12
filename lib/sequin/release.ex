@@ -9,6 +9,10 @@ defmodule Sequin.Release do
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, step: step))
     end
+
+    Sequin.Streams.maybe_seed()
+
+    :ok
   end
 
   def migrate do
@@ -18,6 +22,10 @@ defmodule Sequin.Release do
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))
     end
+
+    Sequin.Streams.maybe_seed()
+
+    :ok
   end
 
   def rollback(repo, version) do

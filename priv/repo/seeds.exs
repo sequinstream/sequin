@@ -10,5 +10,4 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
-account = Sequin.Repo.insert!(%Sequin.Accounts.Account{})
-{:ok, _stream} = Sequin.Streams.create_stream_for_account_with_lifecycle(account.id, %{slug: "default"})
+Sequin.Streams.maybe_seed()

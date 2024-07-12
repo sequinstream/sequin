@@ -2,6 +2,7 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
+  alias Sequin.Accounts.Account
   alias Sequin.Cache
   alias Sequin.Error
   alias Sequin.Repo
@@ -11,6 +12,8 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
+
+  require Logger
 
   @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -30,6 +33,15 @@ defmodule Sequin.Streams do
     |> ConsumerMessage.where_consumer_id()
     |> ConsumerMessage.where_message_subject(cm.message_subject)
     |> Repo.one()
+  end
+
+  def maybe_seed do
+    if Sequin.Repo.all(Account) == [] do
+      account = Sequin.Repo.insert!(%Account{})
+      {:ok, _stream} = create_stream_for_account_with_lifecycle(account.id, %{slug: "default"})
+
+      Logger.info("Created default account and stream")
+    end
   end
 
   # Streams

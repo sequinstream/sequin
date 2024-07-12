@@ -32,7 +32,8 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	scli.Flag("as-curl", "Output the command as a curl request instead of executing it").BoolVar(&config.AsCurl)
 
 	cli.AddContextCommands(scli, &config)
-	cli.AddStreamCommands(scli, &config)
+	// Hiding Stream commands for now
+	// cli.AddStreamCommands(scli, &config)
 	cli.AddPostgresReplicationCommands(scli, &config)
 	cli.AddConsumerCommands(scli, &config)
 

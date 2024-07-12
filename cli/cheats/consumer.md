@@ -1,51 +1,55 @@
-# To list consumers for a stream
+# To list consumers
 
-sequin consumer ls [stream-id]
+sequin consumer ls
 
-# To add a new consumer to a stream
+# To add a new consumer
 
-sequin consumer add [stream-id] [slug]
+sequin consumer add [slug]
 
 # To show consumer information
 
-sequin consumer info [stream-id] [consumer-id]
+sequin consumer info [consumer-id]
 
 # To pull next messages for a consumer (default batch size is 1)
 
-sequin consumer next [stream-id] [consumer-id]
+sequin consumer next [consumer-id]
 
 # To pull next messages for a consumer without acknowledging them
 
-sequin consumer next [stream-id] [consumer-id] --no-ack
+sequin consumer next [consumer-id] --no-ack
 
 # To pull next messages for a consumer and ack them
 
-sequin consumer next [stream-id] [consumer-id]
+sequin consumer next [consumer-id]
 
 # To pull a batch of messages for a consumer
 
-sequin consumer next [stream-id] [consumer-id] --batch-size 10
+sequin consumer next [consumer-id] --batch-size 10
 
 # To peek at messages for a consumer (default shows last 10 messages)
 
-sequin consumer peek [stream-id] [consumer-id]
+sequin consumer peek [consumer-id]
 
 # To peek only at pending messages for a consumer
 
-sequin consumer peek [stream-id] [consumer-id] --pending
+sequin consumer peek [consumer-id] --pending
 
 # To peek at the last N messages for a consumer
 
-sequin consumer peek [stream-id] [consumer-id] --last 20
+sequin consumer peek [consumer-id] --last 20
 
 # To peek at the first N messages for a consumer
 
-sequin consumer peek [stream-id] [consumer-id] --first 20
+sequin consumer peek [consumer-id] --first 20
 
 # To ack a message
 
-sequin consumer ack [stream-id] [consumer-id] [ack-token]
+sequin consumer ack [consumer-id] [ack-token]
 
 # To nack a message
 
-sequin consumer nack [stream-id] [consumer-id] [ack-token]
+sequin consumer nack [consumer-id] [ack-token]
+
+# To edit a consumer
+
+sequin consumer edit [consumer-id]

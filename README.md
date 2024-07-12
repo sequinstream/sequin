@@ -2,129 +2,69 @@
 
 ## What is Sequin?
 
-Sequin is an open-source message streaming system built on top of PostgreSQL. It bridges the gap between simple message queues and complex streaming platforms, offering a powerful yet familiar solution for developers who need reliable, asynchronous processing with the robustness of a database they already know and trust.
+Sequin is an open-source message queue (technically a stream) built on PostgreSQL.
 
-Sequin consists of a **stateless Docker image** that can connect to any Postgres database. And a **CLI** for managing streams, consumers, and sources.
+Sequin offers message ingestion and consumption similar to SQS or Kafka. But because it is built on Postgres, Sequin offers delivery mechanics (such as SQL filtering) that are not possible with existing solutions.
+
+If you already use Postgres and need a message queue, simply extend your database with Sequin instead of adding a new system with new operational burden.
 
 ### Key Features:
 
-- **Postgres-powered streaming**: Harness the robustness of PostgreSQL for high-performance message streaming.
-- **Seamless table integration**: Transform existing Postgres tables into message streams effortlessly.
-- **Hierarchical subject routing**: Utilize dot-separated subjects for precise message filtering and routing.
-- **At-least-once delivery**: Ensure message reliability with durable consumers and automatic redelivery.
-- **HTTP interface**: Access streams via a RESTful API.
-- **Pull and push consumers**: Support both polling and webhook-based message consumption.
-- **Record and event streaming**: Optimized for both database record changes and event-driven architectures.
-- **Replay capability**: Easily replay messages from any point in a stream's history.
-- **Observability and management**: Monitor and control your streams using familiar PostgreSQL tools and Sequin's management API and CLI.
+- **At-least-once delivery**: All the guarantees you expect of a message queue.
+- **SQL reads**: Consume messages with SQL-powered filtering.
+- **Simple stack**: Extend your existing Postgres database into a message queue.
+- **Predictable scaling**: If Postgres can handle your data, Sequin can as well.
+- **Predictable cost**: If you know what Postgres costs, you know what Sequin costs.
 
 ## Core concepts
 
-### Streams
+### Messages
 
-**Streams** are the fundamental building blocks in Sequin. A stream is an ordered list of messages. Each stream is backed by a PostgreSQL table.
+A **message** in Sequin consists of a `key` and a `data` payload. Because you `upsert` messages into Sequin, there’s only ever one message per key.
 
-You can create a stream by running the following command:
+### Key
 
-```
-sequin stream add <stream-name>
-```
+In Sequin, a **key** serves two purposes:
 
-And publish to the stream by running:
+1. It’s the unique key for the message (the primary key of the `messages` table under the hood)
+2. It contains attributes that can be used for consumer filtering
 
-```
-sequin stream pub <stream-name> <subject> <message>
-```
+Because consumers filter by key, you should choose the format of your keys intentionally.
 
-### Subjects
+For example, a payroll processing system might choose a format like:
 
-Subjects in Sequin provide a hierarchical naming system for organizing and routing messages within streams. They use dot-separated strings. This allows for precise message filtering and routing.
+`payroll.[platform].[employer-id].[employee-id].[pay-type].[pay-date]`
 
-For example:
+And the keys might look like:
 
-- `orders.new`
-- `users.profile.updated`
-- `sensors.temperature.us-west`
-
-Subjects support wildcards for flexible message consumption:
-
-- `*` matches a single token (e.g., `orders.*` matches `orders.new` and `orders.cancelled`)
-- `>` matches one or more tokens (e.g., `sensors.>` matches all sensor-related subjects)
+- `payroll.adp.atreides_corp.employee_a.hourly.2024-02-01`
+- `payroll.adp.atreides_corp.employee_b.salary.2024-02-01`
+- `payroll.paychex.harkonnen_house.employee_c.commission.2024-02-01`
 
 ### Consumers
 
-Consumers in Sequin are stateful views of a stream that allow clients to process messages. They keep track of which messages have been delivered and acknowledged, ensuring at-least-once delivery semantics.
+A **consumer** is how to read messages with delivery guarantees. The guarantees:
 
-Sequin supports two types of consumers:
+#### Key filter
 
-1. Pull Consumers: Clients actively request batches of messages on demand. This is ideal for applications that need fine-grained control over message processing rates.
+Consumers are configured with a **key filter** which determines which messages are available to that consumer. The key filter can match on tokens and can include wildcards:
 
-2. Push Consumers: Messages are automatically delivered to a specified endpoint (e.g., a webhook URL). This is suitable for real-time processing scenarios.
+- `payroll.>`: Subscribe to all payroll data across all providers
+- `payroll.adp.>`: Subscribe to all payroll data from ADP
+- `payroll.paychex.>`: Subscribe to all payroll data from Paychex
+- `payroll.*.atreides_corp.>`: Subscribe to all payroll data related to Atreides Corp employees
+- etc
 
-Key features of consumers include:
+#### At-least-once with retries
 
-- Durable subscriptions: Consumers maintain their position in the stream, even if disconnected.
-- Filtered consumption: Consumers can subscribe to specific subjects within a stream.
-- Acknowledgement tracking: Ensures messages are processed at least once.
+Your system receives messages from a consumer and then acks them once they have been processed.
 
-### Sources (PostgreSQL Replication)
+If your system doesn’t ack a message within a consumer’s `ack-wait-ms` period, the message will become available again to that consumer.
 
-Sources in Sequin allow you to transform existing PostgreSQL tables into streams.
+#### Concurrent
 
-## Why Sequin?
-
-> CLAUDE TODO
-
-In the landscape of message streaming solutions, Sequin occupies a unique position:
-
-- **Simplicity of SQS, Power of Kafka**: Sequin offers an intuitive interface like SQS, but with the robustness and scalability approaching that of Kafka.
-- **Familiar Technology**: Built on PostgreSQL, Sequin leverages a database that many teams already know how to operate and scale.
-- **Low Operational Burden**: By using PostgreSQL as the underlying storage, Sequin minimizes the need for additional infrastructure or specialized knowledge.
-- **Feature-Rich**: Sequin's tight integration with PostgreSQL allows for rapid feature development, especially in areas of observability and control.
-
-Whether you're looking to implement event-sourcing, build a robust pub/sub system, or simply need a reliable queue for asynchronous processing, Sequin provides a powerful solution that grows with your needs.
+Multiple workers can concurrently receive messages from a consumer. Messages are only delivered once during the `ack-wait-ms` period. If the message is not ack’d before the period elapses, the message becomes available again.
 
 ## Getting Started
 
 See the [getting started guide](./getting-started.md).
-
-## Setup Postgres Replication
-
-To prepare your Postgres database for replication with Sequin, follow these steps:
-
-1. Create a replication slot:
-
-   ```sql
-   SELECT pg_create_logical_replication_slot('your_slot_name', 'pgoutput');
-   ```
-
-2. Create a publication for the tables you want to replicate:
-
-   ```sql
-   CREATE PUBLICATION your_publication_name FOR TABLE schema.table1, schema.table2;
-   ```
-
-   You can add more tables by separating them with commas. To publish all tables in a schema:
-
-   ```sql
-   CREATE PUBLICATION your_publication_name FOR ALL TABLES IN SCHEMA your_schema;
-   ```
-
-3. Set the replica identity for each table. There are two main options:
-
-   a. Default (only primary key is replicated for updates/deletes):
-
-   ```sql
-   ALTER TABLE your_schema.your_table REPLICA IDENTITY DEFAULT;
-   ```
-
-   b. Full (entire old row is replicated for updates/deletes):
-
-   ```sql
-   ALTER TABLE your_schema.your_table REPLICA IDENTITY FULL;
-   ```
-
-   The "full" option provides more detailed change information but may increase replication
-   overhead.
-
-Remember to adjust your Postgres configuration to allow replication connections. Also, ensure that the `wal_level` parameter in your PostgreSQL configuration is set to 'logical'. This setting enables logical decoding, which is necessary for logical replication.

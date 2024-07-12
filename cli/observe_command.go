@@ -3,16 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/choria-io/fisk"
 	"golang.org/x/term"
-
-	"sequin-cli/api"
-	"sequin-cli/context"
 )
 
 // AddObserveCommands adds all observe-related commands to the given app
@@ -23,14 +19,21 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 }
 
 type model struct {
-	messages []api.Message
-	err      error
-	config   *Config
+	messages  *Message
+	consumers *Consumer
+	err       error
+	config    *Config
+	activeTab int
+	tabs      []string
 }
 
 func initialModel(config *Config) model {
 	return model{
-		config: config,
+		config:    config,
+		activeTab: 0,
+		tabs:      []string{"Messages", "Consumers"},
+		messages:  NewMessage(config),
+		consumers: NewConsumer(config),
 	}
 }
 
@@ -45,7 +48,8 @@ func doTick() tea.Cmd {
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
-		m.fetchMessages,
+		func() tea.Msg { return m.messages.FetchMessages() },
+		func() tea.Msg { return m.consumers.FetchConsumers() },
 	)
 }
 
@@ -55,12 +59,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+		case "tab", "right", "l":
+			m.activeTab = (m.activeTab + 1) % len(m.tabs)
+			return m, nil
+		case "shift+tab", "left", "h":
+			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+			return m, nil
+		case "m":
+			m.activeTab = 0 // Switch to Messages tab
+			return m, nil
+		case "c":
+			m.activeTab = 1 // Switch to Consumers tab
+			return m, nil
 		}
 	case tickMsg:
-		return m, tea.Batch(doTick(), m.fetchMessages)
-	case []api.Message:
-		m.messages = msg
-		return m, nil
+		return m, tea.Batch(
+			doTick(),
+			func() tea.Msg { return m.messages.FetchMessages() },
+			func() tea.Msg { return m.consumers.FetchConsumers() },
+		)
 	case error:
 		m.err = msg
 		return m, nil
@@ -73,73 +90,58 @@ func (m model) View() string {
 		return fmt.Sprintf("Error: %v\n\nq (quit)", m.err)
 	}
 
-	// Get terminal width and height
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
-	// Define column widths
-	seqWidth := 10
-	keyWidth := 20
-	createdWidth := 25
-	dataWidth := width - seqWidth - keyWidth - createdWidth - 8 // 8 for separators and padding
+	tabContent := ""
+	for i, tab := range m.tabs {
+		style := lipgloss.NewStyle().Padding(0, 1)
+		if i == m.activeTab {
+			style = style.Bold(true).Underline(true)
+		}
+		tabContent += style.Render(tab) + " "
+	}
+	tabBar := lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		Width(width).
+		Render(tabContent)
 
-	// Create header
-	output := fmt.Sprintf("\n%-*s | %-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", createdWidth, "Created", dataWidth, "Data")
-	output += strings.Repeat("-", width) + "\n"
-
-	// Add messages
-	for _, msg := range m.messages {
-		seq := fmt.Sprintf("%d", msg.Seq)
-		key := truncateString(msg.Key, keyWidth)
-		created := msg.CreatedAt.Format(time.RFC3339)
-		data := truncateString(msg.Data, dataWidth)
-
-		output += fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
-			seqWidth, seq,
-			keyWidth, key,
-			createdWidth, created,
-			dataWidth, data)
+	var content string
+	if m.activeTab == 0 {
+		content = m.messages.View(width, height-3)
+	} else {
+		content = m.consumers.View(width, height-3)
 	}
 
-	// Create a styled bottom bar
 	bottomBar := lipgloss.NewStyle().
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("255")).
 		Padding(0, 1).
 		Width(width).
 		Align(lipgloss.Center).
-		Render("q (quit)")
+		Render("q (quit), ←/→ (switch tabs), m (Messages), c (Consumers)")
 
-	// Add empty lines to push the bottom bar to the bottom
-	for i := 0; i < height-len(m.messages)-4; i++ {
-		output += "\n"
-	}
-
-	// Add the bottom bar
-	output += bottomBar
-
-	return output
+	return tabBar + "\n" + content + bottomBar
 }
 
-// Helper function to truncate strings
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
+func (m model) fetchMessages() tea.Cmd {
+	return func() tea.Msg {
+		err := m.messages.FetchMessages()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	return s[:maxLen-3] + "..."
 }
 
-func (m model) fetchMessages() tea.Msg {
-	ctx, err := context.LoadContext(m.config.ContextName)
-	if err != nil {
-		return err
+func (m model) fetchConsumers() tea.Cmd {
+	return func() tea.Msg {
+		err := m.consumers.FetchConsumers()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-
-	messages, err := api.ListStreamMessages(ctx, "default", 10, "seq_desc", "")
-	if err != nil {
-		return err
-	}
-
-	return messages
 }
 
 func streamObserve(_ *fisk.ParseContext, config *Config) error {

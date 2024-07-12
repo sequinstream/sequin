@@ -58,12 +58,12 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	})
 	infoCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 
-	nextCmd := consumer.Command("next", "Pull next messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
-		return consumerNext(ctx, config, c)
+	receiveCmd := consumer.Command("receive", "Receive messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
+		return consumerReceive(ctx, config, c)
 	})
-	nextCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	nextCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
-	nextCmd.Flag("no-ack", "Do not acknowledge messages").BoolVar(&c.NoAck)
+	receiveCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	receiveCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
+	receiveCmd.Flag("no-ack", "Do not acknowledge messages").BoolVar(&c.NoAck)
 
 	peekCmd := consumer.Command("peek", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerPeek(ctx, config, c)
@@ -334,7 +334,7 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	return nil
 }
-func consumerNext(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
+func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err

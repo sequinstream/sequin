@@ -10,21 +10,17 @@ sequin consumer add [slug]
 
 sequin consumer info [consumer-id]
 
-# To pull next messages for a consumer (default batch size is 1)
+# To receive messages for a consumer (default batch size is 1)
 
-sequin consumer next [consumer-id]
+sequin consumer receive [consumer-id]
 
-# To pull next messages for a consumer without acknowledging them
+# To receive messages for a consumer without acknowledging them
 
-sequin consumer next [consumer-id] --no-ack
+sequin consumer receive [consumer-id] --no-ack
 
-# To pull next messages for a consumer and ack them
+# To receive a batch of messages for a consumer
 
-sequin consumer next [consumer-id]
-
-# To pull a batch of messages for a consumer
-
-sequin consumer next [consumer-id] --batch-size 10
+sequin consumer receive [consumer-id] --batch-size 10
 
 # To peek at messages for a consumer (default shows last 10 messages)
 

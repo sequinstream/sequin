@@ -43,7 +43,7 @@ defmodule SequinWeb.PostgresReplicationController do
     account_id = conn.assigns.account_id
 
     with {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
-         {:ok, _postgres_replication} <- Sources.delete_pg_replication(postgres_replication) do
+         {:ok, _postgres_replication} <- Sources.delete_pg_replication_with_lifecycle(postgres_replication) do
       send_resp(conn, :no_content, "")
     end
   end

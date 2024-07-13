@@ -83,24 +83,77 @@ defmodule SequinWeb.DatabaseController do
     end
   end
 
-  def setup_replication(conn, %{"id" => id, "slot_name" => slot_name, "publication_name" => publication_name}) do
+  def setup_replication(conn, %{
+        "id" => id,
+        "slot_name" => slot_name,
+        "publication_name" => publication_name,
+        "tables" => tables
+      }) do
     account_id = conn.assigns.account_id
 
-    with :ok <- validate_replication_params(slot_name, publication_name),
+    with :ok <- validate_replication_params(slot_name, publication_name, tables),
          {:ok, database} <- Databases.get_db_for_account(account_id, id),
-         {:ok, _} <- Databases.setup_replication(database, slot_name, publication_name) do
-      render(conn, "setup_replication.json", slot_name: slot_name, publication_name: publication_name)
+         {:ok, _} <- Databases.setup_replication(database, slot_name, publication_name, tables) do
+      render(conn, "setup_replication.json", slot_name: slot_name, publication_name: publication_name, tables: tables)
     end
   end
 
-  defp validate_replication_params(slot_name, publication_name) do
-    with true <- String.length(slot_name) > 0,
-         true <- String.length(publication_name) > 0 do
-      :ok
-    else
-      false -> {:error, Error.validation(summary: "slot_name and publication_name are required")}
+  def list_schemas(conn, %{"id" => id}) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+         {:ok, schemas} <- Databases.list_schemas(database) do
+      render(conn, "schemas.json", schemas: schemas)
     end
   end
+
+  def list_tables(conn, %{"id" => id, "schema" => schema}) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+         {:ok, tables} <- Databases.list_tables(database, schema) do
+      render(conn, "tables.json", tables: tables)
+    end
+  end
+
+  defp validate_replication_params(slot_name, publication_name, tables) do
+    with :ok <- validate_slot_name(slot_name),
+         :ok <- validate_publication_name(publication_name),
+         :ok <- validate_tables(tables) do
+      :ok
+    else
+      {:error, reason} -> {:error, Error.validation(summary: reason)}
+    end
+  end
+
+  defp validate_slot_name(slot_name) do
+    if String.length(slot_name) > 0 do
+      :ok
+    else
+      {:error, "slot_name must not be empty"}
+    end
+  end
+
+  defp validate_publication_name(publication_name) do
+    if String.length(publication_name) > 0 do
+      :ok
+    else
+      {:error, "publication_name must not be empty"}
+    end
+  end
+
+  defp validate_tables(tables) do
+    if is_list(tables) && length(tables) > 0 do
+      (Enum.all?(tables, &validate_table/1) && :ok) || {:error, "Invalid table format"}
+    else
+      {:error, "tables must be a non-empty list"}
+    end
+  end
+
+  defp validate_table([schema, table_name]), do: validate_pg_identifier(schema) && validate_pg_identifier(table_name)
+  defp validate_table(_), do: false
+
+  defp validate_pg_identifier(str), do: is_binary(str) && String.length(str) > 0 && !String.contains?(str, "\"")
 
   defp test_database_connection(database, new_attrs \\ %{})
 

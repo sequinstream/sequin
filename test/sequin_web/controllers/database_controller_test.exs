@@ -8,6 +8,8 @@ defmodule SequinWeb.DatabaseControllerTest do
 
   setup :authenticated_conn
 
+  @schema_name "__database_controller_test_schema__"
+  @tables ["users", "posts"]
   @publication_name "__database_controller_test_pub__"
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
@@ -16,7 +18,19 @@ defmodule SequinWeb.DatabaseControllerTest do
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
     other_database = DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
 
+    # Create schema and sample tables
+    Repo.query!("create schema if not exists #{@schema_name}")
+
+    Enum.each(@tables, fn table ->
+      Repo.query!("""
+        create table if not exists #{@schema_name}.#{table} (
+        id serial primary key
+      )
+      """)
+    end)
+
     on_exit(fn ->
+      Repo.query("DROP SCHEMA IF EXISTS #{@schema_name} CASCADE")
       Repo.query("DROP PUBLICATION IF EXISTS #{@publication_name}")
     end)
 
@@ -190,16 +204,19 @@ defmodule SequinWeb.DatabaseControllerTest do
 
   describe "setup_replication" do
     test "sets up replication slot and publication for a database", %{conn: conn, database: database} do
-      # We can't actually create the rep slot in this test, due to issues with creating
-      # replication slots and the ecto sandbox - see test/support/replication_slots.ex
-
       conn =
         post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
           slot_name: replication_slot(),
-          publication_name: @publication_name
+          publication_name: @publication_name,
+          tables: [["public", "users"], ["public", "posts"]]
         })
 
-      assert %{"success" => true, "slot_name" => _, "publication_name" => @publication_name} =
+      assert %{
+               "success" => true,
+               "slot_name" => _,
+               "publication_name" => @publication_name,
+               "tables" => [["public", "users"], ["public", "posts"]]
+             } =
                json_response(conn, 200)
 
       assert {:ok, %{num_rows: 1}} =
@@ -210,22 +227,49 @@ defmodule SequinWeb.DatabaseControllerTest do
       conn =
         post(conn, ~p"/api/databases/#{other_database.id}/setup_replication", %{
           slot_name: "test_slot",
-          publication_name: "test_pub"
+          publication_name: "test_pub",
+          tables: [["public", "users"], ["public", "posts"]]
         })
 
       assert json_response(conn, 404)
     end
 
-    test "returns error for invalid slot or publication name", %{conn: conn, database: database} do
+    test "returns error for invalid slot, publication name, or tables", %{conn: conn, database: database} do
       conn =
         post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
           slot_name: "",
-          publication_name: ""
+          publication_name: "",
+          tables: []
         })
 
-      assert %{
-               "summary" => "slot_name and publication_name are required"
-             } = json_response(conn, 422)
+      assert %{"summary" => _} = json_response(conn, 422)
+    end
+  end
+
+  describe "list_schemas" do
+    test "lists schemas for a database", %{conn: conn, database: database} do
+      conn = get(conn, ~p"/api/databases/#{database.id}/schemas")
+      assert %{"schemas" => schemas} = json_response(conn, 200)
+      assert is_list(schemas)
+      assert "public" in schemas
+    end
+
+    test "returns 404 if database belongs to another account", %{conn: conn, other_database: other_database} do
+      conn = get(conn, ~p"/api/databases/#{other_database.id}/schemas")
+      assert json_response(conn, 404)
+    end
+  end
+
+  describe "list_tables" do
+    test "lists tables for a schema in a database", %{conn: conn, database: database} do
+      conn = get(conn, ~p"/api/databases/#{database.id}/schemas/public/tables")
+      assert %{"tables" => tables} = json_response(conn, 200)
+      assert is_list(tables)
+    end
+
+    test "returns 404 if database belongs to another account", %{conn: conn, other_database: other_database} do
+      conn = get(conn, ~p"/api/databases/#{other_database.id}/schemas/public/tables")
+      assert json_response(conn, 404)
     end
   end
 end

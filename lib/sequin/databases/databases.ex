@@ -198,28 +198,86 @@ defmodule Sequin.Databases do
     end
   end
 
-  def setup_replication(%PostgresDatabase{} = database, slot_name, publication_name) do
-    with {:ok, conn} <- start_link(database),
-         :ok <- create_replication_slot(conn, slot_name),
-         :ok <- create_publication(conn, publication_name) do
-      {:ok, %{slot_name: slot_name, publication_name: publication_name}}
-    end
+  def setup_replication(%PostgresDatabase{} = database, slot_name, publication_name, tables) do
+    with_connection(database, fn conn ->
+      Postgrex.transaction(conn, fn t_conn ->
+        with :ok <- create_replication_slot(t_conn, slot_name),
+             :ok <- create_publication(t_conn, publication_name, tables) do
+          %{slot_name: slot_name, publication_name: publication_name, tables: tables}
+        else
+          {:error, error} ->
+            Logger.error("Failed to setup replication: #{inspect(error)}", error: error)
+            {:error, error}
+        end
+      end)
+    end)
   end
 
   defp create_replication_slot(conn, slot_name) do
-    # ::text is important, as Postgrex can't handle return type pg_lsn
-    case Postgrex.query(conn, "SELECT pg_create_logical_replication_slot($1, 'pgoutput')::text", [slot_name]) do
-      {:ok, _} -> :ok
-      {:error, %Postgrex.Error{postgres: %{code: :duplicate_object}}} -> :ok
-      {:error, error} -> {:error, "Failed to create replication slot: #{inspect(error)}"}
+    # First, check if the slot already exists
+    check_query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
+
+    case Postgrex.query(conn, check_query, [slot_name]) do
+      {:ok, %{num_rows: 0}} ->
+        # Slot doesn't exist, create it
+        # ::text is important, as Postgrex can't handle return type pg_lsn
+        create_query = "SELECT pg_create_logical_replication_slot($1, 'pgoutput')::text"
+
+        case Postgrex.query(conn, create_query, [slot_name]) do
+          {:ok, _} -> :ok
+          {:error, error} -> {:error, "Failed to create replication slot: #{inspect(error)}"}
+        end
+
+      {:ok, _} ->
+        # Slot already exists
+        :ok
+
+      {:error, error} ->
+        {:error, "Failed to check for existing replication slot: #{inspect(error)}"}
     end
   end
 
-  defp create_publication(conn, publication_name) do
-    case Postgrex.query(conn, "CREATE PUBLICATION #{publication_name} FOR ALL TABLES", []) do
-      {:ok, _} -> :ok
-      {:error, %Postgrex.Error{postgres: %{code: :duplicate_object}}} -> :ok
-      {:error, error} -> {:error, "Failed to create publication: #{inspect(error)}"}
+  defp create_publication(conn, publication_name, tables) do
+    # Check if publication exists
+    check_query = "SELECT 1 FROM pg_publication WHERE pubname = $1"
+
+    case Postgrex.query(conn, check_query, [publication_name]) do
+      {:ok, %{num_rows: 0}} ->
+        # Publication doesn't exist, create it
+        table_list = Enum.map_join(tables, ", ", fn [schema, table] -> ~s{"#{schema}"."#{table}"} end)
+        create_query = "CREATE PUBLICATION #{publication_name} FOR TABLE #{table_list}"
+
+        case Postgrex.query(conn, create_query, []) do
+          {:ok, _} -> :ok
+          {:error, error} -> {:error, "Failed to create publication: #{inspect(error)}"}
+        end
+
+      {:ok, _} ->
+        # Publication already exists
+        :ok
+
+      {:error, error} ->
+        {:error, "Failed to check for existing publication: #{inspect(error)}"}
+    end
+  end
+
+  def list_schemas(%PostgresDatabase{} = database) do
+    with {:ok, conn} <- start_link(database),
+         {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
+      filtered_schemas =
+        rows
+        |> List.flatten()
+        |> Enum.reject(&(&1 in ["pg_toast", "pg_catalog", "information_schema"]))
+
+      {:ok, filtered_schemas}
+    end
+  end
+
+  def list_tables(%PostgresDatabase{} = database, schema) do
+    with {:ok, conn} <- start_link(database),
+         {:ok, %{rows: rows}} <-
+           Postgrex.query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
+      {:ok, List.flatten(rows)}
     end
   end
 end

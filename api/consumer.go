@@ -357,7 +357,9 @@ func BuildFetchMessages(ctx *context.Context, options FetchMessagesOptions) (*ht
 
 	url := fmt.Sprintf("%s/api/streams/%s/consumers/%s/messages?limit=%d&sort=%s",
 		serverURL, options.StreamID, options.ConsumerID, options.Limit, options.Order)
-	if !options.Visible {
+	if options.Visible == true {
+		url += "&visible=true"
+	} else if options.Visible == false {
 		url += "&visible=false"
 	}
 

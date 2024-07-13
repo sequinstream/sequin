@@ -81,7 +81,8 @@ func (m *Message) View(width, height int) string {
 
 func (m *Message) detailView(width, height int) string {
 	msg := m.messages[m.cursor]
-	output := lipgloss.NewStyle().Bold(true).Render("Message Detail\n\n")
+	output := lipgloss.NewStyle().Bold(true).Render("Message Detail")
+	output += "\n\n"
 	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
 	output += fmt.Sprintf("Key:     %s\n", msg.Key)
 	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(time.RFC3339))

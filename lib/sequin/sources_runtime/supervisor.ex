@@ -25,18 +25,22 @@ defmodule Sequin.SourcesRuntime.Supervisor do
   def start_for_pg_replication(supervisor, %PostgresReplication{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
 
-    default_opts = [
-      id: pg_replication.id,
-      slot_name: pg_replication.slot_name,
-      publication: pg_replication.publication_name,
-      message_handler_ctx: PostgresReplicationMessageHandler.context(pg_replication),
-      message_handler_module: PostgresReplicationMessageHandler,
-      connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database)
-    ]
+    if pg_replication.backfill_completed_at do
+      default_opts = [
+        id: pg_replication.id,
+        slot_name: pg_replication.slot_name,
+        publication: pg_replication.publication_name,
+        message_handler_ctx: PostgresReplicationMessageHandler.context(pg_replication),
+        message_handler_module: PostgresReplicationMessageHandler,
+        connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database)
+      ]
 
-    opts = Keyword.merge(default_opts, opts)
+      opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {Replication, opts})
+      Sequin.DynamicSupervisor.start_child(supervisor, {Replication, opts})
+    else
+      {:error, :backfill_not_completed}
+    end
   end
 
   def start_for_pg_replication(supervisor, id, opts) do

@@ -328,13 +328,14 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     # This is for the FKs from postgres_replication to this table
     create unique_index(:postgres_databases, [:id, :account_id], prefix: @config_schema)
 
-    execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled');",
+    execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled', 'backfilling');",
             "drop type if exists #{@config_schema}.replication_status"
 
     create table(:postgres_replications, prefix: @config_schema) do
+      add :backfill_completed_at, :utc_datetime_usec
       add :publication_name, :string, null: false
       add :slot_name, :string, null: false
-      add :status, :"#{@config_schema}.replication_status", null: false
+      add :status, :"#{@config_schema}.replication_status", null: false, default: "backfilling"
 
       add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
 
@@ -348,6 +349,19 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       timestamps()
     end
+
+    execute """
+            ALTER TABLE #{@config_schema}.postgres_replications
+            ADD CONSTRAINT ensure_active_with_backfill_completed
+            CHECK (
+              (status != 'active') OR
+              (status = 'active' AND backfill_completed_at IS NOT NULL)
+            );
+            """,
+            """
+            ALTER TABLE #{@config_schema}.postgres_replications
+            DROP CONSTRAINT IF EXISTS ensure_active_with_backfill_completed;
+            """
 
     create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
              prefix: @config_schema

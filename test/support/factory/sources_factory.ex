@@ -10,12 +10,26 @@ defmodule Sequin.Factory.SourcesFactory do
   alias Sequin.Sources.PostgresReplication
 
   def postgres_replication(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {status, attrs} = Map.pop_lazy(attrs, :status, fn -> Factory.one_of(["active", "disabled", "backfilling"]) end)
+
+    {backfill_completed_at, attrs} =
+      Map.pop_lazy(attrs, :backfill_completed_at, fn ->
+        if status in ["backfilling", :backfilling] do
+          nil
+        else
+          Factory.timestamp()
+        end
+      end)
+
     merge_attributes(
       %PostgresReplication{
-        slot_name: "slot_#{Factory.slug()}",
-        publication_name: "pub_#{Factory.slug()}",
-        status: Factory.one_of(["active", "disabled"]),
+        backfill_completed_at: backfill_completed_at,
         postgres_database_id: Factory.uuid(),
+        publication_name: "pub_#{Factory.slug()}",
+        slot_name: "slot_#{Factory.slug()}",
+        status: status,
         stream_id: Factory.uuid()
       },
       attrs
@@ -31,12 +45,15 @@ defmodule Sequin.Factory.SourcesFactory do
   def insert_postgres_replication!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {postgres_database_id, attrs} =
-      Map.pop_lazy(attrs, :postgres_database_id, fn -> DatabasesFactory.insert_postgres_database!().id end)
-
-    {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> StreamsFactory.insert_stream!().id end)
-
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    {stream_id, attrs} =
+      Map.pop_lazy(attrs, :stream_id, fn -> StreamsFactory.insert_stream!(account_id: account_id).id end)
 
     attrs =
       attrs

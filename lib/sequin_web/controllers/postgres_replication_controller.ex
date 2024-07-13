@@ -24,7 +24,7 @@ defmodule SequinWeb.PostgresReplicationController do
   def create(conn, params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, postgres_replication} <- Sources.create_pg_replication_for_account(account_id, params) do
+    with {:ok, postgres_replication} <- Sources.create_pg_replication_for_account_with_lifecycle(account_id, params) do
       render(conn, "show.json", postgres_replication: postgres_replication)
     end
   end

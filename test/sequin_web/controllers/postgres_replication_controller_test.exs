@@ -139,7 +139,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
         slot_name: replication_slot(),
         publication_name: @publication,
         stream_id: stream.id,
-        postgres_database: db_attrs
+        postgres_database: db_attrs,
+        status: :backfilling
       }
 
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)

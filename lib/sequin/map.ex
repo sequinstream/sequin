@@ -13,7 +13,13 @@ defmodule Sequin.Map do
   end
 
   def atomize_keys(map) do
-    Map.new(map, fn {k, v} -> {String.to_existing_atom(k), v} end)
+    Map.new(map, fn
+      {k, v} when is_binary(k) ->
+        {String.to_existing_atom(k), v}
+
+      {k, v} when is_atom(k) ->
+        {k, v}
+    end)
   end
 
   def put_if_present(map, key, value) do

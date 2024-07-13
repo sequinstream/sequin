@@ -1,11 +1,13 @@
 defmodule Sequin.Sources do
   @moduledoc false
   alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Extensions.Replication
   alias Sequin.Repo
+  alias Sequin.Sources.BackfillPostgresTableWorker
   alias Sequin.Sources.PostgresReplication
   alias Sequin.SourcesRuntime
 
@@ -37,14 +39,24 @@ defmodule Sequin.Sources do
     end
   end
 
-  def create_pg_replication_for_account(account_id, attrs) do
+  def create_pg_replication_for_account_with_lifecycle(account_id, attrs) do
     attrs = Sequin.Map.atomize_keys(attrs)
 
     with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
          :ok <- validate_replication_config(postgres_database, attrs) do
-      %PostgresReplication{account_id: account_id}
-      |> PostgresReplication.create_changeset(attrs)
-      |> Repo.insert()
+      pg_replication =
+        %PostgresReplication{account_id: account_id}
+        |> PostgresReplication.create_changeset(attrs)
+        |> Repo.insert()
+
+      case pg_replication do
+        {:ok, pg_replication} ->
+          enqueue_backfill_jobs(pg_replication)
+          {:ok, pg_replication}
+
+        error ->
+          error
+      end
     else
       {:error, %NotFoundError{}} ->
         {:error, Error.validation(summary: "Database with id #{attrs[:postgres_database_id]} not found")}
@@ -134,5 +146,32 @@ defmodule Sequin.Sources do
         {:error,
          Error.validation(summary: "Error connecting to the database to verify the existence of the publication.")}
     end
+  end
+
+  defp enqueue_backfill_jobs(%PostgresReplication{} = pg_replication) do
+    pg_replication = Repo.preload(pg_replication, :postgres_database)
+    {:ok, conn} = ConnectionCache.connection(pg_replication.postgres_database)
+
+    tables = get_publication_tables(conn, pg_replication.publication_name)
+
+    Enum.each(tables, fn {schema, table} ->
+      BackfillPostgresTableWorker.create(
+        pg_replication.postgres_database_id,
+        schema,
+        table,
+        pg_replication.id
+      )
+    end)
+  end
+
+  defp get_publication_tables(conn, publication_name) do
+    query = """
+    SELECT schemaname, tablename
+    FROM pg_publication_tables
+    WHERE pubname = $1
+    """
+
+    {:ok, %{rows: rows}} = Postgrex.query(conn, query, [publication_name])
+    Enum.map(rows, fn [schemaname, tablename] -> {schemaname, tablename} end)
   end
 end

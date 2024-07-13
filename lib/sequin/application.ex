@@ -2,8 +2,9 @@ defmodule Sequin.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
-
   use Application
+
+  alias Sequin.Databases.ConnectionCache
 
   @impl true
   def start(_type, _args) do
@@ -42,7 +43,8 @@ defmodule Sequin.Application do
       SequinWeb.Endpoint,
       {Task.Supervisor, name: Sequin.TaskSupervisor},
       {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
-      {Oban, Application.fetch_env!(:sequin, Oban)}
+      {Oban, Application.fetch_env!(:sequin, Oban)},
+      ConnectionCache
     ]
   end
 

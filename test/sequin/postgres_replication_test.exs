@@ -79,6 +79,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Create PostgresReplication entity
       pg_replication =
         SourcesFactory.insert_postgres_replication!(
+          status: :active,
           postgres_database_id: source_db.id,
           stream_id: stream.id,
           slot_name: replication_slot(),
@@ -236,6 +237,50 @@ defmodule Sequin.PostgresReplicationTest do
       # Check last_committed_at
       assert pg_replication_with_info.info.last_committed_at != nil
       assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
+    end
+  end
+
+  describe "create_pg_replication_for_account_with_lifecycle" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
+      stream = StreamsFactory.insert_stream!(account_id: account.id)
+
+      %{account: account, database: database, stream: stream}
+    end
+
+    test "creates a pg_replication in backfilling state and enqueues backfill jobs", %{
+      account: account,
+      database: database,
+      stream: stream
+    } do
+      attrs = %{
+        postgres_database_id: database.id,
+        stream_id: stream.id,
+        slot_name: replication_slot(),
+        publication_name: @publication,
+        status: :backfilling
+      }
+
+      {:ok, pg_replication} = Sources.create_pg_replication_for_account_with_lifecycle(account.id, attrs)
+
+      assert pg_replication.status == :backfilling
+      assert is_nil(pg_replication.backfill_completed_at)
+
+      # Check that backfill jobs are enqueued
+      assert_enqueued(worker: Sequin.Sources.BackfillPostgresTableWorker)
+    end
+
+    test "fails to create pg_replication with invalid attributes", %{account: account} do
+      invalid_attrs = %{
+        postgres_database_id: Ecto.UUID.generate(),
+        stream_id: Ecto.UUID.generate(),
+        slot_name: "",
+        publication_name: ""
+      }
+
+      assert {:error, _changeset} =
+               Sources.create_pg_replication_for_account_with_lifecycle(account.id, invalid_attrs)
     end
   end
 

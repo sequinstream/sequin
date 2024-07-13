@@ -26,12 +26,8 @@ type Consumer struct {
 
 func NewConsumer(config *Config, ctx *sequinContext.Context) *Consumer {
 	return &Consumer{
-		config:          config,
-		cursor:          0,
-		showDetail:      false,
-		pendingMessages: []api.MessageWithInfo{},
-		nextMessages:    []api.MessageWithInfo{},
-		ctx:             ctx,
+		config: config,
+		ctx:    ctx,
 	}
 }
 
@@ -51,64 +47,72 @@ func (c *Consumer) FetchConsumers(limit int) error {
 		return err
 	}
 
-	// Limit the number of consumers to the specified limit
-	if len(consumers) > limit {
-		consumers = consumers[:limit]
-	}
-
-	c.consumers = consumers
+	c.consumers = limitConsumers(consumers, limit)
 	return nil
+}
+
+func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
+	if len(consumers) > limit {
+		return consumers[:limit]
+	}
+	return consumers
 }
 
 func (c *Consumer) View(width, height int) string {
 	if c.showDetail {
 		return c.detailView(width, height)
 	}
+	return c.listView(width, height)
+}
 
+func (c *Consumer) listView(width, height int) string {
 	if len(c.consumers) == 0 {
 		return "\nNo consumers found."
 	}
 
-	idWidth := 36
-	slugWidth := 20
-	filterPatternWidth := 25
-	maxAckPendingWidth := 15
-	maxDeliverWidth := 15
-	createdWidth := 25
+	output := formatConsumerHeader(width)
+	output += formatConsumerList(c.consumers, c.cursor, width)
+	output += strings.Repeat("\n", height-len(c.consumers)-3)
 
-	output := fmt.Sprintf("\n%-*s | %-*s | %-*s | %-*s | %-*s | %-*s\n",
-		idWidth, "ID",
-		slugWidth, "Slug",
-		filterPatternWidth, "Filter Pattern",
-		maxAckPendingWidth, "Max Ack Pending",
-		maxDeliverWidth, "Max Deliver",
-		createdWidth, "Created At")
-	output += strings.Repeat("-", width) + "\n"
+	return output
+}
 
-	for i, consumer := range c.consumers {
+func formatConsumerHeader(width int) string {
+	header := fmt.Sprintf("\n%-36s | %-20s | %-25s | %-15s | %-15s | %-25s\n",
+		"ID", "Slug", "Filter Pattern", "Max Ack Pending", "Max Deliver", "Created At")
+	return header + strings.Repeat("-", width) + "\n"
+}
+
+func formatConsumerList(consumers []api.Consumer, cursor int, width int) string {
+	var output string
+	for i, consumer := range consumers {
 		style := lipgloss.NewStyle()
-		if i == c.cursor {
+		if i == cursor {
 			style = style.Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231"))
 		}
-		output += style.Render(fmt.Sprintf("%-*s | %-*s | %-*s | %-*d | %-*d | %-*s",
-			idWidth, consumer.ID,
-			slugWidth, truncateString(consumer.Slug, slugWidth),
-			filterPatternWidth, truncateString(consumer.FilterKeyPattern, filterPatternWidth),
-			maxAckPendingWidth, consumer.MaxAckPending,
-			maxDeliverWidth, consumer.MaxDeliver,
-			createdWidth, consumer.CreatedAt.Format(time.RFC3339)))
+		output += style.Render(fmt.Sprintf("%-36s | %-20s | %-25s | %-15d | %-15d | %-25s",
+			consumer.ID,
+			truncateString(consumer.Slug, 20),
+			truncateString(consumer.FilterKeyPattern, 25),
+			consumer.MaxAckPending,
+			consumer.MaxDeliver,
+			consumer.CreatedAt.Format(time.RFC3339)))
 		output += "\n"
 	}
-
-	for i := 0; i < height-len(c.consumers)-3; i++ {
-		output += "\n"
-	}
-
 	return output
 }
 
 func (c *Consumer) detailView(width, height int) string {
 	consumer := c.consumers[c.cursor]
+	output := formatConsumerDetail(consumer)
+
+	output += formatMessageSection("Pending Messages", c.pendingMessages, width, true, c.isLoading)
+	output += formatMessageSection("Next Messages", c.nextMessages, width, false, c.isLoading)
+
+	return padOutput(output, height)
+}
+
+func formatConsumerDetail(consumer api.Consumer) string {
 	output := lipgloss.NewStyle().Bold(true).Render("Consumer Detail")
 	output += "\n\n"
 	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
@@ -117,122 +121,101 @@ func (c *Consumer) detailView(width, height int) string {
 	output += fmt.Sprintf("Max Ack Pending: %d\n", consumer.MaxAckPending)
 	output += fmt.Sprintf("Max Deliver:     %d\n", consumer.MaxDeliver)
 	output += fmt.Sprintf("Created At:      %s\n", consumer.CreatedAt.Format(time.RFC3339))
-
-	output += "\n" + lipgloss.NewStyle().Bold(true).Render("Pending Messages") + "\n"
-	if c.isLoading {
-		output += c.loadingSpinner()
-	} else {
-		output += c.formatMessageList(c.pendingMessages, width, true)
-	}
-
-	output += "\n" + lipgloss.NewStyle().Bold(true).Render("Next Messages") + "\n"
-	if c.isLoading {
-		output += c.loadingSpinner()
-	} else {
-		output += c.formatMessageList(c.nextMessages, width, false)
-	}
-
-	// Pad the output to fill the available height
-	lines := strings.Count(output, "\n")
-	for i := 0; i < height-lines; i++ {
-		output += "\n"
-	}
-
 	return output
 }
 
-func (c *Consumer) formatMessageList(messages []api.MessageWithInfo, width int, isPending bool) string {
+func formatMessageSection(title string, messages []api.MessageWithInfo, width int, isPending, isLoading bool) string {
+	output := "\n" + lipgloss.NewStyle().Bold(true).Render(title) + "\n"
+	if isLoading {
+		return output + loadingSpinner()
+	}
+	return output + formatMessageList(messages, width, isPending)
+}
+
+func formatMessageList(messages []api.MessageWithInfo, width int, isPending bool) string {
 	if width < 100 {
-		return c.formatMessageListSmall(messages, width, isPending)
+		return formatMessageListSmall(messages, width, isPending)
 	}
+	return formatMessageListLarge(messages, width, isPending)
+}
 
-	if messages == nil {
-		return "No messages.\n"
-	}
+func formatMessageListLarge(messages []api.MessageWithInfo, width int, isPending bool) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth := 10
-	keyWidth := width / 3
-	deliverCountWidth := 15
-	lastColumnWidth := width - seqWidth - keyWidth - deliverCountWidth - 6 // 6 for separators
+	seqWidth, keyWidth, deliverCountWidth := 10, width/3, 15
+	lastColumnWidth := width - seqWidth - keyWidth - deliverCountWidth - 6
 
-	var header string
-	if isPending {
-		header = fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
-			seqWidth, "Seq",
-			keyWidth, "Key",
-			deliverCountWidth, "Deliver Count",
-			lastColumnWidth, "Not Visible Until")
-	} else {
-		header = fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
-			seqWidth, "Seq",
-			keyWidth, "Key",
-			deliverCountWidth, "Deliver Count",
-			lastColumnWidth, "Created At")
-	}
-
-	output := header
-	output += strings.Repeat("-", width) + "\n"
+	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
+	output := header + strings.Repeat("-", width) + "\n"
 
 	for _, msg := range messages {
-		info := msg.Info
-		var lastColumn string
-		if isPending {
-			lastColumn = info.FormatNotVisibleUntil()
-		} else {
-			lastColumn = msg.Message.CreatedAt.Format(time.RFC3339)
-		}
-
-		output += fmt.Sprintf("%-*d | %-*s | %-*d | %-*s\n",
-			seqWidth, msg.Message.Seq,
-			keyWidth, truncateString(msg.Message.Key, keyWidth),
-			deliverCountWidth, info.DeliverCount,
-			lastColumnWidth, lastColumn)
+		output += formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
 	}
 
 	return output
 }
 
-func (c *Consumer) formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending bool) string {
-	if messages == nil {
-		return "No messages.\n"
-	}
+func formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending bool) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth := 10
-	keyWidth := 20
-	lastColumnWidth := width - seqWidth - keyWidth - 3 // 3 for separators
+	seqWidth, keyWidth := 10, 20
+	lastColumnWidth := width - seqWidth - keyWidth - 3
 
-	var header string
-	if isPending {
-		header = fmt.Sprintf("%-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", lastColumnWidth, "Not Visible Until")
-	} else {
-		header = fmt.Sprintf("%-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", lastColumnWidth, "Created At")
-	}
-
-	output := header
-	output += strings.Repeat("-", width) + "\n"
+	header := formatMessageHeader(seqWidth, keyWidth, 0, lastColumnWidth, isPending)
+	output := header + strings.Repeat("-", width) + "\n"
 
 	for _, msg := range messages {
-		info := msg.Info
-		var lastColumn string
-		if isPending {
-			lastColumn = info.FormatNotVisibleUntil()
-		} else {
-			lastColumn = msg.Message.CreatedAt.Format(time.RFC3339)
-		}
-
-		output += fmt.Sprintf("%-*d | %-*s | %-*s\n",
-			seqWidth, msg.Message.Seq,
-			keyWidth, truncateString(msg.Message.Key, keyWidth),
-			lastColumnWidth, lastColumn)
+		output += formatMessageRow(msg, seqWidth, keyWidth, 0, lastColumnWidth, isPending)
 	}
 
 	return output
+}
+
+func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
+	lastColumnName := "Not Visible Until"
+	if !isPending {
+		lastColumnName = "Created At"
+	}
+
+	if deliverCountWidth > 0 {
+		return fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
+			seqWidth, "Seq",
+			keyWidth, "Key",
+			deliverCountWidth, "Deliver Count",
+			lastColumnWidth, lastColumnName)
+	}
+	return fmt.Sprintf("%-*s | %-*s | %-*s\n",
+		seqWidth, "Seq",
+		keyWidth, "Key",
+		lastColumnWidth, lastColumnName)
+}
+
+func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
+	lastColumn := msg.Message.CreatedAt.Format(time.RFC3339)
+	if isPending {
+		lastColumn = msg.Info.FormatNotVisibleUntil()
+	}
+
+	if deliverCountWidth > 0 {
+		return fmt.Sprintf("%-*d | %-*s | %-*d | %-*s\n",
+			seqWidth, msg.Message.Seq,
+			keyWidth, truncateString(msg.Message.Key, keyWidth),
+			deliverCountWidth, msg.Info.DeliverCount,
+			lastColumnWidth, lastColumn)
+	}
+	return fmt.Sprintf("%-*d | %-*s | %-*s\n",
+		seqWidth, msg.Message.Seq,
+		keyWidth, truncateString(msg.Message.Key, keyWidth),
+		lastColumnWidth, lastColumn)
+}
+
+func padOutput(output string, height int) string {
+	lines := strings.Count(output, "\n")
+	return output + strings.Repeat("\n", height-lines)
 }
 
 func (c *Consumer) ToggleDetail() {
@@ -241,49 +224,43 @@ func (c *Consumer) ToggleDetail() {
 
 func (c *Consumer) MoveCursor(direction int) {
 	oldCursor := c.cursor
-	c.cursor += direction
-	if c.cursor < 0 {
-		c.cursor = 0
-	} else if c.cursor >= len(c.consumers) {
-		c.cursor = len(c.consumers) - 1
-	}
+	c.cursor = clamp(c.cursor+direction, 0, len(c.consumers)-1)
 
 	if oldCursor != c.cursor {
-		c.pendingMessages = nil
-		c.nextMessages = nil
-		c.isLoading = true
+		c.resetMessages()
 	}
+}
+
+func clamp(value, min, max int) int {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+	return value
+}
+
+func (c *Consumer) resetMessages() {
+	c.pendingMessages = nil
+	c.nextMessages = nil
+	c.isLoading = true
 }
 
 func (c *Consumer) FetchPendingAndNextMessages() error {
 	if !c.showDetail || len(c.consumers) == 0 {
 		return nil
 	}
+
 	consumer := c.consumers[c.cursor]
 
-	// Fetch pending messages
-	pendingOptions := api.FetchMessagesOptions{
-		StreamID:   c.streamID,
-		ConsumerID: consumer.ID,
-		Visible:    false,
-		Limit:      10,
-		Order:      "seq_asc",
-	}
-	pending, err := api.FetchMessages(c.ctx, pendingOptions)
+	pending, err := c.fetchMessages(consumer.ID, false)
 	if err != nil {
 		return fmt.Errorf("failed to fetch pending messages: %w", err)
 	}
 	c.pendingMessages = pending
 
-	// Fetch next messages
-	nextOptions := api.FetchMessagesOptions{
-		StreamID:   c.streamID,
-		ConsumerID: consumer.ID,
-		Visible:    true,
-		Limit:      10,
-		Order:      "seq_asc",
-	}
-	next, err := api.FetchMessages(c.ctx, nextOptions)
+	next, err := c.fetchMessages(consumer.ID, true)
 	if err != nil {
 		return fmt.Errorf("failed to fetch next messages: %w", err)
 	}
@@ -294,7 +271,17 @@ func (c *Consumer) FetchPendingAndNextMessages() error {
 	return nil
 }
 
-// Add this method to continuously update the messages
+func (c *Consumer) fetchMessages(consumerID string, visible bool) ([]api.MessageWithInfo, error) {
+	options := api.FetchMessagesOptions{
+		StreamID:   c.streamID,
+		ConsumerID: consumerID,
+		Visible:    visible,
+		Limit:      10,
+		Order:      "seq_asc",
+	}
+	return api.FetchMessages(c.ctx, options)
+}
+
 func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Second)
@@ -305,8 +292,7 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				err := c.FetchPendingAndNextMessages()
-				if err != nil {
+				if err := c.FetchPendingAndNextMessages(); err != nil {
 					fmt.Printf("Error updating messages: %v\n", err)
 				}
 			}
@@ -314,7 +300,7 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 	}()
 }
 
-func (c *Consumer) loadingSpinner() string {
+func loadingSpinner() string {
 	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)] + " Loading...\n"
 }

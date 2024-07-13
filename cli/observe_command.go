@@ -2,12 +2,15 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	sequinContext "sequin-cli/context"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/choria-io/fisk"
@@ -26,23 +29,35 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 }
 
 type model struct {
-	messages  *Message
-	consumers *Consumer
-	err       error
-	config    *Config
-	activeTab int
-	tabs      []string
-	ctx       *sequinContext.Context
+	messages    *Message
+	consumers   *Consumer
+	err         error
+	config      *Config
+	activeTab   int
+	tabs        []string
+	ctx         *sequinContext.Context
+	filterInput textinput.Model
+	filterMode  bool
+	filterError string
 }
 
 func initialModel(config *Config, ctx *sequinContext.Context) model {
+	ti := textinput.New()
+	ti.Placeholder = "Filter"
+	ti.CharLimit = 100
+	ti.Width = 30
+	ti.SetValue("")
+
 	m := model{
-		config:    config,
-		activeTab: 0,
-		tabs:      []string{"Messages", "Consumers"},
-		messages:  NewMessage(config),
-		consumers: NewConsumer(config, ctx),
-		ctx:       ctx,
+		config:      config,
+		activeTab:   0,
+		tabs:        []string{"Messages (m)", "Consumers (c)"},
+		messages:    NewMessage(config),
+		consumers:   NewConsumer(config, ctx),
+		ctx:         ctx,
+		filterInput: ti,
+		filterMode:  false,
+		filterError: "",
 	}
 
 	// Start message updates
@@ -67,10 +82,9 @@ func doSlowTick() tea.Cmd {
 
 type slowTickMsg time.Time
 
-// Add this new private function
 func calculateLimit() int {
 	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
-	return height - 10 // Subtract space for headers and footers
+	return height - 10
 }
 
 func (m model) Init() tea.Cmd {
@@ -79,7 +93,7 @@ func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
 		doSlowTick(),
-		func() tea.Msg { return m.messages.FetchMessages(limit) },
+		func() tea.Msg { return m.messages.FetchMessages(limit, m.filterInput.Value()) },
 		func() tea.Msg { return m.consumers.FetchConsumers(limit) },
 	)
 }
@@ -87,6 +101,20 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if m.filterMode {
+			switch msg.String() {
+			case "esc", "enter", "ctrl+c":
+				m.filterMode = false
+				m.filterInput.Blur()
+				return m, m.applyFilter()
+			default:
+				var cmd tea.Cmd
+				m.filterInput, cmd = m.filterInput.Update(msg)
+				m.filterError = "" // Clear the error when the input changes
+				return m, cmd
+			}
+		}
+
 		switch msg.String() {
 		case "tab", "right", "l":
 			m.activeTab = (m.activeTab + 1) % len(m.tabs)
@@ -95,10 +123,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
 			return m, nil
 		case "m":
-			m.activeTab = 0 // Switch to Messages tab
+			m.activeTab = 0
 			return m, nil
 		case "c":
-			m.activeTab = 1 // Switch to Consumers tab
+			m.activeTab = 1
 			return m, nil
 		case "up", "k":
 			if m.activeTab == 0 {
@@ -119,7 +147,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.messages.ToggleDetail()
 			} else {
 				m.consumers.ToggleDetail()
-				// Add this line to fetch pending and next messages when toggling detail view
 				return m, m.fetchPendingAndNextMessages()
 			}
 			return m, nil
@@ -127,6 +154,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "ctrl+c":
 			return m, tea.Quit
+		case "f":
+			if m.activeTab == 0 && !m.messages.IsDetailView() {
+				m.filterMode = true
+				m.filterInput.Focus()
+				return m, nil
+			}
 		}
 	case tickMsg:
 		return m, doTick()
@@ -134,23 +167,42 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		limit := calculateLimit()
 		return m, tea.Batch(
 			doSlowTick(),
-			func() tea.Msg { return m.messages.FetchMessages(limit) },
+			func() tea.Msg { return m.messages.FetchMessages(limit, m.filterInput.Value()) },
 			func() tea.Msg { return m.consumers.FetchConsumers(limit) },
 		)
 	case error:
+		if m.activeTab == 0 && m.filterMode {
+			m.filterError = msg.Error()
+			return m, nil
+		}
 		m.err = msg
 		return m, nil
 	}
 	return m, nil
 }
 
-// Add this new method to the model
 func (m model) fetchPendingAndNextMessages() tea.Cmd {
 	return func() tea.Msg {
 		err := m.consumers.FetchPendingAndNextMessages()
 		if err != nil {
 			return err
 		}
+		return nil
+	}
+}
+
+func (m model) applyFilter() tea.Cmd {
+	return func() tea.Msg {
+		filter := m.filterInput.Value()
+		if filter == "" {
+			filter = ">"
+		}
+		limit := calculateLimit()
+		err := m.messages.FetchMessages(limit, filter)
+		if err != nil {
+			return err
+		}
+		m.filterError = ""
 		return nil
 	}
 }
@@ -178,7 +230,12 @@ func (m model) View() string {
 
 	var content string
 	if m.activeTab == 0 {
-		content = m.messages.View(width, height-4)
+		if !m.messages.IsDetailView() {
+			filterBar := m.renderFilterBar(width)
+			content = filterBar + "\n" + m.messages.View(width, height-7)
+		} else {
+			content = m.messages.View(width, height-4)
+		}
 	} else {
 		content = m.consumers.View(width, height-4)
 	}
@@ -194,10 +251,42 @@ func (m model) View() string {
 	return tabBar + "\n" + content + "\n" + bottomBar
 }
 
+func (m model) renderFilterBar(width int) string {
+	filterBarStyle := lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		Width(width)
+
+	filterContent := "Filter (f): " + strings.TrimPrefix(m.filterInput.View(), "> ")
+	if m.filterError != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("231")).
+			Background(lipgloss.Color("203"))
+
+		// Extract summary from 400 errors
+		errorMessage := m.filterError
+		if strings.Contains(errorMessage, "unexpected status code: 400") {
+			parts := strings.SplitN(errorMessage, "body:", 2)
+			if len(parts) == 2 {
+				var errorBody map[string]interface{}
+				if err := json.Unmarshal([]byte(strings.TrimSpace(parts[1])), &errorBody); err == nil {
+					if summary, ok := errorBody["summary"].(string); ok {
+						errorMessage = summary
+					}
+				}
+			}
+		}
+
+		filterContent += "\n" + errorStyle.Render("Error: "+errorMessage)
+	}
+
+	return filterBarStyle.Render(filterContent)
+}
+
 func (m model) fetchMessages() tea.Cmd {
 	return func() tea.Msg {
 		limit := calculateLimit()
-		err := m.messages.FetchMessages(limit)
+		err := m.messages.FetchMessages(limit, m.filterInput.Value())
 		if err != nil {
 			return err
 		}

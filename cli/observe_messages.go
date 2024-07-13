@@ -16,6 +16,7 @@ type Message struct {
 	config     *Config
 	cursor     int
 	showDetail bool
+	filter     string
 }
 
 func NewMessage(config *Config) *Message {
@@ -23,16 +24,18 @@ func NewMessage(config *Config) *Message {
 		config:     config,
 		cursor:     0,
 		showDetail: false,
+		filter:     ">",
 	}
 }
 
-func (m *Message) FetchMessages(limit int) error {
+func (m *Message) FetchMessages(limit int, filter string) error {
 	ctx, err := context.LoadContext(m.config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	messages, err := api.ListStreamMessages(ctx, "default", limit, "seq_desc", "")
+	m.filter = filter
+	messages, err := api.ListStreamMessages(ctx, "default", limit, "seq_desc", filter)
 	if err != nil {
 		return err
 	}
@@ -47,11 +50,11 @@ func (m *Message) View(width, height int) string {
 	}
 
 	seqWidth := 10
-	keyWidth := 20
-	createdWidth := 25
+	keyWidth := width / 3
+	createdWidth := 22
 	dataWidth := width - seqWidth - keyWidth - createdWidth - 8
 
-	output := fmt.Sprintf("\n%-*s | %-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", createdWidth, "Created", dataWidth, "Data")
+	output := fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", createdWidth, "Created", dataWidth, "Data")
 	output += strings.Repeat("-", width) + "\n"
 
 	for i, msg := range m.messages {
@@ -116,6 +119,10 @@ func (m *Message) MoveCursor(direction int) {
 	} else if m.cursor >= len(m.messages) {
 		m.cursor = len(m.messages) - 1
 	}
+}
+
+func (m *Message) IsDetailView() bool {
+	return m.showDetail
 }
 
 func truncateString(s string, maxLen int) string {

@@ -18,31 +18,32 @@ type PostgresReplicationsResponse struct {
 
 // PostgresReplication represents the structure of a PostgresReplication returned by the API
 type PostgresReplication struct {
-	ID                 string    `json:"id"`
-	SlotName           string    `json:"slot_name"`
-	PublicationName    string    `json:"publication_name"`
-	Status             string    `json:"status"`
-	AccountID          string    `json:"account_id"`
-	PostgresDatabaseID string    `json:"postgres_database_id"`
-	StreamID           string    `json:"stream_id"`
-	CreatedAt          time.Time `json:"inserted_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                  string     `json:"id"`
+	SlotName            string     `json:"slot_name"`
+	PublicationName     string     `json:"publication_name"`
+	Status              string     `json:"status"`
+	AccountID           string     `json:"account_id"`
+	PostgresDatabaseID  string     `json:"postgres_database_id"`
+	StreamID            string     `json:"stream_id"`
+	CreatedAt           time.Time  `json:"inserted_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
+	BackfillCompletedAt *time.Time `json:"backfill_completed_at"`
+}
+
+// Add this helper function to format BackfillCompletedAt
+func (pr *PostgresReplication) FormatBackfillCompletedAt() string {
+	if pr.BackfillCompletedAt == nil {
+		return "Not completed"
+	}
+	return fmt.Sprintf("%s (%s ago)", pr.BackfillCompletedAt.Format(time.RFC3339), time.Since(*pr.BackfillCompletedAt).Round(time.Second))
 }
 
 // PostgresReplicationCreate represents the structure for creating a new PostgresReplication
 type PostgresReplicationCreate struct {
-	SlotName         string `json:"slot_name"`
-	PublicationName  string `json:"publication_name"`
-	Status           string `json:"status,omitempty"`
-	StreamID         string `json:"stream_id"`
-	PostgresDatabase struct {
-		Database string `json:"database"`
-		Hostname string `json:"hostname"`
-		Port     int    `json:"port"`
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Slug     string `json:"slug"`
-	} `json:"postgres_database"`
+	SlotName           string `json:"slot_name"`
+	PublicationName    string `json:"publication_name"`
+	StreamID           string `json:"stream_id"`
+	PostgresDatabaseID string `json:"postgres_database_id"`
 }
 
 // PostgresReplicationInfo represents the additional info for a PostgresReplication

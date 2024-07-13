@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -35,7 +34,6 @@ func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 	add := postgres.Command("add", "Add a new postgres replication").Action(func(ctx *fisk.ParseContext) error {
 		return postgresReplicationAdd(ctx, config, c)
 	})
-	add.Arg("stream", "Stream ID to replicate to").StringVar(&c.StreamID)
 	add.Flag("database", "Database name").StringVar(&c.Database)
 	add.Flag("hostname", "Database hostname").StringVar(&c.Hostname)
 	add.Flag("port", "Database port").IntVar(&c.Port)
@@ -66,131 +64,190 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 		return err
 	}
 
-	if c.StreamID == "" {
-		streamID, err := promptForStream(ctx)
-		if err != nil {
-			return err
-		}
-		c.StreamID = streamID
+	streamID, err := getFirstStream(ctx)
+	if err != nil {
+		return err
+	}
+	c.StreamID = streamID
+
+	databaseID, err := promptForDatabase(ctx)
+	if err != nil {
+		return err
 	}
 
-	if c.Database == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the dbname for the source database:",
-			Default: "postgres",
-			Help:    "A single Postgres server can contain multiple databases. This is the name of the database to replicate from.",
-		}, &c.Database, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
+	hasExistingSetup, err := promptForExistingSetup()
+	if err != nil {
+		return err
 	}
 
-	if c.Hostname == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the hostname for the source database:",
-			Default: "localhost",
-			Help:    "The hostname of the source database. This is the hostname of the Postgres server.",
-		}, &c.Hostname, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
+	if hasExistingSetup {
+		err = promptForExistingReplicationDetails(c)
+	} else {
+		err = handleNewReplicationSetup(ctx, databaseID, c)
+	}
+	if err != nil {
+		return err
 	}
 
-	if c.Port == 0 {
-		var portStr string
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the port for the source database:",
-			Default: "5432",
-			Help:    "The port of the source database. This is the port of the Postgres server.",
-		}, &portStr, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-		c.Port, err = strconv.Atoi(portStr)
-		if err != nil {
-			return fmt.Errorf("invalid port number: %v", err)
-		}
-	}
-
-	if c.Username == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the username for the source database:",
-			Default: "postgres",
-			Help:    "The username Sequin should use to connect to the source database.",
-		}, &c.Username, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.Password == "" {
-		err = survey.AskOne(&survey.Password{
-			Message: "Enter the password for the source database:",
-		}, &c.Password, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.SlotName == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the replication slot's name:",
-			Default: "sequin_replication_slot",
-			Help:    "The name of the replication slot you configured for Sequin to replicate from.",
-		}, &c.SlotName, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.PublicationName == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter the publication name:",
-			Default: "sequin_replication_publication",
-			Help:    "The name of the publication you configured for Sequin to replicate from.",
-		}, &c.PublicationName, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.Slug == "" {
-		err = survey.AskOne(&survey.Input{
-			Message: "Enter a slug for the database:",
-			Help:    "A unique identifier for this database.",
-		}, &c.Slug, survey.WithValidator(survey.Required))
-		if err != nil {
-			return err
-		}
-	}
-
-	// Convert postgresReplicationConfig to api.PostgresReplicationCreate
-	replication := api.PostgresReplicationCreate{
-		SlotName:        c.SlotName,
-		PublicationName: c.PublicationName,
-		StreamID:        c.StreamID,
-		PostgresDatabase: struct {
-			Database string `json:"database"`
-			Hostname string `json:"hostname"`
-			Port     int    `json:"port"`
-			Username string `json:"username"`
-			Password string `json:"password"`
-			Slug     string `json:"slug"`
-		}{
-			Database: c.Database,
-			Hostname: c.Hostname,
-			Port:     c.Port,
-			Username: c.Username,
-			Password: c.Password,
-			Slug:     c.Slug,
-		},
-	}
 	// Create the postgres replication
+	replication := api.PostgresReplicationCreate{
+		SlotName:           c.SlotName,
+		PublicationName:    c.PublicationName,
+		StreamID:           c.StreamID,
+		PostgresDatabaseID: databaseID,
+	}
+
 	newReplication, err := api.AddPostgresReplication(ctx, &replication)
 	fisk.FatalIfError(err, "could not create Postgres replication")
 
 	fmt.Printf("Postgres replication created successfully. ID: %s\n", newReplication.ID)
+
+	// Show info for the new PGR
+	config.PostgresReplicationID = newReplication.ID
+	err = postgresReplicationInfo(nil, config)
+	if err != nil {
+		fmt.Printf("Warning: Could not fetch detailed information for the new replication: %v\n", err)
+	}
+
 	return nil
+}
+
+func promptForExistingSetup() (bool, error) {
+	var hasExisting bool
+	prompt := &survey.Confirm{
+		Message: "Do you have an existing Postgres replication slot and publication for Sequin to connect to?\n(If you're not sure, you probably don't)",
+	}
+	err := survey.AskOne(prompt, &hasExisting)
+	return hasExisting, err
+}
+
+func promptForExistingReplicationDetails(c *postgresReplicationConfig) error {
+	questions := []*survey.Question{
+		{
+			Name: "SlotName",
+			Prompt: &survey.Input{
+				Message: "Enter the replication slot's name:",
+				Help:    "The name of the replication slot you configured for Sequin to replicate from.",
+			},
+			Validate: survey.Required,
+		},
+		{
+			Name: "PublicationName",
+			Prompt: &survey.Input{
+				Message: "Enter the publication name:",
+				Help:    "The name of the publication you configured for Sequin to replicate from.",
+			},
+			Validate: survey.Required,
+		},
+	}
+	return survey.Ask(questions, c)
+}
+
+func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postgresReplicationConfig) error {
+	c.SlotName = "sequin_slot"
+	c.PublicationName = "sequin_pub"
+
+	fmt.Printf("We suggest the following defaults:\n")
+	fmt.Printf("\033[1mSlot name\033[0m: %s\n", c.SlotName)
+	fmt.Printf("\033[1mPublication name\033[0m: %s\n", c.PublicationName)
+
+	var useDefaults bool
+	prompt := &survey.Confirm{
+		Message: "Do these defaults look OK?",
+		Default: true,
+	}
+	err := survey.AskOne(prompt, &useDefaults)
+	if err != nil {
+		return err
+	}
+
+	if !useDefaults {
+		err = promptForExistingReplicationDetails(c)
+		if err != nil {
+			return err
+		}
+	}
+
+	var setupAutomatically bool
+	prompt = &survey.Confirm{
+		Message: "Do you want me to setup the replication slot and publication for you?",
+		Default: true,
+	}
+	err = survey.AskOne(prompt, &setupAutomatically)
+	if err != nil {
+		return err
+	}
+
+	if setupAutomatically {
+		schemas, err := api.ListSchemas(ctx, databaseID)
+		if err != nil {
+			return fmt.Errorf("failed to list schemas: %w", err)
+		}
+
+		var selectedSchema string
+		err = survey.AskOne(&survey.Select{
+			Message: "Choose a schema:",
+			Options: schemas,
+		}, &selectedSchema)
+		if err != nil {
+			return err
+		}
+
+		tables, err := api.ListTables(ctx, databaseID, selectedSchema)
+		if err != nil {
+			return fmt.Errorf("failed to list tables: %w", err)
+		}
+
+		var selectedTables []string
+		for {
+			err = survey.AskOne(&survey.MultiSelect{
+				Message: "Select tables to sync (at least one):",
+				Options: tables,
+			}, &selectedTables)
+			if err != nil {
+				return err
+			}
+
+			if len(selectedTables) == 0 {
+				fmt.Println("You must select at least one table. Please try again.")
+			} else {
+				break
+			}
+		}
+
+		formattedTables := make([][]string, len(selectedTables))
+		for i, table := range selectedTables {
+			formattedTables[i] = []string{selectedSchema, table}
+		}
+
+		err = api.SetupReplicationSlotAndPublication(ctx, databaseID, c.SlotName, c.PublicationName, formattedTables)
+		if err != nil {
+			return fmt.Errorf("failed to setup replication slot and publication: %w", err)
+		}
+		fmt.Println("Replication slot and publication created successfully.")
+	} else {
+		showManualSetupInstructions(c.SlotName, c.PublicationName)
+		fmt.Println("Press Enter when you have completed the setup.")
+		fmt.Scanln() // Wait for user to press Enter
+	}
+
+	return nil
+}
+
+func showManualSetupInstructions(slotName, pubName string) {
+	fmt.Printf(`
+Please follow these steps to set up the replication slot and publication manually:
+
+1. Connect to your PostgreSQL database as a superuser.
+
+2. Create the replication slot:
+   SELECT pg_create_logical_replication_slot('%s', 'pgoutput');
+
+3. Create the publication:
+   CREATE PUBLICATION %s FOR ALL TABLES;
+
+After completing these steps, your database will be ready for Sequin to connect and start replicating.
+`, slotName, pubName)
 }
 
 func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
@@ -227,7 +284,8 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
-	if config.PostgresReplicationID == "" {
+	id := config.PostgresReplicationID
+	if id == "" {
 		replications, err := api.FetchPostgresReplications(ctx)
 		if err != nil {
 			return err
@@ -244,14 +302,14 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 			Filter: func(filterValue string, optValue string, index int) bool {
 				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-		}, &config.PostgresReplicationID)
+		}, &id)
 		if err != nil {
 			return err
 		}
-		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
+		id = strings.Split(id, " ")[0]
 	}
 
-	replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
+	replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -264,6 +322,10 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 	cols.AddRow("Status", replicationWithInfo.PostgresReplication.Status)
 	cols.AddRow("Stream ID", replicationWithInfo.PostgresReplication.StreamID)
 	cols.AddRow("Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID)
+
+	// Add the backfill completed at information
+	backfillCompletedAt := replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()
+	cols.AddRow("Backfill Completed At", backfillCompletedAt)
 
 	// Add the new info fields
 	lastCommittedTS := replicationWithInfo.Info.FormatLastCommittedAt()

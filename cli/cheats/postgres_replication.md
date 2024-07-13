@@ -1,11 +1,17 @@
-// Add a new postgres replication
-sequin-cli sources postgres add
+// List available databases
+sequin databases ls
+
+// Add a new postgres replication (interactive)
+sequin sources postgres add
+
+// Add a new postgres replication with an existing database
+sequin sources postgres add --database-slug <database_slug>
 
 // List postgres replications
-sequin-cli sources postgres ls
+sequin sources postgres ls
 
 // Show postgres replication info
-sequin-cli sources postgres info [id]
+sequin sources postgres info [id]
 
 // Remove a postgres replication
-sequin-cli sources postgres rm [id]
+sequin sources postgres rm [id]

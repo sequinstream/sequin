@@ -247,4 +247,50 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       assert json_response(conn, 404)
     end
   end
+
+  describe "create_backfills" do
+    setup %{postgres_replication: postgres_replication} do
+      tables = [
+        %{"schema" => @test_schema, "table" => @test_table},
+        %{"schema" => @test_schema, "table" => "another_test_table"}
+      ]
+
+      %{tables: tables, postgres_replication: postgres_replication}
+    end
+
+    test "creates backfill jobs for specified tables", %{
+      conn: conn,
+      postgres_replication: postgres_replication,
+      tables: tables
+    } do
+      conn = post(conn, ~p"/api/postgres_replications/#{postgres_replication.id}/backfills", %{tables: tables})
+      assert %{"job_ids" => _} = json_response(conn, 201)
+      assert_enqueued(worker: Sequin.Sources.BackfillPostgresTableWorker)
+    end
+
+    test "returns error for invalid tables format", %{
+      conn: conn,
+      postgres_replication: postgres_replication
+    } do
+      conn = post(conn, ~p"/api/postgres_replications/#{postgres_replication.id}/backfills", %{tables: "invalid"})
+      assert json_response(conn, 400) == %{"error" => "Invalid tables format. Expected a list of tables."}
+    end
+
+    test "returns error when tables parameter is missing", %{
+      conn: conn,
+      postgres_replication: postgres_replication
+    } do
+      conn = post(conn, ~p"/api/postgres_replications/#{postgres_replication.id}/backfills", %{})
+      assert json_response(conn, 400) == %{"error" => "Missing tables parameter."}
+    end
+
+    test "returns 404 for postgres_replication belonging to another account", %{
+      conn: conn,
+      other_postgres_replication: other_postgres_replication,
+      tables: tables
+    } do
+      conn = post(conn, ~p"/api/postgres_replications/#{other_postgres_replication.id}/backfills", %{tables: tables})
+      assert json_response(conn, 404)
+    end
+  end
 end

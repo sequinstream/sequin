@@ -24,6 +24,10 @@ defmodule SequinWeb.Router do
     resources "/streams/:stream_id_or_slug/consumers", ConsumerController, except: [:new, :edit], param: "id_or_slug"
     resources "/databases", DatabaseController, except: [:new, :edit]
     resources "/api_keys", ApiKeyController, only: [:index, :create, :delete]
+
+    resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]
+    post "/postgres_replications/:id/backfills", PostgresReplicationController, :create_backfills
+
     resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]
     post "/databases/:id/test_connection", DatabaseController, :test_connection
     post "/databases/test_connection", DatabaseController, :test_connection_params

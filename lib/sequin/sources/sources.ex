@@ -164,6 +164,24 @@ defmodule Sequin.Sources do
     end)
   end
 
+  @doc """
+  Creates backfill jobs for the specified tables in a PostgresReplication.
+  """
+  def create_backfill_jobs(postgres_replication, tables) do
+    jobs =
+      Enum.map(tables, fn %{"schema" => schema, "table" => table} ->
+        BackfillPostgresTableWorker.create(
+          postgres_replication.postgres_database_id,
+          schema,
+          table,
+          postgres_replication.id
+        )
+      end)
+
+    job_ids = Enum.map(jobs, fn {:ok, job} -> job.id end)
+    {:ok, job_ids}
+  end
+
   defp get_publication_tables(conn, publication_name) do
     query = """
     SELECT schemaname, tablename

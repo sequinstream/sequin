@@ -5,6 +5,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Sources.PostgresReplication
+  alias Sequin.SourcesRuntime
   alias Sequin.Streams
 
   require Logger
@@ -58,9 +59,15 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
     if rows == [] do
       # This is not perfect - other backfills may very well be running (in the case of multiple
       # publications). We'll handle that later.
-      postgres_replication
-      |> Ecto.Changeset.change(backfill_completed_at: DateTime.utc_now())
-      |> Sequin.Repo.update()
+      postgres_replication =
+        postgres_replication
+        |> Ecto.Changeset.change(
+          backfill_completed_at: DateTime.utc_now(),
+          status: :active
+        )
+        |> Sequin.Repo.update()
+
+      SourcesRuntime.Supervisor.start_for_pg_replication(postgres_replication)
 
       Logger.info("Backfill completed for postgres_replication_id: #{postgres_replication_id}")
     else

@@ -93,6 +93,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
       # Verify backfill_completed_at was set
       {:ok, updated_postgres_replication} = Sources.get_pg_replication(postgres_replication.id)
       assert updated_postgres_replication.backfill_completed_at
+      assert updated_postgres_replication.status == :active
     end
   end
 end

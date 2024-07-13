@@ -19,4 +19,8 @@ defmodule SequinWeb.PostgresReplicationJSON do
   def render("delete.json", %{postgres_replication: postgres_replication}) do
     %{id: postgres_replication.id, deleted: true}
   end
+
+  def render("backfill_jobs.json", %{job_ids: job_ids}) do
+    %{job_ids: job_ids}
+  end
 end

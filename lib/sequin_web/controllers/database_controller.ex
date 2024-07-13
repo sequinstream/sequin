@@ -3,6 +3,7 @@ defmodule SequinWeb.DatabaseController do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias SequinWeb.ApiFallbackPlug
 
@@ -79,6 +80,25 @@ defmodule SequinWeb.DatabaseController do
         conn
         |> put_status(:unprocessable_entity)
         |> render("test_connection.json", success: false, reason: reason)
+    end
+  end
+
+  def setup_replication(conn, %{"id" => id, "slot_name" => slot_name, "publication_name" => publication_name}) do
+    account_id = conn.assigns.account_id
+
+    with :ok <- validate_replication_params(slot_name, publication_name),
+         {:ok, database} <- Databases.get_db_for_account(account_id, id),
+         {:ok, _} <- Databases.setup_replication(database, slot_name, publication_name) do
+      render(conn, "setup_replication.json", slot_name: slot_name, publication_name: publication_name)
+    end
+  end
+
+  defp validate_replication_params(slot_name, publication_name) do
+    with true <- String.length(slot_name) > 0,
+         true <- String.length(publication_name) > 0 do
+      :ok
+    else
+      false -> {:error, Error.validation(summary: "slot_name and publication_name are required")}
     end
   end
 

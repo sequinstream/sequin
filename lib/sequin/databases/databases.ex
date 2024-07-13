@@ -197,4 +197,29 @@ defmodule Sequin.Databases do
       {:ok, result}
     end
   end
+
+  def setup_replication(%PostgresDatabase{} = database, slot_name, publication_name) do
+    with {:ok, conn} <- start_link(database),
+         :ok <- create_replication_slot(conn, slot_name),
+         :ok <- create_publication(conn, publication_name) do
+      {:ok, %{slot_name: slot_name, publication_name: publication_name}}
+    end
+  end
+
+  defp create_replication_slot(conn, slot_name) do
+    # ::text is important, as Postgrex can't handle return type pg_lsn
+    case Postgrex.query(conn, "SELECT pg_create_logical_replication_slot($1, 'pgoutput')::text", [slot_name]) do
+      {:ok, _} -> :ok
+      {:error, %Postgrex.Error{postgres: %{code: :duplicate_object}}} -> :ok
+      {:error, error} -> {:error, "Failed to create replication slot: #{inspect(error)}"}
+    end
+  end
+
+  defp create_publication(conn, publication_name) do
+    case Postgrex.query(conn, "CREATE PUBLICATION #{publication_name} FOR ALL TABLES", []) do
+      {:ok, _} -> :ok
+      {:error, %Postgrex.Error{postgres: %{code: :duplicate_object}}} -> :ok
+      {:error, error} -> {:error, "Failed to create publication: #{inspect(error)}"}
+    end
+  end
 end

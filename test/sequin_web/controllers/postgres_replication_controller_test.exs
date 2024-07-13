@@ -179,6 +179,27 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert json_response(conn, 422)["errors"] != %{}
     end
+
+    test "creates a postgres replication with an existing database", %{
+      conn: conn,
+      account: account,
+      stream: stream,
+      database: existing_database
+    } do
+      postgres_replication_attrs = %{
+        slot_name: replication_slot(),
+        publication_name: @publication,
+        stream_id: stream.id,
+        postgres_database_id: existing_database.id
+      }
+
+      conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
+      assert %{"id" => id} = json_response(conn, 200)
+
+      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      assert postgres_replication.account_id == account.id
+      assert postgres_replication.postgres_database_id == existing_database.id
+    end
   end
 
   describe "update" do

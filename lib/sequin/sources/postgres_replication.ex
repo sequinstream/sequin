@@ -32,8 +32,8 @@ defmodule Sequin.Sources.PostgresReplication do
   schema "postgres_replications" do
     field :slot_name, :string
     field :publication_name, :string
-    field :status, Ecto.Enum, values: [:active, :disabled, :backfilling], default: :active
-    field :backfill_completed_at, :utc_datetime_usec
+    field :status, Ecto.Enum, values: [:active, :disabled, :backfilling], default: :backfilling
+    field :backfill_completed_at, :utc_datetime_usec, default: nil
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
@@ -46,7 +46,7 @@ defmodule Sequin.Sources.PostgresReplication do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:slot_name, :publication_name, :status, :stream_id, :postgres_database_id, :backfill_completed_at])
+    |> cast(attrs, [:slot_name, :publication_name, :stream_id, :postgres_database_id])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)

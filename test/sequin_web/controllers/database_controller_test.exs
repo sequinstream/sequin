@@ -4,13 +4,22 @@ defmodule SequinWeb.DatabaseControllerTest do
   alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
+
+  @publication_name "__database_controller_test_pub__"
+  def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
     other_database = DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
+
+    on_exit(fn ->
+      Repo.query("DROP PUBLICATION IF EXISTS #{@publication_name}")
+    end)
+
     %{database: database, other_database: other_database, other_account: other_account}
   end
 
@@ -176,6 +185,47 @@ defmodule SequinWeb.DatabaseControllerTest do
       unreachable_params = Map.merge(params, %{hostname: "unreachable.host", port: 5432})
       conn = post(conn, ~p"/api/databases/test_connection", unreachable_params)
       assert %{"success" => false} = json_response(conn, 422)
+    end
+  end
+
+  describe "setup_replication" do
+    test "sets up replication slot and publication for a database", %{conn: conn, database: database} do
+      # We can't actually create the rep slot in this test, due to issues with creating
+      # replication slots and the ecto sandbox - see test/support/replication_slots.ex
+
+      conn =
+        post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
+          slot_name: replication_slot(),
+          publication_name: @publication_name
+        })
+
+      assert %{"success" => true, "slot_name" => _, "publication_name" => @publication_name} =
+               json_response(conn, 200)
+
+      assert {:ok, %{num_rows: 1}} =
+               Repo.query("SELECT 1 FROM pg_catalog.pg_publication WHERE pubname = $1", [@publication_name])
+    end
+
+    test "returns error for a database belonging to another account", %{conn: conn, other_database: other_database} do
+      conn =
+        post(conn, ~p"/api/databases/#{other_database.id}/setup_replication", %{
+          slot_name: "test_slot",
+          publication_name: "test_pub"
+        })
+
+      assert json_response(conn, 404)
+    end
+
+    test "returns error for invalid slot or publication name", %{conn: conn, database: database} do
+      conn =
+        post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
+          slot_name: "",
+          publication_name: ""
+        })
+
+      assert %{
+               "summary" => "slot_name and publication_name are required"
+             } = json_response(conn, 422)
     end
   end
 end

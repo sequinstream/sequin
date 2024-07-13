@@ -12,7 +12,8 @@ defmodule Sequin.Factory.SourcesFactory do
   def postgres_replication(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {status, attrs} = Map.pop_lazy(attrs, :status, fn -> Factory.one_of(["active", "disabled", "backfilling"]) end)
+    {status, attrs} = Map.pop_lazy(attrs, :status, fn -> Factory.one_of([:active, :disabled, :backfilling]) end)
+    status = if is_atom(status), do: status, else: String.to_atom(status)
 
     {backfill_completed_at, attrs} =
       Map.pop_lazy(attrs, :backfill_completed_at, fn ->
@@ -55,14 +56,11 @@ defmodule Sequin.Factory.SourcesFactory do
     {stream_id, attrs} =
       Map.pop_lazy(attrs, :stream_id, fn -> StreamsFactory.insert_stream!(account_id: account_id).id end)
 
-    attrs =
-      attrs
-      |> Map.put(:postgres_database_id, postgres_database_id)
-      |> Map.put(:stream_id, stream_id)
-      |> postgres_replication_attrs()
-
-    %PostgresReplication{account_id: account_id}
-    |> PostgresReplication.create_changeset(attrs)
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> Map.put(:postgres_database_id, postgres_database_id)
+    |> Map.put(:stream_id, stream_id)
+    |> postgres_replication()
     |> Repo.insert!()
   end
 end

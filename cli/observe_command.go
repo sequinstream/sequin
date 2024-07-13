@@ -45,11 +45,19 @@ func doTick() tea.Cmd {
 	})
 }
 
+// Add this new private function
+func calculateLimit() int {
+	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
+	return height - 10 // Subtract space for headers and footers
+}
+
 func (m model) Init() tea.Cmd {
+	limit := calculateLimit()
+
 	return tea.Batch(
 		doTick(),
-		func() tea.Msg { return m.messages.FetchMessages() },
-		func() tea.Msg { return m.consumers.FetchConsumers() },
+		func() tea.Msg { return m.messages.FetchMessages(limit) },
+		func() tea.Msg { return m.consumers.FetchConsumers(limit) },
 	)
 }
 
@@ -57,8 +65,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
 		case "tab", "right", "l":
 			m.activeTab = (m.activeTab + 1) % len(m.tabs)
 			return m, nil
@@ -71,12 +77,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.activeTab = 1 // Switch to Consumers tab
 			return m, nil
+		case "up", "k":
+			if m.activeTab == 0 {
+				m.messages.MoveCursor(-1)
+			} else {
+				m.consumers.MoveCursor(-1)
+			}
+			return m, nil
+		case "down", "j":
+			if m.activeTab == 0 {
+				m.messages.MoveCursor(1)
+			} else {
+				m.consumers.MoveCursor(1)
+			}
+			return m, nil
+		case "enter":
+			if m.activeTab == 0 {
+				m.messages.ToggleDetail()
+			} else {
+				m.consumers.ToggleDetail()
+			}
+			return m, nil
+		case "q":
+			return m, tea.Quit
+		case "ctrl+c":
+			return m, tea.Quit
 		}
 	case tickMsg:
+		limit := calculateLimit()
+
 		return m, tea.Batch(
 			doTick(),
-			func() tea.Msg { return m.messages.FetchMessages() },
-			func() tea.Msg { return m.consumers.FetchConsumers() },
+			func() tea.Msg { return m.messages.FetchMessages(limit) },
+			func() tea.Msg { return m.consumers.FetchConsumers(limit) },
 		)
 	case error:
 		m.err = msg
@@ -108,9 +141,9 @@ func (m model) View() string {
 
 	var content string
 	if m.activeTab == 0 {
-		content = m.messages.View(width, height-3)
+		content = m.messages.View(width, height-4)
 	} else {
-		content = m.consumers.View(width, height-3)
+		content = m.consumers.View(width, height-4)
 	}
 
 	bottomBar := lipgloss.NewStyle().
@@ -119,14 +152,15 @@ func (m model) View() string {
 		Padding(0, 1).
 		Width(width).
 		Align(lipgloss.Center).
-		Render("q (quit), ←/→ (switch tabs), m (Messages), c (Consumers)")
+		Render("q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details), m (Messages), c (Consumers)")
 
-	return tabBar + "\n" + content + bottomBar
+	return tabBar + "\n" + content + "\n" + bottomBar
 }
 
 func (m model) fetchMessages() tea.Cmd {
 	return func() tea.Msg {
-		err := m.messages.FetchMessages()
+		limit := calculateLimit()
+		err := m.messages.FetchMessages(limit)
 		if err != nil {
 			return err
 		}
@@ -136,7 +170,8 @@ func (m model) fetchMessages() tea.Cmd {
 
 func (m model) fetchConsumers() tea.Cmd {
 	return func() tea.Msg {
-		err := m.consumers.FetchConsumers()
+		limit := calculateLimit()
+		err := m.consumers.FetchConsumers(limit)
 		if err != nil {
 			return err
 		}

@@ -142,6 +142,10 @@ func (c *Consumer) detailView(width, height int) string {
 }
 
 func (c *Consumer) formatMessageList(messages []api.MessageWithInfo, width int, isPending bool) string {
+	if width < 100 {
+		return c.formatMessageListSmall(messages, width, isPending)
+	}
+
 	if messages == nil {
 		return "No messages.\n"
 	}
@@ -185,6 +189,46 @@ func (c *Consumer) formatMessageList(messages []api.MessageWithInfo, width int, 
 			seqWidth, msg.Message.Seq,
 			keyWidth, truncateString(msg.Message.Key, keyWidth),
 			deliverCountWidth, info.DeliverCount,
+			lastColumnWidth, lastColumn)
+	}
+
+	return output
+}
+
+func (c *Consumer) formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending bool) string {
+	if messages == nil {
+		return "No messages.\n"
+	}
+	if len(messages) == 0 {
+		return "No messages found.\n"
+	}
+
+	seqWidth := 10
+	keyWidth := 20
+	lastColumnWidth := width - seqWidth - keyWidth - 3 // 3 for separators
+
+	var header string
+	if isPending {
+		header = fmt.Sprintf("%-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", lastColumnWidth, "Not Visible Until")
+	} else {
+		header = fmt.Sprintf("%-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", lastColumnWidth, "Created At")
+	}
+
+	output := header
+	output += strings.Repeat("-", width) + "\n"
+
+	for _, msg := range messages {
+		info := msg.Info
+		var lastColumn string
+		if isPending {
+			lastColumn = info.FormatNotVisibleUntil()
+		} else {
+			lastColumn = msg.Message.CreatedAt.Format(time.RFC3339)
+		}
+
+		output += fmt.Sprintf("%-*d | %-*s | %-*s\n",
+			seqWidth, msg.Message.Seq,
+			keyWidth, truncateString(msg.Message.Key, keyWidth),
 			lastColumnWidth, lastColumn)
 	}
 

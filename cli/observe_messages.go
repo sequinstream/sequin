@@ -86,11 +86,19 @@ func (m *Message) detailView(width, height int) string {
 	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
 	output += fmt.Sprintf("Key:     %s\n", msg.Key)
 	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(time.RFC3339))
-	output += fmt.Sprintf("Data:    %s\n", msg.Data)
+
+	// Limit data to a maximum number of lines
+	maxDataLines := height - 10
+	dataLines := strings.Split(msg.Data, "\n")
+	if len(dataLines) > maxDataLines {
+		dataLines = dataLines[:maxDataLines]
+		dataLines = append(dataLines, "...")
+	}
+	output += fmt.Sprintf("Data:\n%s\n", strings.Join(dataLines, "\n"))
 
 	// Pad the output to fill the available height
 	lines := strings.Count(output, "\n")
-	for i := 0; i < height-lines; i++ {
+	for i := 0; i < height-lines-1; i++ {
 		output += "\n"
 	}
 
@@ -111,6 +119,12 @@ func (m *Message) MoveCursor(direction int) {
 }
 
 func truncateString(s string, maxLen int) string {
+	// Trim to the first newline
+	if idx := strings.Index(s, "\n"); idx != -1 {
+		s = s[:idx]
+	}
+
+	// Truncate if still longer than maxLen
 	if len(s) <= maxLen {
 		return s
 	}

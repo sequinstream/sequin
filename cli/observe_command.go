@@ -189,7 +189,7 @@ func (m model) View() string {
 		Padding(0, 1).
 		Width(width).
 		Align(lipgloss.Center).
-		Render("q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details), m (Messages), c (Consumers)")
+		Render("q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details)")
 
 	return tabBar + "\n" + content + "\n" + bottomBar
 }

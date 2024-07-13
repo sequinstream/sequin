@@ -46,7 +46,7 @@ func (m *Message) FetchMessages(limit int, filter string) error {
 
 func (m *Message) View(width, height int) string {
 	if m.showDetail {
-		return m.detailView(width, height)
+		return m.detailView(height)
 	}
 	return m.listView(width, height)
 }
@@ -90,7 +90,7 @@ func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWi
 		dataWidth, data)
 }
 
-func (m *Message) detailView(width, height int) string {
+func (m *Message) detailView(height int) string {
 	msg := m.messages[m.cursor]
 	output := lipgloss.NewStyle().Bold(true).Render("Message Detail")
 	output += "\n\n"

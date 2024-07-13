@@ -6,13 +6,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/stretchr/testify/assert"
 
 	"sequin-cli/context"
 )
-
-var askOne = survey.AskOne
 
 func TestCreateAction(t *testing.T) {
 	// Setup

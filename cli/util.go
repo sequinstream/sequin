@@ -4,34 +4,20 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/choria-io/fisk"
-	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/jedib0t/go-pretty/v6/text"
 	"moul.io/http2curl"
 )
 
-func addCheat(name string, cmd *fisk.CmdClause) {
-	cmd.CheatFile(fs, name, fmt.Sprintf("cheats/%s.md", name))
+func loadingSpinner() string {
+	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)] + " Loading...\n"
 }
 
-func newTableWriter(format string, a ...any) *tbl {
-	tbl := &tbl{
-		writer: table.NewWriter(),
-	}
-
-	tbl.writer.SetStyle(styles["rounded"])
-
-	tbl.writer.Style().Title.Align = text.AlignCenter
-	tbl.writer.Style().Format.Header = text.FormatDefault
-	tbl.writer.Style().Format.Footer = text.FormatDefault
-
-	if format != "" {
-		tbl.writer.SetTitle(fmt.Sprintf(format, a...))
-	}
-
-	return tbl
+func addCheat(name string, cmd *fisk.CmdClause) {
+	cmd.CheatFile(fs, name, fmt.Sprintf("cheats/%s.md", name))
 }
 
 func formatBytes(bytes int) string {

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
 	"github.com/jedib0t/go-pretty/v6/text"
 
@@ -95,23 +96,25 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		return nil
 	}
 
-	table := newTableWriter("Contexts")
+	columns := []table.Column{
+		{Title: "Name", Width: 20},
+		{Title: "Description", Width: 30},
+		{Title: "Server URL", Width: 40},
+	}
 
-	table.AddHeaders("Name", "Description", "Server URL")
-
+	rows := []table.Row{}
 	for _, ctx := range contexts {
-		table.AddRow(
+		rows = append(rows, table.Row{
 			ctx.Name,
 			ctx.Description,
 			ctx.ServerURL,
-		)
+		})
 	}
 
-	fmt.Println(table.Render())
-
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Println("Contexts")
+	return t.Render()
 }
-
 func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 	if c.name == "" {
 		err := c.pickContext("Choose a context to show info for:")
@@ -129,22 +132,20 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not load context: %w", err)
 	}
 
-	cols := newColumns(fmt.Sprintf("Information for Context %s", ctx.Name))
-
-	cols.AddRow("Name", ctx.Name)
-	cols.AddRow("Description", ctx.Description)
-	cols.AddRow("Server URL", ctx.ServerURL)
-
-	cols.Println()
-
-	output, err := cols.Render()
-	if err != nil {
-		return err
+	columns := []table.Column{
+		{Title: "Property", Width: 20},
+		{Title: "Value", Width: 40},
 	}
 
-	fmt.Print(output)
+	rows := []table.Row{
+		{"Name", ctx.Name},
+		{"Description", ctx.Description},
+		{"Server URL", ctx.ServerURL},
+	}
 
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Printf("Information for Context %s\n", ctx.Name)
+	return t.Render()
 }
 
 func (c *ctxCommand) removeAction(_ *fisk.ParseContext) error {

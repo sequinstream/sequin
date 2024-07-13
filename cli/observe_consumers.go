@@ -71,7 +71,7 @@ func (c *Consumer) listView(width, height int) string {
 	}
 
 	output := formatConsumerHeader(width)
-	output += formatConsumerList(c.consumers, c.cursor, width)
+	output += formatConsumerList(c.consumers, c.cursor)
 	output += strings.Repeat("\n", height-len(c.consumers)-3)
 
 	return output
@@ -83,7 +83,7 @@ func formatConsumerHeader(width int) string {
 	return header + strings.Repeat("-", width) + "\n"
 }
 
-func formatConsumerList(consumers []api.Consumer, cursor int, width int) string {
+func formatConsumerList(consumers []api.Consumer, cursor int) string {
 	var output string
 	for i, consumer := range consumers {
 		style := lipgloss.NewStyle()
@@ -298,9 +298,4 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 			}
 		}
 	}()
-}
-
-func loadingSpinner() string {
-	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)] + " Loading...\n"
 }

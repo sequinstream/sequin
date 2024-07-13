@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
 
 	"sequin-cli/api"
@@ -106,26 +107,32 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	table := newTableWriter("Streams")
+	columns := []table.Column{
+		{Title: "ID", Width: 36},
+		{Title: "Slug", Width: 20},
+		{Title: "Consumers", Width: 10},
+		{Title: "Messages", Width: 10},
+		{Title: "Storage Size", Width: 15},
+		{Title: "Created At", Width: 30},
+		{Title: "Updated At", Width: 30},
+	}
 
-	table.AddHeaders("ID", "Slug", "Consumers", "Messages", "Storage Size", "Created At", "Updated At")
-	// Add rows
+	rows := []table.Row{}
 	for _, s := range streams {
-		table.AddRow(
+		rows = append(rows, table.Row{
 			s.ID,
 			s.Slug,
-			s.Stats.ConsumerCount,
-			s.Stats.MessageCount,
+			fmt.Sprintf("%d", s.Stats.ConsumerCount),
+			fmt.Sprintf("%d", s.Stats.MessageCount),
 			formatBytes(s.Stats.StorageSize),
 			s.CreatedAt.Format(time.RFC3339),
 			s.UpdatedAt.Format(time.RFC3339),
-		)
+		})
 	}
 
-	// Render the table
-	fmt.Print(table.Render())
-
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Println("Streams")
+	return t.Render()
 }
 
 func streamInfo(_ *fisk.ParseContext, config *Config) error {
@@ -171,26 +178,24 @@ func displayStreamInfo(config *Config) error {
 		return err
 	}
 
-	cols := newColumns(fmt.Sprintf("Information for Stream %s created %s", stream.Slug, stream.CreatedAt.Format(time.RFC3339)))
-
-	cols.AddRow("ID", stream.ID)
-	cols.AddRow("Index", stream.Idx)
-	cols.AddRow("Consumers", stream.Stats.ConsumerCount)
-	cols.AddRow("Messages", stream.Stats.MessageCount)
-	cols.AddRow("Storage Size", formatBytes(stream.Stats.StorageSize))
-	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
-	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
-
-	cols.Println()
-
-	output, err := cols.Render()
-	if err != nil {
-		return err
+	columns := []table.Column{
+		{Title: "Field", Width: 20},
+		{Title: "Value", Width: 50},
 	}
 
-	fmt.Print(output)
+	rows := []table.Row{
+		{"ID", stream.ID},
+		{"Index", fmt.Sprintf("%d", stream.Idx)},
+		{"Consumers", fmt.Sprintf("%d", stream.Stats.ConsumerCount)},
+		{"Messages", fmt.Sprintf("%d", stream.Stats.MessageCount)},
+		{"Storage Size", formatBytes(stream.Stats.StorageSize)},
+		{"Created At", stream.CreatedAt.Format(time.RFC3339)},
+		{"Updated At", stream.UpdatedAt.Format(time.RFC3339)},
+	}
 
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Printf("Information for Stream %s created %s\n\n", stream.Slug, stream.CreatedAt.Format(time.RFC3339))
+	return t.Render()
 }
 
 func streamAdd(_ *fisk.ParseContext, config *Config) error {
@@ -231,26 +236,24 @@ func streamAdd(_ *fisk.ParseContext, config *Config) error {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
 
-	cols := newColumns(fmt.Sprintf("Stream %s created %s", stream.ID, stream.CreatedAt.Format(time.RFC3339)))
-
-	cols.AddRow("Slug", stream.Slug)
-	cols.AddRow("Index", stream.Idx)
-	cols.AddRow("Consumers", stream.Stats.ConsumerCount)
-	cols.AddRow("Messages", stream.Stats.MessageCount)
-	cols.AddRow("Storage Size", formatBytes(stream.Stats.StorageSize))
-	cols.AddRow("Created At", stream.CreatedAt.Format(time.RFC3339))
-	cols.AddRow("Updated At", stream.UpdatedAt.Format(time.RFC3339))
-
-	cols.Println()
-
-	output, err := cols.Render()
-	if err != nil {
-		return err
+	columns := []table.Column{
+		{Title: "Field", Width: 20},
+		{Title: "Value", Width: 50},
 	}
 
-	fmt.Print(output)
+	rows := []table.Row{
+		{"Slug", stream.Slug},
+		{"Index", fmt.Sprintf("%d", stream.Idx)},
+		{"Consumers", fmt.Sprintf("%d", stream.Stats.ConsumerCount)},
+		{"Messages", fmt.Sprintf("%d", stream.Stats.MessageCount)},
+		{"Storage Size", formatBytes(stream.Stats.StorageSize)},
+		{"Created At", stream.CreatedAt.Format(time.RFC3339)},
+		{"Updated At", stream.UpdatedAt.Format(time.RFC3339)},
+	}
 
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Printf("Stream %s created %s\n\n", stream.ID, stream.CreatedAt.Format(time.RFC3339))
+	return t.Render()
 }
 
 func streamRm(_ *fisk.ParseContext, config *Config) error {

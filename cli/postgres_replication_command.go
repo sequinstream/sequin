@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
 
 	"sequin-cli/api"
@@ -266,16 +267,26 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	table := newTableWriter("Postgres Replications")
-
-	table.AddHeaders("ID", "Slot Name", "Publication Name", "Status", "Stream ID")
-	for _, r := range replications {
-		table.AddRow(r.ID, r.SlotName, r.PublicationName, r.Status, r.StreamID)
+	columns := []table.Column{
+		{Title: "ID", Width: 36},
+		{Title: "Slot Name", Width: 20},
+		{Title: "Publication Name", Width: 20},
+		{Title: "Status", Width: 10},
+		{Title: "Stream ID", Width: 36},
 	}
 
-	fmt.Print(table.Render())
+	rows := []table.Row{}
+	for _, r := range replications {
+		rows = append(rows, table.Row{r.ID, r.SlotName, r.PublicationName, r.Status, r.StreamID})
+	}
 
-	return nil
+	tableType := PrintableTable
+	if len(rows) > 10 {
+		tableType = InteractiveTable
+	}
+
+	t := NewTable(columns, rows, tableType)
+	return t.Render()
 }
 
 func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
@@ -283,7 +294,6 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 	if err != nil {
 		return err
 	}
-
 	id := config.PostgresReplicationID
 	if id == "" {
 		replications, err := api.FetchPostgresReplications(ctx)
@@ -314,33 +324,25 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		return err
 	}
 
-	cols := newColumns(fmt.Sprintf("Information for Postgres Replication %s", replicationWithInfo.PostgresReplication.ID))
-
-	cols.AddRow("ID", replicationWithInfo.PostgresReplication.ID)
-	cols.AddRow("Slot Name", replicationWithInfo.PostgresReplication.SlotName)
-	cols.AddRow("Publication Name", replicationWithInfo.PostgresReplication.PublicationName)
-	cols.AddRow("Status", replicationWithInfo.PostgresReplication.Status)
-	cols.AddRow("Stream ID", replicationWithInfo.PostgresReplication.StreamID)
-	cols.AddRow("Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID)
-
-	// Add the backfill completed at information
-	backfillCompletedAt := replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()
-	cols.AddRow("Backfill Completed At", backfillCompletedAt)
-
-	// Add the new info fields
-	lastCommittedTS := replicationWithInfo.Info.FormatLastCommittedAt()
-	cols.AddRow("Last Committed Timestamp", lastCommittedTS)
-
-	cols.Println()
-
-	output, err := cols.Render()
-	if err != nil {
-		return err
+	columns := []table.Column{
+		{Title: "Field", Width: 30},
+		{Title: "Value", Width: 50},
 	}
 
-	fmt.Print(output)
+	rows := []table.Row{
+		{"ID", replicationWithInfo.PostgresReplication.ID},
+		{"Slot Name", replicationWithInfo.PostgresReplication.SlotName},
+		{"Publication Name", replicationWithInfo.PostgresReplication.PublicationName},
+		{"Status", replicationWithInfo.PostgresReplication.Status},
+		{"Stream ID", replicationWithInfo.PostgresReplication.StreamID},
+		{"Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID},
+		{"Backfill Completed At", replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()},
+		{"Last Committed Timestamp", replicationWithInfo.Info.FormatLastCommittedAt()},
+	}
 
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Printf("Information for Postgres Replication %s\n\n", replicationWithInfo.PostgresReplication.ID)
+	return t.Render()
 }
 
 func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
 	"github.com/google/go-cmp/cmp"
 
@@ -143,22 +144,28 @@ func consumerLs(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	table := newTableWriter("Consumers")
+	columns := []table.Column{
+		{Title: "ID", Width: 36},
+		{Title: "Slug", Width: 20},
+		{Title: "Max Ack Pending", Width: 15},
+		{Title: "Max Deliver", Width: 12},
+		{Title: "Created At", Width: 30},
+	}
 
-	table.AddHeaders("ID", "Slug", "Max Ack Pending", "Max Deliver", "Created At")
-
+	rows := []table.Row{}
 	for _, consumer := range consumers {
-		table.AddRow(
+		rows = append(rows, table.Row{
 			consumer.ID,
 			consumer.Slug,
 			strconv.Itoa(consumer.MaxAckPending),
 			strconv.Itoa(consumer.MaxDeliver),
 			consumer.CreatedAt.Format(time.RFC3339),
-		)
+		})
 	}
 
-	fmt.Print(table.Render())
-	return nil
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Println("Consumers")
+	return t.Render()
 }
 
 func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
@@ -270,25 +277,26 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 }
 
 func displayConsumerInfo(consumer *api.Consumer) {
-	cols := newColumns(fmt.Sprintf("Consumer %s created %s", consumer.ID, consumer.CreatedAt.Format(time.RFC3339)))
-	cols.AddRow("ID", consumer.ID)
-	cols.AddRow("Slug", consumer.Slug)
-	cols.AddRow("Stream ID", consumer.StreamID)
-	cols.AddRow("Ack Wait (ms)", strconv.Itoa(consumer.AckWaitMS))
-	cols.AddRow("Max Ack Pending", strconv.Itoa(consumer.MaxAckPending))
-	cols.AddRow("Max Deliver", strconv.Itoa(consumer.MaxDeliver))
-	cols.AddRow("Max Waiting", strconv.Itoa(consumer.MaxWaiting))
-	cols.AddRow("Filter", consumer.FilterKeyPattern)
-	cols.AddRow("Created At", consumer.CreatedAt.Format(time.RFC3339))
-
-	cols.Println()
-
-	output, err := cols.Render()
-	if err != nil {
-		fisk.Fatalf("failed to render columns: %s", err)
+	columns := []table.Column{
+		{Title: "Field", Width: 20},
+		{Title: "Value", Width: 50},
 	}
 
-	fmt.Print(output)
+	rows := []table.Row{
+		{"ID", consumer.ID},
+		{"Slug", consumer.Slug},
+		{"Stream ID", consumer.StreamID},
+		{"Ack Wait (ms)", strconv.Itoa(consumer.AckWaitMS)},
+		{"Max Ack Pending", strconv.Itoa(consumer.MaxAckPending)},
+		{"Max Deliver", strconv.Itoa(consumer.MaxDeliver)},
+		{"Max Waiting", strconv.Itoa(consumer.MaxWaiting)},
+		{"Filter", consumer.FilterKeyPattern},
+		{"Created At", consumer.CreatedAt.Format(time.RFC3339)},
+	}
+
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Printf("Consumer %s created %s\n\n", consumer.ID, consumer.CreatedAt.Format(time.RFC3339))
+	t.Render()
 }
 
 func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
@@ -472,19 +480,32 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return nil
 	}
 
-	for _, msg := range messages {
-		fmt.Printf("Key: %s\n", msg.Message.Key)
-		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
-		fmt.Printf("Deliver Count: %d\n", msg.Info.DeliverCount)
-		fmt.Printf("Last Delivered At: %s\n", msg.Info.FormatLastDeliveredAt())
-		fmt.Printf("Not Visible Until: %s\n", msg.Info.FormatNotVisibleUntil())
-		if msg.Info.State != "" {
-			fmt.Printf("State: %s\n", msg.Info.State)
-		}
-		fmt.Printf("\n%s\n", msg.Message.Data)
+	columns := []table.Column{
+		{Title: "Key", Width: 20},
+		{Title: "Sequence", Width: 10},
+		{Title: "Deliver Count", Width: 15},
+		{Title: "Last Delivered At", Width: 30},
+		{Title: "Not Visible Until", Width: 30},
+		{Title: "State", Width: 10},
+		{Title: "Data", Width: 50},
 	}
 
-	return nil
+	rows := []table.Row{}
+	for _, msg := range messages {
+		rows = append(rows, table.Row{
+			msg.Message.Key,
+			strconv.Itoa(msg.Message.Seq),
+			strconv.Itoa(msg.Info.DeliverCount),
+			msg.Info.FormatLastDeliveredAt(),
+			msg.Info.FormatNotVisibleUntil(),
+			msg.Info.State,
+			msg.Message.Data,
+		})
+	}
+
+	t := NewTable(columns, rows, PrintableTable)
+	fmt.Println("Messages")
+	return t.Render()
 }
 
 func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {

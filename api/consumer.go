@@ -359,6 +359,8 @@ func BuildFetchMessages(ctx *context.Context, options FetchMessagesOptions) (*ht
 		serverURL, options.StreamID, options.ConsumerID, options.Limit, options.Order)
 	if !options.Visible {
 		url += "&visible=false"
+	} else if options.Visible {
+		url += "&visible=true"
 	}
 
 	req, err := http.NewRequest("GET", url, nil)

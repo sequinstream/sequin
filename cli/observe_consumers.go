@@ -111,12 +111,12 @@ func (c *Consumer) detailView(width, height int) string {
 	consumer := c.consumers[c.cursor]
 	output := lipgloss.NewStyle().Bold(true).Render("Consumer Detail")
 	output += "\n\n"
-	output += fmt.Sprintf("ID: %s\n", consumer.ID)
-	output += fmt.Sprintf("Slug: %s\n", consumer.Slug)
-	output += fmt.Sprintf("Filter Key Pattern: %s\n", consumer.FilterKeyPattern)
+	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
+	output += fmt.Sprintf("Slug:            %s\n", consumer.Slug)
+	output += fmt.Sprintf("Filter:          %s\n", consumer.FilterKeyPattern)
 	output += fmt.Sprintf("Max Ack Pending: %d\n", consumer.MaxAckPending)
-	output += fmt.Sprintf("Max Deliver: %d\n", consumer.MaxDeliver)
-	output += fmt.Sprintf("Created At: %s\n", consumer.CreatedAt.Format(time.RFC3339))
+	output += fmt.Sprintf("Max Deliver:     %d\n", consumer.MaxDeliver)
+	output += fmt.Sprintf("Created At:      %s\n", consumer.CreatedAt.Format(time.RFC3339))
 
 	output += "\n" + lipgloss.NewStyle().Bold(true).Render("Pending Messages") + "\n"
 	if c.isLoading {
@@ -240,15 +240,19 @@ func (c *Consumer) ToggleDetail() {
 }
 
 func (c *Consumer) MoveCursor(direction int) {
+	oldCursor := c.cursor
 	c.cursor += direction
 	if c.cursor < 0 {
 		c.cursor = 0
 	} else if c.cursor >= len(c.consumers) {
 		c.cursor = len(c.consumers) - 1
 	}
-	c.pendingMessages = nil
-	c.nextMessages = nil
-	c.isLoading = true
+
+	if oldCursor != c.cursor {
+		c.pendingMessages = nil
+		c.nextMessages = nil
+		c.isLoading = true
+	}
 }
 
 func (c *Consumer) FetchPendingAndNextMessages() error {

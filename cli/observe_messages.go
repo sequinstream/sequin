@@ -50,9 +50,9 @@ func (m *Message) View(width, height int) string {
 	}
 
 	seqWidth := 10
-	keyWidth := width / 3
+	keyWidth := max(10, width/3)
 	createdWidth := 22
-	dataWidth := width - seqWidth - keyWidth - createdWidth - 8
+	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-8)
 
 	output := fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n", seqWidth, "Seq", keyWidth, "Key", createdWidth, "Created", dataWidth, "Data")
 	output += strings.Repeat("-", width) + "\n"
@@ -126,9 +126,19 @@ func (m *Message) IsDetailView() bool {
 }
 
 func truncateString(s string, maxLen int) string {
+	// Handle negative or zero maxLen
+	if maxLen <= 0 {
+		return ""
+	}
+
 	// Trim to the first newline
 	if idx := strings.Index(s, "\n"); idx != -1 {
 		s = s[:idx]
+	}
+
+	// Handle cases where maxLen is too small
+	if maxLen <= 3 {
+		return strings.Repeat(".", maxLen)
 	}
 
 	// Truncate if still longer than maxLen
@@ -136,4 +146,11 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

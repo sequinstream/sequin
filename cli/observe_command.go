@@ -214,6 +214,11 @@ func (m model) View() string {
 
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
+	minWidth := 60 // Adjust this value as needed
+	if width < minWidth {
+		return fmt.Sprintf("Error: Screen too narrow (min %d, current %d)\n\nq (quit)", minWidth, width)
+	}
+
 	tabContent := ""
 	for i, tab := range m.tabs {
 		style := lipgloss.NewStyle().Padding(0, 1)

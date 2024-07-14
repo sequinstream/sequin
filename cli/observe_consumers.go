@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"sequin-cli/api"
@@ -70,50 +69,88 @@ func (c *Consumer) listView(width, height int) string {
 		return "\nNo consumers found."
 	}
 
-	output := formatConsumerHeader(width)
-	output += formatConsumerList(c.consumers, c.cursor)
-	output += strings.Repeat("\n", height-len(c.consumers)-3)
+	slugWidth := c.calculateSlugWidth(width)
+	filterWidth := 25
+	maxAckPendingWidth := 15
+	maxDeliverWidth := 15
+	createdWidth := 25
 
-	return output
-}
+	// Create the table header style
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("0")). // Black text
+		Background(lipgloss.Color("2")). // Green background
+		Width(width)
 
-func formatConsumerHeader(width int) string {
-	header := fmt.Sprintf("\n%-36s | %-20s | %-25s | %-15s | %-15s | %-25s\n",
-		"ID", "Slug", "Filter Pattern", "Max Ack Pending", "Max Deliver", "Created At")
-	return header + strings.Repeat("-", width) + "\n"
-}
+	// Add the "CONSUMERS" title
+	output := lipgloss.NewStyle().Bold(true).Render("CONSUMERS") + "\n\n"
 
-func formatConsumerList(consumers []api.Consumer, cursor int) string {
-	var output string
-	for i, consumer := range consumers {
+	// Format the table header
+	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
+		slugWidth, "SLUG",
+		filterWidth, "FILTER PATTERN",
+		maxAckPendingWidth, "MAX ACK PENDING",
+		maxDeliverWidth, "MAX DELIVER",
+		createdWidth, "CREATED AT")
+
+	output += tableHeaderStyle.Render(tableHeader) + "\n"
+
+	for i, consumer := range c.consumers {
+		line := formatConsumerLine(consumer, slugWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
 		style := lipgloss.NewStyle()
-		if i == cursor {
-			style = style.Background(lipgloss.Color("25")).Foreground(lipgloss.Color("231"))
+		if i == c.cursor {
+			style = style.
+				Background(lipgloss.Color("117")). // Light blue background
+				Foreground(lipgloss.Color("0"))    // Black text
 		}
-		output += style.Render(fmt.Sprintf("%-36s | %-20s | %-25s | %-15d | %-15d | %-25s",
-			consumer.ID,
-			truncateString(consumer.Slug, 20),
-			truncateString(consumer.FilterKeyPattern, 25),
-			consumer.MaxAckPending,
-			consumer.MaxDeliver,
-			consumer.CreatedAt.Format(time.RFC3339)))
-		output += "\n"
+		output += style.Render(line) + "\n"
 	}
+
 	return output
+}
+
+func (c *Consumer) calculateSlugWidth(totalWidth int) int {
+	maxSlugWidth := 3 // Minimum width for "Slug" header
+	for _, consumer := range c.consumers {
+		slugWidth := len(consumer.Slug)
+		if slugWidth > maxSlugWidth {
+			maxSlugWidth = slugWidth
+		}
+	}
+	return min(min(maxSlugWidth, totalWidth/4), 255)
+}
+
+func formatConsumerLine(consumer api.Consumer, slugWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
+	slug := truncateString(consumer.Slug, slugWidth)
+	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
+	maxAckPending := fmt.Sprintf("%d", consumer.MaxAckPending)
+	maxDeliver := fmt.Sprintf("%d", consumer.MaxDeliver)
+	created := consumer.CreatedAt.Format(time.RFC3339)
+
+	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
+		slugWidth, slug,
+		filterWidth, filter,
+		maxAckPendingWidth, maxAckPending,
+		maxDeliverWidth, maxDeliver,
+		createdWidth, created)
 }
 
 func (c *Consumer) detailView(width, height int) string {
+	if len(c.consumers) == 0 || c.cursor < 0 || c.cursor >= len(c.consumers) {
+		return "No consumer selected"
+	}
+
 	consumer := c.consumers[c.cursor]
 	output := formatConsumerDetail(consumer)
 
 	output += formatMessageSection("Pending Messages", c.pendingMessages, width, true, c.isLoading)
 	output += formatMessageSection("Next Messages", c.nextMessages, width, false, c.isLoading)
 
-	return padOutput(output, height)
+	return output
 }
 
 func formatConsumerDetail(consumer api.Consumer) string {
-	output := lipgloss.NewStyle().Bold(true).Render("Consumer Detail")
+	output := lipgloss.NewStyle().Bold(true).Render("CONSUMER DETAIL")
 	output += "\n\n"
 	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
 	output += fmt.Sprintf("Slug:            %s\n", consumer.Slug)
@@ -125,7 +162,12 @@ func formatConsumerDetail(consumer api.Consumer) string {
 }
 
 func formatMessageSection(title string, messages []api.MessageWithInfo, width int, isPending, isLoading bool) string {
-	output := "\n" + lipgloss.NewStyle().Bold(true).Render(title) + "\n"
+	// Create the table header style
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Width(width)
+
+	output := "\n" + tableHeaderStyle.Render(title) + "\n"
 	if isLoading {
 		return output + loadingSpinner()
 	}
@@ -133,22 +175,35 @@ func formatMessageSection(title string, messages []api.MessageWithInfo, width in
 }
 
 func formatMessageList(messages []api.MessageWithInfo, width int, isPending bool) string {
-	if width < 100 {
-		return formatMessageListSmall(messages, width, isPending)
+	seqWidth := calculateSeqWidth(messages)
+
+	if width < 80 {
+		return formatMessageListSmall(messages, width, isPending, seqWidth)
 	}
-	return formatMessageListLarge(messages, width, isPending)
+	return formatMessageListLarge(messages, width, isPending, seqWidth)
 }
 
-func formatMessageListLarge(messages []api.MessageWithInfo, width int, isPending bool) string {
+func calculateSeqWidth(messages []api.MessageWithInfo) int {
+	maxSeqWidth := 3 // Minimum width for "SEQ" header
+	for _, msg := range messages {
+		seqWidth := len(fmt.Sprintf("%d", msg.Message.Seq))
+		if seqWidth > maxSeqWidth {
+			maxSeqWidth = seqWidth
+		}
+	}
+	return maxSeqWidth
+}
+
+func formatMessageListLarge(messages []api.MessageWithInfo, width int, isPending bool, seqWidth int) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth, keyWidth, deliverCountWidth := 10, width/3, 15
+	keyWidth, deliverCountWidth := width/3, 7
 	lastColumnWidth := width - seqWidth - keyWidth - deliverCountWidth - 6
 
 	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
-	output := header + strings.Repeat("-", width) + "\n"
+	output := header
 
 	for _, msg := range messages {
 		output += formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
@@ -157,16 +212,16 @@ func formatMessageListLarge(messages []api.MessageWithInfo, width int, isPending
 	return output
 }
 
-func formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending bool) string {
+func formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending bool, seqWidth int) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth, keyWidth := 10, 20
+	keyWidth := 20
 	lastColumnWidth := width - seqWidth - keyWidth - 3
 
 	header := formatMessageHeader(seqWidth, keyWidth, 0, lastColumnWidth, isPending)
-	output := header + strings.Repeat("-", width) + "\n"
+	output := header
 
 	for _, msg := range messages {
 		output += formatMessageRow(msg, seqWidth, keyWidth, 0, lastColumnWidth, isPending)
@@ -178,20 +233,29 @@ func formatMessageListSmall(messages []api.MessageWithInfo, width int, isPending
 func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
 	lastColumnName := "Not Visible Until"
 	if !isPending {
-		lastColumnName = "Created At"
+		lastColumnName = "CREATED AT"
 	}
 
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("0")). // Black text
+		Background(lipgloss.Color("2"))  // Green background
+
+	var header string
 	if deliverCountWidth > 0 {
-		return fmt.Sprintf("%-*s | %-*s | %-*s | %-*s\n",
-			seqWidth, "Seq",
-			keyWidth, "Key",
-			deliverCountWidth, "Deliver Count",
+		header = fmt.Sprintf("%-*s %-*s %-*s %-*s",
+			seqWidth, "SEQ",
+			keyWidth, "KEY",
+			deliverCountWidth, "DELIVER",
+			lastColumnWidth, lastColumnName)
+	} else {
+		header = fmt.Sprintf("%-*s %-*s %-*s",
+			seqWidth, "SEQ",
+			keyWidth, "KEY",
 			lastColumnWidth, lastColumnName)
 	}
-	return fmt.Sprintf("%-*s | %-*s | %-*s\n",
-		seqWidth, "Seq",
-		keyWidth, "Key",
-		lastColumnWidth, lastColumnName)
+
+	return tableHeaderStyle.Render(header) + "\n"
 }
 
 func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
@@ -201,21 +265,16 @@ func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountW
 	}
 
 	if deliverCountWidth > 0 {
-		return fmt.Sprintf("%-*d | %-*s | %-*d | %-*s\n",
+		return fmt.Sprintf("%-*d %-*s %-*d %-*s\n",
 			seqWidth, msg.Message.Seq,
 			keyWidth, truncateString(msg.Message.Key, keyWidth),
 			deliverCountWidth, msg.Info.DeliverCount,
 			lastColumnWidth, lastColumn)
 	}
-	return fmt.Sprintf("%-*d | %-*s | %-*s\n",
+	return fmt.Sprintf("%-*d %-*s %-*s\n",
 		seqWidth, msg.Message.Seq,
 		keyWidth, truncateString(msg.Message.Key, keyWidth),
 		lastColumnWidth, lastColumn)
-}
-
-func padOutput(output string, height int) string {
-	lines := strings.Count(output, "\n")
-	return output + strings.Repeat("\n", height-lines)
 }
 
 func (c *Consumer) ToggleDetail() {
@@ -298,4 +357,8 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+func (c *Consumer) DisableDetailView() {
+	c.showDetail = false
 }

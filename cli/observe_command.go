@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	sequinContext "sequin-cli/context"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/choria-io/fisk"
@@ -32,32 +30,44 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 }
 
 type model struct {
-	messages    *Message
-	consumers   *Consumer
-	err         error
-	config      *Config
-	activeTab   int
-	tabs        []string
-	ctx         *sequinContext.Context
-	filterInput textinput.Model
-	filterMode  bool
-	filterError string
+	messages  *Message
+	consumers *Consumer
+	config    *Config
+	activeTab int
+	tabs      []string
+	ctx       *sequinContext.Context
+}
+
+// Add these methods to the model struct
+
+func (m *model) fetchConsumers() tea.Cmd {
+	return func() tea.Msg {
+		err := m.consumers.FetchConsumers(calculateLimit())
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (m *model) fetchMessages() tea.Cmd {
+	return func() tea.Msg {
+		err := m.messages.FetchMessages(calculateLimit(), m.messages.filter)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 }
 
 func initialModel(config *Config, ctx *sequinContext.Context) model {
-	ti := textinput.New()
-	ti.Placeholder = "Filter"
-	ti.CharLimit = 100
-	ti.Width = 30
-
 	m := model{
-		config:      config,
-		activeTab:   0,
-		tabs:        []string{"Messages (m)", "Consumers (c)"},
-		messages:    NewMessage(config),
-		consumers:   NewConsumer(config, ctx),
-		ctx:         ctx,
-		filterInput: ti,
+		config:    config,
+		activeTab: 0,
+		tabs:      []string{"Messages (m)", "Consumers (c)"},
+		messages:  NewMessage(config),
+		consumers: NewConsumer(config, ctx),
+		ctx:       ctx,
 	}
 
 	go m.consumers.StartMessageUpdates(context.Background())
@@ -74,7 +84,7 @@ func doTick() tea.Cmd {
 }
 
 func doSlowTick() tea.Cmd {
-	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second/10, func(t time.Time) tea.Msg {
 		return slowTickMsg(t)
 	})
 }
@@ -83,14 +93,14 @@ type slowTickMsg time.Time
 
 func calculateLimit() int {
 	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
-	return height - 10
+	return height - 9
 }
 
 func (m model) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
 		doSlowTick(),
-		m.fetchMessages(),
+		m.messages.ApplyFilter,
 		m.fetchConsumers(),
 	)
 }
@@ -103,26 +113,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, doTick()
 	case slowTickMsg:
 		return m.handleSlowTick()
-	case error:
-		return m.handleError(msg)
 	}
 	return m, nil
 }
 
 func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.filterMode {
-		return m.handleFilterModeKeyPress(msg)
+	if m.activeTab == 0 && m.messages.filterMode {
+		return m, m.messages.HandleFilterModeKeyPress(msg)
 	}
 
 	switch msg.String() {
 	case "tab", "right", "l":
 		m.activeTab = (m.activeTab + 1) % len(m.tabs)
+		m.messages.DisableDetailView()
+		m.consumers.DisableDetailView()
 	case "shift+tab", "left", "h":
 		m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
+		m.messages.DisableDetailView()
+		m.consumers.DisableDetailView()
 	case "m":
 		m.activeTab = 0
+		m.messages.DisableDetailView()
+		m.consumers.DisableDetailView()
 	case "c":
 		m.activeTab = 1
+		m.messages.DisableDetailView()
+		m.consumers.DisableDetailView()
 	case "up", "k":
 		m.moveCursor(-1)
 	case "down", "j":
@@ -132,24 +148,13 @@ func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "f":
-		return m.handleFilterKey()
+		if m.activeTab == 0 {
+			m.messages.HandleFilterKey()
+		}
+		return m, nil
 	}
 
 	return m, nil
-}
-
-func (m model) handleFilterModeKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc", "enter", "ctrl+c":
-		m.filterMode = false
-		m.filterInput.Blur()
-		return m, m.applyFilter()
-	default:
-		var cmd tea.Cmd
-		m.filterInput, cmd = m.filterInput.Update(msg)
-		m.filterError = ""
-		return m, cmd
-	}
 }
 
 func (m *model) moveCursor(direction int) {
@@ -169,29 +174,12 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 	return m, m.fetchPendingAndNextMessages()
 }
 
-func (m model) handleFilterKey() (tea.Model, tea.Cmd) {
-	if m.activeTab == 0 && !m.messages.IsDetailView() {
-		m.filterMode = true
-		m.filterInput.Focus()
-	}
-	return m, nil
-}
-
 func (m model) handleSlowTick() (tea.Model, tea.Cmd) {
 	return m, tea.Batch(
 		doSlowTick(),
 		m.fetchMessages(),
 		m.fetchConsumers(),
 	)
-}
-
-func (m model) handleError(err error) (tea.Model, tea.Cmd) {
-	if m.activeTab == 0 && m.filterMode {
-		m.filterError = err.Error()
-		return m, nil
-	}
-	m.err = err
-	return m, nil
 }
 
 func (m model) fetchPendingAndNextMessages() tea.Cmd {
@@ -204,27 +192,7 @@ func (m model) fetchPendingAndNextMessages() tea.Cmd {
 	}
 }
 
-func (m model) applyFilter() tea.Cmd {
-	return func() tea.Msg {
-		filter := m.filterInput.Value()
-		if filter == "" {
-			filter = ">"
-		}
-		limit := calculateLimit()
-		err := m.messages.FetchMessages(limit, filter)
-		if err != nil {
-			return err
-		}
-		m.filterError = ""
-		return nil
-	}
-}
-
 func (m model) View() string {
-	if m.err != nil {
-		return fmt.Sprintf("Error: %v\n\nq (quit)", m.err)
-	}
-
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
 	minWidth := 60
@@ -233,10 +201,31 @@ func (m model) View() string {
 	}
 
 	tabBar := m.renderTabBar(width)
-	content := m.renderContent(width, height)
+	content := m.renderContent(width, height-3) // Adjust height for tab and bottom bars
+	content = m.truncateOrPadContent(content, width, height-3)
 	bottomBar := m.renderBottomBar(width)
 
 	return tabBar + "\n" + content + "\n" + bottomBar
+}
+
+func (m model) truncateOrPadContent(content string, width, height int) string {
+	contentLines := strings.Split(content, "\n")
+	if len(contentLines) > height {
+		// Truncate content and add indicator
+		contentLines = contentLines[:height-1]
+		warningStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("3")). // Yellow text for warning
+			Width(width).
+			Align(lipgloss.Center)
+		contentLines = append(contentLines, warningStyle.Render("▼ More content below ▼"))
+	} else if len(contentLines) < height {
+		// Pad content
+		for i := len(contentLines); i < height; i++ {
+			contentLines = append(contentLines, "")
+		}
+	}
+
+	return strings.Join(contentLines, "\n")
 }
 
 func (m model) renderTabBar(width int) string {
@@ -244,7 +233,9 @@ func (m model) renderTabBar(width int) string {
 	for i, tab := range m.tabs {
 		style := lipgloss.NewStyle().Padding(0, 1)
 		if i == m.activeTab {
-			style = style.Bold(true).Underline(true)
+			style = style.
+				Background(lipgloss.Color("117")). // Light blue background
+				Foreground(lipgloss.Color("0"))    // Black text
 		}
 		tabContent += style.Render(tab) + " "
 	}
@@ -257,13 +248,9 @@ func (m model) renderTabBar(width int) string {
 
 func (m model) renderContent(width, height int) string {
 	if m.activeTab == 0 {
-		if !m.messages.IsDetailView() {
-			filterBar := m.renderFilterBar(width)
-			return filterBar + "\n" + m.messages.View(width, height-7)
-		}
-		return m.messages.View(width, height-4)
+		return m.messages.View(width, height)
 	}
-	return m.consumers.View(width, height-4)
+	return m.consumers.View(width, height)
 }
 
 func (m model) renderBottomBar(width int) string {
@@ -274,62 +261,6 @@ func (m model) renderBottomBar(width int) string {
 		Width(width).
 		Align(lipgloss.Center).
 		Render("q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details)")
-}
-
-func (m model) renderFilterBar(width int) string {
-	filterBarStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		Width(width)
-
-	filterContent := "Filter (f): " + strings.TrimPrefix(m.filterInput.View(), "> ")
-	if m.filterError != "" {
-		errorStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("231")).
-			Background(lipgloss.Color("203"))
-
-		errorMessage := m.extractErrorSummary(m.filterError)
-		filterContent += "\n" + errorStyle.Render("Error: "+errorMessage)
-	}
-
-	return filterBarStyle.Render(filterContent)
-}
-
-func (m model) extractErrorSummary(errorMessage string) string {
-	if strings.Contains(errorMessage, "unexpected status code: 400") {
-		parts := strings.SplitN(errorMessage, "body:", 2)
-		if len(parts) == 2 {
-			var errorBody map[string]interface{}
-			if err := json.Unmarshal([]byte(strings.TrimSpace(parts[1])), &errorBody); err == nil {
-				if summary, ok := errorBody["summary"].(string); ok {
-					return summary
-				}
-			}
-		}
-	}
-	return errorMessage
-}
-
-func (m model) fetchMessages() tea.Cmd {
-	return func() tea.Msg {
-		limit := calculateLimit()
-		err := m.messages.FetchMessages(limit, m.filterInput.Value())
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-}
-
-func (m model) fetchConsumers() tea.Cmd {
-	return func() tea.Msg {
-		limit := calculateLimit()
-		err := m.consumers.FetchConsumers(limit)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
 }
 
 func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {

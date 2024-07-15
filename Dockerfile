@@ -11,6 +11,7 @@ RUN rm -rf /var/lib/apt/lists/*
 # Set environment variables for building the application
 ENV MIX_ENV=prod
 ENV LANG=C.UTF-8
+ENV ERL_FLAGS="+JPperf true"
 
 # Install hex and rebar
 RUN mix local.hex --force && \

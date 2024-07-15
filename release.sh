@@ -43,6 +43,9 @@ echo "GitHub release created for $new_version"
 # Switch to homebrew-sequin directory
 cd /Users/carterpedersen/Sequin/homebrew-sequin || exit
 
+# Pull the latest changes from the homebrew-sequin repository
+git pull origin main
+
 # Update the version in sequin.rb
 sed -i '' "s/tag: \".*\"/tag: \"$new_version\"/" sequin.rb
 

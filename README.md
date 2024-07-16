@@ -1,5 +1,8 @@
 # Sequin
 
+> [!IMPORTANT]
+> Sequin is still under rapid development and the API is still stabilizing. It should be considered **pre-1.0**.
+
 ## What is Sequin?
 
 Sequin is an open-source message queue (technically a stream) built on Postgres. It’s a stateless Docker container that works with any Postgres database.

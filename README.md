@@ -115,7 +115,7 @@ In distributed systems, messages fall into one of three categories. We think it'
 Run the server with Docker/compose. After cloning the repo:
 
 ```bash
-cd server && docker compose up -d
+cd docker && docker compose up -d
 ```
 
 The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.

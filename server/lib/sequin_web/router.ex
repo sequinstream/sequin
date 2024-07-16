@@ -17,6 +17,12 @@ defmodule SequinWeb.Router do
     plug FetchUser
   end
 
+  scope "/", SequinWeb do
+    pipe_through :browser
+
+    get "/", PageController, :home
+  end
+
   scope "/api", SequinWeb do
     pipe_through :api
 

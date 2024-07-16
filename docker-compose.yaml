@@ -8,8 +8,3 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: sequin_dev
-
-  redis:
-    image: "redis:7.2.5"
-    ports:
-      - "6379:6379"

@@ -17,7 +17,7 @@ type Context struct {
 // GetServerURL returns the server URL based on the current context
 func GetServerURL(ctx *Context) (string, error) {
 	if ctx.Name == "" {
-		return "http://localhost:4000", nil
+		return "http://localhost:7376", nil
 	}
 
 	if ctx.ServerURL == "" {
@@ -59,7 +59,7 @@ func LoadContext(name string) (*Context, error) {
 		return &Context{
 			Name:        "default",
 			Description: "default context",
-			ServerURL:   "http://localhost:4000",
+			ServerURL:   "http://localhost:7376",
 		}, nil
 	}
 

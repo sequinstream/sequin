@@ -28,7 +28,7 @@ if config_env() == :prod do
       [
         hostname: System.get_env("PG_HOSTNAME", "localhost"),
         database: System.get_env("PG_DATABASE", "postgres"),
-        port: String.to_integer(System.get_env("PG_PORT", "5432")),
+        port: String.to_integer(System.get_env("PG_PORT", "7377")),
         username: System.get_env("PG_USERNAME", "postgres"),
         password: System.get_env("PG_PASSWORD", "postgres")
       ]
@@ -43,8 +43,8 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "example.com"
-  port = String.to_integer(System.get_env("PORT") || "4000")
+  host = System.get_env("PHX_HOST") || "sequin.com"
+  port = String.to_integer(System.get_env("PORT") || "7376")
 
   repo_config =
     Keyword.merge(database_config,
@@ -64,7 +64,8 @@ if config_env() == :prod do
       # for more details: https://github.com/danielberkompas/cloak/issues/93
       #
       # In Cloak 2.0, this will be the default iv length for AES.GCM.
-      default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
+      default:
+        {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
     ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.

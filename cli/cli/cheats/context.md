@@ -1,5 +1,5 @@
 // Create a context
-sequin-cli context create dev --server-url=http://localhost:4000
+sequin-cli context create dev --server-url=http://localhost:7376
 sequin-cli context create prod --server-url=https://sequin.io
 
 // List contexts

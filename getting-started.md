@@ -35,16 +35,16 @@ In this example, we're using the defaults for Postgres (i.e. `localhost`, `5432`
 You can connect Sequin to any Postgres. Here are all the docker configs:
 </summary>
 
-| Flag           | Default    |
-|----------------|------------|
-| `PG_HOSTNAME`  | `localhost`|
-| `PG_DATABASE`  | `postgres` |
-| `PG_PORT`      | `5432`     |
-| `PG_POOL_SIZE` |  `30`      |
-| `PG_SSL`       |  `false`   |
-| `PG_USERNAME`  |  `postgres`|
-| `PG_PASSWORD`  |  `postgres`|
-| `PG_URL`       |  When set, this is used instead of the individual connection parts. Example: `postgresql://username:password@localhost:5432/postgres`. The schema prefix still defaults to `sequin_`, but you can override by appending `schema_prefix=myprefix_`.|
+| Flag           | Default                                                                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PG_HOSTNAME`  | `localhost`                                                                                                                                                                                                                                       |
+| `PG_DATABASE`  | `postgres`                                                                                                                                                                                                                                        |
+| `PG_PORT`      | `5432`                                                                                                                                                                                                                                            |
+| `PG_POOL_SIZE` | `30`                                                                                                                                                                                                                                              |
+| `PG_SSL`       | `false`                                                                                                                                                                                                                                           |
+| `PG_USERNAME`  | `postgres`                                                                                                                                                                                                                                        |
+| `PG_PASSWORD`  | `postgres`                                                                                                                                                                                                                                        |
+| `PG_URL`       | When set, this is used instead of the individual connection parts. Example: `postgresql://username:password@localhost:5432/postgres`. The schema prefix still defaults to `sequin_`, but you can override by appending `schema_prefix=myprefix_`. |
 
 </details>
 
@@ -70,10 +70,11 @@ sequin stream add demo_stream
 You just created a new stream called `demo_stream`.
 
 > [!TIP]
-> By default, the CLI connects to Sequin running on `http://localhost:4000`. You can override this configuration by creating a new context in the CLI:
+> By default, the CLI connects to Sequin running on `http://localhost:7376`. You can override this configuration by creating a new context in the CLI:
+>
 > ```bash
 > sequin context create
->```
+> ```
 
 **Step 2:** Now, inspect the stream you just created:
 
@@ -281,7 +282,7 @@ sequin stream info demo_stream --as-curl
 If you execute the `curl` command for `stream info`, the Sequin API will return the stats for your stream:
 
 ```bash
-curl -X GET http://localhost:4000/api/streams/demo_stream \
+curl -X GET http://localhost:7376/api/streams/demo_stream \
 -H "Content-Type: application/json" \
 -H "Accept: application/json"
 
@@ -304,7 +305,7 @@ curl -X GET http://localhost:4000/api/streams/demo_stream \
 ```bash
 sequin stream pub demo_stream sqn.test "Hello API" --as-curl
 
-curl -X POST http://localhost:4000/api/streams/demo_stream/messages \
+curl -X POST http://localhost:7376/api/streams/demo_stream/messages \
 -H 'Content-Type: application/json' \
 -H 'Accept: application/json' \
 -d '{"messages":[{"subject":"sqn.test","data":"Hello API"}]}'
@@ -315,7 +316,7 @@ curl -X POST http://localhost:4000/api/streams/demo_stream/messages \
 ```bash
 sequin consumer next demo_stream demo_consumer --no-ack --as-curl
 
-curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/next \
+curl -X POST http://localhost:7376/api/streams/demo_stream/consumers/demo_consumer/next \
 -H 'Content-Type: application/json' \
 -d '{"batch_size":1}'
 ```
@@ -325,7 +326,7 @@ curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consum
 ```bash
 sequin consumer nack demo_stream demo_consumer [ack_id] --as-curl
 
-curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/nack \
+curl -X POST http://localhost:7376/api/streams/demo_stream/consumers/demo_consumer/nack \
 -H 'Content-Type: application/json' \
 -d '{"ack_tokens":[ack_id]}'
 ```
@@ -335,14 +336,13 @@ curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consum
 ```bash
 sequin consumer ack demo_stream demo_consumer [ack_id] --as-curl
 
-curl -X POST http://localhost:4000/api/streams/demo_stream/consumers/demo_consumer/ack \
+curl -X POST http://localhost:7376/api/streams/demo_stream/consumers/demo_consumer/ack \
 -H 'Content-Type: application/json' \
 -d '{"ack_id":"ack_id"}'
 ```
 
 > [!NOTE]
 > Sequin HTTP push consumers are coming in a couple days. In addition to the HTTP pull consumer you just played with, you'll be able to create a consumer configured with a webhook endpoint. Sequin will then deliver messages to that endpoint.
-
 
 ## Connect your existing tables
 

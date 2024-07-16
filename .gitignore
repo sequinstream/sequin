@@ -1,0 +1,16 @@
+# If the VM crashes, it generates a dump, let's ignore it too.
+erl_crash.dump
+
+.elixir_ls/
+
+dump.rdb
+
+.vscode/settings.json
+
+# IntelliJ things
+*.iml
+
+/.devlocal/
+
+# Mac UI directory attributes
+.DS_Store

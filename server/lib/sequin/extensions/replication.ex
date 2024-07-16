@@ -160,6 +160,8 @@ defmodule Sequin.Extensions.Replication do
   # In Postgres, an LSN is typically represented as a 64-bit integer, but it's sometimes split
   # into two 32-bit parts for easier reading or processing. We'll receive tuples like `{401, 1032909664}`
   # and we'll need to combine them to get the 64-bit LSN.
+  defp lsn_to_int(0), do: 0
+
   defp lsn_to_int({high, low}) do
     high <<< 32 ||| low
   end

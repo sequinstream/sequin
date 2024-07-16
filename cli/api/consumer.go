@@ -23,35 +23,53 @@ type FetchNextMessagesResponse struct {
 
 // Consumer represents the structure of a consumer returned by the API
 type Consumer struct {
-	ID               string    `json:"id"`
-	Slug             string    `json:"slug"`
-	StreamID         string    `json:"stream_id"`
-	AckWaitMS        int       `json:"ack_wait_ms"`
-	MaxAckPending    int       `json:"max_ack_pending"`
-	MaxDeliver       int       `json:"max_deliver"`
-	MaxWaiting       int       `json:"max_waiting"`
-	FilterKeyPattern string    `json:"filter_subject_pattern"`
-	CreatedAt        time.Time `json:"inserted_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               string       `json:"id"`
+	Slug             string       `json:"slug"`
+	StreamID         string       `json:"stream_id"`
+	AckWaitMS        int          `json:"ack_wait_ms"`
+	MaxAckPending    int          `json:"max_ack_pending"`
+	MaxDeliver       int          `json:"max_deliver"`
+	MaxWaiting       int          `json:"max_waiting"`
+	FilterKeyPattern string       `json:"filter_subject_pattern"`
+	CreatedAt        time.Time    `json:"inserted_at"`
+	UpdatedAt        time.Time    `json:"updated_at"`
+	Kind             string       `json:"kind"`
+	HttpEndpoint     HttpEndpoint `json:"http_endpoint,omitempty"`
+}
+
+// HttpEndpoint represents the structure of an HTTP endpoint
+type HttpEndpoint struct {
+	BaseURL string            `json:"base_url"`
+	Headers map[string]string `json:"headers"`
 }
 
 // ConsumerCreateOptions represents the options for creating a new consumer
 type ConsumerCreateOptions struct {
-	Slug             string `json:"slug"`
-	StreamID         string `json:"stream_id"`
-	AckWaitMS        int    `json:"ack_wait_ms,omitempty"`
-	MaxAckPending    int    `json:"max_ack_pending,omitempty"`
-	MaxDeliver       int    `json:"max_deliver,omitempty"`
-	MaxWaiting       int    `json:"max_waiting,omitempty"`
-	FilterKeyPattern string `json:"filter_subject_pattern"`
+	Slug             string               `json:"slug"`
+	StreamID         string               `json:"stream_id"`
+	AckWaitMS        int                  `json:"ack_wait_ms,omitempty"`
+	MaxAckPending    int                  `json:"max_ack_pending,omitempty"`
+	MaxDeliver       int                  `json:"max_deliver,omitempty"`
+	MaxWaiting       int                  `json:"max_waiting,omitempty"`
+	FilterKeyPattern string               `json:"filter_subject_pattern"`
+	Kind             string               `json:"kind"`
+	HttpEndpoint     *HttpEndpointOptions `json:"http_endpoint,omitempty"`
+}
+
+// HttpEndpointOptions represents the options for creating a new HTTP endpoint
+type HttpEndpointOptions struct {
+	BaseURL string            `json:"base_url"`
+	Headers map[string]string `json:"headers"`
 }
 
 // ConsumerUpdateOptions represents the options for updating an existing consumer
 type ConsumerUpdateOptions struct {
-	AckWaitMS     int `json:"ack_wait_ms,omitempty"`
-	MaxAckPending int `json:"max_ack_pending,omitempty"`
-	MaxDeliver    int `json:"max_deliver,omitempty"`
-	MaxWaiting    int `json:"max_waiting,omitempty"`
+	AckWaitMS     int                  `json:"ack_wait_ms,omitempty"`
+	MaxAckPending int                  `json:"max_ack_pending,omitempty"`
+	MaxDeliver    int                  `json:"max_deliver,omitempty"`
+	MaxWaiting    int                  `json:"max_waiting,omitempty"`
+	Kind          *string              `json:"kind,omitempty"`
+	HttpEndpoint  *HttpEndpointOptions `json:"http_endpoint,omitempty"`
 }
 
 // MessageInfo represents the structure of the info field in a MessageWithInfo
@@ -487,6 +505,43 @@ func NackMessage(ctx *context.Context, streamID, consumerID, ackID string) error
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return ParseAPIError(resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// BuildRemoveConsumer builds the HTTP request for removing a consumer
+func BuildRemoveConsumer(ctx *context.Context, streamID, consumerID string) (*http.Request, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/streams/%s/consumers/%s", serverURL, streamID, consumerID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// RemoveConsumer removes a consumer from a stream
+func RemoveConsumer(ctx *context.Context, streamID, consumerID string) error {
+	req, err := BuildRemoveConsumer(ctx, streamID, consumerID)
+	if err != nil {
+		return fmt.Errorf("error building remove consumer request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return ParseAPIError(resp.StatusCode, string(body))
 	}

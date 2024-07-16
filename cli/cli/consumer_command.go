@@ -30,6 +30,9 @@ type consumerConfig struct {
 	AckToken         string
 	Force            bool
 	UseDefaults      bool
+	Kind             string
+	URL              string
+	BearerToken      string
 }
 
 func AddConsumerCommands(app *fisk.Application, config *Config) {
@@ -53,6 +56,9 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	addCmd.Flag("max-waiting", "Maximum number of waiting messages").IntVar(&c.MaxWaiting)
 	addCmd.Flag("filter", "Key pattern for message filtering").StringVar(&c.FilterKeyPattern)
 	addCmd.Flag("defaults", "Use default values for non-required fields").BoolVar(&c.UseDefaults)
+	addCmd.Flag("kind", "Consumer kind (pull or push)").StringVar(&c.Kind)
+	addCmd.Flag("url", "URL for push consumer").StringVar(&c.URL)
+	addCmd.Flag("bearer-token", "Bearer token for push consumer").StringVar(&c.BearerToken)
 
 	infoCmd := consumer.Command("info", "Show consumer information").Action(func(ctx *fisk.ParseContext) error {
 		return consumerInfo(ctx, config, c)
@@ -94,6 +100,12 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	updateCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
 	updateCmd.Flag("max-deliver", "Maximum number of delivery attempts").IntVar(&c.MaxDeliver)
 	updateCmd.Flag("max-waiting", "Maximum number of waiting messages").IntVar(&c.MaxWaiting)
+
+	rmCmd := consumer.Command("rm", "Remove a consumer").Action(func(ctx *fisk.ParseContext) error {
+		return consumerRemove(ctx, config, c)
+	})
+	rmCmd.Arg("consumer-id", "ID of the consumer to remove").StringVar(&c.ConsumerID)
+	rmCmd.Flag("force", "Force removal without confirmation").BoolVar(&c.Force)
 }
 
 // Helper function to get the first available stream
@@ -200,33 +212,68 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		}
 	}
 
-	// Only prompt for non-required fields if --defaults is not set
-	if !c.UseDefaults {
-		if c.AckWaitMS == 0 {
-			err = promptForInt("Enter acknowledgement wait time in milliseconds (optional):", &c.AckWaitMS)
+	if c.Kind == "" {
+		err = survey.AskOne(&survey.Select{
+			Message: "Select consumer kind:",
+			Options: []string{"pull", "push"},
+			Default: "pull",
+		}, &c.Kind)
+		if err != nil {
+			return fmt.Errorf("failed to get user input: %w", err)
+		}
+	}
+
+	var httpEndpoint *api.HttpEndpointOptions
+
+	if c.Kind == "push" {
+		if c.URL == "" {
+			err = survey.AskOne(&survey.Input{
+				Message: "Enter URL to send messages to:",
+				Help:    "The URL where messages will be pushed to.",
+			}, &c.URL, survey.WithValidator(survey.Required))
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get user input: %w", err)
 			}
 		}
 
-		if c.MaxAckPending == 0 {
-			err = promptForInt("Enter maximum number of pending acknowledgements (optional):", &c.MaxAckPending)
+		if c.BearerToken == "" {
+			err = survey.AskOne(&survey.Input{
+				Message: "Enter desired Bearer token to use in HTTP requests (optional):",
+				Help:    "The Bearer token to use in requests to the push URL. Set this if you want to have a way to authenticate inbound requests from Sequin (recommended for production).",
+			}, &c.BearerToken)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get user input: %w", err)
 			}
 		}
 
-		if c.MaxDeliver == 0 {
-			err = promptForInt("Enter maximum number of delivery attempts (optional):", &c.MaxDeliver)
-			if err != nil {
-				return err
-			}
+		httpEndpoint = &api.HttpEndpointOptions{
+			BaseURL: c.URL,
+			Headers: map[string]string{
+				"Authorization": "Bearer " + c.BearerToken,
+			},
 		}
+	} else if c.Kind == "pull" {
+		// Only prompt for these fields if it's a pull consumer and --defaults is not set
+		if !c.UseDefaults {
+			if c.AckWaitMS == 0 {
+				err = promptForInt("Enter acknowledgement wait time in milliseconds (optional):", &c.AckWaitMS)
+				if err != nil {
+					return err
+				}
+			}
 
-		if c.MaxWaiting == 0 {
-			err = promptForInt("Enter maximum number of waiting pull requests (optional):", &c.MaxWaiting)
-			if err != nil {
-				return err
+			if c.MaxAckPending == 0 {
+				err = promptForInt("Enter maximum number of pending acknowledgements (optional):", &c.MaxAckPending)
+				if err != nil {
+					return err
+				}
+			}
+
+			if c.MaxWaiting == 0 {
+				err = promptForInt("Enter maximum number of waiting pull requests (optional):", &c.MaxWaiting)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -235,6 +282,8 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		Slug:             c.Slug,
 		StreamID:         streamID,
 		FilterKeyPattern: c.FilterKeyPattern,
+		Kind:             c.Kind,
+		HttpEndpoint:     httpEndpoint,
 	}
 
 	if c.AckWaitMS != 0 {
@@ -267,7 +316,16 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 
 	consumer, err := api.AddConsumer(ctx, createOptions)
 	if err != nil {
-		fisk.Fatalf("failed to add consumer: %s", err)
+		switch e := err.(type) {
+		case *api.ValidationError:
+			fmt.Println("Validation failed:")
+			e.PrintValidationError()
+		case *api.APIError:
+			e.PrintAPIError()
+		default:
+			return fmt.Errorf("failed to add consumer: %w", err)
+		}
+		return err
 	}
 
 	// Display the created consumer information
@@ -669,5 +727,57 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	fmt.Println("Consumer updated successfully:")
 	displayConsumerInfo(updatedConsumer)
 
+	return nil
+}
+
+func consumerRemove(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	streamID, err := getFirstStream(ctx)
+	if err != nil {
+		return err
+	}
+
+	if c.ConsumerID == "" {
+		consumerID, err := promptForConsumer(ctx, streamID)
+		if err != nil {
+			return err
+		}
+		c.ConsumerID = consumerID
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildRemoveConsumer(ctx, streamID, c.ConsumerID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+		return nil
+	}
+
+	if !c.Force {
+		ok, err := askConfirmation(fmt.Sprintf("Really remove Consumer %s > %s", streamID, c.ConsumerID), false)
+		if err != nil {
+			return fmt.Errorf("could not obtain confirmation: %w", err)
+		}
+		if !ok {
+			return nil
+		}
+	}
+
+	err = api.RemoveConsumer(ctx, streamID, c.ConsumerID)
+	if err != nil {
+		return fmt.Errorf("failed to remove consumer: %w", err)
+	}
+
+	fmt.Printf("Consumer %s removed successfully\n", c.ConsumerID)
 	return nil
 }

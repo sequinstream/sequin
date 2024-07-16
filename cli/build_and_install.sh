@@ -5,7 +5,7 @@ PROJECT_ROOT=$(pwd)
 
 # Build the binary
 echo "Building sequin-cli..."
-go build -o sequin
+go build -tags prod -o sequin
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then

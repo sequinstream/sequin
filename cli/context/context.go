@@ -16,10 +16,6 @@ type Context struct {
 
 // GetServerURL returns the server URL based on the current context
 func GetServerURL(ctx *Context) (string, error) {
-	if ctx.Name == "" {
-		return "http://localhost:7376", nil
-	}
-
 	if ctx.ServerURL == "" {
 		return "", fmt.Errorf("server URL is not set")
 	}
@@ -59,7 +55,7 @@ func LoadContext(name string) (*Context, error) {
 		return &Context{
 			Name:        "default",
 			Description: "default context",
-			ServerURL:   "http://localhost:7376",
+			ServerURL:   fmt.Sprintf("http://localhost:%d", defaultPort),
 		}, nil
 	}
 

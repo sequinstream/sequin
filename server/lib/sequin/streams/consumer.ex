@@ -7,6 +7,7 @@ defmodule Sequin.Streams.Consumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Stream
 
   @derive {Jason.Encoder,
@@ -16,12 +17,15 @@ defmodule Sequin.Streams.Consumer do
              :filter_subject_pattern,
              :id,
              :inserted_at,
+             :kind,
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
              :slug,
              :stream_id,
-             :updated_at
+             :updated_at,
+             :http_endpoint_id,
+             :status
            ]}
   typed_schema "consumers" do
     field :slug, :string
@@ -31,9 +35,12 @@ defmodule Sequin.Streams.Consumer do
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
     field :filter_subject_pattern, :string
+    field :kind, Ecto.Enum, values: [:pull, :push], default: :pull
+    field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
     belongs_to :stream, Stream
     belongs_to :account, Account
+    belongs_to :http_endpoint, HttpEndpoint
 
     timestamps()
   end
@@ -48,14 +55,35 @@ defmodule Sequin.Streams.Consumer do
       :max_waiting,
       :slug,
       :filter_subject_pattern,
-      :backfill_completed_at
+      :backfill_completed_at,
+      :kind,
+      :http_endpoint_id,
+      :status
     ])
-    |> validate_required([:stream_id, :slug, :filter_subject_pattern])
+    |> validate_required([:stream_id, :slug, :filter_subject_pattern, :kind, :status])
+    |> cast_assoc(:http_endpoint,
+      with: fn _struct, attrs ->
+        HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
+      end
+    )
     |> foreign_key_constraint(:stream_id)
+    |> foreign_key_constraint(:http_endpoint_id)
+    |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
   end
 
   def update_changeset(consumer, attrs) do
-    cast(consumer, attrs, [:ack_wait_ms, :max_ack_pending, :max_deliver, :max_waiting, :backfill_completed_at])
+    consumer
+    |> cast(attrs, [
+      :ack_wait_ms,
+      :max_ack_pending,
+      :max_deliver,
+      :max_waiting,
+      :backfill_completed_at,
+      :kind,
+      :http_endpoint_id,
+      :status
+    ])
+    |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -80,6 +108,14 @@ defmodule Sequin.Streams.Consumer do
     else
       where_slug(query, id_or_slug)
     end
+  end
+
+  def where_kind(query \\ base_query(), kind) do
+    from([consumer: c] in query, where: c.kind == ^kind)
+  end
+
+  def where_status(query \\ base_query(), status) do
+    from([consumer: c] in query, where: c.status == ^status)
   end
 
   defp base_query(query \\ __MODULE__) do

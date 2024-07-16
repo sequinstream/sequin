@@ -119,10 +119,18 @@ defmodule Sequin.Streams do
     stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
   end
 
+  def get_consumer(consumer_id) do
+    case consumer_id |> Consumer.where_id() |> Repo.one() do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
   def get_consumer!(consumer_id) do
-    consumer_id
-    |> Consumer.where_id()
-    |> Repo.one!()
+    case get_consumer(consumer_id) do
+      {:ok, consumer} -> consumer
+      {:error, _} -> raise Error.not_found(entity: :consumer)
+    end
   end
 
   def list_consumers_for_account(account_id) do
@@ -131,6 +139,13 @@ defmodule Sequin.Streams do
 
   def list_consumers_for_stream(stream_id) do
     stream_id |> Consumer.where_stream_id() |> Repo.all()
+  end
+
+  def list_active_push_consumers do
+    :push
+    |> Consumer.where_kind()
+    |> Consumer.where_status(:active)
+    |> Repo.all()
   end
 
   def cached_list_consumers_for_stream(stream_id) do

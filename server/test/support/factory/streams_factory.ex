@@ -9,6 +9,7 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Streams
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerMessage
+  alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
   alias Sequin.Streams.Stream
 
@@ -20,7 +21,9 @@ defmodule Sequin.Factory.StreamsFactory do
     attrs = Map.new(attrs)
 
     {state, attrs} =
-      Map.pop_lazy(attrs, :state, fn -> Factory.one_of([:available, :delivered, :pending_redelivery]) end)
+      Map.pop_lazy(attrs, :state, fn ->
+        Factory.one_of([:available, :delivered, :pending_redelivery])
+      end)
 
     not_visible_until =
       unless state == :available do
@@ -122,6 +125,21 @@ defmodule Sequin.Factory.StreamsFactory do
   # Consumer
 
   def consumer(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {kind, attrs} = Map.pop_lazy(attrs, :kind, fn -> Factory.one_of([:pull, :push]) end)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {http_endpoint_id, attrs} =
+      Map.pop_lazy(attrs, :http_endpoint_id, fn ->
+        case kind do
+          :push -> insert_http_endpoint!(account_id: account_id).id
+          :pull -> nil
+        end
+      end)
+
     merge_attributes(
       %Consumer{
         slug: generate_slug(),
@@ -131,8 +149,11 @@ defmodule Sequin.Factory.StreamsFactory do
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         stream_id: Factory.uuid(),
-        account_id: Factory.uuid(),
-        filter_subject_pattern: generate_subject(parts: 3)
+        account_id: account_id,
+        filter_subject_pattern: generate_subject(parts: 3),
+        kind: kind,
+        http_endpoint_id: http_endpoint_id,
+        status: :active
       },
       attrs
     )
@@ -147,8 +168,11 @@ defmodule Sequin.Factory.StreamsFactory do
   def insert_consumer!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-    {stream_id, attrs} = Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!(account_id: account_id).id end)
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {stream_id, attrs} =
+      Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!(account_id: account_id).id end)
 
     attrs =
       attrs
@@ -156,7 +180,9 @@ defmodule Sequin.Factory.StreamsFactory do
       |> Map.put(:account_id, account_id)
       |> consumer_attrs()
 
-    {:ok, consumer} = Streams.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+    {:ok, consumer} =
+      Streams.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+
     consumer
   end
 
@@ -181,12 +207,46 @@ defmodule Sequin.Factory.StreamsFactory do
   def insert_stream!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
     {:ok, stream} =
       Streams.create_stream_for_account_with_lifecycle(account_id, stream_attrs(attrs))
 
     stream
+  end
+
+  # HttpEndpoint
+
+  def http_endpoint(attrs \\ []) do
+    merge_attributes(
+      %HttpEndpoint{
+        name: "Test Endpoint",
+        base_url: "https://example.com/webhook",
+        headers: %{"Content-Type" => "application/json"},
+        account_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def http_endpoint_attrs(attrs \\ []) do
+    attrs
+    |> http_endpoint()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_http_endpoint!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> http_endpoint_attrs()
+    |> then(&HttpEndpoint.changeset(%HttpEndpoint{}, &1))
+    |> Repo.insert!()
   end
 
   defp generate_subject(parts: parts) do

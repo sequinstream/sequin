@@ -236,10 +236,24 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              where: "token16 IS NOT NULL"
            )
 
-    ## TODO: Add indexes to subject space
-
     execute "create type #{@stream_schema}.consumer_message_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
             "drop type if exists #{@stream_schema}.consumer_message_state"
+
+    execute "CREATE TYPE #{@config_schema}.consumer_status AS ENUM ('active', 'disabled');"
+
+    create table(:http_endpoints, prefix: @config_schema) do
+      add :name, :string, null: true
+      add :base_url, :string, null: false
+      add :headers, :map, default: %{}
+
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
+      timestamps()
+    end
+
+    # Required for composite foreign keys pointing to this table
+    create unique_index(:http_endpoints, [:id, :account_id], prefix: @config_schema)
 
     create table(:consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
@@ -254,6 +268,10 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           ),
           null: false
 
+      add :http_endpoint_id,
+          references(:http_endpoints, with: [account_id: :account_id], prefix: @config_schema)
+
+      add :kind, :string, null: false, default: "pull"
       add :slug, :text, null: false
       add :filter_subject_pattern, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
@@ -262,9 +280,16 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :max_ack_pending, :integer, null: false, default: 10_000
       add :max_deliver, :integer, null: true
       add :max_waiting, :integer, null: false, default: 100
+      add :status, :"#{@config_schema}.consumer_status", null: false, default: "active"
 
       timestamps()
     end
+
+    create constraint(:consumers, :kind_http_endpoint_constraint,
+             check:
+               "(kind = 'pull' AND http_endpoint_id IS NULL) OR (kind = 'push' AND http_endpoint_id IS NOT NULL)",
+             prefix: @config_schema
+           )
 
     create index(:consumers, [:stream_id], prefix: @config_schema)
     create unique_index(:consumers, [:stream_id, :slug], prefix: @config_schema)

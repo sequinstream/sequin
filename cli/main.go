@@ -7,7 +7,7 @@ import (
 
 	"github.com/choria-io/fisk"
 
-	"sequin-cli/cli"
+	"github.com/sequinstream/sequin/cli/cli"
 )
 
 var (

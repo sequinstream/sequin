@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 type PostgresDatabase struct {

@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"sequin-cli/api"
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/context"
 
 	"github.com/AlecAivazis/survey/v2"
 )

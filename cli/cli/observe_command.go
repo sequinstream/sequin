@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	sequinContext "sequin-cli/context"
+	sequinContext "github.com/sequinstream/sequin/cli/context"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

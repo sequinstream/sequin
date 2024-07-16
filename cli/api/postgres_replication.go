@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 // PostgresReplicationsResponse represents the structure of the API response for a list of PostgresReplications

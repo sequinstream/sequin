@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"sequin-cli/api"
-	sequinContext "sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/api"
+	sequinContext "github.com/sequinstream/sequin/cli/context"
 
 	"github.com/charmbracelet/lipgloss"
 )

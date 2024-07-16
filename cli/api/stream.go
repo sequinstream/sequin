@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"bytes"
-	"sequin-cli/context"
+
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 // StreamsResponse represents the structure of the API response for a list

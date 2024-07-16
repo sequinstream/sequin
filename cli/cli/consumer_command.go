@@ -10,8 +10,8 @@ import (
 	"github.com/choria-io/fisk"
 	"github.com/google/go-cmp/cmp"
 
-	"sequin-cli/api"
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 type consumerConfig struct {

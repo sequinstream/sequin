@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
 
-	"sequin-cli/api"
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 type postgresReplicationConfig struct {

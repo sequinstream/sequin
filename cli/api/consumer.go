@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"bytes"
-	"sequin-cli/context"
+
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 // ConsumersResponse represents the structure of the API response for a list of consumers

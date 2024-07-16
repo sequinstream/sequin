@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 func TestCreateAction(t *testing.T) {

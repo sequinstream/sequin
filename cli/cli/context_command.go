@@ -9,7 +9,7 @@ import (
 	"github.com/choria-io/fisk"
 	"github.com/jedib0t/go-pretty/v6/text"
 
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/context"
 )
 
 type ctxCommand struct {

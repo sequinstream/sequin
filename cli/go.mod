@@ -1,4 +1,4 @@
-module sequin-cli
+module github.com/sequinstream/sequin/cli
 
 go 1.21.1
 
@@ -12,7 +12,7 @@ require (
 	github.com/google/go-cmp v0.5.2
 	github.com/jedib0t/go-pretty/v6 v6.5.9
 	github.com/mattn/go-isatty v0.0.18
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.8.4
 	golang.org/x/term v0.17.0
 	moul.io/http2curl v1.0.0
 )

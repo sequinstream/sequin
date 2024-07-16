@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"sequin-cli/api"
-	"sequin-cli/context"
+	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/context"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

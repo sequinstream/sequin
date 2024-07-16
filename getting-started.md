@@ -328,7 +328,7 @@ sequin consumer nack demo_stream demo_consumer [ack_id] --as-curl
 
 curl -X POST http://localhost:7376/api/streams/demo_stream/consumers/demo_consumer/nack \
 -H 'Content-Type: application/json' \
--d '{"ack_tokens":[ack_id]}'
+-d '{"ack_ids":[ack_id]}'
 ```
 
 **Step 5:** ack a message:

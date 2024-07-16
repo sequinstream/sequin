@@ -6,6 +6,6 @@ defmodule SequinWeb.PullJSON do
   end
 
   defp render_message(%Message{} = message) do
-    %{ack_token: message.ack_id, message: message}
+    %{ack_id: message.ack_id, message: message}
   end
 end

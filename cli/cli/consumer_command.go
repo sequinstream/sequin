@@ -27,7 +27,7 @@ type consumerConfig struct {
 	PendingOnly      bool
 	LastN            int
 	FirstN           int
-	AckToken         string
+	AckId            string
 	Force            bool
 	UseDefaults      bool
 	Kind             string
@@ -84,13 +84,13 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 		return consumerAck(ctx, config, c)
 	})
 	ackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	ackCmd.Arg("ack-token", "Ack token of the message to ack").StringVar(&c.AckToken)
+	ackCmd.Arg("ack-token", "Ack token of the message to ack").StringVar(&c.AckId)
 
 	nackCmd := consumer.Command("nack", "Nack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerNack(ctx, config, c)
 	})
 	nackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	nackCmd.Arg("ack-id", "ID of the message to nack").StringVar(&c.AckToken)
+	nackCmd.Arg("ack-id", "ID of the message to nack").StringVar(&c.AckId)
 
 	updateCmd := consumer.Command("edit", "Edit an existing consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerEdit(ctx, config, c)
@@ -445,17 +445,17 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Message (Ack Token: %s):\n", msg.AckToken)
+		fmt.Printf("Message (Ack Token: %s):\n", msg.AckId)
 		fmt.Printf("Key: %s\n", msg.Message.Key)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
 
 		if !c.NoAck {
-			err := api.AckMessage(ctx, streamID, c.ConsumerID, msg.AckToken)
+			err := api.AckMessage(ctx, streamID, c.ConsumerID, msg.AckId)
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)
 			}
-			fmt.Printf("Message acknowledged with token %s\n", msg.AckToken)
+			fmt.Printf("Message acknowledged with token %s\n", msg.AckId)
 		}
 	}
 
@@ -578,7 +578,7 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildAckMessage(ctx, streamID, c.ConsumerID, c.AckToken)
+		req, err := api.BuildAckMessage(ctx, streamID, c.ConsumerID, c.AckId)
 		if err != nil {
 			return err
 		}
@@ -592,12 +592,12 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return nil
 	}
 
-	err = api.AckMessage(ctx, streamID, c.ConsumerID, c.AckToken)
+	err = api.AckMessage(ctx, streamID, c.ConsumerID, c.AckId)
 	if err != nil {
 		return fmt.Errorf("failed to acknowledge message: %w", err)
 	}
 
-	fmt.Printf("Message acknowledged with token %s\n", c.AckToken)
+	fmt.Printf("Message acknowledged with token %s\n", c.AckId)
 	return nil
 }
 
@@ -613,7 +613,7 @@ func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildNackMessage(ctx, streamID, c.ConsumerID, c.AckToken)
+		req, err := api.BuildNackMessage(ctx, streamID, c.ConsumerID, c.AckId)
 		if err != nil {
 			return err
 		}
@@ -627,12 +627,12 @@ func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return nil
 	}
 
-	err = api.NackMessage(ctx, streamID, c.ConsumerID, c.AckToken)
+	err = api.NackMessage(ctx, streamID, c.ConsumerID, c.AckId)
 	if err != nil {
 		return fmt.Errorf("failed to nack message: %w", err)
 	}
 
-	fmt.Printf("Message nacked: %s\n", c.AckToken)
+	fmt.Printf("Message nacked: %s\n", c.AckId)
 	return nil
 }
 

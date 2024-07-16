@@ -18,7 +18,7 @@ type ConsumersResponse struct {
 }
 
 type FetchNextMessagesResponse struct {
-	Data []MessageWithAckToken `json:"data"`
+	Data []MessageWithAckId `json:"data"`
 }
 
 // Consumer represents the structure of a consumer returned by the API
@@ -106,9 +106,9 @@ type MessageWithInfo struct {
 	Info    MessageInfo `json:"info"`
 }
 
-type MessageWithAckToken struct {
-	Message  Message `json:"message"`
-	AckToken string  `json:"ack_token"`
+type MessageWithAckId struct {
+	Message Message `json:"message"`
+	AckId   string  `json:"ack_id"`
 }
 
 // BuildFetchConsumers builds the HTTP request for fetching consumers
@@ -327,7 +327,7 @@ func BuildFetchNextMessages(ctx *context.Context, streamID, consumerID string, b
 }
 
 // FetchNextMessages retrieves the next batch of messages for a consumer
-func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckToken, error) {
+func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckId, error) {
 	req, err := BuildFetchNextMessages(ctx, streamID, consumerID, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch next messages request: %w", err)
@@ -431,7 +431,7 @@ func BuildAckMessage(ctx *context.Context, streamID, consumerID, ackID string) (
 		return nil, err
 	}
 
-	requestBody := map[string][]string{"ack_tokens": {ackID}}
+	requestBody := map[string][]string{"ack_ids": {ackID}}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
@@ -475,7 +475,7 @@ func BuildNackMessage(ctx *context.Context, streamID, consumerID, ackID string) 
 		return nil, err
 	}
 
-	requestBody := map[string][]string{"ack_tokens": {ackID}}
+	requestBody := map[string][]string{"ack_ids": {ackID}}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)

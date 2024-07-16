@@ -26,7 +26,7 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_slug),
-         {:ok, message_ids} <- parse_ack_tokens(params),
+         {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.ack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")
     end
@@ -37,25 +37,25 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_slug),
-         {:ok, message_ids} <- parse_ack_tokens(params),
+         {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.nack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")
     end
   end
 
-  defp parse_ack_tokens(params) do
-    ack_tokens = Map.get(params, "ack_tokens")
+  defp parse_ack_ids(params) do
+    ack_ids = Map.get(params, "ack_ids")
 
-    with true <- is_list(ack_tokens),
-         true <- length(ack_tokens) > 0,
-         true <- Enum.all?(ack_tokens, &(is_binary(&1) and &1 != "")) do
-      {:ok, ack_tokens}
+    with true <- is_list(ack_ids),
+         true <- length(ack_ids) > 0,
+         true <- Enum.all?(ack_ids, &(is_binary(&1) and &1 != "")) do
+      {:ok, ack_ids}
     else
       _ ->
         {:error,
          Error.bad_request(
            message:
-             "Invalid ack_tokens. Must send a top-level `ack_tokens` property that is a non-empty list of non-empty strings"
+             "Invalid ack_ids. Must send a top-level `ack_ids` property that is a non-empty list of non-empty strings"
          )}
     end
   end

@@ -13,7 +13,7 @@ import (
 
 func loadingSpinner() string {
 	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	return spinner[int(time.Now().UnixNano()/10000000)%len(spinner)] + " Loading...\n"
+	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)] + " Loading...\n"
 }
 
 func addCheat(name string, cmd *fisk.CmdClause) {

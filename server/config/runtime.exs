@@ -64,8 +64,7 @@ if config_env() == :prod do
       # for more details: https://github.com/danielberkompas/cloak/issues/93
       #
       # In Cloak 2.0, this will be the default iv length for AES.GCM.
-      default:
-        {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
+      default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(vault_key), iv_length: 12}
     ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.

@@ -4,8 +4,8 @@ defmodule SequinWeb.DatabaseControllerTest do
   alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.Support
+  alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
 

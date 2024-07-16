@@ -1,3 +1,5 @@
+name: sequin-dev
+
 services:
   postgres:
     image: "hbontempo/postgres-hll@sha256:356274403972d6c12fb3a77b5f6f7a0e87c3fb1113f298e5509d8e2051711730"
@@ -8,3 +10,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: sequin_dev
+    volumes:
+      - sequin_dev_postgres:/var/lib/postgresql/data
+
+volumes:
+  sequin_dev_postgres:

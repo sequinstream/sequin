@@ -338,10 +338,10 @@ defmodule Sequin.Streams do
     |> Repo.all()
   end
 
-  def get_message_for_stream(stream_id, key) do
+  def get_message_for_stream(stream_id, subject) do
     res =
       stream_id
-      |> Message.where_key(key)
+      |> Message.where_subject_and_stream_id(subject)
       |> Repo.one()
 
     case res do

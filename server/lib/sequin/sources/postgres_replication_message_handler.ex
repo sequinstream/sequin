@@ -3,6 +3,8 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   @behaviour Sequin.Extensions.ReplicationMessageHandler
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.ReplicationMessageHandler
   alias Sequin.Sources.PostgresReplication
   alias Sequin.Streams
@@ -56,9 +58,18 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
         subject_prefix,
         Sequin.Subject.to_subject_token(message.schema),
         Sequin.Subject.to_subject_token(message.table),
+        action(message),
         record_id
       ],
       "."
     )
+  end
+
+  defp action(message) do
+    case message do
+      %NewRecord{} -> "insert"
+      %UpdatedRecord{} -> "update"
+      %DeletedRecord{} -> "delete"
+    end
   end
 end

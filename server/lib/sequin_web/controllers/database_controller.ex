@@ -73,9 +73,6 @@ defmodule SequinWeb.DatabaseController do
       :ok ->
         render(conn, "test_connection.json", success: true)
 
-      {:error, %NotFoundError{}} = error ->
-        error
-
       {:error, reason} ->
         conn
         |> put_status(:unprocessable_entity)

@@ -132,7 +132,7 @@ defmodule Sequin.Error do
   defmodule ValidationError do
     @moduledoc false
     @derive Jason.Encoder
-    defexception errors: %{}, summary: nil
+    defexception errors: %{}, summary: nil, code: nil
 
     @type errors :: %{
             field_name() => [String.t()]
@@ -140,7 +140,8 @@ defmodule Sequin.Error do
     @type field_name :: atom() | String.t()
     @type t :: %__MODULE__{
             errors: errors(),
-            summary: String.t()
+            summary: String.t(),
+            code: atom()
           }
 
     @impl Exception
@@ -154,7 +155,8 @@ defmodule Sequin.Error do
 
       %__MODULE__{
         errors: errors,
-        summary: opts[:summary]
+        summary: opts[:summary],
+        code: opts[:code]
       }
     end
 
@@ -232,6 +234,7 @@ defmodule Sequin.Error do
                {:changeset, Changeset.t()}
                | {:errors, ValidationError.errors()}
                | {:summary, String.t()}
+               | {:code, atom()}
   def validation(opts), do: ValidationError.exception(opts)
 
   @doc """

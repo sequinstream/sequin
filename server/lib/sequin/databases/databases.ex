@@ -89,7 +89,7 @@ defmodule Sequin.Databases do
     end
   end
 
-  @spec test_tcp_reachability(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}
+  @spec test_tcp_reachability(%PostgresDatabase{}, integer()) :: :ok | {:error, Error.t()}
   def test_tcp_reachability(%PostgresDatabase{} = db, timeout \\ 10_000) do
     TcpUtils.test_reachability(db.hostname, db.port, timeout)
   end

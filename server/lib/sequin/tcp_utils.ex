@@ -25,13 +25,14 @@ defmodule Sequin.TcpUtils do
 
           case error do
             :nxdomain ->
-              {:error, Error.validation(summary: "The host is not reachable (nxdomain).")}
+              {:error, Error.validation(summary: "The host is not reachable (nxdomain).", code: :nxdomain)}
 
             :econnrefused ->
-              {:error, Error.validation(summary: "The host is not reachable on that port (econnrefused).")}
+              {:error,
+               Error.validation(summary: "The host is not reachable on that port (econnrefused).", code: :econnrefused)}
 
             :timeout ->
-              {:error, Error.validation(summary: "Timed out attempting to reach the host on that port.")}
+              {:error, Error.validation(summary: "Timed out attempting to reach the host on that port.", code: :timeout)}
 
             error ->
               Logger.error("Unknown error when attempting to connect to database",

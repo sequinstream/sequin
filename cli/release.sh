@@ -41,14 +41,8 @@ git push origin "$new_version"
 
 echo "New tag $new_version created and pushed to GitHub"
 
-# Build Docker image
-docker build -t sequin-builder -f release/Dockerfile .
-
-# Create a temporary directory for assets
-mkdir -p release_assets
-
-# Run Docker container to build assets
-docker run --rm -e VERSION="$new_version" -v "$(pwd)":/go/src/app -v "$(pwd)/release_assets":/go/src/app/release_assets sequin-builder
+# Create compiled releases
+./build_releases.sh $new_version release_assets
 
 # Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"

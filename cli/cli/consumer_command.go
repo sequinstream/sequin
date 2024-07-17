@@ -212,7 +212,9 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		}
 	}
 
-	if c.Kind == "" {
+	if c.UseDefaults {
+		c.Kind = "pull"
+	} else if c.Kind == "" {
 		err = survey.AskOne(&survey.Select{
 			Message: "Select consumer kind:",
 			Options: []string{"pull", "push"},
@@ -255,6 +257,7 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	} else if c.Kind == "pull" {
 		// Only prompt for these fields if it's a pull consumer and --defaults is not set
 		if !c.UseDefaults {
+
 			if c.AckWaitMS == 0 {
 				err = promptForInt("Enter acknowledgement wait time in milliseconds (optional):", &c.AckWaitMS)
 				if err != nil {
@@ -343,6 +346,7 @@ func displayConsumerInfo(consumer *api.Consumer) {
 	rows := []table.Row{
 		{"ID", consumer.ID},
 		{"Slug", consumer.Slug},
+		{"Kind", consumer.Kind},
 		{"Stream ID", consumer.StreamID},
 		{"Ack Wait (ms)", strconv.Itoa(consumer.AckWaitMS)},
 		{"Max Ack Pending", strconv.Itoa(consumer.MaxAckPending)},

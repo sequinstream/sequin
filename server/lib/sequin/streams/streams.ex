@@ -313,7 +313,7 @@ defmodule Sequin.Streams do
 
   # Messages
 
-  defp messages_query(stream_id, params \\ []) do
+  defp messages_query(stream_id, params) do
     Enum.reduce(params, Message.where_stream_id(stream_id), fn
       {:seq_gt, seq}, query ->
         Message.where_seq_gt(query, seq)

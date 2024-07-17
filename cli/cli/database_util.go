@@ -5,86 +5,213 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
 
-	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
-	var database api.PostgresDatabaseCreate
-	var portStr string
+type formModel struct {
+	inputs     []textinput.Model
+	labels     []string
+	focusIndex int
+	err        error
+	ctx        *context.Context
+	submitted  bool
+}
 
-	err := survey.Ask([]*survey.Question{
-		{
-			Name: "Database",
-			Prompt: &survey.Input{
-				Message: "Enter the dbname for the source database:",
-				Default: "postgres",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "Hostname",
-			Prompt: &survey.Input{
-				Message: "Enter the hostname for the source database:",
-				Default: "localhost",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "Port",
-			Prompt: &survey.Input{
-				Message: "Enter the port for the source database:",
-				Default: "5432",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "Username",
-			Prompt: &survey.Input{
-				Message: "Enter the username for the source database:",
-				Default: "postgres",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "Password",
-			Prompt: &survey.Password{
-				Message: "Enter the password for the source database:",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "Slug",
-			Prompt: &survey.Input{
-				Message: "Enter a slug for the database:",
-				Help:    "A unique identifier for this database.",
-			},
-			Validate: survey.Required,
-		},
-	}, &database)
-
-	if err != nil {
-		return nil, err
+func initialDatabaseModel(ctx *context.Context) formModel {
+	inputs := make([]textinput.Model, 6)
+	labels := []string{
+		"Database name:",
+		"Hostname:",
+		"Port:",
+		"Username:",
+		"Password:",
+		"Slug:",
 	}
-	// Convert string port to int or use default
-	port := 5432
-	if portStr != "" {
-		var err error
-		port, err = strconv.Atoi(portStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid port number: %v", err)
+	for i := range inputs {
+		t := textinput.New()
+		switch i {
+		case 0:
+			t.Placeholder = "postgres"
+			t.Focus()
+		case 1:
+			t.Placeholder = "localhost"
+		case 2:
+			t.Placeholder = "5432"
+		case 3:
+			t.Placeholder = "postgres"
+		case 4:
+			t.EchoMode = textinput.EchoPassword
+			t.EchoCharacter = '•'
 		}
+		inputs[i] = t
+	}
+
+	return formModel{
+		inputs:     inputs,
+		labels:     labels,
+		focusIndex: 0,
+		ctx:        ctx,
+	}
+}
+
+func (m formModel) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "esc":
+			return m, tea.Quit
+		case "ctrl+s":
+			return m, m.submit
+		case "tab", "shift+tab", "up", "down":
+			s := msg.String()
+
+			if s == "up" || s == "shift+tab" {
+				m.focusIndex--
+			} else {
+				m.focusIndex++
+			}
+
+			if m.focusIndex > len(m.inputs) {
+				m.focusIndex = 0
+			} else if m.focusIndex < 0 {
+				m.focusIndex = len(m.inputs)
+			}
+
+			cmds := make([]tea.Cmd, len(m.inputs))
+			for i := 0; i <= len(m.inputs)-1; i++ {
+				if i == m.focusIndex {
+					cmds[i] = m.inputs[i].Focus()
+					continue
+				}
+				m.inputs[i].Blur()
+			}
+
+			return m, tea.Batch(cmds...)
+		case "enter":
+			if m.focusIndex == len(m.inputs) {
+				return m, m.submit
+			}
+		}
+	case submitMsg:
+		m.submitted = true
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		m.err = nil // Clear any previous errors
+		return m, tea.Quit
+	}
+
+	cmd := m.updateInputs(msg)
+	return m, cmd
+}
+
+func (m *formModel) updateInputs(msg tea.Msg) tea.Cmd {
+	cmds := make([]tea.Cmd, len(m.inputs))
+
+	for i := range m.inputs {
+		m.inputs[i], cmds[i] = m.inputs[i].Update(msg)
+	}
+
+	return tea.Batch(cmds...)
+}
+
+func (m formModel) View() string {
+	var b strings.Builder
+
+	for i := range m.inputs {
+		b.WriteString(fmt.Sprintf("%s\n", m.labels[i]))
+		b.WriteString(m.inputs[i].View())
+		b.WriteString("\n\n")
+	}
+
+	button := "[ Submit ]"
+	if m.focusIndex == len(m.inputs) {
+		button = "[ " + lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render("Submit") + " ]"
+	}
+	b.WriteString(button)
+
+	if m.err != nil {
+		b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.err.Error()))
+	}
+
+	b.WriteString("\n\n" + lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Render("(Use tab/shift+tab to navigate, CTRL+S to submit from anywhere)"))
+
+	return b.String()
+}
+
+type submitMsg struct {
+	err      error
+	database *api.PostgresDatabase
+}
+
+func (m *formModel) submit() tea.Msg {
+	database := api.PostgresDatabaseCreate{
+		Database: getValueOrDefault(m.inputs[0].Value(), "postgres"),
+		Hostname: getValueOrDefault(m.inputs[1].Value(), "localhost"),
+		Username: getValueOrDefault(m.inputs[3].Value(), "postgres"),
+		Password: m.inputs[4].Value(),
+		Slug:     m.inputs[5].Value(),
+	}
+
+	port, err := strconv.Atoi(getValueOrDefault(m.inputs[2].Value(), "5432"))
+	if err != nil {
+		return submitMsg{err: fmt.Errorf("invalid port number: %v", err)}
 	}
 	database.Port = port
 
-	newDatabase, err := api.AddPostgresDatabase(ctx, &database)
+	newDatabase, err := api.AddPostgresDatabase(m.ctx, &database)
 	if err != nil {
-		return nil, err
+		return submitMsg{err: err}
 	}
 
-	return newDatabase, nil
+	return submitMsg{database: newDatabase}
+}
+
+func getValueOrDefault(value, defaultValue string) string {
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
+
+func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
+	p := tea.NewProgram(initialDatabaseModel(ctx))
+	m, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("error running program: %w", err)
+	}
+
+	if m, ok := m.(formModel); ok {
+		if m.err != nil {
+			return nil, m.err
+		}
+		if !m.submitted {
+			return nil, fmt.Errorf("form submission cancelled")
+		}
+		result := m.submit()
+		if msg, ok := result.(submitMsg); ok {
+			if msg.err != nil {
+				return nil, msg.err
+			}
+			return msg.database, nil
+		}
+		return nil, fmt.Errorf("unexpected submit result")
+	}
+
+	return nil, fmt.Errorf("could not get database from model")
 }
 
 func promptForDatabase(ctx *context.Context) (string, error) {

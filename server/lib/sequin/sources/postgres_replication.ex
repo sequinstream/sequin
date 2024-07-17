@@ -15,6 +15,7 @@ defmodule Sequin.Sources.PostgresReplication do
     @derive Jason.Encoder
     typedstruct do
       field :last_committed_at, nil | DateTime.t()
+      field :total_ingested_messages, nil | non_neg_integer()
     end
   end
 

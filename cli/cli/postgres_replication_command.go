@@ -3,9 +3,13 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/choria-io/fisk"
 
 	"github.com/sequinstream/sequin/cli/api"
@@ -22,6 +26,7 @@ type postgresReplicationConfig struct {
 	SlotName        string
 	PublicationName string
 	Slug            string
+	StickInfo       bool
 }
 
 func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
@@ -48,10 +53,11 @@ func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 		return postgresReplicationList(c, config)
 	})
 
-	infoCmd := postgres.Command("info", "Show postgres replication info").Action(func(c *fisk.ParseContext) error {
-		return postgresReplicationInfo(c, config)
+	infoCmd := postgres.Command("info", "Show postgres replication info").Action(func(fisk *fisk.ParseContext) error {
+		return postgresReplicationInfo(fisk, config, c)
 	})
 	infoCmd.Arg("id", "ID of the postgres replication to show info for").StringVar(&config.PostgresReplicationID)
+	infoCmd.Flag("stick", "Keep the info open and refresh periodically").BoolVar(&c.StickInfo)
 
 	rmCmd := postgres.Command("rm", "Remove a postgres replication").Action(func(c *fisk.ParseContext) error {
 		return postgresReplicationRemove(c, config)
@@ -103,14 +109,10 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 
 	fmt.Printf("Postgres replication created successfully. ID: %s\n", newReplication.ID)
 
-	// Show info for the new PGR
+	// Show info for the new PGR with stick enabled
 	config.PostgresReplicationID = newReplication.ID
-	err = postgresReplicationInfo(nil, config)
-	if err != nil {
-		fmt.Printf("Warning: Could not fetch detailed information for the new replication: %v\n", err)
-	}
-
-	return nil
+	c.StickInfo = true
+	return postgresReplicationInfo(nil, config, c)
 }
 
 func promptForExistingSetup() (bool, error) {
@@ -289,13 +291,122 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 	return t.Render()
 }
 
-func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
+type infoModel struct {
+	config              *Config
+	replicationWithInfo *api.PostgresReplicationWithInfo
+	err                 error
+	stick               bool
+	spinner             spinner.Model
+}
+
+func (m infoModel) Init() tea.Cmd {
+	return tea.Batch(
+		m.spinner.Tick,
+		fetchInfo(m.config),
+	)
+}
+
+func (m infoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		return m, tea.Quit
+
+	case *api.PostgresReplicationWithInfo:
+		m.replicationWithInfo = msg
+		if !m.stick {
+			return m, tea.Quit
+		}
+		return m, tea.Tick(time.Second*2, func(t time.Time) tea.Msg {
+			return tickMsg(t)
+		})
+
+	case tickMsg:
+		return m, fetchInfo(m.config)
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
+
+	case error:
+		m.err = msg
+		return m, tea.Quit
+
+	default:
+		return m, nil
+	}
+}
+
+func (m infoModel) View() string {
+	if m.err != nil {
+		return fmt.Sprintf("Error: %v\n", m.err)
+	}
+
+	if m.replicationWithInfo == nil {
+		return m.spinner.View() + " Loading..."
+	}
+
+	columns := []table.Column{
+		{Title: "Field", Width: 30},
+		{Title: "Value", Width: 50},
+	}
+
+	rows := []table.Row{
+		{"ID", m.replicationWithInfo.PostgresReplication.ID},
+		{"Slot Name", m.replicationWithInfo.PostgresReplication.SlotName},
+		{"Publication Name", m.replicationWithInfo.PostgresReplication.PublicationName},
+		{"Status", getStatus(m.replicationWithInfo.PostgresReplication)},
+		{"Stream ID", m.replicationWithInfo.PostgresReplication.StreamID},
+		{"Postgres Database ID", m.replicationWithInfo.PostgresReplication.PostgresDatabaseID},
+		{"Backfill Completed At", m.replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()},
+		{"Last Committed Timestamp", m.replicationWithInfo.Info.FormatLastCommittedAt()},
+		{"Total Ingested Messages", fmt.Sprintf("%d", m.replicationWithInfo.Info.TotalIngestedMessages)},
+	}
+
+	t := NewTable(columns, rows, PrintableTable)
+	tableStr := t.View()
+
+	output := fmt.Sprintf("Information for Postgres Replication %s\n\n%s", m.replicationWithInfo.PostgresReplication.ID, tableStr)
+
+	if m.stick {
+		output += "\n" + lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")).
+			Render("(Press any key to close)")
+	}
+
+	return output
+}
+
+func getStatus(pr api.PostgresReplication) string {
+	if pr.Status == "backfilling" {
+		return pr.Status + " " + loadingSpinnerNoText()
+	}
+	return pr.Status
+}
+
+func fetchInfo(config *Config) tea.Cmd {
+	return func() tea.Msg {
+		ctx, err := context.LoadContext(config.ContextName)
+		if err != nil {
+			return err
+		}
+
+		replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
+		if err != nil {
+			return err
+		}
+
+		return replicationWithInfo
+	}
+}
+
+func postgresReplicationInfo(_ *fisk.ParseContext, config *Config, c *postgresReplicationConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
-	id := config.PostgresReplicationID
-	if id == "" {
+
+	if config.PostgresReplicationID == "" {
 		replications, err := api.FetchPostgresReplications(ctx)
 		if err != nil {
 			return err
@@ -307,42 +418,27 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config) error {
 		}
 
 		err = survey.AskOne(&survey.Select{
-			Message: "Choose a postgres replication:",
+			Message: "Choose a postgres replication to show info for:",
 			Options: replicationOptions,
 			Filter: func(filterValue string, optValue string, index int) bool {
 				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
 			},
-		}, &id)
+		}, &config.PostgresReplicationID)
 		if err != nil {
 			return err
 		}
-		id = strings.Split(id, " ")[0]
+		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
 	}
 
-	replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, id)
-	if err != nil {
-		return err
+	model := infoModel{
+		config:  config,
+		stick:   c.StickInfo,
+		spinner: spinner.New(spinner.WithSpinner(spinner.Dot)),
 	}
 
-	columns := []table.Column{
-		{Title: "Field", Width: 30},
-		{Title: "Value", Width: 50},
-	}
-
-	rows := []table.Row{
-		{"ID", replicationWithInfo.PostgresReplication.ID},
-		{"Slot Name", replicationWithInfo.PostgresReplication.SlotName},
-		{"Publication Name", replicationWithInfo.PostgresReplication.PublicationName},
-		{"Status", replicationWithInfo.PostgresReplication.Status},
-		{"Stream ID", replicationWithInfo.PostgresReplication.StreamID},
-		{"Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID},
-		{"Backfill Completed At", replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()},
-		{"Last Committed Timestamp", replicationWithInfo.Info.FormatLastCommittedAt()},
-	}
-
-	t := NewTable(columns, rows, PrintableTable)
-	fmt.Printf("Information for Postgres Replication %s\n\n", replicationWithInfo.PostgresReplication.ID)
-	return t.Render()
+	p := tea.NewProgram(model)
+	_, err = p.Run()
+	return err
 }
 
 func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {

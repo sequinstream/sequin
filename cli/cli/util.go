@@ -16,6 +16,11 @@ func loadingSpinner() string {
 	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)] + " Loading...\n"
 }
 
+func loadingSpinnerNoText() string {
+	spinner := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	return spinner[int(time.Now().UnixNano()/100000000)%len(spinner)]
+}
+
 func addCheat(name string, cmd *fisk.CmdClause) {
 	cmd.CheatFile(fs, name, fmt.Sprintf("cheats/%s.md", name))
 }

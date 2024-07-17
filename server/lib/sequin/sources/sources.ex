@@ -10,6 +10,7 @@ defmodule Sequin.Sources do
   alias Sequin.Sources.BackfillPostgresTableWorker
   alias Sequin.Sources.PostgresReplication
   alias Sequin.SourcesRuntime
+  alias Sequin.Streams
 
   # PostgresReplication
 
@@ -83,12 +84,17 @@ defmodule Sequin.Sources do
   end
 
   def add_info(%PostgresReplication{} = pg_replication) do
-    pg_replication = Repo.preload(pg_replication, :postgres_database)
+    pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
     last_committed_at = Replication.get_last_committed_at(pg_replication.id)
+    subject_pattern = "#{pg_replication.postgres_database.slug}.>"
+
+    total_ingested_messages =
+      Streams.fast_count_messages_for_stream(pg_replication.stream_id, subject_pattern: subject_pattern)
 
     info = %PostgresReplication.Info{
-      last_committed_at: last_committed_at
+      last_committed_at: last_committed_at,
+      total_ingested_messages: total_ingested_messages
     }
 
     %{pg_replication | info: info}

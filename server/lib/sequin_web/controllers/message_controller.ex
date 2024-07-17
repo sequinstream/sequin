@@ -27,6 +27,16 @@ defmodule SequinWeb.MessageController do
     end
   end
 
+  def stream_count(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, count_params} <- parse_stream_count_params(params) do
+      count = Streams.count_messages_for_stream(stream.id, count_params)
+      render(conn, "stream_count.json", count: count)
+    end
+  end
+
   def consumer_list(
         conn,
         %{"stream_id_or_slug" => stream_id_or_slug, "consumer_id_or_slug" => consumer_id_or_slug} = params
@@ -70,6 +80,12 @@ defmodule SequinWeb.MessageController do
          {:ok, subject_pattern} <- parse_subject_pattern(params) do
       {:ok,
        Sequin.Keyword.reject_nils(limit: limit, order_by: sort, is_deliverable: visible, subject_pattern: subject_pattern)}
+    end
+  end
+
+  defp parse_stream_count_params(params) do
+    with {:ok, subject_pattern} <- parse_subject_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(subject_pattern: subject_pattern)}
     end
   end
 

@@ -48,7 +48,8 @@ type PostgresReplicationCreate struct {
 
 // PostgresReplicationInfo represents the additional info for a PostgresReplication
 type PostgresReplicationInfo struct {
-	LastCommittedAt *time.Time `json:"last_committed_at"`
+	LastCommittedAt       *time.Time `json:"last_committed_at"`
+	TotalIngestedMessages int64      `json:"total_ingested_messages"`
 }
 
 // PostgresReplicationWithInfo represents the structure of a PostgresReplication with additional info

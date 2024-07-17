@@ -313,9 +313,8 @@ defmodule Sequin.Streams do
 
   # Messages
 
-  def list_messages_for_stream(stream_id, params \\ []) do
-    params
-    |> Enum.reduce(Message.where_stream_id(stream_id), fn
+  defp messages_query(stream_id, params \\ []) do
+    Enum.reduce(params, Message.where_stream_id(stream_id), fn
       {:seq_gt, seq}, query ->
         Message.where_seq_gt(query, seq)
 
@@ -331,6 +330,11 @@ defmodule Sequin.Streams do
       {:subject_pattern, pattern}, query ->
         Message.where_subject_pattern(query, pattern)
     end)
+  end
+
+  def list_messages_for_stream(stream_id, params \\ []) do
+    stream_id
+    |> messages_query(params)
     |> Repo.all()
   end
 
@@ -340,17 +344,17 @@ defmodule Sequin.Streams do
     |> Repo.one!()
   end
 
-  def count_messages_for_stream(stream_id) do
+  def count_messages_for_stream(stream_id, params \\ []) do
     stream_id
-    |> Message.where_stream_id()
+    |> messages_query(params)
     |> Repo.aggregate(:count, :subject)
   end
 
   @fast_count_threshold 50_000
   def fast_count_threshold, do: @fast_count_threshold
 
-  def fast_count_messages_for_stream(stream_id) do
-    query = Message.where_stream_id(stream_id)
+  def fast_count_messages_for_stream(stream_id, params \\ []) do
+    query = messages_query(stream_id, params)
 
     # This number can be pretty inaccurate
     result = Ecto.Adapters.SQL.explain(Repo, :all, query)
@@ -361,7 +365,7 @@ defmodule Sequin.Streams do
         count
 
       _ ->
-        count_messages_for_stream(stream_id)
+        count_messages_for_stream(stream_id, params)
     end
   end
 

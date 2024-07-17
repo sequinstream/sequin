@@ -29,6 +29,10 @@ defmodule SequinWeb.MessageJSON do
     %{data: messages}
   end
 
+  def render("stream_count.json", %{count: count}) do
+    %{count: count}
+  end
+
   defp get_current_state(cm) do
     now = DateTime.utc_now()
 

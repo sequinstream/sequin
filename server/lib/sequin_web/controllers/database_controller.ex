@@ -163,6 +163,18 @@ defmodule SequinWeb.DatabaseController do
     with :ok <- Databases.test_tcp_reachability(database, connection_test_timeouts()),
          :ok <- Databases.test_connect(database, connection_test_timeouts()) do
       Databases.test_permissions(database)
+    else
+      {:error, %Error.ValidationError{}} = error ->
+        error
+
+      {:error, %Postgrex.Error{} = error} ->
+        message = (error.postgres && error.postgres.message) || "Unknown Postgres error"
+        code = error.postgres && error.postgres.code
+
+        {:error, Error.validation(summary: "Error from Postgres: #{message} (code=#{code})")}
+
+      {:error, error} ->
+        {:error, Error.validation(summary: "Unknown error connecting to database: #{inspect(error)}")}
     end
   end
 

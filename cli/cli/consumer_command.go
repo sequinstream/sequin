@@ -24,7 +24,7 @@ type consumerConfig struct {
 	MaxWaiting       int
 	FilterKeyPattern string
 	BatchSize        int
-	NoAck            bool
+	Ack              bool
 	PendingOnly      bool
 	LastN            int
 	FirstN           int
@@ -74,7 +74,7 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	receiveCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	receiveCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	receiveCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
-	receiveCmd.Flag("no-ack", "Do not acknowledge messages").BoolVar(&c.NoAck)
+	receiveCmd.Flag("ack", "Acknowledge messages on receive").BoolVar(&c.Ack)
 
 	peekCmd := consumer.Command("peek", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerPeek(ctx, config, c)
@@ -466,7 +466,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
 
-		if !c.NoAck {
+		if c.Ack {
 			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckId)
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)

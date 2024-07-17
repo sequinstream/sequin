@@ -10,13 +10,13 @@ sequin consumer add [slug]
 
 sequin consumer info [consumer-id]
 
-# To receive messages for a consumer (default batch size is 1)
+# To receive messages for a consumer (default batch size is 1, no automatic ack)
 
 sequin consumer receive [consumer-id]
 
-# To receive messages for a consumer without acknowledging them
+# To receive messages for a consumer and acknowledge them
 
-sequin consumer receive [consumer-id] --no-ack
+sequin consumer receive [consumer-id] --ack
 
 # To receive a batch of messages for a consumer
 

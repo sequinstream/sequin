@@ -11,8 +11,7 @@ if [ -z "$2" ]; then
     exit 1
 fi
 release_assets_dir="$2"
-# platforms=("windows/amd64" "windows/386" "darwin/amd64" "darwin/arm64" "linux/amd64" "linux/386" "linux/arm" "linux/arm64")
-platforms=("darwin/arm64")
+platforms=("windows/amd64" "windows/386" "darwin/amd64" "darwin/arm64" "linux/amd64" "linux/386" "linux/arm" "linux/arm64")
 
 # Create release_assets directory if it doesn't exist
 mkdir -p $release_assets_dir

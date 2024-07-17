@@ -30,7 +30,7 @@ Now, clone Sequin and boot it with Docker compose:
 
 ```
 git clone git@github.com:sequin-io/sequin
-cd sequin/installation
+cd sequin/docker
 docker compose up -d
 ```
 

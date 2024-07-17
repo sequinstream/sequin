@@ -12,34 +12,22 @@ import (
 	"github.com/sequinstream/sequin/cli/context"
 )
 
-type StreamAddConfig struct {
-	Slug string
+type StreamConfig struct {
+	Slug   string
+	Key    string
+	Data   string
+	Filter string
+	Last   int
+	First  int
+	Table  bool
 }
 
-var streamAddConfig StreamAddConfig
-
-type StreamPublishConfig struct {
-	StreamSlug string
-	Key        string
-	Message    string
-}
-
-var streamPublishConfig StreamPublishConfig
-
-type StreamListConfig struct {
-	StreamIDOrSlug string
-	Last           int
-	First          int
-	KeyPattern     string
-}
-
-var streamListConfig StreamListConfig
-
-// AddStreamCommands adds all stream-related commands to the given app
 func AddStreamCommands(app *fisk.Application, config *Config) {
 	stream := app.Command("stream", "Stream related commands").Alias("str").Alias("s")
 
 	addCheat("stream", stream)
+
+	s := &StreamConfig{}
 
 	stream.Command("ls", "List streams").Action(func(c *fisk.ParseContext) error {
 		return streamLs(c, config)
@@ -48,32 +36,34 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	infoCmd := stream.Command("info", "Show stream info").Action(func(c *fisk.ParseContext) error {
 		return streamInfo(c, config)
 	})
-	infoCmd.Arg("stream-id", "ID of the stream to show info for").StringVar(&config.StreamID)
+	infoCmd.Arg("stream-id", "ID or slug of the stream to show info for").StringVar(&config.StreamID)
 
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
-		return streamAdd(c, config)
+		return streamAdd(c, config, s)
 	})
-	addCmd.Arg("slug", "Slug of the stream to Add").StringVar(&streamAddConfig.Slug)
+	addCmd.Arg("slug", "Slug of the stream to Add").StringVar(&s.Slug)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config)
 	})
-	rmCmd.Arg("stream-id", "ID of the stream to remove").StringVar(&config.StreamID)
+	rmCmd.Arg("stream-id", "ID or slug of the stream to remove").StringVar(&config.StreamID)
 
-	pubCmd := stream.Command("pub", "Publish a message to a stream").Action(func(c *fisk.ParseContext) error {
-		return streamPublish(c, config)
+	sendCmd := stream.Command("send", "Send a message to a stream").Action(func(c *fisk.ParseContext) error {
+		return streamSend(c, config, s)
 	})
-	pubCmd.Arg("stream-id-or-slug", "ID or slug of the stream to publish to").Required().StringVar(&streamPublishConfig.StreamSlug)
-	pubCmd.Arg("key", "Key of the message").Required().StringVar(&streamPublishConfig.Key)
-	pubCmd.Arg("message", "Message to publish").Required().StringVar(&streamPublishConfig.Message)
+	sendCmd.Arg("stream-id", "ID or slug of the stream to send to").Required().StringVar(&config.StreamID)
+	sendCmd.Arg("key", "Key of the message").Required().StringVar(&s.Key)
+	sendCmd.Arg("data", "Data payload of the message").Required().StringVar(&s.Data)
 
-	messagesCmd := stream.Command("messages", "List messages in a stream").Action(func(c *fisk.ParseContext) error {
-		return streamList(c, config)
+	viewCmd := stream.Command("view", "View messages in a stream").Action(func(c *fisk.ParseContext) error {
+		return streamView(c, config, s)
 	})
-	messagesCmd.Arg("stream-id-or-slug", "ID or slug of the stream").Required().StringVar(&streamListConfig.StreamIDOrSlug)
-	messagesCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&streamListConfig.Last)
-	messagesCmd.Flag("first", "Show least recent N messages").IntVar(&streamListConfig.First)
-	messagesCmd.Flag("filter", "Filter messages by key pattern").StringVar(&streamListConfig.KeyPattern)
+	viewCmd.Arg("stream-id", "ID or slug of the stream to view").StringVar(&config.StreamID)
+	viewCmd.Flag("filter", "Filter messages by key pattern").StringVar(&s.Filter)
+	viewCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&s.Last)
+	viewCmd.Flag("first", "Show least recent N messages").IntVar(&s.First)
+	viewCmd.Flag("table", "Display messages in a table format").BoolVar(&s.Table)
+
 }
 
 func streamLs(_ *fisk.ParseContext, config *Config) error {
@@ -198,25 +188,25 @@ func displayStreamInfo(config *Config) error {
 	return t.Render()
 }
 
-func streamAdd(_ *fisk.ParseContext, config *Config) error {
+func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
 	// Prompt for slug if not provided
-	if streamAddConfig.Slug == "" {
+	if s.Slug == "" {
 		prompt := &survey.Input{
 			Message: "Enter stream slug:",
 		}
-		err = survey.AskOne(prompt, &streamAddConfig.Slug)
+		err = survey.AskOne(prompt, &s.Slug)
 		if err != nil {
 			return err
 		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildAddStream(ctx, streamAddConfig.Slug)
+		req, err := api.BuildAddStream(ctx, s.Slug)
 		if err != nil {
 			return err
 		}
@@ -231,7 +221,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config) error {
 	}
 
 	// Add stream
-	stream, err := api.AddStream(ctx, streamAddConfig.Slug)
+	stream, err := api.AddStream(ctx, s.Slug)
 	if err != nil {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
@@ -294,14 +284,14 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 	return nil
 }
 
-func streamPublish(_ *fisk.ParseContext, config *Config) error {
+func streamSend(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildPublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Key, streamPublishConfig.Message)
+		req, err := api.BuildPublishMessage(ctx, config.StreamID, s.Key, s.Data)
 		if err != nil {
 			return err
 		}
@@ -311,71 +301,57 @@ func streamPublish(_ *fisk.ParseContext, config *Config) error {
 		}
 
 		fmt.Println(curlCmd)
-
 		return nil
 	}
 
-	// Pass the streamSlug directly to the PublishMessage function
-	err = api.PublishMessage(ctx, streamPublishConfig.StreamSlug, streamPublishConfig.Key, streamPublishConfig.Message)
+	err = api.PublishMessage(ctx, config.StreamID, s.Key, s.Data)
 	if err != nil {
-		return fmt.Errorf("failed to publish message: %w", err)
+		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	fmt.Printf("Message published to stream '%s' with key '%s'\n", streamPublishConfig.StreamSlug, streamPublishConfig.Key)
+	fmt.Printf("Message sent to stream '%s' with key '%s'\n", config.StreamID, s.Key)
 	return nil
 }
 
-func streamList(_ *fisk.ParseContext, config *Config) error {
+func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	limit := streamListConfig.Last
+	if config.StreamID == "" {
+		streamID, err := promptForStream(ctx)
+		if err != nil {
+			return err
+		}
+		config.StreamID = streamID
+	}
+
+	limit := s.Last
 	sort := "seq_desc"
 
-	if streamListConfig.First > 0 {
-		limit = streamListConfig.First
+	if s.First > 0 {
+		limit = s.First
 		sort = "seq_asc"
 	}
 
-	if config.AsCurl {
-		req, err := api.BuildListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.KeyPattern)
-		if err != nil {
-			return err
-		}
-		curlCmd, err := formatCurl(req)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println(curlCmd)
-
-		return nil
+	populator := func() ([]api.Message, error) {
+		return api.ListStreamMessages(ctx, config.StreamID, limit, sort, s.Filter)
 	}
 
-	messages, err := api.ListStreamMessages(ctx, streamListConfig.StreamIDOrSlug, limit, sort, streamListConfig.KeyPattern)
+	messages, err := populator()
 	if err != nil {
 		return fmt.Errorf("failed to list messages: %w", err)
 	}
 
 	if len(messages) == 0 {
-		fmt.Printf("No messages found in stream '%s'\n", streamListConfig.StreamIDOrSlug)
+		fmt.Println("No messages found")
 		return nil
 	}
 
-	fmt.Printf("Listing %d messages in stream %s\n", len(messages), streamListConfig.StreamIDOrSlug)
-
-	for _, msg := range messages {
-		fmt.Println()
-		fmt.Println()
-		fmt.Printf("Sequence:   %d\n", msg.Seq)
-		fmt.Printf("Key:    %s\n", msg.Key)
-		fmt.Printf("Created At: %s\n", msg.CreatedAt.Format(time.RFC3339))
-		fmt.Printf("Updated At: %s\n", msg.UpdatedAt.Format(time.RFC3339))
-		fmt.Println()
-		fmt.Println(msg.Data)
+	if s.Table {
+		return displayMessagesAsTable(messages, populator)
 	}
 
-	return nil
+	return displayMessagesAsDump(messages)
 }

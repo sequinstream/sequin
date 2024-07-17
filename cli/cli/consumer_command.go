@@ -15,6 +15,7 @@ import (
 )
 
 type consumerConfig struct {
+	StreamID         string
 	ConsumerID       string
 	Slug             string
 	AckWaitMS        int
@@ -39,16 +40,17 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	consumer := app.Command("consumer", "Consumer related commands").Alias("con").Alias("c")
 
 	addCheat("consumer", consumer)
-
 	c := &consumerConfig{}
 
-	consumer.Command("ls", "List consumers").Action(func(ctx *fisk.ParseContext) error {
-		return consumerLs(ctx, config)
+	lsCmd := consumer.Command("ls", "List consumers").Action(func(ctx *fisk.ParseContext) error {
+		return consumerLs(ctx, config, c)
 	})
+	lsCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 
 	addCmd := consumer.Command("add", "Add a new consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAdd(ctx, config, c)
 	})
+	addCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	addCmd.Arg("slug", "Slug for the new consumer").StringVar(&c.Slug)
 	addCmd.Flag("ack-wait-ms", "Acknowledgement wait time in milliseconds").IntVar(&c.AckWaitMS)
 	addCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
@@ -63,11 +65,13 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	infoCmd := consumer.Command("info", "Show consumer information").Action(func(ctx *fisk.ParseContext) error {
 		return consumerInfo(ctx, config, c)
 	})
+	infoCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	infoCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 
 	receiveCmd := consumer.Command("receive", "Receive messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerReceive(ctx, config, c)
 	})
+	receiveCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	receiveCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	receiveCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
 	receiveCmd.Flag("no-ack", "Do not acknowledge messages").BoolVar(&c.NoAck)
@@ -75,6 +79,7 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	peekCmd := consumer.Command("peek", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerPeek(ctx, config, c)
 	})
+	peekCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	peekCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	peekCmd.Flag("pending", "Show only pending messages").BoolVar(&c.PendingOnly)
 	peekCmd.Flag("last", "Show most recent N messages").IntVar(&c.LastN)
@@ -83,18 +88,21 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	ackCmd := consumer.Command("ack", "Ack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAck(ctx, config, c)
 	})
+	ackCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	ackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	ackCmd.Arg("ack-id", "Ack ID of the message to ack").StringVar(&c.AckId)
 
 	nackCmd := consumer.Command("nack", "Nack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerNack(ctx, config, c)
 	})
+	nackCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	nackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	nackCmd.Arg("ack-id", "ID of the message to nack").StringVar(&c.AckId)
 
 	updateCmd := consumer.Command("edit", "Edit an existing consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerEdit(ctx, config, c)
 	})
+	updateCmd.Arg("stream-id", "ID or slug of the stream").StringVar(&c.StreamID)
 	updateCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
 	updateCmd.Flag("ack-wait-ms", "Acknowledgement wait time in milliseconds").IntVar(&c.AckWaitMS)
 	updateCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
@@ -104,6 +112,7 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	rmCmd := consumer.Command("rm", "Remove a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerRemove(ctx, config, c)
 	})
+	rmCmd.Arg("stream-id", "ID or slug of the stream").Required().StringVar(&c.StreamID)
 	rmCmd.Arg("consumer-id", "ID of the consumer to remove").StringVar(&c.ConsumerID)
 	rmCmd.Flag("force", "Force removal without confirmation").BoolVar(&c.Force)
 }
@@ -120,19 +129,21 @@ func getFirstStream(ctx *context.Context) (string, error) {
 	return streams[0].ID, nil
 }
 
-func consumerLs(_ *fisk.ParseContext, config *Config) error {
+func consumerLs(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
-		fisk.Fatalf("failed to load context: %s", err)
+		return fmt.Errorf("failed to load context: %w", err)
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildFetchConsumers(ctx, streamID)
+		req, err := api.BuildFetchConsumers(ctx, c.StreamID)
 		if err != nil {
 			return err
 		}
@@ -146,9 +157,9 @@ func consumerLs(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	consumers, err := api.FetchConsumers(ctx, streamID)
+	consumers, err := api.FetchConsumers(ctx, c.StreamID)
 	if err != nil {
-		fisk.Fatalf("failed to fetch consumers: %s", err)
+		return fmt.Errorf("failed to fetch consumers: %w", err)
 	}
 
 	if len(consumers) == 0 {
@@ -186,9 +197,11 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return fmt.Errorf("failed to load context: %w", err)
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Always prompt for required fields
@@ -280,7 +293,7 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 
 	createOptions := api.ConsumerCreateOptions{
 		Slug:             c.Slug,
-		StreamID:         streamID,
+		StreamID:         c.StreamID,
 		FilterKeyPattern: c.FilterKeyPattern,
 		Kind:             c.Kind,
 		HttpEndpoint:     httpEndpoint,
@@ -360,24 +373,25 @@ func displayConsumerInfo(consumer *api.Consumer) {
 func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
-		fisk.Fatalf("failed to load context: %s", err)
+		return fmt.Errorf("failed to load context: %w", err)
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
-	}
-
-	if c.ConsumerID == "" {
-		consumerID, err := promptForConsumer(ctx, streamID)
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-		c.ConsumerID = consumerID
+	}
+
+	if c.ConsumerID == "" {
+		c.ConsumerID, err = promptForConsumer(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildFetchConsumerInfo(ctx, streamID, c.ConsumerID)
+		req, err := api.BuildFetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
 		if err != nil {
 			return err
 		}
@@ -391,36 +405,38 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return nil
 	}
 
-	consumer, err := api.FetchConsumerInfo(ctx, streamID, c.ConsumerID)
+	consumer, err := api.FetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
 	if err != nil {
-		fisk.Fatalf("failed to fetch consumer info: %s", err)
+		return fmt.Errorf("failed to fetch consumer info: %w", err)
 	}
 
 	displayConsumerInfo(consumer)
 
 	return nil
 }
+
 func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
-	}
-
-	if c.ConsumerID == "" {
-		consumerID, err := promptForConsumer(ctx, streamID)
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-		c.ConsumerID = consumerID
+	}
+
+	if c.ConsumerID == "" {
+		c.ConsumerID, err = promptForConsumer(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildFetchNextMessages(ctx, streamID, c.ConsumerID, c.BatchSize)
+		req, err := api.BuildFetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
 		if err != nil {
 			return err
 		}
@@ -434,7 +450,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 		return nil
 	}
 
-	messages, err := api.FetchNextMessages(ctx, streamID, c.ConsumerID, c.BatchSize)
+	messages, err := api.FetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
 	if err != nil {
 		return err
 	}
@@ -451,7 +467,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 		fmt.Printf("\n%s\n", msg.Message.Data)
 
 		if !c.NoAck {
-			err := api.AckMessage(ctx, streamID, c.ConsumerID, msg.AckId)
+			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckId)
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)
 			}
@@ -468,22 +484,23 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
-	}
-
-	if c.ConsumerID == "" {
-		consumerID, err := promptForConsumer(ctx, streamID)
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-		c.ConsumerID = consumerID
+	}
+
+	if c.ConsumerID == "" {
+		c.ConsumerID, err = promptForConsumer(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
 		options := api.FetchMessagesOptions{
-			StreamID:   streamID,
+			StreamID:   c.StreamID,
 			ConsumerID: c.ConsumerID,
 			Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
 			Limit:      10,             // Default limit
@@ -513,7 +530,7 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	options := api.FetchMessagesOptions{
-		StreamID:   streamID,
+		StreamID:   c.StreamID,
 		ConsumerID: c.ConsumerID,
 		Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
 		Limit:      10,             // Default limit
@@ -530,7 +547,7 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	messages, err := api.FetchMessages(ctx, options)
 	if err != nil {
-		fisk.Fatalf("Failed to fetch messages: %v", err)
+		return fmt.Errorf("failed to fetch messages: %w", err)
 	}
 
 	if len(messages) == 0 {
@@ -572,13 +589,15 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildAckMessage(ctx, streamID, c.ConsumerID, c.AckId)
+		req, err := api.BuildAckMessage(ctx, c.StreamID, c.ConsumerID, c.AckId)
 		if err != nil {
 			return err
 		}
@@ -592,7 +611,7 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return nil
 	}
 
-	err = api.AckMessage(ctx, streamID, c.ConsumerID, c.AckId)
+	err = api.AckMessage(ctx, c.StreamID, c.ConsumerID, c.AckId)
 	if err != nil {
 		return fmt.Errorf("failed to acknowledge message: %w", err)
 	}
@@ -607,13 +626,15 @@ func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildNackMessage(ctx, streamID, c.ConsumerID, c.AckId)
+		req, err := api.BuildNackMessage(ctx, c.StreamID, c.ConsumerID, c.AckId)
 		if err != nil {
 			return err
 		}
@@ -627,7 +648,7 @@ func consumerNack(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return nil
 	}
 
-	err = api.NackMessage(ctx, streamID, c.ConsumerID, c.AckId)
+	err = api.NackMessage(ctx, c.StreamID, c.ConsumerID, c.AckId)
 	if err != nil {
 		return fmt.Errorf("failed to nack message: %w", err)
 	}
@@ -642,12 +663,14 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
-	consumer, err := api.FetchConsumerInfo(ctx, streamID, c.ConsumerID)
+	consumer, err := api.FetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
 	if err != nil {
 		return fmt.Errorf("could not load Consumer: %w", err)
 	}
@@ -679,7 +702,7 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	fmt.Printf("Differences (-old +new):\n%s", diff)
 
 	if !c.Force {
-		ok, err := askConfirmation(fmt.Sprintf("Really edit Consumer %s > %s", streamID, c.ConsumerID), false)
+		ok, err := askConfirmation(fmt.Sprintf("Really edit Consumer %s > %s", c.StreamID, c.ConsumerID), false)
 		if err != nil {
 			return fmt.Errorf("could not obtain confirmation: %w", err)
 		}
@@ -705,7 +728,7 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildEditConsumer(ctx, streamID, c.ConsumerID, updateOptions)
+		req, err := api.BuildEditConsumer(ctx, c.StreamID, c.ConsumerID, updateOptions)
 		if err != nil {
 			return err
 		}
@@ -719,7 +742,7 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return nil
 	}
 
-	updatedConsumer, err := api.EditConsumer(ctx, streamID, c.ConsumerID, updateOptions)
+	updatedConsumer, err := api.EditConsumer(ctx, c.StreamID, c.ConsumerID, updateOptions)
 	if err != nil {
 		return fmt.Errorf("failed to update consumer: %w", err)
 	}
@@ -736,21 +759,22 @@ func consumerRemove(_ *fisk.ParseContext, config *Config, c *consumerConfig) err
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
-	}
-
-	if c.ConsumerID == "" {
-		consumerID, err := promptForConsumer(ctx, streamID)
+	if c.StreamID == "" {
+		c.StreamID, err = promptForStream(ctx)
 		if err != nil {
 			return err
 		}
-		c.ConsumerID = consumerID
+	}
+
+	if c.ConsumerID == "" {
+		c.ConsumerID, err = promptForConsumer(ctx, c.StreamID)
+		if err != nil {
+			return err
+		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildRemoveConsumer(ctx, streamID, c.ConsumerID)
+		req, err := api.BuildRemoveConsumer(ctx, c.StreamID, c.ConsumerID)
 		if err != nil {
 			return err
 		}
@@ -764,7 +788,7 @@ func consumerRemove(_ *fisk.ParseContext, config *Config, c *consumerConfig) err
 	}
 
 	if !c.Force {
-		ok, err := askConfirmation(fmt.Sprintf("Really remove Consumer %s > %s", streamID, c.ConsumerID), false)
+		ok, err := askConfirmation(fmt.Sprintf("Really remove Consumer %s > %s", c.StreamID, c.ConsumerID), false)
 		if err != nil {
 			return fmt.Errorf("could not obtain confirmation: %w", err)
 		}
@@ -773,7 +797,7 @@ func consumerRemove(_ *fisk.ParseContext, config *Config, c *consumerConfig) err
 		}
 	}
 
-	err = api.RemoveConsumer(ctx, streamID, c.ConsumerID)
+	err = api.RemoveConsumer(ctx, c.StreamID, c.ConsumerID)
 	if err != nil {
 		return fmt.Errorf("failed to remove consumer: %w", err)
 	}

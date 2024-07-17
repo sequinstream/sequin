@@ -28,7 +28,7 @@ defmodule Sequin.StreamsTest do
       new_data = StreamsFactory.message_data()
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [%{msg | data: new_data, data_hash: nil}])
-      updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
+      updated_msg = Streams.get_message_for_stream!(msg.subject, msg.stream_id)
 
       assert updated_msg.data == new_data
       assert is_binary(updated_msg.data_hash)
@@ -41,7 +41,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 0} = Streams.upsert_messages(stream.id, [msg])
 
-      updated_msg = Streams.get_message!(msg.subject, msg.stream_id)
+      updated_msg = Streams.get_message_for_stream!(msg.subject, msg.stream_id)
       assert updated_msg.seq == msg.seq
       assert updated_msg.data == msg.data
       assert updated_msg.data_hash == msg.data_hash
@@ -57,11 +57,11 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream2.id, [msg2_attrs])
 
-      unchanged_msg1 = Streams.get_message!(msg1.subject, msg1.stream_id)
+      unchanged_msg1 = Streams.get_message_for_stream!(msg1.subject, msg1.stream_id)
       assert unchanged_msg1.seq == msg1.seq
       assert unchanged_msg1.data == msg1.data
 
-      new_msg2 = Streams.get_message!(msg2_attrs.subject, msg2_attrs.stream_id)
+      new_msg2 = Streams.get_message_for_stream!(msg2_attrs.subject, msg2_attrs.stream_id)
       assert new_msg2.data == msg2_attrs.data
     end
 
@@ -71,7 +71,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [msg_attrs])
 
-      inserted_msg = Streams.get_message!(msg_attrs.subject, msg_attrs.stream_id)
+      inserted_msg = Streams.get_message_for_stream!(msg_attrs.subject, msg_attrs.stream_id)
       assert inserted_msg.data == "data with null byte "
     end
   end
@@ -95,7 +95,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
-      message = Streams.get_message!(message.subject, message.stream_id)
+      message = Streams.get_message_for_stream!(message.subject, message.stream_id)
 
       assert [consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
       assert consumer_message.message_subject == message.subject

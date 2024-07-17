@@ -135,6 +135,12 @@ brew tap sequinstream/homebrew-sequin
 brew install sequin
 ```
 
+Install with shell:
+
+```bash
+curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
+```
+
 To build from source, clone this repo then:
 
 ```bash

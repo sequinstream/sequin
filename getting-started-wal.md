@@ -19,9 +19,17 @@ The Sequin Docker image comes with its own Postgres database for simplicity, but
 
 #### Install the Sequin CLI
 
+Install with Homebrew:
+
 ```
 brew tap sequin-io/sequin git@github.com:sequin-io/homebrew-sequin
 brew install sequin
+```
+
+Install with shell:
+
+```bash
+curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
 ```
 
 #### Boot Sequin with Docker compose

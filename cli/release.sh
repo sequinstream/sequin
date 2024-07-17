@@ -6,10 +6,11 @@ get_latest_tag() {
     git describe --tags --abbrev=0
 }
 
-# Function to create a GitHub release
+# Function to create a GitHub release with assets
 create_github_release() {
     local tag=$1
     local repo="sequinstream/sequin"
+    local assets_dir="release_assets"
     
     # Create a release using GitHub CLI
     gh release create "$tag" \
@@ -17,6 +18,11 @@ create_github_release() {
         --title "Release $tag" \
         --notes "Release notes for $tag" \
         --generate-notes
+
+    # Upload assets to the release
+    for asset in "$assets_dir"/*.zip; do
+        gh release upload "$tag" "$asset" --repo "$repo"
+    done
 }
 
 # Set the working directory to sequin-cli
@@ -35,10 +41,22 @@ git push origin "$new_version"
 
 echo "New tag $new_version created and pushed to GitHub"
 
-# Create a GitHub release for the new tag
+# Build Docker image
+docker build -t sequin-builder -f release/Dockerfile .
+
+# Create a temporary directory for assets
+mkdir -p release_assets
+
+# Run Docker container to build assets
+docker run --rm -e VERSION="$new_version" -v "$(pwd)":/go/src/app -v "$(pwd)/release_assets":/go/src/app/release_assets sequin-builder
+
+# Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"
 
-echo "GitHub release created for $new_version"
+# Clean up assets
+rm -rf release_assets
+
+echo "GitHub release created for $new_version with assets"
 
 # Switch to homebrew-sequin directory
 cd /Users/carterpedersen/Sequin/homebrew-sequin || exit

@@ -159,7 +159,15 @@ start() {
   version="latest"
   
   prefix=${PREFIX:-"/usr/local/bin"}
-  tmp="$(mktmpdir)/$bin"
+
+  # Determine the final binary name
+  if [ "$os" = "windows" ]; then
+    bin_name="$bin.exe"
+  else
+    bin_name="$bin"
+  fi
+
+  tmp="$(mktmpdir)/$bin_name"
 
   echo
   log_info "Downloading $repo@$version"
@@ -180,19 +188,23 @@ start() {
   http_download "$tmp.zip" "$download_url"
 
   log_info "Extracting binary"
-  unzip -q -o "$tmp.zip" -d "$(dirname "$tmp")"
-  mv "$(dirname "$tmp")/sequin" "$tmp"
+  unzip -p "$tmp.zip" > "$tmp"
+
+  log_info "Setting executable permissions"
+  chmod +x "$tmp"
+
   rm "$tmp.zip"
 
   if [ -w "$prefix" ]; then
-    log_info "Installing $bin to $prefix"
-    install "$tmp" "$prefix"
+    log_info "Installing $bin_name to $prefix"
+    install "$tmp" "$prefix/$bin_name"
   else
     log_info "Permissions required for installation to $prefix — alternatively specify a new directory with:"
     log_info "  $ curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | PREFIX=. sh"
-    sudo install "$tmp" "$prefix"
+    sudo install "$tmp" "$prefix/$bin_name"
   fi
-  rm -r "$tmp"
+
+  rm -f "$tmp"
 
   log_info "Installation complete"
   echo

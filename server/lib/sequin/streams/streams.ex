@@ -340,8 +340,8 @@ defmodule Sequin.Streams do
 
   def get_message_for_stream(stream_id, subject) do
     res =
-      stream_id
-      |> Message.where_subject_and_stream_id(subject)
+      subject
+      |> Message.where_subject_and_stream_id(stream_id)
       |> Repo.one()
 
     case res do
@@ -350,7 +350,7 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_message_for_stream!(subject, stream_id) do
+  def get_message_for_stream!(stream_id, subject) do
     case get_message_for_stream(stream_id, subject) do
       {:ok, message} -> message
       {:error, _} -> raise Error.not_found(entity: :message)

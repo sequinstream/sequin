@@ -266,14 +266,14 @@ It can be a good idea to set `retain-at-least` if you're setting `max-storage`. 
 To add a consumer to Sequin, run:
 
 ```bash
-sequin consumer add [<consumer-slug>] [<flags>]
+sequin consumer add [<stream-slug>] [<consumer-slug>] [<flags>]
 ```
 
 For example:
 
 ```bash
 # Create a consumer for all orders in the system
-sequin consumer add mycon --ack-wait-ms=60000 --filter="orders.>"
+sequin consumer add mystream mycon --ack-wait-ms=60000 --filter="orders.>"
 ```
 
 The flags:
@@ -294,13 +294,13 @@ When no flags are provided, the CLI will walk you through setup.
 To receive a message for a consumer, run:
 
 ```bash
-sequin receive [<consumer-slug>]  [<flags>]
+sequin receive [<stream-slug>] [<consumer-slug>]  [<flags>]
 ```
 
 For example:
 
 ```bash
-sequin receive mycon --batch-size=10
+sequin receive mystream mycon --batch-size=10
 ```
 
 Or, via HTTP:
@@ -312,7 +312,7 @@ curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/nex
 The CLI will automatically ack messages upon receipt. You can disable this behavior by passing the `--no-ack` flag:
 
 ```bash
-sequin receive mycon --batch-size=10 --no-ack
+sequin receive mystream mycon --batch-size=10 --no-ack
 ```
 
 After a batch of messages is delivered to your worker, those messages will not be available to other workers for that consumer for `ack-wait-ms`. Messages are delivered with an `ack_id` that your worker will [use to ack them](#acking-messages).
@@ -326,7 +326,7 @@ You ack messages using their `ack_id`. The `ack_id` for each message is included
 Using the CLI:
 
 ```bash
-sequin consumer ack [<consumer-slug>] [<ack_id>]
+sequin consumer ack [<stream-slug>] [<consumer-slug>] [<ack_id>]
 ```
 
 When ack'ing via HTTP, you can include a batch of ack_ids to acknowledge all together:
@@ -342,7 +342,7 @@ You can also "negative ack" or "nack" messages. This makes the messages availabl
 Using the CLI:
 
 ```bash
-sequin consumer nack mycon [<ack_id>]
+sequin consumer nack mystream mycon [<ack_id>]
 ```
 
 When nack'ing via HTTP, you can include a batch of ack_ids to nack all together:

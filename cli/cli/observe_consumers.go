@@ -58,7 +58,7 @@ func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
 }
 
 func (c *Consumer) View(width, height int) string {
-	if c.showDetail {
+	if c.showDetail || len(c.consumers) == 1 {
 		return c.detailView(width, height)
 	}
 	return c.listView(width, height)
@@ -74,6 +74,7 @@ func (c *Consumer) listView(width, height int) string {
 	maxAckPendingWidth := 15
 	maxDeliverWidth := 15
 	createdWidth := 25
+	showDetailsPromptWidth := width - filterWidth - maxAckPendingWidth - maxDeliverWidth - createdWidth
 
 	// Create the table header style
 	tableHeaderStyle := lipgloss.NewStyle().
@@ -86,24 +87,27 @@ func (c *Consumer) listView(width, height int) string {
 	output := lipgloss.NewStyle().Bold(true).Render("CONSUMERS") + "\n\n"
 
 	// Format the table header
-	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
+	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
 		slugWidth, "SLUG",
 		filterWidth, "FILTER PATTERN",
 		maxAckPendingWidth, "MAX ACK PENDING",
 		maxDeliverWidth, "MAX DELIVER",
-		createdWidth, "CREATED AT")
+		createdWidth, "CREATED AT",
+		showDetailsPromptWidth, "SHOW DETAILS")
 
 	output += tableHeaderStyle.Render(tableHeader) + "\n"
 
 	for i, consumer := range c.consumers {
 		line := formatConsumerLine(consumer, slugWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
 		style := lipgloss.NewStyle()
+		showDetails := ""
 		if i == c.cursor {
 			style = style.
 				Background(lipgloss.Color("117")). // Light blue background
 				Foreground(lipgloss.Color("0"))    // Black text
+			showDetails = "Press enter"
 		}
-		output += style.Render(line) + "\n"
+		output += style.Render(line+fmt.Sprintf(" %-*s", showDetailsPromptWidth, showDetails)) + "\n"
 	}
 
 	return output

@@ -34,16 +34,6 @@ cd sequin/installation
 docker compose up -d
 ```
 
-## Create a stream
-
-A **stream** is a table of messages. When you send a message to Sequin, it is stored in a stream.
-
-To create a stream, use the `stream add` command:
-
-```
-sequin stream add orders
-```
-
 ## Upsert messages
 
 **Messages** in Sequin consist of a **key** and a **data** payload. Messages are unique by key.
@@ -53,21 +43,21 @@ Keys in Sequin allow for powerful message routing and filtering. For example, yo
 To get a feel for this, let’s simulate an order for an eCommerce use case. Upsert your first message:
 
 ```
-sequin stream upsert orders us.cus_a.order_1 '{"product": "Shoes"}'
+sequin message upsert orders.us.cus_a.order_1 '{"product": "Shoes"}'
 ```
 
 All CLI commands use HTTP to communicate with the Sequin backend. You can see what the requests look like by passing the `--as-curl` flag:
 
 ```
-sequin stream upsert orders us.cus_a.order_1 '{"product": "Shoes", "status": "new"}' --as-curl
+sequin message upsert orders.us.cus_a.order_1 '{"product": "Shoes", "status": "new"}' --as-curl
 ```
 
 Upsert more messages to Sequin:
 
 ```
-sequin stream upsert orders eu.cus_b.order_2 '{"product": "Pants"}'
-sequin stream upsert orders us.cus_c.order_3 '{"product": "Shoes"}'
-sequin stream upsert orders us.cus_a.order_4 '{"product": "Shirts"}'
+sequin message upsert orders.eu.cus_b.order_2 '{"product": "Pants"}'
+sequin message upsert orders.us.cus_c.order_3 '{"product": "Shoes"}'
+sequin message upsert orders.us.cus_a.order_4 '{"product": "Shirts"}'
 ```
 
 Now, take a look at how many messages you have in Sequin. Open a second terminal window or split pane so you can **observe your stream** as you enter more Sequin CLI commands:
@@ -79,15 +69,15 @@ sequin observe
 The observe tool shows the live state of Sequin. You can read and filter these messages using the f command to enter a key filter like:
 
 ```
-us.>
-*.cus_a.*
+orders.us.>
+orders.*.cus_a.*
 >
 ```
 
 Messages are always upserted. So, when cus_b changes their order:
 
 ```
-sequin stream upsert orders eu.cus_b.order_2 '{"product": "Socks"}'
+sequin message upsert orders.eu.cus_b.order_2 '{"product": "Socks"}'
 ```
 
 The message is updated in the stream.
@@ -101,7 +91,7 @@ In Sequin, a **consumer** is how you receive messages with delivery guarantees.
 The best way to understand consumers is to see how they work. Add a consumer:
 
 ```
-sequin consumer add us_orders --filter="us.>" --defaults
+sequin consumer add us_orders --filter="orders.us.>" --defaults
 ```
 
 > [!NOTE]
@@ -136,6 +126,6 @@ These critical feature of consumers ensures that:
 
 Now that you have messages in your stream and a consumer ready to deliver them, you are ready to integrate Sequin. We have a few language specific libraries and example projects:
 
-| Language | Client                                                                   | Example Project                                                                                   |
+| Language | Client                                                                   | Example                                                                                           |
 | -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | Elixir   | [OffBroadwaySequin](https://github.com/sequinstream/off_broadway_sequin) | [Sequin with Broadway](https://github.com/sequinstream/sequin/tree/main/examples/elixir_broadway) |

@@ -8,7 +8,7 @@ sequin stream info [stream-id]
 
 # To add a new stream
 
-sequin stream add [slug]
+sequin stream add [name]
 
 # To remove a stream
 

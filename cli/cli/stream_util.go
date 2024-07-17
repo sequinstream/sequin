@@ -18,7 +18,7 @@ func promptForStream(ctx *context.Context) (string, error) {
 
 	streamOptions := make([]string, len(streams))
 	for i, s := range streams {
-		streamOptions[i] = fmt.Sprintf("%s (ID: %s)", s.Slug, s.ID)
+		streamOptions[i] = fmt.Sprintf("%s (ID: %s)", s.Name, s.ID)
 	}
 
 	var choice string
@@ -48,7 +48,7 @@ func promptForConsumer(ctx *context.Context, streamID string) (string, error) {
 
 	consumerOptions := make([]string, len(consumers))
 	for i, consumer := range consumers {
-		consumerOptions[i] = fmt.Sprintf("%s (ID: %s)", consumer.Slug, consumer.ID)
+		consumerOptions[i] = fmt.Sprintf("%s (ID: %s)", consumer.Name, consumer.ID)
 	}
 
 	var choice string

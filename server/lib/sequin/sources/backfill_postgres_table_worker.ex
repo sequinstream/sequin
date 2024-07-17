@@ -71,7 +71,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
 
       Logger.info("Backfill completed for postgres_replication_id: #{postgres_replication_id}")
     else
-      messages = create_messages(postgres_database.slug, schema, table, columns, rows)
+      messages = create_messages(postgres_database.name, schema, table, columns, rows)
       Streams.upsert_messages(postgres_replication.stream_id, messages)
 
       next_offset = offset + length(rows)
@@ -83,10 +83,10 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
     :ok
   end
 
-  defp create_messages(db_slug, schema, table, columns, rows) do
+  defp create_messages(db_name, schema, table, columns, rows) do
     Enum.map(rows, fn row ->
       record = columns |> Enum.zip(row) |> Map.new()
-      subject = subject_from_message(db_slug, schema, table, record["id"])
+      subject = subject_from_message(db_name, schema, table, record["id"])
 
       %{
         subject: subject,
@@ -99,10 +99,10 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
     end)
   end
 
-  defp subject_from_message(db_slug, schema, table, record_id) do
+  defp subject_from_message(db_name, schema, table, record_id) do
     Enum.join(
       [
-        db_slug,
+        db_name,
         Sequin.Subject.to_subject_token(schema),
         Sequin.Subject.to_subject_token(table),
         "insert",

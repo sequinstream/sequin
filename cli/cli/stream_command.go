@@ -13,7 +13,7 @@ import (
 )
 
 type StreamConfig struct {
-	Slug   string
+	Name   string
 	Key    string
 	Data   string
 	Filter string
@@ -36,29 +36,29 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	infoCmd := stream.Command("info", "Show stream info").Action(func(c *fisk.ParseContext) error {
 		return streamInfo(c, config)
 	})
-	infoCmd.Arg("stream-id", "ID or slug of the stream to show info for").StringVar(&config.StreamID)
+	infoCmd.Arg("stream-id", "ID or name of the stream to show info for").StringVar(&config.StreamID)
 
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
 		return streamAdd(c, config, s)
 	})
-	addCmd.Arg("slug", "Slug of the stream to Add").StringVar(&s.Slug)
+	addCmd.Arg("name", "Name of the stream to Add").StringVar(&s.Name)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config)
 	})
-	rmCmd.Arg("stream-id", "ID or slug of the stream to remove").StringVar(&config.StreamID)
+	rmCmd.Arg("stream-id", "ID or name of the stream to remove").StringVar(&config.StreamID)
 
 	sendCmd := stream.Command("send", "Send a message to a stream").Action(func(c *fisk.ParseContext) error {
 		return streamSend(c, config, s)
 	})
-	sendCmd.Arg("stream-id", "ID or slug of the stream to send to").Required().StringVar(&config.StreamID)
+	sendCmd.Arg("stream-id", "ID or name of the stream to send to").Required().StringVar(&config.StreamID)
 	sendCmd.Arg("key", "Key of the message").Required().StringVar(&s.Key)
 	sendCmd.Arg("data", "Data payload of the message").Required().StringVar(&s.Data)
 
 	viewCmd := stream.Command("view", "View messages in a stream").Action(func(c *fisk.ParseContext) error {
 		return streamView(c, config, s)
 	})
-	viewCmd.Arg("stream-id", "ID or slug of the stream to view").StringVar(&config.StreamID)
+	viewCmd.Arg("stream-id", "ID or name of the stream to view").StringVar(&config.StreamID)
 	viewCmd.Flag("filter", "Filter messages by key pattern").StringVar(&s.Filter)
 	viewCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&s.Last)
 	viewCmd.Flag("first", "Show least recent N messages").IntVar(&s.First)
@@ -99,7 +99,7 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 
 	columns := []table.Column{
 		{Title: "ID", Width: 36},
-		{Title: "Slug", Width: 20},
+		{Title: "Name", Width: 20},
 		{Title: "Consumers", Width: 10},
 		{Title: "Messages", Width: 10},
 		{Title: "Storage Size", Width: 15},
@@ -111,7 +111,7 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 	for _, s := range streams {
 		rows = append(rows, table.Row{
 			s.ID,
-			s.Slug,
+			s.Name,
 			fmt.Sprintf("%d", s.Stats.ConsumerCount),
 			fmt.Sprintf("%d", s.Stats.MessageCount),
 			formatBytes(s.Stats.StorageSize),
@@ -184,7 +184,7 @@ func displayStreamInfo(config *Config) error {
 	}
 
 	t := NewTable(columns, rows, PrintableTable)
-	fmt.Printf("Information for Stream %s created %s\n\n", stream.Slug, stream.CreatedAt.Format(time.RFC3339))
+	fmt.Printf("Information for Stream %s created %s\n\n", stream.Name, stream.CreatedAt.Format(time.RFC3339))
 	return t.Render()
 }
 
@@ -194,19 +194,19 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 		return err
 	}
 
-	// Prompt for slug if not provided
-	if s.Slug == "" {
+	// Prompt for name if not provided
+	if s.Name == "" {
 		prompt := &survey.Input{
-			Message: "Enter stream slug:",
+			Message: "Enter stream name:",
 		}
-		err = survey.AskOne(prompt, &s.Slug)
+		err = survey.AskOne(prompt, &s.Name)
 		if err != nil {
 			return err
 		}
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildAddStream(ctx, s.Slug)
+		req, err := api.BuildAddStream(ctx, s.Name)
 		if err != nil {
 			return err
 		}
@@ -221,7 +221,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	}
 
 	// Add stream
-	stream, err := api.AddStream(ctx, s.Slug)
+	stream, err := api.AddStream(ctx, s.Name)
 	if err != nil {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
@@ -232,7 +232,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	}
 
 	rows := []table.Row{
-		{"Slug", stream.Slug},
+		{"Name", stream.Name},
 		{"Index", fmt.Sprintf("%d", stream.Idx)},
 		{"Consumers", fmt.Sprintf("%d", stream.Stats.ConsumerCount)},
 		{"Messages", fmt.Sprintf("%d", stream.Stats.MessageCount)},

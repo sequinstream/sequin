@@ -144,4 +144,4 @@ Consumers are designed so that:
 2. Messages are not lost; if a consumer doesn't ack a message, it's redelivered
 
 > [!TIP]
-> You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer-slug> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.
+> You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer-name> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.

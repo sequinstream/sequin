@@ -21,7 +21,7 @@ type StreamsResponse struct {
 type Stream struct {
 	ID    string `json:"id"`
 	Idx   int    `json:"idx"`
-	Slug  string `json:"slug"`
+	Name  string `json:"name"`
 	Stats struct {
 		ConsumerCount int `json:"consumer_count"`
 		MessageCount  int `json:"message_count"`
@@ -120,13 +120,13 @@ func FetchStreamInfo(ctx *context.Context, streamID string) (*Stream, error) {
 }
 
 // BuildAddStream builds the HTTP request for adding a new stream
-func BuildAddStream(ctx *context.Context, slug string) (*http.Request, error) {
+func BuildAddStream(ctx *context.Context, name string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	requestBody := map[string]string{"slug": slug}
+	requestBody := map[string]string{"name": name}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
@@ -141,9 +141,9 @@ func BuildAddStream(ctx *context.Context, slug string) (*http.Request, error) {
 	return req, nil
 }
 
-// AddStream adds a new stream with the given slug
-func AddStream(ctx *context.Context, slug string) (*Stream, error) {
-	req, err := BuildAddStream(ctx, slug)
+// AddStream adds a new stream with the given name
+func AddStream(ctx *context.Context, name string) (*Stream, error) {
+	req, err := BuildAddStream(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("error building add stream request: %w", err)
 	}
@@ -282,13 +282,13 @@ type MessagesResponse struct {
 }
 
 // BuildListStreamMessages builds the HTTP request for listing stream messages
-func BuildListStreamMessages(ctx *context.Context, streamIDOrSlug string, limit int, sort string, subjectPattern string) (*http.Request, error) {
+func BuildListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/api/streams/%s/messages?limit=%d&sort=%s", serverURL, streamIDOrSlug, limit, sort)
+	url := fmt.Sprintf("%s/api/streams/%s/messages?limit=%d&sort=%s", serverURL, streamIDOrName, limit, sort)
 	if subjectPattern != "" {
 		url += "&subject_pattern=" + subjectPattern
 	}
@@ -302,8 +302,8 @@ func BuildListStreamMessages(ctx *context.Context, streamIDOrSlug string, limit 
 }
 
 // ListStreamMessages retrieves messages from a stream
-func ListStreamMessages(ctx *context.Context, streamIDOrSlug string, limit int, sort string, subjectPattern string) ([]Message, error) {
-	req, err := BuildListStreamMessages(ctx, streamIDOrSlug, limit, sort, subjectPattern)
+func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]Message, error) {
+	req, err := BuildListStreamMessages(ctx, streamIDOrName, limit, sort, subjectPattern)
 	if err != nil {
 		return nil, fmt.Errorf("error building list stream messages request: %w", err)
 	}

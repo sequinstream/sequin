@@ -28,8 +28,8 @@ defmodule Sequin.Factory.SourcesFactory do
       %PostgresReplication{
         backfill_completed_at: backfill_completed_at,
         postgres_database_id: Factory.uuid(),
-        publication_name: "pub_#{Factory.slug()}",
-        slot_name: "slot_#{Factory.slug()}",
+        publication_name: "pub_#{Factory.name()}",
+        slot_name: "slot_#{Factory.name()}",
         status: status,
         stream_id: Factory.uuid()
       },

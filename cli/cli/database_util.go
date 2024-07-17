@@ -31,7 +31,7 @@ func initialDatabaseModel(ctx *context.Context) formModel {
 		"Port:",
 		"Username:",
 		"Password:",
-		"Slug:",
+		"Name:",
 	}
 	for i := range inputs {
 		t := textinput.New()
@@ -163,7 +163,7 @@ func (m *formModel) submit() tea.Msg {
 		Hostname: getValueOrDefault(m.inputs[1].Value(), "localhost"),
 		Username: getValueOrDefault(m.inputs[3].Value(), "postgres"),
 		Password: m.inputs[4].Value(),
-		Slug:     m.inputs[5].Value(),
+		Name:     m.inputs[5].Value(),
 	}
 
 	port, err := strconv.Atoi(getValueOrDefault(m.inputs[2].Value(), "5432"))
@@ -228,7 +228,7 @@ func promptForDatabase(ctx *context.Context) (string, error) {
 	databaseOptions := make([]string, len(databases)+1)
 	databaseOptions[0] = "Connect new database"
 	for i, db := range databases {
-		databaseOptions[i+1] = fmt.Sprintf("%s (ID: %s)", db.Slug, db.ID)
+		databaseOptions[i+1] = fmt.Sprintf("%s (ID: %s)", db.Name, db.ID)
 	}
 
 	var choice string

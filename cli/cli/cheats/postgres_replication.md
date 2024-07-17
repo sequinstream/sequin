@@ -5,7 +5,7 @@ sequin databases ls
 sequin sources postgres add
 
 // Add a new postgres replication with an existing database
-sequin sources postgres add --database-slug <database_slug>
+sequin sources postgres add --database-name <database_name>
 
 // List postgres replications
 sequin sources postgres ls

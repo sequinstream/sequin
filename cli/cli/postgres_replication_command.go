@@ -25,7 +25,7 @@ type postgresReplicationConfig struct {
 	Password        string
 	SlotName        string
 	PublicationName string
-	Slug            string
+	Name            string
 	StickInfo       bool
 }
 
@@ -47,7 +47,7 @@ func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
 	add.Flag("password", "Database password").StringVar(&c.Password)
 	add.Flag("slot-name", "Replication slot name").StringVar(&c.SlotName)
 	add.Flag("publication-name", "Publication name").StringVar(&c.PublicationName)
-	add.Flag("slug", "Database slug").StringVar(&c.Slug)
+	add.Flag("name", "Database name").StringVar(&c.Name)
 
 	postgres.Command("ls", "List postgres replications").Action(func(c *fisk.ParseContext) error {
 		return postgresReplicationList(c, config)

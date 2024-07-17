@@ -69,7 +69,7 @@ func (c *Consumer) listView(width, height int) string {
 		return "\nNo consumers found."
 	}
 
-	slugWidth := c.calculateSlugWidth(width)
+	nameWidth := c.calculateNameWidth(width)
 	filterWidth := 25
 	maxAckPendingWidth := 15
 	maxDeliverWidth := 15
@@ -88,7 +88,7 @@ func (c *Consumer) listView(width, height int) string {
 
 	// Format the table header
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-		slugWidth, "SLUG",
+		nameWidth, "SLUG",
 		filterWidth, "FILTER PATTERN",
 		maxAckPendingWidth, "MAX ACK PENDING",
 		maxDeliverWidth, "MAX DELIVER",
@@ -98,7 +98,7 @@ func (c *Consumer) listView(width, height int) string {
 	output += tableHeaderStyle.Render(tableHeader) + "\n"
 
 	for i, consumer := range c.consumers {
-		line := formatConsumerLine(consumer, slugWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
+		line := formatConsumerLine(consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
 		style := lipgloss.NewStyle()
 		showDetails := ""
 		if i == c.cursor {
@@ -113,26 +113,26 @@ func (c *Consumer) listView(width, height int) string {
 	return output
 }
 
-func (c *Consumer) calculateSlugWidth(totalWidth int) int {
-	maxSlugWidth := 3 // Minimum width for "Slug" header
+func (c *Consumer) calculateNameWidth(totalWidth int) int {
+	maxNameWidth := 3 // Minimum width for "Name" header
 	for _, consumer := range c.consumers {
-		slugWidth := len(consumer.Slug)
-		if slugWidth > maxSlugWidth {
-			maxSlugWidth = slugWidth
+		nameWidth := len(consumer.Name)
+		if nameWidth > maxNameWidth {
+			maxNameWidth = nameWidth
 		}
 	}
-	return min(min(maxSlugWidth, totalWidth/4), 255)
+	return min(min(maxNameWidth, totalWidth/4), 255)
 }
 
-func formatConsumerLine(consumer api.Consumer, slugWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
-	slug := truncateString(consumer.Slug, slugWidth)
+func formatConsumerLine(consumer api.Consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
+	name := truncateString(consumer.Name, nameWidth)
 	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
 	maxAckPending := fmt.Sprintf("%d", consumer.MaxAckPending)
 	maxDeliver := fmt.Sprintf("%d", consumer.MaxDeliver)
 	created := consumer.CreatedAt.Format(time.RFC3339)
 
 	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
-		slugWidth, slug,
+		nameWidth, name,
 		filterWidth, filter,
 		maxAckPendingWidth, maxAckPending,
 		maxDeliverWidth, maxDeliver,
@@ -157,7 +157,7 @@ func formatConsumerDetail(consumer api.Consumer) string {
 	output := lipgloss.NewStyle().Bold(true).Render("CONSUMER DETAIL")
 	output += "\n\n"
 	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
-	output += fmt.Sprintf("Slug:            %s\n", consumer.Slug)
+	output += fmt.Sprintf("Name:            %s\n", consumer.Name)
 	output += fmt.Sprintf("Filter:          %s\n", consumer.FilterKeyPattern)
 	output += fmt.Sprintf("Max Ack Pending: %d\n", consumer.MaxAckPending)
 	output += fmt.Sprintf("Max Deliver:     %d\n", consumer.MaxDeliver)

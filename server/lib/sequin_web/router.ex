@@ -26,8 +26,8 @@ defmodule SequinWeb.Router do
   scope "/api", SequinWeb do
     pipe_through :api
 
-    resources "/streams", StreamController, except: [:new, :edit], param: "id_or_slug"
-    resources "/streams/:stream_id_or_slug/consumers", ConsumerController, except: [:new, :edit], param: "id_or_slug"
+    resources "/streams", StreamController, except: [:new, :edit], param: "id_or_name"
+    resources "/streams/:stream_id_or_name/consumers", ConsumerController, except: [:new, :edit], param: "id_or_name"
     resources "/databases", DatabaseController, except: [:new, :edit]
     resources "/api_keys", ApiKeyController, only: [:index, :create, :delete]
 
@@ -39,13 +39,13 @@ defmodule SequinWeb.Router do
     get "/databases/:id/schemas", DatabaseController, :list_schemas
     get "/databases/:id/schemas/:schema/tables", DatabaseController, :list_tables
     post "/databases/test_connection", DatabaseController, :test_connection_params
-    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/next", PullController, :next
-    get "/streams/:stream_id_or_slug/consumers/:id_or_slug/next", PullController, :next
-    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/ack", PullController, :ack
-    post "/streams/:stream_id_or_slug/consumers/:id_or_slug/nack", PullController, :nack
-    post "/streams/:stream_id_or_slug/messages", MessageController, :publish
-    get "/streams/:stream_id_or_slug/messages", MessageController, :stream_list
-    get "/streams/:stream_id_or_slug/consumers/:consumer_id_or_slug/messages", MessageController, :consumer_list
+    post "/streams/:stream_id_or_name/consumers/:id_or_name/next", PullController, :next
+    get "/streams/:stream_id_or_name/consumers/:id_or_name/next", PullController, :next
+    post "/streams/:stream_id_or_name/consumers/:id_or_name/ack", PullController, :ack
+    post "/streams/:stream_id_or_name/consumers/:id_or_name/nack", PullController, :nack
+    post "/streams/:stream_id_or_name/messages", MessageController, :publish
+    get "/streams/:stream_id_or_name/messages", MessageController, :stream_list
+    get "/streams/:stream_id_or_name/consumers/:consumer_id_or_name/messages", MessageController, :consumer_list
   end
 
   # Other scopes may use custom stacks.

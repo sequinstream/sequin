@@ -20,7 +20,7 @@ defmodule Sequin.Databases.PostgresDatabase do
              :port,
              :queue_interval,
              :queue_target,
-             :slug,
+             :name,
              :ssl,
              :username,
              :password
@@ -32,7 +32,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :port, :integer
     field :queue_interval, :integer, default: 1000
     field :queue_target, :integer, default: 50
-    field :slug, :string
+    field :name, :string
     field :ssl, :boolean, default: false
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
@@ -51,12 +51,12 @@ defmodule Sequin.Databases.PostgresDatabase do
       :port,
       :queue_interval,
       :queue_target,
-      :slug,
+      :name,
       :ssl,
       :username,
       :password
     ])
-    |> validate_required([:database, :hostname, :port, :username, :password, :slug])
+    |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
   end
 

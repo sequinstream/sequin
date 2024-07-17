@@ -4,7 +4,7 @@ sequin consumer ls
 
 # To add a new consumer
 
-sequin consumer add [slug]
+sequin consumer add [name]
 
 # To show consumer information
 

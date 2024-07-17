@@ -364,7 +364,7 @@ sequin consumer peek [<flags>] [<stream>] [<consumer>]
 Or via HTTP:
 
 ```bash
-curl -X 'GET' 'https://<sequin-base-url>/api/streams/<stream>/consumers/<consumer_slug>/messages?limit=10&sort=seq_desc&visible=true'
+curl -X 'GET' 'https://<sequin-base-url>/api/streams/<stream>/consumers/<consumer_name>/messages?limit=10&sort=seq_desc&visible=true'
 ```
 
 You can also view consumer states in real-time with [observe](#observe).

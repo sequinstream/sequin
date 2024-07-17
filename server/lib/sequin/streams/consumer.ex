@@ -21,14 +21,14 @@ defmodule Sequin.Streams.Consumer do
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
-             :slug,
+             :name,
              :stream_id,
              :updated_at,
              :http_endpoint_id,
              :status
            ]}
   typed_schema "consumers" do
-    field :slug, :string
+    field :name, :string
     field :backfill_completed_at, :utc_datetime_usec
     field :ack_wait_ms, :integer, default: 30_000
     field :max_ack_pending, :integer, default: 10_000
@@ -53,14 +53,14 @@ defmodule Sequin.Streams.Consumer do
       :max_ack_pending,
       :max_deliver,
       :max_waiting,
-      :slug,
+      :name,
       :filter_subject_pattern,
       :backfill_completed_at,
       :kind,
       :http_endpoint_id,
       :status
     ])
-    |> validate_required([:stream_id, :slug, :filter_subject_pattern, :kind, :status])
+    |> validate_required([:stream_id, :name, :filter_subject_pattern, :kind, :status])
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
@@ -98,15 +98,15 @@ defmodule Sequin.Streams.Consumer do
     from([consumer: c] in query, where: c.id == ^id)
   end
 
-  def where_slug(query \\ base_query(), slug) do
-    from([consumer: c] in query, where: c.slug == ^slug)
+  def where_name(query \\ base_query(), name) do
+    from([consumer: c] in query, where: c.name == ^name)
   end
 
-  def where_id_or_slug(query \\ base_query(), id_or_slug) do
-    if Sequin.String.is_uuid?(id_or_slug) do
-      where_id(query, id_or_slug)
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
     else
-      where_slug(query, id_or_slug)
+      where_name(query, id_or_name)
     end
   end
 

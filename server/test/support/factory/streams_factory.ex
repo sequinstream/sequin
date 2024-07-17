@@ -142,7 +142,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Consumer{
-        slug: generate_slug(),
+        name: generate_name(),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
@@ -191,7 +191,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        slug: generate_slug(),
+        name: generate_name(),
         account_id: Factory.uuid()
       },
       attrs
@@ -253,7 +253,7 @@ defmodule Sequin.Factory.StreamsFactory do
     Enum.map_join(1..parts, ".", fn _ -> Faker.Lorem.word() end)
   end
 
-  defp generate_slug do
+  defp generate_name do
     "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
   end
 end

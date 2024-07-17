@@ -9,9 +9,9 @@ defmodule Sequin.Streams.Stream do
   alias Sequin.Streams
   alias Sequin.Streams.Stream
 
-  @derive {Jason.Encoder, only: [:id, :slug, :account_id, :stats, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :account_id, :stats, :inserted_at, :updated_at]}
   typed_schema "streams" do
-    field :slug, :string
+    field :name, :string
 
     field :stats, :map, virtual: true
 
@@ -22,19 +22,19 @@ defmodule Sequin.Streams.Stream do
 
   def changeset(%Stream{} = stream, attrs) do
     stream
-    |> cast(attrs, [:slug])
-    |> validate_required([:slug])
-    |> validate_slug()
-    |> unique_constraint([:account_id, :slug], error_key: :slug)
+    |> cast(attrs, [:name])
+    |> validate_required([:name])
+    |> validate_name()
+    |> unique_constraint([:account_id, :name], error_key: :name)
   end
 
-  defp validate_slug(%Ecto.Changeset{valid?: false} = changeset), do: changeset
+  defp validate_name(%Ecto.Changeset{valid?: false} = changeset), do: changeset
 
-  defp validate_slug(%Ecto.Changeset{valid?: true, changes: %{slug: slug}} = changeset) do
-    if String.match?(slug, ~r/^[a-zA-Z0-9_]+$/) do
+  defp validate_name(%Ecto.Changeset{valid?: true, changes: %{name: name}} = changeset) do
+    if String.match?(name, ~r/^[a-zA-Z0-9_]+$/) do
       changeset
     else
-      add_error(changeset, :slug, "must contain only alphanumeric characters or underscores")
+      add_error(changeset, :name, "must contain only alphanumeric characters or underscores")
     end
   end
 
@@ -42,15 +42,15 @@ defmodule Sequin.Streams.Stream do
     from(s in query, where: s.id == ^id)
   end
 
-  def where_slug(query \\ base_query(), slug) do
-    from(s in query, where: s.slug == ^slug)
+  def where_name(query \\ base_query(), name) do
+    from(s in query, where: s.name == ^name)
   end
 
-  def where_id_or_slug(query \\ base_query(), id_or_slug) do
-    if Sequin.String.is_uuid?(id_or_slug) do
-      where_id(query, id_or_slug)
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
     else
-      where_slug(query, id_or_slug)
+      where_name(query, id_or_name)
     end
   end
 

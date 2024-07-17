@@ -20,7 +20,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   end
 
   def context(%PostgresReplication{} = pr) do
-    %Context{stream_id: pr.stream_id, subject_prefix: pr.postgres_database.slug}
+    %Context{stream_id: pr.stream_id, subject_prefix: pr.postgres_database.name}
   end
 
   @impl ReplicationMessageHandler

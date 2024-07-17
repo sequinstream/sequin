@@ -38,7 +38,7 @@ defmodule Sequin.Streams do
   def maybe_seed do
     if Sequin.Repo.all(Account) == [] do
       account = Sequin.Repo.insert!(%Account{})
-      {:ok, _stream} = create_stream_for_account_with_lifecycle(account.id, %{slug: "default"})
+      {:ok, _stream} = create_stream_for_account_with_lifecycle(account.id, %{name: "default"})
 
       Logger.info("Created default account and stream")
     end
@@ -50,8 +50,8 @@ defmodule Sequin.Streams do
     account_id |> Stream.where_account_id() |> Repo.all()
   end
 
-  def get_stream_for_account(account_id, id_or_slug) do
-    res = account_id |> Stream.where_account_id() |> Stream.where_id_or_slug(id_or_slug) |> Repo.one()
+  def get_stream_for_account(account_id, id_or_name) do
+    res = account_id |> Stream.where_account_id() |> Stream.where_id_or_name(id_or_name) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :stream)}
@@ -95,7 +95,7 @@ defmodule Sequin.Streams do
 
   defp create_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    CREATE TABLE #{stream_schema()}.messages_#{stream.slug} PARTITION OF #{stream_schema()}.messages FOR VALUES IN ('#{stream.id}');
+    CREATE TABLE #{stream_schema()}.messages_#{stream.name} PARTITION OF #{stream_schema()}.messages FOR VALUES IN ('#{stream.id}');
     """)
   end
 
@@ -105,7 +105,7 @@ defmodule Sequin.Streams do
 
   defp drop_records_partition(%Stream{} = stream) do
     Repo.query!("""
-    DROP TABLE IF EXISTS #{stream_schema()}.messages_#{stream.slug};
+    DROP TABLE IF EXISTS #{stream_schema()}.messages_#{stream.name};
     """)
   end
 
@@ -162,8 +162,8 @@ defmodule Sequin.Streams do
 
   defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
 
-  def get_consumer_for_account(account_id, id_or_slug) do
-    res = account_id |> Consumer.where_account_id() |> Consumer.where_id_or_slug(id_or_slug) |> Repo.one()
+  def get_consumer_for_account(account_id, id_or_name) do
+    res = account_id |> Consumer.where_account_id() |> Consumer.where_id_or_name(id_or_name) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -171,8 +171,8 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_consumer_for_stream(stream_id, id_or_slug) do
-    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id_or_slug(id_or_slug) |> Repo.one()
+  def get_consumer_for_stream(stream_id, id_or_name) do
+    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id_or_name(id_or_name) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -261,7 +261,7 @@ defmodule Sequin.Streams do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.stream.slug}_#{consumer.slug} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -274,7 +274,7 @@ defmodule Sequin.Streams do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.stream.slug}_#{consumer.slug};
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name};
     """
     |> Repo.query()
     |> case do
@@ -383,10 +383,10 @@ defmodule Sequin.Streams do
   end
 
   def approximate_storage_size_for_stream(stream_id) do
-    %Stream{slug: slug} = Repo.get!(Stream, stream_id)
+    %Stream{name: name} = Repo.get!(Stream, stream_id)
 
     query = """
-    SELECT pg_total_relation_size('#{stream_schema()}.messages_#{slug}') AS size
+    SELECT pg_total_relation_size('#{stream_schema()}.messages_#{name}') AS size
     """
 
     case Repo.query(query) do

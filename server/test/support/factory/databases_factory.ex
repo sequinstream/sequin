@@ -19,7 +19,7 @@ defmodule Sequin.Factory.DatabasesFactory do
         port: Factory.port(),
         queue_interval: Factory.integer(),
         queue_target: Factory.integer(),
-        slug: Factory.slug(),
+        name: Factory.name(),
         ssl: Factory.boolean(),
         username: Factory.username(),
         password: Factory.password(),

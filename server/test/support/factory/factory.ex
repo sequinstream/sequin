@@ -48,7 +48,7 @@ defmodule Sequin.Factory do
 
   def port, do: Faker.random_between(5000, 9999)
   def postgres_object, do: Faker.Internet.domain_word()
-  def slug, do: to_string(Faker.Lorem.characters(10))
+  def name, do: to_string(Faker.Lorem.characters(10))
   def timestamp, do: Faker.DateTime.backward(365)
   def timestamp_between(min, max), do: Faker.DateTime.between(min, max)
   def timestamp_future, do: Faker.DateTime.forward(365)

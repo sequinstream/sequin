@@ -7,12 +7,12 @@ defmodule SequinWeb.PullController do
 
   action_fallback ApiFallbackPlug
 
-  def next(conn, %{"id_or_slug" => id_or_slug} = params) do
-    Logger.metadata(consumer_id: id_or_slug)
+  def next(conn, %{"id_or_name" => id_or_name} = params) do
+    Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
     # TODO: Cache this
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_slug),
+    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
          {:ok, batch_size} <- parse_batch_size(params),
          {:ok, _wait_for} <- parse_wait_for(params),
          {:ok, messages} <- Streams.next_for_consumer(consumer, batch_size: batch_size) do
@@ -21,22 +21,22 @@ defmodule SequinWeb.PullController do
     end
   end
 
-  def ack(conn, %{"id_or_slug" => id_or_slug} = params) do
-    Logger.metadata(consumer_id: id_or_slug)
+  def ack(conn, %{"id_or_name" => id_or_name} = params) do
+    Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_slug),
+    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
          {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.ack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")
     end
   end
 
-  def nack(conn, %{"id_or_slug" => id_or_slug} = params) do
-    Logger.metadata(consumer_id: id_or_slug)
+  def nack(conn, %{"id_or_name" => id_or_name} = params) do
+    Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_slug),
+    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
          {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.nack_messages(consumer, message_ids) do
       send_resp(conn, 204, "")

@@ -33,7 +33,7 @@ defmodule Sequin.Error do
     def message(%__MODULE__{} = error) do
       case error.params do
         nil ->
-          "Not found: No `#{render_entity(error.entity)}` found matching the provided ID or slug"
+          "Not found: No `#{render_entity(error.entity)}` found matching the provided ID or name"
 
         params ->
           "Not found: No `#{render_entity(error.entity)}` found matching params: `#{inspect(params, pretty: true)}`"

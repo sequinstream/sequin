@@ -7,30 +7,30 @@ defmodule SequinWeb.MessageController do
 
   action_fallback ApiFallbackPlug
 
-  def publish(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
+  def publish(conn, %{"stream_id_or_name" => stream_id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
          {:ok, messages} <- parse_messages(params),
          {:ok, count} <- Streams.upsert_messages(stream.id, messages) do
       render(conn, "publish.json", count: count)
     end
   end
 
-  def stream_list(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
+  def stream_list(conn, %{"stream_id_or_name" => stream_id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
          {:ok, list_params} <- parse_stream_list_params(params) do
       messages = Streams.list_messages_for_stream(stream.id, list_params)
       render(conn, "stream_list.json", messages: messages)
     end
   end
 
-  def stream_count(conn, %{"stream_id_or_slug" => stream_id_or_slug} = params) do
+  def stream_count(conn, %{"stream_id_or_name" => stream_id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
          {:ok, count_params} <- parse_stream_count_params(params) do
       count = Streams.count_messages_for_stream(stream.id, count_params)
       render(conn, "stream_count.json", count: count)
@@ -39,12 +39,12 @@ defmodule SequinWeb.MessageController do
 
   def consumer_list(
         conn,
-        %{"stream_id_or_slug" => stream_id_or_slug, "consumer_id_or_slug" => consumer_id_or_slug} = params
+        %{"stream_id_or_name" => stream_id_or_name, "consumer_id_or_name" => consumer_id_or_name} = params
       ) do
     account_id = conn.assigns.account_id
 
-    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, consumer_id_or_slug),
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
+         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, consumer_id_or_name),
          {:ok, list_params} <- parse_consumer_list_params(params) do
       consumer_messages = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, list_params)
       render(conn, "consumer_list.json", consumer_messages: consumer_messages)

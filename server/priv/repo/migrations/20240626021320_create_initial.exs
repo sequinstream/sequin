@@ -21,14 +21,14 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
         null: false
 
-      add :slug, :text, null: false
+      add :name, :text, null: false
 
       timestamps()
     end
 
     # We will need to alter this unique index to account for the database in which the stream lives
     # This should also probably include account_id
-    create unique_index(:streams, [:account_id, :slug], prefix: @config_schema)
+    create unique_index(:streams, [:account_id, :name], prefix: @config_schema)
     # Required for composite foreign keys pointing to this table
     create unique_index(:streams, [:id, :account_id], prefix: @config_schema)
 
@@ -272,7 +272,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           references(:http_endpoints, with: [account_id: :account_id], prefix: @config_schema)
 
       add :kind, :string, null: false, default: "pull"
-      add :slug, :text, null: false
+      add :name, :text, null: false
       add :filter_subject_pattern, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
 
@@ -292,7 +292,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
            )
 
     create index(:consumers, [:stream_id], prefix: @config_schema)
-    create unique_index(:consumers, [:stream_id, :slug], prefix: @config_schema)
+    create unique_index(:consumers, [:stream_id, :name], prefix: @config_schema)
 
     create table(:consumer_messages,
              prefix: @stream_schema,
@@ -341,7 +341,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :port, :integer, null: false
       add :queue_interval, :integer, default: 50, null: false
       add :queue_target, :integer, default: 100, null: false
-      add :slug, :string, null: false
+      add :name, :string, null: false
       add :ssl, :boolean, default: false, null: false
       add :username, :string, null: false
 

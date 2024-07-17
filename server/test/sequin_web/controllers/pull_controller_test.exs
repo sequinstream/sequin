@@ -60,11 +60,11 @@ defmodule SequinWeb.PullControllerTest do
       assert message["message"]["subject"] == available_message.subject
     end
 
-    test "returns an available message by slug", %{conn: conn, consumer: consumer, stream: stream} do
+    test "returns an available message by name", %{conn: conn, consumer: consumer, stream: stream} do
       db_message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: db_message, state: :available})
 
-      conn = get(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/next")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["message"]["subject"] == db_message.subject
     end
@@ -97,11 +97,11 @@ defmodule SequinWeb.PullControllerTest do
       assert Streams.all_consumer_messages() == []
     end
 
-    test "successfully acks a message by consumer slug", %{conn: conn, consumer: consumer, stream: stream} do
+    test "successfully acks a message by consumer name", %{conn: conn, consumer: consumer, stream: stream} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/ack", ack_ids: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/ack", ack_ids: [cm.ack_id])
       assert response(res_conn, 204)
     end
 
@@ -148,11 +148,11 @@ defmodule SequinWeb.PullControllerTest do
       assert nacked_message["message"]["subject"] == message.subject
     end
 
-    test "successfully nacks a message by consumer slug", %{conn: conn, consumer: consumer, stream: stream} do
+    test "successfully nacks a message by consumer name", %{conn: conn, consumer: consumer, stream: stream} do
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
-      res_conn = post(conn, ~p"/api/streams/#{stream.slug}/consumers/#{consumer.slug}/nack", ack_ids: [cm.ack_id])
+      res_conn = post(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/nack", ack_ids: [cm.ack_id])
       assert response(res_conn, 204)
     end
 

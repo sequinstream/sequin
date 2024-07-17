@@ -18,7 +18,7 @@ type PostgresDatabase struct {
 	Port          int    `json:"port"`
 	QueueInterval int    `json:"queue_interval"`
 	QueueTarget   int    `json:"queue_target"`
-	Slug          string `json:"slug"`
+	Name          string `json:"name"`
 	SSL           bool   `json:"ssl"`
 	Username      string `json:"username"`
 	Password      string `json:"password,omitempty"`
@@ -31,7 +31,7 @@ type PostgresDatabaseCreate struct {
 	Port          int    `json:"port"`
 	QueueInterval int    `json:"queue_interval,omitempty"`
 	QueueTarget   int    `json:"queue_target,omitempty"`
-	Slug          string `json:"slug"`
+	Name          string `json:"name"`
 	SSL           bool   `json:"ssl,omitempty"`
 	Username      string `json:"username"`
 	Password      string `json:"password"`

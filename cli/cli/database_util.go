@@ -226,14 +226,14 @@ func promptForDatabase(ctx *context.Context) (string, error) {
 	}
 
 	databaseOptions := make([]string, len(databases)+1)
-	databaseOptions[0] = "Add new database"
+	databaseOptions[0] = "Connect new database"
 	for i, db := range databases {
 		databaseOptions[i+1] = fmt.Sprintf("%s (ID: %s)", db.Slug, db.ID)
 	}
 
 	var choice string
 	err = survey.AskOne(&survey.Select{
-		Message: "Choose a database or add a new one:",
+		Message: "Choose a database or connect a new one:",
 		Options: databaseOptions,
 		Filter: func(filterValue string, optValue string, index int) bool {
 			return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
@@ -243,7 +243,7 @@ func promptForDatabase(ctx *context.Context) (string, error) {
 		return "", fmt.Errorf("failed to get user input: %w", err)
 	}
 
-	if choice == "Add new database" {
+	if choice == "Connect new database" {
 		newDatabase, err := promptForNewDatabase(ctx)
 		if err != nil {
 			return "", err

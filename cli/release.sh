@@ -9,7 +9,7 @@ get_latest_tag() {
 # Function to create a GitHub release
 create_github_release() {
     local tag=$1
-    local repo="sequin-io/sequin-cli"
+    local repo="sequinstream/sequin"
     
     # Create a release using GitHub CLI
     gh release create "$tag" \
@@ -20,14 +20,14 @@ create_github_release() {
 }
 
 # Set the working directory to sequin-cli
-cd /Users/carterpedersen/Sequin/sequin-cli || exit
+cd /Users/carterpedersen/Sequin/sequin/cli || exit
 
 # Get the latest tag
 latest_tag=$(get_latest_tag)
 echo "Current version: $latest_tag"
 
 # Prompt for the new version
-read -p "Enter the new version (e.g., v0.1.3): " new_version
+read -p "Enter the new version: " new_version
 
 # Create and push the new tag
 git tag "$new_version"

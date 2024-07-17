@@ -30,11 +30,11 @@ func AddMessageCommands(app *fisk.Application, config *Config) {
 
 	m := &MessageConfig{}
 
-	upsertCmd := message.Command("upsert", "Upsert a message").Action(func(ctx *fisk.ParseContext) error {
-		return messageUpsert(ctx, config, m)
+	sendCmd := message.Command("send", "Send a message").Action(func(ctx *fisk.ParseContext) error {
+		return messageSend(ctx, config, m)
 	})
-	upsertCmd.Arg("key", "Key of the message").Required().StringVar(&m.Key)
-	upsertCmd.Arg("data", "Data payload of the message").Required().StringVar(&m.Data)
+	sendCmd.Arg("key", "Key of the message").Required().StringVar(&m.Key)
+	sendCmd.Arg("data", "Data payload of the message").Required().StringVar(&m.Data)
 
 	message.Command("info", "Show message info").Action(func(ctx *fisk.ParseContext) error {
 		return messageInfo(ctx, config)
@@ -49,7 +49,7 @@ func AddMessageCommands(app *fisk.Application, config *Config) {
 	listCmd.Flag("table", "Display messages in a table format").BoolVar(&m.Table)
 }
 
-func messageUpsert(_ *fisk.ParseContext, config *Config, m *MessageConfig) error {
+func messageSend(_ *fisk.ParseContext, config *Config, m *MessageConfig) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -76,10 +76,10 @@ func messageUpsert(_ *fisk.ParseContext, config *Config, m *MessageConfig) error
 
 	err = api.PublishMessage(ctx, streamID, m.Key, m.Data)
 	if err != nil {
-		return fmt.Errorf("failed to upsert message: %w", err)
+		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	fmt.Printf("Message upserted with key '%s'\n", m.Key)
+	fmt.Printf("Message sent with key '%s'\n", m.Key)
 	return nil
 }
 

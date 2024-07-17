@@ -1,6 +1,6 @@
-# To upsert a message
+# To send a message
 
-sequin message upsert [key] [data]
+sequin message send [key] [data]
 
 # To show message info
 

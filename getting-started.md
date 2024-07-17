@@ -34,30 +34,30 @@ cd sequin/installation
 docker compose up -d
 ```
 
-## Upsert messages
+## Send messages
 
 **Messages** in Sequin consist of a **key** and a **data** payload. Messages are unique by key.
 
 Keys in Sequin allow for powerful message routing and filtering. For example, you can organize messages from different sources using a hierarchical key structure.
 
-To get a feel for this, let’s simulate an order for an eCommerce use case. Upsert your first message:
+To get a feel for this, let’s simulate an order for an eCommerce use case. Send your first message:
 
 ```
-sequin message upsert orders.us.cus_a.order_1 '{"product": "Shoes"}'
+sequin message send orders.us.cus_a.order_1 '{"product": "Shoes"}'
 ```
 
 All CLI commands use HTTP to communicate with the Sequin backend. You can see what the requests look like by passing the `--as-curl` flag:
 
 ```
-sequin message upsert orders.us.cus_a.order_1 '{"product": "Shoes", "status": "new"}' --as-curl
+sequin message send orders.us.cus_a.order_1 '{"product": "Shoes", "status": "new"}' --as-curl
 ```
 
-Upsert more messages to Sequin:
+Send more messages to Sequin:
 
 ```
-sequin message upsert orders.eu.cus_b.order_2 '{"product": "Pants"}'
-sequin message upsert orders.us.cus_c.order_3 '{"product": "Shoes"}'
-sequin message upsert orders.us.cus_a.order_4 '{"product": "Shirts"}'
+sequin message send orders.eu.cus_b.order_2 '{"product": "Pants"}'
+sequin message send orders.us.cus_c.order_3 '{"product": "Shoes"}'
+sequin message send orders.us.cus_a.order_4 '{"product": "Shirts"}'
 ```
 
 Now, take a look at how many messages you have in Sequin. Open a second terminal window or split pane so you can **observe your stream** as you enter more Sequin CLI commands:
@@ -74,13 +74,13 @@ orders.*.cus_a.*
 >
 ```
 
-Messages are always upserted. So, when cus_b changes their order:
+By default, Sequin is configured so that messages are always upserted. So, when cus_b changes their order:
 
 ```
-sequin message upsert orders.eu.cus_b.order_2 '{"product": "Socks"}'
+sequin message send orders.eu.cus_b.order_2 '{"product": "Socks"}'
 ```
 
-The message is updated in the stream.
+The message is updated in the stream. (You can change this setting per consumer by setting `one-message-per-key=false`.)
 
 But upserting and listing messages is something we can already do in Postgres. The real power of Sequin comes from consumers.
 

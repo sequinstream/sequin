@@ -9,7 +9,7 @@ Sequin is an open-source message queue (technically a stream) built on Postgres.
 
 If you already use Postgres and need a message queue, simply extend your database with Sequin instead of adding a new system with new operational burden.
 
-Sequin provides an HTTP interface for upserting and consuming messages. It supports both pull-based and push-based (via webhook) consumption patterns.
+Sequin provides an HTTP interface for sending and consuming messages. It supports both pull-based and push-based (via webhook) consumption patterns.
 
 Get a feature-rich system like RabbitMQ via a straightforward HTTP API without adding complexity to your stack.
 
@@ -35,7 +35,7 @@ Sequin offers a persistent message stream with fan-outs, at-least-once delivery,
 
 ### Messages
 
-A **message** in Sequin consists of a `key` and a `data` payload. Because you `upsert` messages into Sequin, there’s only ever one message per key.
+A **message** in Sequin consists of a `key` and a `data` payload. Because you `send` messages into Sequin, there’s only ever one message per key.
 
 ### Key
 

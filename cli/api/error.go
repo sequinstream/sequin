@@ -10,6 +10,7 @@ import (
 type ValidationError struct {
 	Summary          string                 `json:"summary"`
 	ValidationErrors map[string]interface{} `json:"validation_errors"`
+	Code             string                 `json:"code"`
 }
 
 // NewValidationError creates a new ValidationError

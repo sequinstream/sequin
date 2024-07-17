@@ -39,7 +39,8 @@ defmodule SequinWeb.ApiFallbackPlug do
   def call(conn, {:error, %ValidationError{} = error}) do
     response = %{
       summary: error.summary,
-      validation_errors: error.errors
+      validation_errors: error.errors,
+      code: error.code
     }
 
     Logger.metadata(response: response)

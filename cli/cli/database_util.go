@@ -174,7 +174,12 @@ func (m *formModel) submit() tea.Msg {
 
 	newDatabase, err := api.AddPostgresDatabase(m.ctx, &database)
 	if err != nil {
-		return submitMsg{err: err}
+		if validationErr, ok := err.(*api.ValidationError); ok {
+			if validationErr.Code == "econnrefused" && database.Hostname == "localhost" {
+				return submitMsg{err: fmt.Errorf("could not create Postgres database.: %w\n(If you're running Sequin in Docker, try using the host `host.docker.internal` instead of `localhost`.)", err)}
+			}
+		}
+		return submitMsg{err: fmt.Errorf("could not create Postgres database: %w", err)}
 	}
 
 	return submitMsg{database: newDatabase}

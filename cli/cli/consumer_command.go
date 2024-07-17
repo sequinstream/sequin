@@ -84,7 +84,7 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 		return consumerAck(ctx, config, c)
 	})
 	ackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
-	ackCmd.Arg("ack-token", "Ack token of the message to ack").StringVar(&c.AckId)
+	ackCmd.Arg("ack-id", "Ack ID of the message to ack").StringVar(&c.AckId)
 
 	nackCmd := consumer.Command("nack", "Nack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerNack(ctx, config, c)
@@ -445,7 +445,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Message (Ack Token: %s):\n", msg.AckId)
+		fmt.Printf("Message (Ack ID: %s):\n", msg.AckId)
 		fmt.Printf("Key: %s\n", msg.Message.Key)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
@@ -455,7 +455,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)
 			}
-			fmt.Printf("Message acknowledged with token %s\n", msg.AckId)
+			fmt.Printf("Message acknowledged with Ack ID %s\n", msg.AckId)
 		}
 	}
 
@@ -597,7 +597,7 @@ func consumerAck(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		return fmt.Errorf("failed to acknowledge message: %w", err)
 	}
 
-	fmt.Printf("Message acknowledged with token %s\n", c.AckId)
+	fmt.Printf("Message acknowledged with Ack ID %s\n", c.AckId)
 	return nil
 }
 

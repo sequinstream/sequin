@@ -40,11 +40,11 @@ sequin consumer peek [consumer-id] --first 20
 
 # To ack a message
 
-sequin consumer ack [consumer-id] [ack-token]
+sequin consumer ack [consumer-id] [ack-id]
 
 # To nack a message
 
-sequin consumer nack [consumer-id] [ack-token]
+sequin consumer nack [consumer-id] [ack-id]
 
 # To edit a consumer
 

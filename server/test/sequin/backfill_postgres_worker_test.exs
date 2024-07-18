@@ -41,7 +41,13 @@ defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
       database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
 
       postgres_replication =
-        [postgres_database_id: database.id, account_id: account.id, backfill_completed_at: nil, status: :backfilling]
+        [
+          postgres_database_id: database.id,
+          account_id: account.id,
+          backfill_completed_at: nil,
+          status: :backfilling,
+          key_format: :basic
+        ]
         |> SourcesFactory.insert_postgres_replication!()
         |> Repo.preload(:postgres_database)
 

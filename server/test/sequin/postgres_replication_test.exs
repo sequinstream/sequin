@@ -84,7 +84,8 @@ defmodule Sequin.PostgresReplicationTest do
           stream_id: stream.id,
           slot_name: replication_slot(),
           publication_name: @publication,
-          account_id: account_id
+          account_id: stream.account_id,
+          key_format: :basic
         )
 
       # Start replication
@@ -94,7 +95,7 @@ defmodule Sequin.PostgresReplicationTest do
       {:ok, _pid} =
         SourcesRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
-      %{stream: stream, pg_replication: pg_replication}
+      %{stream: stream, pg_replication: pg_replication, source_db: source_db, sup: sup}
     end
 
     test "inserts are replicated to the stream", %{conn: conn, stream: stream} do
@@ -237,6 +238,30 @@ defmodule Sequin.PostgresReplicationTest do
       # Check last_committed_at
       assert pg_replication_with_info.info.last_committed_at != nil
       assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
+    end
+
+    test "replication with 'with_operation' key format", %{
+      conn: conn,
+      stream: stream,
+      pg_replication: pg_replication,
+      sup: sup
+    } do
+      {:ok, pg_replication} = Sources.update_pg_replication(pg_replication, %{key_format: :with_operation})
+
+      # Restart the server
+      SourcesRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
+
+      {:ok, _pid} = SourcesRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+
+      query!(
+        conn,
+        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
+      )
+
+      assert_receive {Replication, :message_handled}, 500
+
+      [message] = Streams.list_messages_for_stream(stream.id)
+      assert message.subject =~ "#{@test_schema}.#{@test_table}.insert"
     end
   end
 

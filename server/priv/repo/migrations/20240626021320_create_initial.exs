@@ -353,14 +353,22 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     # This is for the FKs from postgres_replication to this table
     create unique_index(:postgres_databases, [:id, :account_id], prefix: @config_schema)
 
+    create unique_index(:postgres_databases, [:account_id, :name], prefix: @config_schema)
+
     execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled', 'backfilling');",
             "drop type if exists #{@config_schema}.replication_status"
+
+    execute "CREATE TYPE #{@config_schema}.postgres_replication_key_format AS ENUM ('basic', 'with_operation');"
 
     create table(:postgres_replications, prefix: @config_schema) do
       add :backfill_completed_at, :utc_datetime_usec
       add :publication_name, :string, null: false
       add :slot_name, :string, null: false
       add :status, :"#{@config_schema}.replication_status", null: false, default: "backfilling"
+
+      add :key_format, :"#{@config_schema}.postgres_replication_key_format",
+        null: false,
+        default: "basic"
 
       add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
 

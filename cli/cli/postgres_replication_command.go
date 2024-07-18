@@ -16,6 +16,13 @@ import (
 	"github.com/sequinstream/sequin/cli/context"
 )
 
+type KeyFormat string
+
+const (
+	BasicKeyFormat         KeyFormat = "basic"
+	WithOperationKeyFormat KeyFormat = "with_operation"
+)
+
 type postgresReplicationConfig struct {
 	StreamID             string
 	Database             string
@@ -28,6 +35,7 @@ type postgresReplicationConfig struct {
 	Name                 string
 	StickInfo            bool
 	BackfillExistingRows bool
+	KeyFormat            KeyFormat
 }
 
 func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
@@ -104,6 +112,7 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 		StreamID:             c.StreamID,
 		PostgresDatabaseID:   databaseID,
 		BackfillExistingRows: c.BackfillExistingRows,
+		KeyFormat:            string(c.KeyFormat),
 	}
 
 	newReplication, err := api.AddPostgresReplication(ctx, &replication)
@@ -248,6 +257,28 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 		return err
 	}
 	c.BackfillExistingRows = backfillExistingRows
+
+	// Add this new section for key format selection
+	keyFormatOptions := []string{
+		"[<database>].[<schema>].[<table>].[<row-id>]",
+		"[<database>].[<schema>].[<table>].[<operation>].[<row-id>]",
+	}
+	var selectedKeyFormat string
+	err = survey.AskOne(&survey.Select{
+		Message: "Select a format for keys:",
+		Options: keyFormatOptions,
+		Default: keyFormatOptions[0],
+	}, &selectedKeyFormat)
+	if err != nil {
+		return err
+	}
+
+	// Map the selected option to the corresponding key format
+	if selectedKeyFormat == keyFormatOptions[0] {
+		c.KeyFormat = BasicKeyFormat
+	} else {
+		c.KeyFormat = WithOperationKeyFormat
+	}
 
 	return nil
 }

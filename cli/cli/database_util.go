@@ -21,6 +21,7 @@ type formModel struct {
 	err        error
 	ctx        *context.Context
 	submitted  bool
+	database   *api.PostgresDatabase
 }
 
 func initialDatabaseModel(ctx *context.Context) formModel {
@@ -109,6 +110,7 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.err = nil // Clear any previous errors
+		m.database = msg.database
 		return m, tea.Quit
 	}
 
@@ -142,7 +144,11 @@ func (m formModel) View() string {
 	b.WriteString(button)
 
 	if m.err != nil {
-		b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.err.Error()))
+		if validationErr, ok := m.err.(*api.ValidationError); ok {
+			validationErr.PrintValidationError()
+		} else {
+			b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.err.Error()))
+		}
 	}
 
 	b.WriteString("\n\n" + lipgloss.NewStyle().
@@ -178,6 +184,7 @@ func (m *formModel) submit() tea.Msg {
 			if validationErr.Code == "econnrefused" && database.Hostname == "localhost" {
 				return submitMsg{err: fmt.Errorf("could not create Postgres database.: %w\n(If you're running Sequin in Docker, try using the host `host.docker.internal` instead of `localhost`.)", err)}
 			}
+			return submitMsg{err: validationErr}
 		}
 		return submitMsg{err: fmt.Errorf("could not create Postgres database: %w", err)}
 	}
@@ -206,14 +213,9 @@ func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
 		if !m.submitted {
 			return nil, fmt.Errorf("form submission cancelled")
 		}
-		result := m.submit()
-		if msg, ok := result.(submitMsg); ok {
-			if msg.err != nil {
-				return nil, msg.err
-			}
-			return msg.database, nil
-		}
-		return nil, fmt.Errorf("unexpected submit result")
+		// The submit() method has already been called in the Update method
+		// We just need to return the result
+		return m.database, nil
 	}
 
 	return nil, fmt.Errorf("could not get database from model")

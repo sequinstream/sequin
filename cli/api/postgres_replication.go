@@ -28,6 +28,7 @@ type PostgresReplication struct {
 	CreatedAt           time.Time  `json:"inserted_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
 	BackfillCompletedAt *time.Time `json:"backfill_completed_at"`
+	KeyFormat           string     `json:"key_format"`
 }
 
 // Add this helper function to format BackfillCompletedAt
@@ -48,6 +49,7 @@ type PostgresReplicationCreate struct {
 	StreamID             string `json:"stream_id"`
 	PostgresDatabaseID   string `json:"postgres_database_id"`
 	BackfillExistingRows bool   `json:"backfill_existing_rows"`
+	KeyFormat            string `json:"key_format"`
 }
 
 // PostgresReplicationInfo represents the additional info for a PostgresReplication

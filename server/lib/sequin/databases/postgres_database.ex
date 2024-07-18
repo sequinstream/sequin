@@ -58,6 +58,8 @@ defmodule Sequin.Databases.PostgresDatabase do
     ])
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
+    |> Sequin.Changeset.validate_name()
+    |> unique_constraint([:account_id, :name], name: :postgres_databases_account_id_name_index)
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()

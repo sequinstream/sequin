@@ -26,6 +26,7 @@ USER=$(git config user.name)
 run_step() {
     local cmd="$1"
     echo -e "${BLUE}Run $cmd${RESET}"
+    start_time=$SECONDS
     if eval "$cmd"; then
         echo -e "${GREEN}Completed $cmd in $((SECONDS - start_time)) seconds${RESET}"
     else

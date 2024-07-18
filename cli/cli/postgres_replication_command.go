@@ -17,16 +17,17 @@ import (
 )
 
 type postgresReplicationConfig struct {
-	StreamID        string
-	Database        string
-	Hostname        string
-	Port            int
-	Username        string
-	Password        string
-	SlotName        string
-	PublicationName string
-	Name            string
-	StickInfo       bool
+	StreamID             string
+	Database             string
+	Hostname             string
+	Port                 int
+	Username             string
+	Password             string
+	SlotName             string
+	PublicationName      string
+	Name                 string
+	StickInfo            bool
+	BackfillExistingRows bool
 }
 
 func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
@@ -98,10 +99,11 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 
 	// Create the postgres replication
 	replication := api.PostgresReplicationCreate{
-		SlotName:           c.SlotName,
-		PublicationName:    c.PublicationName,
-		StreamID:           c.StreamID,
-		PostgresDatabaseID: databaseID,
+		SlotName:             c.SlotName,
+		PublicationName:      c.PublicationName,
+		StreamID:             c.StreamID,
+		PostgresDatabaseID:   databaseID,
+		BackfillExistingRows: c.BackfillExistingRows,
 	}
 
 	newReplication, err := api.AddPostgresReplication(ctx, &replication)
@@ -233,6 +235,17 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 		fmt.Println("Press Enter when you have completed the setup.")
 		fmt.Scanln() // Wait for user to press Enter
 	}
+
+	var backfillExistingRows bool
+	prompt = &survey.Confirm{
+		Message: "Do you want to backfill existing rows from your table(s) into the stream?",
+		Default: true,
+	}
+	err = survey.AskOne(prompt, &backfillExistingRows)
+	if err != nil {
+		return err
+	}
+	c.BackfillExistingRows = backfillExistingRows
 
 	return nil
 }

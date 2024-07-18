@@ -7,6 +7,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   alias Sequin.Factory.SourcesFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Sources
+  alias Sequin.Sources.BackfillPostgresTableWorker
   alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
@@ -106,12 +107,14 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   describe "create" do
     setup %{database: database, stream: stream} do
       postgres_replication_attrs =
-        SourcesFactory.postgres_replication_attrs(
+        [
           postgres_database_id: database.id,
           stream_id: stream.id,
           slot_name: replication_slot(),
           publication_name: @publication
-        )
+        ]
+        |> SourcesFactory.postgres_replication_attrs()
+        |> Map.put(:backfill_existing_rows, true)
 
       %{postgres_replication_attrs: postgres_replication_attrs}
     end
@@ -183,22 +186,32 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
     test "creates a postgres replication with an existing database", %{
       conn: conn,
       account: account,
-      stream: stream,
-      database: existing_database
+      database: existing_database,
+      postgres_replication_attrs: postgres_replication_attrs
     } do
-      postgres_replication_attrs = %{
-        slot_name: replication_slot(),
-        publication_name: @publication,
-        stream_id: stream.id,
-        postgres_database_id: existing_database.id
-      }
+      attrs = Map.put(postgres_replication_attrs, :postgres_database_id, existing_database.id)
 
-      conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
+      conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
       assert postgres_replication.postgres_database_id == existing_database.id
+      assert_enqueued(worker: BackfillPostgresTableWorker)
+    end
+
+    test "creates a postgres replication with backfill_existing_rows set to false", %{
+      conn: conn,
+      account: account,
+      postgres_replication_attrs: postgres_replication_attrs
+    } do
+      attrs = Map.put(postgres_replication_attrs, :backfill_existing_rows, false)
+      conn = post(conn, ~p"/api/postgres_replications", attrs)
+      assert %{"id" => id} = json_response(conn, 200)
+
+      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      assert postgres_replication.account_id == account.id
+      refute_enqueued(worker: BackfillPostgresTableWorker)
     end
   end
 
@@ -242,7 +255,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
                "summary" => "Cannot update stream_id or postgres_database_id",
                "validation_errors" => %{
                  "base" => ["Updating stream_id or postgres_database_id is not allowed"]
-               }
+               },
+               "code" => nil
              }
 
       # Verify the postgres_replication was not updated
@@ -286,7 +300,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
     } do
       conn = post(conn, ~p"/api/postgres_replications/#{postgres_replication.id}/backfills", %{tables: tables})
       assert %{"job_ids" => _} = json_response(conn, 201)
-      assert_enqueued(worker: Sequin.Sources.BackfillPostgresTableWorker)
+      assert_enqueued(worker: BackfillPostgresTableWorker)
     end
 
     test "returns error for invalid tables format", %{

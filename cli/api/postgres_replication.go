@@ -40,10 +40,11 @@ func (pr *PostgresReplication) FormatBackfillCompletedAt() string {
 
 // PostgresReplicationCreate represents the structure for creating a new PostgresReplication
 type PostgresReplicationCreate struct {
-	SlotName           string `json:"slot_name"`
-	PublicationName    string `json:"publication_name"`
-	StreamID           string `json:"stream_id"`
-	PostgresDatabaseID string `json:"postgres_database_id"`
+	SlotName             string `json:"slot_name"`
+	PublicationName      string `json:"publication_name"`
+	StreamID             string `json:"stream_id"`
+	PostgresDatabaseID   string `json:"postgres_database_id"`
+	BackfillExistingRows bool   `json:"backfill_existing_rows"`
 }
 
 // PostgresReplicationInfo represents the additional info for a PostgresReplication

@@ -52,7 +52,10 @@ defmodule Sequin.Sources do
 
       case pg_replication do
         {:ok, pg_replication} ->
-          enqueue_backfill_jobs(pg_replication)
+          unless attrs[:backfill_existing_rows] == false do
+            enqueue_backfill_jobs(pg_replication)
+          end
+
           {:ok, pg_replication}
 
         error ->

@@ -105,7 +105,6 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
         db_name,
         Sequin.Subject.to_subject_token(schema),
         Sequin.Subject.to_subject_token(table),
-        "insert",
         record_id
       ],
       "."

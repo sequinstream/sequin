@@ -465,3 +465,4 @@ Exactly-once delivery is a bit of a misnomer; it's always possible in a distribu
 - Allow for streams to live on any database
 - Control the size of `consumer_messages` – don't fan out to dormant consumers
 - Client SDKs
+- First-class Webhook source support

@@ -17,13 +17,14 @@ type MessageState struct {
 	messages        []api.Message
 	config          *Config
 	cursor          int
-	selectedMessage *api.Message // Changed to pointer
+	selectedMessage *api.Message
 	showDetail      bool
 	filter          string
 	filterInput     textinput.Model
 	filterMode      bool
 	err             error
 	errorMsg        string
+	streamName      string // Changed from streamID to streamName
 }
 
 func NewMessageState(config *Config) *MessageState {
@@ -39,17 +40,22 @@ func NewMessageState(config *Config) *MessageState {
 		filter:      "",
 		filterInput: ti,
 		filterMode:  false,
+		streamName:  "", // Changed from streamID to streamName
 	}
 }
 
 func (m *MessageState) FetchMessages(limit int, filter string) error {
+	if m.streamName == "" { // Changed from streamID to streamName
+		return nil // No error, but we won't fetch messages
+	}
+
 	ctx, err := context.LoadContext(m.config.ContextName)
 	if err != nil {
 		return err
 	}
 
 	m.filter = filter
-	messages, err := api.ListStreamMessages(ctx, "default", limit, "seq_desc", filter)
+	messages, err := api.ListStreamMessages(ctx, m.streamName, limit, "seq_desc", filter) // Changed from streamID to streamName
 	if err != nil {
 		m.errorMsg = fmt.Sprintf("Error fetching messages: %v", err)
 		return nil
@@ -60,7 +66,7 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 
 	// Refresh selectedMessage if it exists
 	if m.selectedMessage != nil {
-		updatedMessage, err := api.GetStreamMessage(ctx, "default", m.selectedMessage.Key)
+		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.selectedMessage.Key) // Changed from streamID to streamName
 		if err != nil {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
@@ -72,6 +78,10 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 }
 
 func (m *MessageState) View(width, height int) string {
+	if m.streamName == "" { // Changed from streamID to streamName
+		return "\nPlease select a stream to view messages"
+	}
+
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n\nPress q to quit", m.err)
 	}
@@ -82,7 +92,41 @@ func (m *MessageState) View(width, height int) string {
 	return m.listView(width, height)
 }
 
+func (m *MessageState) SetStreamName(streamName string) { // Changed from SetStreamID to SetStreamName
+	m.streamName = streamName // Changed from streamID to streamName
+	m.messages = nil
+	m.cursor = 0
+	m.selectedMessage = nil
+	m.showDetail = false
+	m.filter = ""
+	m.filterInput.SetValue("")
+	m.filterMode = false
+	m.err = nil
+	m.errorMsg = ""
+}
+
 func (m *MessageState) listView(width, height int) string {
+	// Check if there are no messages
+	if len(m.messages) == 0 {
+		message := "No messages available\n\nTry adjusting your filter or adding messages to the stream:"
+		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))                                              // Blue color for code
+		codePart := codeStyle.Render(fmt.Sprintf("sequin stream send %s message.key 'message payload'", m.streamName)) // Changed from streamID to streamName
+		message += "\n\n" + codePart
+
+		lines := strings.Split(message, "\n")
+		verticalPadding := (height - len(lines)) / 2
+
+		var output strings.Builder
+		output.WriteString(strings.Repeat("\n", verticalPadding))
+
+		for _, line := range lines {
+			horizontalPadding := (width - lipgloss.Width(line)) / 2
+			output.WriteString(fmt.Sprintf("%s%s\n", strings.Repeat(" ", horizontalPadding), line))
+		}
+
+		return output.String()
+	}
+
 	seqWidth := m.calculateSeqWidth()
 	keyWidth := m.calculateKeyWidth(width)
 	createdWidth := 22
@@ -171,7 +215,7 @@ func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWi
 		dataWidth, data)
 }
 
-func (m *MessageState) detailView(width, height int) string {
+func (m *MessageState) detailView(_, _ int) string {
 	if m.selectedMessage == nil {
 		return "No message selected"
 	}
@@ -290,6 +334,10 @@ func (m *MessageState) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *MessageState) ApplyFilter() tea.Msg {
+	if m.streamName == "" { // Changed from streamID to streamName
+		return nil
+	}
+
 	filter := m.filter
 	if filter == "" {
 		filter = ">"

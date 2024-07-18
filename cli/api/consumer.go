@@ -360,11 +360,11 @@ func ReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSiz
 
 // FetchMessagesOptions represents the options for fetching messages
 type FetchMessagesOptions struct {
-	StreamID   string
-	ConsumerID string
-	Visible    bool
-	Limit      int
-	Order      string
+	StreamIDOrName string
+	ConsumerID     string
+	Visible        bool
+	Limit          int
+	Order          string
 }
 
 // BuildFetchMessages builds the HTTP request for fetching messages
@@ -375,7 +375,7 @@ func BuildFetchMessages(ctx *context.Context, options FetchMessagesOptions) (*ht
 	}
 
 	url := fmt.Sprintf("%s/api/streams/%s/consumers/%s/messages?limit=%d&sort=%s",
-		serverURL, options.StreamID, options.ConsumerID, options.Limit, options.Order)
+		serverURL, options.StreamIDOrName, options.ConsumerID, options.Limit, options.Order)
 	if !options.Visible {
 		url += "&visible=false"
 	} else if options.Visible {

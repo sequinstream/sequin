@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
@@ -18,7 +19,7 @@ type ConsumerState struct {
 	showDetail         bool
 	pendingMessages    []api.MessageWithInfo
 	upcomingMessages   []api.MessageWithInfo
-	streamID           string
+	streamName         string
 	ctx                *sequinContext.Context
 	isLoading          bool
 }
@@ -35,13 +36,11 @@ func (c *ConsumerState) FetchConsumers(limit int) error {
 		return fmt.Errorf("context is not set")
 	}
 
-	streamID, err := getFirstStream(c.ctx)
-	if err != nil {
-		return err
+	if c.streamName == "" {
+		return nil // No error, but we won't fetch consumers
 	}
-	c.streamID = streamID
 
-	consumers, err := api.FetchConsumers(c.ctx, streamID)
+	consumers, err := api.FetchConsumers(c.ctx, c.streamName)
 	if err != nil {
 		return err
 	}
@@ -79,15 +78,35 @@ func (c *ConsumerState) setSelectedConsumer(id string) {
 }
 
 func (c *ConsumerState) View(width, height int) string {
+	if c.streamName == "" {
+		return "\nPlease select a stream to view consumers"
+	}
+
 	if c.showDetail || len(c.consumers) == 1 {
 		return c.detailView(width)
 	}
-	return c.listView(width)
+	return c.listView(width, height)
 }
 
-func (c *ConsumerState) listView(width int) string {
+func (c *ConsumerState) listView(width, height int) string {
 	if len(c.consumers) == 0 {
-		return "\nNo consumers found."
+		message := "No consumers found\n\nTry creating a consumer for this stream:"
+		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // Blue color for code
+		codePart := codeStyle.Render(fmt.Sprintf("sequin consumer add %s", c.streamName))
+		message += "\n\n" + codePart
+
+		lines := strings.Split(message, "\n")
+		verticalPadding := (height - len(lines)) / 2
+
+		var output strings.Builder
+		output.WriteString(strings.Repeat("\n", verticalPadding))
+
+		for _, line := range lines {
+			horizontalPadding := (width - lipgloss.Width(line)) / 2
+			output.WriteString(fmt.Sprintf("%s%s\n", strings.Repeat(" ", horizontalPadding), line))
+		}
+
+		return output.String()
 	}
 
 	nameWidth := c.calculateNameWidth(width)
@@ -362,7 +381,7 @@ func (c *ConsumerState) resetMessages() {
 }
 
 func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
-	if !c.showDetail || len(c.consumers) == 0 {
+	if c.streamName == "" || !c.showDetail || len(c.consumers) == 0 {
 		return nil
 	}
 
@@ -389,11 +408,11 @@ func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
 
 func (c *ConsumerState) fetchMessages(consumerID string, visible bool) ([]api.MessageWithInfo, error) {
 	options := api.FetchMessagesOptions{
-		StreamID:   c.streamID,
-		ConsumerID: consumerID,
-		Visible:    visible,
-		Limit:      10,
-		Order:      "seq_asc",
+		StreamIDOrName: c.streamName,
+		ConsumerID:     consumerID,
+		Visible:        visible,
+		Limit:          10,
+		Order:          "seq_asc",
 	}
 	return api.FetchMessages(c.ctx, options)
 }
@@ -418,4 +437,14 @@ func (c *ConsumerState) StartMessageUpdates(ctx context.Context) {
 
 func (c *ConsumerState) DisableDetailView() {
 	c.showDetail = false
+}
+
+func (c *ConsumerState) SetStreamName(streamName string) {
+	c.streamName = streamName
+	c.consumers = nil
+	c.selectedConsumerID = ""
+	c.showDetail = false
+	c.pendingMessages = nil
+	c.upcomingMessages = nil
+	c.isLoading = false
 }

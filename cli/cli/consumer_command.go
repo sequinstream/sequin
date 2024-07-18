@@ -504,11 +504,11 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	if config.AsCurl {
 		options := api.FetchMessagesOptions{
-			StreamID:   c.StreamID,
-			ConsumerID: c.ConsumerID,
-			Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
-			Limit:      10,             // Default limit
-			Order:      "seq_desc",     // Default order
+			StreamIDOrName: c.StreamID,
+			ConsumerID:     c.ConsumerID,
+			Visible:        !c.PendingOnly, // Invert PendingOnly to get Visible
+			Limit:          10,             // Default limit
+			Order:          "seq_desc",     // Default order
 		}
 
 		if c.LastN > 0 {
@@ -534,11 +534,11 @@ func consumerPeek(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 
 	options := api.FetchMessagesOptions{
-		StreamID:   c.StreamID,
-		ConsumerID: c.ConsumerID,
-		Visible:    !c.PendingOnly, // Invert PendingOnly to get Visible
-		Limit:      10,             // Default limit
-		Order:      "seq_desc",     // Default order
+		StreamIDOrName: c.StreamID,
+		ConsumerID:     c.ConsumerID,
+		Visible:        !c.PendingOnly, // Invert PendingOnly to get Visible
+		Limit:          10,             // Default limit
+		Order:          "seq_desc",     // Default order
 	}
 
 	if c.LastN > 0 {

@@ -52,6 +52,14 @@ if [[ "$DIRTY" = false ]] && [[ -n $(git status --porcelain) ]]; then
     exit 1
 fi
 
+# If dirty flag is set, show git status
+if [[ "$DIRTY" = true ]]; then
+    echo -e "${YELLOW}Warning: Running signoff on a dirty repository.${RESET}"
+    echo -e "${YELLOW}Current git status:${RESET}"
+    git status --short
+    echo ""
+fi
+
 # Check if already signed off
 if gh api --method GET -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
     "/repos/${OWNER}/${REPO}/commits/${SHA}/statuses" | \

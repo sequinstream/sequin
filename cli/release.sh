@@ -45,6 +45,14 @@ if [[ "$DIRTY" == false ]] && [[ -n $(git status --porcelain) ]]; then
     exit 1
 fi
 
+# If dirty flag is set, show git status
+if [[ "$DIRTY" = true ]]; then
+    echo -e "${YELLOW}Warning: Running release on a dirty repository.${RESET}"
+    echo -e "${YELLOW}Current git status:${RESET}"
+    git status --short
+    echo ""
+fi
+
 # Set the working directory to this directory
 cd "$(dirname "$0")" || exit
 

@@ -1,4 +1,4 @@
-.PHONY: build release dev deviex cli build-cli signoff signoff_stack merge help
+.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help
 
 dev:
 	@$(MAKE) -C server dev
@@ -15,6 +15,9 @@ cli:
 signoff:
 	@./scripts/signoff.sh
 
+signoff-dirty:
+	@./scripts/signoff.sh --dirty
+
 signoff_stack:
 	@./scripts/signoff_stack.sh
 
@@ -29,6 +32,7 @@ help:
 	@echo "  make deviex    - Open an IEx session on the running local app (delegated to server)"
 	@echo "  make build-cli - Build the CLI (delegated to cli)"
 	@echo "  make signoff   - Run the signoff script"
+	@echo "  make signoff-dirty - Run the signoff script with --dirty flag"
 	@echo "  make signoff_stack - Run the signoff_stack script"
 	@echo "  make merge     - Run the merge script"
 	@echo "  make cli       - Run 'go run main.go' in the cli/ directory"

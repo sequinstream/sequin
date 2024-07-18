@@ -10,6 +10,16 @@ BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 RESET='\033[0m'
 
+# Parse command line arguments
+DIRTY=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --dirty) DIRTY=true ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 # Start the benchmark timer
 SECONDS=0
 
@@ -35,9 +45,9 @@ run_step() {
     fi
 }
 
-# Check if repository is clean
-if [[ -n $(git status --porcelain) ]]; then
-    echo -e "${RED}Can't sign off on a dirty repository!${RESET}" >&2
+# Check if repository is clean (skip if --dirty is used)
+if [[ "$DIRTY" = false ]] && [[ -n $(git status --porcelain) ]]; then
+    echo -e "${RED}Can't sign off on a dirty repository! Use --dirty to override.${RESET}" >&2
     git status
     exit 1
 fi

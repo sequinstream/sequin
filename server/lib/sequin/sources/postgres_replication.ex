@@ -47,7 +47,7 @@ defmodule Sequin.Sources.PostgresReplication do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:slot_name, :publication_name, :stream_id, :postgres_database_id])
+    |> cast(attrs, [:slot_name, :status, :publication_name, :stream_id, :postgres_database_id])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)

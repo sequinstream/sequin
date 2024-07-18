@@ -375,19 +375,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
-    execute """
-            ALTER TABLE #{@config_schema}.postgres_replications
-            ADD CONSTRAINT ensure_active_with_backfill_completed
-            CHECK (
-              (status != 'active') OR
-              (status = 'active' AND backfill_completed_at IS NOT NULL)
-            );
-            """,
-            """
-            ALTER TABLE #{@config_schema}.postgres_replications
-            DROP CONSTRAINT IF EXISTS ensure_active_with_backfill_completed;
-            """
-
     create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
              prefix: @config_schema
            )

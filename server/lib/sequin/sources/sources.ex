@@ -42,6 +42,9 @@ defmodule Sequin.Sources do
 
   def create_pg_replication_for_account_with_lifecycle(account_id, attrs) do
     attrs = Sequin.Map.atomize_keys(attrs)
+    backfill? = attrs[:backfill_existing_rows] != false
+    status = if backfill?, do: :backfilling, else: :active
+    attrs = Map.put(attrs, :status, status)
 
     with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
          :ok <- validate_replication_config(postgres_database, attrs) do
@@ -52,7 +55,7 @@ defmodule Sequin.Sources do
 
       case pg_replication do
         {:ok, pg_replication} ->
-          unless attrs[:backfill_existing_rows] == false do
+          if backfill? do
             enqueue_backfill_jobs(pg_replication)
           end
 

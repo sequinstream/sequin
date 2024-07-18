@@ -120,7 +120,7 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 func promptForExistingSetup() (bool, error) {
 	var hasExisting bool
 	prompt := &survey.Confirm{
-		Message: "Do you have an existing Postgres replication slot and publication for Sequin to connect to?\n(If you're not sure, you probably don't)",
+		Message: "Do you have an existing Postgres replication slot and publication for Sequin to connect to?\n(If you didn't just setup a replication slot for Sequin before this, you probably don't)",
 	}
 	err := survey.AskOne(prompt, &hasExisting)
 	return hasExisting, err
@@ -152,9 +152,10 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 	c.SlotName = "sequin_slot"
 	c.PublicationName = "sequin_pub"
 
-	fmt.Printf("We suggest the following defaults:\n")
+	fmt.Printf("We suggest the following defaults:\n\n")
 	fmt.Printf("\033[1mSlot name\033[0m: %s\n", c.SlotName)
 	fmt.Printf("\033[1mPublication name\033[0m: %s\n", c.PublicationName)
+	fmt.Println()
 
 	var useDefaults bool
 	prompt := &survey.Confirm{
@@ -191,7 +192,7 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 
 		var selectedSchema string
 		err = survey.AskOne(&survey.Select{
-			Message: "Choose a schema:",
+			Message: "Choose the schema your tables are in (you can edit this list later):",
 			Options: schemas,
 		}, &selectedSchema)
 		if err != nil {

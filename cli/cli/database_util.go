@@ -31,7 +31,7 @@ func initialDatabaseModel(ctx *context.Context) formModel {
 		"Port:",
 		"Username:",
 		"Password:",
-		"Name:",
+		"Give your database a name:",
 	}
 	for i := range inputs {
 		t := textinput.New()

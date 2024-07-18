@@ -402,6 +402,8 @@ sequin source postgres add
 
 The CLI will walk you through setting up a replication slot and publication.
 
+Learn more about the [`postgres` source](./docs/postgres-source.md).
+
 ### Comparison to WAL
 
 The WAL must be processed in serial. This makes it hard to scale, as you can only have one worker safely consume from it. And any one slow or corrupt message will jam your pipeline.

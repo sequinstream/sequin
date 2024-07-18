@@ -28,13 +28,15 @@ defmodule Sequin.Sources.PostgresReplication do
              :account_id,
              :postgres_database_id,
              :stream_id,
-             :backfill_completed_at
+             :backfill_completed_at,
+             :key_format
            ]}
   schema "postgres_replications" do
     field :slot_name, :string
     field :publication_name, :string
     field :status, Ecto.Enum, values: [:active, :disabled, :backfilling], default: :backfilling
     field :backfill_completed_at, :utc_datetime_usec, default: nil
+    field :key_format, Ecto.Enum, values: [:basic, :with_operation], default: :basic
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
@@ -47,7 +49,7 @@ defmodule Sequin.Sources.PostgresReplication do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:slot_name, :status, :publication_name, :stream_id, :postgres_database_id])
+    |> cast(attrs, [:slot_name, :status, :publication_name, :stream_id, :postgres_database_id, :key_format])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)
@@ -61,7 +63,7 @@ defmodule Sequin.Sources.PostgresReplication do
 
   def update_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:slot_name, :publication_name, :status, :backfill_completed_at])
+    |> cast(attrs, [:slot_name, :publication_name, :status, :backfill_completed_at, :key_format])
     |> validate_required([:slot_name, :publication_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
   end

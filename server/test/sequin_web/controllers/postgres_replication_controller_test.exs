@@ -93,6 +93,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
         :postgres_database_id,
         :stream_id
       ])
+
+      assert String.to_existing_atom(atomized_response.key_format) == postgres_replication.key_format
     end
 
     test "returns 404 if postgres replication belongs to another account", %{

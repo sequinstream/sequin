@@ -32,7 +32,8 @@ defmodule Sequin.SourcesRuntime.Supervisor do
         publication: pg_replication.publication_name,
         message_handler_ctx: PostgresReplicationMessageHandler.context(pg_replication),
         message_handler_module: PostgresReplicationMessageHandler,
-        connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database)
+        connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
+        key_format: pg_replication.key_format
       ]
 
       opts = Keyword.merge(default_opts, opts)

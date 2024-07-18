@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // ValidationError represents an error that occurs during API validation
@@ -23,24 +24,43 @@ func NewValidationError(summary string, errors map[string]interface{}) *Validati
 
 // Error implements the error interface for ValidationError
 func (ve *ValidationError) Error() string {
+	var parts []string
 	if ve.Summary != "" {
-		return ve.Summary
+		parts = append(parts, ve.Summary)
 	}
-	return "Validation error occurred"
+	if len(ve.ValidationErrors) > 0 {
+		parts = append(parts, "Validation errors occurred")
+	}
+	if len(parts) == 0 {
+		return "An unknown validation error occurred"
+	}
+	return strings.Join(parts, ": ")
 }
 
 // PrintValidationError prints the validation error to the console
 func (ve *ValidationError) PrintValidationError() {
-	fmt.Printf("Validation error: %s\n", ve.Error())
-	for field, message := range ve.ValidationErrors {
-		switch v := message.(type) {
-		case string:
-			fmt.Printf("  %s: %s\n", field, v)
-		case map[string]interface{}:
-			for subField, subMessage := range v {
-				fmt.Printf("  %s.%s: %v\n", field, subField, subMessage)
+	if ve.Summary != "" {
+		fmt.Printf("Validation error: %s\n", ve.Summary)
+		fmt.Println()
+	}
+
+	if len(ve.ValidationErrors) > 0 {
+		errors := make([]string, 0, len(ve.ValidationErrors))
+		for field, messages := range ve.ValidationErrors {
+			switch v := messages.(type) {
+			case []interface{}:
+				for _, msg := range v {
+					errors = append(errors, fmt.Sprintf("%s: %v", field, msg))
+				}
+			case string:
+				errors = append(errors, fmt.Sprintf("%s: %s", field, v))
+			case map[string]interface{}:
+				for subField, subMessage := range v {
+					errors = append(errors, fmt.Sprintf("%s.%s: %v", field, subField, subMessage))
+				}
 			}
 		}
+		fmt.Printf("Validation errors: %s\n", strings.Join(errors, ", "))
 	}
 }
 

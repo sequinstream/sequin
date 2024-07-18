@@ -3,6 +3,8 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   @behaviour Sequin.Extensions.ReplicationMessageHandler
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.ReplicationMessageHandler
   alias Sequin.Sources.PostgresReplication
   alias Sequin.Streams
@@ -14,22 +16,27 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
     typedstruct do
       field :stream_id, String.t()
       field :subject_prefix, String.t()
+      field :key_format, :basic | :with_operation
     end
   end
 
   def context(%PostgresReplication{} = pr) do
-    %Context{stream_id: pr.stream_id, subject_prefix: pr.postgres_database.name}
+    %Context{
+      stream_id: pr.stream_id,
+      subject_prefix: pr.postgres_database.name,
+      key_format: pr.key_format
+    }
   end
 
   @impl ReplicationMessageHandler
   def handle_message(%Context{} = ctx, message) do
-    message = message_for_upsert(ctx.subject_prefix, message)
+    message = message_for_upsert(ctx.subject_prefix, message, ctx.key_format)
     Streams.upsert_messages(ctx.stream_id, [message])
   end
 
-  defp message_for_upsert(subject_prefix, %DeletedRecord{old_record: old_record} = message) do
+  defp message_for_upsert(subject_prefix, %DeletedRecord{old_record: old_record} = message, key_format) do
     %{
-      subject: subject_from_message(subject_prefix, message, old_record["id"]),
+      subject: subject_from_message(subject_prefix, message, old_record["id"], key_format),
       data:
         Jason.encode!(%{
           data: old_record,
@@ -39,9 +46,9 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   end
 
   # InsertRecord and UpdateRecord
-  defp message_for_upsert(subject_prefix, %{record: record} = message) do
+  defp message_for_upsert(subject_prefix, %{record: record} = message, key_format) do
     %{
-      subject: subject_from_message(subject_prefix, message, record["id"]),
+      subject: subject_from_message(subject_prefix, message, record["id"], key_format),
       data:
         Jason.encode!(%{
           data: record,
@@ -50,23 +57,38 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
     }
   end
 
-  defp subject_from_message(subject_prefix, message, record_id) do
-    Enum.join(
-      [
-        subject_prefix,
-        Sequin.Subject.to_subject_token(message.schema),
-        Sequin.Subject.to_subject_token(message.table),
-        record_id
-      ],
-      "."
-    )
+  defp subject_from_message(subject_prefix, message, record_id, key_format) do
+    case key_format do
+      :with_operation ->
+        Enum.join(
+          [
+            subject_prefix,
+            Sequin.Subject.to_subject_token(message.schema),
+            Sequin.Subject.to_subject_token(message.table),
+            action(message),
+            record_id
+          ],
+          "."
+        )
+
+      :basic ->
+        Enum.join(
+          [
+            subject_prefix,
+            Sequin.Subject.to_subject_token(message.schema),
+            Sequin.Subject.to_subject_token(message.table),
+            record_id
+          ],
+          "."
+        )
+    end
   end
 
-  # defp action(message) do
-  #   case message do
-  #     %NewRecord{} -> "insert"
-  #     %UpdatedRecord{} -> "update"
-  #     %DeletedRecord{} -> "delete"
-  #   end
-  # end
+  defp action(message) do
+    case message do
+      %NewRecord{} -> "insert"
+      %UpdatedRecord{} -> "update"
+      %DeletedRecord{} -> "delete"
+    end
+  end
 end

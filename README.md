@@ -33,6 +33,16 @@ Sequin offers a persistent message stream with fan-outs, at-least-once delivery,
 - Processing inserts, updates, and deletes of Postgres records
 - Decoupling services in your stack
 
+## Benchmarks and performance
+
+Postgres is an extremely robust and high-performance system. It does a stellar job handling message streaming workloads like Sequin, when leveraged properly.
+
+Performance is highly dependent on machine resources. But to give you an idea:
+
+A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,000 messages/second** with three consumers (concurrency of 50 instances reading and writing). It can burst up to 10k messages/second. This is the case with `batch_size=10` on both publish and receive.
+
+Expect this performance to degrade with messages >512kb in size.
+
 ## Core concepts
 
 ### Messages
@@ -441,16 +451,6 @@ For the best performance, on top of intelligent indexes, we avoid trigger functi
 You can run Sequin anywhere you can run Docker. It stores its configuration state and streams in [Postgres](#how-it-works).
 
 You can even "sidecar" Sequin alongside your app.
-
-## Benchmarks and performance
-
-Postgres is an extremely robust and high-performance system. It does a stellar job handling message streaming workloads like Sequin, when leveraged properly.
-
-Performance is highly dependent on machine resources. But to give you an idea:
-
-A `db.m5.xlarge` RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,000 messages/second** with three consumers (concurrency of 50 instances reading and writing). It can burst up to 10k messages/second. This is the case with `batch_size=10` on both publish and receive.
-
-Expect this performance to degrade with messages >256kb in size.
 
 ## FAQ
 

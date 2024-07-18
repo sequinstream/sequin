@@ -12,15 +12,15 @@ import (
 )
 
 type Consumer struct {
-	consumers        []api.Consumer
-	config           *Config
-	cursor           int
-	showDetail       bool
-	pendingMessages  []api.MessageWithInfo
-	upcomingMessages []api.MessageWithInfo
-	streamID         string
-	ctx              *sequinContext.Context
-	isLoading        bool
+	consumers          []api.Consumer
+	config             *Config
+	selectedConsumerID string
+	showDetail         bool
+	pendingMessages    []api.MessageWithInfo
+	upcomingMessages   []api.MessageWithInfo
+	streamID           string
+	ctx                *sequinContext.Context
+	isLoading          bool
 }
 
 func NewConsumer(config *Config, ctx *sequinContext.Context) *Consumer {
@@ -47,6 +47,7 @@ func (c *Consumer) FetchConsumers(limit int) error {
 	}
 
 	c.consumers = limitConsumers(consumers, limit)
+	c.updateDetailView()
 	return nil
 }
 
@@ -55,6 +56,26 @@ func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
 		return consumers[:limit]
 	}
 	return consumers
+}
+
+func (c *Consumer) updateDetailView() {
+	if len(c.consumers) == 1 {
+		c.setSelectedConsumer(c.consumers[0].ID)
+		c.showDetail = true
+	} else if len(c.consumers) == 0 {
+		c.setSelectedConsumer("")
+		c.showDetail = false
+	} else if c.selectedConsumerID == "" {
+		c.showDetail = false
+	}
+}
+
+func (c *Consumer) setSelectedConsumer(id string) {
+	if c.selectedConsumerID != id {
+		c.selectedConsumerID = id
+		c.resetMessages()
+		c.isLoading = true
+	}
 }
 
 func (c *Consumer) View(width, height int) string {
@@ -97,11 +118,11 @@ func (c *Consumer) listView(width int) string {
 
 	output += tableHeaderStyle.Render(tableHeader) + "\n"
 
-	for i, consumer := range c.consumers {
+	for _, consumer := range c.consumers {
 		line := formatConsumerLine(consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
 		style := lipgloss.NewStyle()
 		showDetails := ""
-		if i == c.cursor {
+		if consumer.ID == c.selectedConsumerID {
 			style = style.
 				Background(lipgloss.Color("117")). // Light blue background
 				Foreground(lipgloss.Color("0"))    // Black text
@@ -140,17 +161,30 @@ func formatConsumerLine(consumer api.Consumer, nameWidth, filterWidth, maxAckPen
 }
 
 func (c *Consumer) detailView(width int) string {
-	if len(c.consumers) == 0 || c.cursor < 0 || c.cursor >= len(c.consumers) {
+	if len(c.consumers) == 0 || c.selectedConsumerID == "" {
 		return "No consumer selected"
 	}
 
-	consumer := c.consumers[c.cursor]
-	output := formatConsumerDetail(consumer)
+	consumer := c.getSelectedConsumer()
+	if consumer == nil {
+		return "Selected consumer not found"
+	}
+
+	output := formatConsumerDetail(*consumer)
 
 	output += formatMessageSection("Pending Messages", c.pendingMessages, width, true, c.isLoading)
 	output += formatMessageSection("Upcoming Messages", c.upcomingMessages, width, false, c.isLoading)
 
 	return output
+}
+
+func (c *Consumer) getSelectedConsumer() *api.Consumer {
+	for _, consumer := range c.consumers {
+		if consumer.ID == c.selectedConsumerID {
+			return &consumer
+		}
+	}
+	return nil
 }
 
 func formatConsumerDetail(consumer api.Consumer) string {
@@ -282,16 +316,33 @@ func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountW
 }
 
 func (c *Consumer) ToggleDetail() {
-	c.showDetail = !c.showDetail
+	if c.showDetail {
+		c.showDetail = false
+	} else if c.selectedConsumerID != "" {
+		c.showDetail = true
+	}
 }
 
 func (c *Consumer) MoveCursor(direction int) {
-	oldCursor := c.cursor
-	c.cursor = clamp(c.cursor+direction, 0, len(c.consumers)-1)
-
-	if oldCursor != c.cursor {
-		c.resetMessages()
+	if len(c.consumers) == 0 {
+		return
 	}
+
+	currentIndex := c.getCurrentIndex()
+	newIndex := clamp(currentIndex+direction, 0, len(c.consumers)-1)
+
+	if currentIndex != newIndex {
+		c.setSelectedConsumer(c.consumers[newIndex].ID)
+	}
+}
+
+func (c *Consumer) getCurrentIndex() int {
+	for i, consumer := range c.consumers {
+		if consumer.ID == c.selectedConsumerID {
+			return i
+		}
+	}
+	return 0
 }
 
 func clamp(value, min, max int) int {
@@ -315,7 +366,10 @@ func (c *Consumer) fetchPendingAndUpcomingMessages() error {
 		return nil
 	}
 
-	consumer := c.consumers[c.cursor]
+	consumer := c.getSelectedConsumer()
+	if !c.showDetail || c.selectedConsumerID == "" {
+		return nil
+	}
 
 	pending, err := c.fetchMessages(consumer.ID, false)
 	if err != nil {
@@ -329,8 +383,7 @@ func (c *Consumer) fetchPendingAndUpcomingMessages() error {
 	}
 	c.upcomingMessages = upcoming
 
-	c.isLoading = false
-
+	c.isLoading = false // Set isLoading to false after fetching messages
 	return nil
 }
 

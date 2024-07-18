@@ -328,3 +328,37 @@ func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, 
 
 	return messagesResponse.Messages, nil
 }
+
+// GetStreamMessage retrieves a specific message from a stream by its key
+func GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (Message, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return Message{}, err
+	}
+
+	url := fmt.Sprintf("%s/api/streams/%s/messages/%s", serverURL, streamIDOrName, key)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return Message{}, fmt.Errorf("error creating request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return Message{}, fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return Message{}, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var message Message
+	err = json.NewDecoder(resp.Body).Decode(&message)
+	if err != nil {
+		return Message{}, fmt.Errorf("error decoding JSON: %w", err)
+	}
+
+	return message, nil
+}

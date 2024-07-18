@@ -14,15 +14,16 @@ import (
 )
 
 type MessageState struct {
-	messages    []api.Message
-	config      *Config
-	cursor      int
-	showDetail  bool
-	filter      string
-	filterInput textinput.Model
-	filterMode  bool
-	err         error
-	errorMsg    string // New field to store formatted error message
+	messages        []api.Message
+	config          *Config
+	cursor          int
+	selectedMessage *api.Message // Changed to pointer
+	showDetail      bool
+	filter          string
+	filterInput     textinput.Model
+	filterMode      bool
+	err             error
+	errorMsg        string
 }
 
 func NewMessageState(config *Config) *MessageState {
@@ -56,6 +57,17 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 
 	m.messages = messages
 	m.errorMsg = "" // Clear any previous error message
+
+	// Refresh selectedMessage if it exists
+	if m.selectedMessage != nil {
+		updatedMessage, err := api.GetStreamMessage(ctx, "default", m.selectedMessage.Key)
+		if err != nil {
+			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
+		} else {
+			m.selectedMessage = &updatedMessage
+		}
+	}
+
 	return nil
 }
 
@@ -160,7 +172,11 @@ func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWi
 }
 
 func (m *MessageState) detailView(width, height int) string {
-	msg := m.messages[m.cursor]
+	if m.selectedMessage == nil {
+		return "No message selected"
+	}
+
+	msg := *m.selectedMessage
 	output := lipgloss.NewStyle().Bold(true).Render("MESSAGE DETAIL")
 	output += "\n\n"
 	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
@@ -178,6 +194,25 @@ func formatDetailData(data string) string {
 
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
+	if m.showDetail {
+		m.selectedMessage = &m.messages[m.cursor]
+	} else {
+		m.updateCursorAfterDetailView()
+	}
+}
+
+func (m *MessageState) updateCursorAfterDetailView() {
+	if m.selectedMessage == nil {
+		m.cursor = 0
+		return
+	}
+	for i, msg := range m.messages {
+		if msg.Seq == m.selectedMessage.Seq {
+			m.cursor = i
+			return
+		}
+	}
+	m.cursor = 0
 }
 
 func (m *MessageState) MoveCursor(direction int) {

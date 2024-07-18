@@ -27,6 +27,15 @@ defmodule SequinWeb.MessageController do
     end
   end
 
+  def stream_get(conn, %{"stream_id_or_name" => stream_id_or_name, "key" => key}) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
+         {:ok, message} <- Streams.get_message_for_stream(stream.id, key) do
+      render(conn, "stream_get.json", message: message)
+    end
+  end
+
   def stream_count(conn, %{"stream_id_or_name" => stream_id_or_name} = params) do
     account_id = conn.assigns.account_id
 

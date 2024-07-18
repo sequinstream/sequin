@@ -9,6 +9,10 @@ defmodule SequinWeb.MessageJSON do
     %{data: messages}
   end
 
+  def render("stream_get.json", %{message: message}) do
+    message
+  end
+
   def render("consumer_list.json", %{consumer_messages: consumer_messages}) do
     messages =
       Enum.map(consumer_messages, fn %ConsumerMessage{} = cm ->

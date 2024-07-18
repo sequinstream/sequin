@@ -3,9 +3,17 @@
 # Set the project root directory
 PROJECT_ROOT=$(pwd)
 
+# Check if the prod flag is set
+if [ "$1" == "prod" ]; then
+    BUILD_TAGS="-tags prod"
+    echo "Building sequin-cli (production version)..."
+else
+    BUILD_TAGS=""
+    echo "Building sequin-cli (development version)..."
+fi
+
 # Build the binary
-echo "Building sequin-cli..."
-go build -tags prod -o sequin
+go build $BUILD_TAGS -o sequin
 
 # Check if the build was successful
 if [ $? -ne 0 ]; then

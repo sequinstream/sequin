@@ -1,4 +1,4 @@
-.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help init
+.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help init spellcheck addword
 
 dev:
 	@$(MAKE) -C server dev
@@ -35,6 +35,18 @@ init:
 release:
 	@./scripts/release.sh
 
+spellcheck:
+	@npx cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
+
+addword:
+	@if [ -z "$(word)" ]; then \
+		echo "Usage: make addword word=<word>"; \
+	else \
+		echo "$(word)" >> spellcheck/project-words.txt; \
+		sort -u spellcheck/project-words.txt -o spellcheck/project-words.txt; \
+		echo "Added '$(word)' to project-words.txt"; \
+	fi
+
 help:
 	@echo "Available commands:"
 	@echo "  make build     - Build and install the sequin binary (delegated to cli)"
@@ -49,6 +61,8 @@ help:
 	@echo "  make cli       - Run 'go run main.go' in the cli/ directory"
 	@echo "  make init      - Create .settings.json from .settings.json.example"
 	@echo "  make help      - Show this help message"
+	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"
+	@echo "  make addword word=<word> - Add a word to project-words.txt"
 
 %:
 	@:

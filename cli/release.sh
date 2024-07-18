@@ -1,4 +1,8 @@
 #!/bin/bash
+set -e
+
+RED='\033[0;31m'
+RESET='\033[0m'
 
 # Function to get the latest tag from GitHub
 get_latest_tag() {
@@ -25,8 +29,27 @@ create_github_release() {
     done
 }
 
-# Set the working directory to sequin-cli
-cd /Users/carterpedersen/Sequin/sequin/cli || exit
+if [[ -n $(git status --porcelain) ]]; then
+    echo -e "${RED}Can't release a dirty repository.${RESET}" >&2
+    git status
+    exit 1
+fi
+
+# Set the working directory to this directory
+cd "$(dirname "$0")" || exit
+
+settings_file="../.settings.json"
+if [ ! -f "$settings_file" ]; then
+    echo "Error: .settings.json file not found. Please run 'make init' in the project's root dir to create it and set the homebrewDir."
+    exit 1
+fi
+
+homebrew_dir=$(jq -r '.homebrewDir // empty' "$settings_file")
+
+if [ -z "$homebrew_dir" ]; then
+    echo "Error: homebrewDir not set in top-level .settings.json. Please set it and try again."
+    exit 1
+fi
 
 # Get the latest tag
 latest_tag=$(get_latest_tag)
@@ -35,14 +58,14 @@ echo "Current version: $latest_tag"
 # Prompt for the new version
 read -p "Enter the new version: " new_version
 
+# Create compiled releases
+./build_releases.sh $new_version release_assets
+
 # Create and push the new tag
 git tag "$new_version"
 git push origin "$new_version"
 
 echo "New tag $new_version created and pushed to GitHub"
-
-# Create compiled releases
-./build_releases.sh $new_version release_assets
 
 # Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"
@@ -53,7 +76,7 @@ rm -rf release_assets
 echo "GitHub release created for $new_version with assets"
 
 # Switch to homebrew-sequin directory
-cd /Users/carterpedersen/Sequin/homebrew-sequin || exit
+cd "$homebrew_dir" || exit
 
 # Pull the latest changes from the homebrew-sequin repository
 git pull origin main

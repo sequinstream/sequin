@@ -1,4 +1,4 @@
-.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help
+.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help init
 
 dev:
 	@$(MAKE) -C server dev
@@ -24,6 +24,14 @@ signoff_stack:
 merge:
 	@./scripts/merge.sh
 
+init:
+	@if [ ! -f .settings.json ]; then \
+		cp .settings.example.json .settings.json; \
+		echo ".settings.json created. Please edit it to configure your settings."; \
+	else \
+		echo ".settings.json already exists. No changes made."; \
+	fi
+
 help:
 	@echo "Available commands:"
 	@echo "  make build     - Build and install the sequin binary (delegated to cli)"
@@ -36,6 +44,7 @@ help:
 	@echo "  make signoff_stack - Run the signoff_stack script"
 	@echo "  make merge     - Run the merge script"
 	@echo "  make cli       - Run 'go run main.go' in the cli/ directory"
+	@echo "  make init      - Create .settings.json from .settings.json.example"
 	@echo "  make help      - Show this help message"
 
 %:

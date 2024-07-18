@@ -14,3 +14,5 @@ dump.rdb
 
 # Mac UI directory attributes
 .DS_Store
+
+.settings.json

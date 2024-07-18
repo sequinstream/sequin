@@ -170,7 +170,7 @@ func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return s, tea.Quit
 	case "f":
-		if s.activeTab == 0 {
+		if s.activeTab == 1 {
 			s.messages.HandleFilterKey()
 		}
 		return s, nil

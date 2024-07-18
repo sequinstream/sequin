@@ -106,39 +106,6 @@ func (m *MessageState) SetStreamName(streamName string) { // Changed from SetStr
 }
 
 func (m *MessageState) listView(width, height int) string {
-	// Check if there are no messages
-	if len(m.messages) == 0 {
-		message := "No messages available\n\nTry adjusting your filter or adding messages to the stream:"
-		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))                                              // Blue color for code
-		codePart := codeStyle.Render(fmt.Sprintf("sequin stream send %s message.key 'message payload'", m.streamName)) // Changed from streamID to streamName
-		message += "\n\n" + codePart
-
-		lines := strings.Split(message, "\n")
-		verticalPadding := (height - len(lines)) / 2
-
-		var output strings.Builder
-		output.WriteString(strings.Repeat("\n", verticalPadding))
-
-		for _, line := range lines {
-			horizontalPadding := (width - lipgloss.Width(line)) / 2
-			output.WriteString(fmt.Sprintf("%s%s\n", strings.Repeat(" ", horizontalPadding), line))
-		}
-
-		return output.String()
-	}
-
-	seqWidth := m.calculateSeqWidth()
-	keyWidth := m.calculateKeyWidth(width)
-	createdWidth := 22
-	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-3)
-
-	// Create the table header style
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2")). // Green background
-		Width(width)
-
 	// Add the "MESSAGES" title
 	output := lipgloss.NewStyle().Bold(true).Render("MESSAGES") + "\n"
 
@@ -156,6 +123,38 @@ func (m *MessageState) listView(width, height int) string {
 	} else {
 		output += "\n"
 	}
+
+	// Check if there are no messages
+	if len(m.messages) == 0 {
+		message := "No messages available\n\nTry adjusting your filter or adding messages to the stream:"
+		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+		codePart := codeStyle.Render(fmt.Sprintf("sequin stream send %s message.key 'message payload'", m.streamName))
+		message += "\n\n" + codePart
+
+		lines := strings.Split(message, "\n")
+		verticalPadding := (height - len(lines) - 3) / 2 // Subtract 3 for the title, filter, and empty line
+
+		output += strings.Repeat("\n", verticalPadding)
+
+		for _, line := range lines {
+			horizontalPadding := (width - lipgloss.Width(line)) / 2
+			output += fmt.Sprintf("%s%s\n", strings.Repeat(" ", horizontalPadding), line)
+		}
+
+		return output
+	}
+
+	seqWidth := m.calculateSeqWidth()
+	keyWidth := m.calculateKeyWidth(width)
+	createdWidth := 22
+	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-3)
+
+	// Create the table header style
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("0")). // Black text
+		Background(lipgloss.Color("2")). // Green background
+		Width(width)
 
 	// Format the table header
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s",

@@ -78,6 +78,13 @@ type MessageInfo struct {
 	LastDeliveredAt *time.Time `json:"last_delivered_at"`
 	NotVisibleUntil *time.Time `json:"not_visible_until"`
 	State           string     `json:"state"`
+	Subject         string     `json:"subject"`
+	StreamID        string     `json:"stream_id"`
+	DataHash        string     `json:"data_hash"`
+	Data            string     `json:"data"`
+	Seq             int        `json:"seq"`
+	InsertedAt      time.Time  `json:"inserted_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 // FormatLastDeliveredAt returns a formatted string for LastDeliveredAt

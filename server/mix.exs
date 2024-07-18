@@ -66,7 +66,8 @@ defmodule Sequin.MixProject do
       {:oban, "~> 2.17"},
       {:hammox, "~> 0.7", [only: :test]},
       {:broadway, "~> 1.0"},
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:observer_cli, "~> 1.7"}
     ]
   end
 

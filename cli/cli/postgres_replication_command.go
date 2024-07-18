@@ -241,6 +241,7 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 	prompt = &survey.Confirm{
 		Message: "Do you want to backfill existing rows from your table(s) into the stream?",
 		Default: true,
+		Help:    "If you choose to backfill, Sequin will read all existing rows in your table(s) and send them to the stream. If you don't backfill, Sequin will only process rows that are inserted or modified after the replication starts.",
 	}
 	err = survey.AskOne(prompt, &backfillExistingRows)
 	if err != nil {

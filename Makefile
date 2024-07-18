@@ -32,6 +32,9 @@ init:
 		echo ".settings.json already exists. No changes made."; \
 	fi
 
+release:
+	@./scripts/release.sh
+
 help:
 	@echo "Available commands:"
 	@echo "  make build     - Build and install the sequin binary (delegated to cli)"

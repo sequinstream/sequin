@@ -84,6 +84,12 @@ run_step "go fmt ./..."
 run_step "go vet ./..."
 run_step "go build -o /dev/null ./..."
 
+# Return to the project root
+cd ..
+
+# Run cspell check
+run_step "make spellcheck"
+
 # Report successful sign off to GitHub
 description="Signed off by ${USER} (${SECONDS} seconds)"
 if gh api --method POST --silent \

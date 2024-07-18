@@ -29,20 +29,18 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 		})
 }
 
-type model struct {
-	messages  *Message
-	consumers *Consumer
+type state struct {
+	messages  *MessageState
+	consumers *ConsumerState
 	config    *Config
 	activeTab int
 	tabs      []string
 	ctx       *sequinContext.Context
 }
 
-// Add these methods to the model struct
-
-func (m *model) fetchConsumers() tea.Cmd {
+func (s *state) fetchConsumers() tea.Cmd {
 	return func() tea.Msg {
-		err := m.consumers.FetchConsumers(calculateLimit())
+		err := s.consumers.FetchConsumers(calculateLimit())
 		if err != nil {
 			return err
 		}
@@ -50,9 +48,9 @@ func (m *model) fetchConsumers() tea.Cmd {
 	}
 }
 
-func (m *model) fetchMessages() tea.Cmd {
+func (s *state) fetchMessages() tea.Cmd {
 	return func() tea.Msg {
-		err := m.messages.FetchMessages(calculateLimit(), m.messages.filter)
+		err := s.messages.FetchMessages(calculateLimit(), s.messages.filter)
 		if err != nil {
 			return err
 		}
@@ -60,19 +58,19 @@ func (m *model) fetchMessages() tea.Cmd {
 	}
 }
 
-func initialModel(config *Config, ctx *sequinContext.Context) model {
-	m := model{
+func initialState(config *Config, ctx *sequinContext.Context) state {
+	s := state{
 		config:    config,
 		activeTab: 0,
 		tabs:      []string{"Messages (m)", "Consumers (c)"},
-		messages:  NewMessage(config),
-		consumers: NewConsumer(config, ctx),
+		messages:  NewMessageState(config),
+		consumers: NewConsumerState(config, ctx),
 		ctx:       ctx,
 	}
 
-	go m.consumers.StartMessageUpdates(context.Background())
+	go s.consumers.StartMessageUpdates(context.Background())
 
-	return m
+	return s
 }
 
 func doTick() tea.Cmd {
@@ -94,95 +92,95 @@ func calculateLimit() int {
 	return height - 9
 }
 
-func (m model) Init() tea.Cmd {
+func (s state) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
 		doSlowTick(),
-		m.messages.ApplyFilter,
-		m.fetchConsumers(),
+		s.messages.ApplyFilter,
+		s.fetchConsumers(),
 	)
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s state) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		return m.handleKeyPress(msg)
+		return s.handleKeyPress(msg)
 	case tickMsg:
-		return m, doTick()
+		return s, doTick()
 	case slowTickMsg:
-		return m.handleSlowTick()
+		return s.handleSlowTick()
 	}
-	return m, nil
+	return s, nil
 }
 
-func (m model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.activeTab == 0 && m.messages.filterMode {
-		return m, m.messages.HandleFilterModeKeyPress(msg)
+func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if s.activeTab == 0 && s.messages.filterMode {
+		return s, s.messages.HandleFilterModeKeyPress(msg)
 	}
 
 	switch msg.String() {
 	case "tab", "right", "l":
-		m.activeTab = (m.activeTab + 1) % len(m.tabs)
-		m.messages.DisableDetailView()
-		m.consumers.DisableDetailView()
+		s.activeTab = (s.activeTab + 1) % len(s.tabs)
+		s.messages.DisableDetailView()
+		s.consumers.DisableDetailView()
 	case "shift+tab", "left", "h":
-		m.activeTab = (m.activeTab - 1 + len(m.tabs)) % len(m.tabs)
-		m.messages.DisableDetailView()
-		m.consumers.DisableDetailView()
+		s.activeTab = (s.activeTab - 1 + len(s.tabs)) % len(s.tabs)
+		s.messages.DisableDetailView()
+		s.consumers.DisableDetailView()
 	case "m":
-		m.activeTab = 0
-		m.messages.DisableDetailView()
-		m.consumers.DisableDetailView()
+		s.activeTab = 0
+		s.messages.DisableDetailView()
+		s.consumers.DisableDetailView()
 	case "c":
-		m.activeTab = 1
-		m.messages.DisableDetailView()
-		m.consumers.DisableDetailView()
+		s.activeTab = 1
+		s.messages.DisableDetailView()
+		s.consumers.DisableDetailView()
 	case "up", "k":
-		m.moveCursor(-1)
+		s.moveCursor(-1)
 	case "down", "j":
-		m.moveCursor(1)
+		s.moveCursor(1)
 	case "enter":
-		return m.handleEnter()
+		return s.handleEnter()
 	case "q", "ctrl+c":
-		return m, tea.Quit
+		return s, tea.Quit
 	case "f":
-		if m.activeTab == 0 {
-			m.messages.HandleFilterKey()
+		if s.activeTab == 0 {
+			s.messages.HandleFilterKey()
 		}
-		return m, nil
+		return s, nil
 	}
 
-	return m, nil
+	return s, nil
 }
 
-func (m *model) moveCursor(direction int) {
-	if m.activeTab == 0 {
-		m.messages.MoveCursor(direction)
+func (s *state) moveCursor(direction int) {
+	if s.activeTab == 0 {
+		s.messages.MoveCursor(direction)
 	} else {
-		m.consumers.MoveCursor(direction)
+		s.consumers.MoveCursor(direction)
 	}
 }
 
-func (m model) handleEnter() (tea.Model, tea.Cmd) {
-	if m.activeTab == 0 {
-		m.messages.ToggleDetail()
-		return m, nil
+func (s state) handleEnter() (tea.Model, tea.Cmd) {
+	if s.activeTab == 0 {
+		s.messages.ToggleDetail()
+		return s, nil
 	}
-	m.consumers.ToggleDetail()
-	return m, m.fetchPendingAndUpcomingMessages()
+	s.consumers.ToggleDetail()
+	return s, s.fetchPendingAndUpcomingMessages()
 }
 
-func (m model) handleSlowTick() (tea.Model, tea.Cmd) {
-	return m, tea.Batch(
+func (s state) handleSlowTick() (tea.Model, tea.Cmd) {
+	return s, tea.Batch(
 		doSlowTick(),
-		m.fetchMessages(),
-		m.fetchConsumers(),
+		s.fetchMessages(),
+		s.fetchConsumers(),
 	)
 }
 
-func (m model) fetchPendingAndUpcomingMessages() tea.Cmd {
+func (s state) fetchPendingAndUpcomingMessages() tea.Cmd {
 	return func() tea.Msg {
-		err := m.consumers.fetchPendingAndUpcomingMessages()
+		err := s.consumers.fetchPendingAndUpcomingMessages()
 		if err != nil {
 			return err
 		}
@@ -190,7 +188,7 @@ func (m model) fetchPendingAndUpcomingMessages() tea.Cmd {
 	}
 }
 
-func (m model) View() string {
+func (s state) View() string {
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
 	minWidth := 60
@@ -198,15 +196,15 @@ func (m model) View() string {
 		return fmt.Sprintf("Error: Screen too narrow (min %d, current %d)\n\nq (quit)", minWidth, width)
 	}
 
-	tabBar := m.renderTabBar(width)
-	content := m.renderContent(width, height-3) // Adjust height for tab and bottom bars
-	content = m.truncateOrPadContent(content, width, height-3)
-	bottomBar := m.renderBottomBar(width)
+	tabBar := s.renderTabBar(width)
+	content := s.renderContent(width, height-3) // Adjust height for tab and bottom bars
+	content = s.truncateOrPadContent(content, width, height-3)
+	bottomBar := s.renderBottomBar(width)
 
 	return tabBar + "\n" + content + "\n" + bottomBar
 }
 
-func (m model) truncateOrPadContent(content string, width, height int) string {
+func (s state) truncateOrPadContent(content string, width, height int) string {
 	contentLines := strings.Split(content, "\n")
 	if len(contentLines) > height {
 		// Truncate content and add indicator
@@ -226,11 +224,11 @@ func (m model) truncateOrPadContent(content string, width, height int) string {
 	return strings.Join(contentLines, "\n")
 }
 
-func (m model) renderTabBar(width int) string {
+func (s state) renderTabBar(width int) string {
 	tabContent := ""
-	for i, tab := range m.tabs {
+	for i, tab := range s.tabs {
 		style := lipgloss.NewStyle().Padding(0, 1)
-		if i == m.activeTab {
+		if i == s.activeTab {
 			style = style.
 				Background(lipgloss.Color("117")). // Light blue background
 				Foreground(lipgloss.Color("0"))    // Black text
@@ -244,14 +242,14 @@ func (m model) renderTabBar(width int) string {
 		Render(tabContent)
 }
 
-func (m model) renderContent(width, height int) string {
-	if m.activeTab == 0 {
-		return m.messages.View(width, height)
+func (s state) renderContent(width, height int) string {
+	if s.activeTab == 0 {
+		return s.messages.View(width, height)
 	}
-	return m.consumers.View(width, height)
+	return s.consumers.View(width, height)
 }
 
-func (m model) renderBottomBar(width int) string {
+func (s state) renderBottomBar(width int) string {
 	return lipgloss.NewStyle().
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("255")).
@@ -262,7 +260,7 @@ func (m model) renderBottomBar(width int) string {
 }
 
 func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {
-	p := tea.NewProgram(initialModel(config, ctx), tea.WithAltScreen())
+	p := tea.NewProgram(initialState(config, ctx), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running program: %w", err)
 	}

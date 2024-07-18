@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Message struct {
+type MessageState struct {
 	messages    []api.Message
 	config      *Config
 	cursor      int
@@ -25,13 +25,13 @@ type Message struct {
 	errorMsg    string // New field to store formatted error message
 }
 
-func NewMessage(config *Config) *Message {
+func NewMessageState(config *Config) *MessageState {
 	ti := textinput.New()
 	ti.Placeholder = "Filter"
 	ti.CharLimit = 100
 	ti.Width = 30
 
-	return &Message{
+	return &MessageState{
 		config:      config,
 		cursor:      0,
 		showDetail:  false,
@@ -41,7 +41,7 @@ func NewMessage(config *Config) *Message {
 	}
 }
 
-func (m *Message) FetchMessages(limit int, filter string) error {
+func (m *MessageState) FetchMessages(limit int, filter string) error {
 	ctx, err := context.LoadContext(m.config.ContextName)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (m *Message) FetchMessages(limit int, filter string) error {
 	return nil
 }
 
-func (m *Message) View(width, height int) string {
+func (m *MessageState) View(width, height int) string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n\nPress q to quit", m.err)
 	}
@@ -70,7 +70,7 @@ func (m *Message) View(width, height int) string {
 	return m.listView(width, height)
 }
 
-func (m *Message) listView(width, height int) string {
+func (m *MessageState) listView(width, height int) string {
 	seqWidth := m.calculateSeqWidth()
 	keyWidth := m.calculateKeyWidth(width)
 	createdWidth := 22
@@ -124,7 +124,7 @@ func (m *Message) listView(width, height int) string {
 	return output
 }
 
-func (m *Message) calculateSeqWidth() int {
+func (m *MessageState) calculateSeqWidth() int {
 	maxSeqWidth := 3 // Minimum width for "Seq" header
 	for _, msg := range m.messages {
 		seqWidth := len(fmt.Sprintf("%d", msg.Seq))
@@ -135,7 +135,7 @@ func (m *Message) calculateSeqWidth() int {
 	return maxSeqWidth
 }
 
-func (m *Message) calculateKeyWidth(totalWidth int) int {
+func (m *MessageState) calculateKeyWidth(totalWidth int) int {
 	maxKeyWidth := 3 // Minimum width for "Key" header
 	for _, msg := range m.messages {
 		keyWidth := len(msg.Key)
@@ -159,7 +159,7 @@ func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWi
 		dataWidth, data)
 }
 
-func (m *Message) detailView(width, height int) string {
+func (m *MessageState) detailView(width, height int) string {
 	msg := m.messages[m.cursor]
 	output := lipgloss.NewStyle().Bold(true).Render("MESSAGE DETAIL")
 	output += "\n\n"
@@ -176,20 +176,20 @@ func formatDetailData(data string) string {
 	return fmt.Sprintf("Data:\n%s\n", data)
 }
 
-func (m *Message) ToggleDetail() {
+func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 }
 
-func (m *Message) MoveCursor(direction int) {
+func (m *MessageState) MoveCursor(direction int) {
 	m.cursor += direction
 	m.cursor = clampValue(m.cursor, 0, len(m.messages)-1)
 }
 
-func (m *Message) IsDetailView() bool {
+func (m *MessageState) IsDetailView() bool {
 	return m.showDetail
 }
 
-func (m *Message) DisableDetailView() {
+func (m *MessageState) DisableDetailView() {
 	m.showDetail = false
 }
 
@@ -233,14 +233,14 @@ func clampValue(value, min, max int) int {
 	return value
 }
 
-func (m *Message) HandleFilterKey() {
+func (m *MessageState) HandleFilterKey() {
 	if !m.showDetail {
 		m.filterMode = true
 		m.filterInput.Focus()
 	}
 }
 
-func (m *Message) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
+func (m *MessageState) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc", "enter", "ctrl+c":
 		m.filterMode = false
@@ -254,7 +254,7 @@ func (m *Message) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
 	}
 }
 
-func (m *Message) ApplyFilter() tea.Msg {
+func (m *MessageState) ApplyFilter() tea.Msg {
 	filter := m.filter
 	if filter == "" {
 		filter = ">"

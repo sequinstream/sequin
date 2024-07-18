@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Consumer struct {
+type ConsumerState struct {
 	consumers          []api.Consumer
 	config             *Config
 	selectedConsumerID string
@@ -23,14 +23,14 @@ type Consumer struct {
 	isLoading          bool
 }
 
-func NewConsumer(config *Config, ctx *sequinContext.Context) *Consumer {
-	return &Consumer{
+func NewConsumerState(config *Config, ctx *sequinContext.Context) *ConsumerState {
+	return &ConsumerState{
 		config: config,
 		ctx:    ctx,
 	}
 }
 
-func (c *Consumer) FetchConsumers(limit int) error {
+func (c *ConsumerState) FetchConsumers(limit int) error {
 	if c.ctx == nil {
 		return fmt.Errorf("context is not set")
 	}
@@ -58,7 +58,7 @@ func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
 	return consumers
 }
 
-func (c *Consumer) updateDetailView() {
+func (c *ConsumerState) updateDetailView() {
 	if len(c.consumers) == 1 {
 		c.setSelectedConsumer(c.consumers[0].ID)
 		c.showDetail = true
@@ -70,7 +70,7 @@ func (c *Consumer) updateDetailView() {
 	}
 }
 
-func (c *Consumer) setSelectedConsumer(id string) {
+func (c *ConsumerState) setSelectedConsumer(id string) {
 	if c.selectedConsumerID != id {
 		c.selectedConsumerID = id
 		c.resetMessages()
@@ -78,14 +78,14 @@ func (c *Consumer) setSelectedConsumer(id string) {
 	}
 }
 
-func (c *Consumer) View(width, height int) string {
+func (c *ConsumerState) View(width, height int) string {
 	if c.showDetail || len(c.consumers) == 1 {
 		return c.detailView(width)
 	}
 	return c.listView(width)
 }
 
-func (c *Consumer) listView(width int) string {
+func (c *ConsumerState) listView(width int) string {
 	if len(c.consumers) == 0 {
 		return "\nNo consumers found."
 	}
@@ -134,7 +134,7 @@ func (c *Consumer) listView(width int) string {
 	return output
 }
 
-func (c *Consumer) calculateNameWidth(totalWidth int) int {
+func (c *ConsumerState) calculateNameWidth(totalWidth int) int {
 	maxNameWidth := 3 // Minimum width for "Name" header
 	for _, consumer := range c.consumers {
 		nameWidth := len(consumer.Name)
@@ -160,7 +160,7 @@ func formatConsumerLine(consumer api.Consumer, nameWidth, filterWidth, maxAckPen
 		createdWidth, created)
 }
 
-func (c *Consumer) detailView(width int) string {
+func (c *ConsumerState) detailView(width int) string {
 	if len(c.consumers) == 0 || c.selectedConsumerID == "" {
 		return "No consumer selected"
 	}
@@ -178,7 +178,7 @@ func (c *Consumer) detailView(width int) string {
 	return output
 }
 
-func (c *Consumer) getSelectedConsumer() *api.Consumer {
+func (c *ConsumerState) getSelectedConsumer() *api.Consumer {
 	for _, consumer := range c.consumers {
 		if consumer.ID == c.selectedConsumerID {
 			return &consumer
@@ -315,7 +315,7 @@ func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountW
 		lastColumnWidth, lastColumn)
 }
 
-func (c *Consumer) ToggleDetail() {
+func (c *ConsumerState) ToggleDetail() {
 	if c.showDetail {
 		c.showDetail = false
 	} else if c.selectedConsumerID != "" {
@@ -323,7 +323,7 @@ func (c *Consumer) ToggleDetail() {
 	}
 }
 
-func (c *Consumer) MoveCursor(direction int) {
+func (c *ConsumerState) MoveCursor(direction int) {
 	if len(c.consumers) == 0 {
 		return
 	}
@@ -336,7 +336,7 @@ func (c *Consumer) MoveCursor(direction int) {
 	}
 }
 
-func (c *Consumer) getCurrentIndex() int {
+func (c *ConsumerState) getCurrentIndex() int {
 	for i, consumer := range c.consumers {
 		if consumer.ID == c.selectedConsumerID {
 			return i
@@ -355,13 +355,13 @@ func clamp(value, min, max int) int {
 	return value
 }
 
-func (c *Consumer) resetMessages() {
+func (c *ConsumerState) resetMessages() {
 	c.pendingMessages = nil
 	c.upcomingMessages = nil
 	c.isLoading = true
 }
 
-func (c *Consumer) fetchPendingAndUpcomingMessages() error {
+func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
 	if !c.showDetail || len(c.consumers) == 0 {
 		return nil
 	}
@@ -387,7 +387,7 @@ func (c *Consumer) fetchPendingAndUpcomingMessages() error {
 	return nil
 }
 
-func (c *Consumer) fetchMessages(consumerID string, visible bool) ([]api.MessageWithInfo, error) {
+func (c *ConsumerState) fetchMessages(consumerID string, visible bool) ([]api.MessageWithInfo, error) {
 	options := api.FetchMessagesOptions{
 		StreamID:   c.streamID,
 		ConsumerID: consumerID,
@@ -398,7 +398,7 @@ func (c *Consumer) fetchMessages(consumerID string, visible bool) ([]api.Message
 	return api.FetchMessages(c.ctx, options)
 }
 
-func (c *Consumer) StartMessageUpdates(ctx context.Context) {
+func (c *ConsumerState) StartMessageUpdates(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
@@ -416,6 +416,6 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 	}()
 }
 
-func (c *Consumer) DisableDetailView() {
+func (c *ConsumerState) DisableDetailView() {
 	c.showDetail = false
 }

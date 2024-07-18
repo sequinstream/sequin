@@ -47,7 +47,7 @@ run_step() {
 
 # Check if repository is clean (skip if --dirty is used)
 if [[ "$DIRTY" = false ]] && [[ -n $(git status --porcelain) ]]; then
-    echo -e "${RED}Can't sign off on a dirty repository. Use signoff-dirty to override.${RESET}" >&2
+    echo -e "${RED}Can't sign off on a dirty repository. Use 'make signoff-dirty' (or --dirty if calling directly) to override.${RESET}" >&2
     git status
     exit 1
 fi

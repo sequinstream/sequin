@@ -4,6 +4,16 @@ set -e
 RED='\033[0;31m'
 RESET='\033[0m'
 
+# Parse command line arguments
+DIRTY=false
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --dirty) DIRTY=true ;;
+        *) echo "Unknown parameter: $1"; exit 1 ;;
+    esac
+    shift
+done
+
 # Function to get the latest tag from GitHub
 get_latest_tag() {
     git fetch --tags
@@ -29,8 +39,8 @@ create_github_release() {
     done
 }
 
-if [[ -n $(git status --porcelain) ]]; then
-    echo -e "${RED}Can't release a dirty repository.${RESET}" >&2
+if [[ "$DIRTY" == false ]] && [[ -n $(git status --porcelain) ]]; then
+    echo -e "${RED}Can't release a dirty repository. Use 'make release-dirty' (or --dirty if calling directly) to override.${RESET}" >&2
     git status
     exit 1
 fi

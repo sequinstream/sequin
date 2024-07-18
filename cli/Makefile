@@ -14,6 +14,10 @@ release:
 	@echo "Running release process..."
 	@bash release.sh
 
+release-dirty:
+	@echo "Running release process..."
+	@bash release.sh --dirty
+
 help:
 	@echo "Available commands:"
 	@echo "  make build      - Build and install the sequin binary (development version)"

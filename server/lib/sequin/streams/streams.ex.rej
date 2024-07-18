@@ -1,0 +1,28 @@
+diff a/server/lib/sequin/streams/streams.ex b/server/lib/sequin/streams/streams.ex	(rejected hunks)
+@@ -319,10 +320,23 @@ defmodule Sequin.Streams do
+     |> Repo.all()
+   end
+ 
++  def get_message(subject, stream_id) do
++    message =
++      subject
++      |> Message.where_subject_and_stream_id(stream_id)
++      |> Repo.one()
++
++    case message do
++      nil -> {:error, Error.not_found(entity: :message, params: %{stream_id: stream_id, subject: subject})}
++      message -> {:ok, message}
++    end
++  end
++
+   def get_message!(subject, stream_id) do
+-    subject
+-    |> Message.where_subject_and_stream_id(stream_id)
+-    |> Repo.one!()
++    case get_message(subject, stream_id) do
++      {:ok, message} -> message
++      {:error, error} -> raise error
++    end
+   end
+ 
+   def count_messages_for_stream(stream_id) do

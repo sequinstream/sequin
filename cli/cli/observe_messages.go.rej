@@ -1,0 +1,158 @@
+diff a/cli/cli/observe_messages.go b/cli/cli/observe_messages.go	(rejected hunks)
+@@ -14,15 +14,21 @@ import (
+ )
+ 
+ type Message struct {
+-	messages    []api.Message
+-	config      *Config
+-	cursor      int
+-	showDetail  bool
+-	filter      string
+-	filterInput textinput.Model
+-	filterMode  bool
+-	err         error
+-	errorMsg    string // New field to store formatted error message
++	messages      []api.Message
++	config        *Config
++	cursor        int
++	showDetail    bool
++	filter        string
++	filterInput   textinput.Model
++	filterMode    bool
++	err           error
++	errorMsg      string // New field to store formatted error message
++	detailMessage *MessageDetail
++}
++
++type MessageDetail struct {
++	Message       api.MessageInfo    `json:"message"`
++	ConsumerInfos []api.ConsumerInfo `json:"consumer_info"`
+ }
+ 
+ func NewMessage(config *Config) *Message {
+@@ -43,6 +49,7 @@ func NewMessage(config *Config) *Message {
+ 
+ func (m *Message) FetchMessages(limit int, filter string) error {
+ 	ctx, err := context.LoadContext(m.config.ContextName)
++
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -160,24 +167,110 @@ func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWi
+ }
+ 
+ func (m *Message) detailView(width, height int) string {
+-	msg := m.messages[m.cursor]
++	if m.detailMessage == nil {
++		return "Loading message details..."
++	}
++
++	msg := m.detailMessage.Message
+ 	output := lipgloss.NewStyle().Bold(true).Render("MESSAGE DETAIL")
+ 	output += "\n\n"
+-	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
+-	output += fmt.Sprintf("Key:     %s\n", msg.Key)
+-	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(time.RFC3339))
++	output += fmt.Sprintf("Subject:     %s\n", msg.Subject)
++	output += fmt.Sprintf("Seq:         %d\n", msg.Seq)
++	output += fmt.Sprintf("Inserted At: %s\n", msg.InsertedAt.Format(time.RFC3339))
++	output += fmt.Sprintf("Updated At:  %s\n", msg.UpdatedAt.Format(time.RFC3339))
++	output += fmt.Sprintf("Data:\n%s\n", msg.Data)
+ 
+-	output += formatDetailData(msg.Data)
++	output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
++	output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width)
+ 
+ 	return output
+ }
+ 
+-func formatDetailData(data string) string {
+-	return fmt.Sprintf("Data:\n%s\n", data)
++func formatConsumerInfoTable(consumerInfos []api.ConsumerInfo, width int) string {
++	if len(consumerInfos) == 0 {
++		return "No consumer info available.\n"
++	}
++
++	slugWidth := 20
++	deliverCountWidth := 15 // Increased to fit "DELIVERY COUNT"
++	stateWidth := 20
++	patternWidth := width - slugWidth - deliverCountWidth - stateWidth - 6 // Adjust for other columns and spacing
++
++	tableHeaderStyle := lipgloss.NewStyle().
++		Bold(true).
++		Foreground(lipgloss.Color("0")). // Black text
++		Background(lipgloss.Color("2"))  // Green background
++
++	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
++		slugWidth, "CONSUMER SLUG",
++		patternWidth, "FILTER PATTERN",
++		stateWidth, "MESSAGE STATE",
++		deliverCountWidth, "DELIVERY COUNT")
++
++	output := tableHeaderStyle.Render(header) + "\n"
++
++	for _, info := range consumerInfos {
++		deliverCount := "-"
++		if info.DeliverCount != nil {
++			deliverCount = fmt.Sprintf("%d", *info.DeliverCount)
++		}
++
++		output += fmt.Sprintf("%-*s %-*s %-*s %-*s\n",
++			slugWidth, truncateString(info.ConsumerSlug, slugWidth),
++			patternWidth, truncateString(info.ConsumerFilterSubjectPattern, patternWidth),
++			stateWidth, info.State,
++			deliverCountWidth, deliverCount)
++	}
++
++	return output
+ }
+ 
+ func (m *Message) ToggleDetail() {
+ 	m.showDetail = !m.showDetail
++	if m.showDetail {
++		err := m.fetchMessageDetail()
++		if err != nil {
++			m.err = err
++			m.errorMsg = fmt.Sprintf("Error fetching message detail: %v", err)
++		}
++	}
++}
++
++func (m *Message) fetchMessageDetail() error {
++	ctx, err := context.LoadContext(m.config.ContextName)
++	if err != nil {
++		return err
++	}
++
++	msg := m.messages[m.cursor]
++	consumer_detail, err := api.FetchMessageDetail(ctx, "default", msg.Key)
++	if err != nil {
++		return err
++	}
++
++	m.detailMessage = &MessageDetail{
++		Message:       convertToMessageInfo(consumer_detail.Message),
++		ConsumerInfos: convertConsumerInfos(consumer_detail.ConsumerInfos),
++	}
++	return nil
++}
++
++func convertToMessageInfo(apiMsg api.Message) api.MessageInfo {
++	return api.MessageInfo{
++		Subject:    apiMsg.Key,
++		Data:       apiMsg.Data,
++		Seq:        apiMsg.Seq,
++		UpdatedAt:  apiMsg.UpdatedAt,
++		InsertedAt: apiMsg.CreatedAt,
++	}
++}
++
++func convertConsumerInfos(apiInfos []api.ConsumerInfo) []api.ConsumerInfo {
++	infos := make([]api.ConsumerInfo, len(apiInfos))
++	for i, apiInfo := range apiInfos {
++		infos[i] = api.ConsumerInfo(apiInfo)
++	}
++	return infos
+ }
+ 
+ func (m *Message) MoveCursor(direction int) {

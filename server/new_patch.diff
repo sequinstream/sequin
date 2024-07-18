@@ -1,0 +1,271 @@
+diff --git a/server/lib/sequin/streams/consumer_message.ex b/lib/sequin/streams/consumer_message.ex
+index e15a8cf..245dad7 100644
+--- a/server/lib/sequin/streams/consumer_message.ex
++++ b/server/lib/sequin/streams/consumer_message.ex
+@@ -5,6 +5,7 @@ defmodule Sequin.Streams.ConsumerMessage do
+   import Ecto.Changeset
+   import Ecto.Query
+ 
++  alias Sequin.Streams.ConsumerMessageDetails
+   alias Sequin.Streams.Message
+ 
+   @primary_key false
+@@ -111,4 +112,20 @@ defmodule Sequin.Streams.ConsumerMessage do
+   defp base_query(query \\ __MODULE__) do
+     from(cm in query, as: :consumer_message)
+   end
++
++  @spec external_state(%__MODULE__{}) :: ConsumerMessageDetails.state()
++  def external_state(%__MODULE__{} = cm) do
++    now = DateTime.utc_now()
++
++    case cm.state do
++      :acked ->
++        :acked
++
++      :available ->
++        :available
++
++      state when state in [:delivered, :pending_redelivery] ->
++        if DateTime.after?(cm.not_visible_until, now), do: :pending, else: :available
++    end
++  end
+ end
+diff --git a/server/lib/sequin/streams/consumer_message_details.ex b/lib/sequin/streams/consumer_message_details.ex
+new file mode 100644
+index 0000000..77e8213
+--- /dev/null
++++ b/server/lib/sequin/streams/consumer_message_details.ex
+@@ -0,0 +1,37 @@
++defmodule Sequin.Streams.ConsumerMessageDetails do
++  @moduledoc false
++  @derive {Jason.Encoder,
++           only: [
++             :consumer_id,
++             :consumer_slug,
++             :consumer_filter_subject_pattern,
++             :state,
++             :ack_id,
++             :deliver_count,
++             :last_delivered_at,
++             :not_visible_until
++           ]}
++  @type state :: :acked | :available | :pending
++
++  @type t :: %__MODULE__{
++          consumer_id: Ecto.UUID.t(),
++          consumer_slug: String.t(),
++          consumer_filter_subject_pattern: String.t(),
++          state: state(),
++          ack_id: Ecto.UUID.t() | nil,
++          deliver_count: non_neg_integer() | nil,
++          last_delivered_at: DateTime.t() | nil,
++          not_visible_until: DateTime.t() | nil
++        }
++
++  defstruct [
++    :consumer_id,
++    :consumer_slug,
++    :consumer_filter_subject_pattern,
++    :state,
++    :ack_id,
++    :deliver_count,
++    :last_delivered_at,
++    :not_visible_until
++  ]
++end
+diff --git a/server/lib/sequin/streams/message.ex b/lib/sequin/streams/message.ex
+index fe2ddb5..514ee1d 100644
+--- a/server/lib/sequin/streams/message.ex
++++ b/server/lib/sequin/streams/message.ex
+@@ -5,26 +5,8 @@ defmodule Sequin.Streams.Message do
+   import Ecto.Changeset
+   import Ecto.Query
+ 
+-  @token_keys [
+-    :token1,
+-    :token2,
+-    :token3,
+-    :token4,
+-    :token5,
+-    :token6,
+-    :token7,
+-    :token8,
+-    :token9,
+-    :token10,
+-    :token11,
+-    :token12,
+-    :token13,
+-    :token14,
+-    :token15,
+-    :token16
+-  ]
+-
+-  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at] ++ @token_keys}
++  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
++
+   @primary_key false
+   typed_schema "messages" do
+     field :subject, :string, primary_key: true, read_after_writes: true
+diff --git a/server/lib/sequin/streams/streams.ex b/lib/sequin/streams/streams.ex
+index 2d623f4..b2c0e1f 100644
+--- a/server/lib/sequin/streams/streams.ex
++++ b/server/lib/sequin/streams/streams.ex
+@@ -9,6 +9,7 @@ defmodule Sequin.Streams do
+   alias Sequin.Streams.Consumer
+   alias Sequin.Streams.ConsumerBackfillWorker
+   alias Sequin.Streams.ConsumerMessage
++  alias Sequin.Streams.ConsumerMessageDetails
+   alias Sequin.Streams.Message
+   alias Sequin.Streams.Query
+   alias Sequin.Streams.Stream
+@@ -319,10 +320,23 @@ defmodule Sequin.Streams do
+     |> Repo.all()
+   end
+ 
++  def get_message(subject, stream_id) do
++    message =
++      subject
++      |> Message.where_subject_and_stream_id(stream_id)
++      |> Repo.one()
++
++    case message do
++      nil -> {:error, Error.not_found(entity: :message, params: %{stream_id: stream_id, subject: subject})}
++      message -> {:ok, message}
++    end
++  end
++
+   def get_message!(subject, stream_id) do
+-    subject
+-    |> Message.where_subject_and_stream_id(stream_id)
+-    |> Repo.one!()
++    case get_message(subject, stream_id) do
++      {:ok, message} -> message
++      {:error, error} -> raise error
++    end
+   end
+ 
+   def count_messages_for_stream(stream_id) do
+@@ -477,12 +491,64 @@ defmodule Sequin.Streams do
+     end)
+   end
+ 
++  def get_consumer_details_for_message(message_subject, stream_id) do
++    consumers = cached_list_consumers_for_stream(stream_id)
++
++    consumer_message_details =
++      consumers
++      |> Enum.filter(fn consumer -> Sequin.Subject.matches?(consumer.filter_subject_pattern, message_subject) end)
++      |> Enum.map(fn consumer ->
++        case get_consumer_message(consumer.id, message_subject) do
++          {:ok, consumer_message} ->
++            %ConsumerMessageDetails{
++              consumer_id: consumer.id,
++              consumer_slug: consumer.slug,
++              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
++              state: ConsumerMessage.external_state(consumer_message),
++              ack_id: consumer_message.ack_id,
++              deliver_count: consumer_message.deliver_count,
++              last_delivered_at: consumer_message.last_delivered_at,
++              not_visible_until: consumer_message.not_visible_until
++            }
++
++          {:error, %Error.NotFoundError{}} ->
++            external_state =
++              if Consumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
++
++            %ConsumerMessageDetails{
++              consumer_id: consumer.id,
++              consumer_slug: consumer.slug,
++              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
++              state: external_state,
++              ack_id: nil,
++              deliver_count: nil,
++              last_delivered_at: nil,
++              not_visible_until: nil
++            }
++        end
++      end)
++
++    {:ok, consumer_message_details}
++  end
++
++  def get_consumer_message(consumer_id, message_subject) do
++    consumer_message =
++      consumer_id
++      |> ConsumerMessage.where_consumer_id()
++      |> ConsumerMessage.where_message_subject(message_subject)
++      |> Repo.one()
++
++    case consumer_message do
++      nil -> {:error, Error.not_found(entity: :consumer_message)}
++      consumer_message -> {:ok, consumer_message}
++    end
++  end
++
+   def get_consumer_message!(consumer_id, message_subject) do
+-    # Repo.get!(ConsumerMessage, consumer_id: consumer_id, message_subject: message_subject)
+-    consumer_id
+-    |> ConsumerMessage.where_consumer_id()
+-    |> ConsumerMessage.where_message_subject(message_subject)
+-    |> Repo.one!()
++    case get_consumer_message(consumer_id, message_subject) do
++      {:ok, consumer_message} -> consumer_message
++      {:error, _} -> raise Error.not_found(entity: :consumer_message)
++    end
+   end
+ 
+   def upsert_consumer_messages([]), do: {:ok, []}
+diff --git a/server/lib/sequin_web/controllers/message_controller.ex b/lib/sequin_web/controllers/message_controller.ex
+index 81d50d2..c568606 100644
+--- a/server/lib/sequin_web/controllers/message_controller.ex
++++ b/server/lib/sequin_web/controllers/message_controller.ex
+@@ -41,6 +41,16 @@ defmodule SequinWeb.MessageController do
+     end
+   end
+ 
++  def message_info(conn, %{"stream_id_or_slug" => stream_id_or_slug, "subject" => message_subject}) do
++    account_id = conn.assigns.account_id
++
++    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
++         {:ok, message} <- Streams.get_message(message_subject, stream.id),
++         {:ok, consumer_messages_details} <- Streams.get_consumer_details_for_message(message_subject, stream.id) do
++      render(conn, "message_info.json", message: message, consumer_messages_details: consumer_messages_details)
++    end
++  end
++
+   defp parse_messages(%{"messages" => messages}) when is_list(messages) do
+     Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
+       case message do
+diff --git a/server/lib/sequin_web/controllers/message_json.ex b/lib/sequin_web/controllers/message_json.ex
+index 46691bc..1ea6261 100644
+--- a/server/lib/sequin_web/controllers/message_json.ex
++++ b/server/lib/sequin_web/controllers/message_json.ex
+@@ -29,6 +29,15 @@ defmodule SequinWeb.MessageJSON do
+     %{data: messages}
+   end
+ 
++  def render("message_info.json", %{message: message, consumer_messages_details: consumer_messages_details}) do
++    %{
++      data: %{
++        message: message,
++        consumer_info: consumer_messages_details
++      }
++    }
++  end
++
+   defp get_current_state(cm) do
+     now = DateTime.utc_now()
+ 
+diff --git a/server/lib/sequin_web/router.ex b/lib/sequin_web/router.ex
+index d4134c8..a691040 100644
+--- a/server/lib/sequin_web/router.ex
++++ b/server/lib/sequin_web/router.ex
+@@ -39,6 +39,7 @@ defmodule SequinWeb.Router do
+     post "/streams/:stream_id_or_slug/consumers/:id_or_slug/nack", PullController, :nack
+     post "/streams/:stream_id_or_slug/messages", MessageController, :publish
+     get "/streams/:stream_id_or_slug/messages", MessageController, :stream_list
++    get "/streams/:stream_id_or_slug/messages/:subject", MessageController, :message_info
+     get "/streams/:stream_id_or_slug/consumers/:consumer_id_or_slug/messages", MessageController, :consumer_list
+   end
+ 

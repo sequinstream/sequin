@@ -1,0 +1,9 @@
+diff a/server/lib/sequin_web/router.ex b/server/lib/sequin_web/router.ex	(rejected hunks)
+@@ -39,6 +39,7 @@ defmodule SequinWeb.Router do
+     post "/streams/:stream_id_or_slug/consumers/:id_or_slug/nack", PullController, :nack
+     post "/streams/:stream_id_or_slug/messages", MessageController, :publish
+     get "/streams/:stream_id_or_slug/messages", MessageController, :stream_list
++    get "/streams/:stream_id_or_slug/messages/:subject", MessageController, :message_info
+     get "/streams/:stream_id_or_slug/consumers/:consumer_id_or_slug/messages", MessageController, :consumer_list
+   end
+ 

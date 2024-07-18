@@ -9,6 +9,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
+  alias Sequin.Streams.ConsumerMessageDetails
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
@@ -509,12 +510,64 @@ defmodule Sequin.Streams do
     end)
   end
 
+  def get_consumer_details_for_message(message_subject, stream_id) do
+    consumers = cached_list_consumers_for_stream(stream_id)
+
+    consumer_message_details =
+      consumers
+      |> Enum.filter(fn consumer -> Sequin.Subject.matches?(consumer.filter_subject_pattern, message_subject) end)
+      |> Enum.map(fn consumer ->
+        case get_consumer_message(consumer.id, message_subject) do
+          {:ok, consumer_message} ->
+            %ConsumerMessageDetails{
+              consumer_id: consumer.id,
+              consumer_slug: consumer.slug,
+              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
+              state: ConsumerMessage.external_state(consumer_message),
+              ack_id: consumer_message.ack_id,
+              deliver_count: consumer_message.deliver_count,
+              last_delivered_at: consumer_message.last_delivered_at,
+              not_visible_until: consumer_message.not_visible_until
+            }
+
+          {:error, %Error.NotFoundError{}} ->
+            external_state =
+              if Consumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
+
+            %ConsumerMessageDetails{
+              consumer_id: consumer.id,
+              consumer_slug: consumer.slug,
+              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
+              state: external_state,
+              ack_id: nil,
+              deliver_count: nil,
+              last_delivered_at: nil,
+              not_visible_until: nil
+            }
+        end
+      end)
+
+    {:ok, consumer_message_details}
+  end
+
+  def get_consumer_message(consumer_id, message_subject) do
+    consumer_message =
+      consumer_id
+      |> ConsumerMessage.where_consumer_id()
+      |> ConsumerMessage.where_message_subject(message_subject)
+      |> Repo.one()
+
+    case consumer_message do
+      nil -> {:error, Error.not_found(entity: :consumer_message)}
+      consumer_message -> {:ok, consumer_message}
+    end
+  end
+
   def get_consumer_message!(consumer_id, message_subject) do
-    # Repo.get!(ConsumerMessage, consumer_id: consumer_id, message_subject: message_subject)
-    consumer_id
-    |> ConsumerMessage.where_consumer_id()
-    |> ConsumerMessage.where_message_subject(message_subject)
-    |> Repo.one!()
+    case get_consumer_message(consumer_id, message_subject) do
+      {:ok, consumer_message} -> consumer_message
+      {:error, _} -> raise Error.not_found(entity: :consumer_message)
+    end
   end
 
   def upsert_consumer_messages([]), do: {:ok, []}

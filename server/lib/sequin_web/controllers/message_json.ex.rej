@@ -1,0 +1,17 @@
+diff a/server/lib/sequin_web/controllers/message_json.ex b/server/lib/sequin_web/controllers/message_json.ex	(rejected hunks)
+@@ -29,6 +29,15 @@ defmodule SequinWeb.MessageJSON do
+     %{data: messages}
+   end
+ 
++  def render("message_info.json", %{message: message, consumer_messages_details: consumer_messages_details}) do
++    %{
++      data: %{
++        message: message,
++        consumer_info: consumer_messages_details
++      }
++    }
++  end
++
+   defp get_current_state(cm) do
+     now = DateTime.utc_now()
+ 

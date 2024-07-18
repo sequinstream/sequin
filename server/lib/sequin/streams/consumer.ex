@@ -68,6 +68,7 @@ defmodule Sequin.Streams.Consumer do
     )
     |> foreign_key_constraint(:stream_id)
     |> foreign_key_constraint(:http_endpoint_id)
+    |> Sequin.Changeset.validate_name()
     |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
   end
 

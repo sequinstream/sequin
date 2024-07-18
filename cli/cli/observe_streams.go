@@ -63,7 +63,8 @@ func (s *StreamState) View(width, height int) string {
 		return output.String()
 	}
 
-	output := lipgloss.NewStyle().Bold(true).Render("STREAMS") + "\n\n"
+	output := lipgloss.NewStyle().Bold(true).Render("Select a stream to observe it")
+	output += "\n\n"
 
 	// Calculate column widths
 	nameWidth := s.calculateColumnWidth(width, 0.20, "NAME")

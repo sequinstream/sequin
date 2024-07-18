@@ -30,12 +30,20 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 		})
 }
 
+type TabType int
+
+const (
+	StreamsTab TabType = iota
+	MessagesTab
+	ConsumersTab
+)
+
 type state struct {
 	messages       *MessageState
 	consumers      *ConsumerState
 	streams        *StreamState
 	config         *Config
-	activeTab      int
+	activeTab      TabType
 	tabs           []string
 	ctx            *sequinContext.Context
 	selectedStream *api.Stream
@@ -74,7 +82,7 @@ func (s *state) fetchStreams() tea.Cmd {
 func initialState(config *Config, ctx *sequinContext.Context) state {
 	s := state{
 		config:         config,
-		activeTab:      0,
+		activeTab:      StreamsTab,
 		tabs:           []string{"Streams (s)", "Messages (m)", "Consumers (c)"},
 		messages:       NewMessageState(config),
 		consumers:      NewConsumerState(config, ctx),
@@ -125,37 +133,38 @@ func (s state) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s, doTick()
 	case slowTickMsg:
 		return s.handleSlowTick()
+	default:
+		return s, nil
 	}
-	return s, nil
 }
 
 func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if s.activeTab == 1 && s.messages.filterMode {
+	if s.activeTab == MessagesTab && s.messages.filterMode {
 		return s, s.messages.HandleFilterModeKeyPress(msg)
 	}
 
 	switch msg.String() {
 	case "tab", "right", "l":
 		if s.selectedStream != nil {
-			s.activeTab = (s.activeTab+1)%2 + 1 // Cycle between 1 and 2
+			s.activeTab = s.nextTab()
 		}
 		s.messages.DisableDetailView()
 		s.consumers.DisableDetailView()
 	case "shift+tab", "left", "h":
 		if s.selectedStream != nil {
-			s.activeTab = (s.activeTab-1+2)%2 + 1 // Cycle between 1 and 2
+			s.activeTab = s.previousTab()
 		}
 		s.messages.DisableDetailView()
 		s.consumers.DisableDetailView()
 	case "m":
 		if s.selectedStream != nil {
-			s.activeTab = 1
+			s.activeTab = MessagesTab
 			s.messages.DisableDetailView()
 			s.consumers.DisableDetailView()
 		}
 	case "c":
 		if s.selectedStream != nil {
-			s.activeTab = 2
+			s.activeTab = ConsumersTab
 			s.messages.DisableDetailView()
 			s.consumers.DisableDetailView()
 		}
@@ -170,7 +179,7 @@ func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return s, tea.Quit
 	case "f":
-		if s.activeTab == 1 {
+		if s.activeTab == MessagesTab {
 			s.messages.HandleFilterKey()
 		}
 		return s, nil
@@ -179,28 +188,56 @@ func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
+// Helper function to get the next tab
+func (s state) nextTab() TabType {
+	switch s.activeTab {
+	case StreamsTab:
+		return StreamsTab
+	case MessagesTab:
+		return ConsumersTab
+	case ConsumersTab:
+		return MessagesTab
+	default:
+		return StreamsTab
+	}
+}
+
+// Helper function to get the previous tab
+func (s state) previousTab() TabType {
+	switch s.activeTab {
+	case StreamsTab:
+		return StreamsTab
+	case MessagesTab:
+		return ConsumersTab
+	case ConsumersTab:
+		return MessagesTab
+	default:
+		return StreamsTab
+	}
+}
+
 func (s state) handleBackspace() (tea.Model, tea.Cmd) {
 	switch s.activeTab {
-	case 0:
+	case StreamsTab:
 		if s.selectedStream != nil {
 			s.selectedStream = nil
 			s.messages.SetStreamName("")
 			s.consumers.SetStreamName("")
 		}
-	case 1:
+	case MessagesTab:
 		if s.messages.showDetail {
 			s.messages.DisableDetailView()
 		} else if s.selectedStream != nil {
-			s.activeTab = 0
+			s.activeTab = StreamsTab
 			s.selectedStream = nil
 			s.messages.SetStreamName("")
 			s.consumers.SetStreamName("")
 		}
-	case 2:
+	case ConsumersTab:
 		if s.consumers.showDetail {
 			s.consumers.DisableDetailView()
 		} else if s.selectedStream != nil {
-			s.activeTab = 0
+			s.activeTab = StreamsTab
 			s.selectedStream = nil
 			s.messages.SetStreamName("")
 			s.consumers.SetStreamName("")
@@ -211,28 +248,28 @@ func (s state) handleBackspace() (tea.Model, tea.Cmd) {
 
 func (s *state) moveCursor(direction int) {
 	switch s.activeTab {
-	case 0:
+	case StreamsTab:
 		s.streams.MoveCursor(direction)
-	case 1:
+	case MessagesTab:
 		s.messages.MoveCursor(direction)
-	case 2:
+	case ConsumersTab:
 		s.consumers.MoveCursor(direction)
 	}
 }
 
 func (s state) handleEnter() (tea.Model, tea.Cmd) {
 	switch s.activeTab {
-	case 0:
+	case StreamsTab:
 		s.selectedStream = s.streams.GetSelectedStream()
 		if s.selectedStream != nil {
 			s.messages.SetStreamName(s.selectedStream.Name)
 			s.consumers.SetStreamName(s.selectedStream.Name)
-			s.activeTab = 1
+			s.activeTab = MessagesTab
 			return s, s.messages.ApplyFilter
 		}
-	case 1:
+	case MessagesTab:
 		s.messages.ToggleDetail()
-	case 2:
+	case ConsumersTab:
 		s.consumers.ToggleDetail()
 		return s, s.fetchPendingAndUpcomingMessages()
 	}
@@ -258,20 +295,90 @@ func (s state) fetchPendingAndUpcomingMessages() tea.Cmd {
 	}
 }
 
+const (
+	colorLightBlue = lipgloss.Color("117")
+	colorBlack     = lipgloss.Color("0")
+	colorWhite     = lipgloss.Color("255")
+	colorGray      = lipgloss.Color("240")
+	colorGreen     = "2"
+	colorRed       = "9"
+	dateFormat     = time.RFC3339
+	minWidth       = 60
+)
+
 func (s state) View() string {
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
-	minWidth := 60
 	if width < minWidth {
 		return fmt.Sprintf("Error: Screen too narrow (min %d, current %d)\n\nq (quit)", minWidth, width)
 	}
 
 	tabBar := s.renderTabBar(width)
-	content := s.renderContent(width, height-3)
-	content = s.truncateOrPadContent(content, width, height-3)
+	content := s.renderContent(width, height-5)
 	bottomBar := s.renderBottomBar(width)
 
 	return tabBar + "\n" + content + "\n" + bottomBar
+}
+
+func (s state) renderContent(width, height int) string {
+	content := s.getContentForActiveTab(width, height)
+	return s.truncateOrPadContent(content, width, height)
+}
+
+func (s state) getContentForActiveTab(width, height int) string {
+	if s.selectedStream == nil {
+		return s.streams.View(width, height)
+	}
+
+	switch s.activeTab {
+	case MessagesTab:
+		return s.messages.View(width, height)
+	case ConsumersTab:
+		return s.consumers.View(width, height)
+	default:
+		return "Invalid tab"
+	}
+}
+
+func (s state) renderTabBar(width int) string {
+	tabs := s.getTabs()
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderBottom(true).
+		Width(width).
+		Render(lipgloss.JoinHorizontal(lipgloss.Left, tabs...))
+}
+
+func (s state) getTabs() []string {
+	var tabs []string
+	if s.selectedStream == nil {
+		tabs = append(tabs, s.renderTab("Streams", StreamsTab))
+		return tabs
+	} else {
+		streamName := fmt.Sprintf("Stream: %s", s.selectedStream.Name)
+		tabs = append(tabs, s.renderTab(streamName, StreamsTab))
+		tabs = append(tabs, s.renderTab("Messages (m)", MessagesTab))
+		tabs = append(tabs, s.renderTab("Consumers (c)", ConsumersTab))
+		return tabs
+	}
+}
+
+func (s state) renderTab(text string, tabType TabType) string {
+	style := lipgloss.NewStyle().Padding(0, 1)
+
+	switch {
+	case tabType == StreamsTab:
+		style = style.
+			Background(colorWhite).
+			Foreground(colorBlack).
+			Bold(true)
+	case tabType == s.activeTab:
+		style = style.
+			Background(colorLightBlue).
+			Foreground(colorBlack)
+	}
+
+	return style.Render(text)
 }
 
 func (s state) truncateOrPadContent(content string, width, height int) string {
@@ -294,66 +401,16 @@ func (s state) truncateOrPadContent(content string, width, height int) string {
 	return strings.Join(contentLines, "\n")
 }
 
-func (s state) renderTabBar(width int) string {
-	var tabs []string
-	if s.selectedStream == nil {
-		tabs = append(tabs, s.renderTab("Streams (s)", 0))
-	} else {
-		streamName := fmt.Sprintf("Stream (s): %s", s.selectedStream.Name)
-		tabs = append(tabs, s.renderTab(streamName, -1))
-		tabs = append(tabs, s.renderTab("Messages (m)", 1))
-		tabs = append(tabs, s.renderTab("Consumers (c)", 2))
-	}
-	return lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		Width(width).
-		Render(lipgloss.JoinHorizontal(lipgloss.Left, tabs...))
-}
-
-func (s state) renderTab(text string, index int) string {
-	style := lipgloss.NewStyle().Padding(0, 1)
-
-	if index == -1 { // Stream tab
-		style = style.
-			Background(lipgloss.Color("117")). // Light blue background
-			Foreground(lipgloss.Color("0"))    // Black text
-	} else if index == s.activeTab {
-		style = style.
-			Foreground(lipgloss.Color("117")). // Light blue text
-			Underline(true)
-	}
-
-	return style.Render(text)
-}
-
-func (s state) renderContent(width, height int) string {
-	if s.selectedStream == nil {
-		return s.streams.View(width, height)
-	}
-
-	switch s.activeTab {
-	case 0:
-		return s.streams.View(width, height)
-	case 1:
-		return s.messages.View(width, height)
-	case 2:
-		return s.consumers.View(width, height)
-	}
-
-	return "Invalid tab"
-}
-
 func (s state) renderBottomBar(width int) string {
 	var content string
 	if s.selectedStream == nil {
 		content = "q (quit), ↑/↓ (navigate list), enter (select stream)"
 	} else {
-		content = "q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (select/toggle details), backspace (go back)"
+		content = "q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details), backspace (go back)"
 	}
 	return lipgloss.NewStyle().
-		Background(lipgloss.Color("240")).
-		Foreground(lipgloss.Color("255")).
+		Background(colorGray).
+		Foreground(colorWhite).
 		Padding(0, 1).
 		Width(width).
 		Align(lipgloss.Center).

@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
@@ -12,6 +11,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+type TableColumnWidths struct {
+	seq     int
+	key     int
+	created int
+	data    int
+}
 
 type MessageState struct {
 	messages        []api.Message
@@ -24,7 +30,7 @@ type MessageState struct {
 	filterMode      bool
 	err             error
 	errorMsg        string
-	streamName      string // Changed from streamID to streamName
+	streamName      string
 }
 
 func NewMessageState(config *Config) *MessageState {
@@ -40,13 +46,13 @@ func NewMessageState(config *Config) *MessageState {
 		filter:      "",
 		filterInput: ti,
 		filterMode:  false,
-		streamName:  "", // Changed from streamID to streamName
+		streamName:  "",
 	}
 }
 
 func (m *MessageState) FetchMessages(limit int, filter string) error {
-	if m.streamName == "" { // Changed from streamID to streamName
-		return nil // No error, but we won't fetch messages
+	if m.streamName == "" {
+		return nil
 	}
 
 	ctx, err := context.LoadContext(m.config.ContextName)
@@ -55,18 +61,17 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 	}
 
 	m.filter = filter
-	messages, err := api.ListStreamMessages(ctx, m.streamName, limit, "seq_desc", filter) // Changed from streamID to streamName
+	messages, err := api.ListStreamMessages(ctx, m.streamName, limit, "seq_desc", filter)
 	if err != nil {
 		m.errorMsg = fmt.Sprintf("Error fetching messages: %v", err)
 		return nil
 	}
 
 	m.messages = messages
-	m.errorMsg = "" // Clear any previous error message
+	m.errorMsg = ""
 
-	// Refresh selectedMessage if it exists
 	if m.selectedMessage != nil {
-		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.selectedMessage.Key) // Changed from streamID to streamName
+		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.selectedMessage.Key)
 		if err != nil {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
@@ -78,7 +83,7 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 }
 
 func (m *MessageState) View(width, height int) string {
-	if m.streamName == "" { // Changed from streamID to streamName
+	if m.streamName == "" {
 		return "\nPlease select a stream to view messages"
 	}
 
@@ -92,8 +97,8 @@ func (m *MessageState) View(width, height int) string {
 	return m.listView(width, height)
 }
 
-func (m *MessageState) SetStreamName(streamName string) { // Changed from SetStreamID to SetStreamName
-	m.streamName = streamName // Changed from streamID to streamName
+func (m *MessageState) SetStreamName(streamName string) {
+	m.streamName = streamName
 	m.messages = nil
 	m.cursor = 0
 	m.selectedMessage = nil
@@ -106,25 +111,21 @@ func (m *MessageState) SetStreamName(streamName string) { // Changed from SetStr
 }
 
 func (m *MessageState) listView(width, height int) string {
-	// Add the "MESSAGES" title
-	output := lipgloss.NewStyle().Bold(true).Render("MESSAGES") + "\n"
+	output := lipgloss.NewStyle().Bold(true).Render("Select a message to view details") + "\n"
 
-	// Add the filter input or filter display
 	if m.filterMode {
 		output += fmt.Sprintf("Filter (f): %s\n", strings.TrimPrefix(m.filterInput.View(), "> "))
 	} else {
 		output += fmt.Sprintf("Filter (f): %s\n", m.filter)
 	}
 
-	// Display error message if present
 	if m.errorMsg != "" {
-		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red text
+		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed))
 		output += errorStyle.Render(m.errorMsg) + "\n"
 	} else {
 		output += "\n"
 	}
 
-	// Check if there are no messages
 	if len(m.messages) == 0 {
 		message := "No messages available\n\nTry adjusting your filter or adding messages to the stream:"
 		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
@@ -132,7 +133,7 @@ func (m *MessageState) listView(width, height int) string {
 		message += "\n\n" + codePart
 
 		lines := strings.Split(message, "\n")
-		verticalPadding := (height - len(lines) - 3) / 2 // Subtract 3 for the title, filter, and empty line
+		verticalPadding := (height - len(lines) - 3) / 2
 
 		output += strings.Repeat("\n", verticalPadding)
 
@@ -144,43 +145,83 @@ func (m *MessageState) listView(width, height int) string {
 		return output
 	}
 
-	seqWidth := m.calculateSeqWidth()
-	keyWidth := m.calculateKeyWidth(width)
-	createdWidth := 22
-	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-3)
-
-	// Create the table header style
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2")). // Green background
-		Width(width)
-
-	// Format the table header
-	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s",
-		seqWidth, "SEQ",
-		keyWidth, "KEY",
-		createdWidth, "CREATED",
-		dataWidth, "DATA")
-
-	output += tableHeaderStyle.Render(tableHeader) + "\n"
-
-	for i, msg := range m.messages {
-		line := formatMessageLine(msg, seqWidth, keyWidth, createdWidth, dataWidth)
-		style := lipgloss.NewStyle()
-		if i == m.cursor {
-			style = style.
-				Background(lipgloss.Color("117")). // Light blue background
-				Foreground(lipgloss.Color("0"))    // Black text
-		}
-		output += style.Render(line) + "\n"
-	}
+	columnWidths := m.calculateColumnWidths(width)
+	output += m.renderTableHeader(columnWidths, width)
+	output += m.renderTableRows(columnWidths)
 
 	return output
 }
 
+func (m *MessageState) calculateColumnWidths(width int) TableColumnWidths {
+	seqWidth := m.calculateSeqWidth()
+	keyWidth := m.calculateKeyWidth(width)
+	createdWidth := 22
+	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-4) // 4 spaces between columns
+
+	// Distribute extra space evenly among columns
+	extraSpace := width - (seqWidth + keyWidth + createdWidth + dataWidth + 4)
+	if extraSpace > 0 {
+		extraPerColumn := extraSpace / 4
+		seqWidth += extraPerColumn
+		keyWidth += extraPerColumn
+		createdWidth += extraPerColumn
+		dataWidth += extraSpace - (3 * extraPerColumn) // Add remaining space to data column
+	}
+
+	return TableColumnWidths{
+		seq:     seqWidth,
+		key:     keyWidth,
+		created: createdWidth,
+		data:    dataWidth,
+	}
+}
+
+func (m *MessageState) renderTableHeader(widths TableColumnWidths, totalWidth int) string {
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color(colorBlack)).
+		Background(lipgloss.Color(colorGreen)).
+		Width(totalWidth)
+
+	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s",
+		widths.seq, "SEQ",
+		widths.key, "KEY",
+		widths.created, "CREATED",
+		widths.data, "DATA")
+
+	return tableHeaderStyle.Render(tableHeader) + "\n"
+}
+
+func (m *MessageState) renderTableRows(widths TableColumnWidths) string {
+	var output string
+	for i, msg := range m.messages {
+		line := formatMessageLine(msg, widths)
+		style := lipgloss.NewStyle()
+		if i == m.cursor {
+			style = style.
+				Background(lipgloss.Color(colorLightBlue)).
+				Foreground(lipgloss.Color(colorBlack))
+		}
+		output += style.Render(line) + "\n"
+	}
+	return output
+}
+
+func formatMessageLine(msg api.Message, widths TableColumnWidths) string {
+	seq := fmt.Sprintf("%d", msg.Seq)
+	key := truncateString(msg.Key, widths.key)
+	created := msg.CreatedAt.Format(dateFormat)
+	data := truncateString(msg.Data, widths.data)
+
+	return fmt.Sprintf("%-*s %-*s %-*s %-*s",
+		widths.seq, seq,
+		widths.key, key,
+		widths.created, created,
+		widths.data, data)
+}
+
 func (m *MessageState) calculateSeqWidth() int {
-	maxSeqWidth := 3 // Minimum width for "Seq" header
+	maxSeqWidth := 3
 	for _, msg := range m.messages {
 		seqWidth := len(fmt.Sprintf("%d", msg.Seq))
 		if seqWidth > maxSeqWidth {
@@ -191,7 +232,7 @@ func (m *MessageState) calculateSeqWidth() int {
 }
 
 func (m *MessageState) calculateKeyWidth(totalWidth int) int {
-	maxKeyWidth := 3 // Minimum width for "Key" header
+	maxKeyWidth := 3
 	for _, msg := range m.messages {
 		keyWidth := len(msg.Key)
 		if keyWidth > maxKeyWidth {
@@ -201,30 +242,17 @@ func (m *MessageState) calculateKeyWidth(totalWidth int) int {
 	return min(min(maxKeyWidth, totalWidth/2), 255)
 }
 
-func formatMessageLine(msg api.Message, seqWidth, keyWidth, createdWidth, dataWidth int) string {
-	seq := fmt.Sprintf("%d", msg.Seq)
-	key := truncateString(msg.Key, keyWidth)
-	created := msg.CreatedAt.Format(time.RFC3339)
-	data := truncateString(msg.Data, dataWidth)
-
-	return fmt.Sprintf("%-*s %-*s %-*s %-*s",
-		seqWidth, seq,
-		keyWidth, key,
-		createdWidth, created,
-		dataWidth, data)
-}
-
 func (m *MessageState) detailView(_, _ int) string {
 	if m.selectedMessage == nil {
-		return "No message selected"
+		return "No message selected or no messages available"
 	}
 
 	msg := *m.selectedMessage
-	output := lipgloss.NewStyle().Bold(true).Render("MESSAGE DETAIL")
+	output := lipgloss.NewStyle().Bold(true).Render("Message details")
 	output += "\n\n"
 	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
 	output += fmt.Sprintf("Key:     %s\n", msg.Key)
-	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(time.RFC3339))
+	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(dateFormat))
 
 	output += formatDetailData(msg.Data)
 
@@ -238,7 +266,12 @@ func formatDetailData(data string) string {
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 	if m.showDetail {
-		m.selectedMessage = &m.messages[m.cursor]
+		// Only set selectedMessage if there are messages
+		if len(m.messages) > 0 {
+			m.selectedMessage = &m.messages[m.cursor]
+		} else {
+			m.selectedMessage = nil
+		}
 	} else {
 		m.updateCursorAfterDetailView()
 	}
@@ -333,7 +366,7 @@ func (m *MessageState) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
 }
 
 func (m *MessageState) ApplyFilter() tea.Msg {
-	if m.streamName == "" { // Changed from streamID to streamName
+	if m.streamName == "" {
 		return nil
 	}
 
@@ -347,6 +380,6 @@ func (m *MessageState) ApplyFilter() tea.Msg {
 		m.errorMsg = fmt.Sprintf("Error: %v", err)
 		return err
 	}
-	m.err = nil // Clear any previous error
+	m.err = nil
 	return nil
 }

@@ -47,6 +47,12 @@ func (c *ConsumerState) FetchConsumers(limit int) error {
 
 	c.consumers = limitConsumers(consumers, limit)
 	c.updateDetailView()
+
+	// Select the first consumer if none is selected
+	if c.selectedConsumerID == "" && len(c.consumers) > 0 {
+		c.setSelectedConsumer(c.consumers[0].ID)
+	}
+
 	return nil
 }
 
@@ -58,10 +64,7 @@ func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
 }
 
 func (c *ConsumerState) updateDetailView() {
-	if len(c.consumers) == 1 {
-		c.setSelectedConsumer(c.consumers[0].ID)
-		c.showDetail = true
-	} else if len(c.consumers) == 0 {
+	if len(c.consumers) == 0 {
 		c.setSelectedConsumer("")
 		c.showDetail = false
 	} else if c.selectedConsumerID == "" {
@@ -82,7 +85,7 @@ func (c *ConsumerState) View(width, height int) string {
 		return "\nPlease select a stream to view consumers"
 	}
 
-	if c.showDetail || len(c.consumers) == 1 {
+	if c.showDetail {
 		return c.detailView(width)
 	}
 	return c.listView(width, height)
@@ -124,7 +127,7 @@ func (c *ConsumerState) listView(width, height int) string {
 		Width(width)
 
 	// Add the "CONSUMERS" title
-	output := lipgloss.NewStyle().Bold(true).Render("CONSUMERS") + "\n\n"
+	output := lipgloss.NewStyle().Bold(true).Render("Select a consumer to view details") + "\n\n"
 
 	// Format the table header
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
@@ -191,8 +194,8 @@ func (c *ConsumerState) detailView(width int) string {
 
 	output := formatConsumerDetail(*consumer)
 
-	output += formatMessageSection("Pending Messages", c.pendingMessages, width, true, c.isLoading)
-	output += formatMessageSection("Upcoming Messages", c.upcomingMessages, width, false, c.isLoading)
+	output += formatMessageSection("Pending messages", c.pendingMessages, width, true, c.isLoading)
+	output += formatMessageSection("Upcoming messages", c.upcomingMessages, width, false, c.isLoading)
 
 	return output
 }
@@ -207,7 +210,7 @@ func (c *ConsumerState) getSelectedConsumer() *api.Consumer {
 }
 
 func formatConsumerDetail(consumer api.Consumer) string {
-	output := lipgloss.NewStyle().Bold(true).Render("CONSUMER DETAIL")
+	output := lipgloss.NewStyle().Bold(true).Render("Consumer details")
 	output += "\n\n"
 	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
 	output += fmt.Sprintf("Name:            %s\n", consumer.Name)

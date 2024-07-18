@@ -5,26 +5,8 @@ defmodule Sequin.Streams.Message do
   import Ecto.Changeset
   import Ecto.Query
 
-  @token_keys [
-    :token1,
-    :token2,
-    :token3,
-    :token4,
-    :token5,
-    :token6,
-    :token7,
-    :token8,
-    :token9,
-    :token10,
-    :token11,
-    :token12,
-    :token13,
-    :token14,
-    :token15,
-    :token16
-  ]
+  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
 
-  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at] ++ @token_keys}
   @primary_key false
   typed_schema "messages" do
     field :subject, :string, primary_key: true, read_after_writes: true

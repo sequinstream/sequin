@@ -150,7 +150,7 @@ sequin --help
 
 ## Getting Started
 
-See the [getting started guide](./getting-started.md).
+See the [getting started guide](./docs/getting-started.md).
 
 ## CLI
 

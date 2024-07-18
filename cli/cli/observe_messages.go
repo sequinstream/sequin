@@ -311,7 +311,7 @@ func truncateString(s string, maxLen int) string {
 	if idx := strings.Index(s, "\n"); idx != -1 {
 		s = s[:idx]
 	}
-	if maxLen <= 3 {
+	if maxLen <= 3 && len(s) > 3 {
 		return strings.Repeat(".", maxLen)
 	}
 	if len(s) <= maxLen {

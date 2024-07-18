@@ -131,7 +131,7 @@ func (c *ConsumerState) listView(width, height int) string {
 
 	// Format the table header
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-		nameWidth, "SLUG",
+		nameWidth, "NAME",
 		filterWidth, "FILTER PATTERN",
 		maxAckPendingWidth, "MAX ACK PENDING",
 		maxDeliverWidth, "MAX DELIVER",
@@ -157,7 +157,7 @@ func (c *ConsumerState) listView(width, height int) string {
 }
 
 func (c *ConsumerState) calculateNameWidth(totalWidth int) int {
-	maxNameWidth := 3 // Minimum width for "Name" header
+	maxNameWidth := 4 // Minimum width for "Name" header
 	for _, consumer := range c.consumers {
 		nameWidth := len(consumer.Name)
 		if nameWidth > maxNameWidth {

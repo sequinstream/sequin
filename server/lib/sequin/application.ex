@@ -37,14 +37,13 @@ defmodule Sequin.Application do
       {Phoenix.PubSub, name: Sequin.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Sequin.Finch},
-      # Start a worker by calling: Sequin.Worker.start_link(arg)
-      # {Sequin.Worker, arg},
-      # Start to serve requests, typically the last entry
-      SequinWeb.Endpoint,
       {Task.Supervisor, name: Sequin.TaskSupervisor},
       {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
       {Oban, Application.fetch_env!(:sequin, Oban)},
-      ConnectionCache
+      ConnectionCache,
+      SequinWeb.Presence,
+      # Start to serve requests, typically the last entry
+      SequinWeb.Endpoint
     ]
   end
 

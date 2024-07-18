@@ -207,12 +207,17 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       account: account,
       postgres_replication_attrs: postgres_replication_attrs
     } do
-      attrs = Map.put(postgres_replication_attrs, :backfill_existing_rows, false)
+      attrs =
+        postgres_replication_attrs
+        |> Map.put(:backfill_existing_rows, false)
+        |> Map.put(:status, :active)
+
       conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
+      assert postgres_replication.status == :active
       refute_enqueued(worker: BackfillPostgresTableWorker)
     end
   end

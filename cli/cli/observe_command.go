@@ -18,16 +18,26 @@ import (
 
 // AddObserveCommands adds all observe-related commands to the given app
 func AddObserveCommands(app *fisk.Application, config *Config) {
-	app.Command("observe", "Observe stream in real-time").
+	observeCmd := app.Command("observe", "Observe stream in real-time").
 		Alias("obs").
-		Alias("o").
-		Action(func(c *fisk.ParseContext) error {
-			ctx, err := sequinContext.LoadContext(config.ContextName)
-			if err != nil {
-				return fmt.Errorf("failed to load context: %w", err)
-			}
-			return streamObserve(c, config, ctx)
-		})
+		Alias("o")
+
+	listenFlag := observeCmd.Flag("listen", "Listen for incoming messages").
+		Short('l').
+		Bool()
+
+	observeCmd.Action(func(c *fisk.ParseContext) error {
+		ctx, err := sequinContext.LoadContext(config.ContextName)
+		if err != nil {
+			return fmt.Errorf("failed to load context: %w", err)
+		}
+
+		if *listenFlag {
+			return streamListen(c, config, ctx)
+		}
+
+		return streamObserve(c, config, ctx)
+	})
 }
 
 type TabType int
@@ -103,7 +113,7 @@ func doTick() tea.Cmd {
 }
 
 func doSlowTick() tea.Cmd {
-	return tea.Tick(time.Second/10, func(t time.Time) tea.Msg {
+	return tea.Tick(time.Second*10, func(t time.Time) tea.Msg {
 		return slowTickMsg(t)
 	})
 }
@@ -115,7 +125,7 @@ func calculateLimit() int {
 	return height - 9
 }
 
-func (s state) Init() tea.Cmd {
+func (s *state) Init() tea.Cmd {
 	return tea.Batch(
 		doTick(),
 		doSlowTick(),
@@ -125,7 +135,7 @@ func (s state) Init() tea.Cmd {
 	)
 }
 
-func (s state) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (s *state) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return s.handleKeyPress(msg)
@@ -138,7 +148,7 @@ func (s state) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 }
 
-func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if s.activeTab == MessagesTab && s.messages.filterMode {
 		return s, s.messages.HandleFilterModeKeyPress(msg)
 	}
@@ -146,27 +156,19 @@ func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "tab", "right", "l":
 		if s.selectedStream != nil {
-			s.activeTab = s.nextTab()
+			s.setActiveTab(s.nextTab())
 		}
-		s.messages.DisableDetailView()
-		s.consumers.DisableDetailView()
 	case "shift+tab", "left", "h":
 		if s.selectedStream != nil {
-			s.activeTab = s.previousTab()
+			s.setActiveTab(s.previousTab())
 		}
-		s.messages.DisableDetailView()
-		s.consumers.DisableDetailView()
 	case "m":
 		if s.selectedStream != nil {
-			s.activeTab = MessagesTab
-			s.messages.DisableDetailView()
-			s.consumers.DisableDetailView()
+			s.setActiveTab(MessagesTab)
 		}
 	case "c":
 		if s.selectedStream != nil {
-			s.activeTab = ConsumersTab
-			s.messages.DisableDetailView()
-			s.consumers.DisableDetailView()
+			s.setActiveTab(ConsumersTab)
 		}
 	case "s", "backspace":
 		return s.handleBackspace()
@@ -189,7 +191,7 @@ func (s state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // Helper function to get the next tab
-func (s state) nextTab() TabType {
+func (s *state) nextTab() TabType {
 	switch s.activeTab {
 	case StreamsTab:
 		return StreamsTab
@@ -203,7 +205,7 @@ func (s state) nextTab() TabType {
 }
 
 // Helper function to get the previous tab
-func (s state) previousTab() TabType {
+func (s *state) previousTab() TabType {
 	switch s.activeTab {
 	case StreamsTab:
 		return StreamsTab
@@ -216,31 +218,21 @@ func (s state) previousTab() TabType {
 	}
 }
 
-func (s state) handleBackspace() (tea.Model, tea.Cmd) {
+func (s *state) handleBackspace() (tea.Model, tea.Cmd) {
 	switch s.activeTab {
 	case StreamsTab:
-		if s.selectedStream != nil {
-			s.selectedStream = nil
-			s.messages.SetStreamName("")
-			s.consumers.SetStreamName("")
-		}
+		// No change needed here
 	case MessagesTab:
 		if s.messages.showDetail {
 			s.messages.DisableDetailView()
-		} else if s.selectedStream != nil {
-			s.activeTab = StreamsTab
-			s.selectedStream = nil
-			s.messages.SetStreamName("")
-			s.consumers.SetStreamName("")
+		} else {
+			s.setActiveTab(StreamsTab)
 		}
 	case ConsumersTab:
 		if s.consumers.showDetail {
 			s.consumers.DisableDetailView()
-		} else if s.selectedStream != nil {
-			s.activeTab = StreamsTab
-			s.selectedStream = nil
-			s.messages.SetStreamName("")
-			s.consumers.SetStreamName("")
+		} else {
+			s.setActiveTab(StreamsTab)
 		}
 	}
 	return s, nil
@@ -257,14 +249,14 @@ func (s *state) moveCursor(direction int) {
 	}
 }
 
-func (s state) handleEnter() (tea.Model, tea.Cmd) {
+func (s *state) handleEnter() (tea.Model, tea.Cmd) {
 	switch s.activeTab {
 	case StreamsTab:
 		s.selectedStream = s.streams.GetSelectedStream()
 		if s.selectedStream != nil {
 			s.messages.SetStreamName(s.selectedStream.Name)
 			s.consumers.SetStreamName(s.selectedStream.Name)
-			s.activeTab = MessagesTab
+			s.setActiveTab(MessagesTab)
 			return s, s.messages.ApplyFilter
 		}
 	case MessagesTab:
@@ -276,7 +268,7 @@ func (s state) handleEnter() (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
-func (s state) handleSlowTick() (tea.Model, tea.Cmd) {
+func (s *state) handleSlowTick() (tea.Model, tea.Cmd) {
 	return s, tea.Batch(
 		doSlowTick(),
 		s.fetchMessages(),
@@ -285,7 +277,7 @@ func (s state) handleSlowTick() (tea.Model, tea.Cmd) {
 	)
 }
 
-func (s state) fetchPendingAndUpcomingMessages() tea.Cmd {
+func (s *state) fetchPendingAndUpcomingMessages() tea.Cmd {
 	return func() tea.Msg {
 		err := s.consumers.fetchPendingAndUpcomingMessages()
 		if err != nil {
@@ -306,7 +298,7 @@ const (
 	minWidth       = 60
 )
 
-func (s state) View() string {
+func (s *state) View() string {
 	width, height, _ := term.GetSize(int(os.Stdout.Fd()))
 
 	if width < minWidth {
@@ -320,12 +312,12 @@ func (s state) View() string {
 	return tabBar + "\n" + content + "\n" + bottomBar
 }
 
-func (s state) renderContent(width, height int) string {
+func (s *state) renderContent(width, height int) string {
 	content := s.getContentForActiveTab(width, height)
 	return s.truncateOrPadContent(content, width, height)
 }
 
-func (s state) getContentForActiveTab(width, height int) string {
+func (s *state) getContentForActiveTab(width, height int) string {
 	if s.selectedStream == nil {
 		return s.streams.View(width, height)
 	}
@@ -340,7 +332,7 @@ func (s state) getContentForActiveTab(width, height int) string {
 	}
 }
 
-func (s state) renderTabBar(width int) string {
+func (s *state) renderTabBar(width int) string {
 	tabs := s.getTabs()
 	return lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
@@ -349,7 +341,7 @@ func (s state) renderTabBar(width int) string {
 		Render(lipgloss.JoinHorizontal(lipgloss.Left, tabs...))
 }
 
-func (s state) getTabs() []string {
+func (s *state) getTabs() []string {
 	var tabs []string
 	if s.selectedStream == nil {
 		tabs = append(tabs, s.renderTab("Streams", StreamsTab))
@@ -363,7 +355,7 @@ func (s state) getTabs() []string {
 	}
 }
 
-func (s state) renderTab(text string, tabType TabType) string {
+func (s *state) renderTab(text string, tabType TabType) string {
 	style := lipgloss.NewStyle().Padding(0, 1)
 
 	switch {
@@ -381,7 +373,7 @@ func (s state) renderTab(text string, tabType TabType) string {
 	return style.Render(text)
 }
 
-func (s state) truncateOrPadContent(content string, width, height int) string {
+func (s *state) truncateOrPadContent(content string, width, height int) string {
 	contentLines := strings.Split(content, "\n")
 	if len(contentLines) > height {
 		// Truncate content and add indicator
@@ -401,7 +393,7 @@ func (s state) truncateOrPadContent(content string, width, height int) string {
 	return strings.Join(contentLines, "\n")
 }
 
-func (s state) renderBottomBar(width int) string {
+func (s *state) renderBottomBar(width int) string {
 	var content string
 	if s.selectedStream == nil {
 		content = "q (quit), ↑/↓ (navigate list), enter (select stream)"
@@ -418,9 +410,112 @@ func (s state) renderBottomBar(width int) string {
 }
 
 func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {
-	p := tea.NewProgram(initialState(config, ctx), tea.WithAltScreen())
+	statePtr := &state{}                  // Create a pointer to the state
+	*statePtr = initialState(config, ctx) // Initialize the state
+
+	observeChannel, err := api.NewObserveChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create observe channel: %w", err)
+	}
+
+	err = observeChannel.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect to observe channel: %w", err)
+	}
+
+	statePtr.registerCallbacks(observeChannel)
+
+	p := tea.NewProgram(statePtr, tea.WithAltScreen()) // Pass the pointer to the program
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("error running program: %w", err)
 	}
 	return nil
+}
+
+func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
+	observeChannel.OnStreamCreated(func(stream api.Stream) {
+		s.streams.FetchStreams(calculateLimit())
+	})
+
+	observeChannel.OnStreamUpdated(func(stream api.Stream) {
+		s.streams.FetchStreams(calculateLimit())
+	})
+
+	observeChannel.OnStreamDeleted(func(stream api.Stream) {
+		if s.selectedStream != nil && s.selectedStream.Name == stream.Name {
+			s.setActiveTab(StreamsTab)
+		}
+
+		s.streams.FetchStreams(calculateLimit())
+	})
+
+	observeChannel.OnConsumerCreated(func(consumer api.Consumer) {
+		s.consumers.FetchConsumers(calculateLimit())
+	})
+
+	observeChannel.OnConsumerUpdated(func(consumer api.Consumer) {
+		s.consumers.FetchConsumers(calculateLimit())
+	})
+
+	observeChannel.OnConsumerDeleted(func(consumer api.Consumer) {
+		s.consumers.FetchConsumers(calculateLimit())
+	})
+
+	observeChannel.OnMessagesUpserted(func(messages []api.Message) {
+		if s.selectedStream != nil {
+			filteredMessages := filterMessagesForStream(messages, s.selectedStream.ID)
+			s.messages.MessagesUpserted(filteredMessages, calculateLimit())
+		}
+	})
+}
+
+func filterMessagesForStream(messages []api.Message, streamID string) []api.Message {
+	filtered := make([]api.Message, 0)
+	for _, msg := range messages {
+		if msg.StreamID == streamID {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
+}
+
+func streamListen(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {
+	observeChannel, err := api.NewObserveChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create observe channel: %w", err)
+	}
+
+	err = observeChannel.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect to observe channel: %w", err)
+	}
+
+	fmt.Println("Listening for incoming messages. Press Ctrl+C to exit.")
+
+	observeChannel.OnMessagesUpserted(func(messages []api.Message) {
+		for _, msg := range messages {
+			fmt.Printf("New message: Stream ID: %s, Sequence: %d, Data: %s\n", msg.StreamID, msg.Seq, msg.Data)
+		}
+	})
+
+	// Keep the program running
+	select {}
+}
+
+// Add this new function
+func (s *state) setActiveTab(tab TabType) {
+	s.activeTab = tab
+	s.messages.DisableDetailView()
+	s.consumers.DisableDetailView()
+
+	switch tab {
+	case StreamsTab:
+		s.selectedStream = nil
+		s.messages.SetStreamName("")
+		s.consumers.SetStreamName("")
+	case ConsumersTab:
+		s.consumers.WillAppear(calculateLimit())
+	default:
+		// No change needed here
+	}
 }

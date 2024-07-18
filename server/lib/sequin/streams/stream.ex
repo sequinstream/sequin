@@ -48,6 +48,10 @@ defmodule Sequin.Streams.Stream do
     from(s in query, where: s.account_id == ^account_id)
   end
 
+  def order_by(query \\ __MODULE__, order_by) do
+    from(s in query, order_by: ^order_by)
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(s in query, as: :stream)
   end

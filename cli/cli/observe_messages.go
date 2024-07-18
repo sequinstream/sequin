@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/sequinstream/sequin/cli/api"
@@ -82,10 +83,48 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
 			m.selectedMessage = &updatedMessage
+			m.fetchMessageDetail()
 		}
 	}
 
 	return nil
+}
+
+func (m *MessageState) MessagesUpserted(messages []api.Message, limit int) {
+	// Create a map of existing messages for quick lookup
+	existingMessages := make(map[string]*api.Message)
+	for i := range m.messages {
+		existingMessages[m.messages[i].Key] = &m.messages[i]
+	}
+
+	// Process upserted messages
+	for _, upsertedMsg := range messages {
+		if existingMsg, exists := existingMessages[upsertedMsg.Key]; exists {
+			// Replace existing message if the upserted one is newer
+			if upsertedMsg.UpdatedAt.After(existingMsg.UpdatedAt) {
+				*existingMsg = upsertedMsg
+			}
+		} else {
+			// Append new message
+			m.messages = append(m.messages, upsertedMsg)
+		}
+
+		// Check if the upserted message is the selected message
+		if m.selectedMessage != nil && m.selectedMessage.Key == upsertedMsg.Key {
+			m.selectedMessage = &upsertedMsg
+			m.fetchMessageDetail()
+		}
+	}
+
+	// Sort messages by seq desc
+	sort.Slice(m.messages, func(i, j int) bool {
+		return m.messages[i].Seq > m.messages[j].Seq
+	})
+
+	// Limit the final list
+	if len(m.messages) > limit {
+		m.messages = m.messages[:limit]
+	}
 }
 
 func (m *MessageState) View(width, height int) string {
@@ -320,14 +359,10 @@ func formatDetailData(data string) string {
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 	if m.showDetail {
-		err := m.fetchMessageDetail()
-		if err != nil {
-			m.err = err
-			m.errorMsg = fmt.Sprintf("Error fetching message detail: %v", err)
-		}
 		// Only set selectedMessage if there are messages
-		if len(m.messages) > 0 {
+		if len(m.messages) > m.cursor {
 			m.selectedMessage = &m.messages[m.cursor]
+			m.fetchMessageDetail()
 		} else {
 			m.selectedMessage = nil
 		}
@@ -342,8 +377,7 @@ func (m *MessageState) fetchMessageDetail() error {
 		return err
 	}
 
-	msg := m.messages[m.cursor]
-	consumer_detail, err := api.FetchMessageDetail(ctx, "default", msg.Key)
+	consumer_detail, err := api.FetchMessageDetail(ctx, m.streamName, m.selectedMessage.Key)
 	if err != nil {
 		return err
 	}

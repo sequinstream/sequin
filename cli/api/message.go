@@ -9,4 +9,5 @@ type Message struct {
 	Seq       int       `json:"seq"`
 	Key       string    `json:"subject"`
 	UpdatedAt time.Time `json:"updated_at"`
+	StreamID  string    `json:"stream_id"`
 }

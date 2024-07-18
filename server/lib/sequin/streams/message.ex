@@ -121,6 +121,10 @@ defmodule Sequin.Streams.Message do
     from([message: m] in query, where: m.seq > ^seq)
   end
 
+  def where_subject_in(query \\ base_query(), subjects) do
+    from([message: m] in query, where: m.subject in ^subjects)
+  end
+
   def where_subject_pattern(query \\ base_query(), pattern) do
     tokens = Sequin.Subject.tokenize_pattern(pattern)
     trailing_wildcard = List.last(tokens) == ">"

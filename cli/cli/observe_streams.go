@@ -67,12 +67,27 @@ func (s *StreamState) View(width, height int) string {
 	output += "\n\n"
 
 	// Calculate column widths
-	nameWidth := s.calculateColumnWidth(width, 0.20, "NAME")
-	msgCountWidth := s.calculateColumnWidth(width, 0.15, "MESSAGES")
-	storageSizeWidth := s.calculateColumnWidth(width, 0.15, "STORAGE")
-	consumerCountWidth := s.calculateColumnWidth(width, 0.15, "CONSUMERS")
-	createdAtWidth := s.calculateColumnWidth(width, 0.20, "CREATED AT")
-	selectStreamWidth := s.calculateColumnWidth(width, 0.15, "SELECT STREAM")
+	nameWidth := s.calculateNameWidth()
+	msgCountWidth := s.calculateMsgCountWidth()
+	storageSizeWidth := s.calculateStorageSizeWidth()
+	consumerCountWidth := s.calculateConsumerCountWidth()
+	createdAtWidth := s.calculateCreatedAtWidth()
+
+	// Calculate the remaining width for the "SELECT STREAM" column
+	usedWidth := nameWidth + msgCountWidth + storageSizeWidth + consumerCountWidth + createdAtWidth + 5 // 5 spaces between columns
+	selectStreamWidth := width - usedWidth
+
+	// Ensure minimum width for "SELECT STREAM" column
+	if selectStreamWidth < len("SELECT STREAM") {
+		// Redistribute width if necessary
+		excess := len("SELECT STREAM") - selectStreamWidth
+		nameWidth -= excess / 5
+		msgCountWidth -= excess / 5
+		storageSizeWidth -= excess / 5
+		consumerCountWidth -= excess / 5
+		createdAtWidth -= excess / 5
+		selectStreamWidth = len("SELECT STREAM")
+	}
 
 	// Table header
 	tableHeaderStyle := lipgloss.NewStyle().
@@ -108,9 +123,51 @@ func (s *StreamState) View(width, height int) string {
 	return output
 }
 
-func (s *StreamState) calculateColumnWidth(totalWidth int, percentage float64, header string) int {
-	maxWidth := int(float64(totalWidth) * percentage)
-	return max(len(header), maxWidth)
+func (s *StreamState) calculateNameWidth() int {
+	maxWidth := len("NAME")
+	for _, stream := range s.streams {
+		if len(stream.Name) > maxWidth {
+			maxWidth = len(stream.Name)
+		}
+	}
+	return maxWidth
+}
+
+func (s *StreamState) calculateMsgCountWidth() int {
+	maxWidth := len("MESSAGES")
+	for _, stream := range s.streams {
+		width := len(fmt.Sprintf("%d", stream.Stats.MessageCount))
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+func (s *StreamState) calculateStorageSizeWidth() int {
+	maxWidth := len("STORAGE")
+	for _, stream := range s.streams {
+		width := len(formatBytes(stream.Stats.StorageSize))
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+func (s *StreamState) calculateConsumerCountWidth() int {
+	maxWidth := len("CONSUMERS")
+	for _, stream := range s.streams {
+		width := len(fmt.Sprintf("%d", stream.Stats.ConsumerCount))
+		if width > maxWidth {
+			maxWidth = width
+		}
+	}
+	return maxWidth
+}
+
+func (s *StreamState) calculateCreatedAtWidth() int {
+	return len("2006-01-02 15:04:05") // Fixed width for the date format
 }
 
 func formatStreamLine(stream api.Stream, nameWidth, msgCountWidth, storageSizeWidth, consumerCountWidth, createdAtWidth int) string {

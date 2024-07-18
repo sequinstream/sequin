@@ -1,6 +1,7 @@
 defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Error.NotFoundError
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.Streams.Consumer
@@ -46,7 +47,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
       perform_job_for_consumer(consumer)
 
       # Verify that no consumer message was created
-      assert_raise Ecto.NoResultsError, fn ->
+      assert_raise NotFoundError, fn ->
         Streams.get_consumer_message!(consumer.id, message.subject)
       end
 
@@ -63,7 +64,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
       perform_job_for_consumer(consumer)
 
       # Verify that no consumer message was created
-      assert_raise Ecto.NoResultsError, fn ->
+      assert_raise NotFoundError, fn ->
         Streams.get_consumer_message!(consumer.id, message.subject)
       end
 

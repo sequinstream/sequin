@@ -9,9 +9,10 @@ import (
 )
 
 type Context struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	ServerURL   string `json:"server_url"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	ServerURL    string `json:"server_url"`
+	WebSocketURL string `json:"websocket_url"`
 }
 
 // GetServerURL returns the server URL based on the current context
@@ -53,9 +54,10 @@ func LoadContext(name string) (*Context, error) {
 	if name == "" {
 		// Return default context if no name is specified
 		return &Context{
-			Name:        "default",
-			Description: "default context",
-			ServerURL:   fmt.Sprintf("http://localhost:%d", defaultPort),
+			Name:         "default",
+			Description:  "default context",
+			ServerURL:    fmt.Sprintf("http://localhost:%d", defaultPort),
+			WebSocketURL: fmt.Sprintf("ws://localhost:%d/cli", defaultPort),
 		}, nil
 	}
 

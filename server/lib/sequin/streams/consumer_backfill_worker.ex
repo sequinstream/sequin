@@ -10,11 +10,11 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
 
   @limit 10_000
 
-  def create(consumer_id, seq \\ 0)
+  def create(consumer_id, seq \\ 0, schedule_in_seconds \\ 0)
 
-  def create(consumer_id, seq) do
+  def create(consumer_id, seq, schedule_in_seconds) do
     %{consumer_id: consumer_id, seq: seq}
-    |> new()
+    |> new(schedule_in: schedule_in_seconds)
     |> Oban.insert()
   end
 
@@ -61,7 +61,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
         end
 
         next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> seq end)
-        create(consumer.id, next_seq)
+        create(consumer.id, next_seq, 10)
 
       _ ->
         next_seq = Enum.max_by(messages, fn message -> message.seq end).seq

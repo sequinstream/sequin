@@ -48,7 +48,7 @@ defmodule Sequin.Streams do
   # Streams
 
   def list_streams_for_account(account_id) do
-    account_id |> Stream.where_account_id() |> Repo.all()
+    account_id |> Stream.where_account_id() |> Stream.order_by(desc: :inserted_at) |> Repo.all()
   end
 
   def get_stream_for_account(account_id, id_or_name) do
@@ -65,6 +65,7 @@ defmodule Sequin.Streams do
       case create_stream(account_id, attrs) do
         {:ok, stream} ->
           create_records_partition(stream)
+          SequinWeb.ObserveChannel.broadcast("stream:created", stream)
           stream
 
         {:error, changes} ->
@@ -75,9 +76,13 @@ defmodule Sequin.Streams do
 
   def delete_stream_with_lifecycle(%Stream{} = stream) do
     Repo.transaction(fn ->
+      consumers = list_consumers_for_stream(stream.id)
+      Enum.each(consumers, fn consumer -> {:ok, _} = delete_consumer_with_lifecycle(consumer) end)
+
       case delete_stream(stream) do
         {:ok, stream} ->
           drop_records_partition(stream)
+          SequinWeb.ObserveChannel.broadcast("stream:deleted", stream)
           stream
 
         {:error, changes} ->
@@ -190,6 +195,8 @@ defmodule Sequin.Streams do
             {:ok, _} = ConsumerBackfillWorker.create(consumer.id)
           end
 
+          SequinWeb.ObserveChannel.broadcast("consumer:created", consumer)
+
           {:ok, consumer}
         end
       end)
@@ -215,12 +222,13 @@ defmodule Sequin.Streams do
     res =
       Repo.transact(fn ->
         case delete_consumer(consumer) do
-          :ok ->
+          {:ok, _} ->
             :ok = delete_consumer_partition(consumer)
-            consumer
+            SequinWeb.ObserveChannel.broadcast("consumer:deleted", consumer)
+            {:ok, consumer}
 
-          error ->
-            error
+          {:error, error} ->
+            {:error, error}
         end
       end)
 
@@ -241,6 +249,7 @@ defmodule Sequin.Streams do
     |> case do
       {:ok, consumer} ->
         delete_cached_list_consumers_for_stream(consumer.stream_id)
+        SequinWeb.ObserveChannel.broadcast("consumer:updated", consumer)
         {:ok, consumer}
 
       error ->
@@ -330,6 +339,9 @@ defmodule Sequin.Streams do
 
       {:subject_pattern, pattern}, query ->
         Message.where_subject_pattern(query, pattern)
+
+      {:subjects, subjects}, query ->
+        Message.where_subject_in(query, subjects)
     end)
   end
 
@@ -427,7 +439,7 @@ defmodule Sequin.Streams do
 
     consumers = cached_list_consumers_for_stream(stream_id)
 
-    Repo.transact(fn ->
+    fn ->
       {count, messages} =
         Repo.insert_all(
           Message,
@@ -435,6 +447,7 @@ defmodule Sequin.Streams do
           on_conflict: on_conflict,
           conflict_target: [:subject, :stream_id],
           timeout: :timer.seconds(30),
+          # FIXME: Do not select data here. It's just to pass data to ObserveChannel.
           returning: [:subject, :stream_id, :seq]
         )
 
@@ -449,8 +462,17 @@ defmodule Sequin.Streams do
       end)
       |> upsert_consumer_messages()
 
-      {:ok, count}
-    end)
+      {:ok, %{count: count, messages: messages}}
+    end
+    |> Repo.transact()
+    |> case do
+      {:ok, %{count: count, messages: messages}} ->
+        SequinWeb.ObserveChannel.broadcast("messages:upserted", {stream_id, messages})
+        {:ok, count}
+
+      {:error, e} ->
+        {:error, e}
+    end
   rescue
     e in Postgrex.Error ->
       if e.postgres.code == :character_not_in_repertoire and is_retry? == false do

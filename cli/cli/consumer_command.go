@@ -440,7 +440,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 	}
 
 	if config.AsCurl {
-		req, err := api.BuildFetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
+		req, err := api.BuildReceiveMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
 		if err != nil {
 			return err
 		}
@@ -454,7 +454,7 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 		return nil
 	}
 
-	messages, err := api.FetchNextMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
+	messages, err := api.ReceiveMessages(ctx, c.StreamID, c.ConsumerID, c.BatchSize)
 	if err != nil {
 		return err
 	}

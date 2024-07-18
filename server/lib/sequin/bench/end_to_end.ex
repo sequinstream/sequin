@@ -53,7 +53,7 @@ defmodule Sequin.Bench.EndToEnd do
     Sequin.Bench.run(
       [
         {"e2e_0M_upsert", fn batch_size -> upsert_messages(stream.id, batch_size) end},
-        {"e2e_1M_next", fn batch_size -> next_and_ack(consumer, batch_size) end,
+        {"e2e_1M_receive", fn batch_size -> receive_and_ack(consumer, batch_size) end,
          before: fn _input ->
            if current_message_count < 1_000_000 do
              populate_messages(stream.id, 1_000_000)
@@ -61,7 +61,7 @@ defmodule Sequin.Bench.EndToEnd do
              Logger.info("Skipping, db already populated")
            end
          end},
-        {"e2e_10M_next", fn batch_size -> next_and_ack(consumer, batch_size) end,
+        {"e2e_10M_receive", fn batch_size -> receive_and_ack(consumer, batch_size) end,
          before: fn _input ->
            if current_message_count < 8_000_000 do
              populate_messages(stream.id, 10_000_000)
@@ -69,10 +69,10 @@ defmodule Sequin.Bench.EndToEnd do
              Logger.info("Skipping, db already populated")
            end
          end},
-        {"e2e_10M_10C_next",
+        {"e2e_10M_10C_receive",
          fn batch_size ->
            consumer = Enum.random(consumers)
-           next_and_ack(consumer, batch_size)
+           receive_and_ack(consumer, batch_size)
          end}
       ],
       Keyword.merge(default_opts, opts)
@@ -193,7 +193,7 @@ defmodule Sequin.Bench.EndToEnd do
     1..1
     |> Stream.cycle()
     |> Enum.reduce_while(nil, fn _, _ ->
-      messages = next_and_ack(consumer, 100)
+      messages = receive_and_ack(consumer, 100)
       keys = Enum.map(messages, & &1.key)
       Agent.update(key_agent, fn k -> Map.drop(k, keys) end)
 
@@ -233,8 +233,8 @@ defmodule Sequin.Bench.EndToEnd do
     end)
   end
 
-  def next_and_ack(consumer, batch_size) do
-    {:ok, messages} = Streams.next_for_consumer(consumer, batch_size: batch_size)
+  def receive_and_ack(consumer, batch_size) do
+    {:ok, messages} = Streams.receive_for_consumer(consumer, batch_size: batch_size)
     Streams.ack_messages(consumer.id, Enum.map(messages, & &1.ack_id))
     messages
   end

@@ -36,15 +36,15 @@ defmodule Sequin.StreamsIntegrationTest do
       start_supervised!({PopulateConsumerMessages, consumer_id: consumer.id, test_pid: self(), interval_ms: 100})
       assert_receive {PopulateConsumerMessages, :populate_done}
 
-      # Call next_for_consumer
-      {:ok, received_messages} = Streams.next_for_consumer(consumer)
+      # Call receive_for_consumer
+      {:ok, received_messages} = Streams.receive_for_consumer(consumer)
 
       # Assert we got the messages for the correct stream
       assert length(received_messages) == 5
       assert Enum.all?(received_messages, &(&1.stream_id == stream.id))
 
-      # Call next_for_consumer again - we shouldn't receive any messages
-      {:ok, empty_messages} = Streams.next_for_consumer(consumer)
+      # Call receive_for_consumer again - we shouldn't receive any messages
+      {:ok, empty_messages} = Streams.receive_for_consumer(consumer)
       assert empty_messages == []
 
       # Get the outstanding messages

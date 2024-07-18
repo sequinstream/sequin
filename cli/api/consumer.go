@@ -17,7 +17,7 @@ type ConsumersResponse struct {
 	Consumers []Consumer `json:"data"`
 }
 
-type FetchNextMessagesResponse struct {
+type ReceiveMessagesResponse struct {
 	Data []MessageWithAckId `json:"data"`
 }
 
@@ -311,14 +311,14 @@ func EditConsumer(ctx *context.Context, streamID, consumerID string, options Con
 	return &consumer, nil
 }
 
-// BuildFetchNextMessages builds the HTTP request for fetching next messages
-func BuildFetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) (*http.Request, error) {
+// BuildReceiveMessages builds the HTTP request for fetching next messages
+func BuildReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSize int) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/streams/%s/consumers/%s/next?batch_size=%d", serverURL, streamID, consumerID, batchSize), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/streams/%s/consumers/%s/receive?batch_size=%d", serverURL, streamID, consumerID, batchSize), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %w", err)
 	}
@@ -326,11 +326,11 @@ func BuildFetchNextMessages(ctx *context.Context, streamID, consumerID string, b
 	return req, nil
 }
 
-// FetchNextMessages retrieves the next batch of messages for a consumer
-func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckId, error) {
-	req, err := BuildFetchNextMessages(ctx, streamID, consumerID, batchSize)
+// ReceiveMessages retrieves the next batch of messages for a consumer
+func ReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckId, error) {
+	req, err := BuildReceiveMessages(ctx, streamID, consumerID, batchSize)
 	if err != nil {
-		return nil, fmt.Errorf("error building fetch next messages request: %w", err)
+		return nil, fmt.Errorf("error building fetch receive messages request: %w", err)
 	}
 
 	client := &http.Client{}
@@ -349,7 +349,7 @@ func FetchNextMessages(ctx *context.Context, streamID, consumerID string, batchS
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var result FetchNextMessagesResponse
+	var result ReceiveMessagesResponse
 	err = json.Unmarshal(body, &result)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)

@@ -39,8 +39,8 @@ defmodule SequinWeb.Router do
     get "/databases/:id/schemas", DatabaseController, :list_schemas
     get "/databases/:id/schemas/:schema/tables", DatabaseController, :list_tables
     post "/databases/test_connection", DatabaseController, :test_connection_params
-    post "/streams/:stream_id_or_name/consumers/:id_or_name/next", PullController, :next
-    get "/streams/:stream_id_or_name/consumers/:id_or_name/next", PullController, :next
+    post "/streams/:stream_id_or_name/consumers/:id_or_name/receive", PullController, :receive
+    get "/streams/:stream_id_or_name/consumers/:id_or_name/receive", PullController, :receive
     post "/streams/:stream_id_or_name/consumers/:id_or_name/ack", PullController, :ack
     post "/streams/:stream_id_or_name/consumers/:id_or_name/nack", PullController, :nack
     post "/streams/:stream_id_or_name/messages", MessageController, :publish

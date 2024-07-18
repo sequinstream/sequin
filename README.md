@@ -310,7 +310,7 @@ sequin receive mystream mycon --batch-size=10
 Or, via HTTP:
 
 ```bash
-curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/next?batch_size=10'
+curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/receive?batch_size=10'
 ```
 
 After a batch of messages is delivered to your worker, those messages will not be available to other workers for that consumer for `ack-wait-ms`. Messages are delivered with an `ack_id` that your worker will [use to ack them](#acking-messages).

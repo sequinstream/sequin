@@ -21,18 +21,18 @@ defmodule SequinWeb.PullControllerTest do
     %{stream: stream, consumer: consumer, other_consumer: other_consumer, other_stream: other_stream}
   end
 
-  describe "next" do
+  describe "receive" do
     test "returns 404 if trying to pull for another account's consumer", %{
       conn: conn,
       other_consumer: other_consumer,
       other_stream: other_stream
     } do
-      conn = get(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{other_stream.id}/consumers/#{other_consumer.id}/receive")
       assert json_response(conn, 404)
     end
 
     test "returns empty list if no ConsumerMessages to return", %{conn: conn, consumer: consumer, stream: stream} do
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => []} = json_response(conn, 200)
     end
 
@@ -54,7 +54,7 @@ defmodule SequinWeb.PullControllerTest do
         not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       })
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["ack_id"] == cm.ack_id
       assert message["message"]["subject"] == available_message.subject
@@ -64,7 +64,7 @@ defmodule SequinWeb.PullControllerTest do
       db_message = StreamsFactory.insert_message!(%{stream_id: stream.id})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: db_message, state: :available})
 
-      conn = get(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["message"]["subject"] == db_message.subject
     end
@@ -75,7 +75,7 @@ defmodule SequinWeb.PullControllerTest do
         StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :available})
       end
 
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next", batch_size: 1)
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive", batch_size: 1)
       assert %{"data" => messages} = json_response(conn, 200)
       assert length(messages) == 1
     end
@@ -90,7 +90,7 @@ defmodule SequinWeb.PullControllerTest do
       assert response(res_conn, 204)
 
       # Verify the message can't be pulled again
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => []} = json_response(conn, 200)
 
       # Verify it's gone from consumer_messages
@@ -143,7 +143,7 @@ defmodule SequinWeb.PullControllerTest do
       assert Streams.get_consumer_message!(consumer.id, cm.message_subject).state == :available
 
       # Verify the message reappears
-      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/next")
+      conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => [nacked_message]} = json_response(conn, 200)
       assert nacked_message["message"]["subject"] == message.subject
     end

@@ -12,15 +12,15 @@ import (
 )
 
 type Consumer struct {
-	consumers       []api.Consumer
-	config          *Config
-	cursor          int
-	showDetail      bool
-	pendingMessages []api.MessageWithInfo
-	nextMessages    []api.MessageWithInfo
-	streamID        string
-	ctx             *sequinContext.Context
-	isLoading       bool
+	consumers        []api.Consumer
+	config           *Config
+	cursor           int
+	showDetail       bool
+	pendingMessages  []api.MessageWithInfo
+	upcomingMessages []api.MessageWithInfo
+	streamID         string
+	ctx              *sequinContext.Context
+	isLoading        bool
 }
 
 func NewConsumer(config *Config, ctx *sequinContext.Context) *Consumer {
@@ -59,12 +59,12 @@ func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
 
 func (c *Consumer) View(width, height int) string {
 	if c.showDetail || len(c.consumers) == 1 {
-		return c.detailView(width, height)
+		return c.detailView(width)
 	}
-	return c.listView(width, height)
+	return c.listView(width)
 }
 
-func (c *Consumer) listView(width, height int) string {
+func (c *Consumer) listView(width int) string {
 	if len(c.consumers) == 0 {
 		return "\nNo consumers found."
 	}
@@ -139,7 +139,7 @@ func formatConsumerLine(consumer api.Consumer, nameWidth, filterWidth, maxAckPen
 		createdWidth, created)
 }
 
-func (c *Consumer) detailView(width, height int) string {
+func (c *Consumer) detailView(width int) string {
 	if len(c.consumers) == 0 || c.cursor < 0 || c.cursor >= len(c.consumers) {
 		return "No consumer selected"
 	}
@@ -148,7 +148,7 @@ func (c *Consumer) detailView(width, height int) string {
 	output := formatConsumerDetail(consumer)
 
 	output += formatMessageSection("Pending Messages", c.pendingMessages, width, true, c.isLoading)
-	output += formatMessageSection("Next Messages", c.nextMessages, width, false, c.isLoading)
+	output += formatMessageSection("Upcoming Messages", c.upcomingMessages, width, false, c.isLoading)
 
 	return output
 }
@@ -306,11 +306,11 @@ func clamp(value, min, max int) int {
 
 func (c *Consumer) resetMessages() {
 	c.pendingMessages = nil
-	c.nextMessages = nil
+	c.upcomingMessages = nil
 	c.isLoading = true
 }
 
-func (c *Consumer) FetchPendingAndNextMessages() error {
+func (c *Consumer) fetchPendingAndUpcomingMessages() error {
 	if !c.showDetail || len(c.consumers) == 0 {
 		return nil
 	}
@@ -323,11 +323,11 @@ func (c *Consumer) FetchPendingAndNextMessages() error {
 	}
 	c.pendingMessages = pending
 
-	next, err := c.fetchMessages(consumer.ID, true)
+	upcoming, err := c.fetchMessages(consumer.ID, true)
 	if err != nil {
-		return fmt.Errorf("failed to fetch next messages: %w", err)
+		return fmt.Errorf("failed to fetch upcoming messages: %w", err)
 	}
-	c.nextMessages = next
+	c.upcomingMessages = upcoming
 
 	c.isLoading = false
 
@@ -355,7 +355,7 @@ func (c *Consumer) StartMessageUpdates(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := c.FetchPendingAndNextMessages(); err != nil {
+				if err := c.fetchPendingAndUpcomingMessages(); err != nil {
 					fmt.Printf("Error updating messages: %v\n", err)
 				}
 			}

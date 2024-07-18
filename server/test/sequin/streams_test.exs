@@ -401,7 +401,7 @@ defmodule Sequin.StreamsTest do
     end
   end
 
-  describe "next_for_consumer/2" do
+  describe "receive_for_consumer/2" do
     setup do
       stream = StreamsFactory.insert_stream!()
 
@@ -412,7 +412,7 @@ defmodule Sequin.StreamsTest do
     end
 
     test "returns nothing if outstanding messages is empty", %{consumer: consumer} do
-      assert {:ok, []} = Streams.next_for_consumer(consumer)
+      assert {:ok, []} = Streams.receive_for_consumer(consumer)
     end
 
     test "delivers available outstanding messages", %{stream: stream, consumer: consumer} do
@@ -427,7 +427,7 @@ defmodule Sequin.StreamsTest do
           deliver_count: 0
         })
 
-      assert {:ok, [delivered_message]} = Streams.next_for_consumer(consumer)
+      assert {:ok, [delivered_message]} = Streams.receive_for_consumer(consumer)
       # Add a buffer for the comparison
       not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
       assert delivered_message.ack_id == cm.ack_id
@@ -452,7 +452,7 @@ defmodule Sequin.StreamsTest do
           last_delivered_at: DateTime.add(DateTime.utc_now(), -30, :second)
         })
 
-      assert {:ok, [redelivered_msg]} = Streams.next_for_consumer(consumer)
+      assert {:ok, [redelivered_msg]} = Streams.receive_for_consumer(consumer)
       assert redelivered_msg.subject == message.subject
       assert redelivered_msg.ack_id == cm.ack_id
       updated_om = Streams.reload(cm)
@@ -472,7 +472,7 @@ defmodule Sequin.StreamsTest do
         not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       })
 
-      assert {:ok, []} = Streams.next_for_consumer(consumer)
+      assert {:ok, []} = Streams.receive_for_consumer(consumer)
     end
 
     test "delivers only up to batch_size", %{stream: stream, consumer: consumer} do
@@ -486,7 +486,7 @@ defmodule Sequin.StreamsTest do
         })
       end
 
-      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
+      assert {:ok, delivered} = Streams.receive_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
       assert length(Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)) == 3
     end
@@ -501,7 +501,7 @@ defmodule Sequin.StreamsTest do
         state: :available
       })
 
-      assert {:ok, []} = Streams.next_for_consumer(consumer)
+      assert {:ok, []} = Streams.receive_for_consumer(consumer)
     end
 
     test "with a mix of available and unavailble messages, delivers only available outstanding messages", %{
@@ -550,7 +550,7 @@ defmodule Sequin.StreamsTest do
         msg
       end
 
-      assert {:ok, messages} = Streams.next_for_consumer(consumer)
+      assert {:ok, messages} = Streams.receive_for_consumer(consumer)
       assert length(messages) == length(available ++ redeliver)
       assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:subject, :stream_id]))
     end
@@ -596,7 +596,7 @@ defmodule Sequin.StreamsTest do
         state: :available
       })
 
-      assert {:ok, delivered} = Streams.next_for_consumer(consumer, batch_size: 2)
+      assert {:ok, delivered} = Streams.receive_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
       delivered_message_subjects = Enum.map(delivered, & &1.subject)
       assert_lists_equal(delivered_message_subjects, [message1.subject, message2.subject])
@@ -632,11 +632,11 @@ defmodule Sequin.StreamsTest do
         })
       end
 
-      assert {:ok, delivered} = Streams.next_for_consumer(consumer)
+      assert {:ok, delivered} = Streams.receive_for_consumer(consumer)
       assert length(delivered) == 1
       delivered = List.last(delivered)
       assert delivered.subject == cm.message_subject
-      assert {:ok, []} = Streams.next_for_consumer(consumer)
+      assert {:ok, []} = Streams.receive_for_consumer(consumer)
     end
   end
 

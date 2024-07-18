@@ -169,7 +169,7 @@ func (m model) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.consumers.ToggleDetail()
-	return m, m.fetchPendingAndNextMessages()
+	return m, m.fetchPendingAndUpcomingMessages()
 }
 
 func (m model) handleSlowTick() (tea.Model, tea.Cmd) {
@@ -180,9 +180,9 @@ func (m model) handleSlowTick() (tea.Model, tea.Cmd) {
 	)
 }
 
-func (m model) fetchPendingAndNextMessages() tea.Cmd {
+func (m model) fetchPendingAndUpcomingMessages() tea.Cmd {
 	return func() tea.Msg {
-		err := m.consumers.FetchPendingAndNextMessages()
+		err := m.consumers.fetchPendingAndUpcomingMessages()
 		if err != nil {
 			return err
 		}

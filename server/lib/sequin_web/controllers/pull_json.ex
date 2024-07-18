@@ -1,7 +1,7 @@
 defmodule SequinWeb.PullJSON do
   alias Sequin.Streams.Message
 
-  def render("next.json", %{messages: messages}) do
+  def render("receive.json", %{messages: messages}) do
     %{data: Enum.map(messages, &render_message/1)}
   end
 

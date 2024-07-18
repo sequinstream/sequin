@@ -7,7 +7,7 @@ defmodule SequinWeb.PullController do
 
   action_fallback ApiFallbackPlug
 
-  def next(conn, %{"id_or_name" => id_or_name} = params) do
+  def receive(conn, %{"id_or_name" => id_or_name} = params) do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
@@ -15,9 +15,9 @@ defmodule SequinWeb.PullController do
     with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
          {:ok, batch_size} <- parse_batch_size(params),
          {:ok, _wait_for} <- parse_wait_for(params),
-         {:ok, messages} <- Streams.next_for_consumer(consumer, batch_size: batch_size) do
+         {:ok, messages} <- Streams.receive_for_consumer(consumer, batch_size: batch_size) do
       Logger.metadata(batch_size: batch_size)
-      render(conn, "next.json", messages: messages)
+      render(conn, "receive.json", messages: messages)
     end
   end
 

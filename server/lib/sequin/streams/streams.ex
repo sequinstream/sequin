@@ -283,14 +283,14 @@ defmodule Sequin.Streams do
     end
   end
 
-  def next_for_consumer(%Consumer{} = consumer, opts \\ []) do
+  def receive_for_consumer(%Consumer{} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
     max_ack_pending = consumer.max_ack_pending
 
     {:ok, messages} =
-      Query.next_for_consumer(
+      Query.receive_for_consumer(
         batch_size: batch_size,
         consumer_id: UUID.string_to_binary!(consumer.id),
         max_ack_pending: max_ack_pending,

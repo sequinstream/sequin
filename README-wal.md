@@ -315,7 +315,7 @@ sequin receive mystream mycon --batch-size=10
 Or, via HTTP:
 
 ```bash
-curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/next?batch_size=10'
+curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/receive?batch_size=10'
 ```
 
 The CLI will automatically ack messages upon receipt. You can disable this behavior by passing the `--no-ack` flag:

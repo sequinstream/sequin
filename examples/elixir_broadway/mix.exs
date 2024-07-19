@@ -1,4 +1,4 @@
-defmodule ElixirBroadway.MixProject do
+defmodule ExampleBroadway.MixProject do
   use Mix.Project
 
   def project do
@@ -15,7 +15,7 @@ defmodule ElixirBroadway.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {ElixirBroadway.Application, []}
+      mod: {ExampleBroadway.Application, []}
     ]
   end
 

@@ -1,4 +1,4 @@
-defmodule ElixirBroadway do
+defmodule ExampleBroadway do
   use Broadway
 
   def start_link(opts) do
@@ -7,8 +7,8 @@ defmodule ElixirBroadway do
 
     if not consumer, do: raise(ArgumentError, ":consumer is required")
 
-    Broadway.start_link(ElixirBroadway,
-      name: ElixirBroadway,
+    Broadway.start_link(ExampleBroadway,
+      name: ExampleBroadway,
       producer: [
         module: {OffBroadwaySequin.Producer, [stream: stream, consumer: consumer]},
         concurrency: 1

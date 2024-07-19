@@ -1,4 +1,4 @@
-defmodule ElixirBroadwayTest do
+defmodule ExampleBroadwayTest do
   use ExUnit.Case
-  doctest ElixirBroadway
+  doctest ExampleBroadway
 end

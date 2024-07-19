@@ -4,7 +4,8 @@
   "words": [],
   "flagWords": [],
   "ignorePaths": [
-    "node_modules/**"
+    "../server/deps/**",
+    "../cli/**"
   ],
   "dictionaryDefinitions": [
     {
@@ -15,7 +16,8 @@
   ],
   "dictionaries": ["project-words"],
   "includeRegExpList": [
-    "^(?!.*/(docs|examples)/).*\\.mdx?$",
-    "^(docs|examples)/.*\\.mdx?$"
+    "^docs/.*\\.mdx?$",
+    "^examples/.*\\.mdx?$",
+    "^[^/]*\\.mdx?$"
   ]
 }

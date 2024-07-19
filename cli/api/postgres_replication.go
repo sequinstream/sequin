@@ -33,7 +33,10 @@ type PostgresReplication struct {
 // Add this helper function to format BackfillCompletedAt
 func (pr *PostgresReplication) FormatBackfillCompletedAt() string {
 	if pr.BackfillCompletedAt == nil {
-		return "Not completed"
+		if pr.Status == "backfilling" {
+			return "Not completed"
+		}
+		return "N/A"
 	}
 	return fmt.Sprintf("%s (%s ago)", pr.BackfillCompletedAt.Format(time.RFC3339), time.Since(*pr.BackfillCompletedAt).Round(time.Second))
 }

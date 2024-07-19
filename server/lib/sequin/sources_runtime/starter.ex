@@ -42,8 +42,8 @@ defmodule Sequin.SourcesRuntime.Starter do
   end
 
   defp logger_info(msg) do
-    if Application.get_env(:sequin, :env) == :prod do
+    # if Application.get_env(:sequin, :env) == :prod do
       Logger.info(msg)
-    end
+    # end
   end
 end

@@ -8,6 +8,7 @@ defmodule Sequin.Factory.SourcesFactory do
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Repo
   alias Sequin.Sources.PostgresReplication
+  alias Sequin.Sources.Webhook
 
   def postgres_replication(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -62,6 +63,50 @@ defmodule Sequin.Factory.SourcesFactory do
     |> Map.put(:postgres_database_id, postgres_database_id)
     |> Map.put(:stream_id, stream_id)
     |> postgres_replication()
+    |> Repo.insert!()
+  end
+
+  def webhook(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Webhook{
+        name: "webhook_#{Factory.name()}",
+        stream_id: Factory.uuid(),
+        account_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def webhook_attrs(attrs \\ []) do
+    attrs
+    |> webhook()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_webhook!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {stream_id, attrs} =
+      Map.pop_lazy(attrs, :stream_id, fn -> StreamsFactory.insert_stream!(account_id: account_id).id end)
+
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> Map.put(:stream_id, stream_id)
+    |> webhook()
+    |> Repo.insert!()
+  end
+
+  def insert_stream!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> StreamsFactory.stream()
     |> Repo.insert!()
   end
 end

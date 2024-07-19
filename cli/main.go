@@ -33,7 +33,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 
 	cli.AddContextCommands(scli, &config)
 	cli.AddStreamCommands(scli, &config)
-	cli.AddPostgresReplicationCommands(scli, &config)
+	cli.AddSourceCommands(scli, &config) // Add this line to include the new source command
 	cli.AddConsumerCommands(scli, &config)
 	cli.AddObserveCommands(scli, &config)
 

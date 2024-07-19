@@ -29,12 +29,23 @@ func (ve *ValidationError) Error() string {
 		parts = append(parts, ve.Summary)
 	}
 	if len(ve.ValidationErrors) > 0 {
-		parts = append(parts, "Validation errors occurred")
+		for key, value := range ve.ValidationErrors {
+			switch v := value.(type) {
+			case []interface{}:
+				for _, msg := range v {
+					parts = append(parts, fmt.Sprintf("%s: %v", key, msg))
+				}
+			case string:
+				parts = append(parts, fmt.Sprintf("%s: %s", key, v))
+			default:
+				parts = append(parts, fmt.Sprintf("%s: %v", key, v))
+			}
+		}
 	}
 	if len(parts) == 0 {
 		return "An unknown validation error occurred"
 	}
-	return strings.Join(parts, ": ")
+	return strings.Join(parts, "; ")
 }
 
 // PrintValidationError prints the validation error to the console

@@ -38,10 +38,7 @@ type postgresReplicationConfig struct {
 	KeyFormat            KeyFormat
 }
 
-func AddPostgresReplicationCommands(app *fisk.Application, config *Config) {
-	sources := app.Command("source", "Source related commands")
-	postgres := sources.Command("postgres", "Postgres replication related commands").Alias("pg").Alias("p")
-
+func addPostgresReplicationCommands(postgres *fisk.CmdClause, config *Config) {
 	addCheat("postgres_replication", postgres)
 
 	c := &postgresReplicationConfig{}

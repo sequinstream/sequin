@@ -31,6 +31,12 @@ type MessageState struct {
 	err             error
 	errorMsg        string
 	streamName      string
+	detailMessage   *MessageDetail
+}
+
+type MessageDetail struct {
+	Message       api.MessageInfo    `json:"message"`
+	ConsumerInfos []api.ConsumerInfo `json:"consumer_info"`
 }
 
 func NewMessageState(config *Config) *MessageState {
@@ -242,7 +248,7 @@ func (m *MessageState) calculateKeyWidth(totalWidth int) int {
 	return min(min(maxKeyWidth, totalWidth/2), 255)
 }
 
-func (m *MessageState) detailView(_, _ int) string {
+func (m *MessageState) detailView(width, _ int) string {
 	if m.selectedMessage == nil {
 		return "No message selected or no messages available"
 	}
@@ -256,6 +262,54 @@ func (m *MessageState) detailView(_, _ int) string {
 
 	output += formatDetailData(msg.Data)
 
+	// Check if detailMessage is nil before accessing it
+	if m.detailMessage != nil {
+		output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
+		output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width)
+	} else {
+		output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
+		output += "Consumer information not available."
+	}
+
+	return output
+}
+
+func formatConsumerInfoTable(consumerInfos []api.ConsumerInfo, width int) string {
+	if len(consumerInfos) == 0 {
+		return "No consumer info available.\n"
+	}
+
+	slugWidth := 20
+	deliverCountWidth := 15 // Increased to fit "DELIVERY COUNT"
+	stateWidth := 20
+	patternWidth := width - slugWidth - deliverCountWidth - stateWidth - 6 // Adjust for other columns and spacing
+
+	tableHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("0")). // Black text
+		Background(lipgloss.Color("2"))  // Green background
+
+	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
+		slugWidth, "CONSUMER NAME",
+		patternWidth, "FILTER PATTERN",
+		stateWidth, "MESSAGE STATE",
+		deliverCountWidth, "DELIVERY COUNT")
+
+	output := tableHeaderStyle.Render(header) + "\n"
+
+	for _, info := range consumerInfos {
+		deliverCount := "-"
+		if info.DeliverCount != nil {
+			deliverCount = fmt.Sprintf("%d", *info.DeliverCount)
+		}
+
+		output += fmt.Sprintf("%-*s %-*s %-*s %-*s\n",
+			slugWidth, truncateString(info.ConsumerName, slugWidth),
+			patternWidth, truncateString(info.ConsumerFilterSubjectPattern, patternWidth),
+			stateWidth, info.State,
+			deliverCountWidth, deliverCount)
+	}
+
 	return output
 }
 
@@ -266,6 +320,11 @@ func formatDetailData(data string) string {
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 	if m.showDetail {
+		err := m.fetchMessageDetail()
+		if err != nil {
+			m.err = err
+			m.errorMsg = fmt.Sprintf("Error fetching message detail: %v", err)
+		}
 		// Only set selectedMessage if there are messages
 		if len(m.messages) > 0 {
 			m.selectedMessage = &m.messages[m.cursor]
@@ -275,6 +334,43 @@ func (m *MessageState) ToggleDetail() {
 	} else {
 		m.updateCursorAfterDetailView()
 	}
+}
+
+func (m *MessageState) fetchMessageDetail() error {
+	ctx, err := context.LoadContext(m.config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	msg := m.messages[m.cursor]
+	consumer_detail, err := api.FetchMessageDetail(ctx, "default", msg.Key)
+	if err != nil {
+		return err
+	}
+
+	m.detailMessage = &MessageDetail{
+		Message:       convertToMessageInfo(consumer_detail.Message),
+		ConsumerInfos: convertConsumerInfos(consumer_detail.ConsumerInfos),
+	}
+	return nil
+}
+
+func convertToMessageInfo(apiMsg api.Message) api.MessageInfo {
+	return api.MessageInfo{
+		Subject:    apiMsg.Key,
+		Data:       apiMsg.Data,
+		Seq:        apiMsg.Seq,
+		UpdatedAt:  apiMsg.UpdatedAt,
+		InsertedAt: apiMsg.CreatedAt,
+	}
+}
+
+func convertConsumerInfos(apiInfos []api.ConsumerInfo) []api.ConsumerInfo {
+	infos := make([]api.ConsumerInfo, len(apiInfos))
+	for i, apiInfo := range apiInfos {
+		infos[i] = api.ConsumerInfo(apiInfo)
+	}
+	return infos
 }
 
 func (m *MessageState) updateCursorAfterDetailView() {

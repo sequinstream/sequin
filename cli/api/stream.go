@@ -362,3 +362,57 @@ func GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (Message
 
 	return message, nil
 }
+
+func FetchMessageDetail(ctx *context.Context, streamID, messageKey string) (*MessageDetail, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/api/streams/%s/messages/%s/consumer_info", serverURL, streamID, messageKey)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result struct {
+		Data MessageDetail `json:"data"`
+	}
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
+// MessageDetail represents the detailed structure of a message
+type MessageDetail struct {
+	Message       Message        `json:"message"`
+	ConsumerInfos []ConsumerInfo `json:"consumer_info"`
+}
+
+// ConsumerInfo represents the structure of consumer information
+type ConsumerInfo struct {
+	State                        string     `json:"state"`
+	NotVisibleUntil              *time.Time `json:"not_visible_until"`
+	ConsumerID                   string     `json:"consumer_id"`
+	AckID                        *string    `json:"ack_id"`
+	DeliverCount                 *int       `json:"deliver_count"`
+	LastDeliveredAt              *time.Time `json:"last_delivered_at"`
+	ConsumerFilterSubjectPattern string     `json:"consumer_filter_subject_pattern"`
+	ConsumerName                 string     `json:"consumer_name"`
+}

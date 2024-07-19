@@ -25,7 +25,7 @@ defmodule Sequin.SourcesRuntime.Supervisor do
   def start_for_pg_replication(supervisor, %PostgresReplication{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
 
-    if pg_replication.backfill_completed_at do
+    if pg_replication.status == :active do
       default_opts = [
         id: pg_replication.id,
         slot_name: pg_replication.slot_name,

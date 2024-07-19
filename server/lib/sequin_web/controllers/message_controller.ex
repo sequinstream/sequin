@@ -60,6 +60,16 @@ defmodule SequinWeb.MessageController do
     end
   end
 
+  def message_consumer_info(conn, %{"stream_id_or_name" => stream_id_or_slug, "key" => key}) do
+    account_id = conn.assigns.account_id
+
+    with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
+         {:ok, message} <- Streams.get_message_for_stream(stream.id, key),
+         {:ok, consumer_messages_details} <- Streams.get_consumer_details_for_message(key, stream.id) do
+      render(conn, "message_info.json", message: message, consumer_messages_details: consumer_messages_details)
+    end
+  end
+
   defp parse_messages(%{"messages" => messages}) when is_list(messages) do
     Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
       case message do

@@ -33,6 +33,15 @@ defmodule SequinWeb.MessageJSON do
     %{data: messages}
   end
 
+  def render("message_info.json", %{message: message, consumer_messages_details: consumer_messages_details}) do
+    %{
+      data: %{
+        message: message,
+        consumer_info: consumer_messages_details
+      }
+    }
+  end
+
   def render("stream_count.json", %{count: count}) do
     %{count: count}
   end

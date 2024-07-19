@@ -5,6 +5,7 @@ defmodule Sequin.Streams.ConsumerMessage do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Streams.ConsumerMessageDetails
   alias Sequin.Streams.Message
 
   @primary_key false
@@ -110,5 +111,21 @@ defmodule Sequin.Streams.ConsumerMessage do
 
   defp base_query(query \\ __MODULE__) do
     from(cm in query, as: :consumer_message)
+  end
+
+  @spec external_state(%__MODULE__{}) :: ConsumerMessageDetails.state()
+  def external_state(%__MODULE__{} = cm) do
+    now = DateTime.utc_now()
+
+    case cm.state do
+      :acked ->
+        :acked
+
+      :available ->
+        :available
+
+      state when state in [:delivered, :pending_redelivery] ->
+        if DateTime.after?(cm.not_visible_until, now), do: :pending, else: :available
+    end
   end
 end

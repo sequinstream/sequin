@@ -9,6 +9,7 @@ defmodule Sequin.Sources do
   alias Sequin.Repo
   alias Sequin.Sources.BackfillPostgresTableWorker
   alias Sequin.Sources.PostgresReplication
+  alias Sequin.Sources.Webhook
   alias Sequin.SourcesRuntime
   alias Sequin.Streams
 
@@ -203,5 +204,51 @@ defmodule Sequin.Sources do
 
     {:ok, %{rows: rows}} = Postgrex.query(conn, query, [publication_name])
     Enum.map(rows, fn [schemaname, tablename] -> {schemaname, tablename} end)
+  end
+
+  ## Webhooks
+
+  def create_webhook_for_account(account_id, params) do
+    %Webhook{account_id: account_id}
+    |> Webhook.create_changeset(params)
+    |> Repo.insert()
+  end
+
+  def all_webhooks_for_account(account_id) do
+    account_id
+    |> Webhook.where_account()
+    |> Repo.all()
+  end
+
+  def get_webhook_for_account(account_id, webhook_id_or_name) do
+    account_id
+    |> Webhook.where_account()
+    |> Webhook.where_id_or_name(webhook_id_or_name)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :webhook)}
+      webhook -> {:ok, webhook}
+    end
+  end
+
+  def update_webhook_for_account(account_id, webhook_id_or_name, params) do
+    with {:ok, webhook} <- get_webhook_for_account(account_id, webhook_id_or_name) do
+      webhook
+      |> Webhook.update_changeset(params)
+      |> Repo.update()
+    end
+  end
+
+  def delete_webhook_for_account(account_id, webhook_id_or_name) do
+    with {:ok, webhook} <- get_webhook_for_account(account_id, webhook_id_or_name) do
+      Repo.delete(webhook)
+    end
+  end
+
+  def get_webhook!(id) do
+    case Repo.get(Webhook, id) do
+      nil -> raise NotFoundError, entity: :webhook
+      webhook -> webhook
+    end
   end
 end

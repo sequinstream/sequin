@@ -403,5 +403,22 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     create index(:api_keys, [:account_id], prefix: @config_schema)
     create unique_index(:api_keys, [:value], prefix: @config_schema)
+
+    create table(:webhooks, prefix: @config_schema) do
+      add :name, :string, null: false
+
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
+      add :stream_id,
+          references(:streams, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
+
+      timestamps()
+    end
+
+    create index(:webhooks, [:account_id], prefix: @config_schema)
+    create index(:webhooks, [:stream_id], prefix: @config_schema)
+    create unique_index(:webhooks, [:account_id, :name], prefix: @config_schema)
   end
 end

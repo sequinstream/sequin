@@ -200,7 +200,7 @@ Boot it with:
 sequin observe
 ```
 
-![sequin's observe command, opened to a consumer, showing the list of messages for that consumer](./docs/images/observe-consumer.jpg)
+![sequin's observe command showing streams, consumers, and messages](./docs/gifs/observe.gif)
 
 ## Sending messages
 

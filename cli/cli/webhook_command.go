@@ -47,7 +47,7 @@ func addWebhookCommands(webhook *fisk.CmdClause, config *Config) {
 		return webhookUpdate(config, c)
 	})
 	updateCmd.Arg("name", "Name of the webhook to update").StringVar(&c.Name)
-	updateCmd.Flag("stream-id", "New stream ID for the webhook").StringVar(&c.StreamID)
+	updateCmd.Flag("stream", "New stream ID for the webhook").StringVar(&c.StreamID)
 }
 
 func webhookAdd(config *Config, c *webhookConfig) error {

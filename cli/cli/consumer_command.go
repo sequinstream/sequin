@@ -21,7 +21,6 @@ type consumerConfig struct {
 	AckWaitMS        int
 	MaxAckPending    int
 	MaxDeliver       int
-	MaxWaiting       int
 	FilterKeyPattern string
 	BatchSize        int
 	Ack              bool
@@ -45,17 +44,16 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	lsCmd := consumer.Command("ls", "List consumers").Action(func(ctx *fisk.ParseContext) error {
 		return consumerLs(ctx, config, c)
 	})
-	lsCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
+	lsCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
 
 	addCmd := consumer.Command("add", "Add a new consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAdd(ctx, config, c)
 	})
-	addCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
+	addCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
 	addCmd.Arg("name", "Name for the new consumer").StringVar(&c.Name)
 	addCmd.Flag("ack-wait-ms", "Acknowledgement wait time in milliseconds").IntVar(&c.AckWaitMS)
 	addCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
 	addCmd.Flag("max-deliver", "Maximum number of delivery attempts").IntVar(&c.MaxDeliver)
-	addCmd.Flag("max-waiting", "Maximum number of waiting messages").IntVar(&c.MaxWaiting)
 	addCmd.Flag("filter", "Key pattern for message filtering").StringVar(&c.FilterKeyPattern)
 	addCmd.Flag("defaults", "Use default values for non-required fields").BoolVar(&c.UseDefaults)
 	addCmd.Flag("kind", "Consumer kind (pull or push)").StringVar(&c.Kind)
@@ -65,22 +63,22 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	infoCmd := consumer.Command("info", "Show consumer information").Action(func(ctx *fisk.ParseContext) error {
 		return consumerInfo(ctx, config, c)
 	})
-	infoCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	infoCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	infoCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	infoCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 
 	receiveCmd := consumer.Command("receive", "Receive messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerReceive(ctx, config, c)
 	})
-	receiveCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	receiveCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	receiveCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	receiveCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 	receiveCmd.Flag("batch-size", "Number of messages to fetch").Default("1").IntVar(&c.BatchSize)
 	receiveCmd.Flag("ack", "Acknowledge messages on receive").BoolVar(&c.Ack)
 
 	peekCmd := consumer.Command("peek", "Show messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerPeek(ctx, config, c)
 	})
-	peekCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	peekCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	peekCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	peekCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 	peekCmd.Flag("pending", "Show only pending messages").BoolVar(&c.PendingOnly)
 	peekCmd.Flag("last", "Show most recent N messages").IntVar(&c.LastN)
 	peekCmd.Flag("first", "Show least recent N messages").IntVar(&c.FirstN)
@@ -88,32 +86,31 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	ackCmd := consumer.Command("ack", "Ack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerAck(ctx, config, c)
 	})
-	ackCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	ackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	ackCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	ackCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 	ackCmd.Arg("ack-id", "Ack ID of the message to ack").StringVar(&c.AckId)
 
 	nackCmd := consumer.Command("nack", "Nack a message").Action(func(ctx *fisk.ParseContext) error {
 		return consumerNack(ctx, config, c)
 	})
-	nackCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	nackCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	nackCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	nackCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 	nackCmd.Arg("ack-id", "ID of the message to nack").StringVar(&c.AckId)
 
 	updateCmd := consumer.Command("edit", "Edit an existing consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerEdit(ctx, config, c)
 	})
-	updateCmd.Arg("stream-id", "ID or name of the stream").StringVar(&c.StreamID)
-	updateCmd.Arg("consumer-id", "ID of the consumer").StringVar(&c.ConsumerID)
+	updateCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
+	updateCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
 	updateCmd.Flag("ack-wait-ms", "Acknowledgement wait time in milliseconds").IntVar(&c.AckWaitMS)
 	updateCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
 	updateCmd.Flag("max-deliver", "Maximum number of delivery attempts").IntVar(&c.MaxDeliver)
-	updateCmd.Flag("max-waiting", "Maximum number of waiting messages").IntVar(&c.MaxWaiting)
 
 	rmCmd := consumer.Command("rm", "Remove a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerRemove(ctx, config, c)
 	})
-	rmCmd.Arg("stream-id", "ID or name of the stream").Required().StringVar(&c.StreamID)
-	rmCmd.Arg("consumer-id", "ID of the consumer to remove").StringVar(&c.ConsumerID)
+	rmCmd.Arg("stream", "ID or name of the stream").Required().StringVar(&c.StreamID)
+	rmCmd.Arg("consumer", "ID of the consumer to remove").StringVar(&c.ConsumerID)
 	rmCmd.Flag("force", "Force removal without confirmation").BoolVar(&c.Force)
 }
 
@@ -284,13 +281,6 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 					return err
 				}
 			}
-
-			if c.MaxWaiting == 0 {
-				err = promptForInt("Enter maximum number of waiting pull requests (optional):", &c.MaxWaiting)
-				if err != nil {
-					return err
-				}
-			}
 		}
 	}
 
@@ -310,9 +300,6 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	}
 	if c.MaxDeliver != 0 {
 		createOptions.MaxDeliver = c.MaxDeliver
-	}
-	if c.MaxWaiting != 0 {
-		createOptions.MaxWaiting = c.MaxWaiting
 	}
 
 	if config.AsCurl {
@@ -364,7 +351,6 @@ func displayConsumerInfo(consumer *api.Consumer) {
 		{"Ack Wait (ms)", strconv.Itoa(consumer.AckWaitMS)},
 		{"Max Ack Pending", strconv.Itoa(consumer.MaxAckPending)},
 		{"Max Deliver", strconv.Itoa(consumer.MaxDeliver)},
-		{"Max Waiting", strconv.Itoa(consumer.MaxWaiting)},
 		{"Filter", consumer.FilterKeyPattern},
 		{"Created At", consumer.CreatedAt.Format(time.RFC3339)},
 	}
@@ -692,9 +678,6 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	if c.MaxDeliver != 0 {
 		newConfig.MaxDeliver = c.MaxDeliver
 	}
-	if c.MaxWaiting != 0 {
-		newConfig.MaxWaiting = c.MaxWaiting
-	}
 
 	// Compare the configurations
 	diff := cmp.Diff(consumer, &newConfig)
@@ -726,9 +709,6 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 	}
 	if c.MaxDeliver != 0 {
 		updateOptions.MaxDeliver = c.MaxDeliver
-	}
-	if c.MaxWaiting != 0 {
-		updateOptions.MaxWaiting = c.MaxWaiting
 	}
 
 	if config.AsCurl {

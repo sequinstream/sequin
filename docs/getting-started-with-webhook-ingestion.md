@@ -39,7 +39,7 @@ Then choose a name for the webhook. This is used in the URL of the webhook endpo
 After creating your webhook, the webhook endpoint is displayed. You can see this again at any time with:
 
 ```bash
-sequin source webhook info <webhook-name>
+sequin source webhook info <webhook>
 ```
 
 You can send your first webhook manually with a cURL command:
@@ -56,7 +56,7 @@ Use `sequin observe` to view messages ingested to your stream.
 
 ### Key Pattern
 
-Right now only one key format is supported: `<webhook-name>.<payload-hash>`
+Right now only one key format is supported: `<webhook>.<payload-hash>`
 
 ie. `my_webhook.E43ABCF3375244839C012F9633F95862D232A95B00D5BC7348B3098B9FED7F32`
 

@@ -29,7 +29,6 @@ type Consumer struct {
 	AckWaitMS        int          `json:"ack_wait_ms"`
 	MaxAckPending    int          `json:"max_ack_pending"`
 	MaxDeliver       int          `json:"max_deliver"`
-	MaxWaiting       int          `json:"max_waiting"`
 	FilterKeyPattern string       `json:"filter_subject_pattern"`
 	CreatedAt        time.Time    `json:"inserted_at"`
 	UpdatedAt        time.Time    `json:"updated_at"`
@@ -50,7 +49,6 @@ type ConsumerCreateOptions struct {
 	AckWaitMS        int                  `json:"ack_wait_ms,omitempty"`
 	MaxAckPending    int                  `json:"max_ack_pending,omitempty"`
 	MaxDeliver       int                  `json:"max_deliver,omitempty"`
-	MaxWaiting       int                  `json:"max_waiting,omitempty"`
 	FilterKeyPattern string               `json:"filter_subject_pattern"`
 	Kind             string               `json:"kind"`
 	HttpEndpoint     *HttpEndpointOptions `json:"http_endpoint,omitempty"`
@@ -67,7 +65,6 @@ type ConsumerUpdateOptions struct {
 	AckWaitMS     int                  `json:"ack_wait_ms,omitempty"`
 	MaxAckPending int                  `json:"max_ack_pending,omitempty"`
 	MaxDeliver    int                  `json:"max_deliver,omitempty"`
-	MaxWaiting    int                  `json:"max_waiting,omitempty"`
 	Kind          *string              `json:"kind,omitempty"`
 	HttpEndpoint  *HttpEndpointOptions `json:"http_endpoint,omitempty"`
 }

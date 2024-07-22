@@ -7,5 +7,5 @@ This example is useful to generate a consistent stream of changing metrics. This
 ## Usage
 
 ```
-./monitor.sh [stream-name]
+./monitor.sh [stream]
 ```

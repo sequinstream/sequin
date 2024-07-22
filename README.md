@@ -1,37 +1,48 @@
 # Sequin
 
 > [!IMPORTANT]
-> Sequin is still under rapid development and the API is still stabilizing. It should be considered **pre-1.0**.
+> Sequin is still pre-alpha. Join the [release list](https://sequinstream.com/alpha) to get notified when we launch.
 
 ## What is Sequin?
 
-Sequin is an open-source message queue (technically a stream) built on Postgres. It’s a stateless Docker container that works with any Postgres database.
+Sequin is an open source message stream built on Postgres. It's comparable to Kafka, but offers more read flexibility with less operational overhead. Sequin comes with a CLI, HTTP interface, and ability to pull changes from any Postgres table into a stream.
 
-If you already use Postgres and need a message queue, simply extend your database with Sequin instead of adding a new system with new operational burden.
+### Stream not a queue
 
-Sequin provides an HTTP interface for sending and consuming messages. It supports both pull-based and push-based (via webhook) consumption patterns.
+Sequin is a message stream, not just a queue. Like Kafka, Sequin persists messages according to a retention policy you specify. You can setup **consumers** to process a filtered subset of messages in the stream. Sequin delivers messages to consumers exactly once within a visibility timeout.
 
-Sequin also has first-class support for [sources](#sources). You can stream data from an existing Postgres table with the `postgres` source or safely ingest API webhooks with the `webhook` source.
+With a stream instead of a queue, Sequin provides features like message replay and consumer rewind. Consumers can "join" the stream at any time and play through the history of messages. You can fan out to many individual services with exactly once delivery to each. Message history also helps with debugging and troubleshooting.
 
-Get a feature-rich system like RabbitMQ via a straightforward HTTP API without adding complexity to your stack.
+## Why Sequin?
 
-### Key Features:
+Sequin is tailored for developers who need:
 
-- **At-least-once delivery**: All the guarantees you expect of a message queue.
-- **Expressive reads**: Consume messages with expressive filtering.
-- **Simple stack**: Extend your existing Postgres database into a message queue.
-- **Predictable scaling**: If Postgres can handle your data, Sequin can as well.
-- **Use SQL**: Pop the hood and observe or manage your queues with SQL.
-- **HTTP interface**: Simple interface with pull and push-based consumption.
-- **Built in sources**: Stream creates, updates, and deletes from existing Postgres tables or APIs.
+1. **Service decoupling**: Reliably pass messages between services.
+2. **Durable LISTEN/NOTIFY**: Easily process changes from Postgres tables.
+3. **HTTP endpoints**: Safely ingest and process webhooks from external services.
+4. **Observability**: Developer-friendly tools to monitor and debug message flows.
+5. **Simplicity**: A powerful stream without a steep learning curve.
 
-### Use cases
+If these align with your needs, Sequin offers a streamlined alternative to complex messaging systems like Kafka.
 
-Sequin offers a persistent message stream with fan-outs, at-least-once delivery, async consumption, and replays. It’s particularly suitable for:
+### Contrast to Kafka
 
-- Processing API records (e.g. ingesting webhooks or synced API data)
-- Processing inserts, updates, and deletes of Postgres records
-- Decoupling services in your stack
+Sequin shares a lot of similarities with Kafka:
+
+- **Streams**: Sequin uses streams to fan out messages to many consumers.
+- **Retention policies**: Time-based or storage-based retention policies.
+- **Compact by key**: Like Kafka, you can compact messages with the same key. (Unlike Kafka, compaction happens immediately on write.)
+- **Guaranteed message ordering**: Messages with the same key are delivered to a consumer in order.
+
+But with the read flexibility often found in message queues like AWS SQS:
+
+- **No topics**: Sequin uses [key-based routing](#key) to fan out messages to many consumers.
+- **No partitions**: Sequin maintains guaranteed ordering without partitioning.
+
+And with the familiarity of Postgres:
+
+- **Simpler infrastructure**: No need for a separate Kafka broker or Zookeeper instance.
+- **Read at rest in SQL**: Sequin stores messages at rest in Postgres, so you can query them like any other table.
 
 ## Benchmarks and performance
 
@@ -93,13 +104,9 @@ Multiple workers can concurrently receive messages from a consumer. Messages are
 
 ## Guarantees
 
-### At-least-once delivery
+### Exactly-once delivery
 
-Sequin guarantees that all your messages will be delivered for a given consumer to your workers.
-
-### Exactly-once processing
-
-Sequin will keep delivering a message until it is acknowledged (or hits a `max-deliver` threshold you configure).
+Exactly-once delivery within a visibility timeout (`ack-wait-ms`).
 
 ### Strict ordering by message key
 
@@ -108,16 +115,6 @@ Messages with the same key will always be delivered to a consumer's workers in o
 If you've set `one-message-per-key=true` for a stream, then all message key conflicts are upserts. If a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld. When the `ack-wait-ms` expires or the message is ack'd/nack'd, the latest version of the message will be available for delivery.
 
 If you've set `one-message-per-key=false` for a stream, then messages are appended to a stream. Still, if a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld until that message has finished processing.
-
-## Terminology
-
-In distributed systems, messages fall into one of three categories. We think it's helpful to think about messages this way, and so we reference these categories throughout this README:
-
-- **Events** - An event is a discrete occurrence and often high volume. Examples are wind turbine telemetry data, system metrics, or click events. Events are best thought of as immutable.
-- **Records** - A record (or document) on the other hand is something like a Stripe subscription or a row in your `users` table.
-- **Command** - A command message is an instruction for your system to execute a procedure. For example, your system could enqueue a message instructing one of your workers to perform an expensive background task.
-
-All three message types are well-supported by Sequin.
 
 ## Setup
 
@@ -133,18 +130,20 @@ The server runs on `localhost:7376`. The CLI is configured to point to `localhos
 
 ### CLI
 
-Install with Homebrew:
+#### Homebrew
 
 ```bash
 brew tap sequinstream/homebrew-sequin git@github.com:sequin-io/homebrew-sequin
 brew install sequin
 ```
 
-Install with shell:
+#### Shell
 
 ```bash
 curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
 ```
+
+#### Build from source
 
 To build from source, clone this repo then:
 
@@ -241,13 +240,13 @@ Streams can be configured with a number of different policies that affect messag
 
 When `one-message-per-key` is set to `true`, Sequin places a unique constraint on message's `key`. All messages will be upserted. There will only ever be one message with a given key in the stream, the last message with that key received.
 
-This setting is a great fit for processing [records](#terminology), where only the latest version of a message matters to your system.
+This setting is a great fit for processing records where only the latest version of a message matters to your system.
 
 #### `process-unmodified=[<bool>]`
 
 Must be used in combination with `one-message-per-key=true` and defaults to `false`. When `process-unmodified` is false, a stream will ignore messages that (1) have a key that matches an existing message in the stream and (2) are unchanged (according to a SHA256 hash of `data`). This saves the stream from re-inserting the message and all consumers from re-processing it.
 
-You can set this setting to `true` if you want messages to be reprocessed by consumers, even if their contents haven't changed. This can be useful for processing [command messages](#terminology), where the contents don't change but you still want your system to reprocess them.
+You can set this setting to `true` if you want messages to be reprocessed by consumers, even if their contents haven't changed. This can be useful for processing command messages, where the contents don't change but you still want your system to reprocess them.
 
 #### `max-storage=[<gigabytes>]gb`
 
@@ -296,7 +295,6 @@ The flags:
   --ack-wait-ms=ACK-WAIT-MS          Acknowledgement wait time in milliseconds
   --max-ack-pending=MAX-ACK-PENDING  Maximum number of pending acknowledgements
   --max-deliver=MAX-DELIVER          Maximum number of delivery attempts
-  --max-waiting=MAX-WAITING          Maximum number of waiting messages
   --filter=FILTER                    Key pattern for message filtering
   --defaults                         Use default values for non-required fields
 ```
@@ -453,14 +451,6 @@ For the best performance, on top of intelligent indexes, we avoid trigger functi
 You can run Sequin anywhere you can run Docker. It stores its configuration state and streams in [Postgres](#how-it-works).
 
 You can even "sidecar" Sequin alongside your app.
-
-## FAQ
-
-### What about exactly-once delivery?
-
-Sequin offers at-least-once delivery and exactly-once processing (see [Guarantees](#guarantees)). You can configure how many times Sequin should attempt to redeliver a message with a consumer's `max-deliver` option (default: no limit).
-
-Exactly-once delivery is a bit of a misnomer; it's always possible in a distributed system that a message will be sent and received, but the sender will not receive confirmation of receipt. In other words, cross-system two-phase commits can only get _asymptotically close_ to perfect.
 
 ## Roadmap
 

@@ -60,6 +60,9 @@ All CLI commands use HTTP to communicate with the Sequin backend. You can see wh
 sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}' --as-curl
 ```
 
+> [!TIP]
+> The `--as-curl` option can be used with any CLI command to see the equivalent HTTP request.
+
 Send more messages to Sequin:
 
 ```
@@ -118,6 +121,9 @@ echo "\nCommand 3 output:" && sequin consumer receive default us_orders
 echo "\nCommand 4 output:" && sequin consumer receive default us_orders
 ```
 
+> [!TIP]
+> See the equivalent HTTP request with `sequin consumer receive default us_orders --as-curl`.
+
 You will have received the three US based orders. The last `receive` should have returned "No messages available."
 
 The three messages are now pending for the consumer. While they are pending, they are not visible to other consumer receive calls. If the messages are not acked, they will be available for re-delivery in 30 seconds (ack-wait-ms).
@@ -128,7 +134,7 @@ These critical feature of consumers ensures that:
 2. Messages are not lost; if a consumer doesn't ack a message, it's redelivered
 
 > [!TIP]
-> You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer-name> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.
+> You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.
 
 ## Next Steps
 

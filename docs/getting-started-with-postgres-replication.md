@@ -1,5 +1,8 @@
 # Getting started with the Postgres source
 
+> [!NOTE]
+> This guide assumes you have already created a stream and a consumer. If not, please see the [getting started guide](getting-started.md).
+
 With the `postgres` source, Sequin turns the Postgres WAL into a message queue. This means you can stream creates, updates, and deletes from any table in Postgres to your app. Then, you can use Sequin's pull-based or push-based (i.e. webhook) consumption patterns.
 
 Sequin is a great fit if LISTEN/NOTIFY's at-most-once delivery is not sufficient for your use case. It's an alternative to setting up Debezium/Kafka to consume Postgres changes.

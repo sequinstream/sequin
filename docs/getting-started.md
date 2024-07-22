@@ -3,8 +3,8 @@
 In this guide, you'll:
 
 1. Install and boot Sequin
-2. Stream your Postgres table to Sequin
-3. Consume records from Sequin
+2. Send messages to sequin from the CLI / HTTP
+3. Consume messages from sequin via a consumer
 
 ## Install and boot Sequin
 
@@ -132,7 +132,17 @@ These critical feature of consumers ensures that:
 
 ## Next Steps
 
-Now that you have messages in your stream and a consumer ready to deliver them, you are ready to integrate Sequin. We have a few language specific libraries and example projects:
+### Ingesting messages
+
+Sequin ships with three powerful way to ingest messages:
+
+1. CLI / HTTP
+2. [Postgres Replication](getting-started-with-postgres-replication.md)
+3. [Webhook Ingestion](getting-started-with-webhook-ingestion.md)
+
+### Official Clients
+
+When you are ready to integrate Sequin consumers in your application, we have a language specific libraries and example projects:
 
 | Language | Client                                                                   | Example                                                                                           |
 | -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |

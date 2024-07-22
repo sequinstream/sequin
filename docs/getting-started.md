@@ -51,21 +51,21 @@ Keys in Sequin allow for powerful message routing and filtering. For example, yo
 To get a feel for this, let’s simulate an order for an eCommerce use case. Send your first message:
 
 ```
-sequin message send orders.us.cus_a.order_1 '{"product": "Shoes"}'
+sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}'
 ```
 
 All CLI commands use HTTP to communicate with the Sequin backend. You can see what the requests look like by passing the `--as-curl` flag:
 
 ```
-sequin message send orders.us.cus_a.order_1 '{"product": "Shoes"}' --as-curl
+sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}' --as-curl
 ```
 
 Send more messages to Sequin:
 
 ```
-sequin message send orders.eu.cus_b.order_2 '{"product": "Pants"}'
-sequin message send orders.us.cus_c.order_3 '{"product": "Shoes"}'
-sequin message send orders.us.cus_a.order_4 '{"product": "Shirts"}'
+sequin stream send default orders.eu.cus_b.order_2 '{"product": "Pants"}'
+sequin stream send default orders.us.cus_c.order_3 '{"product": "Shoes"}'
+sequin stream send default orders.us.cus_a.order_4 '{"product": "Shirts"}'
 ```
 
 Now, take a look at how many messages you have in Sequin. Open a second terminal window or split pane so you can **observe your stream** as you enter more Sequin CLI commands:
@@ -85,7 +85,7 @@ orders.*.cus_a.*
 By default, Sequin is configured so that messages are always upserted. So, when cus_b adds another product to their order:
 
 ```
-sequin message send orders.eu.cus_b.order_2 '{"product": ["Socks", "Shoes"]}'
+sequin stream send default orders.eu.cus_b.order_2 '{"product": ["Socks", "Shoes"]}'
 ```
 
 The message is updated in the stream. (You can change this setting per consumer by setting `one-message-per-key=false`.)
@@ -99,7 +99,7 @@ In Sequin, a **consumer** is how you receive messages with delivery guarantees.
 The best way to understand consumers is to see how they work. Add a consumer:
 
 ```
-sequin consumer add us_orders --filter="orders.us.>" --defaults
+sequin consumer add default us_orders --filter="orders.us.>" --defaults
 ```
 
 > [!NOTE]
@@ -112,10 +112,10 @@ Take a look at your terminal running `sequin observe`. Switch to the Consumers t
 You receive messages from a consumer using `receive`. When a consumer receives a message, the message is not delivered to other workers for that consumer. Notice how if you receive for a consumer multiple times in a row, you chew through the available messages until no more are available:
 
 ```
-echo "Command 1 output:" && sequin consumer receive us_orders
-echo "\nCommand 2 output:" && sequin consumer receive us_orders
-echo "\nCommand 3 output:" && sequin consumer receive us_orders
-echo "\nCommand 4 output:" && sequin consumer receive us_orders
+echo "Command 1 output:" && sequin consumer receive default us_orders
+echo "\nCommand 2 output:" && sequin consumer receive default us_orders
+echo "\nCommand 3 output:" && sequin consumer receive default us_orders
+echo "\nCommand 4 output:" && sequin consumer receive default us_orders
 ```
 
 You will have received the three US based orders. The last `receive` should have returned "No messages available."

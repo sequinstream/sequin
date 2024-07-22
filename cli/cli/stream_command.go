@@ -39,7 +39,7 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	infoCmd := stream.Command("info", "Show stream info").Action(func(c *fisk.ParseContext) error {
 		return streamInfo(c, config)
 	})
-	infoCmd.Arg("stream-id", "ID or name of the stream to show info for").StringVar(&config.StreamID)
+	infoCmd.Arg("stream", "ID or name of the stream to show info for").StringVar(&config.StreamID)
 
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
 		return streamAdd(c, config, s)
@@ -49,19 +49,19 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config)
 	})
-	rmCmd.Arg("stream-id", "ID or name of the stream to remove").StringVar(&config.StreamID)
+	rmCmd.Arg("stream", "ID or name of the stream to remove").StringVar(&config.StreamID)
 
 	sendCmd := stream.Command("send", "Send a message to a stream").Action(func(c *fisk.ParseContext) error {
 		return streamSend(c, config, s)
 	})
-	sendCmd.Arg("stream-id", "ID or name of the stream to send to").Required().StringVar(&config.StreamID)
+	sendCmd.Arg("stream", "ID or name of the stream to send to").Required().StringVar(&config.StreamID)
 	sendCmd.Arg("key", "Key of the message").Required().StringVar(&s.Key)
 	sendCmd.Arg("data", "Data payload of the message").Required().StringVar(&s.Data)
 
 	viewCmd := stream.Command("view", "View messages in a stream").Action(func(c *fisk.ParseContext) error {
 		return streamView(c, config, s)
 	})
-	viewCmd.Arg("stream-id", "ID or name of the stream to view").StringVar(&config.StreamID)
+	viewCmd.Arg("stream", "ID or name of the stream to view").StringVar(&config.StreamID)
 	viewCmd.Flag("filter", "Filter messages by key pattern").StringVar(&s.Filter)
 	viewCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&s.Last)
 	viewCmd.Flag("first", "Show least recent N messages").IntVar(&s.First)

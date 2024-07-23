@@ -10,7 +10,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
-  alias Sequin.Streams.ConsumerMessageDetails
+  alias Sequin.Streams.ConsumerMessageWithConsumerInfoss
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
@@ -545,7 +545,7 @@ defmodule Sequin.Streams do
       |> Enum.map(fn consumer ->
         case get_consumer_message(consumer.id, message_subject) do
           {:ok, consumer_message} ->
-            %ConsumerMessageDetails{
+            %ConsumerMessageWithConsumerInfoss{
               consumer_id: consumer.id,
               consumer_name: consumer.name,
               consumer_filter_subject_pattern: consumer.filter_subject_pattern,
@@ -560,7 +560,7 @@ defmodule Sequin.Streams do
             external_state =
               if Consumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
 
-            %ConsumerMessageDetails{
+            %ConsumerMessageWithConsumerInfoss{
               consumer_id: consumer.id,
               consumer_name: consumer.name,
               consumer_filter_subject_pattern: consumer.filter_subject_pattern,

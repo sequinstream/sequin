@@ -7,6 +7,7 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,10 +22,10 @@ type TableColumnWidths struct {
 }
 
 type MessageState struct {
-	messages        []api.Message
+	messages        []models.Message
 	config          *Config
 	cursor          int
-	selectedMessage *api.Message
+	selectedMessage *models.Message
 	showDetail      bool
 	filter          string
 	filterInput     textinput.Model
@@ -32,12 +33,12 @@ type MessageState struct {
 	err             error
 	errorMsg        string
 	streamName      string
-	detailMessage   *MessageDetail
+	detailMessage   *MessageWithConsumerInfos
 }
 
-type MessageDetail struct {
-	Message       api.MessageInfo    `json:"message"`
-	ConsumerInfos []api.ConsumerInfo `json:"consumer_info"`
+type MessageWithConsumerInfos struct {
+	Message       models.MessageInfo    `json:"message"`
+	ConsumerInfos []models.ConsumerInfo `json:"consumer_info"`
 }
 
 func NewMessageState(config *Config) *MessageState {
@@ -83,16 +84,16 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
 			m.selectedMessage = &updatedMessage
-			m.fetchMessageDetail()
+			m.fetchMessageWithConsumerInfos()
 		}
 	}
 
 	return nil
 }
 
-func (m *MessageState) MessagesUpserted(messages []api.Message, limit int) {
+func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 	// Create a map of existing messages for quick lookup
-	existingMessages := make(map[string]*api.Message)
+	existingMessages := make(map[string]*models.Message)
 	for i := range m.messages {
 		existingMessages[m.messages[i].Key] = &m.messages[i]
 	}
@@ -112,7 +113,7 @@ func (m *MessageState) MessagesUpserted(messages []api.Message, limit int) {
 		// Check if the upserted message is the selected message
 		if m.selectedMessage != nil && m.selectedMessage.Key == upsertedMsg.Key {
 			m.selectedMessage = &upsertedMsg
-			m.fetchMessageDetail()
+			m.fetchMessageWithConsumerInfos()
 		}
 	}
 
@@ -252,7 +253,7 @@ func (m *MessageState) renderTableRows(widths TableColumnWidths) string {
 	return output
 }
 
-func formatMessageLine(msg api.Message, widths TableColumnWidths) string {
+func formatMessageLine(msg models.Message, widths TableColumnWidths) string {
 	seq := fmt.Sprintf("%d", msg.Seq)
 	key := truncateString(msg.Key, widths.key)
 	created := msg.CreatedAt.Format(dateFormat)
@@ -313,7 +314,7 @@ func (m *MessageState) detailView(width, _ int) string {
 	return output
 }
 
-func formatConsumerInfoTable(consumerInfos []api.ConsumerInfo, width int) string {
+func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int) string {
 	if len(consumerInfos) == 0 {
 		return "No consumer info available.\n"
 	}
@@ -362,7 +363,7 @@ func (m *MessageState) ToggleDetail() {
 		// Only set selectedMessage if there are messages
 		if len(m.messages) > m.cursor {
 			m.selectedMessage = &m.messages[m.cursor]
-			m.fetchMessageDetail()
+			m.fetchMessageWithConsumerInfos()
 		} else {
 			m.selectedMessage = nil
 		}
@@ -371,26 +372,26 @@ func (m *MessageState) ToggleDetail() {
 	}
 }
 
-func (m *MessageState) fetchMessageDetail() error {
+func (m *MessageState) fetchMessageWithConsumerInfos() error {
 	ctx, err := context.LoadContext(m.config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	consumer_detail, err := api.FetchMessageDetail(ctx, m.streamName, m.selectedMessage.Key)
+	consumer_detail, err := api.FetchMessageWithConsumerInfos(ctx, m.streamName, m.selectedMessage.Key)
 	if err != nil {
 		return err
 	}
 
-	m.detailMessage = &MessageDetail{
+	m.detailMessage = &MessageWithConsumerInfos{
 		Message:       convertToMessageInfo(consumer_detail.Message),
 		ConsumerInfos: convertConsumerInfos(consumer_detail.ConsumerInfos),
 	}
 	return nil
 }
 
-func convertToMessageInfo(apiMsg api.Message) api.MessageInfo {
-	return api.MessageInfo{
+func convertToMessageInfo(apiMsg models.Message) models.MessageInfo {
+	return models.MessageInfo{
 		Subject:    apiMsg.Key,
 		Data:       apiMsg.Data,
 		Seq:        apiMsg.Seq,
@@ -399,10 +400,10 @@ func convertToMessageInfo(apiMsg api.Message) api.MessageInfo {
 	}
 }
 
-func convertConsumerInfos(apiInfos []api.ConsumerInfo) []api.ConsumerInfo {
-	infos := make([]api.ConsumerInfo, len(apiInfos))
+func convertConsumerInfos(apiInfos []models.ConsumerInfo) []models.ConsumerInfo {
+	infos := make([]models.ConsumerInfo, len(apiInfos))
 	for i, apiInfo := range apiInfos {
-		infos[i] = api.ConsumerInfo(apiInfo)
+		infos[i] = models.ConsumerInfo(apiInfo)
 	}
 	return infos
 }

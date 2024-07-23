@@ -12,6 +12,7 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type consumerConfig struct {
@@ -235,7 +236,7 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 		}
 	}
 
-	var httpEndpoint *api.HttpEndpointOptions
+	var httpEndpoint *api.ConsumerHttpEndpointOptions
 
 	if c.Kind == "push" {
 		if c.URL == "" {
@@ -258,7 +259,7 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 			}
 		}
 
-		httpEndpoint = &api.HttpEndpointOptions{
+		httpEndpoint = &api.ConsumerHttpEndpointOptions{
 			BaseURL: c.URL,
 			Headers: map[string]string{
 				"Authorization": "Bearer " + c.BearerToken,
@@ -337,7 +338,7 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	return nil
 }
 
-func displayConsumerInfo(consumer *api.Consumer) {
+func displayConsumerInfo(consumer *models.Consumer) {
 	columns := []table.Column{
 		{Title: "Field", Width: 20},
 		{Title: "Value", Width: 50},
@@ -451,17 +452,17 @@ func consumerReceive(_ *fisk.ParseContext, config *Config, c *consumerConfig) er
 	}
 
 	for _, msg := range messages {
-		fmt.Printf("Message (Ack ID: %s):\n", msg.AckId)
+		fmt.Printf("Message (Ack ID: %s):\n", msg.AckID)
 		fmt.Printf("Key: %s\n", msg.Message.Key)
 		fmt.Printf("Sequence: %d\n", msg.Message.Seq)
 		fmt.Printf("\n%s\n", msg.Message.Data)
 
 		if c.Ack {
-			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckId)
+			err := api.AckMessage(ctx, c.StreamID, c.ConsumerID, msg.AckID)
 			if err != nil {
 				return fmt.Errorf("failed to acknowledge message: %w", err)
 			}
-			fmt.Printf("Message acknowledged with Ack ID %s\n", msg.AckId)
+			fmt.Printf("Message acknowledged with Ack ID %s\n", msg.AckID)
 		}
 	}
 

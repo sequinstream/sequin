@@ -5,114 +5,38 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"bytes"
 
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
-// ConsumersResponse represents the structure of the API response for a list of consumers
 type ConsumersResponse struct {
-	Consumers []Consumer `json:"data"`
+	Consumers []models.Consumer `json:"data"`
 }
 
-type ReceiveMessagesResponse struct {
-	Data []MessageWithAckId `json:"data"`
-}
-
-// Consumer represents the structure of a consumer returned by the API
-type Consumer struct {
-	ID               string       `json:"id"`
-	Name             string       `json:"name"`
-	StreamID         string       `json:"stream_id"`
-	AckWaitMS        int          `json:"ack_wait_ms"`
-	MaxAckPending    int          `json:"max_ack_pending"`
-	MaxDeliver       int          `json:"max_deliver"`
-	FilterKeyPattern string       `json:"filter_subject_pattern"`
-	CreatedAt        time.Time    `json:"inserted_at"`
-	UpdatedAt        time.Time    `json:"updated_at"`
-	Kind             string       `json:"kind"`
-	HttpEndpoint     HttpEndpoint `json:"http_endpoint,omitempty"`
-}
-
-// HttpEndpoint represents the structure of an HTTP endpoint
-type HttpEndpoint struct {
-	BaseURL string            `json:"base_url"`
-	Headers map[string]string `json:"headers"`
-}
-
-// ConsumerCreateOptions represents the options for creating a new consumer
 type ConsumerCreateOptions struct {
-	Name             string               `json:"name"`
-	StreamID         string               `json:"stream_id"`
-	AckWaitMS        int                  `json:"ack_wait_ms,omitempty"`
-	MaxAckPending    int                  `json:"max_ack_pending,omitempty"`
-	MaxDeliver       int                  `json:"max_deliver,omitempty"`
-	FilterKeyPattern string               `json:"filter_subject_pattern"`
-	Kind             string               `json:"kind"`
-	HttpEndpoint     *HttpEndpointOptions `json:"http_endpoint,omitempty"`
+	Name             string                       `json:"name"`
+	StreamID         string                       `json:"stream_id"`
+	AckWaitMS        int                          `json:"ack_wait_ms,omitempty"`
+	MaxAckPending    int                          `json:"max_ack_pending,omitempty"`
+	MaxDeliver       int                          `json:"max_deliver,omitempty"`
+	FilterKeyPattern string                       `json:"filter_subject_pattern"`
+	Kind             string                       `json:"kind"`
+	HttpEndpoint     *ConsumerHttpEndpointOptions `json:"http_endpoint,omitempty"`
 }
 
-// HttpEndpointOptions represents the options for creating a new HTTP endpoint
-type HttpEndpointOptions struct {
+type ConsumerUpdateOptions struct {
+	AckWaitMS     int                          `json:"ack_wait_ms,omitempty"`
+	MaxAckPending int                          `json:"max_ack_pending,omitempty"`
+	MaxDeliver    int                          `json:"max_deliver,omitempty"`
+	Kind          *string                      `json:"kind,omitempty"`
+	HttpEndpoint  *ConsumerHttpEndpointOptions `json:"http_endpoint,omitempty"`
+}
+type ConsumerHttpEndpointOptions struct {
 	BaseURL string            `json:"base_url"`
 	Headers map[string]string `json:"headers"`
-}
-
-// ConsumerUpdateOptions represents the options for updating an existing consumer
-type ConsumerUpdateOptions struct {
-	AckWaitMS     int                  `json:"ack_wait_ms,omitempty"`
-	MaxAckPending int                  `json:"max_ack_pending,omitempty"`
-	MaxDeliver    int                  `json:"max_deliver,omitempty"`
-	Kind          *string              `json:"kind,omitempty"`
-	HttpEndpoint  *HttpEndpointOptions `json:"http_endpoint,omitempty"`
-}
-
-// MessageInfo represents the structure of the info field in a MessageWithInfo
-type MessageInfo struct {
-	DeliverCount    int        `json:"deliver_count"`
-	LastDeliveredAt *time.Time `json:"last_delivered_at"`
-	NotVisibleUntil *time.Time `json:"not_visible_until"`
-	State           string     `json:"state"`
-	Subject         string     `json:"subject"`
-	StreamID        string     `json:"stream_id"`
-	DataHash        string     `json:"data_hash"`
-	Data            string     `json:"data"`
-	Seq             int        `json:"seq"`
-	InsertedAt      time.Time  `json:"inserted_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-}
-
-// FormatLastDeliveredAt returns a formatted string for LastDeliveredAt
-func (mi *MessageInfo) FormatLastDeliveredAt() string {
-	if mi.LastDeliveredAt == nil {
-		return "N/A"
-	}
-	return fmt.Sprintf("%s (%s ago)", mi.LastDeliveredAt.Format(time.RFC3339), time.Since(*mi.LastDeliveredAt).Round(time.Second))
-}
-
-// FormatNotVisibleUntil returns a formatted string for NotVisibleUntil
-func (mi *MessageInfo) FormatNotVisibleUntil() string {
-	if mi.NotVisibleUntil == nil {
-		return "N/A"
-	}
-	notVisibleUntil := *mi.NotVisibleUntil
-	if notVisibleUntil.After(time.Now()) {
-		return fmt.Sprintf("%s (%s from now)", notVisibleUntil.Format(time.RFC3339), time.Until(notVisibleUntil).Round(time.Second))
-	}
-	return fmt.Sprintf("%s (%s ago)", notVisibleUntil.Format(time.RFC3339), time.Since(notVisibleUntil).Round(time.Second))
-}
-
-// MessageWithInfo represents the structure of a consumer message returned by the API
-type MessageWithInfo struct {
-	Message Message     `json:"message"`
-	Info    MessageInfo `json:"info"`
-}
-
-type MessageWithAckId struct {
-	Message Message `json:"message"`
-	AckId   string  `json:"ack_id"`
 }
 
 // BuildFetchConsumers builds the HTTP request for fetching consumers
@@ -131,7 +55,7 @@ func BuildFetchConsumers(ctx *context.Context, streamID string) (*http.Request, 
 }
 
 // FetchConsumers retrieves all consumers for a stream from the API
-func FetchConsumers(ctx *context.Context, streamID string) ([]Consumer, error) {
+func FetchConsumers(ctx *context.Context, streamID string) ([]models.Consumer, error) {
 	req, err := BuildFetchConsumers(ctx, streamID)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch consumers request: %w", err)
@@ -178,7 +102,7 @@ func BuildFetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (
 }
 
 // FetchConsumerInfo retrieves information for a specific consumer from the API
-func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Consumer, error) {
+func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*models.Consumer, error) {
 	req, err := BuildFetchConsumerInfo(ctx, streamID, consumerID)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch consumer info request: %w", err)
@@ -200,7 +124,7 @@ func FetchConsumerInfo(ctx *context.Context, streamID, consumerID string) (*Cons
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var consumer Consumer
+	var consumer models.Consumer
 	err = json.Unmarshal(body, &consumer)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -231,7 +155,7 @@ func BuildAddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*htt
 }
 
 // AddConsumer adds a new consumer to a stream
-func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer, error) {
+func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*models.Consumer, error) {
 	req, err := BuildAddConsumer(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("error building add consumer request: %w", err)
@@ -253,7 +177,7 @@ func AddConsumer(ctx *context.Context, options ConsumerCreateOptions) (*Consumer
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var consumer Consumer
+	var consumer models.Consumer
 	err = json.Unmarshal(body, &consumer)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -284,7 +208,7 @@ func BuildEditConsumer(ctx *context.Context, streamID, consumerID string, option
 }
 
 // EditConsumer updates an existing consumer
-func EditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*Consumer, error) {
+func EditConsumer(ctx *context.Context, streamID, consumerID string, options ConsumerUpdateOptions) (*models.Consumer, error) {
 	req, err := BuildEditConsumer(ctx, streamID, consumerID, options)
 	if err != nil {
 		return nil, fmt.Errorf("error building edit consumer request: %w", err)
@@ -306,7 +230,7 @@ func EditConsumer(ctx *context.Context, streamID, consumerID string, options Con
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var consumer Consumer
+	var consumer models.Consumer
 	err = json.Unmarshal(body, &consumer)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -330,8 +254,12 @@ func BuildReceiveMessages(ctx *context.Context, streamID, consumerID string, bat
 	return req, nil
 }
 
+type ReceiveMessagesResponse struct {
+	Data []models.MessageWithAckID `json:"data"`
+}
+
 // ReceiveMessages retrieves the next batch of messages for a consumer
-func ReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]MessageWithAckId, error) {
+func ReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSize int) ([]models.MessageWithAckID, error) {
 	req, err := BuildReceiveMessages(ctx, streamID, consumerID, batchSize)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch receive messages request: %w", err)
@@ -362,7 +290,6 @@ func ReceiveMessages(ctx *context.Context, streamID, consumerID string, batchSiz
 	return result.Data, nil
 }
 
-// FetchMessagesOptions represents the options for fetching messages
 type FetchMessagesOptions struct {
 	StreamIDOrName string
 	ConsumerID     string
@@ -395,7 +322,7 @@ func BuildFetchMessages(ctx *context.Context, options FetchMessagesOptions) (*ht
 }
 
 // FetchMessages retrieves messages for a consumer with optional filters
-func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]MessageWithInfo, error) {
+func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]models.MessageWithInfo, error) {
 	req, err := BuildFetchMessages(ctx, options)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch messages request: %w", err)
@@ -418,7 +345,7 @@ func FetchMessages(ctx *context.Context, options FetchMessagesOptions) ([]Messag
 	}
 
 	var result struct {
-		Data []MessageWithInfo `json:"data"`
+		Data []models.MessageWithInfo `json:"data"`
 	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {

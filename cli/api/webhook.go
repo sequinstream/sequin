@@ -6,29 +6,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
-// WebhooksResponse represents the structure of the API response for a list of Webhooks
 type WebhooksResponse struct {
-	Webhooks []Webhook `json:"data"`
+	Webhooks []models.Webhook `json:"data"`
 }
 
-// Webhook represents the structure of a Webhook returned by the API
-type Webhook struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	AccountID string    `json:"account_id"`
-	StreamID  string    `json:"stream_id"`
-	Stream    Stream    `json:"stream"`
-	CreatedAt time.Time `json:"inserted_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// WebhookCreate represents the structure for creating a new Webhook
-type WebhookCreate struct {
+type WebhookCreateOptions struct {
 	Name     string `json:"name"`
 	StreamID string `json:"stream_id"`
 }
@@ -49,7 +36,7 @@ func BuildFetchWebhooks(ctx *context.Context) (*http.Request, error) {
 }
 
 // FetchWebhooks retrieves all Webhooks from the API
-func FetchWebhooks(ctx *context.Context) ([]Webhook, error) {
+func FetchWebhooks(ctx *context.Context) ([]models.Webhook, error) {
 	req, err := BuildFetchWebhooks(ctx)
 	if err != nil {
 		return nil, err
@@ -95,7 +82,7 @@ func BuildFetchWebhook(ctx *context.Context, idOrName string) (*http.Request, er
 }
 
 // FetchWebhook retrieves a specific Webhook from the API
-func FetchWebhook(ctx *context.Context, idOrName string) (*Webhook, error) {
+func FetchWebhook(ctx *context.Context, idOrName string) (*models.Webhook, error) {
 	req, err := BuildFetchWebhook(ctx, idOrName)
 	if err != nil {
 		return nil, err
@@ -116,7 +103,7 @@ func FetchWebhook(ctx *context.Context, idOrName string) (*Webhook, error) {
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var webhook Webhook
+	var webhook models.Webhook
 	err = json.Unmarshal(body, &webhook)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -126,7 +113,7 @@ func FetchWebhook(ctx *context.Context, idOrName string) (*Webhook, error) {
 }
 
 // BuildCreateWebhook builds the HTTP request for creating a new Webhook
-func BuildCreateWebhook(ctx *context.Context, webhookData *WebhookCreate) (*http.Request, error) {
+func BuildCreateWebhook(ctx *context.Context, webhookData *WebhookCreateOptions) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -147,7 +134,7 @@ func BuildCreateWebhook(ctx *context.Context, webhookData *WebhookCreate) (*http
 }
 
 // CreateWebhook creates a new Webhook
-func CreateWebhook(ctx *context.Context, webhookData *WebhookCreate) (*Webhook, error) {
+func CreateWebhook(ctx *context.Context, webhookData *WebhookCreateOptions) (*models.Webhook, error) {
 	req, err := BuildCreateWebhook(ctx, webhookData)
 	if err != nil {
 		return nil, err
@@ -176,7 +163,7 @@ func CreateWebhook(ctx *context.Context, webhookData *WebhookCreate) (*Webhook, 
 		}
 	}
 
-	var webhook Webhook
+	var webhook models.Webhook
 	err = json.Unmarshal(body, &webhook)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -186,7 +173,7 @@ func CreateWebhook(ctx *context.Context, webhookData *WebhookCreate) (*Webhook, 
 }
 
 // BuildUpdateWebhook builds the HTTP request for updating an existing Webhook
-func BuildUpdateWebhook(ctx *context.Context, idOrName string, webhookData *WebhookCreate) (*http.Request, error) {
+func BuildUpdateWebhook(ctx *context.Context, idOrName string, webhookData *WebhookCreateOptions) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -207,7 +194,7 @@ func BuildUpdateWebhook(ctx *context.Context, idOrName string, webhookData *Webh
 }
 
 // UpdateWebhook updates an existing Webhook
-func UpdateWebhook(ctx *context.Context, idOrName string, webhookData *WebhookCreate) (*Webhook, error) {
+func UpdateWebhook(ctx *context.Context, idOrName string, webhookData *WebhookCreateOptions) (*models.Webhook, error) {
 	req, err := BuildUpdateWebhook(ctx, idOrName, webhookData)
 	if err != nil {
 		return nil, err
@@ -228,7 +215,7 @@ func UpdateWebhook(ctx *context.Context, idOrName string, webhookData *WebhookCr
 		return nil, ParseAPIError(resp.StatusCode, string(body))
 	}
 
-	var webhook Webhook
+	var webhook models.Webhook
 	err = json.Unmarshal(body, &webhook)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)

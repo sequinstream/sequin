@@ -8,17 +8,18 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	sequinContext "github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
 type ConsumerState struct {
-	consumers          []api.Consumer
+	consumers          []models.Consumer
 	config             *Config
 	selectedConsumerID string
 	showDetail         bool
-	pendingMessages    []api.MessageWithInfo
-	upcomingMessages   []api.MessageWithInfo
+	pendingMessages    []models.MessageWithInfo
+	upcomingMessages   []models.MessageWithInfo
 	streamName         string
 	ctx                *sequinContext.Context
 	isLoading          bool
@@ -56,7 +57,7 @@ func (c *ConsumerState) FetchConsumers(limit int) error {
 	return nil
 }
 
-func limitConsumers(consumers []api.Consumer, limit int) []api.Consumer {
+func limitConsumers(consumers []models.Consumer, limit int) []models.Consumer {
 	if len(consumers) > limit {
 		return consumers[:limit]
 	}
@@ -116,11 +117,11 @@ func (c *ConsumerState) listView(width, height int) string {
 		return output.String()
 	}
 
-	nameWidth := c.calculateColumnWidth("NAME", func(consumer api.Consumer) string { return consumer.Name })
-	filterWidth := c.calculateColumnWidth("FILTER PATTERN", func(consumer api.Consumer) string { return consumer.FilterKeyPattern })
-	maxAckPendingWidth := c.calculateColumnWidth("MAX ACK PENDING", func(consumer api.Consumer) string { return fmt.Sprintf("%d", consumer.MaxAckPending) })
-	maxDeliverWidth := c.calculateColumnWidth("MAX DELIVER", func(consumer api.Consumer) string { return fmt.Sprintf("%d", consumer.MaxDeliver) })
-	createdWidth := c.calculateColumnWidth("CREATED AT", func(consumer api.Consumer) string { return consumer.CreatedAt.Format(time.RFC3339) })
+	nameWidth := c.calculateColumnWidth("NAME", func(consumer models.Consumer) string { return consumer.Name })
+	filterWidth := c.calculateColumnWidth("FILTER PATTERN", func(consumer models.Consumer) string { return consumer.FilterKeyPattern })
+	maxAckPendingWidth := c.calculateColumnWidth("MAX ACK PENDING", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxAckPending) })
+	maxDeliverWidth := c.calculateColumnWidth("MAX DELIVER", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxDeliver) })
+	createdWidth := c.calculateColumnWidth("CREATED AT", func(consumer models.Consumer) string { return consumer.CreatedAt.Format(time.RFC3339) })
 	showDetailsPromptWidth := width - nameWidth - filterWidth - maxAckPendingWidth - maxDeliverWidth - createdWidth
 
 	// Create the table header style
@@ -160,7 +161,7 @@ func (c *ConsumerState) listView(width, height int) string {
 	return output
 }
 
-func (c *ConsumerState) calculateColumnWidth(header string, getValue func(api.Consumer) string) int {
+func (c *ConsumerState) calculateColumnWidth(header string, getValue func(models.Consumer) string) int {
 	maxWidth := len(header)
 	for _, consumer := range c.consumers {
 		value := getValue(consumer)
@@ -171,7 +172,7 @@ func (c *ConsumerState) calculateColumnWidth(header string, getValue func(api.Co
 	return maxWidth
 }
 
-func formatConsumerLine(consumer api.Consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
+func formatConsumerLine(consumer models.Consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
 	name := truncateString(consumer.Name, nameWidth)
 	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
 	maxAckPending := fmt.Sprintf("%d", consumer.MaxAckPending)
@@ -204,7 +205,7 @@ func (c *ConsumerState) detailView(width int) string {
 	return output
 }
 
-func (c *ConsumerState) getSelectedConsumer() *api.Consumer {
+func (c *ConsumerState) getSelectedConsumer() *models.Consumer {
 	for _, consumer := range c.consumers {
 		if consumer.ID == c.selectedConsumerID {
 			return &consumer
@@ -213,7 +214,7 @@ func (c *ConsumerState) getSelectedConsumer() *api.Consumer {
 	return nil
 }
 
-func formatConsumerDetail(consumer api.Consumer) string {
+func formatConsumerDetail(consumer models.Consumer) string {
 	output := lipgloss.NewStyle().Bold(true).Render("Consumer details")
 	output += "\n\n"
 	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
@@ -225,7 +226,7 @@ func formatConsumerDetail(consumer api.Consumer) string {
 	return output
 }
 
-func formatMessageSection(title string, messages []api.MessageWithInfo, width int, isPending, isLoading bool) string {
+func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading bool) string {
 	// Create the table header style
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
@@ -238,18 +239,18 @@ func formatMessageSection(title string, messages []api.MessageWithInfo, width in
 	return output + formatMessageList(messages, width, isPending)
 }
 
-func formatMessageList(messages []api.MessageWithInfo, _ int, isPending bool) string {
+func formatMessageList(messages []models.MessageWithInfo, _ int, isPending bool) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth := calculateColumnWidth(messages, "SEQ", func(msg api.MessageWithInfo) string {
+	seqWidth := calculateColumnWidth(messages, "SEQ", func(msg models.MessageWithInfo) string {
 		return fmt.Sprintf("%d", msg.Message.Seq)
 	})
-	keyWidth := calculateColumnWidth(messages, "KEY", func(msg api.MessageWithInfo) string {
+	keyWidth := calculateColumnWidth(messages, "KEY", func(msg models.MessageWithInfo) string {
 		return msg.Message.Key
 	})
-	deliverCountWidth := calculateColumnWidth(messages, "DELIVER", func(msg api.MessageWithInfo) string {
+	deliverCountWidth := calculateColumnWidth(messages, "DELIVER", func(msg models.MessageWithInfo) string {
 		return fmt.Sprintf("%d", msg.Info.DeliverCount)
 	})
 
@@ -257,7 +258,7 @@ func formatMessageList(messages []api.MessageWithInfo, _ int, isPending bool) st
 	if !isPending {
 		lastColumnName = "CREATED AT"
 	}
-	lastColumnWidth := calculateColumnWidth(messages, lastColumnName, func(msg api.MessageWithInfo) string {
+	lastColumnWidth := calculateColumnWidth(messages, lastColumnName, func(msg models.MessageWithInfo) string {
 		if isPending {
 			return msg.Info.FormatNotVisibleUntil()
 		}
@@ -274,7 +275,7 @@ func formatMessageList(messages []api.MessageWithInfo, _ int, isPending bool) st
 	return output
 }
 
-func calculateColumnWidth(messages []api.MessageWithInfo, header string, getValue func(api.MessageWithInfo) string) int {
+func calculateColumnWidth(messages []models.MessageWithInfo, header string, getValue func(models.MessageWithInfo) string) int {
 	maxWidth := len(header)
 	for _, msg := range messages {
 		value := getValue(msg)
@@ -305,7 +306,7 @@ func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth 
 	return tableHeaderStyle.Render(header) + "\n"
 }
 
-func formatMessageRow(msg api.MessageWithInfo, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
+func formatMessageRow(msg models.MessageWithInfo, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
 	lastColumn := msg.Message.CreatedAt.Format(time.RFC3339)
 	if isPending {
 		lastColumn = msg.Info.FormatNotVisibleUntil()
@@ -390,7 +391,7 @@ func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
 	return nil
 }
 
-func (c *ConsumerState) fetchMessages(consumerID string, visible bool) ([]api.MessageWithInfo, error) {
+func (c *ConsumerState) fetchMessages(consumerID string, visible bool) ([]models.MessageWithInfo, error) {
 	options := api.FetchMessagesOptions{
 		StreamIDOrName: c.streamName,
 		ConsumerID:     consumerID,

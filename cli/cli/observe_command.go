@@ -9,6 +9,7 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	sequinContext "github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -56,7 +57,7 @@ type state struct {
 	activeTab      TabType
 	tabs           []string
 	ctx            *sequinContext.Context
-	selectedStream *api.Stream
+	selectedStream *models.Stream
 }
 
 func (s *state) fetchConsumers() tea.Cmd {
@@ -433,15 +434,15 @@ func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Cont
 }
 
 func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
-	observeChannel.OnStreamCreated(func(stream api.Stream) {
+	observeChannel.OnStreamCreated(func(stream models.Stream) {
 		s.streams.FetchStreams(calculateLimit())
 	})
 
-	observeChannel.OnStreamUpdated(func(stream api.Stream) {
+	observeChannel.OnStreamUpdated(func(stream models.Stream) {
 		s.streams.FetchStreams(calculateLimit())
 	})
 
-	observeChannel.OnStreamDeleted(func(stream api.Stream) {
+	observeChannel.OnStreamDeleted(func(stream models.Stream) {
 		if s.selectedStream != nil && s.selectedStream.Name == stream.Name {
 			s.setActiveTab(StreamsTab)
 		}
@@ -449,19 +450,19 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 		s.streams.FetchStreams(calculateLimit())
 	})
 
-	observeChannel.OnConsumerCreated(func(consumer api.Consumer) {
+	observeChannel.OnConsumerCreated(func(consumer models.Consumer) {
 		s.consumers.FetchConsumers(calculateLimit())
 	})
 
-	observeChannel.OnConsumerUpdated(func(consumer api.Consumer) {
+	observeChannel.OnConsumerUpdated(func(consumer models.Consumer) {
 		s.consumers.FetchConsumers(calculateLimit())
 	})
 
-	observeChannel.OnConsumerDeleted(func(consumer api.Consumer) {
+	observeChannel.OnConsumerDeleted(func(consumer models.Consumer) {
 		s.consumers.FetchConsumers(calculateLimit())
 	})
 
-	observeChannel.OnMessagesUpserted(func(messages []api.Message) {
+	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
 		if s.selectedStream != nil {
 			filteredMessages := filterMessagesForStream(messages, s.selectedStream.ID)
 			s.messages.MessagesUpserted(filteredMessages, calculateLimit())
@@ -469,8 +470,8 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 	})
 }
 
-func filterMessagesForStream(messages []api.Message, streamID string) []api.Message {
-	filtered := make([]api.Message, 0)
+func filterMessagesForStream(messages []models.Message, streamID string) []models.Message {
+	filtered := make([]models.Message, 0)
 	for _, msg := range messages {
 		if msg.StreamID == streamID {
 			filtered = append(filtered, msg)
@@ -479,7 +480,7 @@ func filterMessagesForStream(messages []api.Message, streamID string) []api.Mess
 	return filtered
 }
 
-func streamListen(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {
+func streamListen(_ *fisk.ParseContext, _ *Config, ctx *sequinContext.Context) error {
 	observeChannel, err := api.NewObserveChannel(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create observe channel: %w", err)
@@ -492,7 +493,7 @@ func streamListen(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Conte
 
 	fmt.Println("Listening for incoming messages. Press Ctrl+C to exit.")
 
-	observeChannel.OnMessagesUpserted(func(messages []api.Message) {
+	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
 		for _, msg := range messages {
 			fmt.Printf("New message: Stream ID: %s, Sequence: %d, Data: %s\n", msg.StreamID, msg.Seq, msg.Data)
 		}

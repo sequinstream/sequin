@@ -12,6 +12,7 @@ require (
 	github.com/google/go-cmp v0.5.2
 	github.com/jedib0t/go-pretty/v6 v6.5.9
 	github.com/mattn/go-isatty v0.0.18
+	github.com/nshafer/phx v0.2.2
 	github.com/stretchr/testify v1.8.4
 	golang.org/x/term v0.17.0
 	moul.io/http2curl v1.0.0
@@ -39,7 +40,6 @@ require (
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.15.2 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/nshafer/phx v0.2.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/smartystreets/goconvey v1.8.1 // indirect

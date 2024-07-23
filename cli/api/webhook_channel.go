@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type WebhookChannel struct {
@@ -27,11 +28,11 @@ func (wc *WebhookChannel) Connect() error {
 	return wc.BaseChannel.Connect("webhook")
 }
 
-func (wc *WebhookChannel) OnWebhookIngested(handler func(Webhook, Message)) {
+func (wc *WebhookChannel) OnWebhookIngested(handler func(models.Webhook, models.Message)) {
 	wc.channel.On("webhook:ingested", func(payload any) {
 		var webhookPayload struct {
-			Webhook Webhook `json:"webhook"`
-			Message Message `json:"message"`
+			Webhook models.Webhook `json:"webhook"`
+			Message models.Message `json:"message"`
 		}
 		if err := parsePayload(payload, &webhookPayload); err != nil {
 			log.Printf("Error parsing webhook:ingested payload: %v", err)

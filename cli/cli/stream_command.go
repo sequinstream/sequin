@@ -13,6 +13,7 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type StreamConfig struct {
@@ -338,7 +339,7 @@ func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 		sort = "seq_asc"
 	}
 
-	populator := func() ([]api.Message, error) {
+	populator := func() ([]models.Message, error) {
 		return api.ListStreamMessages(ctx, config.StreamID, limit, sort, s.Filter)
 	}
 
@@ -359,7 +360,7 @@ func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	return displayMessagesAsDump(messages)
 }
 
-func displayMessagesAsTable(messages []api.Message, populator func() ([]api.Message, error)) error {
+func displayMessagesAsTable(messages []models.Message, populator func() ([]models.Message, error)) error {
 	columns := []table.Column{
 		{Title: "Key", Width: 20},
 		{Title: "Sequence", Width: 10},
@@ -386,7 +387,7 @@ func displayMessagesAsTable(messages []api.Message, populator func() ([]api.Mess
 
 	return nil
 }
-func displayMessagesAsDump(messages []api.Message) error {
+func displayMessagesAsDump(messages []models.Message) error {
 	headerStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("240")).
 		Foreground(lipgloss.Color("0")).
@@ -405,14 +406,14 @@ func displayMessagesAsDump(messages []api.Message) error {
 
 type messageListModel struct {
 	table       *Table
-	messages    []api.Message
+	messages    []models.Message
 	selected    int
 	showMessage bool
-	populator   func() ([]api.Message, error)
+	populator   func() ([]models.Message, error)
 	isLoading   bool
 }
 
-func newMessageListModel(table *Table, messages []api.Message, populator func() ([]api.Message, error)) *messageListModel {
+func newMessageListModel(table *Table, messages []models.Message, populator func() ([]models.Message, error)) *messageListModel {
 	return &messageListModel{
 		table:       table,
 		messages:    messages,

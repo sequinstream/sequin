@@ -8,7 +8,7 @@ defmodule SequinWeb.WebhookController do
 
   def index(conn, _params) do
     account_id = conn.assigns.account_id
-    webhooks = Sources.all_webhooks_for_account(account_id)
+    webhooks = Sources.list_webhooks_for_account(account_id)
     render(conn, "index.json", webhooks: webhooks)
   end
 

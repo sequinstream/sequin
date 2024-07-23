@@ -214,9 +214,15 @@ defmodule Sequin.Sources do
     |> Repo.insert()
   end
 
-  def all_webhooks_for_account(account_id) do
+  def list_webhooks_for_account(account_id) do
     account_id
     |> Webhook.where_account()
+    |> Repo.all()
+  end
+
+  def list_webhooks_for_stream(stream_id) do
+    stream_id
+    |> Webhook.where_stream()
     |> Repo.all()
   end
 
@@ -239,9 +245,13 @@ defmodule Sequin.Sources do
     end
   end
 
+  def delete_webhook(%Webhook{} = webhook) do
+    Repo.delete(webhook)
+  end
+
   def delete_webhook_for_account(account_id, webhook_id_or_name) do
     with {:ok, webhook} <- get_webhook_for_account(account_id, webhook_id_or_name) do
-      Repo.delete(webhook)
+      delete_webhook(webhook)
     end
   end
 

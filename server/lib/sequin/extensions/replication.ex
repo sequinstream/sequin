@@ -173,8 +173,8 @@ defmodule Sequin.Extensions.Replication do
 
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     columns =
-      Enum.map(columns, fn %{name: name, type: type} ->
-        %{name: name, type: type}
+      Enum.map(columns, fn %{name: name, type: type, flags: flags} ->
+        %{name: name, type: type, pk?: Enum.member?(flags, :key)}
       end)
 
     :ets.insert(ets_table(), {{state.id, id}, columns, schema, table})
@@ -201,6 +201,7 @@ defmodule Sequin.Extensions.Replication do
     record = %NewRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
+      ids: data_tuple_to_ids(columns, msg.tuple_data),
       schema: schema,
       table: table,
       record: data_tuple_to_map(columns, msg.tuple_data),
@@ -230,6 +231,7 @@ defmodule Sequin.Extensions.Replication do
     record = %UpdatedRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
+      ids: data_tuple_to_ids(columns, msg.tuple_data),
       schema: schema,
       table: table,
       old_record: old_record,
@@ -264,6 +266,7 @@ defmodule Sequin.Extensions.Replication do
     record = %DeletedRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
+      ids: data_tuple_to_ids(columns, prev_tuple_data),
       schema: schema,
       table: table,
       old_record: data_tuple_to_map(columns, prev_tuple_data),
@@ -301,6 +304,13 @@ defmodule Sequin.Extensions.Replication do
     if state.test_pid do
       send(state.test_pid, {Replication, :message_handled})
     end
+  end
+
+  def data_tuple_to_ids(columns, tuple_data) do
+    columns
+    |> Enum.zip(Tuple.to_list(tuple_data))
+    |> Enum.filter(fn {col, _} -> col.pk? end)
+    |> Enum.map(fn {_, value} -> value end)
   end
 
   def data_tuple_to_map(columns, tuple_data) do

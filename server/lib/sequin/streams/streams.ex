@@ -412,7 +412,13 @@ defmodule Sequin.Streams do
     end
   end
 
-  def upsert_messages(stream_id, messages, is_retry? \\ false) do
+  def upsert_messages(stream_id, messages) do
+    with :ok <- validate_messages(messages) do
+      do_upsert_messages(stream_id, messages)
+    end
+  end
+
+  defp do_upsert_messages(stream_id, messages, is_retry? \\ false) do
     now = DateTime.utc_now()
 
     messages =
@@ -485,10 +491,25 @@ defmodule Sequin.Streams do
             Map.put(message, :data, String.replace(data, "\u0000", ""))
           end)
 
-        upsert_messages(stream_id, messages, true)
+        do_upsert_messages(stream_id, messages, true)
       else
         reraise e, __STACKTRACE__
       end
+  end
+
+  defp validate_messages(messages) do
+    Enum.reduce_while(messages, :ok, fn message, :ok ->
+      case message do
+        %{key: key, data: data} when is_binary(key) and is_binary(data) ->
+          case Sequin.Key.validate_key(key) do
+            :ok -> {:cont, :ok}
+            {:error, reason} -> {:halt, {:error, Error.bad_request(message: "Invalid key format: #{reason}")}}
+          end
+
+        _ ->
+          {:halt, {:error, Error.bad_request(message: "Invalid message format")}}
+      end
+    end)
   end
 
   # Consumer Messages

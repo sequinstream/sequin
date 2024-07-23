@@ -36,7 +36,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
 
   defp message_for_upsert(key_prefix, %DeletedRecord{old_record: old_record} = message, key_format) do
     %{
-      key: key_from_message(key_prefix, message, old_record["id"], key_format),
+      key: key_from_message(key_prefix, message, message.ids, key_format),
       data:
         Jason.encode!(%{
           data: old_record,
@@ -48,7 +48,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   # InsertRecord and UpdateRecord
   defp message_for_upsert(key_prefix, %{record: record} = message, key_format) do
     %{
-      key: key_from_message(key_prefix, message, record["id"], key_format),
+      key: key_from_message(key_prefix, message, message.ids, key_format),
       data:
         Jason.encode!(%{
           data: record,
@@ -57,7 +57,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
     }
   end
 
-  defp key_from_message(key_prefix, message, record_id, key_format) do
+  defp key_from_message(key_prefix, message, record_ids, key_format) do
     case key_format do
       :with_operation ->
         Enum.join(
@@ -66,7 +66,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
             Sequin.Key.to_key_token(message.schema),
             Sequin.Key.to_key_token(message.table),
             action(message),
-            record_id
+            Enum.join(record_ids, ".")
           ],
           "."
         )
@@ -77,7 +77,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
             key_prefix,
             Sequin.Key.to_key_token(message.schema),
             Sequin.Key.to_key_token(message.table),
-            record_id
+            Enum.join(record_ids, ".")
           ],
           "."
         )

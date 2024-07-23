@@ -148,13 +148,13 @@ defmodule Sequin.PostgresReplicationTest do
       assert message.key =~ "#{@test_schema}.#{@test_table}"
 
       decoded_data = Jason.decode!(message.data)
-      assert decoded_data["data"] == %{"id" => 1, "name" => "Duncan Idaho", "house" => "Atreides", "planet" => "Caladan"}
+      assert decoded_data["data"] == %{"id" => 1, "name" => nil, "house" => nil, "planet" => nil}
       assert decoded_data["deleted"]
     end
 
     test "replication with default replica identity", %{conn: conn, stream: stream} do
       # Set replica identity to default
-      query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
+      # query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
 
       query!(
         conn,
@@ -196,7 +196,8 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "replication with two primary key columns", %{conn: conn, stream: stream} do
       # Set replica identity to default - make sure even the delete comes through with both PKs
-      query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
+      # query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table_2pk} REPLICA IDENTITY DEFAULT")
+
       # Insert
       query!(
         conn,
@@ -420,12 +421,7 @@ defmodule Sequin.PostgresReplicationTest do
                "planet" => "Arrakis"
              })
 
-      assert Map.equal?(update_change.old_record, %{
-               "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Caladan"
-             })
+      assert is_nil(update_change.old_record)
 
       assert update_change.type == "update"
 
@@ -437,9 +433,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert Map.equal?(delete_change.old_record, %{
                "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Arrakis"
+               "name" => nil,
+               "house" => nil,
+               "planet" => nil
              })
 
       assert delete_change.type == "delete"

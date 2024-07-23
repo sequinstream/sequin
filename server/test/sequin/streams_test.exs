@@ -10,7 +10,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
       messages = for _ <- 1..2, do: StreamsFactory.message_attrs(%{stream_id: stream.id, data_hash: nil})
 
-      assert {:ok, 2} = Streams.upsert_messages(stream.id, messages, test_pid: self())
+      assert {:ok, 2} = Streams.upsert_messages(stream.id, messages)
 
       inserted_messages = Repo.all(Streams.Message)
       assert length(inserted_messages) == 2

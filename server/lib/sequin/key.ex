@@ -59,6 +59,9 @@ defmodule Sequin.Key do
       key |> String.split(".") |> length() > 16 ->
         {:error, "Key must not contain more than 16 tokens"}
 
+      String.contains?(key, "\u0000") ->
+        {:error, "Key must not contain null characters"}
+
       true ->
         :ok
     end

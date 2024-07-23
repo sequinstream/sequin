@@ -78,9 +78,9 @@ defmodule Sequin.Test.Support.ReplicationSlots do
     query!(conn, "create publication #{publication} for table #{tables_string}")
 
     # set replica identity to full for all tables. This means we'll get `old` rows with changes.
-    Enum.each(tables, fn table ->
-      query!(conn, "alter table #{schema}.#{table} replica identity full")
-    end)
+    # Enum.each(tables, fn table ->
+    #   query!(conn, "alter table #{schema}.#{table} replica identity full")
+    # end)
 
     ExUnit.Callbacks.on_exit(fn ->
       # Original `conn` will be dead

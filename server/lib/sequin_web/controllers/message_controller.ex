@@ -73,8 +73,8 @@ defmodule SequinWeb.MessageController do
   defp parse_messages(%{"messages" => messages}) when is_list(messages) do
     Enum.reduce_while(messages, {:ok, []}, fn message, {:ok, acc} ->
       case message do
-        %{"subject" => subject, "data" => data} when is_binary(subject) and is_binary(data) ->
-          {:cont, {:ok, [%{subject: subject, data: data} | acc]}}
+        %{"key" => key, "data" => data} when is_binary(key) and is_binary(data) ->
+          {:cont, {:ok, [%{key: key, data: data} | acc]}}
 
         _ ->
           {:halt, {:error, Error.bad_request(message: "Invalid message format")}}
@@ -87,8 +87,8 @@ defmodule SequinWeb.MessageController do
   defp parse_stream_list_params(params) do
     with {:ok, sort} <- parse_stream_sort(params),
          {:ok, limit} <- parse_limit(params),
-         {:ok, subject_pattern} <- parse_subject_pattern(params) do
-      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, subject_pattern: subject_pattern)}
+         {:ok, key_pattern} <- parse_key_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, key_pattern: key_pattern)}
     end
   end
 
@@ -96,15 +96,14 @@ defmodule SequinWeb.MessageController do
     with {:ok, sort} <- parse_consumer_sort(params),
          {:ok, limit} <- parse_limit(params),
          {:ok, visible} <- parse_visible(params),
-         {:ok, subject_pattern} <- parse_subject_pattern(params) do
-      {:ok,
-       Sequin.Keyword.reject_nils(limit: limit, order_by: sort, is_deliverable: visible, subject_pattern: subject_pattern)}
+         {:ok, key_pattern} <- parse_key_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(limit: limit, order_by: sort, is_deliverable: visible, key_pattern: key_pattern)}
     end
   end
 
   defp parse_stream_count_params(params) do
-    with {:ok, subject_pattern} <- parse_subject_pattern(params) do
-      {:ok, Sequin.Keyword.reject_nils(subject_pattern: subject_pattern)}
+    with {:ok, key_pattern} <- parse_key_pattern(params) do
+      {:ok, Sequin.Keyword.reject_nils(key_pattern: key_pattern)}
     end
   end
 
@@ -135,12 +134,12 @@ defmodule SequinWeb.MessageController do
   defp parse_visible(%{"visible" => _}), do: {:error, Error.bad_request(message: "Invalid visible parameter")}
   defp parse_visible(_), do: {:ok, nil}
 
-  defp parse_subject_pattern(%{"subject_pattern" => pattern}) do
-    case Sequin.Subject.validate_subject_pattern(pattern) do
+  defp parse_key_pattern(%{"key_pattern" => pattern}) do
+    case Sequin.Key.validate_key_pattern(pattern) do
       :ok -> {:ok, pattern}
-      {:error, reason} -> {:error, Error.bad_request(message: "Invalid subject pattern: #{reason}")}
+      {:error, reason} -> {:error, Error.bad_request(message: "Invalid key pattern: #{reason}")}
     end
   end
 
-  defp parse_subject_pattern(_), do: {:ok, nil}
+  defp parse_key_pattern(_), do: {:ok, nil}
 end

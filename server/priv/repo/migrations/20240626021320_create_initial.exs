@@ -36,7 +36,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             "drop sequence if exists #{@stream_schema}.messages_seq"
 
     execute """
-            CREATE OR REPLACE FUNCTION subject_from_tokens(VARIADIC text[])
+            CREATE OR REPLACE FUNCTION key_from_tokens(VARIADIC text[])
             RETURNS text AS $$
             DECLARE
             result text := '';
@@ -55,7 +55,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             $$ LANGUAGE plpgsql IMMUTABLE;
             """,
             """
-            drop function if exists subject_from_tokens;
+            drop function if exists key_from_tokens;
             """
 
     create table(:messages,
@@ -66,12 +66,12 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :stream_id, :uuid, null: false, primary_key: true
 
       # Generated column which concats tokens
-      add :subject, :text,
+      add :key, :text,
         null: false,
         primary_key: true,
         generated: """
         ALWAYS AS (
-          subject_from_tokens(token1, token2, token3, token4, token5, token6, token7, token8, token9, token10, token11, token12, token13, token14, token15, token16)
+          key_from_tokens(token1, token2, token3, token4, token5, token6, token7, token8, token9, token10, token11, token12, token13, token14, token15, token16)
         ) STORED
         """
 
@@ -103,7 +103,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     end
 
     create unique_index(:messages, [:stream_id, :seq], prefix: @stream_schema)
-    create unique_index(:messages, [:stream_id, :subject], prefix: @stream_schema)
+    create unique_index(:messages, [:stream_id, :key], prefix: @stream_schema)
 
     create index(:messages, [:stream_id, :token1], prefix: @stream_schema)
 
@@ -148,7 +148,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
            )
 
     execute """
-            CREATE OR REPLACE FUNCTION #{@stream_schema}.validate_message_subject(subject text)
+            CREATE OR REPLACE FUNCTION #{@stream_schema}.validate_message_key(key text)
             RETURNS boolean
             LANGUAGE plpgsql
              IMMUTABLE
@@ -157,13 +157,13 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
                 parts TEXT[];
                 part TEXT;
             BEGIN
-                -- Check if subject is not empty and doesn't start with a period
-                IF subject IS NULL OR subject = '' OR subject LIKE '.%' THEN
+                -- Check if key is not empty and doesn't start with a period
+                IF key IS NULL OR key = '' OR key LIKE '.%' THEN
                     RETURN FALSE;
                 END IF;
 
-                -- Split the subject into parts
-                parts := string_to_array(subject, '.');
+                -- Split the key into parts
+                parts := string_to_array(key, '.');
 
                 -- Check if there's at least one part
                 IF array_length(parts, 1) = 0 THEN
@@ -195,11 +195,11 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             $function$
             """,
             """
-            drop function if exists #{@stream_schema}.validate_message_subject;
+            drop function if exists #{@stream_schema}.validate_message_key;
             """
 
-    execute "alter table #{@stream_schema}.messages add constraint validate_message_subject check (#{@stream_schema}.validate_message_subject(subject));",
-            "alter table #{@stream_schema}.messages drop constraint validate_message_subject;"
+    execute "alter table #{@stream_schema}.messages add constraint validate_message_key check (#{@stream_schema}.validate_message_key(key));",
+            "alter table #{@stream_schema}.messages drop constraint validate_message_key;"
 
     create index(:messages, [:stream_id, :token10],
              prefix: @stream_schema,
@@ -273,7 +273,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       add :kind, :string, null: false, default: "pull"
       add :name, :text, null: false
-      add :filter_subject_pattern, :text, null: false
+      add :filter_key_pattern, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
 
       add :ack_wait_ms, :integer, null: false, default: 30_000
@@ -300,7 +300,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              options: "PARTITION BY LIST (consumer_id)"
            ) do
       add :consumer_id, :uuid, null: false, primary_key: true
-      add :message_subject, :text, null: false, primary_key: true
+      add :message_key, :text, null: false, primary_key: true
       add :message_seq, :bigint, null: false
 
       add :ack_id, :uuid, null: false, default: fragment("uuid_generate_v4()")
@@ -313,13 +313,11 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create unique_index(:consumer_messages, [:consumer_id, :message_subject],
-             prefix: @stream_schema
-           )
+    create unique_index(:consumer_messages, [:consumer_id, :message_key], prefix: @stream_schema)
 
     create unique_index(:consumer_messages, [:consumer_id, :ack_id], prefix: @stream_schema)
 
-    create index(:consumer_messages, [:message_subject], prefix: @stream_schema)
+    create index(:consumer_messages, [:message_key], prefix: @stream_schema)
     create index(:consumer_messages, [:consumer_id], prefix: @stream_schema)
 
     create index(

@@ -86,10 +86,10 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
   defp create_messages(db_name, schema, table, columns, rows, key_format) do
     Enum.map(rows, fn row ->
       record = columns |> Enum.zip(row) |> Map.new()
-      subject = subject_from_message(db_name, schema, table, record["id"], key_format)
+      key = key_from_message(db_name, schema, table, record["id"], key_format)
 
       %{
-        subject: subject,
+        key: key,
         data:
           Jason.encode!(%{
             data: record,
@@ -99,14 +99,14 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
     end)
   end
 
-  defp subject_from_message(db_name, schema, table, record_id, key_format) do
+  defp key_from_message(db_name, schema, table, record_id, key_format) do
     case key_format do
       :with_operation ->
         Enum.join(
           [
             db_name,
-            Sequin.Subject.to_subject_token(schema),
-            Sequin.Subject.to_subject_token(table),
+            Sequin.Key.to_key_token(schema),
+            Sequin.Key.to_key_token(table),
             "insert",
             record_id
           ],
@@ -117,8 +117,8 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
         Enum.join(
           [
             db_name,
-            Sequin.Subject.to_subject_token(schema),
-            Sequin.Subject.to_subject_token(table),
+            Sequin.Key.to_key_token(schema),
+            Sequin.Key.to_key_token(table),
             record_id
           ],
           "."

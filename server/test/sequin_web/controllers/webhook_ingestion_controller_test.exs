@@ -27,7 +27,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
 
       # Verify the message was added to the stream
       [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.subject =~ "#{webhook.name}."
+      assert message.key =~ "#{webhook.name}."
       assert Jason.decode!(message.data) == payload
     end
 
@@ -48,7 +48,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
     #   assert json_response(conn, 422) == %{"error" => "Failed to ingest message"}
     # end
 
-    test "generates correct subject with SHA256 hash", %{conn: conn, webhook: webhook, stream: stream} do
+    test "generates correct key with SHA256 hash", %{conn: conn, webhook: webhook, stream: stream} do
       payload = %{"id" => 1, "name" => "Paul Atreides"}
 
       conn = post(conn, ~p"/api/webhook/#{webhook.name}", payload)
@@ -56,7 +56,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
 
       [message] = Streams.list_messages_for_stream(stream.id)
       expected_hash = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()
-      assert message.subject == "#{webhook.name}.#{expected_hash}"
+      assert message.key == "#{webhook.name}.#{expected_hash}"
     end
   end
 end

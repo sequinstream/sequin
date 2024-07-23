@@ -12,7 +12,7 @@ defmodule Sequin.Streams.ConsumerMessage do
   @derive {Jason.Encoder,
            only: [
              :consumer_id,
-             :message_subject,
+             :message_key,
              :ack_id,
              :deliver_count,
              :last_delivered_at,
@@ -22,7 +22,7 @@ defmodule Sequin.Streams.ConsumerMessage do
            ]}
   typed_schema "consumer_messages" do
     field :consumer_id, Ecto.UUID, primary_key: true
-    field :message_subject, :string, primary_key: true
+    field :message_key, :string, primary_key: true
 
     field :ack_id, Ecto.UUID, read_after_writes: true
     field :deliver_count, :integer
@@ -41,21 +41,21 @@ defmodule Sequin.Streams.ConsumerMessage do
     |> cast(attrs, [
       :consumer_id,
       :message_seq,
-      :message_subject,
+      :message_key,
       :state,
       :not_visible_until,
       :deliver_count,
       :last_delivered_at
     ])
-    |> validate_required([:consumer_id, :message_seq, :message_subject, :state, :deliver_count])
+    |> validate_required([:consumer_id, :message_seq, :message_key, :state, :deliver_count])
   end
 
   def where_consumer_id(query \\ base_query(), consumer_id) do
     from([consumer_message: cm] in query, where: cm.consumer_id == ^consumer_id)
   end
 
-  def where_message_subject(query \\ base_query(), message_subject) do
-    from([consumer_message: cm] in query, where: cm.message_subject == ^message_subject)
+  def where_message_key(query \\ base_query(), message_key) do
+    from([consumer_message: cm] in query, where: cm.message_key == ^message_key)
   end
 
   def where_ack_ids(query \\ base_query(), ack_ids) do
@@ -97,15 +97,15 @@ defmodule Sequin.Streams.ConsumerMessage do
   def join_message(query \\ base_query(), stream_id) do
     from [consumer_message: cm] in query,
       join: m in Sequin.Streams.Message,
-      on: m.subject == cm.message_subject and m.stream_id == ^stream_id,
+      on: m.key == cm.message_key and m.stream_id == ^stream_id,
       as: :message
   end
 
-  def where_subject_pattern(query \\ base_query(), pattern) do
+  def where_key_pattern(query \\ base_query(), pattern) do
     if has_named_binding?(query, :message) do
-      Message.where_subject_pattern(query, pattern)
+      Message.where_key_pattern(query, pattern)
     else
-      raise ArgumentError, "The query must have a joined message before calling where_subject_pattern/2"
+      raise ArgumentError, "The query must have a joined message before calling where_key_pattern/2"
     end
   end
 

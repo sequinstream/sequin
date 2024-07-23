@@ -210,7 +210,7 @@ func RemoveStream(ctx *context.Context, streamID string) error {
 }
 
 // BuildPublishMessage builds the HTTP request for publishing a message to a stream
-func BuildPublishMessage(ctx *context.Context, streamID, subject, message string) (*http.Request, error) {
+func BuildPublishMessage(ctx *context.Context, streamID, key, message string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -220,8 +220,8 @@ func BuildPublishMessage(ctx *context.Context, streamID, subject, message string
 	payload := map[string]interface{}{
 		"messages": []map[string]string{
 			{
-				"subject": subject,
-				"data":    message,
+				"key":  key,
+				"data": message,
 			},
 		},
 	}
@@ -241,8 +241,8 @@ func BuildPublishMessage(ctx *context.Context, streamID, subject, message string
 }
 
 // PublishMessage publishes a message to a stream
-func PublishMessage(ctx *context.Context, streamID, subject, message string) error {
-	req, err := BuildPublishMessage(ctx, streamID, subject, message)
+func PublishMessage(ctx *context.Context, streamID, key, message string) error {
+	req, err := BuildPublishMessage(ctx, streamID, key, message)
 	if err != nil {
 		return fmt.Errorf("error building publish message request: %w", err)
 	}
@@ -267,15 +267,15 @@ type MessagesResponse struct {
 }
 
 // BuildListStreamMessages builds the HTTP request for listing stream messages
-func BuildListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) (*http.Request, error) {
+func BuildListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	url := fmt.Sprintf("%s/api/streams/%s/messages?limit=%d&sort=%s", serverURL, streamIDOrName, limit, sort)
-	if subjectPattern != "" {
-		url += "&subject_pattern=" + subjectPattern
+	if keyPattern != "" {
+		url += "&key_pattern=" + keyPattern
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -287,8 +287,8 @@ func BuildListStreamMessages(ctx *context.Context, streamIDOrName string, limit 
 }
 
 // ListStreamMessages retrieves messages from a stream
-func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]models.Message, error) {
-	req, err := BuildListStreamMessages(ctx, streamIDOrName, limit, sort, subjectPattern)
+func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error) {
+	req, err := BuildListStreamMessages(ctx, streamIDOrName, limit, sort, keyPattern)
 	if err != nil {
 		return nil, fmt.Errorf("error building list stream messages request: %w", err)
 	}

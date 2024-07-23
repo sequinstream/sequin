@@ -1,11 +1,11 @@
-defmodule Sequin.Subject do
+defmodule Sequin.Key do
   @moduledoc """
-  This module provides functionality for working with subjects and subject patterns.
+  This module provides functionality for working with keys and key patterns.
 
-  A subject is a `.` delimited string used for message routing in a publish-subscribe system.
-  A subject pattern is used for subscribing to one or more subjects using wildcards.
+  A key is a `.` delimited string used for message routing in a publish-subscribe system.
+  A key pattern is used for subscribing to one or more keys using wildcards.
 
-  Valid subjects:
+  Valid keys:
   - Must not be empty
   - Must not contain spaces, `*`, or `>`
   - Must not start or end with a delimiter (`.`)
@@ -13,51 +13,51 @@ defmodule Sequin.Subject do
   - Must not exceed 255 characters
   - Must not contain more than 16 tokens
 
-  Valid subject patterns:
-  - Follow the same rules as subjects, with the addition of wildcards
+  Valid key patterns:
+  - Follow the same rules as keys, with the addition of wildcards
   - Can use `*` to match a single token
   - Can use `>` to match one or more tokens, but only at the end of the pattern
 
   Examples:
-  - Valid subject: "orders.new.store123"
-  - Valid subject pattern: "orders.*.store123"
-  - Valid subject pattern: "orders.>"
+  - Valid key: "orders.new.store123"
+  - Valid key pattern: "orders.*.store123"
+  - Valid key pattern: "orders.>"
 
-  A subject pattern matches a subject as in the examples below:
+  A key pattern matches a key as in the examples below:
 
   - "orders.*" would match "orders.new" and "orders.update", but not "orders.new.priority"
   - "orders.>" would match "orders.new", "orders.update", and "orders.new.priority"
 
-  Without the `>` character, the subject_pattern must exactly match in length to a message subject.
+  Without the `>` character, the key_pattern must exactly match in length to a message key.
 
-  It's recommended to use alphanumeric characters, `-` (dash), and `_` (underscore) for subject
+  It's recommended to use alphanumeric characters, `-` (dash), and `_` (underscore) for key
   names to ensure compatibility across different systems and configurations.
   """
 
   @doc """
-  Validates a subject string.
+  Validates a key string.
 
-  Returns :ok if the subject is valid, or {:error, reason} if it's invalid.
+  Returns :ok if the key is valid, or {:error, reason} if it's invalid.
   """
-  def validate_subject(subject) when is_binary(subject) do
+  def validate_key(key) when is_binary(key) do
     cond do
-      subject == "" ->
-        {:error, "Subject must not be empty"}
+      key == "" ->
+        {:error, "Key must not be empty"}
 
-      String.contains?(subject, [" ", "*", ">"]) ->
-        {:error, "Subject contains invalid characters"}
+      String.contains?(key, [" ", "*", ">"]) ->
+        {:error, "Key contains invalid characters"}
 
-      String.starts_with?(subject, ".") or String.ends_with?(subject, ".") ->
-        {:error, "Subject must not start or end with a delimiter"}
+      String.starts_with?(key, ".") or String.ends_with?(key, ".") ->
+        {:error, "Key must not start or end with a delimiter"}
 
-      String.contains?(subject, "..") ->
-        {:error, "Subject must not contain empty tokens"}
+      String.contains?(key, "..") ->
+        {:error, "Key must not contain empty tokens"}
 
-      String.length(subject) > 255 ->
-        {:error, "Subject must not exceed 255 characters"}
+      String.length(key) > 255 ->
+        {:error, "Key must not exceed 255 characters"}
 
-      subject |> String.split(".") |> length() > 16 ->
-        {:error, "Subject must not contain more than 16 tokens"}
+      key |> String.split(".") |> length() > 16 ->
+        {:error, "Key must not contain more than 16 tokens"}
 
       true ->
         :ok
@@ -65,28 +65,28 @@ defmodule Sequin.Subject do
   end
 
   @doc """
-  Validates a subject pattern string.
+  Validates a key pattern string.
 
   Returns :ok if the pattern is valid, or {:error, reason} if it's invalid.
   """
-  def validate_subject_pattern(pattern) when is_binary(pattern) do
+  def validate_key_pattern(pattern) when is_binary(pattern) do
     tokens = String.split(pattern, ".")
 
     cond do
       pattern == "" ->
-        {:error, "Subject pattern must not be empty"}
+        {:error, "Key pattern must not be empty"}
 
       String.starts_with?(pattern, ".") or String.ends_with?(pattern, ".") ->
-        {:error, "Subject pattern must not start or end with a delimiter"}
+        {:error, "Key pattern must not start or end with a delimiter"}
 
       String.contains?(pattern, "..") ->
-        {:error, "Subject pattern must not contain empty tokens"}
+        {:error, "Key pattern must not contain empty tokens"}
 
       String.length(pattern) > 255 ->
-        {:error, "Subject pattern must not exceed 255 characters"}
+        {:error, "Key pattern must not exceed 255 characters"}
 
       length(tokens) > 16 ->
-        {:error, "Subject pattern must not contain more than 16 tokens"}
+        {:error, "Key pattern must not contain more than 16 tokens"}
 
       ">" in Enum.slice(tokens, 0..-2//1) ->
         {:error, "Wildcard '>' can only appear at the end of the pattern"}
@@ -97,61 +97,61 @@ defmodule Sequin.Subject do
   end
 
   @doc """
-  Checks if a subject matches a given pattern.
+  Checks if a key matches a given pattern.
 
-  Returns true if the subject matches the pattern, false otherwise.
+  Returns true if the key matches the pattern, false otherwise.
   """
-  def matches?(pattern, subject) do
+  def matches?(pattern, key) do
     pattern_tokens = String.split(pattern, ".")
-    subject_tokens = String.split(subject, ".")
+    key_tokens = String.split(key, ".")
 
     cond do
       List.last(pattern_tokens) == ">" ->
-        match_with_trailing_wildcard(Enum.drop(pattern_tokens, -1), subject_tokens)
+        match_with_trailing_wildcard(Enum.drop(pattern_tokens, -1), key_tokens)
 
-      length(pattern_tokens) != length(subject_tokens) ->
+      length(pattern_tokens) != length(key_tokens) ->
         false
 
       true ->
-        match_tokens(pattern_tokens, subject_tokens)
+        match_tokens(pattern_tokens, key_tokens)
     end
   end
 
-  defp match_with_trailing_wildcard(pattern_tokens, subject_tokens) do
+  defp match_with_trailing_wildcard(pattern_tokens, key_tokens) do
     pattern_length = length(pattern_tokens)
-    subject_length = length(subject_tokens)
+    key_length = length(key_tokens)
 
-    subject_length > pattern_length and
-      match_tokens(pattern_tokens, Enum.take(subject_tokens, pattern_length))
+    key_length > pattern_length and
+      match_tokens(pattern_tokens, Enum.take(key_tokens, pattern_length))
   end
 
-  defp match_tokens(pattern_tokens, subject_tokens) do
+  defp match_tokens(pattern_tokens, key_tokens) do
     pattern_tokens
-    |> Enum.zip(subject_tokens)
-    |> Enum.all?(fn {pattern_token, subject_token} ->
-      pattern_token == "*" or pattern_token == subject_token
+    |> Enum.zip(key_tokens)
+    |> Enum.all?(fn {pattern_token, key_token} ->
+      pattern_token == "*" or pattern_token == key_token
     end)
   end
 
   @doc """
-  Converts a string into a valid subject token.
+  Converts a string into a valid key token.
 
   ## Examples
 
-      iex> Sequin.Subject.to_subject_token("My Country.My State>My Region")
+      iex> Sequin.Key.to_key_token("My Country.My State>My Region")
       "my_country_my_state_my_region"
 
-      iex> Sequin.Subject.to_subject_token("Hello, World! 123")
+      iex> Sequin.Key.to_key_token("Hello, World! 123")
       "hello_world_123"
 
-      iex> Sequin.Subject.to_subject_token("  Spaced  Out  ")
+      iex> Sequin.Key.to_key_token("  Spaced  Out  ")
       "spaced_out"
 
-      iex> Sequin.Subject.to_subject_token("Unsafe@#$%^&*Characters")
+      iex> Sequin.Key.to_key_token("Unsafe@#$%^&*Characters")
       "unsafe_characters"
 
   """
-  def to_subject_token(string) do
+  def to_key_token(string) do
     string
     |> String.downcase()
     # Remove all non-word characters except spaces and hyphens
@@ -161,18 +161,18 @@ defmodule Sequin.Subject do
     |> validate_token()
   end
 
-  defp validate_token(""), do: "invalid_subject_token"
+  defp validate_token(""), do: "invalid_key_token"
   defp validate_token(identifier), do: identifier
 
   @doc """
-  Tokenizes a subject pattern into a list of tokens.
+  Tokenizes a key pattern into a list of tokens.
 
   ## Examples
 
-      iex> Sequin.Subject.tokenize_pattern("orders.*.store123")
+      iex> Sequin.Key.tokenize_pattern("orders.*.store123")
       ["orders", "*", "store123"]
 
-      iex> Sequin.Subject.tokenize_pattern("orders.>")
+      iex> Sequin.Key.tokenize_pattern("orders.>")
       ["orders", ">"]
 
   """

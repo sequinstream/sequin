@@ -22,7 +22,7 @@ type ConsumerCreateOptions struct {
 	AckWaitMS        int                          `json:"ack_wait_ms,omitempty"`
 	MaxAckPending    int                          `json:"max_ack_pending,omitempty"`
 	MaxDeliver       int                          `json:"max_deliver,omitempty"`
-	FilterKeyPattern string                       `json:"filter_subject_pattern"`
+	FilterKeyPattern string                       `json:"filter_key_pattern"`
 	Kind             string                       `json:"kind"`
 	HttpEndpoint     *ConsumerHttpEndpointOptions `json:"http_endpoint,omitempty"`
 }

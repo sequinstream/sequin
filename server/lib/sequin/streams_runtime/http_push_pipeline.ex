@@ -68,7 +68,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
       [
         base_url: http_endpoint.base_url,
         headers: http_endpoint.headers,
-        json: %{data: message.data, subject: message.subject}
+        json: %{data: message.data, key: message.key}
       ]
       |> Keyword.merge(req_opts)
       |> Req.new()

@@ -345,7 +345,7 @@ func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int) str
 
 		output += fmt.Sprintf("%-*s %-*s %-*s %-*s\n",
 			slugWidth, truncateString(info.ConsumerName, slugWidth),
-			patternWidth, truncateString(info.ConsumerFilterSubjectPattern, patternWidth),
+			patternWidth, truncateString(info.ConsumerFilterKeyPattern, patternWidth),
 			stateWidth, info.State,
 			deliverCountWidth, deliverCount)
 	}
@@ -392,7 +392,7 @@ func (m *MessageState) fetchMessageWithConsumerInfos() error {
 
 func convertToMessageInfo(apiMsg models.Message) models.MessageInfo {
 	return models.MessageInfo{
-		Subject:    apiMsg.Key,
+		Key:        apiMsg.Key,
 		Data:       apiMsg.Data,
 		Seq:        apiMsg.Seq,
 		UpdatedAt:  apiMsg.UpdatedAt,

@@ -57,7 +57,7 @@ defmodule SequinWeb.PullControllerTest do
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
       assert message["ack_id"] == cm.ack_id
-      assert message["message"]["subject"] == available_message.subject
+      assert message["message"]["key"] == available_message.key
     end
 
     test "returns an available message by name", %{conn: conn, consumer: consumer, stream: stream} do
@@ -66,7 +66,7 @@ defmodule SequinWeb.PullControllerTest do
 
       conn = get(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
-      assert message["message"]["subject"] == db_message.subject
+      assert message["message"]["key"] == db_message.key
     end
 
     test "respects batch_size parameter", %{conn: conn, consumer: consumer, stream: stream} do
@@ -140,12 +140,12 @@ defmodule SequinWeb.PullControllerTest do
       assert response(res_conn, 204)
 
       # Verify it's still in consumer_messages
-      assert Streams.get_consumer_message!(consumer.id, cm.message_subject).state == :available
+      assert Streams.get_consumer_message!(consumer.id, cm.message_key).state == :available
 
       # Verify the message reappears
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
       assert %{"data" => [nacked_message]} = json_response(conn, 200)
-      assert nacked_message["message"]["subject"] == message.subject
+      assert nacked_message["message"]["key"] == message.key
     end
 
     test "successfully nacks a message by consumer name", %{conn: conn, consumer: consumer, stream: stream} do

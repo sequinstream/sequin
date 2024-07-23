@@ -25,7 +25,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
       assert to_string(req.url) == http_endpoint.base_url
       json = Jason.decode!(req.body)
       assert json["data"] == message.data
-      assert json["subject"] == message.subject
+      assert json["key"] == message.key
       send(test_pid, :sent)
       {req, Req.Response.new(status: 200)}
     end
@@ -35,7 +35,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
     ref = send_test_message(consumer, message)
     assert_receive {:ack, ^ref, [%{data: msg}], []}, 1_000
     assert is_struct(msg, Sequin.Streams.Message)
-    assert msg.subject == message.subject
+    assert msg.key == message.key
     assert_receive :sent, 1_000
   end
 

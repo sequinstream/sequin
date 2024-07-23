@@ -65,12 +65,12 @@ func (c *Client) RemoveStream(ctx *context.Context, streamID string) error {
 	return RemoveStream(ctx, streamID)
 }
 
-func (c *Client) PublishMessage(ctx *context.Context, streamID, subject, message string) error {
-	return PublishMessage(ctx, streamID, subject, message)
+func (c *Client) PublishMessage(ctx *context.Context, streamID, key, message string) error {
+	return PublishMessage(ctx, streamID, key, message)
 }
 
-func (c *Client) ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]models.Message, error) {
-	return ListStreamMessages(ctx, streamIDOrName, limit, sort, subjectPattern)
+func (c *Client) ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error) {
+	return ListStreamMessages(ctx, streamIDOrName, limit, sort, keyPattern)
 }
 
 func (c *Client) GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error) {

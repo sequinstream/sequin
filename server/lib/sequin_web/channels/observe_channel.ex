@@ -27,8 +27,8 @@ defmodule SequinWeb.ObserveChannel do
   def broadcast("messages:upserted", {stream_id, messages}) do
     if any_users_present?() do
       Logger.warning("Broadcasting messages:upserted for observation: #{stream_id}")
-      subjects = Enum.map(messages, & &1.subject)
-      messages = Streams.list_messages_for_stream(stream_id, %{subjects: subjects})
+      keys = Enum.map(messages, & &1.key)
+      messages = Streams.list_messages_for_stream(stream_id, %{keys: keys})
       SequinWeb.Endpoint.broadcast("observe", "messages:upserted", %{messages: messages})
     end
   end

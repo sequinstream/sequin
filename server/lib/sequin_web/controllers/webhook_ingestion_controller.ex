@@ -15,7 +15,7 @@ defmodule SequinWeb.WebhookIngestionController do
         id = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()
 
         message = %{
-          subject: "#{webhook.name}.#{id}",
+          key: "#{webhook.name}.#{id}",
           data: Jason.encode!(payload)
         }
 

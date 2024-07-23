@@ -15,7 +15,7 @@ defmodule Sequin.StreamsTest do
       inserted_messages = Repo.all(Streams.Message)
       assert length(inserted_messages) == 2
 
-      assert_lists_equal(inserted_messages, messages, &assert_maps_equal(&1, &2, [:subject, :stream_id, :data]))
+      assert_lists_equal(inserted_messages, messages, &assert_maps_equal(&1, &2, [:key, :stream_id, :data]))
 
       assert Enum.all?(inserted_messages, fn message ->
                is_binary(message.data_hash)
@@ -28,7 +28,7 @@ defmodule Sequin.StreamsTest do
       new_data = StreamsFactory.message_data()
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [%{msg | data: new_data, data_hash: nil}])
-      updated_msg = Streams.get_message_for_stream!(msg.stream_id, msg.subject)
+      updated_msg = Streams.get_message_for_stream!(msg.stream_id, msg.key)
 
       assert updated_msg.data == new_data
       assert is_binary(updated_msg.data_hash)
@@ -41,27 +41,27 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 0} = Streams.upsert_messages(stream.id, [msg])
 
-      updated_msg = Streams.get_message_for_stream!(msg.stream_id, msg.subject)
+      updated_msg = Streams.get_message_for_stream!(msg.stream_id, msg.key)
       assert updated_msg.seq == msg.seq
       assert updated_msg.data == msg.data
       assert updated_msg.data_hash == msg.data_hash
       assert updated_msg.updated_at == msg.updated_at
     end
 
-    test "does not affect messages with same subject but different stream_id" do
+    test "does not affect messages with same key but different stream_id" do
       stream1 = StreamsFactory.insert_stream!()
       stream2 = StreamsFactory.insert_stream!()
 
-      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, subject: "same_subject"})
-      msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, subject: "same_subject"})
+      msg1 = StreamsFactory.insert_message!(%{stream_id: stream1.id, key: "same_key"})
+      msg2_attrs = StreamsFactory.message_attrs(%{stream_id: stream2.id, key: "same_key"})
 
       assert {:ok, 1} = Streams.upsert_messages(stream2.id, [msg2_attrs])
 
-      unchanged_msg1 = Streams.get_message_for_stream!(msg1.stream_id, msg1.subject)
+      unchanged_msg1 = Streams.get_message_for_stream!(msg1.stream_id, msg1.key)
       assert unchanged_msg1.seq == msg1.seq
       assert unchanged_msg1.data == msg1.data
 
-      new_msg2 = Streams.get_message_for_stream!(msg2_attrs.stream_id, msg2_attrs.subject)
+      new_msg2 = Streams.get_message_for_stream!(msg2_attrs.stream_id, msg2_attrs.key)
       assert new_msg2.data == msg2_attrs.data
     end
 
@@ -71,7 +71,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [msg_attrs])
 
-      inserted_msg = Streams.get_message_for_stream!(msg_attrs.stream_id, msg_attrs.subject)
+      inserted_msg = Streams.get_message_for_stream!(msg_attrs.stream_id, msg_attrs.key)
       assert inserted_msg.data == "data with null byte "
     end
   end
@@ -86,19 +86,19 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, key: "test.key"})
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
-      message = Streams.get_message_for_stream!(message.stream_id, message.subject)
+      message = Streams.get_message_for_stream!(message.stream_id, message.key)
 
       assert [consumer_message] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
-      assert consumer_message.message_subject == message.subject
+      assert consumer_message.message_key == message.key
       assert consumer_message.ack_id
       assert consumer_message.message_seq == message.seq
       assert consumer_message.state == :available
@@ -111,7 +111,7 @@ defmodule Sequin.StreamsTest do
       consumer1 =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
@@ -119,12 +119,12 @@ defmodule Sequin.StreamsTest do
       consumer2 =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, key: "test.key"})
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
@@ -132,7 +132,7 @@ defmodule Sequin.StreamsTest do
       assert [_] = Streams.list_consumer_messages_for_consumer(consumer2.stream_id, consumer2.id)
     end
 
-    test "does not fan out to a consumer in another stream even with matching subjects", %{
+    test "does not fan out to a consumer in another stream even with matching keys", %{
       stream: stream,
       account_id: account_id
     } do
@@ -141,31 +141,31 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: other_stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, key: "test.key"})
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
       assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
     end
 
-    test "does not fan out to a consumer in the same stream but without a matching subject", %{
+    test "does not fan out to a consumer in the same stream but without a matching key", %{
       stream: stream,
       account_id: account_id
     } do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "other.subject",
+          filter_key_pattern: "other.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, key: "test.key"})
 
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
 
@@ -176,17 +176,17 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.key"})
 
       # Insert initial consumer message
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
-        message_subject: message.subject,
+        message_key: message.key,
         message_seq: message.seq,
         state: :delivered
       })
@@ -204,17 +204,17 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.key"})
 
       # Test with an available state
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
-        message_subject: message.subject,
+        message_key: message.key,
         message_seq: message.seq,
         state: :available
       })
@@ -232,16 +232,16 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: DateTime.utc_now()
         })
 
-      message = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.key"})
 
       StreamsFactory.insert_consumer_message!(%{
         consumer_id: consumer.id,
-        message_subject: message.subject,
+        message_key: message.key,
         message_seq: message.seq,
         state: :acked
       })
@@ -258,12 +258,12 @@ defmodule Sequin.StreamsTest do
       consumer =
         StreamsFactory.insert_consumer!(%{
           stream_id: stream.id,
-          filter_subject_pattern: "test.subject",
+          filter_key_pattern: "test.key",
           account_id: account_id,
           backfill_completed_at: nil
         })
 
-      message = StreamsFactory.message_attrs(%{stream_id: stream.id, subject: "test.subject"})
+      message = StreamsFactory.message_attrs(%{stream_id: stream.id, key: "test.key"})
       assert {:ok, 1} = Streams.upsert_messages(stream.id, [message])
       assert [] = Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer.id)
     end
@@ -276,57 +276,57 @@ defmodule Sequin.StreamsTest do
     end
 
     test "filters messages with seq_gt", %{stream: stream} do
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.1"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.2"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.3"})
 
       results = Streams.list_messages_for_stream(stream.id, seq_gt: message1.seq)
       assert length(results) == 2
-      assert Enum.map(results, & &1.subject) == ["test.2", "test.3"]
+      assert Enum.map(results, & &1.key) == ["test.2", "test.3"]
     end
 
     test "applies order_by with limit", %{stream: stream} do
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.1"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.2"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.3"})
 
       results = Streams.list_messages_for_stream(stream.id, order_by: [desc: :seq], limit: 2)
       assert length(results) == 2
-      assert Enum.map(results, & &1.subject) == ["test.3", "test.2"]
+      assert Enum.map(results, & &1.key) == ["test.3", "test.2"]
     end
 
-    test "filters messages with subject_pattern - exact match", %{stream: stream} do
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters messages with key_pattern - exact match", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
-      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.b.c")
+      results = Streams.list_messages_for_stream(stream.id, key_pattern: "a.b.c")
       assert length(results) == 1
-      assert hd(results).subject == "a.b.c"
+      assert hd(results).key == "a.b.c"
     end
 
-    test "filters messages with subject_pattern - wildcard", %{stream: stream} do
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.x.c"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters messages with key_pattern - wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.x.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c.d"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
-      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.*.c")
+      results = Streams.list_messages_for_stream(stream.id, key_pattern: "a.*.c")
       assert length(results) == 2
-      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.x.c"]
+      assert results |> Enum.map(& &1.key) |> Enum.sort() == ["a.b.c", "a.x.c"]
     end
 
-    test "filters messages with subject_pattern - trailing wildcard", %{stream: stream} do
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d.e"})
-      StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters messages with key_pattern - trailing wildcard", %{stream: stream} do
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c.d"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c.d.e"})
+      StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
-      results = Streams.list_messages_for_stream(stream.id, subject_pattern: "a.b.>")
+      results = Streams.list_messages_for_stream(stream.id, key_pattern: "a.b.>")
       assert length(results) == 3
-      assert results |> Enum.map(& &1.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d", "a.b.c.d.e"]
+      assert results |> Enum.map(& &1.key) |> Enum.sort() == ["a.b.c", "a.b.c.d", "a.b.c.d.e"]
     end
   end
 
@@ -345,9 +345,9 @@ defmodule Sequin.StreamsTest do
     end
 
     test "applies order_by with limit", %{stream: stream, consumer: consumer} do
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.1"})
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.2"})
-      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "test.3"})
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.1"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.2"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.3"})
 
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
@@ -357,47 +357,47 @@ defmodule Sequin.StreamsTest do
         Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, order_by: [desc: :message_seq], limit: 2)
 
       assert length(results) == 2
-      assert Enum.map(results, & &1.message.subject) == ["test.3", "test.2"]
+      assert Enum.map(results, & &1.message.key) == ["test.3", "test.2"]
     end
 
-    test "filters consumer messages with subject_pattern - exact match", %{stream: stream, consumer: consumer} do
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters consumer messages with key_pattern - exact match", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
 
-      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.b.c")
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, key_pattern: "a.b.c")
       assert length(results) == 1
-      assert hd(results).message.subject == "a.b.c"
+      assert hd(results).message.key == "a.b.c"
     end
 
-    test "filters consumer messages with subject_pattern - wildcard", %{stream: stream, consumer: consumer} do
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.x.c"})
-      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters consumer messages with key_pattern - wildcard", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.x.c"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message3})
 
-      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.*.c")
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, key_pattern: "a.*.c")
       assert length(results) == 2
-      assert results |> Enum.map(& &1.message.subject) |> Enum.sort() == ["a.b.c", "a.x.c"]
+      assert results |> Enum.map(& &1.message.key) |> Enum.sort() == ["a.b.c", "a.x.c"]
     end
 
-    test "filters consumer messages with subject_pattern - trailing wildcard", %{stream: stream, consumer: consumer} do
-      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c"})
-      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "a.b.c.d"})
-      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, subject: "x.y.z"})
+    test "filters consumer messages with key_pattern - trailing wildcard", %{stream: stream, consumer: consumer} do
+      message1 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c"})
+      message2 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "a.b.c.d"})
+      message3 = StreamsFactory.insert_message!(%{stream_id: stream.id, key: "x.y.z"})
 
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message1})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message2})
       StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message3})
 
-      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, subject_pattern: "a.b.>")
+      results = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, key_pattern: "a.b.>")
       assert length(results) == 2
-      assert results |> Enum.map(& &1.message.subject) |> Enum.sort() == ["a.b.c", "a.b.c.d"]
+      assert results |> Enum.map(& &1.message.key) |> Enum.sort() == ["a.b.c", "a.b.c.d"]
     end
   end
 
@@ -431,7 +431,7 @@ defmodule Sequin.StreamsTest do
       # Add a buffer for the comparison
       not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
       assert delivered_message.ack_id == cm.ack_id
-      assert delivered_message.subject == message.subject
+      assert delivered_message.key == message.key
       updated_om = Streams.reload(cm)
       assert updated_om.state == :delivered
       assert DateTime.after?(updated_om.not_visible_until, not_visible_until)
@@ -453,7 +453,7 @@ defmodule Sequin.StreamsTest do
         })
 
       assert {:ok, [redelivered_msg]} = Streams.receive_for_consumer(consumer)
-      assert redelivered_msg.subject == message.subject
+      assert redelivered_msg.key == message.key
       assert redelivered_msg.ack_id == cm.ack_id
       updated_om = Streams.reload(cm)
       assert updated_om.state == :delivered
@@ -552,7 +552,7 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, messages} = Streams.receive_for_consumer(consumer)
       assert length(messages) == length(available ++ redeliver)
-      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:subject, :stream_id]))
+      assert_lists_equal(messages, available ++ redeliver, &assert_maps_equal(&1, &2, [:key, :stream_id]))
     end
 
     test "delivers messages according to message_seq asc", %{stream: stream, consumer: consumer} do
@@ -598,8 +598,8 @@ defmodule Sequin.StreamsTest do
 
       assert {:ok, delivered} = Streams.receive_for_consumer(consumer, batch_size: 2)
       assert length(delivered) == 2
-      delivered_message_subjects = Enum.map(delivered, & &1.subject)
-      assert_lists_equal(delivered_message_subjects, [message1.subject, message2.subject])
+      delivered_message_keys = Enum.map(delivered, & &1.key)
+      assert_lists_equal(delivered_message_keys, [message1.key, message2.key])
     end
 
     test "respect's a consumer's max_ack_pending", %{consumer: consumer} do
@@ -635,7 +635,7 @@ defmodule Sequin.StreamsTest do
       assert {:ok, delivered} = Streams.receive_for_consumer(consumer)
       assert length(delivered) == 1
       delivered = List.last(delivered)
-      assert delivered.subject == cm.message_subject
+      assert delivered.key == cm.message_key
       assert {:ok, []} = Streams.receive_for_consumer(consumer)
     end
   end
@@ -718,7 +718,7 @@ defmodule Sequin.StreamsTest do
 
       :ok = Streams.ack_messages(consumer, [cm.ack_id])
 
-      updated_om = Streams.get_consumer_message!(cm.consumer_id, cm.message_subject)
+      updated_om = Streams.get_consumer_message!(cm.consumer_id, cm.message_key)
       assert updated_om.state == :available
       refute updated_om.not_visible_until
     end

@@ -4,7 +4,7 @@ defmodule Sequin.Streams.ConsumerMessageWithConsumerInfoss do
            only: [
              :consumer_id,
              :consumer_name,
-             :consumer_filter_subject_pattern,
+             :consumer_filter_key_pattern,
              :state,
              :ack_id,
              :deliver_count,
@@ -16,7 +16,7 @@ defmodule Sequin.Streams.ConsumerMessageWithConsumerInfoss do
   @type t :: %__MODULE__{
           consumer_id: Ecto.UUID.t(),
           consumer_name: String.t(),
-          consumer_filter_subject_pattern: String.t(),
+          consumer_filter_key_pattern: String.t(),
           state: state(),
           ack_id: Ecto.UUID.t() | nil,
           deliver_count: non_neg_integer() | nil,
@@ -27,7 +27,7 @@ defmodule Sequin.Streams.ConsumerMessageWithConsumerInfoss do
   defstruct [
     :consumer_id,
     :consumer_name,
-    :consumer_filter_subject_pattern,
+    :consumer_filter_key_pattern,
     :state,
     :ack_id,
     :deliver_count,

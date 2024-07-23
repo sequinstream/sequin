@@ -2,12 +2,16 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/charmbracelet/bubbles/table"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/choria-io/fisk"
+	"golang.org/x/term"
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
@@ -97,7 +101,55 @@ func webhookAdd(config *Config, c *webhookConfig) error {
 	}
 
 	fmt.Printf("Webhook created successfully. ID: %s\n", newWebhook.ID)
-	return printWebhookInfo(newWebhook, ctx)
+	err = printWebhookInfo(newWebhook, ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println()
+
+	// Subscribe to webhook channel and wait for first message
+	wc, err := api.NewWebhookChannel(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create webhook channel: %w", err)
+	}
+
+	err = wc.Connect()
+	if err != nil {
+		return fmt.Errorf("failed to connect to webhook channel: %w", err)
+	}
+	// Create a channel to signal when a message is received
+	messageChan := make(chan api.Message)
+	wc.OnWebhookIngested(func(webhook api.Webhook, message api.Message) {
+		if webhook.ID == newWebhook.ID {
+			messageChan <- message
+		}
+	})
+
+	// Start the loading indicator
+	done := make(chan bool)
+	go loadingIndicator(done)
+
+	receivedMessage := <-messageChan
+	done <- true
+	displayWebhookMessage(newWebhook, receivedMessage)
+
+	return nil
+}
+
+func loadingIndicator(done chan bool) {
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	i := 0
+	for {
+		select {
+		case <-done:
+			return
+		default:
+			fmt.Printf("\rWaiting for the first webhook message to be processed %s", frames[i])
+			time.Sleep(100 * time.Millisecond)
+			i = (i + 1) % len(frames)
+		}
+	}
 }
 
 func webhookList(config *Config) error {
@@ -313,4 +365,127 @@ func promptForWebhook(ctx *context.Context) (string, error) {
 	}
 
 	return strings.Split(selected, " ")[0], nil
+}
+
+func displayWebhookMessage(webhook *api.Webhook, message api.Message) {
+	successStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("green")).
+		Bold(true)
+
+	fmt.Println(successStyle.Render("\nWebhook received successfully!"))
+
+	screenWidth, _, _ := term.GetSize(int(os.Stdout.Fd()))
+	maxWidth := screenWidth - 4 // Subtract 4 for padding and borders
+
+	// Prepare data for width calculation
+	data := []string{
+		webhook.Name,
+		message.Key,
+		time.Now().Format(time.RFC3339),
+		message.Data,
+	}
+
+	// Calculate max content width
+	maxContentWidth := 0
+	for _, item := range data {
+		if len(item) > maxContentWidth {
+			maxContentWidth = len(item)
+		}
+	}
+
+	// Calculate column widths
+	fieldWidth := 20
+	valueWidth := min(maxContentWidth, maxWidth-fieldWidth-3)
+
+	columns := []table.Column{
+		{Title: "Field", Width: fieldWidth},
+		{Title: "Value", Width: valueWidth},
+	}
+
+	// Prepare and truncate message data
+	truncatedData := truncateMessageData(message.Data, valueWidth, 5)
+
+	rows := []table.Row{
+		{"Webhook Name", truncateString(webhook.Name, valueWidth)},
+		{"Message Key", truncateString(message.Key, valueWidth)},
+		{"Message Created At", truncateString(time.Now().Format(time.RFC3339), valueWidth)},
+	}
+
+	// Add message data rows
+	for i, line := range truncatedData {
+		if i == 0 {
+			rows = append(rows, table.Row{"Message Data", line})
+		} else {
+			rows = append(rows, table.Row{"", line})
+		}
+	}
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(len(rows)),
+	)
+
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(false)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+	t.SetStyles(s)
+
+	m := model{t}
+	p := tea.NewProgram(m)
+	go func() {
+		time.Sleep(1 * time.Second)
+		p.Quit()
+	}()
+	if _, err := p.Run(); err != nil {
+		fmt.Println("Error running program:", err)
+		return
+	}
+}
+
+// Helper function to truncate and split message data
+func truncateMessageData(data string, width, maxLines int) []string {
+	lines := strings.Split(data, "\n")
+	var result []string
+	for i, line := range lines {
+		if i >= maxLines {
+			break
+		}
+		result = append(result, truncateString(line, width))
+	}
+	return result
+}
+
+type model struct {
+	table table.Model
+}
+
+func (m model) Init() tea.Cmd { return nil }
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "ctrl+c", "esc":
+			return m, tea.Quit
+		}
+	}
+	m.table, cmd = m.table.Update(msg)
+	return m, cmd
+}
+
+func (m model) View() string {
+	return lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Render(m.table.View()) + "\n"
 }

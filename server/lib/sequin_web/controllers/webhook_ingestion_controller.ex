@@ -1,6 +1,7 @@
 defmodule SequinWeb.WebhookIngestionController do
   use SequinWeb, :controller
 
+  alias Sequin.Repo
   alias Sequin.Sources
   alias Sequin.Streams
 
@@ -10,6 +11,7 @@ defmodule SequinWeb.WebhookIngestionController do
 
     case Sources.get_webhook_for_account(account_id, webhook_name) do
       {:ok, webhook} ->
+        webhook = Repo.preload(webhook, :stream)
         id = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()
 
         message = %{
@@ -19,6 +21,7 @@ defmodule SequinWeb.WebhookIngestionController do
 
         case Streams.upsert_messages(webhook.stream_id, [message]) do
           {:ok, _count} ->
+            SequinWeb.WebhookChannel.broadcast("webhook:ingested", %{webhook: webhook, message: message})
             send_resp(conn, :no_content, "")
 
           {:error, _error} ->

@@ -20,6 +20,7 @@ defmodule SequinWeb.CLISocket do
   # for further details.
 
   channel "observe", SequinWeb.ObserveChannel
+  channel "webhook", SequinWeb.WebhookChannel
 
   # Socket params are passed from the client and can
   # be used to verify and authenticate a user. After

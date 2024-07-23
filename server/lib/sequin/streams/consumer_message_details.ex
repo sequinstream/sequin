@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.ConsumerMessageDetails do
+defmodule Sequin.Streams.ConsumerMessageWithConsumerInfoss do
   @moduledoc false
   @derive {Jason.Encoder,
            only: [

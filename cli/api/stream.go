@@ -5,30 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"bytes"
 
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
-// StreamsResponse represents the structure of the API response for a list
 type StreamsResponse struct {
-	Streams []Stream `json:"data"`
-}
-
-// Stream represents the structure of a stream returned by the API
-type Stream struct {
-	ID    string `json:"id"`
-	Idx   int    `json:"idx"`
-	Name  string `json:"name"`
-	Stats struct {
-		ConsumerCount int `json:"consumer_count"`
-		MessageCount  int `json:"message_count"`
-		StorageSize   int `json:"storage_size"`
-	} `json:"stats"`
-	CreatedAt time.Time `json:"inserted_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Streams []models.Stream `json:"data"`
 }
 
 // BuildFetchStreams builds the HTTP request for fetching streams
@@ -48,7 +33,7 @@ func BuildFetchStreams(ctx *context.Context) (*http.Request, error) {
 }
 
 // FetchStreams retrieves all streams from the API
-func FetchStreams(ctx *context.Context) ([]Stream, error) {
+func FetchStreams(ctx *context.Context) ([]models.Stream, error) {
 	req, err := BuildFetchStreams(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch streams request: %w", err)
@@ -92,7 +77,7 @@ func BuildFetchStreamInfo(ctx *context.Context, streamID string) (*http.Request,
 }
 
 // FetchStreamInfo retrieves information for a specific stream from the API
-func FetchStreamInfo(ctx *context.Context, streamID string) (*Stream, error) {
+func FetchStreamInfo(ctx *context.Context, streamID string) (*models.Stream, error) {
 	req, err := BuildFetchStreamInfo(ctx, streamID)
 	if err != nil {
 		return nil, fmt.Errorf("error building fetch stream info request: %w", err)
@@ -110,7 +95,7 @@ func FetchStreamInfo(ctx *context.Context, streamID string) (*Stream, error) {
 		return nil, fmt.Errorf("error reading response: %w", err)
 	}
 
-	var streamResponse Stream
+	var streamResponse models.Stream
 	err = json.Unmarshal(body, &streamResponse)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -142,7 +127,7 @@ func BuildAddStream(ctx *context.Context, name string) (*http.Request, error) {
 }
 
 // AddStream adds a new stream with the given name
-func AddStream(ctx *context.Context, name string) (*Stream, error) {
+func AddStream(ctx *context.Context, name string) (*models.Stream, error) {
 	req, err := BuildAddStream(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("error building add stream request: %w", err)
@@ -178,7 +163,7 @@ func AddStream(ctx *context.Context, name string) (*Stream, error) {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var stream Stream
+	var stream models.Stream
 	err = json.Unmarshal(body, &stream)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
@@ -278,7 +263,7 @@ func PublishMessage(ctx *context.Context, streamID, subject, message string) err
 }
 
 type MessagesResponse struct {
-	Messages []Message `json:"data"`
+	Messages []models.Message `json:"data"`
 }
 
 // BuildListStreamMessages builds the HTTP request for listing stream messages
@@ -302,7 +287,7 @@ func BuildListStreamMessages(ctx *context.Context, streamIDOrName string, limit 
 }
 
 // ListStreamMessages retrieves messages from a stream
-func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]Message, error) {
+func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]models.Message, error) {
 	req, err := BuildListStreamMessages(ctx, streamIDOrName, limit, sort, subjectPattern)
 	if err != nil {
 		return nil, fmt.Errorf("error building list stream messages request: %w", err)
@@ -330,40 +315,40 @@ func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, 
 }
 
 // GetStreamMessage retrieves a specific message from a stream by its key
-func GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (Message, error) {
+func GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
-		return Message{}, err
+		return models.Message{}, err
 	}
 
 	url := fmt.Sprintf("%s/api/streams/%s/messages/%s", serverURL, streamIDOrName, key)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return Message{}, fmt.Errorf("error creating request: %w", err)
+		return models.Message{}, fmt.Errorf("error creating request: %w", err)
 	}
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return Message{}, fmt.Errorf("error making request: %w", err)
+		return models.Message{}, fmt.Errorf("error making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return Message{}, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+		return models.Message{}, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var message Message
+	var message models.Message
 	err = json.NewDecoder(resp.Body).Decode(&message)
 	if err != nil {
-		return Message{}, fmt.Errorf("error decoding JSON: %w", err)
+		return models.Message{}, fmt.Errorf("error decoding JSON: %w", err)
 	}
 
 	return message, nil
 }
 
-func FetchMessageDetail(ctx *context.Context, streamID, messageKey string) (*MessageDetail, error) {
+func FetchMessageWithConsumerInfos(ctx *context.Context, streamID, messageKey string) (*models.MessageWithConsumerInfos, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -389,7 +374,7 @@ func FetchMessageDetail(ctx *context.Context, streamID, messageKey string) (*Mes
 	}
 
 	var result struct {
-		Data MessageDetail `json:"data"`
+		Data models.MessageWithConsumerInfos `json:"data"`
 	}
 	err = json.Unmarshal(body, &result)
 	if err != nil {
@@ -397,22 +382,4 @@ func FetchMessageDetail(ctx *context.Context, streamID, messageKey string) (*Mes
 	}
 
 	return &result.Data, nil
-}
-
-// MessageDetail represents the detailed structure of a message
-type MessageDetail struct {
-	Message       Message        `json:"message"`
-	ConsumerInfos []ConsumerInfo `json:"consumer_info"`
-}
-
-// ConsumerInfo represents the structure of consumer information
-type ConsumerInfo struct {
-	State                        string     `json:"state"`
-	NotVisibleUntil              *time.Time `json:"not_visible_until"`
-	ConsumerID                   string     `json:"consumer_id"`
-	AckID                        *string    `json:"ack_id"`
-	DeliverCount                 *int       `json:"deliver_count"`
-	LastDeliveredAt              *time.Time `json:"last_delivered_at"`
-	ConsumerFilterSubjectPattern string     `json:"consumer_filter_subject_pattern"`
-	ConsumerName                 string     `json:"consumer_name"`
 }

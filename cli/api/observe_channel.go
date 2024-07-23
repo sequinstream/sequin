@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type ObserveChannel struct {
@@ -27,9 +28,9 @@ func (oc *ObserveChannel) Connect() error {
 	return oc.BaseChannel.Connect("observe")
 }
 
-func (oc *ObserveChannel) OnStreamCreated(handler func(Stream)) {
+func (oc *ObserveChannel) OnStreamCreated(handler func(models.Stream)) {
 	oc.channel.On("stream:created", func(payload any) {
-		var stream Stream
+		var stream models.Stream
 		if err := parsePayload(payload, &stream); err != nil {
 			log.Printf("Error parsing stream:created payload: %v", err)
 			return
@@ -38,9 +39,9 @@ func (oc *ObserveChannel) OnStreamCreated(handler func(Stream)) {
 	})
 }
 
-func (oc *ObserveChannel) OnStreamUpdated(handler func(Stream)) {
+func (oc *ObserveChannel) OnStreamUpdated(handler func(models.Stream)) {
 	oc.channel.On("stream:updated", func(payload any) {
-		var stream Stream
+		var stream models.Stream
 		if err := parsePayload(payload, &stream); err != nil {
 			log.Printf("Error parsing stream:updated payload: %v", err)
 			return
@@ -49,9 +50,9 @@ func (oc *ObserveChannel) OnStreamUpdated(handler func(Stream)) {
 	})
 }
 
-func (oc *ObserveChannel) OnStreamDeleted(handler func(Stream)) {
+func (oc *ObserveChannel) OnStreamDeleted(handler func(models.Stream)) {
 	oc.channel.On("stream:deleted", func(payload any) {
-		var stream Stream
+		var stream models.Stream
 		if err := parsePayload(payload, &stream); err != nil {
 			log.Printf("Error parsing stream:deleted payload: %v", err)
 			return
@@ -60,9 +61,9 @@ func (oc *ObserveChannel) OnStreamDeleted(handler func(Stream)) {
 	})
 }
 
-func (oc *ObserveChannel) OnConsumerCreated(handler func(Consumer)) {
+func (oc *ObserveChannel) OnConsumerCreated(handler func(models.Consumer)) {
 	oc.channel.On("consumer:created", func(payload any) {
-		var consumer Consumer
+		var consumer models.Consumer
 		if err := parsePayload(payload, &consumer); err != nil {
 			log.Printf("Error parsing consumer:created payload: %v", err)
 			return
@@ -71,9 +72,9 @@ func (oc *ObserveChannel) OnConsumerCreated(handler func(Consumer)) {
 	})
 }
 
-func (oc *ObserveChannel) OnConsumerUpdated(handler func(Consumer)) {
+func (oc *ObserveChannel) OnConsumerUpdated(handler func(models.Consumer)) {
 	oc.channel.On("consumer:updated", func(payload any) {
-		var consumer Consumer
+		var consumer models.Consumer
 		if err := parsePayload(payload, &consumer); err != nil {
 			log.Printf("Error parsing consumer:updated payload: %v", err)
 			return
@@ -82,9 +83,9 @@ func (oc *ObserveChannel) OnConsumerUpdated(handler func(Consumer)) {
 	})
 }
 
-func (oc *ObserveChannel) OnConsumerDeleted(handler func(Consumer)) {
+func (oc *ObserveChannel) OnConsumerDeleted(handler func(models.Consumer)) {
 	oc.channel.On("consumer:deleted", func(payload any) {
-		var consumer Consumer
+		var consumer models.Consumer
 		if err := parsePayload(payload, &consumer); err != nil {
 			log.Printf("Error parsing consumer:deleted payload: %v", err)
 			return
@@ -93,10 +94,10 @@ func (oc *ObserveChannel) OnConsumerDeleted(handler func(Consumer)) {
 	})
 }
 
-func (oc *ObserveChannel) OnMessagesUpserted(handler func([]Message)) {
+func (oc *ObserveChannel) OnMessagesUpserted(handler func([]models.Message)) {
 	oc.channel.On("messages:upserted", func(payload any) {
 		type tempPayload struct {
-			Messages []Message `json:"messages"`
+			Messages []models.Message `json:"messages"`
 		}
 
 		var tp tempPayload

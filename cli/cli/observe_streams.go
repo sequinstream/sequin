@@ -7,10 +7,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sequinstream/sequin/cli/api"
 	sequinContext "github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type StreamState struct {
-	streams []api.Stream
+	streams []models.Stream
 	config  *Config
 	cursor  int
 	err     error
@@ -170,7 +171,7 @@ func (s *StreamState) calculateCreatedAtWidth() int {
 	return len("2006-01-02 15:04:05") // Fixed width for the date format
 }
 
-func formatStreamLine(stream api.Stream, nameWidth, msgCountWidth, storageSizeWidth, consumerCountWidth, createdAtWidth int) string {
+func formatStreamLine(stream models.Stream, nameWidth, msgCountWidth, storageSizeWidth, consumerCountWidth, createdAtWidth int) string {
 	name := truncateString(stream.Name, nameWidth)
 	messageCount := fmt.Sprintf("%d", stream.Stats.MessageCount)
 	storageSize := formatBytes(stream.Stats.StorageSize)
@@ -190,7 +191,7 @@ func (s *StreamState) MoveCursor(direction int) {
 	s.cursor = clampValue(s.cursor, 0, len(s.streams)-1)
 }
 
-func (s *StreamState) GetSelectedStream() *api.Stream {
+func (s *StreamState) GetSelectedStream() *models.Stream {
 	if len(s.streams) == 0 {
 		return nil
 	}

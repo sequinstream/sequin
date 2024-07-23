@@ -15,6 +15,7 @@ import (
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
+	"github.com/sequinstream/sequin/cli/models"
 )
 
 type webhookConfig struct {
@@ -75,7 +76,7 @@ func webhookAdd(config *Config, c *webhookConfig) error {
 		}
 	}
 
-	webhook := api.WebhookCreate{
+	webhook := api.WebhookCreateOptions{
 		Name:     c.Name,
 		StreamID: c.StreamID,
 	}
@@ -119,8 +120,8 @@ func webhookAdd(config *Config, c *webhookConfig) error {
 		return fmt.Errorf("failed to connect to webhook channel: %w", err)
 	}
 	// Create a channel to signal when a message is received
-	messageChan := make(chan api.Message)
-	wc.OnWebhookIngested(func(webhook api.Webhook, message api.Message) {
+	messageChan := make(chan models.Message)
+	wc.OnWebhookIngested(func(webhook models.Webhook, message models.Message) {
 		if webhook.ID == newWebhook.ID {
 			messageChan <- message
 		}
@@ -197,7 +198,7 @@ func webhookList(config *Config) error {
 	return t.Render()
 }
 
-func printWebhookInfo(webhook *api.Webhook, ctx *context.Context) error {
+func printWebhookInfo(webhook *models.Webhook, ctx *context.Context) error {
 	columns := []table.Column{
 		{Title: "Field", Width: 20},
 		{Title: "Value", Width: 50},
@@ -310,7 +311,7 @@ func webhookUpdate(config *Config, c *webhookConfig) error {
 		}
 	}
 
-	webhookData := &api.WebhookCreate{
+	webhookData := &api.WebhookCreateOptions{
 		StreamID: c.StreamID,
 	}
 
@@ -367,7 +368,7 @@ func promptForWebhook(ctx *context.Context) (string, error) {
 	return strings.Split(selected, " ")[0], nil
 }
 
-func displayWebhookMessage(webhook *api.Webhook, message api.Message) {
+func displayWebhookMessage(webhook *models.Webhook, message models.Message) {
 	successStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("green")).
 		Bold(true)

@@ -19,3 +19,6 @@ dev: ## Run the app locally
 
 deviex: ## Open an IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
+
+signoff:
+	mix signoff

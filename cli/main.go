@@ -7,6 +7,7 @@ import (
 
 	"github.com/choria-io/fisk"
 
+	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/cli"
 )
 
@@ -27,13 +28,16 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	scli.HelpFlag.Short('h')
 	scli.WithCheats().CheatCommand.Hidden()
 
+	// Initialize the API client
+	apiClient := api.NewClient()
+
 	// Add global context flag
 	scli.Flag("context", "Use a specific context").StringVar(&config.ContextName)
 	scli.Flag("as-curl", "Output the command as a curl request instead of executing it").BoolVar(&config.AsCurl)
 
 	cli.AddContextCommands(scli, &config)
-	cli.AddStreamCommands(scli, &config)
-	cli.AddSourceCommands(scli, &config) // Add this line to include the new source command
+	cli.AddStreamCommands(scli, &config, apiClient)
+	cli.AddSourceCommands(scli, &config)
 	cli.AddConsumerCommands(scli, &config)
 	cli.AddObserveCommands(scli, &config)
 

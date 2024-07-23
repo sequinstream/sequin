@@ -26,7 +26,7 @@ type StreamConfig struct {
 	Table  bool
 }
 
-func AddStreamCommands(app *fisk.Application, config *Config) {
+func AddStreamCommands(app *fisk.Application, config *Config, apiClient api.API) {
 	stream := app.Command("stream", "Stream related commands").Alias("str").Alias("s")
 
 	addCheat("stream", stream)
@@ -34,43 +34,42 @@ func AddStreamCommands(app *fisk.Application, config *Config) {
 	s := &StreamConfig{}
 
 	stream.Command("ls", "List streams").Action(func(c *fisk.ParseContext) error {
-		return streamLs(c, config)
+		return streamLs(c, config, apiClient)
 	})
 
 	infoCmd := stream.Command("info", "Show stream info").Action(func(c *fisk.ParseContext) error {
-		return streamInfo(c, config)
+		return streamInfo(c, config, apiClient)
 	})
 	infoCmd.Arg("stream", "ID or name of the stream to show info for").StringVar(&config.StreamID)
 
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
-		return streamAdd(c, config, s)
+		return streamAdd(c, config, s, apiClient)
 	})
 	addCmd.Arg("name", "Name of the stream to Add").StringVar(&s.Name)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
-		return streamRm(c, config)
+		return streamRm(c, config, apiClient)
 	})
 	rmCmd.Arg("stream", "ID or name of the stream to remove").StringVar(&config.StreamID)
 
 	sendCmd := stream.Command("send", "Send a message to a stream").Action(func(c *fisk.ParseContext) error {
-		return streamSend(c, config, s)
+		return streamSend(c, config, s, apiClient)
 	})
 	sendCmd.Arg("stream", "ID or name of the stream to send to").Required().StringVar(&config.StreamID)
 	sendCmd.Arg("key", "Key of the message").Required().StringVar(&s.Key)
 	sendCmd.Arg("data", "Data payload of the message").Required().StringVar(&s.Data)
 
 	viewCmd := stream.Command("view", "View messages in a stream").Action(func(c *fisk.ParseContext) error {
-		return streamView(c, config, s)
+		return streamView(c, config, s, apiClient)
 	})
 	viewCmd.Arg("stream", "ID or name of the stream to view").StringVar(&config.StreamID)
 	viewCmd.Flag("filter", "Filter messages by key pattern").StringVar(&s.Filter)
 	viewCmd.Flag("last", "Show most recent N messages").Default("10").IntVar(&s.Last)
 	viewCmd.Flag("first", "Show least recent N messages").IntVar(&s.First)
 	viewCmd.Flag("table", "Display messages in a table format").BoolVar(&s.Table)
-
 }
 
-func streamLs(_ *fisk.ParseContext, config *Config) error {
+func streamLs(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -91,7 +90,7 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	streams, err := api.FetchStreams(ctx)
+	streams, err := apiClient.FetchStreams(ctx)
 	if err != nil {
 		return err
 	}
@@ -129,7 +128,7 @@ func streamLs(_ *fisk.ParseContext, config *Config) error {
 	return t.Render()
 }
 
-func streamInfo(_ *fisk.ParseContext, config *Config) error {
+func streamInfo(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -158,16 +157,16 @@ func streamInfo(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	return displayStreamInfo(config)
+	return displayStreamInfo(config, apiClient)
 }
 
-func displayStreamInfo(config *Config) error {
+func displayStreamInfo(config *Config, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
 	}
 
-	stream, err := api.FetchStreamInfo(ctx, config.StreamID)
+	stream, err := apiClient.FetchStreamInfo(ctx, config.StreamID)
 	if err != nil {
 		return err
 	}
@@ -192,7 +191,7 @@ func displayStreamInfo(config *Config) error {
 	return t.Render()
 }
 
-func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
+func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -225,7 +224,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	}
 
 	// Add stream
-	stream, err := api.AddStream(ctx, s.Name)
+	stream, err := apiClient.AddStream(ctx, s.Name)
 	if err != nil {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
@@ -250,7 +249,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	return t.Render()
 }
 
-func streamRm(_ *fisk.ParseContext, config *Config) error {
+func streamRm(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -279,7 +278,7 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 		return nil
 	}
 
-	err = api.RemoveStream(ctx, config.StreamID)
+	err = apiClient.RemoveStream(ctx, config.StreamID)
 	if err != nil {
 		return fmt.Errorf("failed to remove stream: %w", err)
 	}
@@ -288,7 +287,7 @@ func streamRm(_ *fisk.ParseContext, config *Config) error {
 	return nil
 }
 
-func streamSend(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
+func streamSend(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -308,7 +307,7 @@ func streamSend(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 		return nil
 	}
 
-	err = api.PublishMessage(ctx, config.StreamID, s.Key, s.Data)
+	err = apiClient.PublishMessage(ctx, config.StreamID, s.Key, s.Data)
 	if err != nil {
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -317,7 +316,7 @@ func streamSend(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	return nil
 }
 
-func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
+func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -340,7 +339,7 @@ func streamView(_ *fisk.ParseContext, config *Config, s *StreamConfig) error {
 	}
 
 	populator := func() ([]models.Message, error) {
-		return api.ListStreamMessages(ctx, config.StreamID, limit, sort, s.Filter)
+		return apiClient.ListStreamMessages(ctx, config.StreamID, limit, sort, s.Filter)
 	}
 
 	messages, err := populator()

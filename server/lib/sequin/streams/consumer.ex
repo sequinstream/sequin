@@ -14,7 +14,7 @@ defmodule Sequin.Streams.Consumer do
            only: [
              :account_id,
              :ack_wait_ms,
-             :filter_subject_pattern,
+             :filter_key_pattern,
              :id,
              :inserted_at,
              :kind,
@@ -34,7 +34,7 @@ defmodule Sequin.Streams.Consumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
-    field :filter_subject_pattern, :string
+    field :filter_key_pattern, :string
     field :kind, Ecto.Enum, values: [:pull, :push], default: :pull
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
@@ -54,13 +54,13 @@ defmodule Sequin.Streams.Consumer do
       :max_deliver,
       :max_waiting,
       :name,
-      :filter_subject_pattern,
+      :filter_key_pattern,
       :backfill_completed_at,
       :kind,
       :http_endpoint_id,
       :status
     ])
-    |> validate_required([:stream_id, :name, :filter_subject_pattern, :kind, :status])
+    |> validate_required([:stream_id, :name, :filter_key_pattern, :kind, :status])
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)

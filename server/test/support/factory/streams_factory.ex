@@ -35,7 +35,7 @@ defmodule Sequin.Factory.StreamsFactory do
         consumer_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
-        message_subject: generate_subject(parts: 3),
+        message_key: generate_key(parts: 3),
         message_seq: Enum.random(1..1000),
         not_visible_until: not_visible_until,
         state: state
@@ -57,7 +57,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     message_attrs =
       if message do
-        %{message_subject: message.subject, message_seq: message.seq}
+        %{message_key: message.key, message_seq: message.seq}
       else
         %{}
       end
@@ -96,7 +96,7 @@ defmodule Sequin.Factory.StreamsFactory do
         data_hash: Base.encode64(:crypto.hash(:sha256, data)),
         data: data,
         seq: Postgres.sequence_nextval("#{Streams.stream_schema()}.messages_seq"),
-        subject: generate_subject(parts: 3)
+        key: generate_key(parts: 3)
       },
       attrs
     )
@@ -150,7 +150,7 @@ defmodule Sequin.Factory.StreamsFactory do
         max_waiting: 20,
         stream_id: Factory.uuid(),
         account_id: account_id,
-        filter_subject_pattern: generate_subject(parts: 3),
+        filter_key_pattern: generate_key(parts: 3),
         kind: kind,
         http_endpoint_id: http_endpoint_id,
         status: :active
@@ -249,7 +249,7 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
-  defp generate_subject(parts: parts) do
+  defp generate_key(parts: parts) do
     Enum.map_join(1..parts, ".", fn _ -> Faker.Lorem.word() end)
   end
 

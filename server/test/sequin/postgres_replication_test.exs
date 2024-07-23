@@ -107,7 +107,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {Replication, :message_handled}, 500
 
       [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.subject =~ "#{@test_schema}.#{@test_table}"
+      assert message.key =~ "#{@test_schema}.#{@test_table}"
 
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => "Paul Atreides", "house" => "Atreides", "planet" => "Arrakis"}
@@ -126,7 +126,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {Replication, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.subject =~ "#{@test_schema}.#{@test_table}"
+      assert message.key =~ "#{@test_schema}.#{@test_table}"
 
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => "Leto Atreides", "house" => "Atreides", "planet" => "Arrakis"}
@@ -145,7 +145,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {Replication, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.subject =~ "#{@test_schema}.#{@test_table}"
+      assert message.key =~ "#{@test_schema}.#{@test_table}"
 
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => "Duncan Idaho", "house" => "Atreides", "planet" => "Caladan"}
@@ -164,7 +164,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {Replication, :message_handled}, 1_000
 
       [insert_message] = Streams.list_messages_for_stream(stream.id)
-      assert insert_message.subject =~ "#{@test_schema}.#{@test_table}"
+      assert insert_message.key =~ "#{@test_schema}.#{@test_table}"
       decoded_insert_data = Jason.decode!(insert_message.data)
       assert decoded_insert_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Fremen", "planet" => "Arrakis"}
       refute decoded_insert_data["deleted"]
@@ -174,7 +174,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       [update_message] = Streams.list_messages_for_stream(stream.id)
       assert update_message.seq > insert_message.seq
-      assert update_message.subject == insert_message.subject
+      assert update_message.key == insert_message.key
       assert DateTime.compare(update_message.inserted_at, insert_message.inserted_at) == :eq
 
       decoded_update_data = Jason.decode!(update_message.data)
@@ -186,7 +186,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       [delete_message] = Streams.list_messages_for_stream(stream.id)
       assert delete_message.seq > update_message.seq
-      assert delete_message.subject == update_message.subject
+      assert delete_message.key == update_message.key
       assert DateTime.compare(delete_message.inserted_at, update_message.inserted_at) == :eq
 
       decoded_delete_data = Jason.decode!(delete_message.data)
@@ -261,7 +261,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {Replication, :message_handled}, 500
 
       [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.subject =~ "#{@test_schema}.#{@test_table}.insert"
+      assert message.key =~ "#{@test_schema}.#{@test_table}.insert"
     end
   end
 

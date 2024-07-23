@@ -11,8 +11,8 @@ type MockAPIClient struct {
 	FetchStreamInfoFunc               func(ctx *context.Context, streamID string) (*models.Stream, error)
 	AddStreamFunc                     func(ctx *context.Context, name string) (*models.Stream, error)
 	RemoveStreamFunc                  func(ctx *context.Context, streamID string) error
-	PublishMessageFunc                func(ctx *context.Context, streamID, subject, message string) error
-	ListStreamMessagesFunc            func(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]models.Message, error)
+	PublishMessageFunc                func(ctx *context.Context, streamID, key, message string) error
+	ListStreamMessagesFunc            func(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error)
 	GetStreamMessageFunc              func(ctx *context.Context, streamIDOrName, key string) (models.Message, error)
 	FetchMessageWithConsumerInfosFunc func(ctx *context.Context, streamID, messageKey string) (*models.MessageWithConsumerInfos, error)
 }
@@ -33,12 +33,12 @@ func (m *MockAPIClient) RemoveStream(ctx *context.Context, streamID string) erro
 	return m.RemoveStreamFunc(ctx, streamID)
 }
 
-func (m *MockAPIClient) PublishMessage(ctx *context.Context, streamID, subject, message string) error {
-	return m.PublishMessageFunc(ctx, streamID, subject, message)
+func (m *MockAPIClient) PublishMessage(ctx *context.Context, streamID, key, message string) error {
+	return m.PublishMessageFunc(ctx, streamID, key, message)
 }
 
-func (m *MockAPIClient) ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, subjectPattern string) ([]models.Message, error) {
-	return m.ListStreamMessagesFunc(ctx, streamIDOrName, limit, sort, subjectPattern)
+func (m *MockAPIClient) ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error) {
+	return m.ListStreamMessagesFunc(ctx, streamIDOrName, limit, sort, keyPattern)
 }
 
 func (m *MockAPIClient) GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error) {

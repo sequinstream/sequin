@@ -35,18 +35,18 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
         seq_gt: seq,
         limit: @limit,
         order_by: [asc: :seq],
-        select: [:subject, :seq]
+        select: [:key, :seq]
       )
 
     {:ok, _} =
       messages
       |> Enum.filter(fn message ->
-        Sequin.Subject.matches?(consumer.filter_subject_pattern, message.subject)
+        Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
       end)
       |> Enum.map(fn message ->
         %ConsumerMessage{
           consumer_id: consumer.id,
-          message_subject: message.subject,
+          message_key: message.key,
           message_seq: message.seq
         }
       end)

@@ -26,7 +26,7 @@ type Message struct {
 	CreatedAt time.Time `json:"inserted_at"`
 	Data      string    `json:"data"`
 	Seq       int       `json:"seq"`
-	Key       string    `json:"subject"`
+	Key       string    `json:"key"`
 	UpdatedAt time.Time `json:"updated_at"`
 	StreamID  string    `json:"stream_id"`
 }
@@ -36,7 +36,7 @@ type MessageInfo struct {
 	LastDeliveredAt *time.Time `json:"last_delivered_at"`
 	NotVisibleUntil *time.Time `json:"not_visible_until"`
 	State           string     `json:"state"`
-	Subject         string     `json:"subject"`
+	Key             string     `json:"key"`
 	StreamID        string     `json:"stream_id"`
 	DataHash        string     `json:"data_hash"`
 	Data            string     `json:"data"`
@@ -68,7 +68,7 @@ type Consumer struct {
 	AckWaitMS        int                  `json:"ack_wait_ms"`
 	MaxAckPending    int                  `json:"max_ack_pending"`
 	MaxDeliver       int                  `json:"max_deliver"`
-	FilterKeyPattern string               `json:"filter_subject_pattern"`
+	FilterKeyPattern string               `json:"filter_key_pattern"`
 	CreatedAt        time.Time            `json:"inserted_at"`
 	UpdatedAt        time.Time            `json:"updated_at"`
 	Kind             string               `json:"kind"`
@@ -76,14 +76,14 @@ type Consumer struct {
 }
 
 type ConsumerInfo struct {
-	State                        string     `json:"state"`
-	NotVisibleUntil              *time.Time `json:"not_visible_until"`
-	ConsumerID                   string     `json:"consumer_id"`
-	AckID                        *string    `json:"ack_id"`
-	DeliverCount                 *int       `json:"deliver_count"`
-	LastDeliveredAt              *time.Time `json:"last_delivered_at"`
-	ConsumerFilterSubjectPattern string     `json:"consumer_filter_subject_pattern"`
-	ConsumerName                 string     `json:"consumer_name"`
+	State                    string     `json:"state"`
+	NotVisibleUntil          *time.Time `json:"not_visible_until"`
+	ConsumerID               string     `json:"consumer_id"`
+	AckID                    *string    `json:"ack_id"`
+	DeliverCount             *int       `json:"deliver_count"`
+	LastDeliveredAt          *time.Time `json:"last_delivered_at"`
+	ConsumerFilterKeyPattern string     `json:"consumer_filter_key_pattern"`
+	ConsumerName             string     `json:"consumer_name"`
 }
 
 // HTTP-related structures

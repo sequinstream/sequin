@@ -94,10 +94,10 @@ defmodule Sequin.Sources do
     pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
     last_committed_at = Replication.get_last_committed_at(pg_replication.id)
-    subject_pattern = "#{pg_replication.postgres_database.name}.>"
+    key_pattern = "#{pg_replication.postgres_database.name}.>"
 
     total_ingested_messages =
-      Streams.fast_count_messages_for_stream(pg_replication.stream_id, subject_pattern: subject_pattern)
+      Streams.fast_count_messages_for_stream(pg_replication.stream_id, key_pattern: key_pattern)
 
     info = %PostgresReplication.Info{
       last_committed_at: last_committed_at,

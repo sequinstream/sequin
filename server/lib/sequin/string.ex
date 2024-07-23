@@ -48,24 +48,24 @@ defmodule Sequin.String do
   end
 
   @doc """
-  Converts a string into a valid  subject identifier.
+  Converts a string into a valid  key identifier.
 
   ## Examples
 
-      iex> Sequin.Subject.to_subject_token("My Country.My State>My Region")
+      iex> Sequin.Key.to_key_token("My Country.My State>My Region")
       "my_country_my_state_my_region"
 
-      iex> Sequin.Subject.to_subject_token("Hello, World! 123")
+      iex> Sequin.Key.to_key_token("Hello, World! 123")
       "hello_world_123"
 
-      iex> Sequin.Subject.to_subject_token("  Spaced  Out  ")
+      iex> Sequin.Key.to_key_token("  Spaced  Out  ")
       "spaced_out"
 
-      iex> Sequin.Subject.to_subject_token("Unsafe@#$%^&*Characters")
+      iex> Sequin.Key.to_key_token("Unsafe@#$%^&*Characters")
       "unsafe_characters"
 
   """
-  def to_subject_token(string) do
+  def to_key_token(string) do
     string
     |> String.downcase()
     # Remove all non-word characters except spaces and hyphens
@@ -75,6 +75,6 @@ defmodule Sequin.String do
     |> validate_token()
   end
 
-  defp validate_token(""), do: "invalid_subject_token"
+  defp validate_token(""), do: "invalid_key_token"
   defp validate_token(identifier), do: identifier
 end

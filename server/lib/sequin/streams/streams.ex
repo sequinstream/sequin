@@ -27,13 +27,13 @@ defmodule Sequin.Streams do
 
   def reload(%Message{} = msg) do
     # Repo.reload/2 does not support compound pks
-    msg.subject |> Message.where_subject_and_stream_id(msg.stream_id) |> Repo.one()
+    msg.key |> Message.where_key_and_stream_id(msg.stream_id) |> Repo.one()
   end
 
   def reload(%ConsumerMessage{} = cm) do
     cm.consumer_id
     |> ConsumerMessage.where_consumer_id()
-    |> ConsumerMessage.where_message_subject(cm.message_subject)
+    |> ConsumerMessage.where_message_key(cm.message_key)
     |> Repo.one()
   end
 
@@ -341,11 +341,11 @@ defmodule Sequin.Streams do
       {:order_by, order_by}, query ->
         order_by(query, ^order_by)
 
-      {:subject_pattern, pattern}, query ->
-        Message.where_subject_pattern(query, pattern)
+      {:key_pattern, pattern}, query ->
+        Message.where_key_pattern(query, pattern)
 
-      {:subjects, subjects}, query ->
-        Message.where_subject_in(query, subjects)
+      {:keys, keys}, query ->
+        Message.where_key_in(query, keys)
     end)
   end
 
@@ -355,10 +355,10 @@ defmodule Sequin.Streams do
     |> Repo.all()
   end
 
-  def get_message_for_stream(stream_id, subject) do
+  def get_message_for_stream(stream_id, key) do
     res =
-      subject
-      |> Message.where_subject_and_stream_id(stream_id)
+      key
+      |> Message.where_key_and_stream_id(stream_id)
       |> Repo.one()
 
     case res do
@@ -367,8 +367,8 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_message_for_stream!(stream_id, subject) do
-    case get_message_for_stream(stream_id, subject) do
+  def get_message_for_stream!(stream_id, key) do
+    case get_message_for_stream(stream_id, key) do
       {:ok, message} -> message
       {:error, _} -> raise Error.not_found(entity: :message)
     end
@@ -377,7 +377,7 @@ defmodule Sequin.Streams do
   def count_messages_for_stream(stream_id, params \\ []) do
     stream_id
     |> messages_query(params)
-    |> Repo.aggregate(:count, :subject)
+    |> Repo.aggregate(:count, :key)
   end
 
   @fast_count_threshold 50_000
@@ -449,19 +449,19 @@ defmodule Sequin.Streams do
           Message,
           messages,
           on_conflict: on_conflict,
-          conflict_target: [:subject, :stream_id],
+          conflict_target: [:key, :stream_id],
           timeout: :timer.seconds(30),
           # FIXME: Do not select data here. It's just to pass data to ObserveChannel.
-          returning: [:subject, :stream_id, :seq]
+          returning: [:key, :stream_id, :seq]
         )
 
       consumers
       |> Enum.reject(&(&1.backfill_completed_at == nil))
       |> Enum.flat_map(fn consumer ->
         messages
-        |> Enum.filter(fn message -> Sequin.Subject.matches?(consumer.filter_subject_pattern, message.subject) end)
+        |> Enum.filter(fn message -> Sequin.Key.matches?(consumer.filter_key_pattern, message.key) end)
         |> Enum.map(fn message ->
-          %ConsumerMessage{consumer_id: consumer.id, message_subject: message.subject, message_seq: message.seq}
+          %ConsumerMessage{consumer_id: consumer.id, message_key: message.key, message_seq: message.seq}
         end)
       end)
       |> upsert_consumer_messages()
@@ -524,8 +524,8 @@ defmodule Sequin.Streams do
         {:order_by, order_by}, query ->
           order_by(query, ^order_by)
 
-        {:subject_pattern, pattern}, query ->
-          ConsumerMessage.where_subject_pattern(query, pattern)
+        {:key_pattern, pattern}, query ->
+          ConsumerMessage.where_key_pattern(query, pattern)
       end)
 
     query
@@ -536,19 +536,19 @@ defmodule Sequin.Streams do
     end)
   end
 
-  def get_consumer_details_for_message(message_subject, stream_id) do
+  def get_consumer_details_for_message(message_key, stream_id) do
     consumers = cached_list_consumers_for_stream(stream_id)
 
     consumer_message_details =
       consumers
-      |> Enum.filter(fn consumer -> Sequin.Subject.matches?(consumer.filter_subject_pattern, message_subject) end)
+      |> Enum.filter(fn consumer -> Sequin.Key.matches?(consumer.filter_key_pattern, message_key) end)
       |> Enum.map(fn consumer ->
-        case get_consumer_message(consumer.id, message_subject) do
+        case get_consumer_message(consumer.id, message_key) do
           {:ok, consumer_message} ->
             %ConsumerMessageWithConsumerInfoss{
               consumer_id: consumer.id,
               consumer_name: consumer.name,
-              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
+              consumer_filter_key_pattern: consumer.filter_key_pattern,
               state: ConsumerMessage.external_state(consumer_message),
               ack_id: consumer_message.ack_id,
               deliver_count: consumer_message.deliver_count,
@@ -563,7 +563,7 @@ defmodule Sequin.Streams do
             %ConsumerMessageWithConsumerInfoss{
               consumer_id: consumer.id,
               consumer_name: consumer.name,
-              consumer_filter_subject_pattern: consumer.filter_subject_pattern,
+              consumer_filter_key_pattern: consumer.filter_key_pattern,
               state: external_state,
               ack_id: nil,
               deliver_count: nil,
@@ -576,11 +576,11 @@ defmodule Sequin.Streams do
     {:ok, consumer_message_details}
   end
 
-  def get_consumer_message(consumer_id, message_subject) do
+  def get_consumer_message(consumer_id, message_key) do
     consumer_message =
       consumer_id
       |> ConsumerMessage.where_consumer_id()
-      |> ConsumerMessage.where_message_subject(message_subject)
+      |> ConsumerMessage.where_message_key(message_key)
       |> Repo.one()
 
     case consumer_message do
@@ -589,8 +589,8 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_consumer_message!(consumer_id, message_subject) do
-    case get_consumer_message(consumer_id, message_subject) do
+  def get_consumer_message!(consumer_id, message_key) do
+    case get_consumer_message(consumer_id, message_key) do
       {:ok, consumer_message} -> consumer_message
       {:error, _} -> raise Error.not_found(entity: :consumer_message)
     end
@@ -599,18 +599,18 @@ defmodule Sequin.Streams do
   def upsert_consumer_messages([]), do: {:ok, []}
 
   def upsert_consumer_messages(consumer_messages) do
-    {consumer_ids, message_subjects, message_seqs} =
+    {consumer_ids, message_keys, message_seqs} =
       consumer_messages
       |> Enum.map(fn message ->
-        {message.consumer_id, message.message_subject, message.message_seq}
+        {message.consumer_id, message.message_key, message.message_seq}
       end)
-      |> Enum.reduce({[], [], []}, fn {consumer_id, message_subject, message_seq}, {ids, subjects, seqs} ->
-        {[consumer_id | ids], [message_subject | subjects], [message_seq | seqs]}
+      |> Enum.reduce({[], [], []}, fn {consumer_id, message_key, message_seq}, {ids, keys, seqs} ->
+        {[consumer_id | ids], [message_key | keys], [message_seq | seqs]}
       end)
 
     Query.upsert_consumer_messages(
       consumer_ids: Enum.map(consumer_ids, &UUID.string_to_binary!/1),
-      message_subjects: message_subjects,
+      message_keys: message_keys,
       message_seqs: message_seqs
     )
   end
@@ -625,7 +625,7 @@ defmodule Sequin.Streams do
     query =
       from(cm in ConsumerMessage,
         join: acm in subquery(subquery),
-        on: cm.consumer_id == acm.consumer_id and cm.message_subject == acm.message_subject
+        on: cm.consumer_id == acm.consumer_id and cm.message_key == acm.message_key
       )
 
     Repo.delete_all(query)

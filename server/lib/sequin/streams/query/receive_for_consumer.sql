@@ -26,4 +26,4 @@ updated AS (
 )
 SELECT u.ack_id, m.*
 FROM updated u
-JOIN sequin_streams.messages m ON u.message_subject = m.subject AND u.message_seq = m.seq
+JOIN sequin_streams.messages m ON u.message_key = m.key AND u.message_seq = m.seq

@@ -81,8 +81,8 @@ defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
       # Verify messages were upserted
       messages = Streams.list_messages_for_stream(postgres_replication.stream_id)
       assert length(messages) == 2
-      assert Enum.at(messages, 0).subject == "#{postgres_replication.postgres_database.name}.public.#{@table_name}.1"
-      assert Enum.at(messages, 1).subject == "#{postgres_replication.postgres_database.name}.public.#{@table_name}.2"
+      assert Enum.at(messages, 0).key == "#{postgres_replication.postgres_database.name}.public.#{@table_name}.1"
+      assert Enum.at(messages, 1).key == "#{postgres_replication.postgres_database.name}.public.#{@table_name}.2"
 
       # Verify next job was enqueued
       assert_enqueued(

@@ -1,21 +1,21 @@
-WITH input_data(consumer_id, message_subject, message_seq) AS (
+WITH input_data(consumer_id, message_key, message_seq) AS (
   SELECT * FROM UNNEST(
     :consumer_ids::uuid[],
-    :message_subjects::text[],
+    :message_keys::text[],
     :message_seqs::bigint[]
   )
 )
 INSERT INTO sequin_streams.consumer_messages
-    (consumer_id, message_subject, message_seq, state, updated_at, inserted_at)
+    (consumer_id, message_key, message_seq, state, updated_at, inserted_at)
 SELECT 
   consumer_id,
-  message_subject,
+  message_key,
   message_seq,
   'available'::sequin_streams.consumer_message_state AS state,
   NOW() AS updated_at,
   NOW() AS inserted_at
 FROM input_data
-ON CONFLICT (consumer_id, message_subject)
+ON CONFLICT (consumer_id, message_key)
 DO UPDATE SET
   state = CASE sequin_streams.consumer_messages.state
     WHEN 'acked'::sequin_streams.consumer_message_state THEN 'available'::sequin_streams.consumer_message_state

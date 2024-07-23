@@ -5,11 +5,11 @@ defmodule Sequin.Streams.Message do
   import Ecto.Changeset
   import Ecto.Query
 
-  @derive {Jason.Encoder, only: [:subject, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:key, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
 
   @primary_key false
   typed_schema "messages" do
-    field :subject, :string, primary_key: true, read_after_writes: true
+    field :key, :string, primary_key: true, read_after_writes: true
     field :stream_id, Ecto.UUID, primary_key: true
 
     field :data_hash, :string
@@ -40,48 +40,48 @@ defmodule Sequin.Streams.Message do
 
   def changeset(message, attrs) do
     message
-    |> cast(attrs, [:stream_id, :subject, :data, :data_hash])
-    |> validate_required([:stream_id, :subject, :data, :data_hash])
-    |> validate_subject()
+    |> cast(attrs, [:stream_id, :key, :data, :data_hash])
+    |> validate_required([:stream_id, :key, :data, :data_hash])
+    |> validate_key()
     |> put_tokens()
   end
 
-  defp validate_subject(changeset) do
-    subject = get_field(changeset, :subject)
+  defp validate_key(changeset) do
+    key = get_field(changeset, :key)
 
-    case Sequin.Subject.validate_subject(subject) do
+    case Sequin.Key.validate_key(key) do
       :ok -> changeset
-      {:error, reason} -> add_error(changeset, :subject, reason)
+      {:error, reason} -> add_error(changeset, :key, reason)
     end
   end
 
-  # set token1..token16 to the token components of the subject
-  # and remove subject from the changeset
+  # set token1..token16 to the token components of the key
+  # and remove key from the changeset
   def put_tokens(%Ecto.Changeset{valid?: true} = changeset) do
-    subject = get_field(changeset, :subject)
-    tokens = String.split(subject, ".")
+    key = get_field(changeset, :key)
+    tokens = String.split(key, ".")
 
     tokens
     |> Enum.with_index()
     |> Enum.reduce(changeset, fn {token, index}, acc ->
       put_change(acc, :"token#{index + 1}", token)
     end)
-    |> put_change(:subject, nil)
+    |> put_change(:key, nil)
   end
 
   def put_tokens(%Ecto.Changeset{} = changeset), do: changeset
 
   def put_tokens(msg) when is_map(msg) do
-    subject = msg.subject
+    key = msg.key
 
-    tokens = String.split(subject, ".")
+    tokens = String.split(key, ".")
 
     tokens
     |> Enum.with_index()
     |> Enum.reduce(msg, fn {token, index}, acc ->
       Map.put(acc, :"token#{index + 1}", token)
     end)
-    |> Map.delete(:subject)
+    |> Map.delete(:key)
   end
 
   def put_data_hash(msg) do
@@ -92,21 +92,21 @@ defmodule Sequin.Streams.Message do
     from([message: m] in query, where: m.stream_id == ^stream_id)
   end
 
-  def where_subject_and_stream_id(query \\ base_query(), subject, stream_id) do
-    from([message: m] in query, where: m.subject == ^subject and m.stream_id == ^stream_id)
+  def where_key_and_stream_id(query \\ base_query(), key, stream_id) do
+    from([message: m] in query, where: m.key == ^key and m.stream_id == ^stream_id)
   end
 
-  def where_subject_and_stream_id_in(query \\ base_query(), subject_stream_id_pairs) do
-    {subjects, stream_ids} = Enum.unzip(subject_stream_id_pairs)
+  def where_key_and_stream_id_in(query \\ base_query(), key_stream_id_pairs) do
+    {keys, stream_ids} = Enum.unzip(key_stream_id_pairs)
     stream_ids = Enum.map(stream_ids, &UUID.string_to_binary!/1)
 
     from([message: m] in query,
       where:
         fragment(
           "(?, ?) IN (SELECT UNNEST(?::text[]), UNNEST(?::uuid[]))",
-          m.subject,
+          m.key,
           m.stream_id,
-          ^subjects,
+          ^keys,
           ^stream_ids
         )
     )
@@ -121,12 +121,12 @@ defmodule Sequin.Streams.Message do
     from([message: m] in query, where: m.seq > ^seq)
   end
 
-  def where_subject_in(query \\ base_query(), subjects) do
-    from([message: m] in query, where: m.subject in ^subjects)
+  def where_key_in(query \\ base_query(), keys) do
+    from([message: m] in query, where: m.key in ^keys)
   end
 
-  def where_subject_pattern(query \\ base_query(), pattern) do
-    tokens = Sequin.Subject.tokenize_pattern(pattern)
+  def where_key_pattern(query \\ base_query(), pattern) do
+    tokens = Sequin.Key.tokenize_pattern(pattern)
     trailing_wildcard = List.last(tokens) == ">"
 
     query =

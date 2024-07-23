@@ -15,7 +15,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
 
     typedstruct do
       field :stream_id, String.t()
-      field :subject_prefix, String.t()
+      field :key_prefix, String.t()
       field :key_format, :basic | :with_operation
     end
   end
@@ -23,20 +23,20 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   def context(%PostgresReplication{} = pr) do
     %Context{
       stream_id: pr.stream_id,
-      subject_prefix: pr.postgres_database.name,
+      key_prefix: pr.postgres_database.name,
       key_format: pr.key_format
     }
   end
 
   @impl ReplicationMessageHandler
   def handle_message(%Context{} = ctx, message) do
-    message = message_for_upsert(ctx.subject_prefix, message, ctx.key_format)
+    message = message_for_upsert(ctx.key_prefix, message, ctx.key_format)
     Streams.upsert_messages(ctx.stream_id, [message])
   end
 
-  defp message_for_upsert(subject_prefix, %DeletedRecord{old_record: old_record} = message, key_format) do
+  defp message_for_upsert(key_prefix, %DeletedRecord{old_record: old_record} = message, key_format) do
     %{
-      subject: subject_from_message(subject_prefix, message, old_record["id"], key_format),
+      key: key_from_message(key_prefix, message, old_record["id"], key_format),
       data:
         Jason.encode!(%{
           data: old_record,
@@ -46,9 +46,9 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   end
 
   # InsertRecord and UpdateRecord
-  defp message_for_upsert(subject_prefix, %{record: record} = message, key_format) do
+  defp message_for_upsert(key_prefix, %{record: record} = message, key_format) do
     %{
-      subject: subject_from_message(subject_prefix, message, record["id"], key_format),
+      key: key_from_message(key_prefix, message, record["id"], key_format),
       data:
         Jason.encode!(%{
           data: record,
@@ -57,14 +57,14 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
     }
   end
 
-  defp subject_from_message(subject_prefix, message, record_id, key_format) do
+  defp key_from_message(key_prefix, message, record_id, key_format) do
     case key_format do
       :with_operation ->
         Enum.join(
           [
-            subject_prefix,
-            Sequin.Subject.to_subject_token(message.schema),
-            Sequin.Subject.to_subject_token(message.table),
+            key_prefix,
+            Sequin.Key.to_key_token(message.schema),
+            Sequin.Key.to_key_token(message.table),
             action(message),
             record_id
           ],
@@ -74,9 +74,9 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
       :basic ->
         Enum.join(
           [
-            subject_prefix,
-            Sequin.Subject.to_subject_token(message.schema),
-            Sequin.Subject.to_subject_token(message.table),
+            key_prefix,
+            Sequin.Key.to_key_token(message.schema),
+            Sequin.Key.to_key_token(message.table),
             record_id
           ],
           "."

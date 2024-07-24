@@ -158,7 +158,9 @@ start() {
   # version (use "latest" or a specific tag)
   version="latest"
   
-  prefix=${PREFIX:-"/usr/local/bin"}
+  # Change the default installation directory
+  default_bin_dir="$HOME/.local/bin"
+  prefix=${PREFIX:-"$default_bin_dir"}
 
   # Determine the final binary name
   if [ "$os" = "windows" ]; then
@@ -195,19 +197,24 @@ start() {
 
   rm "$tmp.zip"
 
-  if [ -w "$prefix" ]; then
-    log_info "Installing $bin_name to $prefix"
-    install "$tmp" "$prefix/$bin_name"
-  else
-    log_info "Permissions required for installation to $prefix — alternatively specify a new directory with:"
-    log_info "  $ curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | PREFIX=. sh"
-    sudo install "$tmp" "$prefix/$bin_name"
-  fi
+  # Create the installation directory if it doesn't exist
+  mkdir -p "$prefix"
+
+  log_info "Installing $bin_name to $prefix"
+  install "$tmp" "$prefix/$bin_name"
 
   rm -f "$tmp"
 
   log_info "Installation complete"
   echo
+
+  # Add a message about updating PATH if necessary
+  if [ "$prefix" = "$default_bin_dir" ]; then
+    echo "To use $bin_name, make sure $default_bin_dir is in your PATH."
+    echo "You can add it by running:"
+    echo "  echo 'export PATH=\$PATH:$default_bin_dir' >> ~/.bashrc"
+    echo "  source ~/.bashrc"
+  fi
 }
 
 start

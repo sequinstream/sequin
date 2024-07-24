@@ -42,6 +42,8 @@ cd sequin/docker
 docker compose up -d
 ```
 
+See the [installation](installation.md) guide for more details.
+
 ## Send messages
 
 **Messages** in Sequin consist of a **key** and a **data** payload. Messages are unique by key.

@@ -9,6 +9,9 @@ services:
     environment:
       - PG_HOSTNAME=postgres
       - PG_DATABASE=sequin
+      - PG_PORT=7377
+      - PG_USERNAME=postgres
+      - PG_PASSWORD=postgres
       - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
       - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
     depends_on:

@@ -4,6 +4,7 @@ defmodule Sequin.StreamsTest do
   alias Sequin.Factory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
+  alias Sequin.Streams.ConsumerBackfillWorker
 
   describe "upsert_messages/1" do
     test "inserts new messages" do
@@ -73,6 +74,43 @@ defmodule Sequin.StreamsTest do
 
       inserted_msg = Streams.get_message_for_stream!(msg_attrs.stream_id, msg_attrs.key)
       assert inserted_msg.data == "data with null byte "
+    end
+  end
+
+  describe "create_consumer_for_account_with_lifecycle/2" do
+    setup do
+      account = Factory.AccountsFactory.insert_account!()
+      stream = Factory.StreamsFactory.insert_stream!(account_id: account.id)
+      {:ok, stream: stream, account: account}
+    end
+
+    test "creates a consumer and backfills few messages synchronously", %{stream: stream, account: account} do
+      attrs =
+        StreamsFactory.consumer_attrs(%{
+          stream_id: stream.id,
+          kind: :pull,
+          filter_key_pattern: "test.key.>",
+          backfill_completed_at: nil
+        })
+
+      for i <- 1..3 do
+        # 3 messages that match the filter
+        StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.key.#{i}"})
+
+        # and 3 that do not match the filter
+        StreamsFactory.insert_message!(%{stream_id: stream.id, key: "test.other_key.#{i}"})
+      end
+
+      assert {:ok, consumer} = Streams.create_consumer_for_account_with_lifecycle(account.id, attrs)
+
+      # We do enqueue a job even if we have synchonously backfilled
+      # This is to patch a race and to delete acked messages later
+      assert_enqueued(worker: ConsumerBackfillWorker)
+
+      assert messages = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id)
+      assert length(messages) == 3
+
+      assert consumer.backfill_completed_at
     end
   end
 

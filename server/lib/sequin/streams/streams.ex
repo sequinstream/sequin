@@ -196,8 +196,10 @@ defmodule Sequin.Streams do
         with {:ok, consumer} <- create_consumer(account_id, attrs),
              :ok <- create_consumer_partition(consumer) do
           unless opts[:no_backfill] do
-            {:ok, _} = ConsumerBackfillWorker.create(consumer.id)
+            backfill_consumer!(consumer)
           end
+
+          consumer = Repo.reload!(consumer)
 
           SequinWeb.ObserveChannel.broadcast("consumer:created", consumer)
 
@@ -321,6 +323,49 @@ defmodule Sequin.Streams do
         |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
         |> then(&struct!(Message, &1))
       end)
+
+    {:ok, messages}
+  end
+
+  def backfill_limit, do: 10_000
+
+  # We make the first backfill pull synchronous and maybe mark the consumer as backfilled
+  # The Oban job always runs to catch up with race conditions then to clear acked messages
+  defp backfill_consumer!(consumer) do
+    {:ok, messages} = backfill_messages_for_consumer(consumer)
+
+    if length(messages) < backfill_limit() do
+      {:ok, _} = update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+    end
+
+    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> 0 end)
+    {:ok, _} = ConsumerBackfillWorker.create(consumer.id, next_seq)
+
+    :ok
+  end
+
+  def backfill_messages_for_consumer(consumer, seq \\ 0) do
+    messages =
+      list_messages_for_stream(consumer.stream_id,
+        seq_gt: seq,
+        limit: backfill_limit(),
+        order_by: [asc: :seq],
+        select: [:key, :seq]
+      )
+
+    {:ok, _} =
+      messages
+      |> Enum.filter(fn message ->
+        Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
+      end)
+      |> Enum.map(fn message ->
+        %ConsumerMessage{
+          consumer_id: consumer.id,
+          message_key: message.key,
+          message_seq: message.seq
+        }
+      end)
+      |> upsert_consumer_messages()
 
     {:ok, messages}
   end

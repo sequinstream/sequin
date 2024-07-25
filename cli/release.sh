@@ -158,13 +158,15 @@ echo "New tag $new_version created and pushed to GitHub"
 # Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"
 
-# Commit and push the changes
-git add "$homebrew_dir/sequin.rb"
-git commit -m "Bump sequin-cli version to $new_version and update SHA256 checksums"
-git push origin main
+# Commit and push the changes to the Homebrew formula repository
+(
+    cd "$homebrew_dir" || exit
+    git add sequin.rb
+    git commit -m "Bump sequin-cli version to $new_version and update SHA256 checksums"
+    git push origin main
+)
 
 echo "Homebrew formula updated with new version and SHA256 checksums, and pushed to GitHub"
-
 # Clean up assets
 rm -rf release_assets
 

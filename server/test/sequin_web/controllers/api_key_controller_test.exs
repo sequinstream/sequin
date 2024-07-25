@@ -52,7 +52,7 @@ defmodule SequinWeb.ApiKeyControllerTest do
   describe "delete" do
     test "deletes the api key", %{conn: conn, api_key: api_key} do
       conn = delete(conn, ~p"/api/api_keys/#{api_key.id}")
-      assert response(conn, 204) == ""
+      assert json_response(conn, 200) == %{"success" => true}
 
       assert {:error, _} = Accounts.get_api_key_for_account(api_key.account_id, api_key.id)
     end

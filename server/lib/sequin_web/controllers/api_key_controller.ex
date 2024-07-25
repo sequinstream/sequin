@@ -25,7 +25,7 @@ defmodule SequinWeb.ApiKeyController do
 
     with {:ok, api_key} <- Accounts.get_api_key_for_account(account_id, id),
          {:ok, _api_key} <- Accounts.delete_api_key(api_key) do
-      send_resp(conn, :no_content, "")
+      json(conn, %{success: true})
     end
   end
 end

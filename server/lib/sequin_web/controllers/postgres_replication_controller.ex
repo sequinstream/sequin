@@ -44,7 +44,7 @@ defmodule SequinWeb.PostgresReplicationController do
 
     with {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
          {:ok, _postgres_replication} <- Sources.delete_pg_replication_with_lifecycle(postgres_replication) do
-      send_resp(conn, :no_content, "")
+      render(conn, "delete.json", postgres_replication: postgres_replication)
     end
   end
 

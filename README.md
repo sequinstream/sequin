@@ -133,7 +133,7 @@ The server runs on `localhost:7376`. The CLI is configured to point to `localhos
 #### Homebrew
 
 ```bash
-brew tap sequinstream/homebrew-sequin git@github.com:sequin-io/homebrew-sequin
+brew tap sequin-io/sequin git@github.com:sequin-io/homebrew-sequin
 brew install sequin
 ```
 

@@ -68,10 +68,10 @@ update_homebrew_formula() {
     local linux_arm64_sha=$(calculate_sha256 "$assets_dir/sequin-cli-${version}-linux-arm64.zip")
     local linux_amd64_sha=$(calculate_sha256 "$assets_dir/sequin-cli-${version}-linux-amd64.zip")
 
-    sed -i.bak "s|sha256 \".*\"|sha256 \"$darwin_arm64_sha\"|" "$formula_file"
-    sed -i.bak "s|sha256 \".*\"|sha256 \"$darwin_amd64_sha\"|" "$formula_file"
-    sed -i.bak "s|sha256 \".*\"|sha256 \"$linux_arm64_sha\"|" "$formula_file"
-    sed -i.bak "s|sha256 \".*\"|sha256 \"$linux_amd64_sha\"|" "$formula_file"
+    sed -i.bak "s|sha256 \".*\" # tag:darwin-arm64|sha256 \"$darwin_arm64_sha\" # tag:darwin-arm64|" "$formula_file"
+    sed -i.bak "s|sha256 \".*\" # tag:darwin-amd64|sha256 \"$darwin_amd64_sha\" # tag:darwin-amd64|" "$formula_file"
+    sed -i.bak "s|sha256 \".*\" # tag:linux-arm64|sha256 \"$linux_arm64_sha\" # tag:linux-arm64|" "$formula_file"
+    sed -i.bak "s|sha256 \".*\" # tag:linux-amd64|sha256 \"$linux_amd64_sha\" # tag:linux-amd64|" "$formula_file"
 
     # Remove backup files
     rm "${formula_file}.bak"

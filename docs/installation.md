@@ -1,6 +1,6 @@
 # Installing Sequin
 
-Sequin is composed of a server and a CLI. The server is best installed as a Docker container. The CLI is a binary and is pre-compiled for most operating systems and architectures.
+Sequin is composed of a server and a CLI. The server is best run as a Docker container. The CLI is a binary and is pre-compiled for most operating systems and architectures.
 
 ## Sequin server installation
 
@@ -20,7 +20,7 @@ docker compose up -d
 
 ### Docker compose with existing project
 
-If you are adding Sequin to an existing `docker-compose.yaml` file in your project, you can add the following to your services:
+If you are adding Sequin to an existing `docker-compose.yaml` file in your project, you can add the following to the `services` section:
 
 ```yaml
 services:

@@ -4,11 +4,10 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
 
   alias Sequin.Streams
   alias Sequin.Streams.Consumer
-  alias Sequin.Streams.ConsumerMessage
 
   require Logger
 
-  @limit 10_000
+  @limit Streams.backfill_limit()
 
   def create(consumer_id, seq \\ 0, schedule_in_seconds \\ 0)
 
@@ -25,47 +24,23 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
     if Consumer.should_delete_acked_messages?(consumer) do
       delete_acked_messages(consumer)
     else
-      backfill_messages(consumer, seq)
-    end
-  end
+      case Streams.backfill_messages_for_consumer(consumer, seq) do
+        {:ok, messages} when length(messages) < @limit ->
+          Logger.info("[ConsumerBackfillWorker] Upserted #{length(messages)} messages for consumer #{consumer.id}")
 
-  def backfill_messages(consumer, seq) do
-    messages =
-      Streams.list_messages_for_stream(consumer.stream_id,
-        seq_gt: seq,
-        limit: @limit,
-        order_by: [asc: :seq],
-        select: [:key, :seq]
-      )
+          if is_nil(consumer.backfill_completed_at) do
+            Logger.info("[ConsumerBackfillWorker] Marking consumer #{consumer.id} as backfilled")
+            {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+          end
 
-    {:ok, _} =
-      messages
-      |> Enum.filter(fn message ->
-        Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
-      end)
-      |> Enum.map(fn message ->
-        %ConsumerMessage{
-          consumer_id: consumer.id,
-          message_key: message.key,
-          message_seq: message.seq
-        }
-      end)
-      |> Streams.upsert_consumer_messages()
+          next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> seq end)
+          create(consumer.id, next_seq, 10)
 
-    Logger.info("[ConsumerBackfillWorker] Upserted #{length(messages)} messages for consumer #{consumer.id}")
-
-    case messages do
-      messages when length(messages) < @limit ->
-        if is_nil(consumer.backfill_completed_at) do
-          {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
-        end
-
-        next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> seq end)
-        create(consumer.id, next_seq, 10)
-
-      _ ->
-        next_seq = Enum.max_by(messages, fn message -> message.seq end).seq
-        create(consumer.id, next_seq)
+        {:ok, messages} ->
+          Logger.info("[ConsumerBackfillWorker] Upserted #{length(messages)} messages for consumer #{consumer.id}")
+          next_seq = Enum.max_by(messages, fn message -> message.seq end).seq
+          create(consumer.id, next_seq)
+      end
     end
   end
 

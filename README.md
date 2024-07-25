@@ -5,7 +5,9 @@
 
 ## What is Sequin?
 
-Sequin is an open source message stream built on Postgres. It's comparable to Kafka, but offers more read flexibility with less operational overhead. Sequin comes with a CLI, HTTP interface, and ability to pull changes from any Postgres table into a stream.
+Sequin is an open source message stream built on Postgres. It's like Kafka, but is built on Postgres to give you more flexibility with less operational overhead.
+
+Sequin runs as a stateless Docker container that sits in front of any Postgres database. It comes with a CLI, HTTP interface, and ability to pull changes from any Postgres table into a stream.
 
 ### Stream not a queue
 
@@ -15,34 +17,43 @@ With a stream instead of a queue, Sequin provides features like message replay a
 
 ## Why Sequin?
 
-Sequin is tailored for developers who need:
+Streams are powerful and versatile data structures. Unlike queues, streams persist messages. This means you can fan out messages, replay messages, and dynamically materialize messages into views.
 
-1. **Service decoupling**: Reliably pass messages between services.
-2. **Durable LISTEN/NOTIFY**: Easily process changes from Postgres tables.
-3. **HTTP endpoints**: Safely ingest and process webhooks from external services.
-4. **Observability**: Developer-friendly tools to monitor and debug message flows.
-5. **Simplicity**: A powerful stream without a steep learning curve.
+Kafka popularized streams. Developed at LinkedIn, it prioritizes scale over ergonomics and usability. Kafka uses topics, partitions, and offsets to make it horizontally scalable. But this consumption paradigm is limiting and hard to work with. And Kafka is famously difficult to run.
 
-If these align with your needs, Sequin offers a streamlined alternative to complex messaging systems like Kafka.
+We think that if streams were easier to use and had more flexible consumption patterns, more developers would use them. We also know Postgres is the perfect data layer for ergonomic streams.
 
-### Contrast to Kafka
+In Sequin, messages are stored like a stream. But consumption patterns are more flexible and ergonomic, like a queue. And you don't need to worry about topics, partitions, or Zookeeper.
 
-Sequin shares a lot of similarities with Kafka:
+### Killer features
 
-- **Streams**: Sequin uses streams to fan out messages to many consumers.
-- **Retention policies**: Time-based or storage-based retention policies.
-- **Compact by key**: Like Kafka, you can compact messages with the same key. (Unlike Kafka, compaction happens immediately on write.)
-- **Guaranteed message ordering**: Messages with the same key are delivered to a consumer in order.
+- **Store like a stream, consume like a queue**: Sequin persists messages like a stream. But the consumption pattern is more flexible and ergonomic, like a queue.
+- [**Key-based routing**](#key): Publish messages with a rich key that consumers can use to filter down to the data they care about.
+- **Replays**: Rewind consumers to any point in a stream. Or republish select messages that match a SQL query.
+- [**Exactly once delivery**](#guarantees): Sequin delivers messages to consumers exactly once within a visibility timeout.
+- **Dynamic concurrency**: Scale workers for a consumer up or down as needed. No need to plan out partition counts ahead of time.
+- [**Upsert support**](#policies): Get immediate compaction by key, so only one record for a key exists in the stream at a time.
+- [**Stream any Postgres table**](#the-postgres-source): Sequin can pull changes from any Postgres table into a stream.
+- [**It's Just Postgres™**](#schema): The core of Sequin is a few Postgres tables. So you can query your streams like any other table.
 
-But with the read flexibility often found in message queues like AWS SQS:
+## Works with any Postgres database
 
-- **No topics**: Sequin uses [key-based routing](#key) to fan out messages to many consumers.
-- **No partitions**: Sequin maintains guaranteed ordering without partitioning.
+Sequin is compatible with any Postgres database, including those from cloud providers like:
 
-And with the familiarity of Postgres:
+- AWS RDS Postgres
+- Azure Database for Postgres
+- GCP Cloud SQL
+- Neon
+- ...and many more
 
-- **Simpler infrastructure**: No need for a separate Kafka broker or Zookeeper instance.
-- **Read at rest in SQL**: Sequin stores messages at rest in Postgres, so you can query them like any other table.
+### Schema
+
+The stream tables that power Sequin are simple. Streams are stored in a Postgres schema called `sequin_streams` by default:
+
+- `sequin_streams.messages`: Stores the messages for all streams. `messages` is partitioned by `stream_id`.
+- `sequin_streams.consumer_messages`: Stores the state for consumers.
+
+In addition, Sequin maintains several Postgres tables to support its internal operations. Those are stored in the `sequin_config` schema by default.
 
 ## Benchmarks and performance
 
@@ -62,12 +73,12 @@ A **message** in Sequin consists of a `key` and a `data` payload.
 
 ### Key
 
-In Sequin, a **key** is a string that serves two purposes:
+Sequin uses **key-based routing**. In Sequin, a **key** is a string that serves two purposes:
 
 1. It’s the unique key for the message (the primary key of the `messages` table under the hood)
 2. It contains attributes that can be used for consumer filtering
 
-Because consumers filter by key, you should choose the format of your keys intentionally.
+In Kafka, you route on write into a topic. But with Sequin, you route on read. Because consumers filter by key, you should choose the format of your keys intentionally.
 
 For example, an e-commerce company might choose a format like:
 

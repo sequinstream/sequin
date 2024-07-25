@@ -22,7 +22,7 @@ defmodule SequinWeb.WebhookIngestionController do
         case Streams.upsert_messages(webhook.stream_id, [message]) do
           {:ok, _count} ->
             SequinWeb.WebhookChannel.broadcast("webhook:ingested", %{webhook: webhook, message: message})
-            send_resp(conn, :no_content, "")
+            json(conn, %{success: true})
 
           {:error, _error} ->
             conn

@@ -87,7 +87,7 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
 
       # Verify the message can't be pulled again
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/receive")
@@ -102,7 +102,7 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/ack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows acking a message twice", %{conn: conn, consumer: consumer, stream: stream} do
@@ -110,10 +110,10 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
 
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/ack", ack_ids: [cm.ack_id])
-      assert response(conn, 204)
+      assert json_response(conn, 200) == %{"success" => true}
     end
 
     test "returns 404 when acking a message belonging to another consumer", %{
@@ -137,7 +137,7 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
 
       # Verify it's still in consumer_messages
       assert Streams.get_consumer_message!(consumer.id, cm.message_key).state == :available
@@ -153,7 +153,7 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}/nack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows nacking a message twice", %{conn: conn, consumer: consumer, stream: stream} do
@@ -161,10 +161,10 @@ defmodule SequinWeb.PullControllerTest do
       cm = StreamsFactory.insert_consumer_message!(%{consumer_id: consumer.id, message: message, state: :delivered})
 
       res_conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_ids: [cm.ack_id])
-      assert response(res_conn, 204)
+      assert json_response(res_conn, 200) == %{"success" => true}
 
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}/nack", ack_ids: [cm.ack_id])
-      assert response(conn, 204)
+      assert json_response(conn, 200) == %{"success" => true}
     end
 
     test "returns 404 when nacking a message belonging to another consumer", %{

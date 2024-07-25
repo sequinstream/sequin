@@ -275,7 +275,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   describe "delete" do
     test "deletes the postgres replication", %{conn: conn, postgres_replication: postgres_replication} do
       conn = delete(conn, ~p"/api/postgres_replications/#{postgres_replication.id}")
-      assert response(conn, 204)
+      assert %{"id" => id, "deleted" => true} = json_response(conn, 200)
+      assert id == postgres_replication.id
 
       assert {:error, _} =
                Sources.get_pg_replication_for_account(postgres_replication.account_id, postgres_replication.id)

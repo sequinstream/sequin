@@ -23,7 +23,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
       }
 
       conn = post(conn, ~p"/api/webhook/#{webhook.name}", payload)
-      assert response(conn, 204)
+      assert json_response(conn, 200) == %{"success" => true}
 
       # Verify the message was added to the stream
       [message] = Streams.list_messages_for_stream(stream.id)
@@ -52,7 +52,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
       payload = %{"id" => 1, "name" => "Paul Atreides"}
 
       conn = post(conn, ~p"/api/webhook/#{webhook.name}", payload)
-      assert response(conn, 204)
+      assert json_response(conn, 200) == %{"success" => true}
 
       [message] = Streams.list_messages_for_stream(stream.id)
       expected_hash = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()

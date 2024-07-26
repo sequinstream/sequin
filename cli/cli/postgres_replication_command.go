@@ -36,6 +36,7 @@ type postgresReplicationConfig struct {
 	StickInfo            bool
 	BackfillExistingRows bool
 	KeyFormat            KeyFormat
+	SSL                  bool
 }
 
 func addPostgresReplicationCommands(postgres *fisk.CmdClause, config *Config) {
@@ -110,6 +111,7 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 		PostgresDatabaseID:   databaseID,
 		BackfillExistingRows: c.BackfillExistingRows,
 		KeyFormat:            string(c.KeyFormat),
+		SSL:                  c.SSL,
 	}
 
 	newReplication, err := api.AddPostgresReplication(ctx, &replication)
@@ -276,6 +278,17 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 	} else {
 		c.KeyFormat = WithOperationKeyFormat
 	}
+
+	var useSSL bool
+	prompt = &survey.Confirm{
+		Message: "Do you want to use SSL for the connection?",
+		Default: false,
+	}
+	err = survey.AskOne(prompt, &useSSL)
+	if err != nil {
+		return err
+	}
+	c.SSL = useSSL
 
 	return nil
 }

@@ -20,8 +20,8 @@ type formModel struct {
 	focusIndex int
 	err        error
 	ctx        *context.Context
-	submitted  bool
 	database   *api.PostgresDatabase
+	sslToggle  bool
 }
 
 func initialDatabaseModel(ctx *context.Context) formModel {
@@ -58,6 +58,7 @@ func initialDatabaseModel(ctx *context.Context) formModel {
 		labels:     labels,
 		focusIndex: 0,
 		ctx:        ctx,
+		sslToggle:  false,
 	}
 }
 
@@ -82,10 +83,10 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusIndex++
 			}
 
-			if m.focusIndex > len(m.inputs) {
+			if m.focusIndex > len(m.inputs)+1 {
 				m.focusIndex = 0
 			} else if m.focusIndex < 0 {
-				m.focusIndex = len(m.inputs)
+				m.focusIndex = len(m.inputs) + 1
 			}
 
 			cmds := make([]tea.Cmd, len(m.inputs))
@@ -100,11 +101,19 @@ func (m formModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "enter":
 			if m.focusIndex == len(m.inputs) {
+				m.sslToggle = !m.sslToggle
+				return m, nil
+			}
+			if m.focusIndex == len(m.inputs)+1 {
 				return m, m.submit
+			}
+		case " ":
+			if m.focusIndex == len(m.inputs) {
+				m.sslToggle = !m.sslToggle
+				return m, nil
 			}
 		}
 	case submitMsg:
-		m.submitted = true
 		if msg.err != nil {
 			m.err = msg.err
 			return m, nil
@@ -137,17 +146,31 @@ func (m formModel) View() string {
 		b.WriteString("\n\n")
 	}
 
-	button := "[ Submit ]"
+	// Add SSL toggle
+	sslToggle := "[ ] Use SSL"
+	if m.sslToggle {
+		sslToggle = "[x] Use SSL"
+	}
 	if m.focusIndex == len(m.inputs) {
-		button = "[ " + lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render("Submit") + " ]"
+		sslToggle = "> " + sslToggle
+	}
+	b.WriteString(sslToggle + "\n\n")
+
+	button := "[ Submit ]"
+	if m.focusIndex == len(m.inputs)+1 {
+		button = "> [ " + lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render("Submit") + " ]"
+	} else {
+		button = "  [ Submit ]"
 	}
 	b.WriteString(button)
 
 	if m.err != nil {
+		b.WriteString("\n\n")
 		if validationErr, ok := m.err.(*api.ValidationError); ok {
-			validationErr.PrintValidationError()
+			// Instead of calling PrintValidationError(), we'll format the error here
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(fmt.Sprintf("Validation Error: %s", validationErr.Error())))
 		} else {
-			b.WriteString("\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.err.Error()))
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Render(m.err.Error()))
 		}
 	}
 
@@ -170,6 +193,7 @@ func (m *formModel) submit() tea.Msg {
 		Username: getValueOrDefault(m.inputs[3].Value(), "postgres"),
 		Password: m.inputs[4].Value(),
 		Name:     m.inputs[5].Value(),
+		SSL:      m.sslToggle,
 	}
 
 	port, err := strconv.Atoi(getValueOrDefault(m.inputs[2].Value(), "5432"))
@@ -209,9 +233,6 @@ func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
 	if m, ok := m.(formModel); ok {
 		if m.err != nil {
 			return nil, m.err
-		}
-		if !m.submitted {
-			return nil, fmt.Errorf("form submission cancelled")
 		}
 		// The submit() method has already been called in the Update method
 		// We just need to return the result

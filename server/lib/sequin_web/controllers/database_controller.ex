@@ -165,10 +165,18 @@ defmodule SequinWeb.DatabaseController do
         error
 
       {:error, %Postgrex.Error{} = error} ->
-        message = (error.postgres && error.postgres.message) || "Unknown Postgres error"
+        # On connection issues, message is sometimes in first layer
+        message = (error.postgres && error.postgres.message) || error.message || "Unknown Postgres error"
         code = error.postgres && error.postgres.code
 
-        {:error, Error.validation(summary: "Error from Postgres: #{message} (code=#{code})")}
+        summary =
+          if code do
+            "Error from Postgres: #{message} (code=#{code})"
+          else
+            "Error from Postgres: #{message}"
+          end
+
+        {:error, Error.validation(summary: summary)}
 
       {:error, error} ->
         {:error, Error.validation(summary: "Unknown error connecting to database: #{inspect(error)}")}

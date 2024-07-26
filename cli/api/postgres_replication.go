@@ -24,6 +24,7 @@ type PostgresReplication struct {
 	Status              string     `json:"status"`
 	AccountID           string     `json:"account_id"`
 	PostgresDatabaseID  string     `json:"postgres_database_id"`
+	SSL                 bool       `json:"ssl"`
 	StreamID            string     `json:"stream_id"`
 	CreatedAt           time.Time  `json:"inserted_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
@@ -46,6 +47,7 @@ func (pr *PostgresReplication) FormatBackfillCompletedAt() string {
 type PostgresReplicationCreate struct {
 	SlotName             string `json:"slot_name"`
 	PublicationName      string `json:"publication_name"`
+	SSL                  bool   `json:"ssl"`
 	StreamID             string `json:"stream_id"`
 	PostgresDatabaseID   string `json:"postgres_database_id"`
 	BackfillExistingRows bool   `json:"backfill_existing_rows"`

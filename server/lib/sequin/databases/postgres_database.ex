@@ -77,9 +77,17 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
-    pd
-    |> Sequin.Map.from_ecto()
-    |> Map.take([:database, :hostname, :pool_size, :port, :queue_interval, :queue_target, :password, :ssl, :username])
-    |> Enum.to_list()
+    opts =
+      pd
+      |> Sequin.Map.from_ecto()
+      |> Map.take([:database, :hostname, :pool_size, :port, :queue_interval, :queue_target, :password, :ssl, :username])
+      |> Enum.to_list()
+
+    if opts[:ssl] do
+      # To change this to verify_full in the future, we'll need to add CA certs for the cloud vendors
+      Keyword.put(opts, :ssl_opts, verify: :verify_none)
+    else
+      opts
+    end
   end
 end

@@ -115,6 +115,9 @@ defmodule Sequin.Databases do
 
         :ok
 
+      {:error, error} when is_struct(error, Postgrex.Error) ->
+        {:error, error}
+
       {:error, error} when is_exception(error) ->
         sanitized = db |> Map.from_struct() |> Map.delete(:password)
 
@@ -205,9 +208,14 @@ defmodule Sequin.Databases do
              :ok <- create_publication(t_conn, publication_name, tables) do
           %{slot_name: slot_name, publication_name: publication_name, tables: tables}
         else
+          {:error, %Postgrex.Error{} = error} ->
+            message = (error.postgres && error.postgres.message) || "Unknown Postgres error"
+            code = (error.postgres && error.postgres.code) || "unknown"
+            Postgrex.rollback(t_conn, Error.service(service: :external_postgres, message: message, code: code))
+
           {:error, error} ->
             Logger.error("Failed to setup replication: #{inspect(error)}", error: error)
-            {:error, error}
+            Postgrex.rollback(t_conn, error)
         end
       end)
     end)
@@ -225,7 +233,7 @@ defmodule Sequin.Databases do
 
         case Postgrex.query(conn, create_query, [slot_name]) do
           {:ok, _} -> :ok
-          {:error, error} -> {:error, "Failed to create replication slot: #{inspect(error)}"}
+          {:error, error} -> {:error, error}
         end
 
       {:ok, _} ->

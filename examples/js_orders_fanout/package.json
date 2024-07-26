@@ -1,0 +1,21 @@
+{
+  "name": "js_orders_fanout",
+  "version": "1.0.0",
+  "description": "Example of a fan-out pattern using Sequin and the sequin-js library.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@sequinstream/sequin-js": "^0.1.0",
+    "better-sqlite3": "^11.1.2",
+    "dotenv": "^16.4.5",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  }
+}

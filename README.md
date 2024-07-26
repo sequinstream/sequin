@@ -5,9 +5,9 @@
 
 ## What is Sequin?
 
-Sequin is an open source message stream built on Postgres. It's like Kafka, but is built on Postgres to give you more flexibility with less operational overhead.
+Sequin is an open source message stream built on Postgres. It's like Kafka, but its Postgres foundation gives you more flexibility with less operational overhead.
 
-Sequin runs as a stateless Docker container that sits in front of any Postgres database. It comes with a CLI, HTTP interface, and ability to pull changes from any Postgres table into a stream.
+Sequin runs as a stateless Docker container in front of any Postgres database. It comes with a CLI, HTTP interface, and the ability to pull changes from any Postgres table into a stream.
 
 ### Stream not a queue
 

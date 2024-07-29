@@ -13,11 +13,10 @@ import (
 )
 
 type ctxCommand struct {
-	name        string
-	description string
-	hostname    string
-	tls         bool
-	setDefault  bool
+	name       string
+	hostname   string
+	tls        bool
+	setDefault bool
 }
 
 func AddContextCommands(app *fisk.Application, _config *Config) {
@@ -29,7 +28,6 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 
 	create := ctx.Command("create", "Create or update a context").Action(cmd.createAction)
 	create.Arg("name", "The context name").StringVar(&cmd.name)
-	create.Flag("description", "Set a friendly description for this context").StringVar(&cmd.description)
 	create.Flag("hostname", "The hostname for this context").StringVar(&cmd.hostname)
 	create.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
 	create.Flag("set-default", "Set this context as the default").BoolVar(&cmd.setDefault)
@@ -58,16 +56,6 @@ func (c *ctxCommand) createAction(pctx *fisk.ParseContext) error {
 		}
 	}
 
-	if c.description == "" {
-		prompt := &survey.Input{
-			Message: "Enter a description for the context (optional):",
-		}
-		err := survey.AskOne(prompt, &c.description)
-		if err != nil {
-			return fmt.Errorf("failed to get context description: %w", err)
-		}
-	}
-
 	if c.hostname == "" {
 		prompt := &survey.Input{
 			Message: "Enter the hostname (e.g., localhost:7376 or sequin.io):",
@@ -90,10 +78,9 @@ func (c *ctxCommand) createAction(pctx *fisk.ParseContext) error {
 	}
 
 	ctx := context.Context{
-		Name:        c.name,
-		Description: c.description,
-		Hostname:    c.hostname,
-		TLS:         c.tls,
+		Name:     c.name,
+		Hostname: c.hostname,
+		TLS:      c.tls,
 	}
 
 	err := context.SaveContext(ctx)
@@ -139,7 +126,6 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 
 	columns := []table.Column{
 		{Title: "Name", Width: 20},
-		{Title: "Description", Width: 30},
 		{Title: "Hostname", Width: 40},
 		{Title: "TLS", Width: 10},
 		{Title: "Default", Width: 10},
@@ -153,7 +139,6 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		}
 		rows = append(rows, table.Row{
 			ctx.Name,
-			ctx.Description,
 			ctx.Hostname,
 			fmt.Sprintf("%t", ctx.TLS),
 			isDefault,
@@ -188,7 +173,6 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 
 	rows := []table.Row{
 		{"Name", ctx.Name},
-		{"Description", ctx.Description},
 		{"Hostname", ctx.Hostname},
 		{"TLS", fmt.Sprintf("%t", ctx.TLS)},
 		{"Default", fmt.Sprintf("%t", ctx.Default)},
@@ -232,11 +216,7 @@ func (c *ctxCommand) pickContext(message string) error {
 
 	options := make([]string, len(contexts))
 	for i, ctx := range contexts {
-		if ctx.Description != "" {
-			options[i] = fmt.Sprintf("%s (%s)", ctx.Name, ctx.Description)
-		} else {
-			options[i] = ctx.Name
-		}
+		options[i] = ctx.Name
 	}
 
 	prompt := &survey.Select{

@@ -26,11 +26,11 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	// Add cheats
 	addCheat("context", ctx)
 
-	create := ctx.Command("create", "Create or update a context").Action(cmd.createAction)
-	create.Arg("name", "The context name").StringVar(&cmd.name)
-	create.Flag("hostname", "The hostname for this context").StringVar(&cmd.hostname)
-	create.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
-	create.Flag("set-default", "Set this context as the default").BoolVar(&cmd.setDefault)
+	add := ctx.Command("add", "Add or update a context").Action(cmd.addAction)
+	add.Arg("name", "The context name").StringVar(&cmd.name)
+	add.Flag("hostname", "The hostname for this context").StringVar(&cmd.hostname)
+	add.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
+	add.Flag("set-default", "Set this context as the default").BoolVar(&cmd.setDefault)
 
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
 
@@ -44,7 +44,7 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	selectCmd.Arg("name", "The context name").StringVar(&cmd.name)
 }
 
-func (c *ctxCommand) createAction(pctx *fisk.ParseContext) error {
+func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 	// Use pre-set values if available, otherwise prompt
 	if c.name == "" {
 		prompt := &survey.Input{
@@ -242,14 +242,14 @@ func (c *ctxCommand) selectAction(_ *fisk.ParseContext) error {
 		err := c.pickContext("Choose a context to set as default:")
 		if err != nil {
 			if err.Error() == "no contexts available" {
-				fmt.Println(text.FgYellow.Sprint("There are no contexts available. Would you like to create a new context?"))
-				createNew := false
+				fmt.Println(text.FgYellow.Sprint("There are no contexts available. Would you like to add a new context?"))
+				addNew := false
 				prompt := &survey.Confirm{
-					Message: "Create a new context?",
+					Message: "Add a new context?",
 				}
-				survey.AskOne(prompt, &createNew)
-				if createNew {
-					return c.createAction(nil)
+				survey.AskOne(prompt, &addNew)
+				if addNew {
+					return c.addAction(nil)
 				}
 				return nil
 			}

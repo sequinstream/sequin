@@ -11,7 +11,7 @@ import (
 	"github.com/sequinstream/sequin/cli/context"
 )
 
-func TestCreateAction(t *testing.T) {
+func TestAddAction(t *testing.T) {
 	// Setup
 	cmd := &ctxCommand{
 		name:       "test-context",
@@ -26,7 +26,7 @@ func TestCreateAction(t *testing.T) {
 	os.Stdout = w
 
 	// Execute
-	err := cmd.createAction(nil)
+	err := cmd.addAction(nil)
 
 	// Restore stdout
 	w.Close()

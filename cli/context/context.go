@@ -14,6 +14,7 @@ type Context struct {
 	Description string `json:"description"`
 	Hostname    string `json:"hostname"`
 	TLS         bool   `json:"tls"`
+	Default     bool   `json:"default"`
 }
 
 // GetServerURL returns the server URL based on the current context
@@ -80,6 +81,8 @@ func LoadContext(name string) (*Context, error) {
 					Name:        "default",
 					Description: "default context",
 					Hostname:    fmt.Sprintf("localhost:%d", defaultPort),
+					TLS:         false,
+					Default:     false,
 				}, nil
 			}
 			return nil, err
@@ -104,6 +107,11 @@ func LoadContext(name string) (*Context, error) {
 		return nil, fmt.Errorf("could not unmarshal context: %w", err)
 	}
 
+	defaultName, err := getDefaultContextName()
+	if err == nil && defaultName == name {
+		ctx.Default = true
+	}
+
 	return &ctx, nil
 }
 
@@ -120,13 +128,18 @@ func ListContexts() ([]Context, error) {
 	}
 
 	var contexts []Context
+
 	for _, file := range files {
 		if filepath.Ext(file.Name()) == ".json" {
 			ctx, err := LoadContext(strings.TrimSuffix(file.Name(), ".json"))
 			if err != nil {
 				return nil, fmt.Errorf("could not load context %s: %w", file.Name(), err)
 			}
-			contexts = append(contexts, *ctx)
+			if ctx.Default {
+				contexts = append([]Context{*ctx}, contexts...)
+			} else {
+				contexts = append(contexts, *ctx)
+			}
 		}
 	}
 

@@ -46,7 +46,8 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	selectCmd.Arg("name", "The context name").StringVar(&cmd.name)
 }
 
-func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
+func (c *ctxCommand) createAction(pctx *fisk.ParseContext) error {
+	// Use pre-set values if available, otherwise prompt
 	if c.name == "" {
 		prompt := &survey.Input{
 			Message: "Enter the context name:",
@@ -141,18 +142,23 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		{Title: "Description", Width: 30},
 		{Title: "Hostname", Width: 40},
 		{Title: "TLS", Width: 10},
+		{Title: "Default", Width: 10},
 	}
 
 	rows := []table.Row{}
 	for _, ctx := range contexts {
+		isDefault := ""
+		if ctx.Default {
+			isDefault = "✓"
+		}
 		rows = append(rows, table.Row{
 			ctx.Name,
 			ctx.Description,
 			ctx.Hostname,
 			fmt.Sprintf("%t", ctx.TLS),
+			isDefault,
 		})
 	}
-
 	t := NewTable(columns, rows, PrintableTable)
 	fmt.Println("Contexts")
 	return t.Render()
@@ -185,6 +191,7 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		{"Description", ctx.Description},
 		{"Hostname", ctx.Hostname},
 		{"TLS", fmt.Sprintf("%t", ctx.TLS)},
+		{"Default", fmt.Sprintf("%t", ctx.Default)},
 	}
 
 	t := NewTable(columns, rows, PrintableTable)

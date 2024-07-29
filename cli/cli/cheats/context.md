@@ -1,6 +1,6 @@
 // Create a context
-sequin-cli context create dev --hostname=localhost:7376
-sequin-cli context create prod --hostname=sequin.io
+sequin-cli context create dev --hostname=localhost:7376 --set-default
+sequin-cli context create prod --hostname=sequin.io --tls
 
 // List contexts
 sequin-cli context ls

@@ -14,11 +14,10 @@ import (
 func TestCreateAction(t *testing.T) {
 	// Setup
 	cmd := &ctxCommand{
-		name:        "test-context",
-		description: "Test description",
-		hostname:    "http://test-server.com",
-		tls:         true,
-		setDefault:  true,
+		name:       "test-context",
+		hostname:   "http://test-server.com",
+		tls:        true,
+		setDefault: true,
 	}
 
 	// Redirect stdout to capture output
@@ -45,7 +44,6 @@ func TestCreateAction(t *testing.T) {
 	savedContext, err := context.LoadContext("test-context")
 	assert.NoError(t, err)
 	assert.Equal(t, cmd.name, savedContext.Name)
-	assert.Equal(t, cmd.description, savedContext.Description)
 	assert.Equal(t, cmd.hostname, savedContext.Hostname)
 	assert.Equal(t, cmd.tls, savedContext.TLS)
 
@@ -56,8 +54,8 @@ func TestCreateAction(t *testing.T) {
 func TestListAction(t *testing.T) {
 	// Setup
 	testContexts := []context.Context{
-		{Name: "context1", Description: "Description 1", Hostname: "http://server1.com"},
-		{Name: "context2", Description: "Description 2", Hostname: "http://server2.com"},
+		{Name: "context1", Hostname: "http://server1.com"},
+		{Name: "context2", Hostname: "http://server2.com"},
 	}
 
 	for _, ctx := range testContexts {
@@ -88,7 +86,6 @@ func TestListAction(t *testing.T) {
 	output := buf.String()
 	for _, ctx := range testContexts {
 		assert.Contains(t, output, ctx.Name)
-		assert.Contains(t, output, ctx.Description)
 		assert.Contains(t, output, ctx.Hostname)
 	}
 
@@ -101,9 +98,8 @@ func TestListAction(t *testing.T) {
 func TestInfoActionWithoutSelection(t *testing.T) {
 	// Setup
 	testContext := context.Context{
-		Name:        "test-context",
-		Description: "Test Description",
-		Hostname:    "http://test-server.com",
+		Name:     "test-context",
+		Hostname: "http://test-server.com",
 	}
 	err := context.SaveContext(testContext)
 	assert.NoError(t, err)
@@ -130,7 +126,6 @@ func TestInfoActionWithoutSelection(t *testing.T) {
 	assert.NoError(t, err)
 	output := buf.String()
 	assert.Contains(t, output, testContext.Name)
-	assert.Contains(t, output, testContext.Description)
 	assert.Contains(t, output, testContext.Hostname)
 
 	// Cleanup

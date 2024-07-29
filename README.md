@@ -128,6 +128,8 @@ cd docker && docker compose up -d
 
 The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.
 
+For installation in production, see our [deployment guide](./deploy.md).
+
 ### CLI
 
 #### Homebrew

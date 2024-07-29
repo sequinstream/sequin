@@ -2,6 +2,8 @@
 
 Sequin is composed of a server and a CLI. The server is best run as a Docker container. The CLI is a binary and is pre-compiled for most operating systems and architectures.
 
+For installation in production, see our [deployment guide](./deploy.md).
+
 ## Sequin server installation
 
 Sequin server can be installed and started alongside Postgres so you can quickly get started. Alternatively, Sequin can be added to an existing `docker-compose.yaml` file in your project.

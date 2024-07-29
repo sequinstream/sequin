@@ -15,7 +15,8 @@ import (
 type ctxCommand struct {
 	name        string
 	description string
-	serverURL   string
+	hostname    string
+	tls         bool
 	setDefault  bool
 }
 
@@ -29,7 +30,8 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	create := ctx.Command("create", "Create or update a context").Action(cmd.createAction)
 	create.Arg("name", "The context name").StringVar(&cmd.name)
 	create.Flag("description", "Set a friendly description for this context").StringVar(&cmd.description)
-	create.Flag("server-url", "The server URL for this context").StringVar(&cmd.serverURL)
+	create.Flag("hostname", "The hostname for this context").StringVar(&cmd.hostname)
+	create.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
 	create.Flag("set-default", "Set this context as the default").BoolVar(&cmd.setDefault)
 
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
@@ -65,20 +67,32 @@ func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
 		}
 	}
 
-	if c.serverURL == "" {
+	if c.hostname == "" {
 		prompt := &survey.Input{
-			Message: "Enter the server URL:",
+			Message: "Enter the hostname (e.g., localhost:7376 or sequin.io):",
 		}
-		err := survey.AskOne(prompt, &c.serverURL)
+		err := survey.AskOne(prompt, &c.hostname)
 		if err != nil {
-			return fmt.Errorf("failed to get server URL: %w", err)
+			return fmt.Errorf("failed to get hostname: %w", err)
+		}
+	}
+
+	if !c.tls {
+		prompt := &survey.Confirm{
+			Message: "Enable TLS for this context?",
+			Default: false,
+		}
+		err := survey.AskOne(prompt, &c.tls)
+		if err != nil {
+			return fmt.Errorf("failed to get TLS option: %w", err)
 		}
 	}
 
 	ctx := context.Context{
 		Name:        c.name,
 		Description: c.description,
-		ServerURL:   c.serverURL,
+		Hostname:    c.hostname,
+		TLS:         c.tls,
 	}
 
 	err := context.SaveContext(ctx)
@@ -125,7 +139,8 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 	columns := []table.Column{
 		{Title: "Name", Width: 20},
 		{Title: "Description", Width: 30},
-		{Title: "Server URL", Width: 40},
+		{Title: "Hostname", Width: 40},
+		{Title: "TLS", Width: 10},
 	}
 
 	rows := []table.Row{}
@@ -133,7 +148,8 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 		rows = append(rows, table.Row{
 			ctx.Name,
 			ctx.Description,
-			ctx.ServerURL,
+			ctx.Hostname,
+			fmt.Sprintf("%t", ctx.TLS),
 		})
 	}
 
@@ -167,7 +183,8 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 	rows := []table.Row{
 		{"Name", ctx.Name},
 		{"Description", ctx.Description},
-		{"Server URL", ctx.ServerURL},
+		{"Hostname", ctx.Hostname},
+		{"TLS", fmt.Sprintf("%t", ctx.TLS)},
 	}
 
 	t := NewTable(columns, rows, PrintableTable)

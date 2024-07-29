@@ -16,7 +16,12 @@ type BaseChannel struct {
 }
 
 func NewBaseChannel(ctx *context.Context, channelName string, logger phx.Logger) (*BaseChannel, error) {
-	endPoint, err := url.Parse(ctx.WebSocketURL)
+	webSocketURL, err := context.GetWebSocketURL(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get WebSocket URL: %w", err)
+	}
+
+	endPoint, err := url.Parse(webSocketURL)
 	if err != nil {
 		return nil, err
 	}

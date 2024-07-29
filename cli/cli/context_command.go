@@ -16,6 +16,7 @@ type ctxCommand struct {
 	name        string
 	description string
 	serverURL   string
+	setDefault  bool
 }
 
 func AddContextCommands(app *fisk.Application, _config *Config) {
@@ -29,6 +30,7 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	create.Arg("name", "The context name").StringVar(&cmd.name)
 	create.Flag("description", "Set a friendly description for this context").StringVar(&cmd.description)
 	create.Flag("server-url", "The server URL for this context").StringVar(&cmd.serverURL)
+	create.Flag("set-default", "Set this context as the default").BoolVar(&cmd.setDefault)
 
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
 
@@ -37,6 +39,9 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 
 	rm := ctx.Command("rm", "Remove a context").Action(cmd.removeAction)
 	rm.Arg("name", "The context name").StringVar(&cmd.name)
+
+	selectCmd := ctx.Command("select", "Select a default context").Action(cmd.selectAction)
+	selectCmd.Arg("name", "The context name").StringVar(&cmd.name)
 }
 
 func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
@@ -81,7 +86,28 @@ func (c *ctxCommand) createAction(_ *fisk.ParseContext) error {
 		return fmt.Errorf("could not save context: %w", err)
 	}
 
-	fmt.Print(text.FgGreen.Sprintf("Context '%s' created successfully.", c.name))
+	fmt.Print(text.FgGreen.Sprintf("Context '%s' created successfully.\n", c.name))
+
+	if !c.setDefault {
+		setAsDefault := false
+		prompt := &survey.Confirm{
+			Message: fmt.Sprintf("Do you want to set '%s' as the default context?", c.name),
+		}
+		err := survey.AskOne(prompt, &setAsDefault)
+		if err != nil {
+			return fmt.Errorf("failed to get user input: %w", err)
+		}
+		c.setDefault = setAsDefault
+	}
+
+	if c.setDefault {
+		err := context.SetDefaultContext(c.name)
+		if err != nil {
+			return fmt.Errorf("could not set default context: %w", err)
+		}
+		fmt.Printf("Context '%s' has been set as the default.\n", c.name)
+	}
+
 	return nil
 }
 
@@ -115,6 +141,7 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 	fmt.Println("Contexts")
 	return t.Render()
 }
+
 func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 	if c.name == "" {
 		err := c.pickContext("Choose a context to show info for:")
@@ -203,5 +230,39 @@ func (c *ctxCommand) pickContext(message string) error {
 	}
 
 	c.name = strings.SplitN(choice, " ", 2)[0]
+	return nil
+}
+
+func (c *ctxCommand) selectAction(_ *fisk.ParseContext) error {
+	if c.name == "" {
+		err := c.pickContext("Choose a context to set as default:")
+		if err != nil {
+			if err.Error() == "no contexts available" {
+				fmt.Println(text.FgYellow.Sprint("There are no contexts available. Would you like to create a new context?"))
+				createNew := false
+				prompt := &survey.Confirm{
+					Message: "Create a new context?",
+				}
+				survey.AskOne(prompt, &createNew)
+				if createNew {
+					return c.createAction(nil)
+				}
+				return nil
+			}
+			return err
+		}
+	}
+
+	ctx, err := context.LoadContext(c.name)
+	if err != nil {
+		return fmt.Errorf("could not load context '%s': %w", c.name, err)
+	}
+
+	err = context.SetDefaultContext(ctx.Name)
+	if err != nil {
+		return fmt.Errorf("could not set default context: %w", err)
+	}
+
+	fmt.Printf("Default context set to '%s'.\n", ctx.Name)
 	return nil
 }

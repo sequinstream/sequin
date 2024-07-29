@@ -55,7 +55,6 @@ type state struct {
 	streams        *StreamState
 	config         *Config
 	activeTab      TabType
-	tabs           []string
 	ctx            *sequinContext.Context
 	selectedStream *models.Stream
 }
@@ -94,7 +93,6 @@ func initialState(config *Config, ctx *sequinContext.Context) state {
 	s := state{
 		config:         config,
 		activeTab:      StreamsTab,
-		tabs:           []string{"Streams (s)", "Messages (m)", "Consumers (c)"},
 		messages:       NewMessageState(config),
 		consumers:      NewConsumerState(config, ctx),
 		streams:        NewStreamState(config),
@@ -335,11 +333,33 @@ func (s *state) getContentForActiveTab(width, height int) string {
 
 func (s *state) renderTabBar(width int) string {
 	tabs := s.getTabs()
+	contextTab := s.renderContextTab()
+
+	tabsContent := lipgloss.JoinHorizontal(lipgloss.Left, tabs...)
+
 	return lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderBottom(true).
 		Width(width).
-		Render(lipgloss.JoinHorizontal(lipgloss.Left, tabs...))
+		Render(lipgloss.JoinHorizontal(lipgloss.Center,
+			tabsContent,
+			lipgloss.NewStyle().Width(width-lipgloss.Width(tabsContent)-lipgloss.Width(contextTab)).Render(""),
+			contextTab,
+		))
+}
+
+func (s *state) renderContextTab() string {
+	contextName := s.ctx.Name
+	if contextName == "" {
+		contextName = "Default"
+	}
+
+	return lipgloss.NewStyle().
+		Background(colorWhite).
+		Foreground(colorBlack).
+		Bold(true).
+		Padding(0, 1).
+		Render("Context: " + contextName)
 }
 
 func (s *state) getTabs() []string {

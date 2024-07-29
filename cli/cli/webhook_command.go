@@ -211,17 +211,23 @@ func printWebhookInfo(webhook *models.Webhook, ctx *context.Context) error {
 		{"Account ID", webhook.AccountID},
 		{"Created At", webhook.CreatedAt.String()},
 		{"Updated At", webhook.UpdatedAt.String()},
-		{"Webhook URL", fmt.Sprintf("%s/api/webhook/%s", ctx.ServerURL, webhook.Name)},
 	}
 
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get server URL: %w", err)
+	}
+
+	rows = append(rows, table.Row{"Webhook URL", fmt.Sprintf("%s/api/webhook/%s", serverURL, webhook.Name)})
+
 	t := NewTable(columns, rows, PrintableTable)
-	err := t.Render()
+	err = t.Render()
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("\nTo send a webhook payload:")
-	fmt.Printf("curl -X POST %s/api/webhook/%s \\\n", ctx.ServerURL, webhook.Name)
+	fmt.Printf("curl -X POST %s/api/webhook/%s \\\n", serverURL, webhook.Name)
 	fmt.Println("  -H \"Content-Type: application/json\" \\\n  -d '{\"key\": \"value\"}'")
 
 	return nil

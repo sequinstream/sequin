@@ -10,19 +10,38 @@ import (
 )
 
 type Context struct {
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	ServerURL    string `json:"server_url"`
-	WebSocketURL string `json:"websocket_url"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Hostname    string `json:"hostname"`
+	TLS         bool   `json:"tls"`
 }
 
 // GetServerURL returns the server URL based on the current context
 func GetServerURL(ctx *Context) (string, error) {
-	if ctx.ServerURL == "" {
-		return "", fmt.Errorf("server URL is not set")
+	if ctx.Hostname == "" {
+		return "", fmt.Errorf("hostname is not set")
 	}
 
-	return ctx.ServerURL, nil
+	protocol := "http"
+	if ctx.TLS {
+		protocol = "https"
+	}
+
+	return fmt.Sprintf("%s://%s", protocol, ctx.Hostname), nil
+}
+
+// GetWebSocketURL returns the WebSocket URL based on the current context
+func GetWebSocketURL(ctx *Context) (string, error) {
+	if ctx.Hostname == "" {
+		return "", fmt.Errorf("hostname is not set")
+	}
+
+	protocol := "ws"
+	if ctx.TLS {
+		protocol = "wss"
+	}
+
+	return fmt.Sprintf("%s://%s/cli", protocol, ctx.Hostname), nil
 }
 
 func SaveContext(ctx Context) error {
@@ -58,10 +77,9 @@ func LoadContext(name string) (*Context, error) {
 			if errors.Is(err, os.ErrNotExist) {
 				// Return default context if no name is specified and no default set
 				return &Context{
-					Name:         "default",
-					Description:  "default context",
-					ServerURL:    fmt.Sprintf("http://localhost:%d", defaultPort),
-					WebSocketURL: fmt.Sprintf("ws://localhost:%d/cli", defaultPort),
+					Name:        "default",
+					Description: "default context",
+					Hostname:    fmt.Sprintf("localhost:%d", defaultPort),
 				}, nil
 			}
 			return nil, err

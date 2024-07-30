@@ -1,0 +1,55 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Sequin",
+  "logo": {
+    "light": "/logo/light.png",
+    "dark": "/logo/dark.png",
+    "href": "https://sequinstream.com"
+  },
+  "favicon": "/favicon.png",
+  "colors": {
+    "primary": "#0E0E0E",
+    "light": "#474747",
+    "dark": "#0E0E0E"
+  },
+  "topbarCtaButton": {
+    "type": "github",
+    "url": "https://github.com/sequinstream/sequin"
+  },
+  "tabs": [],
+  "navigation": [
+    {
+      "group": "Overall",
+      "pages": ["introduction", "quickstart", "installation", "cli", "sdks"]
+    },
+    {
+      "group": "Core concepts",
+      "pages": [
+        "core/overview",
+        "core/streams",
+        "core/consumers",
+        "core/sources"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/deploying",
+        "guides/ingesting-from-postgres",
+        "guides/ingesting-webhooks"
+      ]
+    },
+    {
+      "group": "SDKs",
+      "pages": [
+        "sdks/javascript",
+        "sdks/python",
+        "sdks/go",
+        "sdks/java",
+        "sdks/ruby",
+        "sdks/php"
+      ]
+    }
+  ],
+  "footerSocials": {}
+}

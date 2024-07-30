@@ -1,0 +1,47 @@
+---
+title: CLI
+description: 'Sequin comes with a CLI you can use to interact with and observe a running Sequin instance. You can use the CLI to set up streams and consumers, and observe messages flowing through your system in real-time.'
+---
+
+To install the CLI, see the [installation guide](/installation).
+
+## Universal flags
+
+#### `--as-curl`
+
+For every CLI command, you can pass the `--as-curl` flag to have the command printed out as a curl request:
+
+```bash
+sequin consumer receive mycon --batch-size=10 --as-curl
+```
+
+## Contexts
+
+You can use contexts to easily switch your CLI between environments. For example, if you're debugging production, you can run:
+
+```bash
+sequin observe --context=prod
+```
+
+And the Sequin CLI will use your settings for prod to connect to your production Sequin instance.
+
+Create a context like so:
+
+```bash
+sequin context add [<flags>] [<name>]
+```
+
+## Observe
+
+Sequin's `observe` is like [htop](https://github.com/htop-dev/htop) for your Sequin instance. You can watch messages flow into your system, into a consumer's outbox, and get ack'd in real-time.
+
+Boot it with:
+
+```bash
+sequin observe
+```
+
+<Frame>
+<img src="/images/observe.gif" alt="sequin's observe command showing streams, consumers, and messages" />
+</Frame>
+

@@ -1,15 +1,15 @@
-# Getting started with the Postgres source
+---
+title: 'Ingesting from Postgres'
+description: With the `postgres` source, Sequin turns the Postgres WAL into a message stream. This means you can stream creates, updates, and deletes from any table in Postgres to your app. Then, you can use Sequin's pull-based or push-based (i.e. webhook) consumption patterns.
+---
 
-> [!NOTE]
-> This guide assumes you have already created a stream and a consumer. If not, please see the [getting started guide](getting-started.md).
-
-With the `postgres` source, Sequin turns the Postgres WAL into a message queue. This means you can stream creates, updates, and deletes from any table in Postgres to your app. Then, you can use Sequin's pull-based or push-based (i.e. webhook) consumption patterns.
+<Note>This guide assumes you have already created a stream and a consumer. If not, please see the [quickstart guide](/quickstart).</Note>
 
 Sequin is a great fit if LISTEN/NOTIFY's at-most-once delivery is not sufficient for your use case. It's an alternative to setting up Debezium/Kafka to consume Postgres changes.
 
 ## Setup
 
-From the CLI, connect any Postgres table to Sequin:
+From the CLI, connect any Postgres table to Sequin with:
 
 ```bash
 sequin source postgres add
@@ -45,6 +45,10 @@ Password:
 Give your database a name:
 > mydb
 
+Use SSL?
+
+> [X]
+
 [ Submit ]
 ```
 
@@ -60,8 +64,7 @@ The CLI will ask permission to create a replication slot and publication for you
 
 If you prefer, you can create the replication slot and publication manually. Setting up manually gives you more control over the publication. You can select whether to include `INSERT`, `UPDATE`, `DELETE`, and `TRUNCATE` events. You can also specify `WHERE` clauses to filter which rows are specified to Sequin.
 
-> [!NOTE]
-> The manual setup may be necessary if the Postgres user you've provided during the setup process doesn't have permission to create a replication slot or publication.
+<Note>The manual setup may be necessary if the Postgres user you've provided during the setup process doesn't have permission to create a replication slot or publication.</Note>
 
 To create a replication slot and publication manually, run the following SQL commands:
 
@@ -97,11 +100,9 @@ For example:
 - `mydb.public.users.1` (format 1)
 - `mydb.public.users.insert.1` (format 2)
 
-> [!NOTE]
-> More complex key and data transformations are coming soon. Please open an issue specifying your use case if this interests you.
+<Note>More complex key and data transformations are coming soon. Please open an issue specifying your use case if this interests you.</Note>
 
-> [!IMPORTANT]
-> Truncates are not supported yet. If you need to capture truncates, please open an issue specifying your use case.
+<Warning>Truncates are not supported yet. If you need to capture truncates, please open an issue specifying your use case.</Warning>
 
 ### Shape of the message
 

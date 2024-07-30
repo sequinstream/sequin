@@ -1,0 +1,63 @@
+---
+title: What is Sequin?
+description: Sequin is an open source message stream built on Postgres. It's like Kafka, but its Postgres foundation gives you more flexibility with less operational overhead.
+---
+
+Sequin runs as a stateless Docker container in front of any Postgres database. It comes with a CLI, HTTP interface, and the ability to pull changes from any Postgres table into a stream.
+
+You can also [roll your own](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/) basic version of Sequin.
+
+### Stream not a queue
+
+Sequin is a message stream, not just a queue. Like Kafka, Sequin persists messages according to a retention policy you specify. You can setup **consumers** to process a filtered subset of messages in the stream. Sequin delivers messages to consumers exactly once within a visibility timeout.
+
+With a stream instead of a queue, Sequin provides features like message replay and consumer rewind. Consumers can "join" the stream at any time and play through the history of messages. You can fan out to many individual services with exactly once delivery to each. Message history also helps with debugging and troubleshooting.
+
+## Why Sequin?
+
+Streams are powerful and versatile data structures. Unlike queues, streams persist messages. This means you can fan out messages, replay messages, and dynamically materialize messages into views.
+
+Kafka popularized streams. Developed at LinkedIn, it prioritizes scale over ergonomics and usability. Kafka uses topics, partitions, and offsets to make it horizontally scalable. But this consumption paradigm is limiting and hard to work with. And Kafka is famously difficult to run.
+
+We think that if streams were easier to use and had more flexible consumption patterns, more developers would use them. We also know Postgres is the perfect data layer for ergonomic streams.
+
+In Sequin, messages are stored like a stream. But consumption patterns are more flexible and ergonomic, like a queue. And you don't need to worry about topics, partitions, or Zookeeper.
+
+### Killer features
+
+- **Store like a stream, consume like a queue**: Sequin persists messages like a stream. But the consumption pattern is more flexible and ergonomic, like a queue.
+- [**Key-based routing**](/core/overview#key): Publish messages with a rich key that consumers can use to filter down to the data they care about.
+- **Replays**: Rewind consumers to any point in a stream. Or republish select messages that match a SQL query.
+- [**Exactly once delivery**](/core/overview#guarantees): Sequin delivers messages to consumers exactly once within a visibility timeout.
+- **Dynamic concurrency**: Scale workers for a consumer up or down as needed. No need to plan out partition counts ahead of time.
+- [**Upsert support**](/core/streams#policies): Get immediate compaction by key, so only one record for a key exists in the stream at a time.
+- [**Stream any Postgres table**](/core/sources#postgres): Sequin can pull changes from any Postgres table into a stream.
+- [**It's Just Postgres™**](/core/streams#schema): The core of Sequin is a few Postgres tables. So you can query your streams like any other table.
+
+## Works with any Postgres database
+
+Sequin is compatible with any Postgres database, including those from cloud providers like:
+
+- AWS RDS Postgres
+- Azure Database for Postgres
+- GCP Cloud SQL
+- Neon
+- ...and many more
+
+## Benchmarks and performance
+
+Postgres is an extremely robust and high-performance system. It does a stellar job handling message streaming workloads like Sequin, when leveraged properly.
+
+Performance is highly dependent on machine resources. But to give you an idea:
+
+A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,000 messages/second** with three consumers (concurrency of 50 instances reading and writing). It can burst up to 10k messages/second. This is the case with `batch_size=10` on both publish and receive. Messages at ~10-100kb in size.
+
+## Deployments
+
+You can run Sequin [anywhere you can run Docker](/guides/deploying). It stores its configuration state and streams in Postgres.
+
+You can even "sidecar" Sequin alongside your app.
+
+## Quickstart
+
+Check out the [quickstart](/quickstart) to get up and running in 5 minutes.

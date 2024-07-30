@@ -153,6 +153,17 @@ func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if s.activeTab == ConsumersTab && s.consumers.showDetail {
+		switch msg.String() {
+		case "up", "k":
+			s.consumers.MoveDetailCursor(-1)
+			return s, nil
+		case "down", "j":
+			s.consumers.MoveDetailCursor(1)
+			return s, nil
+		}
+	}
+
 	switch msg.String() {
 	case "tab", "right", "l":
 		if s.selectedStream != nil {

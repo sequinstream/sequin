@@ -14,6 +14,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Message
   alias Sequin.Streams.Query
   alias Sequin.Streams.Stream
+  alias Sequin.StreamsRuntime
 
   require Logger
 
@@ -197,6 +198,10 @@ defmodule Sequin.Streams do
              :ok <- create_consumer_partition(consumer) do
           unless opts[:no_backfill] do
             backfill_consumer!(consumer)
+          end
+
+          if consumer.kind == :push and env() != :test do
+            StreamsRuntime.Supervisor.start_for_push_consumer(consumer)
           end
 
           consumer = Repo.reload!(consumer)
@@ -739,5 +744,9 @@ defmodule Sequin.Streams do
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
     :ok
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

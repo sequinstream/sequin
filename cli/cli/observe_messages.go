@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
 	"github.com/sequinstream/sequin/cli/context"
 	"github.com/sequinstream/sequin/cli/models"
 
+	"github.com/atotto/clipboard"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,7 +26,7 @@ type TableColumnWidths struct {
 type MessageState struct {
 	messages            []models.Message
 	config              *Config
-	cursor              int
+	listCursor          int
 	detailMessage       *models.MessageWithConsumerInfos
 	showDetail          bool
 	filter              string
@@ -34,6 +36,10 @@ type MessageState struct {
 	errorMsg            string
 	streamName          string
 	visibleMessageCount int
+	detailCursor        int
+	detailMaxCursor     int
+	copiedNotification  string
+	notificationTimer   *time.Timer
 }
 
 type MessageWithConsumerInfos struct {
@@ -49,13 +55,17 @@ func NewMessageState(config *Config) *MessageState {
 
 	return &MessageState{
 		config:              config,
-		cursor:              0,
+		listCursor:          0,
 		showDetail:          false,
 		filter:              "",
 		filterInput:         ti,
 		filterMode:          false,
 		streamName:          "",
 		visibleMessageCount: 0,
+		detailCursor:        0,
+		detailMaxCursor:     0,
+		copiedNotification:  "",
+		notificationTimer:   nil,
 	}
 }
 
@@ -157,7 +167,7 @@ func (m *MessageState) View(width, height int) string {
 func (m *MessageState) SetStreamName(streamName string) {
 	m.streamName = streamName
 	m.messages = nil
-	m.cursor = 0
+	m.listCursor = 0
 	m.detailMessage = nil
 	m.showDetail = false
 	m.filter = ""
@@ -165,6 +175,8 @@ func (m *MessageState) SetStreamName(streamName string) {
 	m.filterMode = false
 	m.err = nil
 	m.errorMsg = ""
+	m.detailCursor = 0
+	m.detailMaxCursor = 0
 }
 
 func (m *MessageState) listView(width, height int) string {
@@ -242,7 +254,7 @@ func (m *MessageState) renderTableHeader(widths TableColumnWidths, totalWidth in
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorGreen)).
+		Background(lipgloss.Color(colorLightGray)).
 		Width(totalWidth)
 
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s",
@@ -262,10 +274,10 @@ func (m *MessageState) renderTableRows(widths TableColumnWidths, height int) str
 		}
 		line := formatMessageLine(msg, widths)
 		style := lipgloss.NewStyle()
-		if i == m.cursor {
+		if i == m.listCursor {
 			style = style.
-				Background(lipgloss.Color(colorLightBlue)).
-				Foreground(lipgloss.Color(colorBlack))
+				Background(lipgloss.Color(colorPurple)).
+				Foreground(lipgloss.Color(colorWhite))
 		}
 		output += style.Render(line) + "\n"
 	}
@@ -313,70 +325,142 @@ func (m *MessageState) detailView(width, _ int) string {
 	}
 
 	msg := m.detailMessage.Message
-	output := lipgloss.NewStyle().Bold(true).Render("Message details")
-	output += "\n\n"
-	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
-	output += fmt.Sprintf("Key:     %s\n", msg.Key)
-	output += fmt.Sprintf("Created: %s\n", msg.CreatedAt.Format(dateFormat))
+	output := lipgloss.NewStyle().Bold(true).Render("Message details") + "\n\n"
 
-	output += formatDetailData(msg.Data)
+	// Define fields and their values
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"Seq", fmt.Sprintf("%d", msg.Seq)},
+		{"Key", msg.Key},
+		{"Created", msg.CreatedAt.Format(dateFormat)},
+		{"Updated", msg.UpdatedAt.Format(dateFormat)},
+	}
 
-	output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
-	output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width)
+	// Render fields
+	copyTextStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colorWhite)).
+		Align(lipgloss.Right).
+		PaddingRight(2)
+
+	for i, field := range fields {
+		style := lipgloss.NewStyle()
+		line := fmt.Sprintf("%-15s %s", field.name+":", field.value)
+		if i == m.detailCursor {
+			style = style.
+				Background(lipgloss.Color(colorPurple)).
+				Foreground(lipgloss.Color(colorWhite))
+			copyText := m.getCopyText(copyTextStyle, width-lipgloss.Width(line))
+			line += copyText
+		}
+		output += style.Render(line) + "\n"
+	}
+	output += "\n"
+
+	// Add the data value separately, allowing it to wrap
+	dataStyle := lipgloss.NewStyle().Bold(true).Width(width)
+	if m.detailCursor == len(fields) {
+		dataStyle = dataStyle.
+			Background(lipgloss.Color(colorPurple)).
+			Foreground(lipgloss.Color(colorWhite))
+		copyText := m.getCopyText(copyTextStyle, 0)
+		output += dataStyle.Render(fmt.Sprintf("%-*s%s", width-lipgloss.Width(copyText), "Data", copyText))
+	} else {
+		output += dataStyle.Render("Data")
+	}
+	output += "\n"
+	output += wrapText(msg.Data, width-2) + "\n\n"
+
+	output += lipgloss.NewStyle().Bold(true).Render("Consumers for message") + "\n\n"
+	output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width, m.detailCursor-len(fields)-1)
+
+	m.detailMaxCursor = len(fields) + len(m.detailMessage.ConsumerInfos)
 
 	return output
 }
 
-func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int) string {
+func wrapText(text string, width int) string {
+	var wrapped []string
+	lines := strings.Split(text, "\n")
+	for _, line := range lines {
+		if len(line) <= width {
+			wrapped = append(wrapped, line)
+		} else {
+			for len(line) > width {
+				i := strings.LastIndex(line[:width], " ")
+				if i == -1 {
+					i = width
+				}
+				wrapped = append(wrapped, line[:i])
+				line = line[i:]
+				if len(line) > 0 && line[0] == ' ' {
+					line = line[1:]
+				}
+			}
+			if len(line) > 0 {
+				wrapped = append(wrapped, line)
+			}
+		}
+	}
+	return strings.Join(wrapped, "\n")
+}
+
+func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int, selectedIndex int) string {
 	if len(consumerInfos) == 0 {
-		return "No consumer info available.\n"
+		return "No consumers for message\n"
 	}
 
 	slugWidth := 20
-	deliverCountWidth := 15 // Increased to fit "DELIVERY COUNT"
+	deliverCountWidth := 15
 	stateWidth := 20
-	patternWidth := width - slugWidth - deliverCountWidth - stateWidth - 6 // Adjust for other columns and spacing
+	patternWidth := width - slugWidth - deliverCountWidth - stateWidth - 6
 
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2"))  // Green background
+		Foreground(lipgloss.Color(colorBlack)).
+		Background(lipgloss.Color(colorLightGray))
 
 	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
 		slugWidth, "CONSUMER NAME",
-		patternWidth, "FILTER PATTERN",
+		patternWidth, "CONSUMER FILTER PATTERN",
 		stateWidth, "MESSAGE STATE",
-		deliverCountWidth, "DELIVERY COUNT")
+		deliverCountWidth, "DELIVERED COUNT")
 
 	output := tableHeaderStyle.Render(header) + "\n"
 
-	for _, info := range consumerInfos {
+	for i, info := range consumerInfos {
 		deliverCount := "-"
 		if info.DeliverCount != nil {
 			deliverCount = fmt.Sprintf("%d", *info.DeliverCount)
 		}
 
-		output += fmt.Sprintf("%-*s %-*s %-*s %-*s\n",
+		line := fmt.Sprintf("%-*s %-*s %-*s %-*s",
 			slugWidth, truncateString(info.ConsumerName, slugWidth),
 			patternWidth, truncateString(info.ConsumerFilterKeyPattern, patternWidth),
 			stateWidth, info.State,
 			deliverCountWidth, deliverCount)
+
+		style := lipgloss.NewStyle()
+		if i == selectedIndex {
+			style = style.
+				Background(lipgloss.Color(colorPurple)).
+				Foreground(lipgloss.Color(colorWhite))
+		}
+
+		output += style.Render(line) + "\n"
 	}
 
 	return output
-}
-
-func formatDetailData(data string) string {
-	return fmt.Sprintf("Data:\n%s\n", data)
 }
 
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 	if m.showDetail {
 		// Only set detailMessage if there are messages
-		if len(m.messages) > m.cursor {
+		if len(m.messages) > m.listCursor {
 			m.detailMessage = &models.MessageWithConsumerInfos{
-				Message:       m.messages[m.cursor],
+				Message:       m.messages[m.listCursor],
 				ConsumerInfos: nil,
 			}
 			m.fetchMessageWithConsumerInfos()
@@ -409,25 +493,25 @@ func (m *MessageState) fetchMessageWithConsumerInfos() error {
 
 func (m *MessageState) updateCursorAfterDetailView() {
 	if m.detailMessage == nil {
-		m.cursor = 0
+		m.listCursor = 0
 		return
 	}
 	for i, msg := range m.messages {
 		if msg.Seq == m.detailMessage.Message.Seq {
-			m.cursor = i
+			m.listCursor = i
 			return
 		}
 	}
-	m.cursor = 0
+	m.listCursor = 0
 }
 
 func (m *MessageState) MoveCursor(direction int, amount int) {
-	m.cursor += direction * amount
-	m.cursor = clampValue(m.cursor, 0, m.visibleMessageCount-1)
+	m.listCursor += direction * amount
+	m.listCursor = clampValue(m.listCursor, 0, m.visibleMessageCount-1)
 
 	// Set detailMessage
 	m.detailMessage = &models.MessageWithConsumerInfos{
-		Message:       m.messages[m.cursor],
+		Message:       m.messages[m.listCursor],
 		ConsumerInfos: nil,
 	}
 	m.fetchMessageWithConsumerInfos()
@@ -435,8 +519,8 @@ func (m *MessageState) MoveCursor(direction int, amount int) {
 
 func (m *MessageState) PageMove(direction int, height int) {
 	pageSize := height / 2 // Move by half the height
-	m.cursor += direction * pageSize
-	m.cursor = clampValue(m.cursor, 0, m.visibleMessageCount-1)
+	m.listCursor += direction * pageSize
+	m.listCursor = clampValue(m.listCursor, 0, m.visibleMessageCount-1)
 }
 
 func (m *MessageState) IsDetailView() bool {
@@ -526,4 +610,89 @@ func (m *MessageState) ApplyFilter() tea.Msg {
 	}
 	m.err = nil
 	return nil
+}
+
+func (m *MessageState) HandleDetailViewKeyPress(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		m.detailCursor--
+		if m.detailCursor < 0 {
+			m.detailCursor = 0
+		}
+		m.clearNotification()
+	case "down", "j":
+		m.detailCursor++
+		if m.detailCursor > m.detailMaxCursor {
+			m.detailCursor = m.detailMaxCursor
+		}
+		m.clearNotification()
+	case "enter":
+		return m.handleDetailViewEnter()
+	}
+	return nil
+}
+
+func (m *MessageState) handleDetailViewEnter() tea.Cmd {
+	msg := m.detailMessage.Message
+	var textToCopy string
+
+	switch m.detailCursor {
+	case 0:
+		textToCopy = fmt.Sprintf("%d", msg.Seq)
+	case 1:
+		textToCopy = msg.Key
+	case 2:
+		textToCopy = msg.CreatedAt.Format(dateFormat)
+	case 3:
+		textToCopy = msg.UpdatedAt.Format(dateFormat)
+	case 4:
+		textToCopy = msg.Data
+	default:
+		return nil
+	}
+
+	return tea.Sequence(
+		m.copyToClipboard(textToCopy),
+		m.showCopiedNotification(),
+	)
+}
+
+func (m *MessageState) copyToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		err := clipboard.WriteAll(text)
+		if err != nil {
+			return fmt.Errorf("failed to copy to clipboard: %v", err)
+		}
+		return nil
+	}
+}
+
+func (m *MessageState) showCopiedNotification() tea.Cmd {
+	return func() tea.Msg {
+		m.copiedNotification = "Copied to clipboard!"
+		if m.notificationTimer != nil {
+			m.notificationTimer.Stop()
+		}
+		m.notificationTimer = time.AfterFunc(3*time.Second, func() {
+			m.copiedNotification = ""
+			m.notificationTimer = nil
+		})
+		return nil
+	}
+}
+
+func (m *MessageState) getCopyText(style lipgloss.Style, remainingWidth int) string {
+	text := "Press enter to copy"
+	if m.copiedNotification != "" {
+		text = m.copiedNotification
+	}
+	return style.Width(remainingWidth).Render(text)
+}
+
+func (m *MessageState) clearNotification() {
+	m.copiedNotification = ""
+	if m.notificationTimer != nil {
+		m.notificationTimer.Stop()
+		m.notificationTimer = nil
+	}
 }

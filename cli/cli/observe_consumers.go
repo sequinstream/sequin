@@ -127,8 +127,8 @@ func (c *ConsumerState) listView(width, height int) string {
 	// Create the table header style
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2")). // Green background
+		Foreground(lipgloss.Color(colorBlack)).
+		Background(lipgloss.Color(colorLightGray)).
 		Width(width)
 
 	// Add the "CONSUMERS" title
@@ -151,8 +151,8 @@ func (c *ConsumerState) listView(width, height int) string {
 		showDetails := ""
 		if consumer.ID == c.selectedConsumerID {
 			style = style.
-				Background(lipgloss.Color("117")). // Light blue background
-				Foreground(lipgloss.Color("0"))    // Black text
+				Background(lipgloss.Color("57")). // Purple background
+				Foreground(lipgloss.Color("255")) // White text
 			showDetails = "Press enter"
 		}
 		output += style.Render(line+fmt.Sprintf(" %-*s", showDetailsPromptWidth, showDetails)) + "\n"
@@ -227,12 +227,10 @@ func formatConsumerDetail(consumer models.Consumer) string {
 }
 
 func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading bool) string {
-	// Create the table header style
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Width(width)
+	headerStyle := lipgloss.NewStyle().
+		Bold(true)
 
-	output := "\n" + tableHeaderStyle.Render(title) + "\n"
+	output := "\n" + headerStyle.Render(title) + "\n"
 	if isLoading {
 		return output + loadingSpinner()
 	}
@@ -294,8 +292,8 @@ func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth 
 
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2"))  // Green background
+		Foreground(lipgloss.Color(colorBlack)).
+		Background(lipgloss.Color(colorLightGray))
 
 	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
 		seqWidth, "SEQ",

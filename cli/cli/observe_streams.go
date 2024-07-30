@@ -93,8 +93,8 @@ func (s *StreamState) View(width, height int) string {
 	// Table header
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("0")). // Black text
-		Background(lipgloss.Color("2")). // Green background
+		Foreground(lipgloss.Color("0")).   // Black text
+		Background(lipgloss.Color("252")). // Light grey background
 		Width(width)
 
 	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
@@ -114,8 +114,8 @@ func (s *StreamState) View(width, height int) string {
 		selectStream := ""
 		if i == s.cursor {
 			style = style.
-				Background(lipgloss.Color("117")). // Light blue background
-				Foreground(lipgloss.Color("0"))    // Black text
+				Background(lipgloss.Color("57")). // Purple background
+				Foreground(lipgloss.Color("255")) // White text
 			selectStream = "Press Enter"
 		}
 		output += style.Render(line+fmt.Sprintf(" %-*s", selectStreamWidth, selectStream)) + "\n"

@@ -193,7 +193,9 @@ func (m *MessageState) listView(width, height int) string {
 
 	columnWidths := m.calculateColumnWidths(width)
 	output += m.renderTableHeader(columnWidths, width)
-	output += m.renderTableRows(columnWidths)
+
+	messagesHeight := height - lipgloss.Height(output)
+	output += m.renderTableRows(columnWidths, messagesHeight)
 
 	return output
 }
@@ -238,9 +240,12 @@ func (m *MessageState) renderTableHeader(widths TableColumnWidths, totalWidth in
 	return tableHeaderStyle.Render(tableHeader) + "\n"
 }
 
-func (m *MessageState) renderTableRows(widths TableColumnWidths) string {
+func (m *MessageState) renderTableRows(widths TableColumnWidths, height int) string {
 	var output string
 	for i, msg := range m.messages {
+		if i >= height {
+			break
+		}
 		line := formatMessageLine(msg, widths)
 		style := lipgloss.NewStyle()
 		if i == m.cursor {

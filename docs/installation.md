@@ -50,7 +50,7 @@ Make sure to configure the `PG_PORT` environment variable to match the port of y
 Install with Homebrew:
 
 ```
-brew tap sequin-io/sequin git@github.com:sequin-io/homebrew-sequin
+brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
 brew install sequin
 ```
 

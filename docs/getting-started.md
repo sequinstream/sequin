@@ -22,7 +22,7 @@ The Sequin Docker image comes with its own Postgres database for simplicity, but
 Install with Homebrew:
 
 ```
-brew tap sequin-io/sequin git@github.com:sequin-io/homebrew-sequin
+brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
 brew install sequin
 ```
 

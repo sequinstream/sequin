@@ -146,7 +146,7 @@ For installation in production, see our [deployment guide](./deploy.md).
 #### Homebrew
 
 ```bash
-brew tap sequin-io/sequin git@github.com:sequin-io/homebrew-sequin
+brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
 brew install sequin
 ```
 

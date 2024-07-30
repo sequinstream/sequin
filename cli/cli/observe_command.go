@@ -23,18 +23,10 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 		Alias("obs").
 		Alias("o")
 
-	listenFlag := observeCmd.Flag("listen", "Listen for incoming messages").
-		Short('l').
-		Bool()
-
 	observeCmd.Action(func(c *fisk.ParseContext) error {
 		ctx, err := sequinContext.LoadContext(config.ContextName)
 		if err != nil {
 			return fmt.Errorf("failed to load context: %w", err)
-		}
-
-		if *listenFlag {
-			return streamListen(c, config, ctx)
 		}
 
 		return streamObserve(c, config, ctx)
@@ -121,7 +113,7 @@ type slowTickMsg time.Time
 
 func calculateLimit() int {
 	_, height, _ := term.GetSize(int(os.Stdout.Fd()))
-	return height - 9
+	return height
 }
 
 func (s *state) Init() tea.Cmd {
@@ -305,8 +297,10 @@ func (s *state) View() string {
 	}
 
 	tabBar := s.renderTabBar(width)
-	content := s.renderContent(width, height-5)
 	bottomBar := s.renderBottomBar(width)
+
+	totalBarHeight := lipgloss.Height(tabBar) + lipgloss.Height(bottomBar)
+	content := s.renderContent(width, height-totalBarHeight)
 
 	return tabBar + "\n" + content + "\n" + bottomBar
 }
@@ -500,30 +494,6 @@ func filterMessagesForStream(messages []models.Message, streamID string) []model
 	return filtered
 }
 
-func streamListen(_ *fisk.ParseContext, _ *Config, ctx *sequinContext.Context) error {
-	observeChannel, err := api.NewObserveChannel(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create observe channel: %w", err)
-	}
-
-	err = observeChannel.Connect()
-	if err != nil {
-		return fmt.Errorf("failed to connect to observe channel: %w", err)
-	}
-
-	fmt.Println("Listening for incoming messages. Press Ctrl+C to exit.")
-
-	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
-		for _, msg := range messages {
-			fmt.Printf("New message: Stream ID: %s, Sequence: %d, Data: %s\n", msg.StreamID, msg.Seq, msg.Data)
-		}
-	})
-
-	// Keep the program running
-	select {}
-}
-
-// Add this new function
 func (s *state) setActiveTab(tab TabType) {
 	s.activeTab = tab
 	s.messages.DisableDetailView()

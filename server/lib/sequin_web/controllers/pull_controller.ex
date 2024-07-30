@@ -3,6 +3,7 @@ defmodule SequinWeb.PullController do
 
   alias Sequin.Error
   alias Sequin.Streams
+  alias Sequin.String, as: SequinString
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -48,14 +49,15 @@ defmodule SequinWeb.PullController do
 
     with true <- is_list(ack_ids),
          true <- length(ack_ids) > 0,
-         true <- Enum.all?(ack_ids, &(is_binary(&1) and &1 != "")) do
+         true <- Enum.all?(ack_ids, &(is_binary(&1) and &1 != "")),
+         true <- SequinString.all_uuids?(ack_ids) do
       {:ok, ack_ids}
     else
       _ ->
         {:error,
          Error.bad_request(
            message:
-             "Invalid ack_ids. Must send a top-level `ack_ids` property that is a non-empty list of non-empty strings"
+             "Invalid ack_ids. Must send a top-level `ack_ids` property that is a non-empty list of valid UUID strings"
          )}
     end
   end

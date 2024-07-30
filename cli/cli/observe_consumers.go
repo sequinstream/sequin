@@ -13,6 +13,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+type DetailSection int
+
+const (
+	DetailSectionConsumer DetailSection = iota
+	DetailSectionPending
+	DetailSectionUpcoming
+)
+
 type ConsumerState struct {
 	consumers          []models.Consumer
 	config             *Config
@@ -23,12 +31,18 @@ type ConsumerState struct {
 	streamName         string
 	ctx                *sequinContext.Context
 	isLoading          bool
+	detailSection      DetailSection
+	detailCursor       int
+	detailMaxCursor    int
 }
 
 func NewConsumerState(config *Config, ctx *sequinContext.Context) *ConsumerState {
 	return &ConsumerState{
-		config: config,
-		ctx:    ctx,
+		config:          config,
+		ctx:             ctx,
+		detailSection:   DetailSectionConsumer,
+		detailCursor:    0,
+		detailMaxCursor: 0,
 	}
 }
 
@@ -67,9 +81,9 @@ func limitConsumers(consumers []models.Consumer, limit int) []models.Consumer {
 func (c *ConsumerState) updateDetailView() {
 	if len(c.consumers) == 0 {
 		c.setSelectedConsumer("")
-		c.showDetail = false
+		c.DisableDetailView()
 	} else if c.selectedConsumerID == "" {
-		c.showDetail = false
+		c.DisableDetailView()
 	}
 }
 
@@ -77,6 +91,7 @@ func (c *ConsumerState) setSelectedConsumer(id string) {
 	if c.selectedConsumerID != id {
 		c.selectedConsumerID = id
 		c.resetMessages()
+		c.resetDetailCursor()
 		c.isLoading = true
 	}
 }
@@ -119,10 +134,20 @@ func (c *ConsumerState) listView(width, height int) string {
 
 	nameWidth := c.calculateColumnWidth("NAME", func(consumer models.Consumer) string { return consumer.Name })
 	filterWidth := c.calculateColumnWidth("FILTER PATTERN", func(consumer models.Consumer) string { return consumer.FilterKeyPattern })
-	maxAckPendingWidth := c.calculateColumnWidth("MAX ACK PENDING", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxAckPending) })
-	maxDeliverWidth := c.calculateColumnWidth("MAX DELIVER", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxDeliver) })
-	createdWidth := c.calculateColumnWidth("CREATED AT", func(consumer models.Consumer) string { return consumer.CreatedAt.Format(time.RFC3339) })
-	showDetailsPromptWidth := width - nameWidth - filterWidth - maxAckPendingWidth - maxDeliverWidth - createdWidth
+
+	var maxAckPendingWidth, maxDeliverWidth, createdWidth int
+	showFullTable := width >= 100
+
+	if showFullTable {
+		createdWidth = c.calculateColumnWidth("CREATED AT", func(consumer models.Consumer) string { return consumer.CreatedAt.Format(time.RFC3339) })
+		maxAckPendingWidth = c.calculateColumnWidth("MAX ACK PENDING", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxAckPending) })
+		maxDeliverWidth = c.calculateColumnWidth("MAX DELIVER", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxDeliver) })
+	}
+
+	showDetailsPromptWidth := width - nameWidth - filterWidth - createdWidth
+	if showFullTable {
+		showDetailsPromptWidth -= maxAckPendingWidth + maxDeliverWidth + createdWidth
+	}
 
 	// Create the table header style
 	tableHeaderStyle := lipgloss.NewStyle().
@@ -131,22 +156,35 @@ func (c *ConsumerState) listView(width, height int) string {
 		Background(lipgloss.Color(colorLightGray)).
 		Width(width)
 
-	// Add the "CONSUMERS" title
-	output := lipgloss.NewStyle().Bold(true).Render("Select a consumer to view details") + "\n\n"
+	// Add the "Consumers" title
+	output := lipgloss.NewStyle().Bold(true).Render("Consumers") + "\n\n"
 
 	// Format the table header
-	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-		nameWidth, "NAME",
-		filterWidth, "FILTER PATTERN",
-		maxAckPendingWidth, "MAX ACK PENDING",
-		maxDeliverWidth, "MAX DELIVER",
-		createdWidth, "CREATED AT",
-		showDetailsPromptWidth, "SHOW DETAILS")
+	var tableHeader string
+	if showFullTable {
+		tableHeader = fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
+			nameWidth, "NAME",
+			filterWidth, "FILTER PATTERN",
+			maxAckPendingWidth, "MAX ACK PENDING",
+			maxDeliverWidth, "MAX DELIVER",
+			createdWidth, "CREATED AT",
+			showDetailsPromptWidth, "SHOW DETAILS")
+	} else {
+		tableHeader = fmt.Sprintf("%-*s %-*s %-*s",
+			nameWidth, "NAME",
+			filterWidth, "FILTER PATTERN",
+			showDetailsPromptWidth, "SHOW DETAILS")
+	}
 
 	output += tableHeaderStyle.Render(tableHeader) + "\n"
 
 	for _, consumer := range c.consumers {
-		line := formatConsumerLine(consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
+		var line string
+		if showFullTable {
+			line = formatConsumerLine(consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
+		} else {
+			line = formatConsumerLineSmall(consumer, nameWidth, filterWidth)
+		}
 		style := lipgloss.NewStyle()
 		showDetails := ""
 		if consumer.ID == c.selectedConsumerID {
@@ -159,6 +197,15 @@ func (c *ConsumerState) listView(width, height int) string {
 	}
 
 	return output
+}
+
+func formatConsumerLineSmall(consumer models.Consumer, nameWidth, filterWidth int) string {
+	name := truncateString(consumer.Name, nameWidth)
+	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
+
+	return fmt.Sprintf("%-*s %-*s",
+		nameWidth, name,
+		filterWidth, filter)
 }
 
 func (c *ConsumerState) calculateColumnWidth(header string, getValue func(models.Consumer) string) int {
@@ -197,10 +244,12 @@ func (c *ConsumerState) detailView(width int) string {
 		return "Selected consumer not found"
 	}
 
-	output := formatConsumerDetail(*consumer)
+	output := formatConsumerDetail(*consumer, c.detailSection == DetailSectionConsumer, c.detailCursor)
 
-	output += formatMessageSection("Pending messages", c.pendingMessages, width, true, c.isLoading)
-	output += formatMessageSection("Upcoming messages", c.upcomingMessages, width, false, c.isLoading)
+	output += formatMessageSection("Pending messages", c.pendingMessages, width, true, c.isLoading, c.detailSection == DetailSectionPending, c.detailCursor)
+	output += formatMessageSection("Upcoming messages", c.upcomingMessages, width, false, c.isLoading, c.detailSection == DetailSectionUpcoming, c.detailCursor)
+
+	c.detailMaxCursor = 5 + len(c.pendingMessages) + len(c.upcomingMessages)
 
 	return output
 }
@@ -214,19 +263,35 @@ func (c *ConsumerState) getSelectedConsumer() *models.Consumer {
 	return nil
 }
 
-func formatConsumerDetail(consumer models.Consumer) string {
+func formatConsumerDetail(consumer models.Consumer, isSelected bool, cursor int) string {
 	output := lipgloss.NewStyle().Bold(true).Render("Consumer details")
 	output += "\n\n"
-	output += fmt.Sprintf("ID:              %s\n", consumer.ID)
-	output += fmt.Sprintf("Name:            %s\n", consumer.Name)
-	output += fmt.Sprintf("Filter:          %s\n", consumer.FilterKeyPattern)
-	output += fmt.Sprintf("Max Ack Pending: %d\n", consumer.MaxAckPending)
-	output += fmt.Sprintf("Max Deliver:     %d\n", consumer.MaxDeliver)
-	output += fmt.Sprintf("Created At:      %s\n", consumer.CreatedAt.Format(time.RFC3339))
+
+	fields := []struct {
+		name  string
+		value string
+	}{
+		{"ID", consumer.ID},
+		{"Name", consumer.Name},
+		{"Filter", consumer.FilterKeyPattern},
+		{"Max Ack Pending", fmt.Sprintf("%d", consumer.MaxAckPending)},
+		{"Max Deliver", fmt.Sprintf("%d", consumer.MaxDeliver)},
+		{"Created At", consumer.CreatedAt.Format(time.RFC3339)},
+	}
+
+	for i, field := range fields {
+		style := lipgloss.NewStyle()
+		if isSelected && i == cursor {
+			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
+		}
+		line := fmt.Sprintf("%-17s %s", field.name+":", field.value)
+		output += style.Render(line) + "\n"
+	}
+
 	return output
 }
 
-func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading bool) string {
+func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading, isSelected bool, cursor int) string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true)
 
@@ -234,10 +299,10 @@ func formatMessageSection(title string, messages []models.MessageWithInfo, width
 	if isLoading {
 		return output + loadingSpinner()
 	}
-	return output + formatMessageList(messages, width, isPending)
+	return output + formatMessageList(messages, width, isPending, isSelected, cursor)
 }
 
-func formatMessageList(messages []models.MessageWithInfo, _ int, isPending bool) string {
+func formatMessageList(messages []models.MessageWithInfo, width int, isPending, isSelected bool, cursor int) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
@@ -266,8 +331,15 @@ func formatMessageList(messages []models.MessageWithInfo, _ int, isPending bool)
 	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
 	output := header
 
-	for _, msg := range messages {
-		output += formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
+	for i, msg := range messages {
+		style := lipgloss.NewStyle()
+		line := formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
+		if isSelected && i == cursor {
+			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
+			output += style.Render(strings.TrimRight(line, "\n")) + "\n"
+		} else {
+			output += line
+		}
 	}
 
 	return output
@@ -319,7 +391,7 @@ func formatMessageRow(msg models.MessageWithInfo, seqWidth, keyWidth, deliverCou
 
 func (c *ConsumerState) ToggleDetail() {
 	if c.showDetail {
-		c.showDetail = false
+		c.DisableDetailView()
 	} else if c.selectedConsumerID != "" {
 		c.showDetail = true
 	}
@@ -335,6 +407,36 @@ func (c *ConsumerState) MoveCursor(direction int) {
 
 	if currentIndex != newIndex {
 		c.setSelectedConsumer(c.consumers[newIndex].ID)
+	}
+}
+
+func (c *ConsumerState) MoveDetailCursor(direction int) {
+	switch c.detailSection {
+	case DetailSectionConsumer:
+		c.detailCursor += direction
+		if c.detailCursor < 0 {
+			c.detailCursor = 0
+		} else if c.detailCursor > 5 {
+			c.detailSection = DetailSectionPending
+			c.detailCursor = 0
+		}
+	case DetailSectionPending:
+		c.detailCursor += direction
+		if c.detailCursor < 0 {
+			c.detailSection = DetailSectionConsumer
+			c.detailCursor = 5
+		} else if c.detailCursor >= len(c.pendingMessages) {
+			c.detailSection = DetailSectionUpcoming
+			c.detailCursor = 0
+		}
+	case DetailSectionUpcoming:
+		c.detailCursor += direction
+		if c.detailCursor < 0 {
+			c.detailSection = DetailSectionPending
+			c.detailCursor = len(c.pendingMessages) - 1
+		} else if c.detailCursor >= len(c.upcomingMessages) {
+			c.detailCursor = len(c.upcomingMessages) - 1
+		}
 	}
 }
 
@@ -361,6 +463,11 @@ func (c *ConsumerState) resetMessages() {
 	c.pendingMessages = nil
 	c.upcomingMessages = nil
 	c.isLoading = true
+}
+
+func (c *ConsumerState) resetDetailCursor() {
+	c.detailCursor = 0
+	c.detailSection = DetailSectionConsumer
 }
 
 func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
@@ -420,14 +527,16 @@ func (c *ConsumerState) StartMessageUpdates(ctx context.Context) {
 
 func (c *ConsumerState) DisableDetailView() {
 	c.showDetail = false
+	c.resetDetailCursor()
 }
 
 func (c *ConsumerState) SetStreamName(streamName string) {
 	c.streamName = streamName
 	c.consumers = nil
 	c.selectedConsumerID = ""
-	c.showDetail = false
+	c.DisableDetailView()
 	c.pendingMessages = nil
 	c.upcomingMessages = nil
 	c.isLoading = false
+	c.resetDetailCursor()
 }

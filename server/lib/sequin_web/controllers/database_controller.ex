@@ -26,8 +26,9 @@ defmodule SequinWeb.DatabaseController do
   def create(conn, params) do
     account_id = conn.assigns.account_id
 
-    with :ok <- test_database_connection(params),
-         {:ok, database} <- Databases.create_db_for_account(account_id, params) do
+    with {:ok, cleaned_params} <- parse_params(params),
+         :ok <- test_database_connection(cleaned_params),
+         {:ok, database} <- Databases.create_db_for_account(account_id, cleaned_params) do
       render(conn, "show.json", database: database)
     end
   end
@@ -36,8 +37,9 @@ defmodule SequinWeb.DatabaseController do
     account_id = conn.assigns.account_id
 
     with {:ok, existing_database} <- Databases.get_db_for_account(account_id, id),
-         :ok <- test_database_connection(existing_database, params),
-         {:ok, updated_database} <- Databases.update_db(existing_database, params) do
+         {:ok, cleaned_params} <- parse_params(params),
+         :ok <- test_database_connection(existing_database, cleaned_params),
+         {:ok, updated_database} <- Databases.update_db(existing_database, cleaned_params) do
       render(conn, "show.json", database: updated_database)
     end
   end
@@ -69,10 +71,10 @@ defmodule SequinWeb.DatabaseController do
   end
 
   def test_connection_params(conn, params) do
-    case test_database_connection(params) do
-      :ok ->
-        render(conn, "test_connection.json", success: true)
-
+    with {:ok, cleaned_params} <- parse_params(params),
+         :ok <- test_database_connection(cleaned_params) do
+      render(conn, "test_connection.json", success: true)
+    else
       {:error, reason} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -91,7 +93,11 @@ defmodule SequinWeb.DatabaseController do
     with :ok <- validate_replication_params(slot_name, publication_name, tables),
          {:ok, database} <- Databases.get_db_for_account(account_id, id),
          {:ok, _} <- Databases.setup_replication(database, slot_name, publication_name, tables) do
-      render(conn, "setup_replication.json", slot_name: slot_name, publication_name: publication_name, tables: tables)
+      render(conn, "setup_replication.json",
+        slot_name: slot_name,
+        publication_name: publication_name,
+        tables: tables
+      )
     end
   end
 
@@ -148,6 +154,7 @@ defmodule SequinWeb.DatabaseController do
   end
 
   defp validate_table([schema, table_name]), do: validate_pg_identifier(schema) && validate_pg_identifier(table_name)
+
   defp validate_table(_), do: false
 
   defp validate_pg_identifier(str), do: is_binary(str) && String.length(str) > 0 && !String.contains?(str, "\"")
@@ -166,7 +173,9 @@ defmodule SequinWeb.DatabaseController do
 
       {:error, %Postgrex.Error{} = error} ->
         # On connection issues, message is sometimes in first layer
-        message = (error.postgres && error.postgres.message) || error.message || "Unknown Postgres error"
+        message =
+          (error.postgres && error.postgres.message) || error.message || "Unknown Postgres error"
+
         code = error.postgres && error.postgres.code
 
         summary =
@@ -196,4 +205,21 @@ defmodule SequinWeb.DatabaseController do
       10_000
     end
   end
+
+  defp parse_params(params) do
+    cleaned_params =
+      params
+      |> Map.take(["hostname", "port", "database", "username", "name"])
+      |> Map.update("hostname", nil, &maybe_trim/1)
+      |> Map.update("port", nil, &maybe_trim/1)
+      |> Map.update("database", nil, &maybe_trim/1)
+      |> Map.update("username", nil, &maybe_trim/1)
+      |> Map.update("name", nil, &maybe_trim/1)
+      |> Sequin.Map.reject_nil_values()
+
+    {:ok, Map.merge(params, cleaned_params)}
+  end
+
+  defp maybe_trim(str) when is_binary(str), do: String.trim(str)
+  defp maybe_trim(other), do: other
 end

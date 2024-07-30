@@ -41,7 +41,7 @@ defmodule SequinWeb.WebhookControllerTest do
       assert json_response = json_response(conn, 200)
       atomized_response = Sequin.Map.atomize_keys(json_response)
 
-      assert_maps_equal(webhook, atomized_response, [:id, :name, :stream_id])
+      assert_maps_equal(webhook, atomized_response, [:id, :name, :stream_id, :auth_strategy])
     end
 
     test "shows webhook details by name", %{conn: conn, account: account} do
@@ -51,6 +51,7 @@ defmodule SequinWeb.WebhookControllerTest do
       assert json_response = json_response(conn, 200)
       assert json_response["id"] == webhook.id
       assert json_response["name"] == webhook.name
+      assert json_response["auth_strategy"] == webhook.auth_strategy
     end
 
     test "returns 404 if webhook belongs to another account", %{conn: conn, other_account: other_account} do
@@ -95,6 +96,24 @@ defmodule SequinWeb.WebhookControllerTest do
       webhook = Sources.get_webhook!(id)
       assert webhook.account_id == account.id
       assert webhook.account_id != other_account.id
+    end
+
+    test "creates a webhook with HMAC auth strategy", %{conn: conn, account: account} do
+      stream = SourcesFactory.insert_stream!(account_id: account.id)
+
+      attrs =
+        SourcesFactory.webhook_attrs(
+          stream_id: stream.id,
+          auth_strategy: %{"type" => "hmac", "header_name" => "X-HMAC-Signature", "secret" => "some-secret"}
+        )
+
+      conn = post(conn, ~p"/api/webhooks", attrs)
+      assert %{"id" => id} = json_response(conn, 201)
+
+      webhook = Sources.get_webhook!(id)
+      assert webhook.account_id == account.id
+      assert webhook.stream_id == stream.id
+      assert webhook.auth_strategy == %{"type" => "hmac", "header_name" => "X-HMAC-Signature", "secret" => "some-secret"}
     end
   end
 

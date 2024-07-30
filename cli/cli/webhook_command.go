@@ -19,8 +19,11 @@ import (
 )
 
 type webhookConfig struct {
-	Name     string
-	StreamID string
+	Name         string
+	StreamID     string
+	AuthStrategy string
+	HeaderName   string
+	Secret       string
 }
 
 func addWebhookCommands(webhook *fisk.CmdClause, config *Config) {
@@ -32,6 +35,9 @@ func addWebhookCommands(webhook *fisk.CmdClause, config *Config) {
 		return webhookAdd(config, c)
 	})
 	add.Arg("name", "Name of the webhook").StringVar(&c.Name)
+	add.Flag("auth", "Authentication strategy (none or hmac)").StringVar(&c.AuthStrategy)
+	add.Flag("header", "Header name for HMAC authentication").StringVar(&c.HeaderName)
+	add.Flag("secret", "Secret for HMAC authentication").StringVar(&c.Secret)
 
 	webhook.Command("ls", "List webhooks").Alias("list").Action(func(_ *fisk.ParseContext) error {
 		return webhookList(config)
@@ -79,6 +85,44 @@ func webhookAdd(config *Config, c *webhookConfig) error {
 	webhook := api.WebhookCreateOptions{
 		Name:     c.Name,
 		StreamID: c.StreamID,
+	}
+
+	// Add auth strategy setup
+	if c.AuthStrategy == "" {
+		err = survey.AskOne(&survey.Select{
+			Message: "Select authentication strategy:",
+			Options: []string{"none", "hmac"},
+		}, &c.AuthStrategy)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.AuthStrategy == "hmac" {
+		if c.HeaderName == "" {
+			err = survey.AskOne(&survey.Input{
+				Message: "Enter the header name for HMAC authentication:",
+				Default: "X-HMAC-Signature",
+			}, &c.HeaderName)
+			if err != nil {
+				return err
+			}
+		}
+
+		if c.Secret == "" {
+			err = survey.AskOne(&survey.Password{
+				Message: "Enter the secret for HMAC authentication:",
+			}, &c.Secret)
+			if err != nil {
+				return err
+			}
+		}
+
+		webhook.AuthStrategy = &api.AuthStrategy{
+			Type:       "hmac",
+			HeaderName: c.HeaderName,
+			Secret:     c.Secret,
+		}
 	}
 
 	if config.AsCurl {
@@ -185,13 +229,18 @@ func webhookList(config *Config) error {
 
 	columns := []table.Column{
 		{Title: "Name", Width: 20},
-		{Title: "Stream", Width: 50},
+		{Title: "Stream", Width: 30},
+		{Title: "Auth Strategy", Width: 15},
 		{Title: "Created At", Width: 20},
 	}
 
 	rows := []table.Row{}
 	for _, w := range webhooks {
-		rows = append(rows, table.Row{w.Name, w.Stream.Name, w.CreatedAt.Format(time.RFC3339)})
+		authStrategy := "none"
+		if w.AuthStrategy != nil {
+			authStrategy = w.AuthStrategy.Type
+		}
+		rows = append(rows, table.Row{w.Name, w.Stream.Name, authStrategy, w.CreatedAt.Format(time.RFC3339)})
 	}
 
 	t := NewTable(columns, rows, PrintableTable)
@@ -213,6 +262,19 @@ func printWebhookInfo(webhook *models.Webhook, ctx *context.Context) error {
 		{"Updated At", webhook.UpdatedAt.String()},
 	}
 
+	// Add auth strategy information
+	authStrategy := "none"
+	if webhook.AuthStrategy != nil {
+		authStrategy = webhook.AuthStrategy.Type
+		rows = append(rows, table.Row{"Auth Strategy", authStrategy})
+		if authStrategy == "hmac" {
+			rows = append(rows, table.Row{"Auth Header", webhook.AuthStrategy.HeaderName})
+			rows = append(rows, table.Row{"Auth Secret", "********"}) // Don't display the actual secret
+		}
+	} else {
+		rows = append(rows, table.Row{"Auth Strategy", authStrategy})
+	}
+
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get server URL: %w", err)
@@ -227,8 +289,17 @@ func printWebhookInfo(webhook *models.Webhook, ctx *context.Context) error {
 	}
 
 	fmt.Println("\nTo send a webhook payload:")
-	fmt.Printf("curl -X POST %s/api/webhook/%s \\\n", serverURL, webhook.Name)
-	fmt.Println("  -H \"Content-Type: application/json\" \\\n  -d '{\"key\": \"value\"}'")
+	curlCmd := fmt.Sprintf("curl -X POST %s/api/webhook/%s \\\n", serverURL, webhook.Name)
+	curlCmd += "  -H \"Content-Type: application/json\" \\\n"
+
+	if webhook.AuthStrategy != nil && webhook.AuthStrategy.Type == "hmac" {
+		dummyHMAC := "1234567890abcdef1234567890abcdef" // Dummy HMAC value
+		curlCmd += fmt.Sprintf("  -H \"%s: %s\" \\\n", webhook.AuthStrategy.HeaderName, dummyHMAC)
+	}
+
+	curlCmd += "  -d '{\"key\": \"value\"}'"
+
+	fmt.Println(curlCmd)
 
 	return nil
 }

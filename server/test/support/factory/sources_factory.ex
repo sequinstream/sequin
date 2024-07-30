@@ -74,7 +74,8 @@ defmodule Sequin.Factory.SourcesFactory do
       %Webhook{
         name: "webhook_#{Factory.name()}",
         stream_id: Factory.uuid(),
-        account_id: Factory.uuid()
+        account_id: Factory.uuid(),
+        auth_strategy: nil
       },
       attrs
     )

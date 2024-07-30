@@ -94,13 +94,20 @@ type ConsumerHttpEndpoint struct {
 
 // Webhook-related structures
 type Webhook struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	AccountID string    `json:"account_id"`
-	StreamID  string    `json:"stream_id"`
-	Stream    Stream    `json:"stream"`
-	CreatedAt time.Time `json:"inserted_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string               `json:"id"`
+	Name         string               `json:"name"`
+	AccountID    string               `json:"account_id"`
+	StreamID     string               `json:"stream_id"`
+	Stream       Stream               `json:"stream"`
+	CreatedAt    time.Time            `json:"inserted_at"`
+	UpdatedAt    time.Time            `json:"updated_at"`
+	AuthStrategy *WebhookAuthStrategy `json:"auth_strategy,omitempty"`
+}
+
+type WebhookAuthStrategy struct {
+	Type       string `json:"type"`
+	HeaderName string `json:"header_name,omitempty"`
+	Secret     string `json:"secret,omitempty"`
 }
 
 // Helper methods

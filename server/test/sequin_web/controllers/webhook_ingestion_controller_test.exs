@@ -58,5 +58,49 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
       expected_hash = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()
       assert message.key == "#{webhook.name}.#{expected_hash}"
     end
+
+    test "validates HMAC auth strategy", %{conn: conn, account: account, stream: stream} do
+      secret = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+
+      webhook =
+        SourcesFactory.insert_webhook!(
+          account_id: account.id,
+          stream_id: stream.id,
+          auth_strategy: %{"type" => "hmac", "header_name" => "X-HMAC-Signature", "secret" => secret}
+        )
+
+      payload = %{"id" => 1, "name" => "Paul Atreides"}
+      body = Jason.encode!(payload)
+
+      expected_hmac =
+        "hmac-sha256=" <> (:hmac |> :crypto.mac(:sha256, Base.decode64!(secret), body) |> Base.encode16(case: :lower))
+
+      conn =
+        conn
+        |> put_req_header("x-hmac-signature", expected_hmac)
+        |> post(~p"/api/webhook/#{webhook.name}", payload)
+
+      assert json_response(conn, 200) == %{"success" => true}
+    end
+
+    test "returns 401 for invalid HMAC", %{conn: conn, account: account, stream: stream} do
+      secret = 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+
+      webhook =
+        SourcesFactory.insert_webhook!(
+          account_id: account.id,
+          stream_id: stream.id,
+          auth_strategy: %{"type" => "hmac", "header_name" => "X-HMAC-Signature", "secret" => secret}
+        )
+
+      payload = %{"id" => 1, "name" => "Paul Atreides"}
+
+      conn =
+        conn
+        |> put_req_header("x-hmac-signature", "invalid-hmac")
+        |> post(~p"/api/webhook/#{webhook.name}", payload)
+
+      assert json_response(conn, 401) == %{"error" => "Unauthorized"}
+    end
   end
 end

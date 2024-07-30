@@ -316,3 +316,15 @@ variable "vault_key" {
 
 data "aws_availability_zones" "available" {}
 ```
+
+### Secrets
+
+`secret_key_base` should be a random string of at least 32 characters.
+
+`vault_key` should be a random base64 encoded string of **exactly** 32 characters.
+
+You can generate these secrets with `openssl` like so:
+
+```bash
+openssl rand -base64 32
+```

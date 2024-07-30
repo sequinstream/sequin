@@ -175,7 +175,14 @@ func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if s.activeTab == MessagesTab {
 			s.messages.HandleFilterKey()
 		}
-		return s, nil
+	case "pgup":
+		if s.activeTab == MessagesTab {
+			s.messages.PageMove(-1, calculateLimit())
+		}
+	case "pgdown":
+		if s.activeTab == MessagesTab {
+			s.messages.PageMove(1, calculateLimit())
+		}
 	}
 
 	return s, nil
@@ -234,7 +241,7 @@ func (s *state) moveCursor(direction int) {
 	case StreamsTab:
 		s.streams.MoveCursor(direction)
 	case MessagesTab:
-		s.messages.MoveCursor(direction)
+		s.messages.MoveCursor(direction, 1)
 	case ConsumersTab:
 		s.consumers.MoveCursor(direction)
 	}

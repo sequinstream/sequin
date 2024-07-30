@@ -22,18 +22,18 @@ type TableColumnWidths struct {
 }
 
 type MessageState struct {
-	messages        []models.Message
-	config          *Config
-	cursor          int
-	selectedMessage *models.Message
-	showDetail      bool
-	filter          string
-	filterInput     textinput.Model
-	filterMode      bool
-	err             error
-	errorMsg        string
-	streamName      string
-	detailMessage   *MessageWithConsumerInfos
+	messages            []models.Message
+	config              *Config
+	cursor              int
+	detailMessage       *models.MessageWithConsumerInfos
+	showDetail          bool
+	filter              string
+	filterInput         textinput.Model
+	filterMode          bool
+	err                 error
+	errorMsg            string
+	streamName          string
+	visibleMessageCount int
 }
 
 type MessageWithConsumerInfos struct {
@@ -48,13 +48,14 @@ func NewMessageState(config *Config) *MessageState {
 	ti.Width = 30
 
 	return &MessageState{
-		config:      config,
-		cursor:      0,
-		showDetail:  false,
-		filter:      "",
-		filterInput: ti,
-		filterMode:  false,
-		streamName:  "",
+		config:              config,
+		cursor:              0,
+		showDetail:          false,
+		filter:              "",
+		filterInput:         ti,
+		filterMode:          false,
+		streamName:          "",
+		visibleMessageCount: 0,
 	}
 }
 
@@ -78,12 +79,12 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 	m.messages = messages
 	m.errorMsg = ""
 
-	if m.selectedMessage != nil {
-		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.selectedMessage.Key)
+	if m.detailMessage != nil {
+		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.detailMessage.Message.Key)
 		if err != nil {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
-			m.selectedMessage = &updatedMessage
+			m.detailMessage.Message = updatedMessage
 			m.fetchMessageWithConsumerInfos()
 		}
 	}
@@ -111,8 +112,8 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 		}
 
 		// Check if the upserted message is the selected message
-		if m.selectedMessage != nil && m.selectedMessage.Key == upsertedMsg.Key {
-			m.selectedMessage = &upsertedMsg
+		if m.detailMessage != nil && m.detailMessage.Message.Key == upsertedMsg.Key {
+			m.detailMessage.Message = upsertedMsg
 			m.fetchMessageWithConsumerInfos()
 		}
 	}
@@ -125,6 +126,16 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 	// Limit the final list
 	if len(m.messages) > limit {
 		m.messages = m.messages[:limit]
+	}
+
+	// Update detailMessage if it's no longer in the messages slice
+	if m.detailMessage != nil {
+		for _, msg := range m.messages {
+			if msg.Key == m.detailMessage.Message.Key {
+				m.detailMessage.Message = msg
+				break
+			}
+		}
 	}
 }
 
@@ -147,7 +158,7 @@ func (m *MessageState) SetStreamName(streamName string) {
 	m.streamName = streamName
 	m.messages = nil
 	m.cursor = 0
-	m.selectedMessage = nil
+	m.detailMessage = nil
 	m.showDetail = false
 	m.filter = ""
 	m.filterInput.SetValue("")
@@ -196,6 +207,9 @@ func (m *MessageState) listView(width, height int) string {
 
 	messagesHeight := height - lipgloss.Height(output)
 	output += m.renderTableRows(columnWidths, messagesHeight)
+
+	// Update visibleMessageCount
+	m.visibleMessageCount = min(len(m.messages), messagesHeight)
 
 	return output
 }
@@ -294,11 +308,11 @@ func (m *MessageState) calculateKeyWidth(totalWidth int) int {
 }
 
 func (m *MessageState) detailView(width, _ int) string {
-	if m.selectedMessage == nil {
+	if m.detailMessage == nil {
 		return "No message selected or no messages available"
 	}
 
-	msg := *m.selectedMessage
+	msg := m.detailMessage.Message
 	output := lipgloss.NewStyle().Bold(true).Render("Message details")
 	output += "\n\n"
 	output += fmt.Sprintf("Seq:     %d\n", msg.Seq)
@@ -307,14 +321,8 @@ func (m *MessageState) detailView(width, _ int) string {
 
 	output += formatDetailData(msg.Data)
 
-	// Check if detailMessage is nil before accessing it
-	if m.detailMessage != nil {
-		output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
-		output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width)
-	} else {
-		output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
-		output += "Consumer information not available."
-	}
+	output += "\n" + lipgloss.NewStyle().Bold(true).Render("CONSUMER INFO") + "\n\n"
+	output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width)
 
 	return output
 }
@@ -365,14 +373,18 @@ func formatDetailData(data string) string {
 func (m *MessageState) ToggleDetail() {
 	m.showDetail = !m.showDetail
 	if m.showDetail {
-		// Only set selectedMessage if there are messages
+		// Only set detailMessage if there are messages
 		if len(m.messages) > m.cursor {
-			m.selectedMessage = &m.messages[m.cursor]
+			m.detailMessage = &models.MessageWithConsumerInfos{
+				Message:       m.messages[m.cursor],
+				ConsumerInfos: nil,
+			}
 			m.fetchMessageWithConsumerInfos()
 		} else {
-			m.selectedMessage = nil
+			m.detailMessage = nil
 		}
 	} else {
+		m.detailMessage = nil
 		m.updateCursorAfterDetailView()
 	}
 }
@@ -383,43 +395,25 @@ func (m *MessageState) fetchMessageWithConsumerInfos() error {
 		return err
 	}
 
-	consumer_detail, err := api.FetchMessageWithConsumerInfos(ctx, m.streamName, m.selectedMessage.Key)
+	consumer_detail, err := api.FetchMessageWithConsumerInfos(ctx, m.streamName, m.detailMessage.Message.Key)
 	if err != nil {
 		return err
 	}
 
-	m.detailMessage = &MessageWithConsumerInfos{
-		Message:       convertToMessageInfo(consumer_detail.Message),
-		ConsumerInfos: convertConsumerInfos(consumer_detail.ConsumerInfos),
+	m.detailMessage = &models.MessageWithConsumerInfos{
+		Message:       consumer_detail.Message,
+		ConsumerInfos: consumer_detail.ConsumerInfos,
 	}
 	return nil
 }
 
-func convertToMessageInfo(apiMsg models.Message) models.MessageInfo {
-	return models.MessageInfo{
-		Key:        apiMsg.Key,
-		Data:       apiMsg.Data,
-		Seq:        apiMsg.Seq,
-		UpdatedAt:  apiMsg.UpdatedAt,
-		InsertedAt: apiMsg.CreatedAt,
-	}
-}
-
-func convertConsumerInfos(apiInfos []models.ConsumerInfo) []models.ConsumerInfo {
-	infos := make([]models.ConsumerInfo, len(apiInfos))
-	for i, apiInfo := range apiInfos {
-		infos[i] = models.ConsumerInfo(apiInfo)
-	}
-	return infos
-}
-
 func (m *MessageState) updateCursorAfterDetailView() {
-	if m.selectedMessage == nil {
+	if m.detailMessage == nil {
 		m.cursor = 0
 		return
 	}
 	for i, msg := range m.messages {
-		if msg.Seq == m.selectedMessage.Seq {
+		if msg.Seq == m.detailMessage.Message.Seq {
 			m.cursor = i
 			return
 		}
@@ -427,9 +421,22 @@ func (m *MessageState) updateCursorAfterDetailView() {
 	m.cursor = 0
 }
 
-func (m *MessageState) MoveCursor(direction int) {
-	m.cursor += direction
-	m.cursor = clampValue(m.cursor, 0, len(m.messages)-1)
+func (m *MessageState) MoveCursor(direction int, amount int) {
+	m.cursor += direction * amount
+	m.cursor = clampValue(m.cursor, 0, m.visibleMessageCount-1)
+
+	// Set detailMessage
+	m.detailMessage = &models.MessageWithConsumerInfos{
+		Message:       m.messages[m.cursor],
+		ConsumerInfos: nil,
+	}
+	m.fetchMessageWithConsumerInfos()
+}
+
+func (m *MessageState) PageMove(direction int, height int) {
+	pageSize := height / 2 // Move by half the height
+	m.cursor += direction * pageSize
+	m.cursor = clampValue(m.cursor, 0, m.visibleMessageCount-1)
 }
 
 func (m *MessageState) IsDetailView() bool {
@@ -438,6 +445,7 @@ func (m *MessageState) IsDetailView() bool {
 
 func (m *MessageState) DisableDetailView() {
 	m.showDetail = false
+	m.detailMessage = nil
 }
 
 func truncateString(s string, maxLen int) string {

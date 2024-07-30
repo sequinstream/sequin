@@ -144,6 +144,15 @@ func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return s, s.messages.HandleFilterModeKeyPress(msg)
 	}
 
+	if s.activeTab == MessagesTab && s.messages.IsDetailView() {
+		switch msg.String() {
+		case "up", "down", "j", "k", "enter":
+			return s, s.messages.HandleDetailViewKeyPress(msg)
+		default:
+			break
+		}
+	}
+
 	switch msg.String() {
 	case "tab", "right", "l":
 		if s.selectedStream != nil {
@@ -286,12 +295,13 @@ func (s *state) fetchPendingAndUpcomingMessages() tea.Cmd {
 }
 
 const (
-	colorLightBlue = lipgloss.Color("117")
-	colorBlack     = lipgloss.Color("0")
+	colorPurple    = lipgloss.Color("57")
 	colorWhite     = lipgloss.Color("255")
+	colorBlack     = lipgloss.Color("0")
 	colorGray      = lipgloss.Color("240")
-	colorGreen     = "2"
-	colorRed       = "9"
+	colorLightGray = lipgloss.Color("252") // New light grey color for table headers
+	colorRed       = lipgloss.Color("9")
+	colorGreen     = lipgloss.Color("10")
 	dateFormat     = time.RFC3339
 	minWidth       = 60
 )
@@ -388,8 +398,8 @@ func (s *state) renderTab(text string, tabType TabType) string {
 			Bold(true)
 	case tabType == s.activeTab:
 		style = style.
-			Background(colorLightBlue).
-			Foreground(colorBlack)
+			Background(colorPurple).
+			Foreground(colorWhite)
 	}
 
 	return style.Render(text)

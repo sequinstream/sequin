@@ -17,6 +17,18 @@ var (
 )
 
 func main() {
+	// Set up logging
+	logFile, err := os.OpenFile("sequin.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal("Failed to open log file:", err)
+	}
+	defer logFile.Close()
+
+	log.SetOutput(logFile)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	log.Println("Starting Sequin CLI")
+
 	help := `Sequin CLI
 
 See 'sequin cheat' for a quick cheatsheet of commands`
@@ -41,8 +53,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddConsumerCommands(scli, &config)
 	cli.AddObserveCommands(scli, &config)
 
-	log.SetFlags(log.Ltime)
-
+	log.Println("Parsing command line arguments")
 	scli.MustParseWithUsage(os.Args[1:])
 }
 

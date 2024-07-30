@@ -1,0 +1,76 @@
+---
+title: 'Overview'
+description: 'Sequin has three core concepts: streams, messages, and consumers.'
+---
+
+You send [**messages**](#messages) to [**streams**](#streams). Then, you can use [**consumers**](#consumers) to filter and receive messages. Consumers process messages exactly once.
+
+## Messages
+
+A **message** is stored as a row in Postgres. Messages consist of a `key` and a `data` payload.
+
+### Key
+
+Sequin uses **key-based routing**. In Sequin, a **key** is a string that serves two purposes:
+
+1. It’s the unique key for the message
+2. It contains attributes that can be used for consumer filtering
+
+In Kafka, you route on write into a topic. But with Sequin, you route on read. Because consumers filter by key, you should choose the format of your keys intentionally.
+
+For example, an e-commerce company might choose a format like:
+
+`orders.[customer_id].[order_id]`
+
+And the keys might look like:
+
+- `orders.cus_a.ord_1`
+- `orders.cus_b.ord_2`
+- `orders.cus_a.ord_3`
+
+## Streams
+
+A **stream** is a table of messages. When you send a message to Sequin, it is stored in a stream. [Consumers](#consumers) are how you read messages from the stream with delivery guarantees.
+
+If you're just starting out, using a single stream for all your data is sufficient. You'll use separate streams when you want to have different policies for a set of messages. They can also be helpful when scaling, as each stream is a separate Postgres table under the hood.
+
+[Read more about streams](/core/streams).
+
+### Consumers
+
+A **consumer** is how to read messages with delivery guarantees.
+
+#### Key filter
+
+Consumers are configured with a **key filter** which determines which messages are available to that consumer. These filters follow the [NATS standard](https://docs.nats.io/nats-concepts/subjects). The key filter can match on tokens and can include wildcards:
+
+- The wildcard `*` matches a single token.
+- The wildcard `>` will match one or more tokens and can only appear at the end of the filter.
+
+For instance, `orders.cus_a.*` will return all orders for `cus_a` while `orders.>` will return every order for all customers.
+
+#### At-least-once with retries
+
+Your system receives messages from a consumer and then acks them once they have been processed.
+
+If your system doesn’t ack a message within a consumer’s `ack-wait-ms` period, the message will become available again to that consumer. (`ack-wait-ms` is configurable.)
+
+#### Concurrent
+
+Multiple workers can concurrently receive messages from a consumer. Messages are only delivered once during the `ack-wait-ms` period. If the message is not ack’d before the period elapses, the message becomes available again.
+
+[Read more about consumers](/core/consumers).
+
+## Guarantees
+
+### Exactly-once delivery
+
+Exactly-once delivery within a visibility timeout (`ack-wait-ms`).
+
+### Strict ordering by message key
+
+Messages with the same key will always be delivered to a consumer's workers in order (by insertion time).
+
+If you've set `one-message-per-key=true` for a stream, then all message key conflicts are upserts. If a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld. When the `ack-wait-ms` expires or the message is ack'd/nack'd, the latest version of the message will be available for delivery.
+
+If you've set `one-message-per-key=false` for a stream, then messages are appended to a stream. Still, if a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld until that message has finished processing.

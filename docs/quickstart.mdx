@@ -1,10 +1,15 @@
-# Getting Started
+---
+title: 'Quickstart'
+description: 'Get a robust, flexible message stream in under 5 minutes.'
+---
+
+import InstallationSteps from "/snippets/cli-installation-steps.mdx"
 
 In this guide, you'll:
 
 1. Install and boot Sequin
-2. Send messages to sequin from the CLI / HTTP
-3. Consume messages from sequin via a consumer
+2. Send messages to your Sequin instance from the CLI / HTTP
+3. Consume messages from your Sequin instance via a consumer
 
 ## Install and boot Sequin
 
@@ -15,34 +20,32 @@ To work with Sequin, you'll:
 1. Install the Sequin CLI (for interacting with Sequin)
 2. Boot a Sequin instance (running in Docker)
 
-The Sequin Docker image comes with its own Postgres database for simplicity, but you can use Sequin with any Postgres database.
+The Sequin Docker image comes with its own Postgres database for simplicity, but you can use
+Sequin with any Postgres database.
 
-#### Install the Sequin CLI
+### Server
 
-Install with Homebrew:
-
-```
-brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
-brew install sequin
-```
-
-Install with shell:
+Run the server with Docker/compose. Clone the repo:
 
 ```bash
-curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
-```
-
-#### Boot Sequin with Docker compose
-
-Now, clone Sequin and boot it with Docker compose:
-
-```
 git clone git@github.com:sequinstream/sequin.git
-cd sequin/docker
-docker compose up -d
 ```
 
-See the [installation](installation.md) guide for more details.
+After cloning the repo, `cd` into it and boot the server:
+
+```bash
+cd docker && docker compose up -d
+```
+
+The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.
+
+### CLI
+
+Install the Sequin CLI to work with Sequin.
+
+<InstallationSteps />
+
+See the [installation guide](/installation.mdx) for more details.
 
 ## Send messages
 
@@ -50,7 +53,7 @@ See the [installation](installation.md) guide for more details.
 
 Keys in Sequin allow for powerful message routing and filtering. For example, you can organize messages from different sources using a hierarchical key structure.
 
-To get a feel for this, let’s simulate an order for an eCommerce use case. Send your first message:
+To get a feel for this, let’s simulate an order for an e-commerce use case. Send your first message:
 
 ```
 sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}'
@@ -62,8 +65,7 @@ All CLI commands use HTTP to communicate with the Sequin backend. You can see wh
 sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}' --as-curl
 ```
 
-> [!TIP]
-> The `--as-curl` option can be used with any CLI command to see the equivalent HTTP request.
+<Note>You can use `--as-curl` with any CLI command to see the equivalent HTTP request.</Note>
 
 Send more messages to Sequin:
 
@@ -107,8 +109,7 @@ The best way to understand consumers is to see how they work. Add a consumer:
 sequin consumer add default us_orders --filter="orders.us.>" --defaults
 ```
 
-> [!NOTE]
-> The --defaults flag creates the consumers using reasonable defaults. You can learn more in our docs (coming soon!).
+<Note>The --defaults flag creates the consumers using reasonable defaults. Learn more about consumers [here](/core/consumers).</Note>
 
 This consumer will receive all orders in the US. A set of workers might then route these orders to different fulfillment systems or trigger updates to customers.
 
@@ -117,14 +118,11 @@ Take a look at your terminal running `sequin observe`. Switch to the Consumers t
 You receive messages from a consumer using `receive`. When a consumer receives a message, the message is not delivered to other workers for that consumer. Notice how if you receive for a consumer multiple times in a row, you chew through the available messages until no more are available:
 
 ```
-echo "Command 1 output:" && sequin consumer receive default us_orders
-echo "\nCommand 2 output:" && sequin consumer receive default us_orders
-echo "\nCommand 3 output:" && sequin consumer receive default us_orders
-echo "\nCommand 4 output:" && sequin consumer receive default us_orders
+sequin consumer receive default us_orders
+sequin consumer receive default us_orders
+sequin consumer receive default us_orders
+sequin consumer receive default us_orders
 ```
-
-> [!TIP]
-> See the equivalent HTTP request with `sequin consumer receive default us_orders --as-curl`.
 
 You will have received the three US based orders. The last `receive` should have returned "No messages available."
 
@@ -135,8 +133,7 @@ These critical feature of consumers ensures that:
 1. You can have multiple workers pulling messages for a single consumer
 2. Messages are not lost; if a consumer doesn't ack a message, it's redelivered
 
-> [!TIP]
-> You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.
+<Tip>You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.</Tip>
 
 ## Next Steps
 
@@ -144,9 +141,9 @@ These critical feature of consumers ensures that:
 
 Sequin ships with three powerful way to ingest messages:
 
-1. CLI / HTTP
-2. [Postgres Replication](getting-started-with-postgres-replication.md)
-3. [Webhook Ingestion](getting-started-with-webhook-ingestion.md)
+1. HTTP (which the CLI uses)
+2. [Postgres Replication](/guides/ingesting-from-postgres)
+3. [Webhook Ingestion](/guides/ingesting-webhooks)
 
 ### Official Clients
 

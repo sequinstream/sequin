@@ -1,9 +1,9 @@
-# Getting started with the Webhook source
+---
+title: 'Ingesting webhooks'
+description: With the `webhook` source, Sequin turns webhooks into a message queue. This means you can stream webhooks from any service to your app with at-least-once delivery.
+---
 
-> [!NOTE]
-> This guide assumes you have already created a stream and a consumer. If not, please see the [getting started guide](getting-started.md).
-
-With the `webhook` source, Sequin turns webhooks into a message queue. This means you can stream webhooks from any service to your app with at-least-once delivery.
+<Note>This guide assumes you have already created a stream and a consumer. If not, please see the [quickstart](/quickstart).</Note>
 
 Sequin is a great fit if you need to ingest webhooks without dropping any messages.
 
@@ -62,8 +62,9 @@ ie. `my_webhook.E43ABCF3375244839C012F9633F95862D232A95B00D5BC7348B3098B9FED7F32
 
 This ensures that unique webhooks have unique keys in your stream. Duplicate webhooks are upserted, which may lead to re-delivery of the same webhook.
 
-> [!NOTE]
-> Custom key patterns are coming soon. Please open an issue specifying your use case if this interests you.
+<Note>
+  Custom key patterns are coming soon. Please open an issue specifying your use case if this interests you.
+</Note>
 
 ### Shape of the message
 
@@ -75,8 +76,4 @@ The webhook payload is stored in your stream as it is received.
 
 ### Consuming webhooks
 
-Now that webhooks are in your stream, you can consume them with a consumer.
-
-See the [getting started guide](getting-started.md#consuming-messages) for more information on consumers.
-
-Or see the list of our [official clients](getting-started.md#official-clients)
+Now that webhooks are in your stream, you can consume them with a [consumer](/core/consumers).

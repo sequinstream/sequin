@@ -16,7 +16,7 @@
   ],
   "dictionaries": ["project-words"],
   "includeRegExpList": [
-    "^docs/.*\\.mdx?$",
+    "^docs/**/.*\\.mdx?$",
     "^examples/.*\\.mdx?$",
     "^[^/]*\\.mdx?$"
   ]

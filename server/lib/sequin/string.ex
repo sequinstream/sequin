@@ -48,6 +48,22 @@ defmodule Sequin.String do
   end
 
   @doc """
+  Checks if all strings in a list are valid UUIDs.
+
+  ## Examples
+
+      iex> Sequin.String.all_uuids?(["123e4567-e89b-12d3-a456-426614174000", "987fbc97-4bed-5078-9f07-9141ba07c9f3"])
+      true
+
+      iex> Sequin.String.all_uuids?(["123e4567-e89b-12d3-a456-426614174000", "not-a-uuid"])
+      false
+
+  """
+  def all_uuids?(list) when is_list(list) do
+    Enum.all?(list, &is_uuid?/1)
+  end
+
+  @doc """
   Converts a string into a valid  key identifier.
 
   ## Examples

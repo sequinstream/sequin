@@ -18,7 +18,8 @@ defmodule Sequin.Streams.ConsumerMessage do
              :last_delivered_at,
              :message_seq,
              :not_visible_until,
-             :state
+             :state,
+             :message
            ]}
   typed_schema "consumer_messages" do
     field :consumer_id, Ecto.UUID, primary_key: true

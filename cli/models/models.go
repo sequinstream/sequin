@@ -103,6 +103,25 @@ type Webhook struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// New struct to match the incoming JSON structure
+type ConsumerMessage struct {
+	AckID           string     `json:"ack_id"`
+	ConsumerID      string     `json:"consumer_id"`
+	DeliverCount    int        `json:"deliver_count"`
+	LastDeliveredAt *time.Time `json:"last_delivered_at"`
+	MessageKey      string     `json:"message_key"`
+	MessageSeq      int        `json:"message_seq"`
+	NotVisibleUntil *time.Time `json:"not_visible_until"`
+	State           string     `json:"state"`
+	Message         Message    `json:"message"`
+}
+
+// Update the struct used in the NewObserveChannel function
+type ConsumerMessages struct {
+	PendingMessages  []ConsumerMessage `json:"pending_messages"`
+	UpcomingMessages []ConsumerMessage `json:"upcoming_messages"`
+}
+
 // Helper methods
 func (mi *MessageInfo) FormatLastDeliveredAt() string {
 	if mi.LastDeliveredAt == nil {
@@ -116,6 +135,17 @@ func (mi *MessageInfo) FormatNotVisibleUntil() string {
 		return "N/A"
 	}
 	notVisibleUntil := *mi.NotVisibleUntil
+	if notVisibleUntil.After(time.Now()) {
+		return fmt.Sprintf("%s (%s from now)", notVisibleUntil.Format(time.RFC3339), time.Until(notVisibleUntil).Round(time.Second))
+	}
+	return fmt.Sprintf("%s (%s ago)", notVisibleUntil.Format(time.RFC3339), time.Since(notVisibleUntil).Round(time.Second))
+}
+
+func (cm *ConsumerMessage) FormatNotVisibleUntil() string {
+	if cm.NotVisibleUntil == nil {
+		return "N/A"
+	}
+	notVisibleUntil := *cm.NotVisibleUntil
 	if notVisibleUntil.After(time.Now()) {
 		return fmt.Sprintf("%s (%s from now)", notVisibleUntil.Format(time.RFC3339), time.Until(notVisibleUntil).Round(time.Second))
 	}

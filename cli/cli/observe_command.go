@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -91,8 +90,6 @@ func initialState(config *Config, ctx *sequinContext.Context) state {
 		ctx:            ctx,
 		selectedStream: nil,
 	}
-
-	go s.consumers.StartMessageUpdates(context.Background())
 
 	return s
 }
@@ -286,7 +283,7 @@ func (s *state) handleEnter() (tea.Model, tea.Cmd) {
 			return s, s.consumers.HandleDetailViewKeyPress(tea.KeyMsg{Type: tea.KeyEnter})
 		} else {
 			s.consumers.ToggleDetail()
-			return s, s.fetchPendingAndUpcomingMessages()
+			return s, nil
 		}
 	}
 	return s, nil
@@ -299,16 +296,6 @@ func (s *state) handleSlowTick() (tea.Model, tea.Cmd) {
 		s.fetchConsumers(),
 		s.fetchStreams(),
 	)
-}
-
-func (s *state) fetchPendingAndUpcomingMessages() tea.Cmd {
-	return func() tea.Msg {
-		err := s.consumers.fetchPendingAndUpcomingMessages()
-		if err != nil {
-			return err
-		}
-		return nil
-	}
 }
 
 const (
@@ -464,14 +451,10 @@ func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Cont
 
 	observeChannel, err := api.NewObserveChannel(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create observe channel: %w", err)
+		return fmt.Errorf("failed to create and connect observe channel: %w", err)
 	}
 
-	err = observeChannel.Connect()
-	if err != nil {
-		return fmt.Errorf("failed to connect to observe channel: %w", err)
-	}
-
+	statePtr.consumers.SetObserveChannel(observeChannel)
 	statePtr.registerCallbacks(observeChannel)
 
 	p := tea.NewProgram(statePtr, tea.WithAltScreen()) // Pass the pointer to the program

@@ -27,7 +27,7 @@ func main() {
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	log.Println("Starting Sequin CLI")
+	log.Println("Starting Sequin CLI version:", getVersion())
 
 	help := `Sequin CLI
 
@@ -53,7 +53,6 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddConsumerCommands(scli, &config)
 	cli.AddObserveCommands(scli, &config)
 
-	log.Println("Parsing command line arguments")
 	scli.MustParseWithUsage(os.Args[1:])
 }
 

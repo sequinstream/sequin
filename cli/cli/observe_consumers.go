@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -24,20 +24,24 @@ const (
 )
 
 type ConsumerState struct {
-	consumers          []models.Consumer
-	config             *Config
-	selectedConsumerID string
-	showDetail         bool
-	pendingMessages    []models.MessageWithInfo
-	upcomingMessages   []models.MessageWithInfo
-	streamName         string
-	ctx                *sequinContext.Context
-	isLoading          bool
-	detailSection      DetailSection
-	detailCursor       int
-	detailMaxCursor    int
-	copiedNotification string
-	notificationTimer  *time.Timer
+	consumers                   []models.Consumer
+	config                      *Config
+	selectedConsumerID          string
+	showDetail                  bool
+	pendingMessages             []models.ConsumerMessage
+	upcomingMessages            []models.ConsumerMessage
+	streamName                  string
+	ctx                         *sequinContext.Context
+	isLoading                   bool
+	detailSection               DetailSection
+	detailCursor                int
+	detailMaxCursor             int
+	copiedNotification          string
+	notificationTimer           *time.Timer
+	observeChannel              *api.ObserveChannel
+	messageLimit                int
+	visiblePendingMessageCount  int
+	visibleUpcomingMessageCount int
 }
 
 func NewConsumerState(config *Config, ctx *sequinContext.Context) *ConsumerState {
@@ -49,6 +53,7 @@ func NewConsumerState(config *Config, ctx *sequinContext.Context) *ConsumerState
 		detailMaxCursor:    0,
 		copiedNotification: "",
 		notificationTimer:  nil,
+		observeChannel:     nil,
 	}
 }
 
@@ -102,6 +107,12 @@ func (c *ConsumerState) setSelectedConsumer(id string) {
 	}
 }
 
+func (c *ConsumerState) updateMessages(pendingMessages, upcomingMessages []models.ConsumerMessage) {
+	c.pendingMessages = pendingMessages
+	c.upcomingMessages = upcomingMessages
+	c.isLoading = false
+}
+
 func (c *ConsumerState) WillAppear(limit int) {
 	c.FetchConsumers(limit)
 }
@@ -111,8 +122,10 @@ func (c *ConsumerState) View(width, height int) string {
 		return "\nPlease select a stream to view consumers"
 	}
 
+	c.messageLimit = height
+
 	if c.showDetail {
-		return c.detailView(width)
+		return c.detailView(width, height)
 	}
 	return c.listView(width, height)
 }
@@ -240,7 +253,7 @@ func formatConsumerLine(consumer models.Consumer, nameWidth, filterWidth, maxAck
 		createdWidth, created)
 }
 
-func (c *ConsumerState) detailView(width int) string {
+func (c *ConsumerState) detailView(width, height int) string {
 	if len(c.consumers) == 0 || c.selectedConsumerID == "" {
 		return "No consumer selected"
 	}
@@ -252,10 +265,61 @@ func (c *ConsumerState) detailView(width int) string {
 
 	output := formatConsumerDetail(*consumer, c.detailSection == DetailSectionConsumer, c.detailCursor, c.copiedNotification, width)
 
-	output += formatMessageSection("Pending messages", c.pendingMessages, width, true, c.isLoading, c.detailSection == DetailSectionPending, c.detailCursor)
-	output += formatMessageSection("Upcoming messages", c.upcomingMessages, width, false, c.isLoading, c.detailSection == DetailSectionUpcoming, c.detailCursor)
+	consumerDetailHeight := lipgloss.Height(formatConsumerDetail(*consumer, c.detailSection == DetailSectionConsumer, c.detailCursor, c.copiedNotification, width))
 
-	c.detailMaxCursor = 5 + len(c.pendingMessages) + len(c.upcomingMessages)
+	remainingHeight := height - consumerDetailHeight
+
+	pendingHeaderHeight := lipgloss.Height(formatMessageSection("Ack pending messages", nil, width, true, false, false, 0))
+	upcomingHeaderHeight := lipgloss.Height(formatMessageSection("Available messages", nil, width, false, false, false, 0))
+
+	messageTableHeight := remainingHeight - pendingHeaderHeight - upcomingHeaderHeight
+
+	pendingCount := len(c.pendingMessages)
+	upcomingCount := len(c.upcomingMessages)
+	totalCount := pendingCount + upcomingCount
+
+	log.Println("pendingCount:", pendingCount, "upcomingCount:", upcomingCount, "totalCount:", totalCount, "messageTableHeight:", messageTableHeight)
+
+	var pendingLimit, upcomingLimit int
+
+	if totalCount > messageTableHeight {
+		log.Println("totalCount > messageTableHeight")
+		// If we have more messages than we can display, try to show an equal number of each
+		pendingLimit = messageTableHeight / 2
+		upcomingLimit = messageTableHeight - pendingLimit
+	} else {
+		log.Println("totalCount <= messageTableHeight")
+		// If we have fewer messages than we can display, show all of them
+		pendingLimit = pendingCount
+		upcomingLimit = upcomingCount
+	}
+
+	// Adjust limits if one type has fewer messages than its limit
+	if pendingCount < pendingLimit {
+		log.Println("pendingCount < pendingLimit")
+		upcomingLimit += pendingLimit - pendingCount
+		pendingLimit = pendingCount
+	} else if upcomingCount < upcomingLimit {
+		log.Println("upcomingCount < upcomingLimit")
+		pendingLimit += upcomingLimit - upcomingCount
+		upcomingLimit = upcomingCount
+	}
+
+	c.visiblePendingMessageCount = min(pendingLimit, pendingCount)
+	c.visibleUpcomingMessageCount = min(upcomingLimit, upcomingCount)
+	c.detailMaxCursor = 5 + c.visiblePendingMessageCount + c.visibleUpcomingMessageCount
+
+	if pendingCount > 0 {
+		output += formatMessageSection("Ack pending messages", c.pendingMessages[:c.visiblePendingMessageCount], width, true, c.isLoading, c.detailSection == DetailSectionPending, c.detailCursor)
+	} else {
+		output += formatMessageSection("Ack pending messages", nil, width, true, c.isLoading, c.detailSection == DetailSectionPending, c.detailCursor)
+	}
+
+	if upcomingCount > 0 {
+		output += formatMessageSection("Available messages", c.upcomingMessages[:c.visibleUpcomingMessageCount], width, false, c.isLoading, c.detailSection == DetailSectionUpcoming, c.detailCursor)
+	} else {
+		output += formatMessageSection("Available messages", nil, width, false, c.isLoading, c.detailSection == DetailSectionUpcoming, c.detailCursor)
+	}
 
 	return output
 }
@@ -318,7 +382,7 @@ func getCopyText(style lipgloss.Style, copiedNotification string) string {
 	return style.Render(text)
 }
 
-func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading, isSelected bool, cursor int) string {
+func formatMessageSection(title string, messages []models.ConsumerMessage, width int, isPending, isLoading, isSelected bool, cursor int) string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Width(width)
@@ -330,28 +394,28 @@ func formatMessageSection(title string, messages []models.MessageWithInfo, width
 	return output + formatMessageList(messages, width, isPending, isSelected, cursor)
 }
 
-func formatMessageList(messages []models.MessageWithInfo, width int, isPending, isSelected bool, cursor int) string {
+func formatMessageList(messages []models.ConsumerMessage, width int, isPending, isSelected bool, cursor int) string {
 	if len(messages) == 0 {
 		return "No messages found.\n"
 	}
 
-	seqWidth := calculateColumnWidth(messages, "SEQ", func(msg models.MessageWithInfo) string {
-		return fmt.Sprintf("%d", msg.Message.Seq)
+	seqWidth := calculateColumnWidth(messages, "SEQ", func(msg models.ConsumerMessage) string {
+		return fmt.Sprintf("%d", msg.MessageSeq)
 	})
-	keyWidth := calculateColumnWidth(messages, "KEY", func(msg models.MessageWithInfo) string {
-		return msg.Message.Key
+	keyWidth := calculateColumnWidth(messages, "KEY", func(msg models.ConsumerMessage) string {
+		return msg.MessageKey
 	})
-	deliverCountWidth := calculateColumnWidth(messages, "DELIVER", func(msg models.MessageWithInfo) string {
-		return fmt.Sprintf("%d", msg.Info.DeliverCount)
+	deliverCountWidth := calculateColumnWidth(messages, "DELIVER", func(msg models.ConsumerMessage) string {
+		return fmt.Sprintf("%d", msg.DeliverCount)
 	})
 
 	lastColumnName := "Not Visible Until"
 	if !isPending {
 		lastColumnName = "CREATED AT"
 	}
-	lastColumnWidth := calculateColumnWidth(messages, lastColumnName, func(msg models.MessageWithInfo) string {
+	lastColumnWidth := calculateColumnWidth(messages, lastColumnName, func(msg models.ConsumerMessage) string {
 		if isPending {
-			return msg.Info.FormatNotVisibleUntil()
+			return msg.FormatNotVisibleUntil()
 		}
 		return msg.Message.CreatedAt.Format(time.RFC3339)
 	})
@@ -377,7 +441,7 @@ func formatMessageList(messages []models.MessageWithInfo, width int, isPending, 
 	return output
 }
 
-func calculateColumnWidth(messages []models.MessageWithInfo, header string, getValue func(models.MessageWithInfo) string) int {
+func calculateColumnWidth(messages []models.ConsumerMessage, header string, getValue func(models.ConsumerMessage) string) int {
 	maxWidth := len(header)
 	for _, msg := range messages {
 		value := getValue(msg)
@@ -409,16 +473,16 @@ func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth 
 	return tableHeaderStyle.Render(header) + "\n"
 }
 
-func formatMessageRow(msg models.MessageWithInfo, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
+func formatMessageRow(msg models.ConsumerMessage, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
 	lastColumn := msg.Message.CreatedAt.Format(time.RFC3339)
 	if isPending {
-		lastColumn = msg.Info.FormatNotVisibleUntil()
+		lastColumn = msg.FormatNotVisibleUntil()
 	}
 
 	return fmt.Sprintf("%-*d %-*s %-*d %-*s",
-		seqWidth, msg.Message.Seq,
-		keyWidth, truncateString(msg.Message.Key, keyWidth),
-		deliverCountWidth, msg.Info.DeliverCount,
+		seqWidth, msg.MessageSeq,
+		keyWidth, truncateString(msg.MessageKey, keyWidth),
+		deliverCountWidth, msg.DeliverCount,
 		lastColumnWidth, lastColumn)
 }
 
@@ -426,7 +490,7 @@ func (c *ConsumerState) ToggleDetail() {
 	if c.showDetail {
 		c.DisableDetailView()
 	} else if c.selectedConsumerID != "" {
-		c.showDetail = true
+		c.EnableDetailView()
 	}
 }
 
@@ -452,10 +516,10 @@ func (c *ConsumerState) MoveDetailCursor(direction int) {
 		if c.detailCursor < 0 {
 			c.detailCursor = 0
 		} else if c.detailCursor > 5 {
-			if len(c.pendingMessages) > 0 {
+			if c.visiblePendingMessageCount > 0 {
 				c.detailSection = DetailSectionPending
 				c.detailCursor = 0
-			} else if len(c.upcomingMessages) > 0 {
+			} else if c.visibleUpcomingMessageCount > 0 {
 				c.detailSection = DetailSectionUpcoming
 				c.detailCursor = 0
 			} else {
@@ -467,26 +531,26 @@ func (c *ConsumerState) MoveDetailCursor(direction int) {
 		if c.detailCursor < 0 {
 			c.detailSection = DetailSectionConsumer
 			c.detailCursor = 5
-		} else if c.detailCursor >= len(c.pendingMessages) {
-			if len(c.upcomingMessages) > 0 {
+		} else if c.detailCursor >= c.visiblePendingMessageCount {
+			if c.visibleUpcomingMessageCount > 0 {
 				c.detailSection = DetailSectionUpcoming
 				c.detailCursor = 0
 			} else {
-				c.detailCursor = len(c.pendingMessages) - 1 // Stay at last pending message if upcoming is empty
+				c.detailCursor = c.visiblePendingMessageCount - 1 // Stay at last pending message if upcoming is empty
 			}
 		}
 	case DetailSectionUpcoming:
 		c.detailCursor += direction
 		if c.detailCursor < 0 {
-			if len(c.pendingMessages) > 0 {
+			if c.visiblePendingMessageCount > 0 {
 				c.detailSection = DetailSectionPending
-				c.detailCursor = len(c.pendingMessages) - 1
+				c.detailCursor = c.visiblePendingMessageCount - 1
 			} else {
 				c.detailSection = DetailSectionConsumer
 				c.detailCursor = 5
 			}
-		} else if c.detailCursor >= len(c.upcomingMessages) {
-			c.detailCursor = len(c.upcomingMessages) - 1
+		} else if c.detailCursor >= c.visibleUpcomingMessageCount {
+			c.detailCursor = c.visibleUpcomingMessageCount - 1
 		}
 	}
 }
@@ -521,66 +585,6 @@ func (c *ConsumerState) resetDetailCursor() {
 	c.detailSection = DetailSectionConsumer
 }
 
-func (c *ConsumerState) fetchPendingAndUpcomingMessages() error {
-	if c.streamName == "" || !c.showDetail || len(c.consumers) == 0 {
-		return nil
-	}
-
-	consumer := c.getSelectedConsumer()
-	if !c.showDetail || c.selectedConsumerID == "" {
-		return nil
-	}
-
-	pending, err := c.fetchMessages(consumer.ID, false)
-	if err != nil {
-		return fmt.Errorf("failed to fetch pending messages: %w", err)
-	}
-	c.pendingMessages = pending
-
-	upcoming, err := c.fetchMessages(consumer.ID, true)
-	if err != nil {
-		return fmt.Errorf("failed to fetch upcoming messages: %w", err)
-	}
-	c.upcomingMessages = upcoming
-
-	c.isLoading = false // Set isLoading to false after fetching messages
-	return nil
-}
-
-func (c *ConsumerState) fetchMessages(consumerID string, visible bool) ([]models.MessageWithInfo, error) {
-	options := api.FetchMessagesOptions{
-		StreamIDOrName: c.streamName,
-		ConsumerID:     consumerID,
-		Visible:        visible,
-		Limit:          10,
-		Order:          "seq_asc",
-	}
-	return api.FetchMessages(c.ctx, options)
-}
-
-func (c *ConsumerState) StartMessageUpdates(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if err := c.fetchPendingAndUpcomingMessages(); err != nil {
-					fmt.Printf("Error updating messages: %v\n", err)
-				}
-			}
-		}
-	}()
-}
-
-func (c *ConsumerState) DisableDetailView() {
-	c.showDetail = false
-	c.resetDetailCursor()
-}
-
 func (c *ConsumerState) SetStream(stream models.Stream) {
 	c.streamName = stream.Name
 	c.consumers = nil
@@ -590,6 +594,25 @@ func (c *ConsumerState) SetStream(stream models.Stream) {
 	c.upcomingMessages = nil
 	c.isLoading = false
 	c.resetDetailCursor()
+}
+
+func (c *ConsumerState) EnableDetailView() {
+	c.showDetail = true
+	c.resetDetailCursor()
+
+	if c.observeChannel != nil {
+		c.observeChannel.ListenConsumer(c.selectedConsumerID, c.messageLimit)
+		c.observeChannel.SetConsumerMessagesCallback(c.updateMessages)
+	}
+}
+
+func (c *ConsumerState) DisableDetailView() {
+	c.showDetail = false
+	c.resetDetailCursor()
+
+	if c.observeChannel != nil {
+		c.observeChannel.ClearListeningConsumer()
+	}
 }
 
 func (c *ConsumerState) HandleDetailViewKeyPress(msg tea.KeyMsg) tea.Cmd {
@@ -667,4 +690,8 @@ func (c *ConsumerState) clearNotification() {
 		c.notificationTimer.Stop()
 		c.notificationTimer = nil
 	}
+}
+
+func (c *ConsumerState) SetObserveChannel(oc *api.ObserveChannel) {
+	c.observeChannel = oc
 }

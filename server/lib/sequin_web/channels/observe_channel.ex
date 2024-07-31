@@ -10,7 +10,7 @@ defmodule SequinWeb.ObserveChannel do
   @impl true
   def join("observe", _payload, socket) do
     send(self(), :after_join)
-    {:ok, socket}
+    {:ok, assign(socket, listening_consumer_id: nil, message_limit: nil)}
   end
 
   @impl true
@@ -22,6 +22,59 @@ defmodule SequinWeb.ObserveChannel do
 
     push(socket, "presence_state", Presence.list(socket))
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info(:fetch_messages, socket) do
+    consumer_id = socket.assigns.listening_consumer_id
+    limit = socket.assigns.message_limit
+
+    if consumer_id do
+      {:ok, consumer} = Streams.get_consumer(consumer_id)
+
+      pending_messages =
+        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id, is_deliverable: false, limit: limit)
+
+      upcoming_messages =
+        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id, is_deliverable: true, limit: limit)
+
+      push(socket, "consumer_messages", %{
+        pending_messages: pending_messages,
+        upcoming_messages: upcoming_messages
+      })
+
+      timer_ref = schedule_messages_fetch()
+      {:noreply, assign(socket, timer_ref: timer_ref)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_in("listen_consumer", %{"consumer_id" => consumer_id, "limit" => limit}, socket) do
+    Logger.info("Listening to consumer: #{consumer_id} with limit: #{limit}")
+
+    if socket.assigns.listening_consumer_id do
+      Process.cancel_timer(socket.assigns.timer_ref)
+    end
+
+    timer_ref = schedule_messages_fetch()
+    {:reply, :ok, assign(socket, listening_consumer_id: consumer_id, timer_ref: timer_ref, message_limit: limit)}
+  end
+
+  @impl true
+  def handle_in("clear_listening_consumer", _payload, socket) do
+    Logger.info("Clearing listening consumer")
+
+    if socket.assigns.listening_consumer_id do
+      Process.cancel_timer(socket.assigns.timer_ref)
+    end
+
+    {:reply, :ok, assign(socket, listening_consumer_id: nil, timer_ref: nil, message_limit: nil)}
+  end
+
+  defp schedule_messages_fetch do
+    Process.send_after(self(), :fetch_messages, 100)
   end
 
   def broadcast("messages:upserted", {stream_id, messages}) do

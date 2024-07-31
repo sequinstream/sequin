@@ -63,7 +63,7 @@ func (s *state) fetchConsumers() tea.Cmd {
 
 func (s *state) fetchMessages() tea.Cmd {
 	return func() tea.Msg {
-		err := s.messages.FetchMessages(calculateLimit(), s.messages.filter)
+		err := s.messages.FetchMessages(calculateLimit(), s.messages.filterPattern)
 		if err != nil {
 			return err
 		}
@@ -513,6 +513,9 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
 		if s.selectedStream != nil {
 			filteredMessages := filterMessagesForStream(messages, s.selectedStream.ID)
+			if s.messages.filterPattern != "" {
+				filteredMessages = filterMessagesForFilter(filteredMessages, s.messages.filterPattern)
+			}
 			s.messages.MessagesUpserted(filteredMessages, calculateLimit())
 		}
 	})
@@ -522,6 +525,16 @@ func filterMessagesForStream(messages []models.Message, streamID string) []model
 	filtered := make([]models.Message, 0)
 	for _, msg := range messages {
 		if msg.StreamID == streamID {
+			filtered = append(filtered, msg)
+		}
+	}
+	return filtered
+}
+
+func filterMessagesForFilter(messages []models.Message, filterPattern string) []models.Message {
+	filtered := make([]models.Message, 0)
+	for _, msg := range messages {
+		if DoesKeyMatch(filterPattern, msg.Key) {
 			filtered = append(filtered, msg)
 		}
 	}

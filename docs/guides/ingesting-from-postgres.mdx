@@ -104,23 +104,93 @@ For example:
 
 <Warning>Truncates are not supported yet. If you need to capture truncates, please open an issue specifying your use case.</Warning>
 
-### Shape of the message
+## Shape of messages
 
-The message is stored in your stream in JSON format. It has two top-level keys, `data` and `deleted`:
+All messages are stored in Sequin as a string-encoded JSON. The following fields are always present:
+
+- `data`: The current state of the record.
+- `deleted`: A boolean indicating whether the record is deleted.
+- `changes`: A map of changed fields (for updates only). Values are the old (previous) values.
+- `action`: The type of operation ("insert", "update", or "delete").
+
+### Insert
+
+For insert operations, the message will look like this:
 
 ```json
 {
   "data": {
     "id": 1,
-    "name": "Paul Atreides"
+    "name": "Paul Atreides",
+    "house": "Atreides",
+    "planet": "Caladan"
   },
-  "deleted": false
+  "deleted": false,
+  "changes": {},
+  "action": "insert"
 }
 ```
 
+### Update
+
+For update operations, the message will include the new state of the record and `changes`:
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Paul Atreides",
+    "house": "Atreides",
+    "planet": "Arrakis"
+  },
+  "deleted": false,
+  "changes": {
+    "planet": "Caladan"
+  },
+  "action": "update"
+}
+```
+
+Note that the `changes` field contains the old values of the updated fields. In the above example, the prior value of `planet` was `Caladan`.
+
+### Delete
+
+For delete operations, the message will contain the state of the record before deletion:
+
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "Paul Atreides",
+    "house": "Atreides",
+    "planet": "Arrakis"
+  },
+  "deleted": true,
+  "changes": {},
+  "action": "delete"
+}
+```
+
+The `deleted` field is set to `true` for delete operations.
+
+### Key Format
+
+The key for each message in the stream will follow one of two formats, depending on your configuration:
+
+1. Basic format: `[<database>].[<schema>].[<table>].[<row-id>]`
+2. With operation format: `[<database>].[<schema>].[<table>].[<operation>].[<row-id>]`
+
+For example, with the operation format:
+
+- Insert: `mydb.public.users.insert.1`
+- Update: `mydb.public.users.update.1`
+- Delete: `mydb.public.users.delete.1`
+
 ### Backfilling
 
-The CLI will next ask if you want to backfill existing rows from your tables into the stream. This will run a process to extract all existing rows from your tables and insert them into your stream. (Note that all rows will be inserted as `insert` operations.)
+The CLI will next ask if you want to backfill existing rows from your tables into the stream. This
+will run a process to extract all existing rows from your tables and insert them into your stream.
+(Note that all rows will be inserted as `insert` operations.)
 
 ## Status
 
@@ -131,3 +201,15 @@ sequin source postgres info [<source>]
 ```
 
 The `Last Committed Timestamp` indicates the last WAL position that Sequin has committed to the stream.
+
+## Adding and removing tables
+
+You can add or remove tables that are shipped to Sequin by modifing the publication in Postgres:
+
+```sql
+-- Add a table to the publication
+alter publication sequin_publication add table my_schema.new_table;
+
+-- Remove a table from the publication
+alter publication sequin_publication drop table my_schema.old_table;
+```

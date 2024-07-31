@@ -161,6 +161,8 @@ func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			s.consumers.MoveDetailCursor(1)
 			return s, nil
+		case "enter":
+			return s, s.consumers.HandleDetailViewKeyPress(msg)
 		}
 	}
 
@@ -280,8 +282,12 @@ func (s *state) handleEnter() (tea.Model, tea.Cmd) {
 	case MessagesTab:
 		s.messages.ToggleDetail()
 	case ConsumersTab:
-		s.consumers.ToggleDetail()
-		return s, s.fetchPendingAndUpcomingMessages()
+		if s.consumers.showDetail {
+			return s, s.consumers.HandleDetailViewKeyPress(tea.KeyMsg{Type: tea.KeyEnter})
+		} else {
+			s.consumers.ToggleDetail()
+			return s, s.fetchPendingAndUpcomingMessages()
+		}
 	}
 	return s, nil
 }

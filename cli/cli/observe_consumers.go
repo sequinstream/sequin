@@ -10,6 +10,8 @@ import (
 	sequinContext "github.com/sequinstream/sequin/cli/context"
 	"github.com/sequinstream/sequin/cli/models"
 
+	"github.com/atotto/clipboard"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -34,15 +36,19 @@ type ConsumerState struct {
 	detailSection      DetailSection
 	detailCursor       int
 	detailMaxCursor    int
+	copiedNotification string
+	notificationTimer  *time.Timer
 }
 
 func NewConsumerState(config *Config, ctx *sequinContext.Context) *ConsumerState {
 	return &ConsumerState{
-		config:          config,
-		ctx:             ctx,
-		detailSection:   DetailSectionConsumer,
-		detailCursor:    0,
-		detailMaxCursor: 0,
+		config:             config,
+		ctx:                ctx,
+		detailSection:      DetailSectionConsumer,
+		detailCursor:       0,
+		detailMaxCursor:    0,
+		copiedNotification: "",
+		notificationTimer:  nil,
 	}
 }
 
@@ -244,7 +250,7 @@ func (c *ConsumerState) detailView(width int) string {
 		return "Selected consumer not found"
 	}
 
-	output := formatConsumerDetail(*consumer, c.detailSection == DetailSectionConsumer, c.detailCursor)
+	output := formatConsumerDetail(*consumer, c.detailSection == DetailSectionConsumer, c.detailCursor, c.copiedNotification, width)
 
 	output += formatMessageSection("Pending messages", c.pendingMessages, width, true, c.isLoading, c.detailSection == DetailSectionPending, c.detailCursor)
 	output += formatMessageSection("Upcoming messages", c.upcomingMessages, width, false, c.isLoading, c.detailSection == DetailSectionUpcoming, c.detailCursor)
@@ -263,7 +269,7 @@ func (c *ConsumerState) getSelectedConsumer() *models.Consumer {
 	return nil
 }
 
-func formatConsumerDetail(consumer models.Consumer, isSelected bool, cursor int) string {
+func formatConsumerDetail(consumer models.Consumer, isSelected bool, cursor int, copiedNotification string, width int) string {
 	output := lipgloss.NewStyle().Bold(true).Render("Consumer details")
 	output += "\n\n"
 
@@ -279,16 +285,32 @@ func formatConsumerDetail(consumer models.Consumer, isSelected bool, cursor int)
 		{"Created At", consumer.CreatedAt.Format(time.RFC3339)},
 	}
 
+	copyTextStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colorWhite)).
+		Align(lipgloss.Right).
+		PaddingRight(2)
+
 	for i, field := range fields {
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(width)
+		line := fmt.Sprintf("%-17s %s", field.name+":", field.value)
 		if isSelected && i == cursor {
 			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
+			copyText := getCopyText(copyTextStyle, copiedNotification)
+			remainingWidth := width - lipgloss.Width(line) - lipgloss.Width(copyText)
+			line += strings.Repeat(" ", remainingWidth) + copyText
 		}
-		line := fmt.Sprintf("%-17s %s", field.name+":", field.value)
 		output += style.Render(line) + "\n"
 	}
 
 	return output
+}
+
+func getCopyText(style lipgloss.Style, copiedNotification string) string {
+	text := "Press enter to copy"
+	if copiedNotification != "" {
+		text = copiedNotification
+	}
+	return style.Render(text)
 }
 
 func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading, isSelected bool, cursor int) string {
@@ -411,6 +433,8 @@ func (c *ConsumerState) MoveCursor(direction int) {
 }
 
 func (c *ConsumerState) MoveDetailCursor(direction int) {
+	c.clearNotification() // Clear notification when cursor moves
+
 	switch c.detailSection {
 	case DetailSectionConsumer:
 		c.detailCursor += direction
@@ -539,4 +563,81 @@ func (c *ConsumerState) SetStreamName(streamName string) {
 	c.upcomingMessages = nil
 	c.isLoading = false
 	c.resetDetailCursor()
+}
+
+func (c *ConsumerState) HandleDetailViewKeyPress(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "up", "k":
+		c.MoveDetailCursor(-1)
+		c.clearNotification()
+	case "down", "j":
+		c.MoveDetailCursor(1)
+		c.clearNotification()
+	case "enter":
+		return c.handleDetailViewEnter()
+	}
+	return nil
+}
+
+func (c *ConsumerState) handleDetailViewEnter() tea.Cmd {
+	consumer := c.getSelectedConsumer()
+	if consumer == nil {
+		return nil
+	}
+
+	var textToCopy string
+
+	switch c.detailCursor {
+	case 0:
+		textToCopy = consumer.ID
+	case 1:
+		textToCopy = consumer.Name
+	case 2:
+		textToCopy = consumer.FilterKeyPattern
+	case 3:
+		textToCopy = fmt.Sprintf("%d", consumer.MaxAckPending)
+	case 4:
+		textToCopy = fmt.Sprintf("%d", consumer.MaxDeliver)
+	case 5:
+		textToCopy = consumer.CreatedAt.Format(time.RFC3339)
+	default:
+		return nil
+	}
+
+	return tea.Sequence(
+		c.copyToClipboard(textToCopy),
+		c.showCopiedNotification(),
+	)
+}
+
+func (c *ConsumerState) copyToClipboard(text string) tea.Cmd {
+	return func() tea.Msg {
+		err := clipboard.WriteAll(text)
+		if err != nil {
+			return fmt.Errorf("failed to copy to clipboard: %v", err)
+		}
+		return nil
+	}
+}
+
+func (c *ConsumerState) showCopiedNotification() tea.Cmd {
+	return func() tea.Msg {
+		c.copiedNotification = "Copied to clipboard!"
+		if c.notificationTimer != nil {
+			c.notificationTimer.Stop()
+		}
+		c.notificationTimer = time.AfterFunc(3*time.Second, func() {
+			c.copiedNotification = ""
+			c.notificationTimer = nil
+		})
+		return nil
+	}
+}
+
+func (c *ConsumerState) clearNotification() {
+	c.copiedNotification = ""
+	if c.notificationTimer != nil {
+		c.notificationTimer.Stop()
+		c.notificationTimer = nil
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/cli/table"
 	sequinContext "github.com/sequinstream/sequin/cli/context"
 	"github.com/sequinstream/sequin/cli/models"
 
@@ -136,121 +137,83 @@ func (c *ConsumerState) listView(width, height int) string {
 		codeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // Blue color for code
 		codePart := codeStyle.Render(fmt.Sprintf("sequin consumer add %s", c.streamName))
 		message += "\n\n" + codePart
-
 		lines := strings.Split(message, "\n")
 		verticalPadding := (height - len(lines)) / 2
-
 		var output strings.Builder
 		output.WriteString(strings.Repeat("\n", verticalPadding))
-
 		for _, line := range lines {
 			horizontalPadding := (width - lipgloss.Width(line)) / 2
 			output.WriteString(fmt.Sprintf("%s%s\n", strings.Repeat(" ", horizontalPadding), line))
 		}
-
 		return output.String()
 	}
 
-	nameWidth := c.calculateColumnWidth("NAME", func(consumer models.Consumer) string { return consumer.Name })
-	filterWidth := c.calculateColumnWidth("FILTER PATTERN", func(consumer models.Consumer) string { return consumer.FilterKeyPattern })
-
-	var maxAckPendingWidth, maxDeliverWidth, createdWidth int
 	showFullTable := width >= 100
 
-	if showFullTable {
-		createdWidth = c.calculateColumnWidth("CREATED AT", func(consumer models.Consumer) string { return consumer.CreatedAt.Format(time.RFC3339) })
-		maxAckPendingWidth = c.calculateColumnWidth("MAX ACK PENDING", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxAckPending) })
-		maxDeliverWidth = c.calculateColumnWidth("MAX DELIVER", func(consumer models.Consumer) string { return fmt.Sprintf("%d", consumer.MaxDeliver) })
+	columns := []table.Column{
+		{Name: "NAME", MinWidth: 10, ValueFunc: func(row interface{}) string {
+			return row.(models.Consumer).Name
+		}},
+		{Name: "FILTER PATTERN", MinWidth: 10, ValueFunc: func(row interface{}) string {
+			return row.(models.Consumer).FilterKeyPattern
+		}},
 	}
 
-	showDetailsPromptWidth := width - nameWidth - filterWidth - createdWidth
 	if showFullTable {
-		showDetailsPromptWidth -= maxAckPendingWidth + maxDeliverWidth + createdWidth
+		columns = append(columns,
+			table.Column{Name: "MAX ACK PENDING", MinWidth: 15, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%d", row.(models.Consumer).MaxAckPending)
+			}},
+			table.Column{Name: "MAX DELIVER", MinWidth: 11, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%d", row.(models.Consumer).MaxDeliver)
+			}},
+			table.Column{Name: "CREATED AT", MinWidth: 20, ValueFunc: func(row interface{}) string {
+				return row.(models.Consumer).CreatedAt.Format(time.RFC3339)
+			}},
+		)
 	}
 
-	// Create the table header style
-	tableHeaderStyle := lipgloss.NewStyle().
+	consumerTable := table.NewTable(
+		columns,
+		consumerInterfaceSlice(c.consumers),
+		width,
+	)
+
+	consumerTable.SetActionColumn("SHOW DETAILS", func(row interface{}) string {
+		return "Press enter"
+	})
+
+	consumerTable.HeaderStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray)).
-		Width(width)
+		Background(lipgloss.Color(colorLightGray))
+	consumerTable.RowStyle = lipgloss.NewStyle()
+	consumerTable.SelectedStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color(colorPurple)).
+		Foreground(lipgloss.Color(colorWhite))
+	consumerTable.ActionOnSelect = true
 
-	// Add the "Consumers" title
-	output := lipgloss.NewStyle().Bold(true).Render("Consumers") + "\n\n"
-
-	// Format the table header
-	var tableHeader string
-	if showFullTable {
-		tableHeader = fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-			nameWidth, "NAME",
-			filterWidth, "FILTER PATTERN",
-			maxAckPendingWidth, "MAX ACK PENDING",
-			maxDeliverWidth, "MAX DELIVER",
-			createdWidth, "CREATED AT",
-			showDetailsPromptWidth, "SHOW DETAILS")
-	} else {
-		tableHeader = fmt.Sprintf("%-*s %-*s %-*s",
-			nameWidth, "NAME",
-			filterWidth, "FILTER PATTERN",
-			showDetailsPromptWidth, "SHOW DETAILS")
-	}
-
-	output += tableHeaderStyle.Render(tableHeader) + "\n"
-
-	for _, consumer := range c.consumers {
-		var line string
-		if showFullTable {
-			line = formatConsumerLine(consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth)
-		} else {
-			line = formatConsumerLineSmall(consumer, nameWidth, filterWidth)
-		}
-		style := lipgloss.NewStyle().Width(width)
-		showDetails := ""
+	// Set the selected index based on the selectedConsumerID
+	for i, consumer := range c.consumers {
 		if consumer.ID == c.selectedConsumerID {
-			style = style.
-				Background(lipgloss.Color(colorPurple)).
-				Foreground(lipgloss.Color(colorWhite))
-			showDetails = " Press enter"
+			consumerTable.SelectedIndex = i
+			break
 		}
-		output += style.Render(line+fmt.Sprintf("%-*s", showDetailsPromptWidth, showDetails)) + "\n"
 	}
+
+	output := lipgloss.NewStyle().Bold(true).Render("Consumers") + "\n\n"
+	output += consumerTable.Render()
 
 	return output
 }
 
-func formatConsumerLineSmall(consumer models.Consumer, nameWidth, filterWidth int) string {
-	name := truncateString(consumer.Name, nameWidth)
-	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
-
-	return fmt.Sprintf("%-*s %-*s",
-		nameWidth, name,
-		filterWidth, filter)
-}
-
-func (c *ConsumerState) calculateColumnWidth(header string, getValue func(models.Consumer) string) int {
-	maxWidth := len(header)
-	for _, consumer := range c.consumers {
-		value := getValue(consumer)
-		if len(value) > maxWidth {
-			maxWidth = len(value)
-		}
+// Helper function to convert []models.Consumer to []interface{}
+func consumerInterfaceSlice(consumers []models.Consumer) []interface{} {
+	result := make([]interface{}, len(consumers))
+	for i, v := range consumers {
+		result[i] = v
 	}
-	return maxWidth
-}
-
-func formatConsumerLine(consumer models.Consumer, nameWidth, filterWidth, maxAckPendingWidth, maxDeliverWidth, createdWidth int) string {
-	name := truncateString(consumer.Name, nameWidth)
-	filter := truncateString(consumer.FilterKeyPattern, filterWidth)
-	maxAckPending := fmt.Sprintf("%d", consumer.MaxAckPending)
-	maxDeliver := fmt.Sprintf("%d", consumer.MaxDeliver)
-	created := consumer.CreatedAt.Format(time.RFC3339)
-
-	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
-		nameWidth, name,
-		filterWidth, filter,
-		maxAckPendingWidth, maxAckPending,
-		maxDeliverWidth, maxDeliver,
-		createdWidth, created)
+	return result
 }
 
 func (c *ConsumerState) detailView(width, height int) string {
@@ -269,8 +232,8 @@ func (c *ConsumerState) detailView(width, height int) string {
 
 	remainingHeight := height - consumerDetailHeight
 
-	pendingHeaderHeight := lipgloss.Height(formatMessageSection("Ack pending messages", nil, width, true, false, false, 0))
-	upcomingHeaderHeight := lipgloss.Height(formatMessageSection("Available messages", nil, width, false, false, false, 0))
+	pendingHeaderHeight := lipgloss.Height(formatMessageSection("Ack pending messages", nil, width, true, false, false, 0)) - 1
+	upcomingHeaderHeight := lipgloss.Height(formatMessageSection("Available messages", nil, width, false, false, false, 0)) - 1
 
 	messageTableHeight := remainingHeight - pendingHeaderHeight - upcomingHeaderHeight
 
@@ -386,7 +349,6 @@ func formatMessageSection(title string, messages []models.ConsumerMessage, width
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
 		Width(width)
-
 	output := "\n" + headerStyle.Render(title) + "\n"
 	if isLoading {
 		return output + loadingSpinner()
@@ -396,94 +358,68 @@ func formatMessageSection(title string, messages []models.ConsumerMessage, width
 
 func formatMessageList(messages []models.ConsumerMessage, width int, isPending, isSelected bool, cursor int) string {
 	if len(messages) == 0 {
-		return "No messages found.\n"
+		return "No messages available\n"
 	}
 
-	seqWidth := calculateColumnWidth(messages, "SEQ", func(msg models.ConsumerMessage) string {
-		return fmt.Sprintf("%d", msg.MessageSeq)
-	})
-	keyWidth := calculateColumnWidth(messages, "KEY", func(msg models.ConsumerMessage) string {
-		return msg.MessageKey
-	})
-	deliverCountWidth := calculateColumnWidth(messages, "DELIVER", func(msg models.ConsumerMessage) string {
-		return fmt.Sprintf("%d", msg.DeliverCount)
-	})
+	columns := []table.Column{
+		{Name: "SEQ", MinWidth: 4, ValueFunc: func(row interface{}) string {
+			return fmt.Sprintf("%d", row.(models.ConsumerMessage).MessageSeq)
+		}},
+		{Name: "KEY", MinWidth: 10, ValueFunc: func(row interface{}) string {
+			return row.(models.ConsumerMessage).MessageKey
+		}},
+		{Name: "DELIVER", MinWidth: 7, ValueFunc: func(row interface{}) string {
+			return fmt.Sprintf("%d", row.(models.ConsumerMessage).DeliverCount)
+		}},
+	}
 
 	lastColumnName := "Not Visible Until"
 	if !isPending {
 		lastColumnName = "CREATED AT"
 	}
-	lastColumnWidth := calculateColumnWidth(messages, lastColumnName, func(msg models.ConsumerMessage) string {
-		if isPending {
-			return msg.FormatNotVisibleUntil()
-		}
-		return msg.Message.CreatedAt.Format(time.RFC3339)
+	columns = append(columns, table.Column{
+		Name:     lastColumnName,
+		MinWidth: 20,
+		ValueFunc: func(row interface{}) string {
+			msg := row.(models.ConsumerMessage)
+			if isPending {
+				return msg.FormatNotVisibleUntil()
+			}
+			return msg.Message.CreatedAt.Format(time.RFC3339)
+		},
 	})
 
-	// Adjust column widths to fit the full width
-	remainingWidth := width - seqWidth - keyWidth - deliverCountWidth - lastColumnWidth - 3 // 3 for spaces between columns
-	if remainingWidth > 0 {
-		keyWidth += remainingWidth // Add remaining width to the key column
-	}
+	messageTable := table.NewTable(
+		columns,
+		consumerMessageInterfaceSlice(messages),
+		width,
+	)
 
-	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending, width)
-	output := header
-
-	for i, msg := range messages {
-		style := lipgloss.NewStyle().Width(width)
-		line := formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
-		if isSelected && i == cursor {
-			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
-		}
-		output += style.Render(strings.TrimRight(line, "\n")) + "\n"
-	}
-
-	return output
-}
-
-func calculateColumnWidth(messages []models.ConsumerMessage, header string, getValue func(models.ConsumerMessage) string) int {
-	maxWidth := len(header)
-	for _, msg := range messages {
-		value := getValue(msg)
-		if len(value) > maxWidth {
-			maxWidth = len(value)
-		}
-	}
-	return maxWidth
-}
-
-func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool, totalWidth int) string {
-	lastColumnName := "Not Visible Until"
-	if !isPending {
-		lastColumnName = "CREATED AT"
-	}
-
-	tableHeaderStyle := lipgloss.NewStyle().
+	messageTable.HeaderStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray)).
-		Width(totalWidth)
+		Background(lipgloss.Color(colorLightGray))
+	messageTable.RowStyle = lipgloss.NewStyle()
+	messageTable.SelectedStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color(colorPurple)).
+		Foreground(lipgloss.Color(colorWhite))
 
-	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
-		seqWidth, "SEQ",
-		keyWidth, "KEY",
-		deliverCountWidth, "DELIVER",
-		lastColumnWidth, lastColumnName)
-
-	return tableHeaderStyle.Render(header) + "\n"
-}
-
-func formatMessageRow(msg models.ConsumerMessage, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
-	lastColumn := msg.Message.CreatedAt.Format(time.RFC3339)
-	if isPending {
-		lastColumn = msg.FormatNotVisibleUntil()
+	if isSelected {
+		messageTable.SelectedIndex = cursor
+	} else {
+		messageTable.SelectedIndex = -1 // No selection
 	}
 
-	return fmt.Sprintf("%-*d %-*s %-*d %-*s",
-		seqWidth, msg.MessageSeq,
-		keyWidth, truncateString(msg.MessageKey, keyWidth),
-		deliverCountWidth, msg.DeliverCount,
-		lastColumnWidth, lastColumn)
+	return messageTable.Render()
+}
+
+// Helper function to convert []models.ConsumerMessage to []interface{}
+func consumerMessageInterfaceSlice(messages []models.ConsumerMessage) []interface{} {
+	result := make([]interface{}, len(messages))
+	for i, v := range messages {
+		result[i] = v
+	}
+	return result
 }
 
 func (c *ConsumerState) ToggleDetail() {

@@ -3,9 +3,11 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/cli/table"
 	sequinContext "github.com/sequinstream/sequin/cli/context"
 	"github.com/sequinstream/sequin/cli/models"
 )
@@ -64,126 +66,43 @@ func (s *StreamState) View(width, height int) string {
 		return output.String()
 	}
 
-	output := lipgloss.NewStyle().Bold(true).Render("Select a stream to observe it")
-	output += "\n\n"
+	table := table.NewTable(
+		[]table.Column{
+			{Name: "NAME", MinWidth: 10, ValueFunc: func(row interface{}) string {
+				return row.(models.Stream).Name
+			}},
+			{Name: "MESSAGES", MinWidth: 8, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%d", row.(models.Stream).Stats.MessageCount)
+			}},
+			{Name: "STORAGE", MinWidth: 7, ValueFunc: func(row interface{}) string {
+				return formatBytes(row.(models.Stream).Stats.StorageSize)
+			}},
+			{Name: "CONSUMERS", MinWidth: 9, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%d", row.(models.Stream).Stats.ConsumerCount)
+			}},
+			{Name: "CREATED AT", MinWidth: 20, ValueFunc: func(row interface{}) string {
+				return row.(models.Stream).CreatedAt.Format(time.RFC3339)
+			}},
+		},
+		streamInterfaceSlice(s.streams),
+		width,
+	)
 
-	// Calculate column widths
-	nameWidth := s.calculateNameWidth()
-	msgCountWidth := s.calculateMsgCountWidth()
-	storageSizeWidth := s.calculateStorageSizeWidth()
-	consumerCountWidth := s.calculateConsumerCountWidth()
-	createdAtWidth := s.calculateCreatedAtWidth()
+	table.SetActionColumn("SELECT STREAM", func(row interface{}) string {
+		return "Press Enter"
+	})
+	table.SelectedIndex = s.cursor
+	table.ActionOnSelect = true
 
-	// Calculate the remaining width for the "SELECT STREAM" column
-	usedWidth := nameWidth + msgCountWidth + storageSizeWidth + consumerCountWidth + createdAtWidth + 5 // 5 spaces between columns
-	selectStreamWidth := width - usedWidth
-
-	// Ensure minimum width for "SELECT STREAM" column
-	if selectStreamWidth < len("SELECT STREAM") {
-		// Redistribute width if necessary
-		excess := len("SELECT STREAM") - selectStreamWidth
-		nameWidth -= excess / 5
-		msgCountWidth -= excess / 5
-		storageSizeWidth -= excess / 5
-		consumerCountWidth -= excess / 5
-		createdAtWidth -= excess / 5
-		selectStreamWidth = len("SELECT STREAM")
-	}
-
-	// Table header
-	tableHeaderStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("0")).   // Black text
-		Background(lipgloss.Color("252")). // Light grey background
-		Width(width)
-
-	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s %-*s",
-		nameWidth, "NAME",
-		msgCountWidth, "MESSAGES",
-		storageSizeWidth, "STORAGE",
-		consumerCountWidth, "CONSUMERS",
-		createdAtWidth, "CREATED AT",
-		selectStreamWidth, "SELECT STREAM")
-
-	output += tableHeaderStyle.Render(tableHeader) + "\n"
-
-	// Stream rows
-	for i, stream := range s.streams {
-		line := formatStreamLine(stream, nameWidth, msgCountWidth, storageSizeWidth, consumerCountWidth, createdAtWidth)
-		style := lipgloss.NewStyle()
-		selectStream := ""
-		if i == s.cursor {
-			style = style.
-				Background(lipgloss.Color("57")). // Purple background
-				Foreground(lipgloss.Color("255")) // White text
-			selectStream = "Press Enter"
-		}
-		output += style.Render(line+fmt.Sprintf(" %-*s", selectStreamWidth, selectStream)) + "\n"
-	}
-
-	return output
+	return "Select a stream to observe it\n\n" + table.Render()
 }
 
-func (s *StreamState) calculateNameWidth() int {
-	maxWidth := len("NAME")
-	for _, stream := range s.streams {
-		if len(stream.Name) > maxWidth {
-			maxWidth = len(stream.Name)
-		}
+func streamInterfaceSlice(streams []models.Stream) []interface{} {
+	result := make([]interface{}, len(streams))
+	for i, v := range streams {
+		result[i] = v
 	}
-	return maxWidth
-}
-
-func (s *StreamState) calculateMsgCountWidth() int {
-	maxWidth := len("MESSAGES")
-	for _, stream := range s.streams {
-		width := len(fmt.Sprintf("%d", stream.Stats.MessageCount))
-		if width > maxWidth {
-			maxWidth = width
-		}
-	}
-	return maxWidth
-}
-
-func (s *StreamState) calculateStorageSizeWidth() int {
-	maxWidth := len("STORAGE")
-	for _, stream := range s.streams {
-		width := len(formatBytes(stream.Stats.StorageSize))
-		if width > maxWidth {
-			maxWidth = width
-		}
-	}
-	return maxWidth
-}
-
-func (s *StreamState) calculateConsumerCountWidth() int {
-	maxWidth := len("CONSUMERS")
-	for _, stream := range s.streams {
-		width := len(fmt.Sprintf("%d", stream.Stats.ConsumerCount))
-		if width > maxWidth {
-			maxWidth = width
-		}
-	}
-	return maxWidth
-}
-
-func (s *StreamState) calculateCreatedAtWidth() int {
-	return len("2006-01-02 15:04:05") // Fixed width for the date format
-}
-
-func formatStreamLine(stream models.Stream, nameWidth, msgCountWidth, storageSizeWidth, consumerCountWidth, createdAtWidth int) string {
-	name := truncateString(stream.Name, nameWidth)
-	messageCount := fmt.Sprintf("%d", stream.Stats.MessageCount)
-	storageSize := formatBytes(stream.Stats.StorageSize)
-	consumerCount := fmt.Sprintf("%d", stream.Stats.ConsumerCount)
-	createdAt := stream.CreatedAt.Format("2006-01-02 15:04:05")
-
-	return fmt.Sprintf("%-*s %-*s %-*s %-*s %-*s",
-		nameWidth, name,
-		msgCountWidth, messageCount,
-		storageSizeWidth, storageSize,
-		consumerCountWidth, consumerCount,
-		createdAtWidth, createdAt)
+	return result
 }
 
 func (s *StreamState) MoveCursor(direction int) {

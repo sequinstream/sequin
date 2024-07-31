@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
+	"github.com/sequinstream/sequin/cli/cli/table"
 	"github.com/sequinstream/sequin/cli/context"
 	"github.com/sequinstream/sequin/cli/models"
 
@@ -16,13 +17,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-type TableColumnWidths struct {
-	seq     int
-	key     int
-	created int
-	data    int
-}
 
 type MessageState struct {
 	messages            []models.Message
@@ -192,13 +186,11 @@ func (m *MessageState) SetStream(stream models.Stream) {
 
 func (m *MessageState) listView(width, height int) string {
 	output := lipgloss.NewStyle().Bold(true).Render("Select a message to view details") + "\n"
-
 	if m.filterMode {
 		output += fmt.Sprintf("Filter (f): %s\n", strings.TrimPrefix(m.filterInput.View(), "> "))
 	} else {
 		output += fmt.Sprintf("Filter (f): %s\n", m.filterPattern)
 	}
-
 	if m.errorMsg != "" {
 		errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed))
 		output += errorStyle.Render(m.errorMsg) + "\n"
@@ -225,115 +217,76 @@ func (m *MessageState) listView(width, height int) string {
 		return output
 	}
 
-	columnWidths := m.calculateColumnWidths(width)
-	output += m.renderTableHeader(columnWidths, width)
+	// Calculate available height for the table
+	tableHeight := height - lipgloss.Height(output)
 
-	messagesHeight := height - lipgloss.Height(output)
-	output += m.renderTableRows(columnWidths, messagesHeight)
+	// Create a new table
+	messageTable := table.NewTable(
+		[]table.Column{
+			{Name: "SEQ", MinWidth: 4, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%d", row.(models.Message).Seq)
+			}},
+			{Name: "KEY", MinWidth: 10, ValueFunc: func(row interface{}) string {
+				return row.(models.Message).Key
+			}},
+			{Name: "CREATED", MinWidth: 22, ValueFunc: func(row interface{}) string {
+				return row.(models.Message).CreatedAt.Format(dateFormat)
+			}},
+			{Name: "DATA", MinWidth: 10, ValueFunc: func(row interface{}) string {
+				data := row.(models.Message).Data
+				return strings.ReplaceAll(data, "\n", " ")
+			}},
+		},
+		messageInterfaceSlice(m.messages),
+		width,
+	)
 
-	// Update visibleMessageCount
-	m.visibleMessageCount = min(len(m.messages), messagesHeight)
-
-	return output
-}
-
-func (m *MessageState) calculateColumnWidths(width int) TableColumnWidths {
-	seqWidth := m.calculateSeqWidth()
-	keyWidth := m.calculateKeyWidth(width)
-	createdWidth := 22
-	dataWidth := max(10, width-seqWidth-keyWidth-createdWidth-4) // 4 spaces between columns
-
-	// Distribute extra space evenly among columns
-	extraSpace := width - (seqWidth + keyWidth + createdWidth + dataWidth + 4)
-	if extraSpace > 0 {
-		extraPerColumn := extraSpace / 4
-		seqWidth += extraPerColumn
-		keyWidth += extraPerColumn
-		createdWidth += extraPerColumn
-		dataWidth += extraSpace - (3 * extraPerColumn) // Add remaining space to data column
-	}
-
-	return TableColumnWidths{
-		seq:     seqWidth,
-		key:     keyWidth,
-		created: createdWidth,
-		data:    dataWidth,
-	}
-}
-
-func (m *MessageState) renderTableHeader(widths TableColumnWidths, totalWidth int) string {
-	tableHeaderStyle := lipgloss.NewStyle().
+	messageTable.SelectedIndex = m.listCursor
+	messageTable.HeaderStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray)).
-		Width(totalWidth)
+		Background(lipgloss.Color(colorLightGray))
+	messageTable.RowStyle = lipgloss.NewStyle()
+	messageTable.SelectedStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color(colorPurple)).
+		Foreground(lipgloss.Color(colorWhite))
 
-	tableHeader := fmt.Sprintf("%-*s %-*s %-*s %-*s",
-		widths.seq, "SEQ",
-		widths.key, "KEY",
-		widths.created, "CREATED",
-		widths.data, "DATA")
+	messageTable.SetActionColumn("View Details", func(row interface{}) string {
+		return "Press Enter"
+	})
+	messageTable.SelectedIndex = m.listCursor
+	messageTable.ActionOnSelect = true
 
-	return tableHeaderStyle.Render(tableHeader) + "\n"
-}
+	// Render the table
+	tableOutput := messageTable.Render()
 
-func (m *MessageState) renderTableRows(widths TableColumnWidths, height int) string {
-	var output string
-	totalWidth := widths.seq + widths.key + widths.created + widths.data + 4 // 4 spaces between columns
-	for i, msg := range m.messages {
-		if i >= height {
-			break
-		}
-		line := formatMessageLine(msg, widths)
-		style := lipgloss.NewStyle().Width(totalWidth)
-		if i == m.listCursor {
-			style = style.
-				Background(lipgloss.Color(colorPurple)).
-				Foreground(lipgloss.Color(colorWhite))
-		}
-		output += style.Render(line) + "\n"
+	// Truncate the table output if it exceeds the available height
+	tableLines := strings.Split(tableOutput, "\n")
+	if len(tableLines) > tableHeight {
+		tableLines = tableLines[:tableHeight]
+		tableOutput = strings.Join(tableLines, "\n")
 	}
+
+	output += tableOutput
+
+	// Update visibleMessageCount
+	m.visibleMessageCount = min(len(m.messages), tableHeight-1) // Subtract 1 for the header row
+
 	return output
 }
 
-func formatMessageLine(msg models.Message, widths TableColumnWidths) string {
-	seq := fmt.Sprintf("%d", msg.Seq)
-	key := truncateString(msg.Key, widths.key)
-	created := msg.CreatedAt.Format(dateFormat)
-	data := truncateString(msg.Data, widths.data)
-
-	return fmt.Sprintf("%-*s %-*s %-*s %s",
-		widths.seq, seq,
-		widths.key, key,
-		widths.created, created,
-		data)
-}
-
-func (m *MessageState) calculateSeqWidth() int {
-	maxSeqWidth := 3
-	for _, msg := range m.messages {
-		seqWidth := len(fmt.Sprintf("%d", msg.Seq))
-		if seqWidth > maxSeqWidth {
-			maxSeqWidth = seqWidth
-		}
+// Helper function to convert []models.Message to []interface{}
+func messageInterfaceSlice(messages []models.Message) []interface{} {
+	result := make([]interface{}, len(messages))
+	for i, v := range messages {
+		result[i] = v
 	}
-	return maxSeqWidth
-}
-
-func (m *MessageState) calculateKeyWidth(totalWidth int) int {
-	maxKeyWidth := 3
-	for _, msg := range m.messages {
-		keyWidth := len(msg.Key)
-		if keyWidth > maxKeyWidth {
-			maxKeyWidth = keyWidth
-		}
-	}
-	return min(min(maxKeyWidth, totalWidth/2), 255)
+	return result
 }
 
 func (m *MessageState) detailView(width, _ int) string {
 	if m.detailMessage == nil {
-		return "No message selected or no messages available"
+		return "No message selected"
 	}
 
 	msg := m.detailMessage.Message
@@ -423,48 +376,49 @@ func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int, sel
 		return lipgloss.NewStyle().Width(width).Render("No consumers for message\n")
 	}
 
-	slugWidth := 20
-	deliverCountWidth := 15
-	stateWidth := 20
-	patternWidth := width - slugWidth - deliverCountWidth - stateWidth - 6
+	consumerTable := table.NewTable(
+		[]table.Column{
+			{Name: "CONSUMER NAME", MinWidth: 20, ValueFunc: func(row interface{}) string {
+				return row.(models.ConsumerInfo).ConsumerName
+			}},
+			{Name: "CONSUMER FILTER PATTERN", MinWidth: 20, ValueFunc: func(row interface{}) string {
+				return row.(models.ConsumerInfo).ConsumerFilterKeyPattern
+			}},
+			{Name: "MESSAGE STATE", MinWidth: 20, ValueFunc: func(row interface{}) string {
+				return row.(models.ConsumerInfo).State
+			}},
+			{Name: "DELIVERED COUNT", MinWidth: 15, ValueFunc: func(row interface{}) string {
+				info := row.(models.ConsumerInfo)
+				if info.DeliverCount != nil {
+					return fmt.Sprintf("%d", *info.DeliverCount)
+				}
+				return "-"
+			}},
+		},
+		consumerInfoInterfaceSlice(consumerInfos),
+		width,
+	)
 
-	tableHeaderStyle := lipgloss.NewStyle().
+	consumerTable.SelectedIndex = selectedIndex
+	consumerTable.HeaderStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray)).
-		Width(width)
+		Background(lipgloss.Color(colorLightGray))
+	consumerTable.RowStyle = lipgloss.NewStyle()
+	consumerTable.SelectedStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color(colorPurple)).
+		Foreground(lipgloss.Color(colorWhite))
 
-	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
-		slugWidth, "CONSUMER NAME",
-		patternWidth, "CONSUMER FILTER PATTERN",
-		stateWidth, "MESSAGE STATE",
-		deliverCountWidth, "DELIVERED COUNT")
+	return consumerTable.Render()
+}
 
-	output := tableHeaderStyle.Render(header) + "\n"
-
-	for i, info := range consumerInfos {
-		deliverCount := "-"
-		if info.DeliverCount != nil {
-			deliverCount = fmt.Sprintf("%d", *info.DeliverCount)
-		}
-
-		line := fmt.Sprintf("%-*s %-*s %-*s %-*s",
-			slugWidth, truncateString(info.ConsumerName, slugWidth),
-			patternWidth, truncateString(info.ConsumerFilterKeyPattern, patternWidth),
-			stateWidth, info.State,
-			deliverCountWidth, deliverCount)
-
-		style := lipgloss.NewStyle().Width(width)
-		if i == selectedIndex {
-			style = style.
-				Background(lipgloss.Color(colorPurple)).
-				Foreground(lipgloss.Color(colorWhite))
-		}
-
-		output += style.Render(line) + "\n"
+// Helper function to convert []models.ConsumerInfo to []interface{}
+func consumerInfoInterfaceSlice(consumerInfos []models.ConsumerInfo) []interface{} {
+	result := make([]interface{}, len(consumerInfos))
+	for i, v := range consumerInfos {
+		result[i] = v
 	}
-
-	return output
+	return result
 }
 
 func (m *MessageState) ToggleDetail() {
@@ -559,30 +513,6 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func clampValue(value, min, max int) int {
-	if value < min {
-		return min
-	}
-	if value > max {
-		return max
-	}
-	return value
 }
 
 func (m *MessageState) HandleFilterKey() {

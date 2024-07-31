@@ -307,7 +307,7 @@ const (
 	colorRed       = lipgloss.Color("9")
 	colorGreen     = lipgloss.Color("10")
 	dateFormat     = time.RFC3339
-	minWidth       = 60
+	minWidth       = 40
 )
 
 func (s *state) View() string {

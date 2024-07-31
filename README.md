@@ -9,8 +9,6 @@ Sequin is an open source message stream built on Postgres. It's like Kafka, but 
 
 Sequin runs as a stateless Docker container in front of any Postgres database. It comes with a CLI, HTTP interface, and the ability to pull changes from any Postgres table into a stream.
 
-You can also [roll your own](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/) basic version of Sequin.
-
 ### Stream not a queue
 
 Sequin is a message stream, not just a queue. Like Kafka, Sequin persists messages according to a retention policy you specify. You can setup **consumers** to process a filtered subset of messages in the stream. Sequin delivers messages to consumers exactly once within a visibility timeout.
@@ -30,13 +28,13 @@ In Sequin, messages are stored like a stream. But consumption patterns are more 
 ### Killer features
 
 - **Store like a stream, consume like a queue**: Sequin persists messages like a stream. But the consumption pattern is more flexible and ergonomic, like a queue.
-- [**Key-based routing**](https://sequinstream.com/docs/core/overview#key): Publish messages with a rich key that consumers can use to filter down to the data they care about.
+- [**Key-based routing**](#key): Publish messages with a rich key that consumers can use to filter down to the data they care about.
 - **Replays**: Rewind consumers to any point in a stream. Or republish select messages that match a SQL query.
-- [**Exactly once delivery**](https://sequinstream.com/docs/core/overview#guarantees): Sequin delivers messages to consumers exactly once within a visibility timeout.
+- [**Exactly once delivery**](#guarantees): Sequin delivers messages to consumers exactly once within a visibility timeout.
 - **Dynamic concurrency**: Scale workers for a consumer up or down as needed. No need to plan out partition counts ahead of time.
-- [**Upsert support**](https://sequinstream.com/docs/core/streams#policies): Get immediate compaction by key, so only one record for a key exists in the stream at a time.
-- [**Stream any Postgres table**](https://sequinstream.com/docs/core/sources#postgres): Sequin can pull changes from any Postgres table into a stream.
-- [**It's Just Postgres™**](https://sequinstream.com/docs/core/streams#schema): The core of Sequin is a few Postgres tables. So you can query your streams like any other table.
+- [**Upsert support**](#policies): Get immediate compaction by key, so only one record for a key exists in the stream at a time.
+- [**Stream any Postgres table**](#the-postgres-source): Sequin can pull changes from any Postgres table into a stream.
+- [**It's Just Postgres™**](#schema): The core of Sequin is a few Postgres tables. So you can query your streams like any other table.
 
 ## Works with any Postgres database
 
@@ -48,65 +46,24 @@ Sequin is compatible with any Postgres database, including those from cloud prov
 - Neon
 - ...and many more
 
+### Schema
+
+The stream tables that power Sequin are simple. Streams are stored in a Postgres schema called `sequin_streams` by default:
+
+- `sequin_streams.messages`: Stores the messages for all streams. `messages` is partitioned by `stream_id`.
+- `sequin_streams.consumer_messages`: Stores the state for consumers.
+
+In addition, Sequin maintains several Postgres tables to support its internal operations. Those are stored in the `sequin_config` schema by default.
+
 ## Benchmarks and performance
 
 Postgres is an extremely robust and high-performance system. It does a stellar job handling message streaming workloads like Sequin, when leveraged properly.
 
 Performance is highly dependent on machine resources. But to give you an idea:
 
-A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,000 messages/second** with three consumers (concurrency of 50 instances reading and writing). It can burst up to 10k messages/second. This is the case with `batch_size=10` on both publish and receive. Messages at ~10-100kb in size.
+A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,000 messages/second** with three consumers (concurrency of 50 instances reading and writing). It can burst up to 10k messages/second. This is the case with `batch_size=10` on both publish and receive.
 
-## Docs
-
-📖 Find the [full docs here](https://sequinstream.com/docs).
-
-## Installation
-
-### Server
-
-Run the server with Docker/compose. Clone the repo:
-
-```bash
-git clone git@github.com:sequinstream/sequin.git
-```
-
-After cloning the repo, `cd` into it and boot the server:
-
-```bash
-cd docker && docker compose up -d
-```
-
-The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.
-
-### CLI
-
-Install the Sequin CLI to work with Sequin.
-
-Install with Homebrew:
-
-```bash
-brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
-brew install sequin
-```
-
-Or install with shell:
-
-```bash
-curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
-```
-
-Or build from source:
-
-```bash
-git clone git@github.com:sequinstream/sequin.git
-cd cli && make build
-```
-
-Reload your console and test that it's installed:
-
-```bash
-sequin --help
-```
+Expect this performance to degrade with messages >512kb in size.
 
 ## Core concepts
 
@@ -118,7 +75,7 @@ A **message** in Sequin consists of a `key` and a `data` payload.
 
 Sequin uses **key-based routing**. In Sequin, a **key** is a string that serves two purposes:
 
-1. It's the unique key for the message (the primary key of the `messages` table under the hood)
+1. It’s the unique key for the message (the primary key of the `messages` table under the hood)
 2. It contains attributes that can be used for consumer filtering
 
 In Kafka, you route on write into a topic. But with Sequin, you route on read. Because consumers filter by key, you should choose the format of your keys intentionally.
@@ -132,10 +89,6 @@ And the keys might look like:
 - `orders.cus_a.ord_1`
 - `orders.cus_b.ord_2`
 - `orders.cus_a.ord_3`
-
-### Streams
-
-A **stream** is a table of messages. When you send a message to Sequin, it is stored in a stream. [Consumers](#consumers) are how you read messages from the stream with delivery guarantees.
 
 ### Consumers
 
@@ -154,19 +107,19 @@ For instance, `orders.cus_a.*` will return all orders for `cus_a` while `orders.
 
 Your system receives messages from a consumer and then acks them once they have been processed.
 
-If your system doesn't ack a message within a consumer's `ack-wait-ms` period, the message will become available again to that consumer. (`ack-wait-ms` is configurable.)
+If your system doesn’t ack a message within a consumer’s `ack-wait-ms` period, the message will become available again to that consumer. (`ack-wait-ms` is configurable.)
 
 #### Concurrent
 
-Multiple workers can concurrently receive messages from a consumer. Messages are only delivered once during the `ack-wait-ms` period. If the message is not ack'd before the period elapses, the message becomes available again.
+Multiple workers can concurrently receive messages from a consumer. Messages are only delivered once during the `ack-wait-ms` period. If the message is not ack’d before the period elapses, the message becomes available again.
 
-### Guarantees
+## Guarantees
 
-#### Exactly-once delivery
+### Exactly-once delivery
 
 Exactly-once delivery within a visibility timeout (`ack-wait-ms`).
 
-#### Strict ordering by message key
+### Strict ordering by message key
 
 Messages with the same key will always be delivered to a consumer's workers in order (by insertion time).
 
@@ -174,11 +127,82 @@ If you've set `one-message-per-key=true` for a stream, then all message key conf
 
 If you've set `one-message-per-key=false` for a stream, then messages are appended to a stream. Still, if a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld until that message has finished processing.
 
-Learn more about [the core concepts of Sequin](https://sequinstream.com/docs/core/overview)
+## Setup
+
+### Server
+
+Run the server with Docker/compose. After cloning the repo:
+
+```bash
+cd docker && docker compose up -d
+```
+
+The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.
+
+For installation in production, see our [deployment guide](./deploy.md).
+
+### CLI
+
+#### Homebrew
+
+```bash
+brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
+brew install sequin
+```
+
+#### Shell
+
+```bash
+curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
+```
+
+#### Build from source
+
+To build from source, clone this repo then:
+
+```bash
+cd cli && make build
+```
+
+Reload your console and test that it's installed:
+
+```bash
+sequin --help
+```
+
+## Getting Started
+
+See the [getting started guide](./docs/getting-started.md).
 
 ## CLI
 
-Sequin comes with a powerful CLI for managing and observing streams, messages, and consumers. [Read more about the CLI](https://sequinstream.com/docs/cli).
+Sequin comes with a CLI you can use to interact with and observe a running Sequin instance. You can use the CLI to set up streams and consumers, and observe messages flowing through your system in real-time.
+
+### `--as-curl`
+
+For every CLI command, you can pass the `--as-curl` flag to have the command printed out as a curl request:
+
+```bash
+sequin consumer receive mycon --batch-size=10 --as-curl
+```
+
+### Contexts
+
+You can use contexts to easily switch your CLI between environments. For example, if you're debugging production, you can run:
+
+```bash
+sequin observe --context=prod
+```
+
+And the Sequin CLI will use your settings for prod to connect to your production Sequin instance.
+
+Create a context like so:
+
+```bash
+sequin context create [<flags>] [<name>]
+```
+
+### Observe
 
 Sequin's `observe` is like [htop](https://github.com/htop-dev/htop) for your Sequin instance. You can watch messages flow into your system, into a consumer's outbox, and get ack'd in real-time.
 
@@ -188,7 +212,187 @@ Boot it with:
 sequin observe
 ```
 
-![sequin's observe command showing streams, consumers, and messages](./docs/images/observe.gif)
+![sequin's observe command showing streams, consumers, and messages](./docs/gifs/observe.gif)
+
+## Sending messages
+
+You can send a message to Sequin by specifying the `key` and the `data` payload:
+
+```bash
+sequin message send orders.cus_a.ord_1jNsd '{ "quantity": 4 }'
+```
+
+When sending via HTTP, `messages` can contain a list of 1 or more messages:
+
+```bash
+curl -X 'POST' -d '{"messages":[{"data":"{ \"quantity\": 4 }","key":"orders.cus_a.ord_1jNsd"}, {"data":"{ \"quantity\": 4 }","key":"orders.cus_a.ord_1jNsd"}]}' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer {token} \
+'https://[sequin-base-url]/api/streams/68658e3e-de48-4005-a5de-2a7cd6868d80/messages'
+```
+
+The maximum batch size per send request is 10,000 messages. We generally recommend smaller batch sizes if each message is large. Keeping the entire batch to under ~10MB is usually a good rule in most cases.
+
+## Streams
+
+A **stream** is a table of messages. When you send a message to Sequin, it is stored in a stream. [Consumers](#consumers) are how you read messages from the stream with delivery guarantees.
+
+If you're just starting out, using a single stream for all your data is sufficient. You'll use separate streams when you want to have different policies for a set of messages. They can also be helpful when scaling, as each stream is a separate Postgres table under the hood.
+
+To add a stream to Sequin, run:
+
+```bash
+sequin stream add [<stream>] [<flags>]
+```
+
+### Policies
+
+Streams can be configured with a number of different policies that affect message processing and retention:
+
+#### `one-message-per-key=[<bool>]`
+
+When `one-message-per-key` is set to `true`, Sequin places a unique constraint on message's `key`. All messages will be upserted. There will only ever be one message with a given key in the stream, the last message with that key received.
+
+This setting is a great fit for processing records where only the latest version of a message matters to your system.
+
+#### `process-unmodified=[<bool>]`
+
+Must be used in combination with `one-message-per-key=true` and defaults to `false`. When `process-unmodified` is false, a stream will ignore messages that (1) have a key that matches an existing message in the stream and (2) are unchanged (according to a SHA256 hash of `data`). This saves the stream from re-inserting the message and all consumers from re-processing it.
+
+You can set this setting to `true` if you want messages to be reprocessed by consumers, even if their contents haven't changed. This can be useful for processing command messages, where the contents don't change but you still want your system to reprocess them.
+
+#### `max-storage=[<gigabytes>]gb`
+
+The approximate maximum storage (in gigabytes) that a stream can expand to.
+
+When a stream hits `max-storage`, messages will be evicted oldest-first, respecting `retain-at-least`.
+
+Postgres' analytics around storage are approximate, so we recommend ensuring a 20% buffer. i.e. if you set a stream's `max-storage` to 100GB, you should ensure that your Postgres volume is able to accommodate a 120GB stream.
+
+#### `retain-up-to=[<duration>]`
+
+Messages that are older than `duration` will be evicted from the stream.
+
+#### `retain-at-least=[<duration>]`
+
+Must be used in combination with `max-storage`. `retain-at-least` is a safety mechanism. It ensures that if a stream hits `max-storage`, Sequin will never evict messages younger than `retain-at-least`. You can set `retain-at-least=infinite` to ensure nothing is evicted.
+
+If a stream hits `max-storage` but can no longer evict messages according to `retain-at-least`, it will stop receiving messages.
+
+It can be a good idea to set `retain-at-least` if you're setting `max-storage`. If your stream starts growing unexpectedly, the combination of these two settings can act as a failsafe.
+
+## Consumers
+
+**Consumers** are central to Sequin. A consumer is how workers in your system receive messages. Using consumers allow you to:
+
+- Filter the message stream down to what a given worker/system cares about
+- Safely process messages concurrently
+- Ensure messages are processed exactly once
+
+To add a consumer to Sequin, run:
+
+```bash
+sequin consumer add [<stream>] [<consumer>] [<flags>]
+```
+
+For example:
+
+```bash
+# Create a consumer for all orders in the system
+sequin consumer add mystream mycon --ack-wait-ms=60000 --filter="orders.>"
+```
+
+The flags:
+
+```bash
+  --ack-wait-ms=ACK-WAIT-MS          Acknowledgement wait time in milliseconds
+  --max-ack-pending=MAX-ACK-PENDING  Maximum number of pending acknowledgements
+  --max-deliver=MAX-DELIVER          Maximum number of delivery attempts
+  --filter=FILTER                    Key pattern for message filtering
+  --defaults                         Use default values for non-required fields
+```
+
+When no flags are provided, the CLI will walk you through setup.
+
+### Receiving messages
+
+To receive a message for a consumer, run:
+
+```bash
+sequin receive [<stream>] [<consumer>] [<flags>]
+```
+
+For example:
+
+```bash
+sequin receive mystream mycon --batch-size=10
+```
+
+Or, via HTTP:
+
+```bash
+curl -X 'GET' https://[sequin-base-url]/api/streams/mystream/consumers/mycon/receive?batch_size=10'
+```
+
+After a batch of messages is delivered to your worker, those messages will not be available to other workers for that consumer for `ack-wait-ms`. Messages are delivered with an `ack_id` that your worker will [use to ack them](#acking-messages).
+
+### Acking messages
+
+After your system receives messages from a consumer, it will process them. When it's finished processing, it should ack those messages. Ack'ing ensures those messages will not be redelivered and is how Sequin guarantees exactly-once processing.
+
+You ack messages using their `ack_id`. The `ack_id` for each message is included with every delivery.
+
+Using the CLI:
+
+```bash
+sequin consumer ack [<stream>] [<consumer>] [<ack_id>]
+```
+
+When ack'ing via HTTP, you can include a batch of ack_ids to acknowledge all together:
+
+```bash
+curl -X 'POST' -d '{"ack_ids":["ack_1jdiQuj"]}' -H 'Content-Type: application/json' 'https://[sequin-base-url]/api/streams/mystream/consumers/mycon/ack'
+```
+
+### Nacking messages
+
+You can also "negative ack" or "nack" messages. This makes the messages available again for immediate redelivery.
+
+Using the CLI:
+
+```bash
+sequin consumer nack mystream mycon [<ack_id>]
+```
+
+When nack'ing via HTTP, you can include a batch of ack_ids to nack all together:
+
+```bash
+curl -X 'POST' -d '{"ack_ids":["ack_1jdiQuj"]}' -H 'Content-Type: application/json' 'https://[sequin-base-url]/api/streams/mystream/consumers/mycon/nack'
+```
+
+Nacking is an advanced feature. Usually, it's fine to just let the `ack-wait-ms` for a message expire and have it be redelivered that way.
+
+### Peeking messages
+
+For debugging purposes, you can also "peek" at messages and their states for a consumer. Peeking lets you see the delivered messages and upcoming messages, without affecting their states.
+
+You can peek via the CLI:
+
+```bash
+sequin consumer peek [<flags>] [<stream>] [<consumer>]
+```
+
+Or via HTTP:
+
+```bash
+curl -X 'GET' 'https://<sequin-base-url>/api/streams/<stream>/consumers/<consumer_name>/messages?limit=10&sort=seq_desc&visible=true'
+```
+
+You can also view consumer states in real-time with [observe](#observe).
+
+### Learn more
+
+This is just a subset of consumer configuration and usage. Learn more by running `sequin consumer --help`.
 
 ## Sources
 
@@ -197,87 +401,40 @@ Sequin has first-class support for ingesting messages from:
 1. `postgres`: Existing Postgres tables (via the WAL)
 2. `webhook`: External APIs
 
-For example, with the `postgres` source, you can use Sequin to treat the creates, updates, and deletes from any existing Postgres table as a stream of messages.
+### The `postgres` source
 
-[Learn more about sources](https://sequinstream.com/docs/core/sources).
+You can use Sequin to treat the creates, updates, and deletes from any existing Postgres table as a stream of messages.
 
-## Examples
+From the CLI, connect any Postgres table to Sequin:
 
-### Using CLI
-
-Create a stream:
-
-```bash
-sequin stream add mystream
+```
+sequin source postgres add
 ```
 
-Send messages:
+The CLI will walk you through setting up a replication slot and publication.
 
-```bash
-sequin stream send mystream orders.us.cus_a.order_1 '{"product": "Shoes"}'
-sequin stream send mystream orders.eu.cus_b.order_2 '{"product": "Pants"}'
+Learn more about the [`postgres` source](./docs/postgres-source.md).
+
+### Comparison to WAL
+
+The WAL must be processed in serial. This makes it hard to scale, as you can only have one worker safely consume from it. And any one slow or corrupt message will jam your pipeline.
+
+With Sequin, WAL messages can be fanned out to many consumers for parallel processing and independent handling. (To make this safe, messages with the same key will [always be delivered in serial](#how-it-works).)
+
+### Comparison to LISTEN/NOTIFY
+
+Postgres' LISTEN/NOTIFY pushes notifications to your system whenever certain changes occur in Postgres. Because it's an at-most-once system, it works OK if you're fine with missing messages. But if your listening processes are not connected to the database during a NOTIFY event, they will miss that event.
+
+Sequin offers at-least-once delivery and first-class features like fan-out and replay.
+
+### The `webhook` source
+
+You can use Sequin to ingest incoming messages from external APIs.
+
+From the CLI, setup an HTTP endpoint for others to post to with:
+
 ```
-
-Create a consumer:
-
-```bash
-sequin consumer add mystream us_orders --filter="orders.us.>" --defaults
-```
-
-Receive messages:
-
-```bash
-sequin consumer receive us_orders
-```
-
-### Using HTTP
-
-Create a stream:
-
-```bash
-curl -X POST http://localhost:7376/v1/streams \
-  -H "Content-Type: application/json" \
-  -d '{"name": "mystream"}'
-```
-
-Send messages:
-
-```bash
-curl -X POST http://localhost:7376/v1/streams/mystream/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "key": "orders.us.cus_a.order_1",
-    "data": {"product": "Shoes"}
-  }'
-
-curl -X POST http://localhost:7376/v1/streams/mystream/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "key": "orders.eu.cus_b.order_2",
-    "data": {"product": "Pants"}
-  }'
-```
-
-Create a consumer:
-
-```bash
-curl -X POST http://localhost:7376/v1/streams/mystream/consumers \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "us_orders",
-    "filter": "orders.us.>",
-    "ack_wait_ms": 30000,
-    "max_ack_pending": 100,
-    "max_deliver": 10
-  }'
-```
-
-Receive messages:
-
-```bash
-curl -X POST http://localhost:7376/v1/streams/mystream/consumers/us_orders/messages \
-  -H "Content-Type: application/json" \
-  -d '{"batch_size": 10}'
+sequin source webhook add
 ```
 
 ## How it works
@@ -304,6 +461,13 @@ For the best performance, on top of intelligent indexes, we avoid trigger functi
 
 ## Deployments
 
-You can run Sequin anywhere you can run Docker. You can even "sidecar" Sequin alongside your app.
+You can run Sequin anywhere you can run Docker. It stores its configuration state and streams in [Postgres](#how-it-works).
 
-Read more about [deploying Sequin](https://sequinstream.com/docs/deploying).
+You can even "sidecar" Sequin alongside your app.
+
+## Roadmap
+
+- Allow for streams to live on any database
+- Control the size of `consumer_messages` – don't fan out to dormant consumers
+- Client SDKs
+- First-class Webhook source support

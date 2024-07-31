@@ -268,12 +268,13 @@ func (m *MessageState) renderTableHeader(widths TableColumnWidths, totalWidth in
 
 func (m *MessageState) renderTableRows(widths TableColumnWidths, height int) string {
 	var output string
+	totalWidth := widths.seq + widths.key + widths.created + widths.data + 4 // 4 spaces between columns
 	for i, msg := range m.messages {
 		if i >= height {
 			break
 		}
 		line := formatMessageLine(msg, widths)
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(totalWidth)
 		if i == m.listCursor {
 			style = style.
 				Background(lipgloss.Color(colorPurple)).
@@ -290,11 +291,11 @@ func formatMessageLine(msg models.Message, widths TableColumnWidths) string {
 	created := msg.CreatedAt.Format(dateFormat)
 	data := truncateString(msg.Data, widths.data)
 
-	return fmt.Sprintf("%-*s %-*s %-*s %-*s",
+	return fmt.Sprintf("%-*s %-*s %-*s %s",
 		widths.seq, seq,
 		widths.key, key,
 		widths.created, created,
-		widths.data, data)
+		data)
 }
 
 func (m *MessageState) calculateSeqWidth() int {

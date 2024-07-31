@@ -11,6 +11,8 @@ defmodule Sequin.Extensions.Replication do
 
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
@@ -21,6 +23,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
+
   # alias Sequin.JSON
 
   require Logger
@@ -43,6 +46,7 @@ defmodule Sequin.Extensions.Replication do
       field :slot_name, String.t()
       field :step, :disconnected | :streaming
       field :test_pid, pid()
+      field :connection, map()
     end
   end
 
@@ -68,7 +72,8 @@ defmodule Sequin.Extensions.Replication do
       slot_name: slot_name,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
-      message_handler_module: message_handler_module
+      message_handler_module: message_handler_module,
+      connection: connection
     }
 
     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
@@ -172,9 +177,24 @@ defmodule Sequin.Extensions.Replication do
   # end
 
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
+    query = """
+    SELECT a.attname
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE i.indrelid = ($1::text || '.' || $2::text)::regclass
+    AND i.indisprimary;
+    """
+
+    conn = get_cached_conn(state)
+    {:ok, %{rows: rows}} = Postgrex.query(conn, query, [schema, table])
+
+    primary_keys = List.flatten(rows)
+
+    # We can't trust the `flags` when replica identity is set to full - all columns are indicated
+    # as primary keys.
     columns =
-      Enum.map(columns, fn %{name: name, type: type, flags: flags} ->
-        %{name: name, type: type, pk?: Enum.member?(flags, :key)}
+      Enum.map(columns, fn %{name: name, type: type} ->
+        %{name: name, type: type, pk?: name in primary_keys}
       end)
 
     :ets.insert(ets_table(), {{state.id, id}, columns, schema, table})
@@ -408,5 +428,24 @@ defmodule Sequin.Extensions.Replication do
       [{{^id, :last_committed_at}, ts}] -> ts
       [] -> nil
     end
+  end
+
+  defp get_cached_conn(%State{} = state) do
+    # Create a PostgresDatabase struct so we can use ConnectionCache. Doesn't matter
+    # that the ID is for the replication_slot. Using ConnectionCache ensures we
+    # do not create a bunch of connections to the database, regardless of the lifecycle
+    # of this GenServer
+    postgres_database = %PostgresDatabase{
+      id: state.id,
+      database: state.connection[:database],
+      hostname: state.connection[:hostname],
+      port: state.connection[:port],
+      username: state.connection[:username],
+      password: state.connection[:password],
+      ssl: state.connection[:ssl] || false
+    }
+
+    {:ok, conn} = ConnectionCache.connection(postgres_database)
+    conn
   end
 end

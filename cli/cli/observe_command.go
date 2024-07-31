@@ -197,11 +197,11 @@ func (s *state) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if s.activeTab == MessagesTab {
 			s.messages.HandleFilterKey()
 		}
-	case "pgup":
+	case "pgup", "ctrl+u":
 		if s.activeTab == MessagesTab {
 			s.messages.PageMove(-1, calculateLimit())
 		}
-	case "pgdown":
+	case "pgdown", "ctrl+d":
 		if s.activeTab == MessagesTab {
 			s.messages.PageMove(1, calculateLimit())
 		}
@@ -491,10 +491,7 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 	})
 
 	observeChannel.OnStreamDeleted(func(stream models.Stream) {
-		if s.selectedStream != nil && s.selectedStream.Name == stream.Name {
-			s.setActiveTab(StreamsTab)
-		}
-
+		s.setActiveTab(StreamsTab)
 		s.streams.FetchStreams(calculateLimit())
 	})
 
@@ -511,34 +508,8 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 	})
 
 	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
-		if s.selectedStream != nil {
-			filteredMessages := filterMessagesForStream(messages, s.selectedStream.ID)
-			if s.messages.filterPattern != "" {
-				filteredMessages = filterMessagesForFilter(filteredMessages, s.messages.filterPattern)
-			}
-			s.messages.MessagesUpserted(filteredMessages, calculateLimit())
-		}
+		s.messages.MessagesUpserted(messages, calculateLimit())
 	})
-}
-
-func filterMessagesForStream(messages []models.Message, streamID string) []models.Message {
-	filtered := make([]models.Message, 0)
-	for _, msg := range messages {
-		if msg.StreamID == streamID {
-			filtered = append(filtered, msg)
-		}
-	}
-	return filtered
-}
-
-func filterMessagesForFilter(messages []models.Message, filterPattern string) []models.Message {
-	filtered := make([]models.Message, 0)
-	for _, msg := range messages {
-		if DoesKeyMatch(filterPattern, msg.Key) {
-			filtered = append(filtered, msg)
-		}
-	}
-	return filtered
 }
 
 func (s *state) setActiveTab(tab TabType) {

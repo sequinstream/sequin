@@ -191,7 +191,7 @@ func (c *ConsumerState) listView(width, height int) string {
 		} else {
 			line = formatConsumerLineSmall(consumer, nameWidth, filterWidth)
 		}
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(width)
 		showDetails := ""
 		if consumer.ID == c.selectedConsumerID {
 			style = style.
@@ -199,7 +199,7 @@ func (c *ConsumerState) listView(width, height int) string {
 				Foreground(lipgloss.Color("255")) // White text
 			showDetails = "Press enter"
 		}
-		output += style.Render(line+fmt.Sprintf(" %-*s", showDetailsPromptWidth, showDetails)) + "\n"
+		output += style.Render(line+fmt.Sprintf("%-*s", showDetailsPromptWidth, showDetails)) + "\n"
 	}
 
 	return output
@@ -297,7 +297,12 @@ func formatConsumerDetail(consumer models.Consumer, isSelected bool, cursor int,
 			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
 			copyText := getCopyText(copyTextStyle, copiedNotification)
 			remainingWidth := width - lipgloss.Width(line) - lipgloss.Width(copyText)
-			line += strings.Repeat(" ", remainingWidth) + copyText
+			if remainingWidth > 0 {
+				line += strings.Repeat(" ", remainingWidth) + copyText
+			} else {
+				// If there's not enough space, truncate the line
+				line = lipgloss.NewStyle().Width(width-lipgloss.Width(copyText)).Render(line) + copyText
+			}
 		}
 		output += style.Render(line) + "\n"
 	}
@@ -315,7 +320,8 @@ func getCopyText(style lipgloss.Style, copiedNotification string) string {
 
 func formatMessageSection(title string, messages []models.MessageWithInfo, width int, isPending, isLoading, isSelected bool, cursor int) string {
 	headerStyle := lipgloss.NewStyle().
-		Bold(true)
+		Bold(true).
+		Width(width)
 
 	output := "\n" + headerStyle.Render(title) + "\n"
 	if isLoading {
@@ -350,18 +356,22 @@ func formatMessageList(messages []models.MessageWithInfo, width int, isPending, 
 		return msg.Message.CreatedAt.Format(time.RFC3339)
 	})
 
-	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
+	// Adjust column widths to fit the full width
+	remainingWidth := width - seqWidth - keyWidth - deliverCountWidth - lastColumnWidth - 3 // 3 for spaces between columns
+	if remainingWidth > 0 {
+		keyWidth += remainingWidth // Add remaining width to the key column
+	}
+
+	header := formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending, width)
 	output := header
 
 	for i, msg := range messages {
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(width)
 		line := formatMessageRow(msg, seqWidth, keyWidth, deliverCountWidth, lastColumnWidth, isPending)
 		if isSelected && i == cursor {
 			style = style.Background(lipgloss.Color(colorPurple)).Foreground(lipgloss.Color(colorWhite))
-			output += style.Render(strings.TrimRight(line, "\n")) + "\n"
-		} else {
-			output += line
 		}
+		output += style.Render(strings.TrimRight(line, "\n")) + "\n"
 	}
 
 	return output
@@ -378,7 +388,7 @@ func calculateColumnWidth(messages []models.MessageWithInfo, header string, getV
 	return maxWidth
 }
 
-func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool) string {
+func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth int, isPending bool, totalWidth int) string {
 	lastColumnName := "Not Visible Until"
 	if !isPending {
 		lastColumnName = "CREATED AT"
@@ -387,7 +397,8 @@ func formatMessageHeader(seqWidth, keyWidth, deliverCountWidth, lastColumnWidth 
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray))
+		Background(lipgloss.Color(colorLightGray)).
+		Width(totalWidth)
 
 	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
 		seqWidth, "SEQ",
@@ -404,7 +415,7 @@ func formatMessageRow(msg models.MessageWithInfo, seqWidth, keyWidth, deliverCou
 		lastColumn = msg.Info.FormatNotVisibleUntil()
 	}
 
-	return fmt.Sprintf("%-*d %-*s %-*d %-*s\n",
+	return fmt.Sprintf("%-*d %-*s %-*d %-*s",
 		seqWidth, msg.Message.Seq,
 		keyWidth, truncateString(msg.Message.Key, keyWidth),
 		deliverCountWidth, msg.Info.DeliverCount,
@@ -441,8 +452,15 @@ func (c *ConsumerState) MoveDetailCursor(direction int) {
 		if c.detailCursor < 0 {
 			c.detailCursor = 0
 		} else if c.detailCursor > 5 {
-			c.detailSection = DetailSectionPending
-			c.detailCursor = 0
+			if len(c.pendingMessages) > 0 {
+				c.detailSection = DetailSectionPending
+				c.detailCursor = 0
+			} else if len(c.upcomingMessages) > 0 {
+				c.detailSection = DetailSectionUpcoming
+				c.detailCursor = 0
+			} else {
+				c.detailCursor = 5 // Stay in consumer section if both message sections are empty
+			}
 		}
 	case DetailSectionPending:
 		c.detailCursor += direction
@@ -450,14 +468,23 @@ func (c *ConsumerState) MoveDetailCursor(direction int) {
 			c.detailSection = DetailSectionConsumer
 			c.detailCursor = 5
 		} else if c.detailCursor >= len(c.pendingMessages) {
-			c.detailSection = DetailSectionUpcoming
-			c.detailCursor = 0
+			if len(c.upcomingMessages) > 0 {
+				c.detailSection = DetailSectionUpcoming
+				c.detailCursor = 0
+			} else {
+				c.detailCursor = len(c.pendingMessages) - 1 // Stay at last pending message if upcoming is empty
+			}
 		}
 	case DetailSectionUpcoming:
 		c.detailCursor += direction
 		if c.detailCursor < 0 {
-			c.detailSection = DetailSectionPending
-			c.detailCursor = len(c.pendingMessages) - 1
+			if len(c.pendingMessages) > 0 {
+				c.detailSection = DetailSectionPending
+				c.detailCursor = len(c.pendingMessages) - 1
+			} else {
+				c.detailSection = DetailSectionConsumer
+				c.detailCursor = 5
+			}
 		} else if c.detailCursor >= len(c.upcomingMessages) {
 			c.detailCursor = len(c.upcomingMessages) - 1
 		}

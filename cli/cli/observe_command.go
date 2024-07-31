@@ -447,7 +447,7 @@ func (s *state) renderBottomBar(width int) string {
 	if s.selectedStream == nil {
 		content = "q (quit), ↑/↓ (navigate list), enter (select stream)"
 	} else {
-		content = "q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (toggle details), backspace (go back)"
+		content = "q (quit), ←/→ (switch tabs), ↑/↓ (navigate list), enter (select), backspace (go back)"
 	}
 	return lipgloss.NewStyle().
 		Background(colorGray).

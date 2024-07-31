@@ -114,8 +114,20 @@ echo "Current version: $latest_tag"
 # Prompt for the new version
 read -p "Enter the new version: " new_version
 
+# Source the .env file if it exists
+if [ -f ".env" ]; then
+    source .env
+else
+    echo "Warning: .env file not found. Make sure environment variables are set."
+fi
+
 # Create compiled releases
-./build_releases.sh $new_version release_assets
+if [ -z "$SLACK_WEBHOOK_URL" ]; then
+    echo "Error: SLACK_WEBHOOK_URL is not set. Please add it to your .env file."
+    exit 1
+fi
+
+SLACK_WEBHOOK_URL="$SLACK_WEBHOOK_URL" ./build_releases.sh $new_version release_assets
 
 # Update Homebrew formula
 update_homebrew_formula "$new_version"

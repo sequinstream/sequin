@@ -27,7 +27,7 @@ For the CLI, see the snippet @cli-installation-steps.mdx
 
 ## Docs
 
-📖 Find the [full docs here](https://sequinstream.com/docs).
+📖 [Find the full docs here](https://sequinstream.com/docs).
 
 4. Create a new section called "Core concepts". Include sections from the doc @overview.mdx:
 
@@ -54,6 +54,8 @@ sequin observe
 ```
 
 ![sequin's observe command showing streams, consumers, and messages](./docs/images/observe.gif)
+
+5.5. Include links out to SDKs, from @sdks.mdx. Say "Open an issue" not "Open an issue on GitHub."
 
 6. Sources - include this section verbatim:
 

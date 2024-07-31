@@ -16,6 +16,11 @@
     "type": "github",
     "url": "https://github.com/sequinstream/sequin"
   },
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  },
   "tabs": [],
   "navigation": [
     {

@@ -58,7 +58,7 @@ A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,00
 
 ## Docs
 
-📖 Find the [full docs here](https://sequinstream.com/docs).
+📖 [Find the full docs here](https://sequinstream.com/docs).
 
 ## Installation
 
@@ -189,6 +189,17 @@ sequin observe
 ```
 
 ![sequin's observe command showing streams, consumers, and messages](./docs/images/observe.gif)
+
+## SDKs
+
+- [JavaScript](https://github.com/sequinstream/sequin-js)
+- [Elixir](https://github.com/sequinstream/sequin-elixir)
+  - And [Elixir Broadway](https://github.com/sequinstream/off_broadway_sequin)
+- [Go](https://github.com/sequinstream/sequin-go)
+- [Ruby](https://github.com/sequinstream/sequin-ruby)
+- [Python](https://github.com/sequinstream/sequin-py)
+
+Don't see the SDK you need? [Open an issue](https://github.com/sequinstream/sequin/issues).
 
 ## Sources
 

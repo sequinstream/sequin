@@ -195,9 +195,9 @@ func (c *ConsumerState) listView(width, height int) string {
 		showDetails := ""
 		if consumer.ID == c.selectedConsumerID {
 			style = style.
-				Background(lipgloss.Color("57")). // Purple background
-				Foreground(lipgloss.Color("255")) // White text
-			showDetails = "Press enter"
+				Background(lipgloss.Color(colorPurple)).
+				Foreground(lipgloss.Color(colorWhite))
+			showDetails = " Press enter"
 		}
 		output += style.Render(line+fmt.Sprintf("%-*s", showDetailsPromptWidth, showDetails)) + "\n"
 	}

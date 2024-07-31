@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sequinstream/sequin/cli/api"
@@ -40,6 +41,8 @@ type MessageState struct {
 	detailMaxCursor     int
 	copiedNotification  string
 	notificationTimer   *time.Timer
+	streamID            string
+	mu                  sync.Mutex
 }
 
 type MessageWithConsumerInfos struct {
@@ -103,6 +106,11 @@ func (m *MessageState) FetchMessages(limit int, filterPattern string) error {
 }
 
 func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	filteredMessages := m.filterMessages(messages)
+
 	// Create a map of existing messages for quick lookup
 	existingMessages := make(map[string]*models.Message)
 	for i := range m.messages {
@@ -110,7 +118,7 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 	}
 
 	// Process upserted messages
-	for _, upsertedMsg := range messages {
+	for _, upsertedMsg := range filteredMessages {
 		if existingMsg, exists := existingMessages[upsertedMsg.Key]; exists {
 			// Replace existing message if the upserted one is newer
 			if upsertedMsg.UpdatedAt.After(existingMsg.UpdatedAt) {
@@ -165,6 +173,8 @@ func (m *MessageState) View(width, height int) string {
 }
 
 func (m *MessageState) SetStreamName(streamName string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.streamName = streamName
 	m.messages = nil
 	m.listCursor = 0
@@ -697,4 +707,24 @@ func (m *MessageState) clearNotification() {
 		m.notificationTimer.Stop()
 		m.notificationTimer = nil
 	}
+}
+
+func (m *MessageState) filterMessages(messages []models.Message) []models.Message {
+	if m.streamID == "" {
+		return nil
+	}
+
+	filtered := make([]models.Message, 0)
+	for _, msg := range messages {
+		if msg.StreamID == m.streamID {
+			if m.filterPattern != "" {
+				if DoesKeyMatch(m.filterPattern, msg.Key) {
+					filtered = append(filtered, msg)
+				}
+			} else {
+				filtered = append(filtered, msg)
+			}
+		}
+	}
+	return filtered
 }

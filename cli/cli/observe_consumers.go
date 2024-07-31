@@ -115,6 +115,7 @@ func (c *ConsumerState) updateMessages(pendingMessages, upcomingMessages []model
 }
 
 func (c *ConsumerState) WillAppear(limit int) {
+	c.messageLimit = limit
 	c.FetchConsumers(limit)
 }
 
@@ -122,8 +123,6 @@ func (c *ConsumerState) View(width, height int) string {
 	if c.streamName == "" {
 		return "\nPlease select a stream to view consumers"
 	}
-
-	c.messageLimit = height
 
 	if c.showDetail {
 		return c.detailView(width, height)
@@ -241,17 +240,13 @@ func (c *ConsumerState) detailView(width, height int) string {
 	upcomingCount := len(c.upcomingMessages)
 	totalCount := pendingCount + upcomingCount
 
-	log.Println("pendingCount:", pendingCount, "upcomingCount:", upcomingCount, "totalCount:", totalCount, "messageTableHeight:", messageTableHeight)
-
 	var pendingLimit, upcomingLimit int
 
 	if totalCount > messageTableHeight {
-		log.Println("totalCount > messageTableHeight")
 		// If we have more messages than we can display, try to show an equal number of each
 		pendingLimit = messageTableHeight / 2
 		upcomingLimit = messageTableHeight - pendingLimit
 	} else {
-		log.Println("totalCount <= messageTableHeight")
 		// If we have fewer messages than we can display, show all of them
 		pendingLimit = pendingCount
 		upcomingLimit = upcomingCount
@@ -259,11 +254,9 @@ func (c *ConsumerState) detailView(width, height int) string {
 
 	// Adjust limits if one type has fewer messages than its limit
 	if pendingCount < pendingLimit {
-		log.Println("pendingCount < pendingLimit")
 		upcomingLimit += pendingLimit - pendingCount
 		pendingLimit = pendingCount
 	} else if upcomingCount < upcomingLimit {
-		log.Println("upcomingCount < upcomingLimit")
 		pendingLimit += upcomingLimit - upcomingCount
 		upcomingLimit = upcomingCount
 	}
@@ -537,6 +530,7 @@ func (c *ConsumerState) EnableDetailView() {
 	c.resetDetailCursor()
 
 	if c.observeChannel != nil {
+		log.Printf("Listening to consumer: %s\n\tmessageLimit: %d", c.selectedConsumerID, c.messageLimit)
 		c.observeChannel.ListenConsumer(c.selectedConsumerID, c.messageLimit)
 		c.observeChannel.SetConsumerMessagesCallback(c.updateMessages)
 	}

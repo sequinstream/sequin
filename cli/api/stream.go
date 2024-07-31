@@ -90,15 +90,19 @@ func FetchStreamInfo(ctx *context.Context, streamID string) (*models.Stream, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response: %w", err)
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("stream not found: %s", streamID)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	var streamResponse models.Stream
-	err = json.Unmarshal(body, &streamResponse)
+	err = json.NewDecoder(resp.Body).Decode(&streamResponse)
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling JSON: %w", err)
+		return nil, fmt.Errorf("error decoding JSON: %w", err)
 	}
 
 	return &streamResponse, nil

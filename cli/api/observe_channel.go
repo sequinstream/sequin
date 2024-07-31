@@ -46,6 +46,7 @@ func NewObserveChannel(ctx *context.Context) (*ObserveChannel, error) {
 			return
 		}
 
+		log.Printf("Received %d pending messages and %d upcoming messages", len(messages.PendingMessages), len(messages.UpcomingMessages))
 		oc.consumerMessagesCallback(messages.PendingMessages, messages.UpcomingMessages)
 	})
 
@@ -57,7 +58,10 @@ func (oc *ObserveChannel) ListenConsumer(consumerID string, limit int) error {
 		"consumer_id": consumerID,
 		"limit":       limit,
 	})
-	return err
+	if err != nil {
+		log.Printf("Error listening to consumer: %v", err)
+	}
+	return nil
 }
 
 func (oc *ObserveChannel) ClearListeningConsumer() error {

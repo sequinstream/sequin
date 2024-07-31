@@ -16,3 +16,5 @@ type Config struct {
 	ConsumerID            string
 	AsCurl                bool
 }
+
+const LogFilePath = "sequin.log"

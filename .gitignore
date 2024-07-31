@@ -18,3 +18,5 @@ dump.rdb
 .settings.json
 
 sequin.log
+
+.env

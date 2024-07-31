@@ -29,7 +29,7 @@ type MessageState struct {
 	listCursor          int
 	detailMessage       *models.MessageWithConsumerInfos
 	showDetail          bool
-	filter              string
+	filterPattern       string
 	filterInput         textinput.Model
 	filterMode          bool
 	err                 error
@@ -57,7 +57,7 @@ func NewMessageState(config *Config) *MessageState {
 		config:              config,
 		listCursor:          0,
 		showDetail:          false,
-		filter:              "",
+		filterPattern:       "",
 		filterInput:         ti,
 		filterMode:          false,
 		streamName:          "",
@@ -69,7 +69,7 @@ func NewMessageState(config *Config) *MessageState {
 	}
 }
 
-func (m *MessageState) FetchMessages(limit int, filter string) error {
+func (m *MessageState) FetchMessages(limit int, filterPattern string) error {
 	if m.streamName == "" {
 		return nil
 	}
@@ -79,8 +79,8 @@ func (m *MessageState) FetchMessages(limit int, filter string) error {
 		return err
 	}
 
-	m.filter = filter
-	messages, err := api.ListStreamMessages(ctx, m.streamName, limit, "seq_desc", filter)
+	m.filterPattern = filterPattern
+	messages, err := api.ListStreamMessages(ctx, m.streamName, limit, "seq_desc", filterPattern)
 	if err != nil {
 		m.errorMsg = fmt.Sprintf("Error fetching messages: %v", err)
 		return nil
@@ -170,7 +170,7 @@ func (m *MessageState) SetStreamName(streamName string) {
 	m.listCursor = 0
 	m.detailMessage = nil
 	m.showDetail = false
-	m.filter = ""
+	m.filterPattern = ""
 	m.filterInput.SetValue("")
 	m.filterMode = false
 	m.err = nil
@@ -185,7 +185,7 @@ func (m *MessageState) listView(width, height int) string {
 	if m.filterMode {
 		output += fmt.Sprintf("Filter (f): %s\n", strings.TrimPrefix(m.filterInput.View(), "> "))
 	} else {
-		output += fmt.Sprintf("Filter (f): %s\n", m.filter)
+		output += fmt.Sprintf("Filter (f): %s\n", m.filterPattern)
 	}
 
 	if m.errorMsg != "" {
@@ -585,7 +585,7 @@ func (m *MessageState) HandleFilterModeKeyPress(msg tea.KeyMsg) tea.Cmd {
 	case "esc", "enter", "ctrl+c":
 		m.filterMode = false
 		m.filterInput.Blur()
-		m.filter = m.filterInput.Value()
+		m.filterPattern = m.filterInput.Value()
 		return m.ApplyFilter
 	default:
 		var cmd tea.Cmd
@@ -599,11 +599,11 @@ func (m *MessageState) ApplyFilter() tea.Msg {
 		return nil
 	}
 
-	filter := m.filter
-	if filter == "" {
-		filter = ">"
+	filterPattern := m.filterPattern
+	if filterPattern == "" {
+		filterPattern = ">"
 	}
-	err := m.FetchMessages(calculateLimit(), filter)
+	err := m.FetchMessages(calculateLimit(), filterPattern)
 	if err != nil {
 		m.err = err
 		m.errorMsg = fmt.Sprintf("Error: %v", err)

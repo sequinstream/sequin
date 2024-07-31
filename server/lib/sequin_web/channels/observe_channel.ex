@@ -10,7 +10,7 @@ defmodule SequinWeb.ObserveChannel do
   @impl true
   def join("observe", _payload, socket) do
     send(self(), :after_join)
-    {:ok, assign(socket, listening_consumer_id: nil, message_limit: nil)}
+    {:ok, assign(socket, listening_consumer_id: nil, message_limit: nil, last_messages_hash: nil)}
   end
 
   @impl true
@@ -38,13 +38,22 @@ defmodule SequinWeb.ObserveChannel do
       upcoming_messages =
         Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id, is_deliverable: true, limit: limit)
 
-      push(socket, "consumer_messages", %{
+      new_messages = %{
         pending_messages: pending_messages,
         upcoming_messages: upcoming_messages
-      })
+      }
 
-      timer_ref = schedule_messages_fetch()
-      {:noreply, assign(socket, timer_ref: timer_ref)}
+      new_hash = :erlang.phash2(new_messages)
+
+      if new_hash == socket.assigns.last_messages_hash do
+        timer_ref = schedule_messages_fetch()
+        {:noreply, assign(socket, timer_ref: timer_ref)}
+      else
+        Logger.info("Sending updated messages for consumer: #{consumer_id}")
+        push(socket, "consumer_messages", new_messages)
+        timer_ref = schedule_messages_fetch()
+        {:noreply, assign(socket, timer_ref: timer_ref, last_messages_hash: new_hash)}
+      end
     else
       {:noreply, socket}
     end
@@ -70,7 +79,7 @@ defmodule SequinWeb.ObserveChannel do
       Process.cancel_timer(socket.assigns.timer_ref)
     end
 
-    {:reply, :ok, assign(socket, listening_consumer_id: nil, timer_ref: nil, message_limit: nil)}
+    {:reply, :ok, assign(socket, listening_consumer_id: nil, timer_ref: nil, message_limit: nil, last_messages_hash: nil)}
   end
 
   defp schedule_messages_fetch do

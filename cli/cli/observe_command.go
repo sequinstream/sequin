@@ -18,9 +18,12 @@ import (
 
 // AddObserveCommands adds all observe-related commands to the given app
 func AddObserveCommands(app *fisk.Application, config *Config) {
-	observeCmd := app.Command("observe", "Observe stream in real-time").
+	observeCmd := app.Command("observe", "Observe Sequin in real-time").
 		Alias("obs").
 		Alias("o")
+
+	streamArg := observeCmd.Arg("stream", "Stream name or ID to observe").String()
+	consumerArg := observeCmd.Arg("consumer", "Consumer name or ID to observe").String()
 
 	observeCmd.Action(func(c *fisk.ParseContext) error {
 		ctx, err := sequinContext.LoadContext(config.ContextName)
@@ -28,7 +31,7 @@ func AddObserveCommands(app *fisk.Application, config *Config) {
 			return fmt.Errorf("failed to load context: %w", err)
 		}
 
-		return streamObserve(c, config, ctx)
+		return streamObserve(c, config, ctx, *streamArg, *consumerArg)
 	})
 }
 
@@ -445,7 +448,7 @@ func (s *state) renderBottomBar(width int) string {
 		Render(content)
 }
 
-func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context) error {
+func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Context, streamArg string, consumerArg string) error {
 	statePtr := &state{}                  // Create a pointer to the state
 	*statePtr = initialState(config, ctx) // Initialize the state
 
@@ -456,6 +459,30 @@ func streamObserve(_ *fisk.ParseContext, config *Config, ctx *sequinContext.Cont
 
 	statePtr.consumers.SetObserveChannel(observeChannel)
 	statePtr.registerCallbacks(observeChannel)
+
+	// If a stream argument is provided, set the initial stream
+	if streamArg != "" {
+		stream, err := api.FetchStreamInfo(ctx, streamArg)
+		if err != nil {
+			return fmt.Errorf("failed to get stream: %w", err)
+		}
+		statePtr.selectedStream = stream
+		statePtr.messages.SetStream(*stream)
+		statePtr.consumers.SetStream(*stream)
+
+		if consumerArg != "" {
+			// If a consumer argument is provided, set the initial consumer and switch to the Consumers tab
+			consumer, err := api.FetchConsumerInfo(ctx, streamArg, consumerArg)
+			if err != nil {
+				return fmt.Errorf("failed to get consumer: %w", err)
+			}
+			statePtr.setActiveTab(ConsumersTab)
+			statePtr.consumers.setSelectedConsumer(consumer.ID)
+			statePtr.consumers.EnableDetailView()
+		} else {
+			statePtr.setActiveTab(MessagesTab)
+		}
+	}
 
 	p := tea.NewProgram(statePtr, tea.WithAltScreen()) // Pass the pointer to the program
 	if _, err := p.Run(); err != nil {

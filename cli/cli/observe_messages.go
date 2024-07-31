@@ -172,10 +172,11 @@ func (m *MessageState) View(width, height int) string {
 	return m.listView(width, height)
 }
 
-func (m *MessageState) SetStreamName(streamName string) {
+func (m *MessageState) SetStream(stream models.Stream) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.streamName = streamName
+	m.streamName = stream.Name
+	m.streamID = stream.ID
 	m.messages = nil
 	m.listCursor = 0
 	m.detailMessage = nil

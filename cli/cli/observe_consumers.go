@@ -581,8 +581,8 @@ func (c *ConsumerState) DisableDetailView() {
 	c.resetDetailCursor()
 }
 
-func (c *ConsumerState) SetStreamName(streamName string) {
-	c.streamName = streamName
+func (c *ConsumerState) SetStream(stream models.Stream) {
+	c.streamName = stream.Name
 	c.consumers = nil
 	c.selectedConsumerID = ""
 	c.DisableDetailView()

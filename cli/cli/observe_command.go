@@ -274,8 +274,8 @@ func (s *state) handleEnter() (tea.Model, tea.Cmd) {
 	case StreamsTab:
 		s.selectedStream = s.streams.GetSelectedStream()
 		if s.selectedStream != nil {
-			s.messages.SetStreamName(s.selectedStream.Name)
-			s.consumers.SetStreamName(s.selectedStream.Name)
+			s.messages.SetStream(*s.selectedStream)
+			s.consumers.SetStream(*s.selectedStream)
 			s.setActiveTab(MessagesTab)
 			return s, s.messages.ApplyFilter
 		}
@@ -520,8 +520,8 @@ func (s *state) setActiveTab(tab TabType) {
 	switch tab {
 	case StreamsTab:
 		s.selectedStream = nil
-		s.messages.SetStreamName("")
-		s.consumers.SetStreamName("")
+		s.messages.SetStream(models.Stream{})
+		s.consumers.SetStream(models.Stream{})
 	case ConsumersTab:
 		s.consumers.WillAppear(calculateLimit())
 	default:

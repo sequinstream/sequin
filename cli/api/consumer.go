@@ -391,7 +391,7 @@ func AckMessage(ctx *context.Context, streamID, consumerID, ackID string) error 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusNoContent {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return ParseAPIError(resp.StatusCode, string(body))
 	}

@@ -29,6 +29,7 @@ defmodule Sequin.PostgresReplicationTest do
   @test_schema "__postgres_replication_test_schema__"
   @test_table "__postgres_replication_test_table__"
   @test_table_2pk "__postgres_replication_test_table_2pk__"
+  @test_table_full_replica "__postgres_replication_test_table_full_replica__"
   @publication "__postgres_replication_test_publication__"
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
@@ -55,12 +56,23 @@ defmodule Sequin.PostgresReplicationTest do
         planet text,
         primary key (id1, id2)
       )
+      """,
+      """
+      create table if not exists #{@test_schema}.#{@test_table_full_replica} (
+        id serial primary key,
+        name text,
+        house text,
+        planet text
+      )
+      """,
+      """
+      ALTER TABLE #{@test_schema}.#{@test_table_full_replica} REPLICA IDENTITY FULL
       """
     ]
 
     ReplicationSlots.setup_each(
       @test_schema,
-      [@test_table, @test_table_2pk],
+      [@test_table, @test_table_2pk, @test_table_full_replica],
       @publication,
       replication_slot(),
       create_table_ddls
@@ -112,6 +124,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => "Paul Atreides", "house" => "Atreides", "planet" => "Arrakis"}
       refute decoded_data["deleted"]
+      assert decoded_data["changes"] == %{}
+      assert decoded_data["action"] == "insert"
     end
 
     test "updates are replicated to the stream", %{conn: conn, stream: stream} do
@@ -131,6 +145,9 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => "Leto Atreides", "house" => "Atreides", "planet" => "Arrakis"}
       refute decoded_data["deleted"]
+      # Empty because replica identity is not set to FULL
+      assert decoded_data["changes"] == %{}
+      assert decoded_data["action"] == "update"
     end
 
     test "deletes are replicated to the stream", %{conn: conn, stream: stream} do
@@ -150,6 +167,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_data = Jason.decode!(message.data)
       assert decoded_data["data"] == %{"id" => 1, "name" => nil, "house" => nil, "planet" => nil}
       assert decoded_data["deleted"]
+      assert decoded_data["changes"] == %{}
+      assert decoded_data["action"] == "delete"
     end
 
     test "replication with default replica identity", %{conn: conn, stream: stream} do
@@ -168,6 +187,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_insert_data = Jason.decode!(insert_message.data)
       assert decoded_insert_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Fremen", "planet" => "Arrakis"}
       refute decoded_insert_data["deleted"]
+      assert decoded_insert_data["changes"] == %{}
+      assert decoded_insert_data["action"] == "insert"
 
       query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET house = 'Atreides' WHERE id = 1")
       assert_receive {Replication, :message_handled}, 1_000
@@ -180,6 +201,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_update_data = Jason.decode!(update_message.data)
       assert decoded_update_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Arrakis"}
       refute decoded_update_data["deleted"]
+      assert decoded_update_data["changes"] == %{}
+      assert decoded_update_data["action"] == "update"
 
       query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
       assert_receive {Replication, :message_handled}, 1_000
@@ -192,6 +215,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_delete_data = Jason.decode!(delete_message.data)
       assert decoded_delete_data["data"]["id"] == 1
       assert decoded_delete_data["deleted"]
+      assert decoded_delete_data["changes"] == %{}
+      assert decoded_delete_data["action"] == "delete"
     end
 
     test "replication with two primary key columns", %{conn: conn, stream: stream} do
@@ -210,6 +235,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_insert_data = Jason.decode!(insert_message.data)
       assert %{"id1" => 1, "id2" => 2} = decoded_insert_data["data"]
       refute decoded_insert_data["deleted"]
+      assert decoded_insert_data["changes"] == %{}
+      assert decoded_insert_data["action"] == "insert"
 
       # Delete
       query!(conn, "DELETE FROM #{@test_schema}.#{@test_table_2pk} WHERE id1 = 1 AND id2 = 2")
@@ -219,6 +246,8 @@ defmodule Sequin.PostgresReplicationTest do
       decoded_delete_data = Jason.decode!(delete_message.data)
       assert %{"id1" => 1, "id2" => 2} = decoded_delete_data["data"]
       assert decoded_delete_data["deleted"]
+      assert decoded_delete_data["changes"] == %{}
+      assert decoded_delete_data["action"] == "delete"
     end
 
     test "add_info returns correct information", %{conn: conn, pg_replication: pg_replication} do
@@ -263,6 +292,35 @@ defmodule Sequin.PostgresReplicationTest do
 
       [message] = Streams.list_messages_for_stream(stream.id)
       assert message.key =~ "#{@test_schema}.#{@test_table}.insert"
+    end
+
+    test "updates with FULL replica identity include changed fields", %{
+      conn: conn,
+      stream: stream,
+      source_db: source_db
+    } do
+      query!(
+        conn,
+        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet) VALUES ('Chani', 'Fremen', 'Arrakis')"
+      )
+
+      assert_receive {Replication, :message_handled}, 1_000
+
+      query!(
+        conn,
+        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan' WHERE id = 1"
+      )
+
+      assert_receive {Replication, :message_handled}, 1_000
+
+      [update_message] = Streams.list_messages_for_stream(stream.id)
+      assert update_message.key == "#{source_db.name}.#{@test_schema}.#{@test_table_full_replica}.1"
+
+      decoded_data = Jason.decode!(update_message.data)
+      assert decoded_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Caladan"}
+      refute decoded_data["deleted"]
+      assert decoded_data["changes"] == %{"house" => "Fremen", "planet" => "Arrakis"}
+      assert decoded_data["action"] == "update"
     end
   end
 

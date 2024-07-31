@@ -40,21 +40,53 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
       data:
         Jason.encode!(%{
           data: old_record,
-          deleted: true
+          deleted: true,
+          changes: %{},
+          action: "delete"
         })
     }
   end
 
-  # InsertRecord and UpdateRecord
-  defp message_for_upsert(key_prefix, %{record: record} = message, key_format) do
+  # InsertRecord
+  defp message_for_upsert(key_prefix, %NewRecord{record: record} = message, key_format) do
     %{
       key: key_from_message(key_prefix, message, message.ids, key_format),
       data:
         Jason.encode!(%{
           data: record,
-          deleted: false
+          deleted: false,
+          changes: %{},
+          action: "insert"
         })
     }
+  end
+
+  # UpdateRecord
+  defp message_for_upsert(key_prefix, %UpdatedRecord{record: record, old_record: old_record} = message, key_format) do
+    changes = if old_record, do: filter_changes(old_record, record), else: %{}
+
+    %{
+      key: key_from_message(key_prefix, message, message.ids, key_format),
+      data:
+        Jason.encode!(%{
+          data: record,
+          deleted: false,
+          changes: changes,
+          action: "update"
+        })
+    }
+  end
+
+  defp filter_changes(old_record, new_record) do
+    old_record
+    |> Enum.reduce(%{}, fn {k, v}, acc ->
+      if v == Map.get(new_record, k) do
+        acc
+      else
+        Map.put(acc, k, v)
+      end
+    end)
+    |> Map.new()
   end
 
   defp key_from_message(key_prefix, message, record_ids, key_format) do

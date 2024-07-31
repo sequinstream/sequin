@@ -346,7 +346,7 @@ func (m *MessageState) detailView(width, _ int) string {
 		PaddingRight(2)
 
 	for i, field := range fields {
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(width)
 		line := fmt.Sprintf("%-15s %s", field.name+":", field.value)
 		if i == m.detailCursor {
 			style = style.
@@ -371,9 +371,9 @@ func (m *MessageState) detailView(width, _ int) string {
 		output += dataStyle.Render("Data")
 	}
 	output += "\n"
-	output += wrapText(msg.Data, width-2) + "\n\n"
+	output += wrapText(msg.Data, width) + "\n\n"
 
-	output += lipgloss.NewStyle().Bold(true).Render("Consumers for message") + "\n\n"
+	output += lipgloss.NewStyle().Bold(true).Width(width).Render("Consumers for message") + "\n\n"
 	output += formatConsumerInfoTable(m.detailMessage.ConsumerInfos, width, m.detailCursor-len(fields)-1)
 
 	m.detailMaxCursor = len(fields) + len(m.detailMessage.ConsumerInfos)
@@ -409,7 +409,7 @@ func wrapText(text string, width int) string {
 
 func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int, selectedIndex int) string {
 	if len(consumerInfos) == 0 {
-		return "No consumers for message\n"
+		return lipgloss.NewStyle().Width(width).Render("No consumers for message\n")
 	}
 
 	slugWidth := 20
@@ -420,7 +420,8 @@ func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int, sel
 	tableHeaderStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(colorBlack)).
-		Background(lipgloss.Color(colorLightGray))
+		Background(lipgloss.Color(colorLightGray)).
+		Width(width)
 
 	header := fmt.Sprintf("%-*s %-*s %-*s %-*s",
 		slugWidth, "CONSUMER NAME",
@@ -442,7 +443,7 @@ func formatConsumerInfoTable(consumerInfos []models.ConsumerInfo, width int, sel
 			stateWidth, info.State,
 			deliverCountWidth, deliverCount)
 
-		style := lipgloss.NewStyle()
+		style := lipgloss.NewStyle().Width(width)
 		if i == selectedIndex {
 			style = style.
 				Background(lipgloss.Color(colorPurple)).

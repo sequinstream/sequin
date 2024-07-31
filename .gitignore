@@ -16,3 +16,5 @@ dump.rdb
 .DS_Store
 
 .settings.json
+
+sequin.log

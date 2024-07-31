@@ -16,8 +16,15 @@ type WebhooksResponse struct {
 }
 
 type WebhookCreateOptions struct {
-	Name     string `json:"name"`
-	StreamID string `json:"stream_id"`
+	Name         string        `json:"name"`
+	StreamID     string        `json:"stream_id"`
+	AuthStrategy *AuthStrategy `json:"auth_strategy,omitempty"`
+}
+
+type AuthStrategy struct {
+	Type       string `json:"type"`
+	HeaderName string `json:"header_name,omitempty"`
+	Secret     string `json:"secret,omitempty"`
 }
 
 // BuildFetchWebhooks builds the HTTP request for fetching all webhooks

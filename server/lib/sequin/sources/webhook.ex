@@ -7,9 +7,10 @@ defmodule Sequin.Sources.Webhook do
 
   alias Ecto.Queryable
 
-  @derive {Jason.Encoder, only: [:id, :name, :account_id, :stream_id, :stream, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :account_id, :stream_id, :stream, :inserted_at, :updated_at, :auth_strategy]}
   schema "webhooks" do
     field :name, :string
+    field :auth_strategy, :map
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :stream, Sequin.Streams.Stream
@@ -19,17 +20,19 @@ defmodule Sequin.Sources.Webhook do
 
   def create_changeset(webhook, attrs) do
     webhook
-    |> cast(attrs, [:name, :stream_id])
+    |> cast(attrs, [:name, :stream_id, :auth_strategy])
     |> validate_required([:name, :stream_id])
     |> Sequin.Changeset.validate_name()
     |> foreign_key_constraint(:stream_id, name: "webhooks_stream_id_fkey")
     |> unique_constraint([:account_id, :name], error_key: :name)
+    |> validate_auth_strategy()
   end
 
   def update_changeset(webhook, attrs) do
     webhook
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :auth_strategy])
     |> validate_required([:name])
+    |> validate_auth_strategy()
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
@@ -60,5 +63,19 @@ defmodule Sequin.Sources.Webhook do
 
   defp base_query(query \\ __MODULE__) do
     from(w in query, as: :webhook)
+  end
+
+  defp validate_auth_strategy(changeset) do
+    case get_change(changeset, :auth_strategy) do
+      nil ->
+        changeset
+
+      %{"type" => "hmac", "header_name" => header_name, "secret" => secret}
+      when is_binary(header_name) and is_binary(secret) ->
+        changeset
+
+      %{} ->
+        add_error(changeset, :auth_strategy, "invalid auth strategy")
+    end
   end
 end

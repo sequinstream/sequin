@@ -1,13 +1,12 @@
-WITH max_ack_pending AS (
-  SELECT *
-  FROM sequin_streams.consumer_messages
-  WHERE consumer_id = :consumer_id
-  ORDER BY message_seq ASC
-  LIMIT :max_ack_pending
-),
-deliverable AS (
-  SELECT *
-  FROM max_ack_pending
+WITH deliverable_ids AS (
+  SELECT ack_id
+  FROM (
+    SELECT ack_id, state, not_visible_until
+    FROM sequin_streams.consumer_messages
+    WHERE consumer_id = :consumer_id
+    ORDER BY message_seq ASC
+    LIMIT :max_ack_pending
+  ) as max_ack_pending
   WHERE state = 'available'
      OR (state IN ('delivered', 'pending_redelivery') AND not_visible_until <= :now)
   LIMIT :batch_size
@@ -20,9 +19,9 @@ updated AS (
       not_visible_until = :not_visible_until,
       last_delivered_at = :now,
       updated_at = :now
-  FROM deliverable d
+  FROM deliverable_ids d
   WHERE cm.ack_id = d.ack_id
-  RETURNING cm.*
+  RETURNING cm.ack_id, cm.message_key, cm.message_seq
 )
 SELECT u.ack_id, m.*
 FROM updated u

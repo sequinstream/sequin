@@ -62,7 +62,7 @@ while true; do
             
             # Acknowledge the message
             ack_response=$(sequin consumer ack "$STREAM_NAME" "$CONSUMER_NAME" "$ack_id" 2>&1)
-            if echo "$ack_response" | grep -q '"success":true'; then
+            if [[ $ack_response == *"Message acknowledged with Ack ID"* ]]; then
                 echo "Successfully acknowledged message with ack_id: $ack_id"
             else
                 echo "Failed to acknowledge message with ack_id: $ack_id"

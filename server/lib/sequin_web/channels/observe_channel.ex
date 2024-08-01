@@ -33,10 +33,18 @@ defmodule SequinWeb.ObserveChannel do
       {:ok, consumer} = Streams.get_consumer(consumer_id)
 
       pending_messages =
-        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id, is_deliverable: false, limit: limit)
+        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id,
+          is_deliverable: false,
+          limit: limit,
+          order_by: :message_seq
+        )
 
       upcoming_messages =
-        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id, is_deliverable: true, limit: limit)
+        Streams.list_consumer_messages_for_consumer(consumer.stream_id, consumer_id,
+          is_deliverable: true,
+          limit: limit,
+          order_by: :message_seq
+        )
 
       new_messages = %{
         pending_messages: pending_messages,

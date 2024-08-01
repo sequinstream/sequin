@@ -249,8 +249,9 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
-  defp generate_key(parts: parts) do
-    Enum.map_join(1..parts, ".", fn _ -> Faker.Lorem.word() end)
+  defp generate_key(parts: parts) when parts > 1 do
+    s = Enum.map_join(1..(parts - 1), ".", fn _ -> Faker.Lorem.word() end)
+    "#{s}.#{:erlang.unique_integer([:positive])}"
   end
 
   defp generate_name do

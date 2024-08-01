@@ -678,6 +678,62 @@ defmodule Sequin.StreamsTest do
     end
   end
 
+  describe "receive_for_consumer with concurrent workers" do
+    setup do
+      stream = StreamsFactory.insert_stream!()
+
+      consumer =
+        StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 100)
+
+      # Insert 10 messages
+      messages =
+        Enum.map(1..10, fn _ ->
+          StreamsFactory.insert_message!(stream_id: stream.id)
+        end)
+
+      # Insert consumer messages for each message
+      Enum.each(messages, fn message ->
+        StreamsFactory.insert_consumer_message!(
+          consumer_id: consumer.id,
+          message: message,
+          state: :available
+        )
+      end)
+
+      {:ok, stream: stream, consumer: consumer}
+    end
+
+    test "ensures unique messages are received by concurrent workers", %{consumer: consumer} do
+      # Create 20 tasks that each try to receive one message
+      tasks =
+        Enum.map(1..20, fn _ ->
+          Task.async(fn ->
+            Streams.receive_for_consumer(consumer, batch_size: 1)
+          end)
+        end)
+
+      # Wait for all tasks to complete
+      results = Task.await_many(tasks, 5000)
+
+      # Count successful and empty results
+      {successful, empty} =
+        Enum.reduce(results, {[], []}, fn result, {successful, empty} ->
+          case result do
+            {:ok, [message]} -> {[message | successful], empty}
+            {:ok, []} -> {successful, ["empty" | empty]}
+          end
+        end)
+
+      # Verify that we got 10 unique messages and 10 empty results
+      assert length(successful) == 10
+      assert length(empty) == 10
+
+      # Verify that all received messages are unique
+      unique_messages = Enum.uniq_by(successful, & &1.key)
+      assert length(unique_messages) == 10
+    end
+  end
+
   @one_day_ago DateTime.add(DateTime.utc_now(), -24, :hour)
 
   describe "ack_messages/2" do

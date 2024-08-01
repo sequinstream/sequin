@@ -79,14 +79,19 @@ func getVersion() string {
 }
 
 func trimLogFile(file *os.File, maxLines int) error {
-	// Read all lines
+	// Increase the scanner's buffer size and set a custom split function
+	const maxCapacity = 1024 * 1024 // 1MB
+	buf := make([]byte, maxCapacity)
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(buf, maxCapacity)
+	scanner.Split(bufio.ScanLines)
+
 	var lines []string
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return err
+		return fmt.Errorf("error scanning file: %w", err)
 	}
 
 	// Keep only the last maxLines

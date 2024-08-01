@@ -57,9 +57,8 @@ while true; do
             
             # Process the message
             echo "Received message content: $content"
-            echo "Processing message for 1 second..."
-            sleep 1
-            
+            echo "Processing message for 100 milliseconds..."
+            sleep 0.1
             # Acknowledge the message
             ack_response=$(sequin consumer ack "$STREAM_NAME" "$CONSUMER_NAME" "$ack_id" 2>&1)
             if [[ $ack_response == *"Message acknowledged with Ack ID"* ]]; then
@@ -72,7 +71,7 @@ while true; do
             echo "Invalid ack_id format: $ack_id"
         fi
     else
-        echo "No message received. Waiting..."
+        echo "No messages to consume. Waiting..."
         sleep 5
     fi
 done

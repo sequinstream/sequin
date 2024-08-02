@@ -41,8 +41,8 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
     # test "returns 422 when message ingestion fails", %{conn: conn, webhook: webhook} do
     #   payload = %{"id" => 1, "name" => "Paul Atreides"}
 
-    #   # Mock Streams.upsert_messages to return an error
-    #   Mox.expect(Sequin.StreamsMock, :upsert_messages, fn _, _ -> {:error, "Some error"} end)
+    #   # Mock Streams.send_messages to return an error
+    #   Mox.expect(Sequin.StreamsMock, :send_messages, fn _, _ -> {:error, "Some error"} end)
 
     #   conn = post(conn, ~p"/api/webhook/#{webhook.name}", payload)
     #   assert json_response(conn, 422) == %{"error" => "Failed to ingest message"}

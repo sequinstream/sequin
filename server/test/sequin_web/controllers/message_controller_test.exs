@@ -223,4 +223,39 @@ defmodule SequinWeb.MessageControllerTest do
       assert listed_message["info"]["not_visible_until"] == nil
     end
   end
+
+  describe "message_consumer_info" do
+    test "returns message and consumer details for a valid message", %{conn: conn, stream: stream} do
+      message = StreamsFactory.insert_message!(stream_id: stream.id)
+
+      consumer =
+        StreamsFactory.insert_consumer!(account_id: stream.account_id, stream_id: stream.id, filter_key_pattern: ">")
+
+      StreamsFactory.insert_consumer_message!(consumer_id: consumer.id, message: message)
+
+      conn = get(conn, ~p"/api/streams/#{stream.id}/messages/#{message.id}/consumer_info")
+      assert %{"data" => data} = json_response(conn, 200)
+      assert data["message"]["id"] == message.id
+      assert data["message"]["key"] == message.key
+      assert data["message"]["data"] == message.data
+      assert [consumer_info] = data["consumer_info"]
+      assert consumer_info["consumer_id"] == consumer.id
+    end
+
+    test "returns 404 for non-existent stream", %{conn: conn} do
+      conn = get(conn, ~p"/api/streams/non_existent_stream/messages/1/consumer_info")
+      assert json_response(conn, 404)
+    end
+
+    test "returns 404 for non-existent message", %{conn: conn, stream: stream} do
+      conn = get(conn, ~p"/api/streams/#{stream.id}/messages/#{UUID.uuid4()}/consumer_info")
+      assert json_response(conn, 404)
+    end
+
+    test "returns 404 for message from another account's stream", %{conn: conn, other_stream: other_stream} do
+      message = StreamsFactory.insert_message!(stream_id: other_stream.id)
+      conn = get(conn, ~p"/api/streams/#{other_stream.id}/messages/#{message.id}/consumer_info")
+      assert json_response(conn, 404)
+    end
+  end
 end

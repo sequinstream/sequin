@@ -9,5 +9,4 @@ defmodule Sequin.Streams.Query do
 
   Yesql.defquery(Path.join(__DIR__, "receive_for_consumer.sql"))
   Yesql.defquery(Path.join(__DIR__, "populate_consumer_messages.sql"))
-  Yesql.defquery(Path.join(__DIR__, "upsert_consumer_messages.sql"))
 end

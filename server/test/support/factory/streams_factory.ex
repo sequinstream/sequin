@@ -37,6 +37,7 @@ defmodule Sequin.Factory.StreamsFactory do
         last_delivered_at: Factory.timestamp(),
         message_key: generate_key(parts: 3),
         message_seq: Enum.random(1..1000),
+        message_id: Factory.uuid(),
         not_visible_until: not_visible_until,
         state: state
       },
@@ -57,7 +58,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     message_attrs =
       if message do
-        %{message_key: message.key, message_seq: message.seq}
+        %{message_key: message.key, message_seq: message.seq, message_id: message.id}
       else
         %{}
       end
@@ -142,7 +143,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Consumer{
-        name: generate_name(),
+        name: generate_name(:consumer),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
@@ -191,8 +192,9 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        name: generate_name(),
-        account_id: Factory.uuid()
+        name: generate_name(:stream),
+        account_id: Factory.uuid(),
+        one_message_per_key: Factory.one_of([true, false])
       },
       attrs
     )
@@ -254,7 +256,11 @@ defmodule Sequin.Factory.StreamsFactory do
     "#{s}.#{:erlang.unique_integer([:positive])}"
   end
 
-  defp generate_name do
-    "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
+  defp generate_name(:stream) do
+    "stream_#{:erlang.unique_integer([:positive])}"
+  end
+
+  defp generate_name(:consumer) do
+    "consumer_#{:erlang.unique_integer([:positive])}"
   end
 end

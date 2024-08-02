@@ -60,10 +60,10 @@ func TestStreamLs(t *testing.T) {
 func TestStreamAdd(t *testing.T) {
 	mockClient := &MockAPIClient{}
 	config := &Config{}
-	streamConfig := &StreamConfig{Name: "new-stream"}
+	streamConfig := &StreamConfig{Name: "new-stream", OneMessagePerKey: true}
 
 	t.Run("successful stream addition", func(t *testing.T) {
-		mockClient.AddStreamFunc = func(ctx *context.Context, name string) (*models.Stream, error) {
+		mockClient.AddStreamFunc = func(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error) {
 			return &models.Stream{
 				ID:   "new-stream-id",
 				Name: name,
@@ -87,7 +87,7 @@ func TestStreamAdd(t *testing.T) {
 	})
 
 	t.Run("error adding stream", func(t *testing.T) {
-		mockClient.AddStreamFunc = func(ctx *context.Context, name string) (*models.Stream, error) {
+		mockClient.AddStreamFunc = func(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error) {
 			return nil, errors.New("failed to add stream")
 		}
 

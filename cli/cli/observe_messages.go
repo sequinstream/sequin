@@ -87,7 +87,7 @@ func (m *MessageState) FetchMessages(limit int, filterPattern string) error {
 	m.errorMsg = ""
 
 	if m.detailMessage != nil {
-		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.detailMessage.Message.Key)
+		updatedMessage, err := api.GetStreamMessage(ctx, m.streamName, m.detailMessage.Message.ID)
 		if err != nil {
 			m.errorMsg = fmt.Sprintf("Error refreshing selected message: %v", err)
 		} else {
@@ -108,12 +108,12 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 	// Create a map of existing messages for quick lookup
 	existingMessages := make(map[string]*models.Message)
 	for i := range m.messages {
-		existingMessages[m.messages[i].Key] = &m.messages[i]
+		existingMessages[m.messages[i].ID] = &m.messages[i]
 	}
 
 	// Process upserted messages
 	for _, upsertedMsg := range filteredMessages {
-		if existingMsg, exists := existingMessages[upsertedMsg.Key]; exists {
+		if existingMsg, exists := existingMessages[upsertedMsg.ID]; exists {
 			// Replace existing message if the upserted one is newer
 			if upsertedMsg.UpdatedAt.After(existingMsg.UpdatedAt) {
 				*existingMsg = upsertedMsg
@@ -124,7 +124,7 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 		}
 
 		// Check if the upserted message is the selected message
-		if m.detailMessage != nil && m.detailMessage.Message.Key == upsertedMsg.Key {
+		if m.detailMessage != nil && m.detailMessage.Message.ID == upsertedMsg.ID {
 			m.detailMessage.Message = upsertedMsg
 			m.fetchMessageWithConsumerInfos()
 		}
@@ -143,7 +143,7 @@ func (m *MessageState) MessagesUpserted(messages []models.Message, limit int) {
 	// Update detailMessage if it's no longer in the messages slice
 	if m.detailMessage != nil {
 		for _, msg := range m.messages {
-			if msg.Key == m.detailMessage.Message.Key {
+			if msg.ID == m.detailMessage.Message.ID {
 				m.detailMessage.Message = msg
 				break
 			}
@@ -262,7 +262,7 @@ func (m *MessageState) listView(width, height int) string {
 
 	// Truncate the table output if it exceeds the available height
 	tableLines := strings.Split(tableOutput, "\n")
-	if len(tableLines) > tableHeight {
+	if tableHeight > 0 && len(tableLines) > tableHeight {
 		tableLines = tableLines[:tableHeight]
 		tableOutput = strings.Join(tableLines, "\n")
 	}
@@ -270,7 +270,7 @@ func (m *MessageState) listView(width, height int) string {
 	output += tableOutput
 
 	// Update visibleMessageCount
-	m.visibleMessageCount = min(len(m.messages), tableHeight-1) // Subtract 1 for the header row
+	m.visibleMessageCount = max(0, min(len(m.messages), tableHeight-1)) // Ensure non-negative
 
 	return output
 }
@@ -297,6 +297,7 @@ func (m *MessageState) detailView(width, _ int) string {
 		name  string
 		value string
 	}{
+		{"ID", msg.ID},
 		{"Seq", fmt.Sprintf("%d", msg.Seq)},
 		{"Key", msg.Key},
 		{"Created", msg.CreatedAt.Format(dateFormat)},
@@ -446,7 +447,7 @@ func (m *MessageState) fetchMessageWithConsumerInfos() error {
 		return err
 	}
 
-	consumer_detail, err := api.FetchMessageWithConsumerInfos(ctx, m.streamName, m.detailMessage.Message.Key)
+	consumer_detail, err := api.FetchMessageWithConsumerInfos(ctx, m.streamName, m.detailMessage.Message.ID)
 	if err != nil {
 		return err
 	}
@@ -581,14 +582,16 @@ func (m *MessageState) handleDetailViewEnter() tea.Cmd {
 
 	switch m.detailCursor {
 	case 0:
-		textToCopy = fmt.Sprintf("%d", msg.Seq)
+		textToCopy = msg.ID
 	case 1:
-		textToCopy = msg.Key
+		textToCopy = fmt.Sprintf("%d", msg.Seq)
 	case 2:
-		textToCopy = msg.CreatedAt.Format(dateFormat)
+		textToCopy = msg.Key
 	case 3:
-		textToCopy = msg.UpdatedAt.Format(dateFormat)
+		textToCopy = msg.CreatedAt.Format(dateFormat)
 	case 4:
+		textToCopy = msg.UpdatedAt.Format(dateFormat)
+	case 5:
 		textToCopy = msg.Data
 	default:
 		return nil
@@ -658,4 +661,12 @@ func (m *MessageState) filterMessages(messages []models.Message) []models.Messag
 		}
 	}
 	return filtered
+}
+
+// Add this helper function if it doesn't exist
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

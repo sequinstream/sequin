@@ -31,7 +31,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   @impl ReplicationMessageHandler
   def handle_message(%Context{} = ctx, message) do
     message = message_for_upsert(ctx.key_prefix, message, ctx.key_format)
-    Streams.upsert_messages(ctx.stream_id, [message])
+    Streams.send_messages(ctx.stream_id, [message])
   end
 
   defp message_for_upsert(key_prefix, %DeletedRecord{old_record: old_record} = message, key_format) do

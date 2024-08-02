@@ -12,7 +12,7 @@ defmodule SequinWeb.MessageController do
 
     with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
          {:ok, messages} <- parse_messages(params),
-         {:ok, count} <- Streams.upsert_messages(stream.id, messages) do
+         {:ok, count} <- Streams.send_messages(stream.id, messages) do
       render(conn, "publish.json", count: count)
     end
   end
@@ -27,11 +27,11 @@ defmodule SequinWeb.MessageController do
     end
   end
 
-  def stream_get(conn, %{"stream_id_or_name" => stream_id_or_name, "key" => key}) do
+  def stream_get(conn, %{"stream_id_or_name" => stream_id_or_name, "id" => id}) do
     account_id = conn.assigns.account_id
 
     with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
-         {:ok, message} <- Streams.get_message_for_stream(stream.id, key) do
+         {:ok, message} <- Streams.get_message_for_stream(stream.id, id) do
       render(conn, "stream_get.json", message: message)
     end
   end
@@ -60,12 +60,12 @@ defmodule SequinWeb.MessageController do
     end
   end
 
-  def message_consumer_info(conn, %{"stream_id_or_name" => stream_id_or_slug, "key" => key}) do
+  def message_consumer_info(conn, %{"stream_id_or_name" => stream_id_or_slug, "id" => id}) do
     account_id = conn.assigns.account_id
 
     with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_slug),
-         {:ok, message} <- Streams.get_message_for_stream(stream.id, key),
-         {:ok, consumer_messages_details} <- Streams.get_consumer_details_for_message(key, stream.id) do
+         {:ok, message} <- Streams.get_message_for_stream(stream.id, id),
+         {:ok, consumer_messages_details} <- Streams.get_consumer_details_for_message(id, stream.id) do
       render(conn, "message_info.json", message: message, consumer_messages_details: consumer_messages_details)
     end
   end

@@ -80,6 +80,9 @@ func (s *StreamState) View(width, height int) string {
 			{Name: "CONSUMERS", MinWidth: 9, ValueFunc: func(row interface{}) string {
 				return fmt.Sprintf("%d", row.(models.Stream).Stats.ConsumerCount)
 			}},
+			{Name: "ONE MSG/KEY", MinWidth: 12, ValueFunc: func(row interface{}) string {
+				return fmt.Sprintf("%t", row.(models.Stream).OneMessagePerKey)
+			}},
 			{Name: "CREATED AT", MinWidth: 20, ValueFunc: func(row interface{}) string {
 				return row.(models.Stream).CreatedAt.Format(time.RFC3339)
 			}},

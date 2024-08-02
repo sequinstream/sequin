@@ -174,3 +174,20 @@ func (oc *ObserveChannel) OnMessagesUpserted(handler func([]models.Message)) {
 		handler(tp.Messages)
 	})
 }
+
+func (oc *ObserveChannel) OnMessagesInserted(handler func([]models.Message)) {
+	oc.mu.Lock()
+	defer oc.mu.Unlock()
+	oc.channel.On("messages:inserted", func(payload any) {
+		type tempPayload struct {
+			Messages []models.Message `json:"messages"`
+		}
+
+		var tp tempPayload
+		if err := parsePayload(payload, &tp); err != nil {
+			log.Printf("Error parsing messages:inserted payload: %v", err)
+			return
+		}
+		handler(tp.Messages)
+	})
+}

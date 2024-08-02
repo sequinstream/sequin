@@ -45,8 +45,8 @@ defmodule SequinWeb.Router do
     post "/streams/:stream_id_or_name/consumers/:id_or_name/nack", PullController, :nack
     post "/streams/:stream_id_or_name/messages", MessageController, :publish
     get "/streams/:stream_id_or_name/messages", MessageController, :stream_list
-    get "/streams/:stream_id_or_name/messages/:key", MessageController, :stream_get
-    get "/streams/:stream_id_or_name/messages/:key/consumer_info", MessageController, :message_consumer_info
+    get "/streams/:stream_id_or_name/messages/:id", MessageController, :stream_get
+    get "/streams/:stream_id_or_name/messages/:id/consumer_info", MessageController, :message_consumer_info
     get "/streams/:stream_id_or_name/consumers/:consumer_id_or_name/messages", MessageController, :consumer_list
     resources "/webhooks", WebhookController, except: [:new, :edit], param: "id_or_name"
     post "/webhook/:webhook_name", WebhookIngestionController, :ingest

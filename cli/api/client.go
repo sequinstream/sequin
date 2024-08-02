@@ -57,8 +57,8 @@ func (c *Client) FetchStreamInfo(ctx *context.Context, streamID string) (*models
 	return FetchStreamInfo(ctx, streamID)
 }
 
-func (c *Client) AddStream(ctx *context.Context, name string) (*models.Stream, error) {
-	return AddStream(ctx, name)
+func (c *Client) AddStream(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error) {
+	return AddStream(ctx, name, oneMessagePerKey)
 }
 
 func (c *Client) RemoveStream(ctx *context.Context, streamID string) error {
@@ -73,8 +73,8 @@ func (c *Client) ListStreamMessages(ctx *context.Context, streamIDOrName string,
 	return ListStreamMessages(ctx, streamIDOrName, limit, sort, keyPattern)
 }
 
-func (c *Client) GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error) {
-	return GetStreamMessage(ctx, streamIDOrName, key)
+func (c *Client) GetStreamMessage(ctx *context.Context, streamIDOrName, messageID string) (models.Message, error) {
+	return GetStreamMessage(ctx, streamIDOrName, messageID)
 }
 
 func (c *Client) FetchMessageWithConsumerInfos(ctx *context.Context, streamID, messageKey string) (*models.MessageWithConsumerInfos, error) {

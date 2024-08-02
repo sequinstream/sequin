@@ -9,7 +9,7 @@ import (
 type MockAPIClient struct {
 	FetchStreamsFunc                  func(ctx *context.Context) ([]models.Stream, error)
 	FetchStreamInfoFunc               func(ctx *context.Context, streamID string) (*models.Stream, error)
-	AddStreamFunc                     func(ctx *context.Context, name string) (*models.Stream, error)
+	AddStreamFunc                     func(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error)
 	RemoveStreamFunc                  func(ctx *context.Context, streamID string) error
 	PublishMessageFunc                func(ctx *context.Context, streamID, key, message string) error
 	ListStreamMessagesFunc            func(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error)
@@ -25,8 +25,8 @@ func (m *MockAPIClient) FetchStreamInfo(ctx *context.Context, streamID string) (
 	return m.FetchStreamInfoFunc(ctx, streamID)
 }
 
-func (m *MockAPIClient) AddStream(ctx *context.Context, name string) (*models.Stream, error) {
-	return m.AddStreamFunc(ctx, name)
+func (m *MockAPIClient) AddStream(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error) {
+	return m.AddStreamFunc(ctx, name, oneMessagePerKey)
 }
 
 func (m *MockAPIClient) RemoveStream(ctx *context.Context, streamID string) error {

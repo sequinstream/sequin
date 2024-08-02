@@ -72,7 +72,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
       Logger.info("Backfill completed for postgres_replication_id: #{postgres_replication_id}")
     else
       messages = create_messages(postgres_database.name, schema, table, columns, rows, postgres_replication.key_format)
-      Streams.upsert_messages(postgres_replication.stream_id, messages)
+      Streams.send_messages(postgres_replication.stream_id, messages)
 
       next_offset = offset + length(rows)
       create(postgres_database_id, schema, table, postgres_replication_id, next_offset)

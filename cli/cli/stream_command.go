@@ -18,14 +18,15 @@ import (
 )
 
 type StreamConfig struct {
-	Name   string
-	Key    string
-	Data   string
-	Filter string
-	Last   int
-	First  int
-	Table  bool
-	AsJSON bool
+	Name             string
+	Key              string
+	Data             string
+	Filter           string
+	Last             int
+	First            int
+	Table            bool
+	AsJSON           bool
+	OneMessagePerKey bool
 }
 
 func AddStreamCommands(app *fisk.Application, config *Config, apiClient api.API) {
@@ -51,6 +52,7 @@ func AddStreamCommands(app *fisk.Application, config *Config, apiClient api.API)
 	addCmd.Arg("name", "Name of the stream to Add").StringVar(&s.Name)
 	addCmd.Flag("json", "JSON string containing stream configuration").StringVar(&config.JSONInput)
 	addCmd.Flag("json-file", "Path to JSON file containing stream configuration").StringVar(&config.JSONFile)
+	addCmd.Flag("one-message-per-key", "Allow only one message per key").BoolVar(&s.OneMessagePerKey)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config, apiClient)
@@ -108,6 +110,7 @@ func streamLs(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 	columns := []table.Column{
 		{Title: "ID", Width: 36},
 		{Title: "Name", Width: 20},
+		{Title: "One MSG/KEY", Width: 12},
 		{Title: "Consumers", Width: 10},
 		{Title: "Messages", Width: 10},
 		{Title: "Storage Size", Width: 15},
@@ -120,6 +123,7 @@ func streamLs(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 		rows = append(rows, table.Row{
 			s.ID,
 			s.Name,
+			fmt.Sprintf("%t", s.OneMessagePerKey),
 			fmt.Sprintf("%d", s.Stats.ConsumerCount),
 			fmt.Sprintf("%d", s.Stats.MessageCount),
 			formatBytes(s.Stats.StorageSize),
@@ -197,6 +201,7 @@ func displayStreamInfo(config *Config, apiClient api.API) error {
 	rows := []table.Row{
 		{"ID", stream.ID},
 		{"Index", fmt.Sprintf("%d", stream.Idx)},
+		{"One MSG/KEY", fmt.Sprintf("%t", stream.OneMessagePerKey)},
 		{"Consumers", fmt.Sprintf("%d", stream.Stats.ConsumerCount)},
 		{"Messages", fmt.Sprintf("%d", stream.Stats.MessageCount)},
 		{"Storage Size", formatBytes(stream.Stats.StorageSize)},
@@ -230,8 +235,20 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient 
 		}
 	}
 
+	// Prompt for OneMessagePerKey if not provided
+	if !s.OneMessagePerKey {
+		prompt := &survey.Confirm{
+			Message: "Allow only one message per key?",
+			Default: false,
+		}
+		err = survey.AskOne(prompt, &s.OneMessagePerKey)
+		if err != nil {
+			return err
+		}
+	}
+
 	if config.AsCurl {
-		req, err := api.BuildAddStream(ctx, s.Name)
+		req, err := api.BuildAddStream(ctx, s.Name, s.OneMessagePerKey)
 		if err != nil {
 			return err
 		}
@@ -246,7 +263,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient 
 	}
 
 	// Add stream
-	stream, err := apiClient.AddStream(ctx, s.Name)
+	stream, err := apiClient.AddStream(ctx, s.Name, s.OneMessagePerKey)
 	if err != nil {
 		return fmt.Errorf("failed to add stream: %w", err)
 	}
@@ -259,6 +276,7 @@ func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient 
 	rows := []table.Row{
 		{"Name", stream.Name},
 		{"Index", fmt.Sprintf("%d", stream.Idx)},
+		{"One Message Per Key", fmt.Sprintf("%t", stream.OneMessagePerKey)},
 		{"Consumers", fmt.Sprintf("%d", stream.Stats.ConsumerCount)},
 		{"Messages", fmt.Sprintf("%d", stream.Stats.MessageCount)},
 		{"Storage Size", formatBytes(stream.Stats.StorageSize)},

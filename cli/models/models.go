@@ -7,12 +7,13 @@ import (
 
 // Stream-related structures
 type Stream struct {
-	ID        string      `json:"id"`
-	Idx       int         `json:"idx"`
-	Name      string      `json:"name"`
-	Stats     StreamStats `json:"stats"`
-	CreatedAt time.Time   `json:"inserted_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
+	ID               string      `json:"id"`
+	Idx              int         `json:"idx"`
+	Name             string      `json:"name"`
+	OneMessagePerKey bool        `json:"one_message_per_key"`
+	Stats            StreamStats `json:"stats"`
+	CreatedAt        time.Time   `json:"inserted_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
 }
 
 type StreamStats struct {
@@ -23,6 +24,7 @@ type StreamStats struct {
 
 // Message-related structures
 type Message struct {
+	ID        string    `json:"id"`
 	CreatedAt time.Time `json:"inserted_at"`
 	Data      string    `json:"data"`
 	Seq       int       `json:"seq"`

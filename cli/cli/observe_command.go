@@ -520,6 +520,10 @@ func (s *state) registerCallbacks(observeChannel *api.ObserveChannel) {
 	observeChannel.OnMessagesUpserted(func(messages []models.Message) {
 		s.messages.MessagesUpserted(messages, calculateLimit())
 	})
+
+	observeChannel.OnMessagesInserted(func(messages []models.Message) {
+		s.messages.MessagesUpserted(messages, calculateLimit())
+	})
 }
 
 func (s *state) setActiveTab(tab TabType) {

@@ -22,6 +22,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
         null: false
 
       add :name, :text, null: false
+      add :one_message_per_key, :boolean, null: false, default: false
 
       timestamps()
     end
@@ -59,7 +60,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
             """
 
     create table(:messages,
-             primary_key: false,
              prefix: @stream_schema,
              options: "PARTITION BY LIST (stream_id)"
            ) do
@@ -68,7 +68,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       # Generated column which concats tokens
       add :key, :text,
         null: false,
-        primary_key: true,
         generated: """
         ALWAYS AS (
           key_from_tokens(token1, token2, token3, token4, token5, token6, token7, token8, token9, token10, token11, token12, token13, token14, token15, token16)
@@ -103,7 +102,8 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     end
 
     create unique_index(:messages, [:stream_id, :seq], prefix: @stream_schema)
-    create unique_index(:messages, [:stream_id, :key], prefix: @stream_schema)
+
+    create index(:messages, [:stream_id, :key], prefix: @stream_schema)
 
     create index(:messages, [:stream_id, :token1], prefix: @stream_schema)
 
@@ -300,7 +300,9 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              options: "PARTITION BY LIST (consumer_id)"
            ) do
       add :consumer_id, :uuid, null: false, primary_key: true
-      add :message_key, :text, null: false, primary_key: true
+      add :message_id, :uuid, null: false, primary_key: true
+
+      add :message_key, :text, null: false
       add :message_seq, :bigint, null: false
 
       add :ack_id, :uuid, null: false, default: fragment("uuid_generate_v4()")
@@ -313,12 +315,11 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create unique_index(:consumer_messages, [:consumer_id, :message_key], prefix: @stream_schema)
-
     create unique_index(:consumer_messages, [:consumer_id, :ack_id], prefix: @stream_schema)
+    create unique_index(:consumer_messages, [:consumer_id, :message_seq], prefix: @stream_schema)
 
-    create index(:consumer_messages, [:message_key], prefix: @stream_schema)
-    create index(:consumer_messages, [:consumer_id], prefix: @stream_schema)
+    create index(:consumer_messages, [:consumer_id, :message_id], prefix: @stream_schema)
+    create index(:consumer_messages, [:consumer_id, :message_key], prefix: @stream_schema)
 
     create index(
              :consumer_messages,

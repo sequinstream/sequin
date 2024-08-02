@@ -9,10 +9,10 @@ defmodule Sequin.Streams.Stream do
   alias Sequin.Streams
   alias Sequin.Streams.Stream
 
-  @derive {Jason.Encoder, only: [:id, :name, :account_id, :stats, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :account_id, :one_message_per_key, :stats, :inserted_at, :updated_at]}
   typed_schema "streams" do
     field :name, :string
-
+    field :one_message_per_key, :boolean
     field :stats, :map, virtual: true
 
     belongs_to :account, Account
@@ -22,7 +22,7 @@ defmodule Sequin.Streams.Stream do
 
   def changeset(%Stream{} = stream, attrs) do
     stream
-    |> cast(attrs, [:name])
+    |> cast(attrs, [:name, :one_message_per_key])
     |> validate_required([:name])
     |> Sequin.Changeset.validate_name()
     |> unique_constraint([:account_id, :name], error_key: :name)

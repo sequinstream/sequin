@@ -20,11 +20,11 @@ type API interface {
 	// Stream methods
 	FetchStreams(ctx *context.Context) ([]models.Stream, error)
 	FetchStreamInfo(ctx *context.Context, streamID string) (*models.Stream, error)
-	AddStream(ctx *context.Context, name string) (*models.Stream, error)
+	AddStream(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error)
 	RemoveStream(ctx *context.Context, streamID string) error
 	PublishMessage(ctx *context.Context, streamID, key, message string) error
 	ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, sort string, keyPattern string) ([]models.Message, error)
-	GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error)
+	GetStreamMessage(ctx *context.Context, streamIDOrName, messageID string) (models.Message, error)
 	FetchMessageWithConsumerInfos(ctx *context.Context, streamID, messageKey string) (*models.MessageWithConsumerInfos, error)
 
 	// Webhook methods

@@ -52,7 +52,7 @@ defmodule Sequin.Bench.EndToEnd do
 
     Sequin.Bench.run(
       [
-        {"e2e_0M_upsert", fn batch_size -> upsert_messages(stream.id, batch_size) end},
+        {"e2e_0M_upsert", fn batch_size -> send_messages(stream.id, batch_size) end},
         {"e2e_1M_receive", fn batch_size -> receive_and_ack(consumer, batch_size) end,
          before: fn _input ->
            if current_message_count < 1_000_000 do
@@ -130,7 +130,7 @@ defmodule Sequin.Bench.EndToEnd do
     #   interval_stream
     #   |> Flow.from_enumerable(max_demand: 10, stages: 10)
     #   |> Flow.partition(stages: 10, max_demand: 1)
-    #   |> Flow.map(fn _ -> upsert_messages(stream.id, 100) end)
+    #   |> Flow.map(fn _ -> send_messages(stream.id, 100) end)
     #   |> Flow.run()
     # end)
 
@@ -188,7 +188,7 @@ defmodule Sequin.Bench.EndToEnd do
     key = message.key
     Agent.update(key_agent, fn keys -> Map.put(keys, key, true) end)
 
-    upsert_messages(stream_id, messages)
+    send_messages(stream_id, messages)
 
     1..1
     |> Stream.cycle()
@@ -205,12 +205,12 @@ defmodule Sequin.Bench.EndToEnd do
     end)
   end
 
-  def upsert_messages(stream_id, messages) when is_list(messages) do
-    Streams.upsert_messages(stream_id, messages)
+  def send_messages(stream_id, messages) when is_list(messages) do
+    Streams.send_messages(stream_id, messages)
     messages
   end
 
-  def upsert_messages(stream_id, batch_size) do
+  def send_messages(stream_id, batch_size) do
     messages =
       Enum.map(1..batch_size, fn _ ->
         %{
@@ -220,7 +220,7 @@ defmodule Sequin.Bench.EndToEnd do
         }
       end)
 
-    upsert_messages(stream_id, messages)
+    send_messages(stream_id, messages)
   end
 
   defp messages(stream_id, batch_size) do

@@ -19,7 +19,7 @@ defmodule SequinWeb.WebhookIngestionController do
           data: Jason.encode!(payload)
         }
 
-        case Streams.upsert_messages(webhook.stream_id, [message]) do
+        case Streams.send_messages(webhook.stream_id, [message]) do
           {:ok, _count} ->
             SequinWeb.WebhookChannel.broadcast("webhook:ingested", %{webhook: webhook, message: message})
             json(conn, %{success: true})

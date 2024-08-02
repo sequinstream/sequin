@@ -86,7 +86,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
       source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
-      stream = StreamsFactory.insert_stream!(account_id: account_id)
+      stream = StreamsFactory.insert_stream!(account_id: account_id, one_message_per_key: true)
 
       # Create PostgresReplication entity
       pg_replication =

@@ -109,13 +109,16 @@ func FetchStreamInfo(ctx *context.Context, streamID string) (*models.Stream, err
 }
 
 // BuildAddStream builds the HTTP request for adding a new stream
-func BuildAddStream(ctx *context.Context, name string) (*http.Request, error) {
+func BuildAddStream(ctx *context.Context, name string, oneMessagePerKey bool) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	requestBody := map[string]string{"name": name}
+	requestBody := map[string]interface{}{
+		"name":                name,
+		"one_message_per_key": oneMessagePerKey,
+	}
 	jsonBody, err := json.Marshal(requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
@@ -131,8 +134,8 @@ func BuildAddStream(ctx *context.Context, name string) (*http.Request, error) {
 }
 
 // AddStream adds a new stream with the given name
-func AddStream(ctx *context.Context, name string) (*models.Stream, error) {
-	req, err := BuildAddStream(ctx, name)
+func AddStream(ctx *context.Context, name string, oneMessagePerKey bool) (*models.Stream, error) {
+	req, err := BuildAddStream(ctx, name, oneMessagePerKey)
 	if err != nil {
 		return nil, fmt.Errorf("error building add stream request: %w", err)
 	}
@@ -318,14 +321,14 @@ func ListStreamMessages(ctx *context.Context, streamIDOrName string, limit int, 
 	return messagesResponse.Messages, nil
 }
 
-// GetStreamMessage retrieves a specific message from a stream by its key
-func GetStreamMessage(ctx *context.Context, streamIDOrName, key string) (models.Message, error) {
+// GetStreamMessage retrieves a specific message from a stream by its ID
+func GetStreamMessage(ctx *context.Context, streamIDOrName, messageID string) (models.Message, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return models.Message{}, err
 	}
 
-	url := fmt.Sprintf("%s/api/streams/%s/messages/%s", serverURL, streamIDOrName, key)
+	url := fmt.Sprintf("%s/api/streams/%s/messages/%s", serverURL, streamIDOrName, messageID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return models.Message{}, fmt.Errorf("error creating request: %w", err)

@@ -5,13 +5,12 @@ defmodule Sequin.Streams.Message do
   import Ecto.Changeset
   import Ecto.Query
 
-  @derive {Jason.Encoder, only: [:key, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :key, :stream_id, :data_hash, :data, :seq, :inserted_at, :updated_at]}
 
-  @primary_key false
   typed_schema "messages" do
-    field :key, :string, primary_key: true, read_after_writes: true
     field :stream_id, Ecto.UUID, primary_key: true
 
+    field :key, :string, read_after_writes: true
     field :data_hash, :string
     field :data, :string
     field :seq, :integer, read_after_writes: true
@@ -88,25 +87,29 @@ defmodule Sequin.Streams.Message do
     Map.put(msg, :data_hash, Base.encode64(:crypto.hash(:sha256, msg.data)))
   end
 
+  def where_id_in(query \\ base_query(), ids) do
+    from([message: m] in query, where: m.id in ^ids)
+  end
+
   def where_stream_id(query \\ base_query(), stream_id) do
     from([message: m] in query, where: m.stream_id == ^stream_id)
   end
 
-  def where_key_and_stream_id(query \\ base_query(), key, stream_id) do
-    from([message: m] in query, where: m.key == ^key and m.stream_id == ^stream_id)
+  def where_id_and_stream_id(query \\ base_query(), id, stream_id) do
+    from([message: m] in query, where: m.id == ^id and m.stream_id == ^stream_id)
   end
 
-  def where_key_and_stream_id_in(query \\ base_query(), key_stream_id_pairs) do
-    {keys, stream_ids} = Enum.unzip(key_stream_id_pairs)
+  def where_id_and_stream_id_in(query \\ base_query(), id_stream_id_pairs) do
+    {ids, stream_ids} = Enum.unzip(id_stream_id_pairs)
     stream_ids = Enum.map(stream_ids, &UUID.string_to_binary!/1)
 
     from([message: m] in query,
       where:
         fragment(
           "(?, ?) IN (SELECT UNNEST(?::text[]), UNNEST(?::uuid[]))",
-          m.key,
+          m.id,
           m.stream_id,
-          ^keys,
+          ^ids,
           ^stream_ids
         )
     )
@@ -119,6 +122,10 @@ defmodule Sequin.Streams.Message do
 
   def where_seq_gt(query \\ base_query(), seq) do
     from([message: m] in query, where: m.seq > ^seq)
+  end
+
+  def where_key(query \\ base_query(), key) do
+    from([message: m] in query, where: m.key == ^key)
   end
 
   def where_key_in(query \\ base_query(), keys) do

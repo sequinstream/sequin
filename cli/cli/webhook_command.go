@@ -227,7 +227,7 @@ func printWebhookInfo(webhook *models.Webhook, ctx *context.Context) error {
 	}
 
 	fmt.Println("\nTo send a webhook payload:")
-	fmt.Printf("curl -X POST %s/api/webhook/%s \\\n", serverURL, webhook.Name)
+	fmt.Printf("curl -X POST %s/api/webhook/%s/messages \\\n", serverURL, webhook.Name)
 	fmt.Println("  -H \"Content-Type: application/json\" \\\n  -d '{\"key\": \"value\"}'")
 
 	return nil

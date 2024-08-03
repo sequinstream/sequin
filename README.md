@@ -1,7 +1,7 @@
 # Sequin
 
 > [!IMPORTANT]
-> Sequin is still pre-alpha. Join the [release list](https://sequinstream.com/alpha) to get notified when we launch.
+> Sequin is still pre-alpha. Join the [release list](https://sequinstream.com/alpha) to get notified when we hit alpha.
 
 ## What is Sequin?
 

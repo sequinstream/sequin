@@ -36,7 +36,7 @@ release:
 	@./scripts/release.sh
 
 spellcheck:
-	@npx cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
+	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
 
 addword:
 	@if [ -z "$(word)" ]; then \

@@ -26,11 +26,11 @@ defmodule Sequin.Databases do
     end
   end
 
-  def get_db_for_account(account_id, id) do
+  def get_db_for_account(account_id, id_or_name) do
     query =
       account_id
       |> PostgresDatabase.where_account()
-      |> PostgresDatabase.where_id(id)
+      |> PostgresDatabase.where_id_or_name(id_or_name)
 
     case Repo.one(query) do
       nil -> {:error, Error.not_found(entity: :postgres_database)}

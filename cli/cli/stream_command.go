@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -24,6 +25,7 @@ type StreamConfig struct {
 	Last   int
 	First  int
 	Table  bool
+	AsJSON bool
 }
 
 func AddStreamCommands(app *fisk.Application, config *Config, apiClient api.API) {
@@ -38,14 +40,17 @@ func AddStreamCommands(app *fisk.Application, config *Config, apiClient api.API)
 	})
 
 	infoCmd := stream.Command("info", "Show stream info").Action(func(c *fisk.ParseContext) error {
-		return streamInfo(c, config, apiClient)
+		return streamInfo(c, config, s, apiClient)
 	})
 	infoCmd.Arg("stream", "ID or name of the stream to show info for").StringVar(&config.StreamID)
+	infoCmd.Flag("as-json", "Print stream info as JSON").BoolVar(&s.AsJSON)
 
 	addCmd := stream.Command("add", "Add a new stream").Action(func(c *fisk.ParseContext) error {
 		return streamAdd(c, config, s, apiClient)
 	})
 	addCmd.Arg("name", "Name of the stream to Add").StringVar(&s.Name)
+	addCmd.Flag("json", "JSON string containing stream configuration").StringVar(&config.JSONInput)
+	addCmd.Flag("json-file", "Path to JSON file containing stream configuration").StringVar(&config.JSONFile)
 
 	rmCmd := stream.Command("rm", "Remove a stream").Action(func(c *fisk.ParseContext) error {
 		return streamRm(c, config, apiClient)
@@ -128,7 +133,7 @@ func streamLs(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 	return t.Render()
 }
 
-func streamInfo(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
+func streamInfo(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
@@ -154,6 +159,19 @@ func streamInfo(_ *fisk.ParseContext, config *Config, apiClient api.API) error {
 
 		fmt.Println(curlCmd)
 
+		return nil
+	}
+
+	if s.AsJSON {
+		stream, err := apiClient.FetchStreamInfo(ctx, config.StreamID)
+		if err != nil {
+			return err
+		}
+		jsonData, err := json.MarshalIndent(stream, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling stream to JSON: %w", err)
+		}
+		fmt.Println(string(jsonData))
 		return nil
 	}
 
@@ -194,6 +212,10 @@ func displayStreamInfo(config *Config, apiClient api.API) error {
 func streamAdd(_ *fisk.ParseContext, config *Config, s *StreamConfig, apiClient api.API) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
+		return err
+	}
+
+	if err := MergeJSONConfig(s, config.JSONInput, config.JSONFile); err != nil {
 		return err
 	}
 

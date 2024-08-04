@@ -15,8 +15,6 @@ From the CLI, connect any Postgres table to Sequin with:
 sequin source postgres add
 ```
 
-### Connecting a database
-
 If connecting your first Postgres database to Sequin, select "Connect new" from the prompt:
 
 ```bash
@@ -51,6 +49,49 @@ Use SSL?
 
 [ Submit ]
 ```
+
+You'll then be prompted with:
+
+```bash
+? Do you have an existing Postgres replication slot and publication for Sequin to connect to?
+(If you didn't just setup a replication slot for Sequin before this, you probably don't) (y/N)
+```
+
+You can indicate `N` (see instructions below for how to setup a replication slot and publication manually).
+
+The walkthrough will then ask:
+
+```bash
+We suggest the following defaults:
+
+Slot name: sequin_slot
+Publication name: sequin_pub
+
+? Do these defaults look OK? (Y/n)
+```
+
+You can accept the defaults by pressing `Enter`. You can accept this one too:
+
+```bash
+? Do you want me to setup the replication slot and publication for you? (Y/n)
+```
+
+Then, the CLI will ask you to select the tables you want to stream to Sequin:
+
+```bash
+? Choose the schema your tables are in (you can edit this list later):  [Use arrows to move, type to filter]
+> public
+```
+
+Then, you'll be prompted about backfills:
+
+```bash
+? Do you want to backfill existing rows from your table(s) into the stream?
+```
+
+"Backfilling existing rows" means Sequin will copy all existing rows from your tables into the stream. Then, it will begin streaming changes. If you select "No", Sequin will only stream changes from this point forward.
+
+## Configuration
 
 ### Setting up a replication slot and publication
 

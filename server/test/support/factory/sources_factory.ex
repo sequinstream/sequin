@@ -32,7 +32,6 @@ defmodule Sequin.Factory.SourcesFactory do
         publication_name: "pub_#{Factory.name()}",
         slot_name: "slot_#{Factory.name()}",
         status: status,
-        ssl: false,
         stream_id: Factory.uuid(),
         key_format: Factory.one_of([:basic, :with_operation])
       },

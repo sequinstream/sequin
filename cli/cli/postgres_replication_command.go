@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -36,7 +37,7 @@ type postgresReplicationConfig struct {
 	StickInfo            bool
 	BackfillExistingRows bool
 	KeyFormat            KeyFormat
-	SSL                  bool
+	AsJSON               bool
 }
 
 func addPostgresReplicationCommands(postgres *fisk.CmdClause, config *Config) {
@@ -55,16 +56,26 @@ func addPostgresReplicationCommands(postgres *fisk.CmdClause, config *Config) {
 	add.Flag("slot-name", "Replication slot name").StringVar(&c.SlotName)
 	add.Flag("publication-name", "Publication name").StringVar(&c.PublicationName)
 	add.Flag("name", "Database name").StringVar(&c.Name)
+	add.Flag("json", "JSON string containing postgres replication configuration").StringVar(&config.JSONInput)
+	add.Flag("json-file", "Path to JSON file containing postgres replication configuration").StringVar(&config.JSONFile)
 
-	postgres.Command("ls", "List postgres replications").Action(func(c *fisk.ParseContext) error {
-		return postgresReplicationList(c, config)
+	editCmd := postgres.Command("edit", "Edit an existing postgres replication").Action(func(ctx *fisk.ParseContext) error {
+		return postgresReplicationEdit(ctx, config, c)
 	})
+	editCmd.Arg("id", "ID of the postgres replication to edit").StringVar(&config.PostgresReplicationID)
+	editCmd.Flag("json", "JSON string containing postgres replication configuration").StringVar(&config.JSONInput)
+	editCmd.Flag("json-file", "Path to JSON file containing postgres replication configuration").StringVar(&config.JSONFile)
 
 	infoCmd := postgres.Command("info", "Show postgres replication info").Action(func(fisk *fisk.ParseContext) error {
 		return postgresReplicationInfo(fisk, config, c)
 	})
 	infoCmd.Arg("id", "ID of the postgres replication to show info for").StringVar(&config.PostgresReplicationID)
 	infoCmd.Flag("stick", "Keep the info open and refresh periodically").BoolVar(&c.StickInfo)
+	infoCmd.Flag("as-json", "Print postgres replication info as JSON").BoolVar(&c.AsJSON)
+
+	postgres.Command("ls", "List postgres replications").Action(func(c *fisk.ParseContext) error {
+		return postgresReplicationList(c, config)
+	})
 
 	rmCmd := postgres.Command("rm", "Remove a postgres replication").Action(func(c *fisk.ParseContext) error {
 		return postgresReplicationRemove(c, config)
@@ -78,51 +89,72 @@ func postgresReplicationAdd(_ *fisk.ParseContext, config *Config, c *postgresRep
 		return err
 	}
 
-	streamID, err := getFirstStream(ctx)
-	if err != nil {
-		return err
-	}
-	c.StreamID = streamID
+	var replication api.PostgresReplicationCreate
 
-	databaseID, err := promptForDatabase(ctx)
-	if err != nil {
-		return err
-	}
-
-	hasExistingSetup, err := promptForExistingSetup()
-	if err != nil {
-		return err
-	}
-
-	if hasExistingSetup {
-		err = promptForExistingReplicationDetails(c)
+	if config.JSONFile != "" || config.JSONInput != "" {
+		if err := MergeJSONConfig(&replication, config.JSONInput, config.JSONFile); err != nil {
+			return err
+		}
 	} else {
-		err = handleNewReplicationSetup(ctx, databaseID, c)
+		streamID, err := getFirstStream(ctx)
+		if err != nil {
+			return err
+		}
+
+		databaseID, err := promptForDatabase(ctx)
+		if err != nil {
+			return err
+		}
+
+		hasExistingSetup, err := promptForExistingSetup()
+		if err != nil {
+			return err
+		}
+
+		if hasExistingSetup {
+			err = promptForExistingReplicationDetails(c)
+		} else {
+			err = handleNewReplicationSetup(ctx, databaseID, c)
+		}
+		if err != nil {
+			return err
+		}
+
+		replication = api.PostgresReplicationCreate{
+			SlotName:             c.SlotName,
+			PublicationName:      c.PublicationName,
+			StreamID:             streamID,
+			PostgresDatabaseID:   databaseID,
+			BackfillExistingRows: c.BackfillExistingRows,
+			KeyFormat:            string(c.KeyFormat),
+		}
 	}
+
+	if config.AsCurl {
+		req, err := api.BuildAddPostgresReplication(ctx, &replication)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+		return nil
+	}
+
+	createdReplication, err := api.AddPostgresReplication(ctx, &replication)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create postgres replication: %w", err)
 	}
 
-	// Create the postgres replication
-	replication := api.PostgresReplicationCreate{
-		SlotName:             c.SlotName,
-		PublicationName:      c.PublicationName,
-		StreamID:             c.StreamID,
-		PostgresDatabaseID:   databaseID,
-		BackfillExistingRows: c.BackfillExistingRows,
-		KeyFormat:            string(c.KeyFormat),
-		SSL:                  c.SSL,
-	}
-
-	newReplication, err := api.AddPostgresReplication(ctx, &replication)
-	fisk.FatalIfError(err, "could not create Postgres replication")
-
-	fmt.Printf("Postgres replication created successfully. ID: %s\n", newReplication.ID)
-
-	// Show info for the new PGR with stick enabled
-	config.PostgresReplicationID = newReplication.ID
-	c.StickInfo = true
-	return postgresReplicationInfo(nil, config, c)
+	fmt.Println("Postgres replication created successfully:")
+	config.PostgresReplicationID = createdReplication.ID
+	return postgresReplicationInfo(nil, config, &postgresReplicationConfig{
+		StickInfo: true,
+		AsJSON:    c.AsJSON,
+	})
 }
 
 func promptForExistingSetup() (bool, error) {
@@ -279,17 +311,6 @@ func handleNewReplicationSetup(ctx *context.Context, databaseID string, c *postg
 		c.KeyFormat = WithOperationKeyFormat
 	}
 
-	var useSSL bool
-	prompt = &survey.Confirm{
-		Message: "Do you want to use SSL for the connection?",
-		Default: false,
-	}
-	err = survey.AskOne(prompt, &useSSL)
-	if err != nil {
-		return err
-	}
-	c.SSL = useSSL
-
 	return nil
 }
 
@@ -313,6 +334,20 @@ func postgresReplicationList(_ *fisk.ParseContext, config *Config) error {
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return err
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildFetchPostgresReplications(ctx)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+		return nil
 	}
 
 	replications, err := api.FetchPostgresReplications(ctx)
@@ -463,38 +498,73 @@ func postgresReplicationInfo(_ *fisk.ParseContext, config *Config, c *postgresRe
 	}
 
 	if config.PostgresReplicationID == "" {
-		replications, err := api.FetchPostgresReplications(ctx)
+		config.PostgresReplicationID, err = promptForPostgresReplication(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildFetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
 		if err != nil {
 			return err
 		}
 
-		replicationOptions := make([]string, len(replications))
-		for i, r := range replications {
-			replicationOptions[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
-		}
+		fmt.Println(curlCmd)
+		return nil
+	}
 
-		err = survey.AskOne(&survey.Select{
-			Message: "Choose a postgres replication to show info for:",
-			Options: replicationOptions,
-			Filter: func(filterValue string, optValue string, index int) bool {
-				return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
-			},
-		}, &config.PostgresReplicationID)
+	if c.StickInfo {
+		p := tea.NewProgram(infoModel{
+			config:  config,
+			stick:   true,
+			spinner: spinner.New(),
+		})
+		_, err := p.Run()
+		return err
+	}
+
+	replicationWithInfo, err := api.FetchPostgresReplicationInfo(ctx, config.PostgresReplicationID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch postgres replication info: %w", err)
+	}
+
+	return displayPostgresReplicationInfo(replicationWithInfo, c.AsJSON)
+}
+
+func displayPostgresReplicationInfo(replicationWithInfo *api.PostgresReplicationWithInfo, asJSON bool) error {
+	if asJSON {
+		jsonData, err := json.MarshalIndent(replicationWithInfo.PostgresReplication, "", "  ")
 		if err != nil {
-			return err
+			return fmt.Errorf("error marshaling postgres replication to JSON: %w", err)
 		}
-		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
+		fmt.Println(string(jsonData))
+		return nil
 	}
 
-	model := infoModel{
-		config:  config,
-		stick:   c.StickInfo,
-		spinner: spinner.New(spinner.WithSpinner(spinner.Dot)),
+	columns := []table.Column{
+		{Title: "Field", Width: 30},
+		{Title: "Value", Width: 50},
 	}
 
-	p := tea.NewProgram(model)
-	_, err = p.Run()
-	return err
+	rows := []table.Row{
+		{"ID", replicationWithInfo.PostgresReplication.ID},
+		{"Slot Name", replicationWithInfo.PostgresReplication.SlotName},
+		{"Publication Name", replicationWithInfo.PostgresReplication.PublicationName},
+		{"Status", getStatus(replicationWithInfo.PostgresReplication)},
+		{"Stream ID", replicationWithInfo.PostgresReplication.StreamID},
+		{"Postgres Database ID", replicationWithInfo.PostgresReplication.PostgresDatabaseID},
+		{"Backfill Completed At", replicationWithInfo.PostgresReplication.FormatBackfillCompletedAt()},
+		{"Last Committed Timestamp", replicationWithInfo.Info.FormatLastCommittedAt()},
+		{"Total Ingested Messages", fmt.Sprintf("%d", replicationWithInfo.Info.TotalIngestedMessages)},
+	}
+
+	t := NewTable(columns, rows, PrintableTable)
+	return t.Render()
 }
 
 func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {
@@ -527,6 +597,20 @@ func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {
 		config.PostgresReplicationID = strings.Split(config.PostgresReplicationID, " ")[0]
 	}
 
+	if config.AsCurl {
+		req, err := api.BuildDeletePostgresReplication(ctx, config.PostgresReplicationID)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+		return nil
+	}
+
 	err = api.DeletePostgresReplication(ctx, config.PostgresReplicationID)
 	if err != nil {
 		return err
@@ -534,4 +618,85 @@ func postgresReplicationRemove(_ *fisk.ParseContext, config *Config) error {
 
 	fmt.Printf("Postgres replication %s removed successfully.\n", config.PostgresReplicationID)
 	return nil
+}
+
+func postgresReplicationEdit(_ *fisk.ParseContext, config *Config, c *postgresReplicationConfig) error {
+	ctx, err := context.LoadContext(config.ContextName)
+	if err != nil {
+		return err
+	}
+
+	var updateOptions api.PostgresReplicationUpdate
+
+	if config.JSONFile != "" || config.JSONInput != "" {
+		if err := MergeJSONConfig(&updateOptions, config.JSONInput, config.JSONFile); err != nil {
+			return err
+		}
+	} else {
+		if config.PostgresReplicationID == "" {
+			config.PostgresReplicationID, err = promptForPostgresReplication(ctx)
+			if err != nil {
+				return err
+			}
+		}
+
+		updateOptions = api.PostgresReplicationUpdate{
+			BackfillExistingRows: c.BackfillExistingRows,
+			KeyFormat:            string(c.KeyFormat),
+		}
+	}
+
+	if config.AsCurl {
+		req, err := api.BuildUpdatePostgresReplication(ctx, config.PostgresReplicationID, updateOptions)
+		if err != nil {
+			return err
+		}
+		curlCmd, err := formatCurl(req)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(curlCmd)
+		return nil
+	}
+
+	updatedReplication, err := api.UpdatePostgresReplication(ctx, config.PostgresReplicationID, updateOptions)
+	if err != nil {
+		return fmt.Errorf("failed to update postgres replication: %w", err)
+	}
+
+	fmt.Println("Postgres replication updated successfully:")
+	return displayPostgresReplicationInfo(&api.PostgresReplicationWithInfo{
+		PostgresReplication: *updatedReplication,
+	}, c.AsJSON)
+}
+
+func promptForPostgresReplication(ctx *context.Context) (string, error) {
+	replications, err := api.FetchPostgresReplications(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch postgres replications: %w", err)
+	}
+
+	replicationOptions := make([]string, len(replications))
+	for i, r := range replications {
+		replicationOptions[i] = fmt.Sprintf("%s (Slot: %s, Publication: %s)", r.ID, r.SlotName, r.PublicationName)
+	}
+
+	var choice string
+	err = survey.AskOne(&survey.Select{
+		Message: "Choose a postgres replication:",
+		Options: replicationOptions,
+		Filter: func(filterValue string, optValue string, index int) bool {
+			return strings.Contains(strings.ToLower(optValue), strings.ToLower(filterValue))
+		},
+	}, &choice)
+	if err != nil {
+		return "", fmt.Errorf("failed to get user input: %w", err)
+	}
+
+	parts := strings.Split(choice, " ")
+	if len(parts) > 0 {
+		return parts[0], nil
+	}
+	return "", fmt.Errorf("invalid postgres replication choice format")
 }

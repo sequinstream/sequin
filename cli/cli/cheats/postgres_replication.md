@@ -15,3 +15,6 @@ sequin sources postgres info [id]
 
 // Remove a postgres replication
 sequin sources postgres rm [id]
+
+// Edit a postgres replication
+sequin sources postgres edit [id]

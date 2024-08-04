@@ -74,14 +74,30 @@ func (pri *PostgresReplicationInfo) FormatLastCommittedAt() string {
 	return fmt.Sprintf("%s (%s ago)", pri.LastCommittedAt.Format(time.RFC3339), time.Since(*pri.LastCommittedAt).Round(time.Second))
 }
 
-// FetchPostgresReplications retrieves all PostgresReplications from the API
-func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, error) {
+// BuildFetchPostgresReplications builds the HTTP request for fetching postgres replications
+func BuildFetchPostgresReplications(ctx *context.Context) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(serverURL + "/api/postgres_replications")
+	req, err := http.NewRequest("GET", serverURL+"/api/postgres_replications", nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchPostgresReplications retrieves all PostgresReplications from the API
+func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, error) {
+	req, err := BuildFetchPostgresReplications(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch postgres replications request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -105,14 +121,30 @@ func FetchPostgresReplications(ctx *context.Context) ([]PostgresReplication, err
 	return pgReplicationsResponse.PostgresReplications, nil
 }
 
-// FetchPostgresReplicationInfo retrieves information for a specific PostgresReplication from the API
-func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*PostgresReplicationWithInfo, error) {
+// BuildFetchPostgresReplicationInfo builds the HTTP request for fetching postgres replication info
+func BuildFetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := http.Get(fmt.Sprintf("%s/api/postgres_replications/%s", serverURL, replicationID))
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s/api/postgres_replications/%s", serverURL, replicationID), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+
+	return req, nil
+}
+
+// FetchPostgresReplicationInfo retrieves information for a specific PostgresReplication from the API
+func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*PostgresReplicationWithInfo, error) {
+	req, err := BuildFetchPostgresReplicationInfo(ctx, replicationID)
+	if err != nil {
+		return nil, fmt.Errorf("error building fetch postgres replication info request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -136,8 +168,8 @@ func FetchPostgresReplicationInfo(ctx *context.Context, replicationID string) (*
 	return &pgReplicationWithInfo, nil
 }
 
-// AddPostgresReplication creates a new PostgresReplication
-func AddPostgresReplication(ctx *context.Context, replicationData *PostgresReplicationCreate) (*PostgresReplication, error) {
+// BuildAddPostgresReplication builds the HTTP request for adding a new postgres replication
+func BuildAddPostgresReplication(ctx *context.Context, replicationData *PostgresReplicationCreate) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
@@ -148,7 +180,24 @@ func AddPostgresReplication(ctx *context.Context, replicationData *PostgresRepli
 		return nil, fmt.Errorf("error marshaling JSON: %w", err)
 	}
 
-	resp, err := http.Post(serverURL+"/api/postgres_replications", "application/json", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest("POST", serverURL+"/api/postgres_replications", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// AddPostgresReplication creates a new PostgresReplication
+func AddPostgresReplication(ctx *context.Context, replicationData *PostgresReplicationCreate) (*PostgresReplication, error) {
+	req, err := BuildAddPostgresReplication(ctx, replicationData)
+	if err != nil {
+		return nil, fmt.Errorf("error building add postgres replication request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error making request: %w", err)
 	}
@@ -172,19 +221,30 @@ func AddPostgresReplication(ctx *context.Context, replicationData *PostgresRepli
 	return &pgReplication, nil
 }
 
-// DeletePostgresReplication deletes a PostgresReplication
-func DeletePostgresReplication(ctx *context.Context, replicationID string) error {
+// BuildDeletePostgresReplication builds the HTTP request for deleting a postgres replication
+func BuildDeletePostgresReplication(ctx *context.Context, replicationID string) (*http.Request, error) {
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/postgres_replications/%s", serverURL, replicationID), nil)
 	if err != nil {
-		return fmt.Errorf("error creating request: %w", err)
+		return nil, fmt.Errorf("error creating request: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	return req, nil
+}
+
+// DeletePostgresReplication deletes a PostgresReplication
+func DeletePostgresReplication(ctx *context.Context, replicationID string) error {
+	req, err := BuildDeletePostgresReplication(ctx, replicationID)
+	if err != nil {
+		return fmt.Errorf("error building delete postgres replication request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error making request: %w", err)
 	}
@@ -196,4 +256,59 @@ func DeletePostgresReplication(ctx *context.Context, replicationID string) error
 	}
 
 	return nil
+}
+
+// BuildUpdatePostgresReplication builds the HTTP request for updating a postgres replication
+func BuildUpdatePostgresReplication(ctx *context.Context, replicationID string, updateOptions PostgresReplicationUpdate) (*http.Request, error) {
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	jsonData, err := json.Marshal(updateOptions)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling update options: %w", err)
+	}
+
+	req, err := http.NewRequest("PATCH", fmt.Sprintf("%s/api/postgres_replications/%s", serverURL, replicationID), bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	return req, nil
+}
+
+// UpdatePostgresReplication updates an existing PostgresReplication
+func UpdatePostgresReplication(ctx *context.Context, replicationID string, updateOptions PostgresReplicationUpdate) (*PostgresReplication, error) {
+	req, err := BuildUpdatePostgresReplication(ctx, replicationID, updateOptions)
+	if err != nil {
+		return nil, fmt.Errorf("error building update postgres replication request: %w", err)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, ParseAPIError(resp.StatusCode, string(body))
+	}
+
+	var pgReplication PostgresReplication
+	if err := json.NewDecoder(resp.Body).Decode(&pgReplication); err != nil {
+		return nil, fmt.Errorf("error decoding response: %w", err)
+	}
+
+	return &pgReplication, nil
+}
+
+// PostgresReplicationUpdate represents the structure for updating a PostgresReplication
+type PostgresReplicationUpdate struct {
+	BackfillExistingRows bool   `json:"backfill_existing_rows,omitempty"`
+	KeyFormat            string `json:"key_format,omitempty"`
+	SSL                  bool   `json:"ssl,omitempty"`
 }

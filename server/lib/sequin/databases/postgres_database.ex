@@ -59,7 +59,10 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> Sequin.Changeset.validate_name()
-    |> unique_constraint([:account_id, :name], name: :postgres_databases_account_id_name_index)
+    |> unique_constraint([:account_id, :name],
+      name: :postgres_databases_account_id_name_index,
+      message: "Database name must be unique"
+    )
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
@@ -70,6 +73,18 @@ defmodule Sequin.Databases.PostgresDatabase do
   @spec where_id(Queryable.t(), String.t()) :: Queryable.t()
   def where_id(query \\ base_query(), id) do
     from([database: pd] in query, where: pd.id == ^id)
+  end
+
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
+    else
+      where_name(query, id_or_name)
+    end
+  end
+
+  def where_name(query \\ base_query(), name) do
+    from([database: pd] in query, where: pd.name == ^name)
   end
 
   defp base_query(query \\ PostgresDatabase) do

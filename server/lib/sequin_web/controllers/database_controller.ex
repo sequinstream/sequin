@@ -15,10 +15,10 @@ defmodule SequinWeb.DatabaseController do
     render(conn, "index.json", databases: Databases.list_dbs_for_account(account_id))
   end
 
-  def show(conn, %{"id" => id}) do
+  def show(conn, %{"id_or_name" => id_or_name}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, database} <- Databases.get_db_for_account(account_id, id) do
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name) do
       render(conn, "show.json", database: database)
     end
   end
@@ -33,10 +33,10 @@ defmodule SequinWeb.DatabaseController do
     end
   end
 
-  def update(conn, %{"id" => id} = params) do
+  def update(conn, %{"id_or_name" => id_or_name} = params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, existing_database} <- Databases.get_db_for_account(account_id, id),
+    with {:ok, existing_database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, cleaned_params} <- parse_params(params),
          :ok <- test_database_connection(existing_database, cleaned_params),
          {:ok, updated_database} <- Databases.update_db(existing_database, cleaned_params) do
@@ -44,19 +44,19 @@ defmodule SequinWeb.DatabaseController do
     end
   end
 
-  def delete(conn, %{"id" => id}) do
+  def delete(conn, %{"id_or_name" => id_or_name}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, _database} <- Databases.delete_db(database) do
       render(conn, "delete.json", database: database)
     end
   end
 
-  def test_connection(conn, %{"id" => id}) do
+  def test_connection(conn, %{"id_or_name" => id_or_name}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          :ok <- test_database_connection(database) do
       render(conn, "test_connection.json", success: true)
     else
@@ -83,7 +83,7 @@ defmodule SequinWeb.DatabaseController do
   end
 
   def setup_replication(conn, %{
-        "id" => id,
+        "id_or_name" => id_or_name,
         "slot_name" => slot_name,
         "publication_name" => publication_name,
         "tables" => tables
@@ -91,7 +91,7 @@ defmodule SequinWeb.DatabaseController do
     account_id = conn.assigns.account_id
 
     with :ok <- validate_replication_params(slot_name, publication_name, tables),
-         {:ok, database} <- Databases.get_db_for_account(account_id, id),
+         {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, _} <- Databases.setup_replication(database, slot_name, publication_name, tables) do
       render(conn, "setup_replication.json",
         slot_name: slot_name,
@@ -101,19 +101,19 @@ defmodule SequinWeb.DatabaseController do
     end
   end
 
-  def list_schemas(conn, %{"id" => id}) do
+  def list_schemas(conn, %{"id_or_name" => id_or_name}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, schemas} <- Databases.list_schemas(database) do
       render(conn, "schemas.json", schemas: schemas)
     end
   end
 
-  def list_tables(conn, %{"id" => id, "schema" => schema}) do
+  def list_tables(conn, %{"id_or_name" => id_or_name, "schema" => schema}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, database} <- Databases.get_db_for_account(account_id, id),
+    with {:ok, database} <- Databases.get_db_for_account(account_id, id_or_name),
          {:ok, tables} <- Databases.list_tables(database, schema) do
       render(conn, "tables.json", tables: tables)
     end
@@ -162,6 +162,7 @@ defmodule SequinWeb.DatabaseController do
   defp test_database_connection(database, new_attrs \\ %{})
 
   defp test_database_connection(%PostgresDatabase{} = database, new_attrs) do
+    new_attrs = Map.drop(new_attrs, ["id", "id_or_name"])
     database = Map.merge(database, Sequin.Map.atomize_keys(new_attrs))
 
     with :ok <- Databases.test_tcp_reachability(database, connection_test_timeouts()),

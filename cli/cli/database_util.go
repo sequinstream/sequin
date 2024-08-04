@@ -20,11 +20,12 @@ type formModel struct {
 	focusIndex int
 	err        error
 	ctx        *context.Context
-	database   *api.PostgresDatabase
+	database   *api.PostgresDatabaseCreate
 	sslToggle  bool
+	id         string
 }
 
-func initialDatabaseModel(ctx *context.Context) formModel {
+func initialDatabaseModel(ctx *context.Context, existingDatabase *api.PostgresDatabase) formModel {
 	inputs := make([]textinput.Model, 6)
 	labels := []string{
 		"Database name:",
@@ -53,12 +54,26 @@ func initialDatabaseModel(ctx *context.Context) formModel {
 		inputs[i] = t
 	}
 
+	var id string
+	sslToggle := false
+
+	if existingDatabase != nil {
+		inputs[0].SetValue(existingDatabase.Database)
+		inputs[1].SetValue(existingDatabase.Hostname)
+		inputs[2].SetValue(fmt.Sprintf("%d", existingDatabase.Port))
+		inputs[3].SetValue(existingDatabase.Username)
+		inputs[5].SetValue(existingDatabase.Name)
+		sslToggle = existingDatabase.SSL
+		id = existingDatabase.ID
+	}
+
 	return formModel{
 		inputs:     inputs,
 		labels:     labels,
 		focusIndex: 0,
 		ctx:        ctx,
-		sslToggle:  false,
+		sslToggle:  sslToggle,
+		id:         id,
 	}
 }
 
@@ -183,11 +198,11 @@ func (m formModel) View() string {
 
 type submitMsg struct {
 	err      error
-	database *api.PostgresDatabase
+	database *api.PostgresDatabaseCreate
 }
 
 func (m *formModel) submit() tea.Msg {
-	database := api.PostgresDatabaseCreate{
+	database := &api.PostgresDatabaseCreate{
 		Database: getValueOrDefault(m.inputs[0].Value(), "postgres"),
 		Hostname: getValueOrDefault(m.inputs[1].Value(), "localhost"),
 		Username: getValueOrDefault(m.inputs[3].Value(), "postgres"),
@@ -202,29 +217,36 @@ func (m *formModel) submit() tea.Msg {
 	}
 	database.Port = port
 
-	newDatabase, err := api.AddPostgresDatabase(m.ctx, &database)
-	if err != nil {
-		if validationErr, ok := err.(*api.ValidationError); ok {
-			if validationErr.Code == "econnrefused" && database.Hostname == "localhost" {
-				return submitMsg{err: fmt.Errorf("could not create Postgres database.: %w\n(If you're running Sequin in Docker, try using the host `host.docker.internal` instead of `localhost`.)", err)}
-			}
-			return submitMsg{err: validationErr}
-		}
-		return submitMsg{err: fmt.Errorf("could not create Postgres database: %w", err)}
-	}
-
-	return submitMsg{database: newDatabase}
+	return submitMsg{database: database}
 }
 
-func getValueOrDefault(value, defaultValue string) string {
-	if value == "" {
-		return defaultValue
+func (m *formModel) getActionString() string {
+	if m.id != "" {
+		return "update"
 	}
-	return value
+	return "create"
 }
 
 func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
-	p := tea.NewProgram(initialDatabaseModel(ctx))
+	newDatabase, err := promptForDatabaseForm(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	createdDatabase, err := api.AddPostgresDatabase(ctx, newDatabase)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create new database: %w", err)
+	}
+
+	return createdDatabase, nil
+}
+
+func promptForEditDatabase(ctx *context.Context, existingDatabase *api.PostgresDatabase) (*api.PostgresDatabaseCreate, error) {
+	return promptForDatabaseForm(ctx, existingDatabase)
+}
+
+func promptForDatabaseForm(ctx *context.Context, existingDatabase *api.PostgresDatabase) (*api.PostgresDatabaseCreate, error) {
+	p := tea.NewProgram(initialDatabaseModel(ctx, existingDatabase))
 	m, err := p.Run()
 	if err != nil {
 		return nil, fmt.Errorf("error running program: %w", err)
@@ -234,8 +256,6 @@ func promptForNewDatabase(ctx *context.Context) (*api.PostgresDatabase, error) {
 		if m.err != nil {
 			return nil, m.err
 		}
-		// The submit() method has already been called in the Update method
-		// We just need to return the result
 		return m.database, nil
 	}
 
@@ -267,11 +287,11 @@ func promptForDatabase(ctx *context.Context) (string, error) {
 	}
 
 	if choice == "Connect new database" {
-		newDatabase, err := promptForNewDatabase(ctx)
+		createdDatabase, err := promptForNewDatabase(ctx)
 		if err != nil {
 			return "", err
 		}
-		return newDatabase.ID, nil
+		return createdDatabase.ID, nil
 	}
 
 	// Extract the database ID from the selected option
@@ -280,4 +300,11 @@ func promptForDatabase(ctx *context.Context) (string, error) {
 		return strings.TrimRight(parts[1], ")"), nil
 	}
 	return "", fmt.Errorf("invalid database choice format")
+}
+
+func getValueOrDefault(value, defaultValue string) string {
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }

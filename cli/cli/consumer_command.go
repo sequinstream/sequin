@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -34,6 +35,7 @@ type consumerConfig struct {
 	Kind             string
 	URL              string
 	BearerToken      string
+	AsJSON           bool
 }
 
 func AddConsumerCommands(app *fisk.Application, config *Config) {
@@ -60,12 +62,15 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	addCmd.Flag("kind", "Consumer kind (pull or push)").StringVar(&c.Kind)
 	addCmd.Flag("url", "URL for push consumer").StringVar(&c.URL)
 	addCmd.Flag("bearer-token", "Bearer token for push consumer").StringVar(&c.BearerToken)
+	addCmd.Flag("json", "JSON string containing consumer configuration").StringVar(&config.JSONInput)
+	addCmd.Flag("json-file", "Path to JSON file containing consumer configuration").StringVar(&config.JSONFile)
 
 	infoCmd := consumer.Command("info", "Show consumer information").Action(func(ctx *fisk.ParseContext) error {
 		return consumerInfo(ctx, config, c)
 	})
 	infoCmd.Arg("stream", "ID or name of the stream").StringVar(&c.StreamID)
 	infoCmd.Arg("consumer", "ID of the consumer").StringVar(&c.ConsumerID)
+	infoCmd.Flag("as-json", "Print consumer info as JSON").BoolVar(&c.AsJSON)
 
 	receiveCmd := consumer.Command("receive", "Receive messages for a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerReceive(ctx, config, c)
@@ -106,6 +111,8 @@ func AddConsumerCommands(app *fisk.Application, config *Config) {
 	updateCmd.Flag("ack-wait-ms", "Acknowledgement wait time in milliseconds").IntVar(&c.AckWaitMS)
 	updateCmd.Flag("max-ack-pending", "Maximum number of pending acknowledgements").IntVar(&c.MaxAckPending)
 	updateCmd.Flag("max-deliver", "Maximum number of delivery attempts").IntVar(&c.MaxDeliver)
+	updateCmd.Flag("json", "JSON string containing consumer configuration").StringVar(&config.JSONInput)
+	updateCmd.Flag("json-file", "Path to JSON file containing consumer configuration").StringVar(&config.JSONFile)
 
 	rmCmd := consumer.Command("rm", "Remove a consumer").Action(func(ctx *fisk.ParseContext) error {
 		return consumerRemove(ctx, config, c)
@@ -193,6 +200,10 @@ func consumerAdd(_ *fisk.ParseContext, config *Config, c *consumerConfig) error 
 	ctx, err := context.LoadContext(config.ContextName)
 	if err != nil {
 		return fmt.Errorf("failed to load context: %w", err)
+	}
+
+	if err := MergeJSONConfig(c, config.JSONInput, config.JSONFile); err != nil {
+		return err
 	}
 
 	if c.StreamID == "" {
@@ -398,11 +409,19 @@ func consumerInfo(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 
 	consumer, err := api.FetchConsumerInfo(ctx, c.StreamID, c.ConsumerID)
 	if err != nil {
-		return fmt.Errorf("failed to fetch consumer info: %w", err)
+		return fmt.Errorf("could not load Consumer: %w", err)
+	}
+
+	if c.AsJSON {
+		jsonData, err := json.MarshalIndent(consumer, "", "  ")
+		if err != nil {
+			return fmt.Errorf("error marshaling consumer to JSON: %w", err)
+		}
+		fmt.Println(string(jsonData))
+		return nil
 	}
 
 	displayConsumerInfo(consumer)
-
 	return nil
 }
 
@@ -654,8 +673,19 @@ func consumerEdit(_ *fisk.ParseContext, config *Config, c *consumerConfig) error
 		return err
 	}
 
+	if err := MergeJSONConfig(c, config.JSONInput, config.JSONFile); err != nil {
+		return err
+	}
+
 	if c.StreamID == "" {
 		c.StreamID, err = promptForStream(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	if c.ConsumerID == "" {
+		c.ConsumerID, err = promptForConsumer(ctx, c.StreamID)
 		if err != nil {
 			return err
 		}

@@ -28,16 +28,16 @@ defmodule SequinWeb.Router do
 
     resources "/streams", StreamController, except: [:new, :edit], param: "id_or_name"
     resources "/streams/:stream_id_or_name/consumers", ConsumerController, except: [:new, :edit], param: "id_or_name"
-    resources "/databases", DatabaseController, except: [:new, :edit]
+    resources "/databases", DatabaseController, except: [:new, :edit], param: "id_or_name"
     resources "/api_keys", ApiKeyController, only: [:index, :create, :delete]
 
     resources "/postgres_replications", PostgresReplicationController, except: [:new, :edit]
     post "/postgres_replications/:id/backfills", PostgresReplicationController, :create_backfills
 
-    post "/databases/:id/test_connection", DatabaseController, :test_connection
-    post "/databases/:id/setup_replication", DatabaseController, :setup_replication
-    get "/databases/:id/schemas", DatabaseController, :list_schemas
-    get "/databases/:id/schemas/:schema/tables", DatabaseController, :list_tables
+    post "/databases/:id_or_name/test_connection", DatabaseController, :test_connection
+    post "/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication
+    get "/databases/:id_or_name/schemas", DatabaseController, :list_schemas
+    get "/databases/:id_or_name/schemas/:schema/tables", DatabaseController, :list_tables
     post "/databases/test_connection", DatabaseController, :test_connection_params
     post "/streams/:stream_id_or_name/consumers/:id_or_name/receive", PullController, :receive
     get "/streams/:stream_id_or_name/consumers/:id_or_name/receive", PullController, :receive

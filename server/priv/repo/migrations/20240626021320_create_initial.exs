@@ -363,7 +363,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       add :publication_name, :string, null: false
       add :slot_name, :string, null: false
       add :status, :"#{@config_schema}.replication_status", null: false, default: "backfilling"
-      add :ssl, :boolean, null: false
 
       add :key_format, :"#{@config_schema}.postgres_replication_key_format",
         null: false,

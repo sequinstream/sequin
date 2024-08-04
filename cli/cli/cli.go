@@ -10,11 +10,14 @@ var (
 )
 
 type Config struct {
-	ContextName           string
-	StreamID              string
-	PostgresReplicationID string
-	ConsumerID            string
 	AsCurl                bool
+	ConsumerID            string
+	ContextName           string
+	JSONFile              string
+	JSONInput             string
+	PostgresReplicationID string
+	StreamID              string
+	Force                 bool
 }
 
 const LogFilePath = "sequin.log"

@@ -61,6 +61,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 	cli.AddConsumerCommands(scli, &config)
 	cli.AddObserveCommands(scli, &config)
 	cli.AddReportCommand(scli, &config)
+	cli.AddPostgresDatabaseCommands(scli, &config)
 
 	scli.MustParseWithUsage(os.Args[1:])
 }

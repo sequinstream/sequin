@@ -194,6 +194,14 @@ For update operations, the message will include the new state of the record and 
 
 Note that the `changes` field contains the old values of the updated fields. In the above example, the prior value of `planet` was `Caladan`.
 
+<Note>
+`changes` will only be populated if the replica identity is set to `full`. To change the replica identity, run the following SQL command:
+
+```sql
+ALTER TABLE my_table REPLICA IDENTITY FULL;
+```
+</Note>
+
 ### Delete
 
 For delete operations, the message will contain the state of the record before deletion:

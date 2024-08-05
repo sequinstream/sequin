@@ -70,7 +70,10 @@ defmodule Sequin.Streams.Consumer do
     |> foreign_key_constraint(:http_endpoint_id)
     |> Sequin.Changeset.validate_name()
     |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
-    |> unique_constraint([:stream_id, :name], name: "consumers_stream_id_name_index")
+    |> unique_constraint([:stream_id, :name],
+      name: "consumers_stream_id_name_index",
+      message: "Consumer name must be unique within a stream"
+    )
   end
 
   def update_changeset(consumer, attrs) do

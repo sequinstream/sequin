@@ -341,6 +341,9 @@ defmodule Sequin.Extensions.Replication do
     end)
   end
 
+  defp cast_value("bool", "t"), do: true
+  defp cast_value("bool", "f"), do: false
+
   defp cast_value(type, value) do
     case Ecto.Type.cast(string_to_ecto_type(type), value) do
       {:ok, casted_value} -> casted_value

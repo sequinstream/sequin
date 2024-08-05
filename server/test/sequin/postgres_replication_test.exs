@@ -62,7 +62,8 @@ defmodule Sequin.PostgresReplicationTest do
         id serial primary key,
         name text,
         house text,
-        planet text
+        planet text,
+        is_active boolean
       )
       """,
       """
@@ -301,14 +302,14 @@ defmodule Sequin.PostgresReplicationTest do
     } do
       query!(
         conn,
-        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet) VALUES ('Chani', 'Fremen', 'Arrakis')"
+        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active) VALUES ('Chani', 'Fremen', 'Arrakis', true)"
       )
 
       assert_receive {Replication, :message_handled}, 1_000
 
       query!(
         conn,
-        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan' WHERE id = 1"
+        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false WHERE id = 1"
       )
 
       assert_receive {Replication, :message_handled}, 1_000
@@ -317,9 +318,17 @@ defmodule Sequin.PostgresReplicationTest do
       assert update_message.key == "#{source_db.name}.#{@test_schema}.#{@test_table_full_replica}.1"
 
       decoded_data = Jason.decode!(update_message.data)
-      assert decoded_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Caladan"}
+
+      assert decoded_data["data"] == %{
+               "id" => 1,
+               "name" => "Chani",
+               "house" => "Atreides",
+               "planet" => "Caladan",
+               "is_active" => false
+             }
+
       refute decoded_data["deleted"]
-      assert decoded_data["changes"] == %{"house" => "Fremen", "planet" => "Arrakis"}
+      assert decoded_data["changes"] == %{"house" => "Fremen", "planet" => "Arrakis", "is_active" => true}
       assert decoded_data["action"] == "update"
     end
   end

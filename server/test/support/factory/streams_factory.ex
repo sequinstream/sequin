@@ -4,6 +4,8 @@ defmodule Sequin.Factory.StreamsFactory do
 
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.SourcesFactory
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams
@@ -12,6 +14,8 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
   alias Sequin.Streams.Stream
+  alias Sequin.Streams.StreamTable
+  alias Sequin.Streams.StreamTableColumn
 
   def message_data, do: Faker.String.base64(24)
 
@@ -142,7 +146,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Consumer{
-        name: generate_name(),
+        name: Factory.append_unique(Faker.Lorem.word()),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
@@ -191,7 +195,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        name: generate_name(),
+        name: Factory.append_unique(Faker.Lorem.word()),
         account_id: Factory.uuid()
       },
       attrs
@@ -249,12 +253,99 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
+  # StreamTable
+
+  def stream_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {stream_columns, attrs} = Map.pop(attrs, :stream_columns)
+    {stream_column_count, attrs} = Map.pop(attrs, :stream_column_count, 3)
+    columns = stream_columns || for _ <- 1..stream_column_count, do: stream_table_column()
+
+    merge_attributes(
+      %StreamTable{
+        account_id: Factory.uuid(),
+        source_postgres_database_id: Factory.uuid(),
+        source_replication_slot_id: Factory.uuid(),
+        table_schema_name: Factory.postgres_object(),
+        table_name: Factory.append_unique(Factory.postgres_object()),
+        name: Factory.append_unique(Faker.Lorem.word()),
+        retention_policy: %{},
+        insert_mode: Factory.one_of([:append, :upsert]),
+        stream_columns: columns
+      },
+      attrs
+    )
+  end
+
+  def stream_table_attrs(attrs \\ []) do
+    attrs
+    |> stream_table()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_stream_table!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {source_postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :source_postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    {source_replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :source_replication_slot_id, fn ->
+        SourcesFactory.insert_postgres_replication!(
+          account_id: account_id,
+          postgres_database_id: source_postgres_database_id
+        ).id
+      end)
+
+    stream_table =
+      attrs
+      |> Map.merge(%{
+        account_id: account_id,
+        source_postgres_database_id: source_postgres_database_id,
+        source_replication_slot_id: source_replication_slot_id
+      })
+      |> stream_table_attrs()
+      |> then(&StreamTable.changeset(%StreamTable{}, &1))
+      |> Repo.insert!()
+
+    stream_table
+  end
+
+  # StreamTableColumn
+
+  def stream_table_column(attrs \\ []) do
+    merge_attributes(
+      %StreamTableColumn{
+        stream_table_id: Factory.uuid(),
+        name: Factory.append_unique(Faker.Lorem.word()),
+        type: Enum.random(["integer", "text", "boolean", "timestamp"]),
+        is_pk: false
+      },
+      attrs
+    )
+  end
+
+  def stream_table_column_attrs(attrs \\ []) do
+    attrs
+    |> stream_table_column()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_stream_table_column!(attrs \\ []) do
+    attrs
+    |> stream_table_column_attrs()
+    |> then(&StreamTableColumn.changeset(%StreamTableColumn{}, &1))
+    |> Repo.insert!()
+  end
+
   defp generate_key(parts: parts) when parts > 1 do
     s = Enum.map_join(1..(parts - 1), ".", fn _ -> Faker.Lorem.word() end)
     "#{s}.#{:erlang.unique_integer([:positive])}"
-  end
-
-  defp generate_name do
-    "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
   end
 end

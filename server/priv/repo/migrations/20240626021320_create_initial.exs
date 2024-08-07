@@ -120,6 +120,21 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
       timestamps()
     end
 
+    create table(:stream_table_columns, prefix: @config_schema) do
+      add :stream_table_id,
+          references(:stream_tables, on_delete: :delete_all, prefix: @config_schema),
+          null: false
+
+      add :name, :text, null: false
+      add :type, :text, null: false
+      add :is_pk, :boolean, null: false, default: false
+
+      timestamps()
+    end
+
+    create index(:stream_table_columns, [:stream_table_id], prefix: @config_schema)
+    create unique_index(:stream_table_columns, [:stream_table_id, :name], prefix: @config_schema)
+
     create index(:stream_tables, [:account_id], prefix: @config_schema)
 
     # create unique_index(:stream_tables, [:destination_postgres_database_id, :table_schema_name, :table_name], prefix: @config_schema)

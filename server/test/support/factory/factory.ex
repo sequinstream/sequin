@@ -4,6 +4,7 @@ defmodule Sequin.Factory do
   """
 
   def atom, do: String.to_atom(Faker.Internet.domain_word())
+  def append_unique(str), do: str <> "_" <> to_string(:erlang.unique_integer([:positive]))
   def boolean, do: one_of([true, false])
 
   def count(opts \\ []) do

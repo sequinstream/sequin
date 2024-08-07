@@ -5,6 +5,7 @@ defmodule Sequin.StreamsTest do
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerBackfillWorker
+  alias Sequin.Streams.SourceTableStreamTableColumnMapping
 
   describe "upsert_messages/1" do
     test "inserts new messages" do
@@ -894,6 +895,23 @@ defmodule Sequin.StreamsTest do
       Enum.each(stream_table.columns, fn column ->
         assert column.stream_table_id == stream_table.id
       end)
+    end
+  end
+
+  describe "source_table" do
+    test "factory creates a source table" do
+      source_table = StreamsFactory.insert_source_table!()
+      assert source_table.schema_oid
+    end
+  end
+
+  describe "source_table_stream_table_column_mapping" do
+    test "factory creates a source_table_stream_table_column_mapping" do
+      mapping = StreamsFactory.insert_source_table_stream_table_column_mapping!()
+      assert %SourceTableStreamTableColumnMapping{} = mapping
+      assert mapping.source_table_id
+      assert mapping.stream_column_id
+      assert mapping.object in SourceTableStreamTableColumnMapping.objects()
     end
   end
 end

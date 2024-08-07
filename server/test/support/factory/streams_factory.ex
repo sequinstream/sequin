@@ -262,7 +262,7 @@ defmodule Sequin.Factory.StreamsFactory do
       %StreamTableColumn{
         name: Faker.Lorem.word(),
         type: Enum.random(StreamTableColumn.column_types()),
-        is_pk: Enum.random([true, false]),
+        is_conflict_key: Enum.random([true, false]),
         stream_table_id: Factory.uuid()
       },
       attrs
@@ -300,7 +300,7 @@ defmodule Sequin.Factory.StreamsFactory do
     stream_columns =
       stream_columns ||
         for n <- 1..stream_column_count do
-          is_pk =
+          is_conflict_key =
             cond do
               # Ensure at least one column is a primary key
               insert_mode == :upsert and n == 1 -> true
@@ -308,7 +308,7 @@ defmodule Sequin.Factory.StreamsFactory do
               true -> false
             end
 
-          stream_table_column(is_pk: is_pk)
+          stream_table_column(is_conflict_key: is_conflict_key)
         end
 
     merge_attributes(

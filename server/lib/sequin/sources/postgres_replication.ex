@@ -31,14 +31,12 @@ defmodule Sequin.Sources.PostgresReplication do
              :backfill_completed_at,
              :key_format
            ]}
-  schema "postgres_replications" do
+  typed_schema "postgres_replications" do
     field :slot_name, :string
     field :publication_name, :string
     field :status, Ecto.Enum, values: [:active, :disabled, :backfilling], default: :backfilling
     field :backfill_completed_at, :utc_datetime_usec, default: nil
     field :key_format, Ecto.Enum, values: [:basic, :with_operation], default: :basic
-    # This is unused! We need to remove via a migration
-    field :ssl, :boolean, default: true
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase

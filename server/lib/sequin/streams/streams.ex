@@ -5,6 +5,9 @@ defmodule Sequin.Streams do
   alias Sequin.Accounts.Account
   alias Sequin.Cache
   alias Sequin.Error
+  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
@@ -12,7 +15,9 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.ConsumerMessageWithConsumerInfoss
   alias Sequin.Streams.Message
+  alias Sequin.Streams.NewMessage
   alias Sequin.Streams.Query
+  alias Sequin.Streams.SourceTable
   alias Sequin.Streams.Stream
   alias Sequin.StreamsRuntime
 
@@ -749,4 +754,53 @@ defmodule Sequin.Streams do
   defp env do
     Application.get_env(:sequin, :env)
   end
+
+  def message_from_replication_change(%SourceTable{} = source_table, change) do
+    user_fields =
+      Enum.reduce(source_table.column_mappings, %{}, fn mapping, acc ->
+        Map.put(acc, mapping.stream_column.name, extract_field_value(mapping.mapping, change, source_table))
+      end)
+
+    %NewMessage{
+      data: %{
+        record: get_record(change),
+        changes: get_changes(change)
+      },
+      recorded_at: DateTime.utc_now(),
+      user_fields: user_fields,
+      deleted: is_struct(change, DeletedRecord)
+    }
+  end
+
+  defp get_record(%NewRecord{record: record}), do: record
+  defp get_record(%UpdatedRecord{record: record}), do: record
+  defp get_record(%DeletedRecord{old_record: old_record}), do: old_record
+
+  defp extract_field_value(%{type: :record_field, field_name: field_name}, change, _source_table) do
+    case change do
+      %NewRecord{record: record} -> record[field_name]
+      %UpdatedRecord{record: record} -> record[field_name]
+      %DeletedRecord{old_record: old_record} -> old_record[field_name]
+    end
+  end
+
+  defp extract_field_value(%{type: :metadata, field_name: field_name}, change, source_table) do
+    case field_name do
+      "action" -> get_action(change)
+      "table_name" -> source_table.name
+    end
+  end
+
+  defp get_changes(%UpdatedRecord{old_record: old_record, record: record}) do
+    old_record
+    |> Map.new(fn {k, v} -> {k, if(record[k] == v, do: nil, else: v)} end)
+    |> Map.reject(fn {_, v} -> is_nil(v) end)
+  end
+
+  defp get_changes(%NewRecord{}), do: nil
+  defp get_changes(%DeletedRecord{}), do: nil
+
+  defp get_action(%NewRecord{}), do: :insert
+  defp get_action(%UpdatedRecord{}), do: :update
+  defp get_action(%DeletedRecord{}), do: :delete
 end

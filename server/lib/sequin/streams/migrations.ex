@@ -10,6 +10,14 @@ defmodule Sequin.Streams.Migrations do
 
   @spec provision_stream_table(%StreamTable{}) :: :ok | {:error, Postgrex.Error.t()}
   def provision_stream_table(%StreamTable{} = stream_table) do
+    stream_table
+    |> provision_stream_table_ddl()
+    |> Enum.map(&execute_ddl/1)
+    |> execute_sql()
+  end
+
+  @spec provision_stream_table_ddl(%StreamTable{}) :: list()
+  def provision_stream_table_ddl(%StreamTable{} = stream_table) do
     table_name = stream_table.table_name
     schema_name = stream_table.table_schema_name
 
@@ -29,38 +37,48 @@ defmodule Sequin.Streams.Migrations do
       primary_key: false
     }
 
-    create_ddl = execute_ddl({:create, table, required_columns ++ custom_columns})
+    create_ddl = {:create, table, required_columns ++ custom_columns}
 
     indexes = indexes(stream_table)
     conflict_key_index = conflict_key_index(stream_table) || nil
 
-    index_ddls =
-      Enum.map(indexes ++ List.wrap(conflict_key_index), fn %Index{} = index -> execute_ddl({:create, index}) end)
+    index_ddls = Enum.map(indexes ++ List.wrap(conflict_key_index), &{:create, &1})
 
-    execute_sql([create_ddl] ++ index_ddls)
+    [create_ddl | index_ddls]
   end
 
   @spec migrate_stream_table(%StreamTable{}, %StreamTable{}) :: :ok | {:error, Postgrex.Error.t()}
   def migrate_stream_table(old_stream_table, new_stream_table) do
-    # Migrate columns first, they will all refer to old table name and schema name
-    column_ddl_cmds = migrate_stream_table_columns_cmds(old_stream_table, new_stream_table)
-    table_ddl_cmds = migrate_stream_table_cmds(old_stream_table, new_stream_table)
-
-    (column_ddl_cmds ++ table_ddl_cmds)
+    old_stream_table
+    |> migrate_stream_table_ddl(new_stream_table)
     |> Enum.map(&execute_ddl/1)
     |> execute_sql()
   end
 
+  @spec migrate_stream_table_ddl(%StreamTable{}, %StreamTable{}) :: list()
+  def migrate_stream_table_ddl(old_stream_table, new_stream_table) do
+    column_ddl_cmds = migrate_stream_table_columns_cmds(old_stream_table, new_stream_table)
+    table_ddl_cmds = migrate_stream_table_cmds(old_stream_table, new_stream_table)
+
+    column_ddl_cmds ++ table_ddl_cmds
+  end
+
   @spec drop_stream_table(%StreamTable{}) :: :ok | {:error, Postgrex.Error.t()}
   def drop_stream_table(%StreamTable{} = stream_table) do
+    stream_table
+    |> drop_stream_table_ddl()
+    |> execute_ddl()
+    |> execute_sql()
+  end
+
+  @spec drop_stream_table_ddl(%StreamTable{}) :: tuple()
+  def drop_stream_table_ddl(%StreamTable{} = stream_table) do
     table = %Table{
       name: stream_table.table_name,
       prefix: stream_table.table_schema_name
     }
 
-    drop_ddl = execute_ddl({:drop, table, :cascade})
-
-    execute_sql(drop_ddl)
+    {:drop, table, :cascade}
   end
 
   defp stream_table_column_to_ecto_column(%StreamTableColumn{} = column) do
@@ -91,6 +109,9 @@ defmodule Sequin.Streams.Migrations do
 
         {:rename_index, _opts} = cmd ->
           cmd
+
+        {:add_index, index} ->
+          {:create, index}
       end
     end)
   end
@@ -159,11 +180,13 @@ defmodule Sequin.Streams.Migrations do
       end
 
     rename_index_cmds = Enum.reject(rename_index_cmds, &is_nil/1)
+    add_index_cmds = Enum.map(added, fn column -> {:add_index, column_index(new, column)} end)
 
     Enum.map(added, &{:add_column, &1}) ++
       Enum.map(dropped, &{:drop_column, &1.name}) ++
       rename_column_cmds ++
-      rename_index_cmds
+      rename_index_cmds ++
+      add_index_cmds
   end
 
   defp column_index(%StreamTable{} = stream_table, %StreamTableColumn{} = column) do

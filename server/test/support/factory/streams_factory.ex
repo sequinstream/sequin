@@ -260,6 +260,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream_table_column(attrs \\ []) do
     merge_attributes(
       %StreamTableColumn{
+        id: Factory.uuid(),
         name: Faker.Lorem.word(),
         type: Enum.random(StreamTableColumn.column_types()),
         is_conflict_key: Enum.random([true, false]),
@@ -313,6 +314,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %StreamTable{
+        id: Factory.uuid(),
         name: Factory.unique_word(),
         table_schema_name: Factory.unique_postgres_object(),
         table_name: Factory.unique_postgres_object(),

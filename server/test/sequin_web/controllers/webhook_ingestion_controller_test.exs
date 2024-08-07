@@ -1,7 +1,7 @@
 defmodule SequinWeb.WebhookIngestionControllerTest do
   use SequinWeb.ConnCase, async: true
 
-  alias Sequin.Factory.SourcesFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
 
@@ -10,7 +10,7 @@ defmodule SequinWeb.WebhookIngestionControllerTest do
   describe "ingest" do
     setup %{account: account} do
       stream = StreamsFactory.insert_stream!(account_id: account.id)
-      webhook = SourcesFactory.insert_webhook!(account_id: account.id, stream_id: stream.id)
+      webhook = ReplicationFactory.insert_webhook!(account_id: account.id, stream_id: stream.id)
       %{stream: stream, webhook: webhook}
     end
 

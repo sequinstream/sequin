@@ -3,6 +3,7 @@ defmodule Sequin.Streams.StreamTable do
   use Sequin.ConfigSchema
 
   import Ecto.Changeset
+  import Ecto.Query
 
   alias Sequin.Accounts.Account
   alias Sequin.Databases.PostgresDatabase
@@ -34,12 +35,12 @@ defmodule Sequin.Streams.StreamTable do
     belongs_to :source_postgres_database, PostgresDatabase
     belongs_to :source_replication_slot, PostgresReplication
 
-    has_many :columns, StreamTableColumn
+    has_many :columns, StreamTableColumn, on_replace: :delete
 
     timestamps()
   end
 
-  def changeset(%__MODULE__{} = stream_table, attrs) do
+  def create_changeset(%__MODULE__{} = stream_table, attrs) do
     stream_table
     |> cast(attrs, [
       :name,
@@ -47,7 +48,6 @@ defmodule Sequin.Streams.StreamTable do
       :table_name,
       :retention_policy,
       :insert_mode,
-      :account_id,
       :source_postgres_database_id,
       :source_replication_slot_id
     ])
@@ -57,19 +57,84 @@ defmodule Sequin.Streams.StreamTable do
       :table_name,
       :retention_policy,
       :insert_mode,
-      :account_id,
       :source_postgres_database_id,
       :source_replication_slot_id
     ])
-    |> Sequin.Changeset.validate_name()
     |> validate_inclusion(:insert_mode, [:append, :upsert])
-    |> foreign_key_constraint(:account_id)
     |> foreign_key_constraint(:source_postgres_database_id)
     |> foreign_key_constraint(:source_replication_slot_id)
-    |> unique_constraint([:account_id, :name])
+    |> unique_constraint([:account_id, :name], message: "has already been taken", error_key: :name)
+    |> cast_assoc(:columns, with: &column_changeset/2)
+    |> validate_primary_keys()
   end
 
-  # defp base_query(query \\ __MODULE__) do
-  #   from(st in query, as: :stream_table)
-  # end
+  def update_changeset(%__MODULE__{} = stream_table, attrs) do
+    stream_table
+    |> cast(attrs, [
+      :name,
+      :table_schema_name,
+      :table_name,
+      :retention_policy
+    ])
+    |> validate_required([
+      :name,
+      :table_schema_name,
+      :table_name,
+      :retention_policy
+    ])
+    |> Sequin.Changeset.validate_name()
+    |> cast_assoc(:columns, with: &column_changeset/2)
+  end
+
+  defp column_changeset(column, attrs) do
+    if is_nil(column.id) do
+      StreamTableColumn.create_changeset(column, attrs)
+    else
+      StreamTableColumn.update_changeset(column, attrs)
+    end
+  end
+
+  defp validate_primary_keys(changeset) do
+    insert_mode = get_field(changeset, :insert_mode)
+    columns = get_field(changeset, :columns) || []
+
+    case insert_mode do
+      :append ->
+        if Enum.any?(columns, & &1.is_pk) do
+          add_error(changeset, :columns, "cannot have primary keys when insert_mode is :append")
+        else
+          changeset
+        end
+
+      :upsert ->
+        if Enum.any?(columns, & &1.is_pk) do
+          changeset
+        else
+          add_error(changeset, :columns, "must have at least one primary key when insert_mode is :upsert")
+        end
+
+      _ ->
+        changeset
+    end
+  end
+
+  def where_account_id(query \\ base_query(), account_id) do
+    from(st in query, where: st.account_id == ^account_id)
+  end
+
+  def where_id(query \\ base_query(), id) do
+    from(st in query, where: st.id == ^id)
+  end
+
+  def where_source_postgres_database_id(query \\ base_query(), source_postgres_database_id) do
+    from(st in query, where: st.source_postgres_database_id == ^source_postgres_database_id)
+  end
+
+  def where_source_replication_slot_id(query \\ base_query(), source_replication_slot_id) do
+    from(st in query, where: st.source_replication_slot_id == ^source_replication_slot_id)
+  end
+
+  defp base_query(query \\ __MODULE__) do
+    from(st in query, as: :stream_table)
+  end
 end

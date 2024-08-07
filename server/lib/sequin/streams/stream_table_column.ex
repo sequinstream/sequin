@@ -7,7 +7,7 @@ defmodule Sequin.Streams.StreamTableColumn do
   alias Sequin.Streams.StreamTable
 
   def column_types do
-    ~w(text integer boolean timestamp)
+    ~w(text integer boolean timestamp uuid)
   end
 
   @derive {Jason.Encoder, only: [:id, :name, :type, :is_pk, :stream_table_id, :inserted_at, :updated_at]}

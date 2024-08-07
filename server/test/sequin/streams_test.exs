@@ -2,9 +2,11 @@ defmodule Sequin.StreamsTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Factory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerBackfillWorker
+  alias Sequin.Streams.NewMessage
   alias Sequin.Streams.SourceTableStreamTableColumnMapping
 
   describe "upsert_messages/1" do
@@ -911,7 +913,168 @@ defmodule Sequin.StreamsTest do
       assert %SourceTableStreamTableColumnMapping{} = mapping
       assert mapping.source_table_id
       assert mapping.stream_column_id
-      assert mapping.object in SourceTableStreamTableColumnMapping.objects()
+      assert mapping.mapping.type in [:record_field, :metadata]
+    end
+  end
+
+  describe "message_from_replication_change/2" do
+    setup do
+      stream_table = StreamsFactory.insert_stream_table!()
+
+      source_table =
+        StreamsFactory.insert_source_table!(account_id: stream_table.account_id)
+
+      # Dune universe theme columns
+      spice_name_column =
+        StreamsFactory.insert_stream_table_column!(stream_table_id: stream_table.id, name: "spice_name", type: "text")
+
+      StreamsFactory.insert_source_table_stream_table_column_mapping!(
+        source_table_id: source_table.id,
+        stream_column_id: spice_name_column.id,
+        mapping: %{type: :record_field, field_name: "spice_name"}
+      )
+
+      sandworm_count_column =
+        StreamsFactory.insert_stream_table_column!(
+          stream_table_id: stream_table.id,
+          name: "sandworm_count",
+          type: "integer"
+        )
+
+      StreamsFactory.insert_source_table_stream_table_column_mapping!(
+        source_table_id: source_table.id,
+        stream_column_id: sandworm_count_column.id,
+        mapping: %{type: :record_field, field_name: "sandworm_count"}
+      )
+
+      is_fremen_column =
+        StreamsFactory.insert_stream_table_column!(stream_table_id: stream_table.id, name: "is_fremen", type: "boolean")
+
+      StreamsFactory.insert_source_table_stream_table_column_mapping!(
+        source_table_id: source_table.id,
+        stream_column_id: is_fremen_column.id,
+        mapping: %{type: :record_field, field_name: "is_fremen"}
+      )
+
+      # Metadata columns
+      action_column =
+        StreamsFactory.insert_stream_table_column!(stream_table_id: stream_table.id, name: "action", type: "text")
+
+      StreamsFactory.insert_source_table_stream_table_column_mapping!(
+        source_table_id: source_table.id,
+        stream_column_id: action_column.id,
+        mapping: %{type: :metadata, field_name: "action"}
+      )
+
+      table_name_column =
+        StreamsFactory.insert_stream_table_column!(stream_table_id: stream_table.id, name: "table_name", type: "text")
+
+      StreamsFactory.insert_source_table_stream_table_column_mapping!(
+        source_table_id: source_table.id,
+        stream_column_id: table_name_column.id,
+        mapping: %{type: :metadata, field_name: "table_name"}
+      )
+
+      source_table = Repo.preload(source_table, column_mappings: :stream_column)
+      %{stream_table: stream_table, source_table: source_table}
+    end
+
+    test "creates a message from a new record", %{source_table: source_table} do
+      record = %{
+        "spice_name" => "Melange",
+        "sandworm_count" => 5,
+        "is_fremen" => false
+      }
+
+      insert_change = ReplicationFactory.postgres_insert(record: record)
+
+      %NewMessage{
+        data: data,
+        recorded_at: recorded_at,
+        user_fields: user_fields,
+        deleted: false
+      } = Streams.message_from_replication_change(source_table, insert_change)
+
+      assert data.record == record
+      assert data.changes == nil
+      assert is_struct(recorded_at, DateTime)
+
+      assert user_fields == %{
+               "spice_name" => "Melange",
+               "sandworm_count" => 5,
+               "is_fremen" => false,
+               "action" => :insert,
+               "table_name" => source_table.name
+             }
+    end
+
+    test "creates a message from an updated record", %{source_table: source_table} do
+      old_record = %{
+        "spice_name" => "Melange",
+        "sandworm_count" => 5,
+        "is_fremen" => false
+      }
+
+      new_record = %{
+        "spice_name" => "Melange",
+        "sandworm_count" => 10,
+        "is_fremen" => true
+      }
+
+      updated_record = ReplicationFactory.postgres_update(old_record: old_record, record: new_record)
+
+      %NewMessage{
+        data: data,
+        recorded_at: recorded_at,
+        user_fields: user_fields,
+        deleted: false
+      } = Streams.message_from_replication_change(source_table, updated_record)
+
+      assert data.record == new_record
+
+      assert data.changes == %{
+               "sandworm_count" => 5,
+               "is_fremen" => false
+             }
+
+      assert is_struct(recorded_at, DateTime)
+
+      assert user_fields == %{
+               "spice_name" => "Melange",
+               "sandworm_count" => 10,
+               "is_fremen" => true,
+               "action" => :update,
+               "table_name" => source_table.name
+             }
+    end
+
+    test "creates a message from a deleted record", %{source_table: source_table} do
+      old_record = %{
+        "spice_name" => "Melange",
+        "sandworm_count" => 5,
+        "is_fremen" => false
+      }
+
+      deleted_record = ReplicationFactory.postgres_delete(old_record: old_record)
+
+      %NewMessage{
+        data: data,
+        recorded_at: recorded_at,
+        user_fields: user_fields,
+        deleted: true
+      } = Streams.message_from_replication_change(source_table, deleted_record)
+
+      assert data.record == old_record
+      assert data.changes == nil
+      assert is_struct(recorded_at, DateTime)
+
+      assert user_fields == %{
+               "spice_name" => "Melange",
+               "sandworm_count" => 5,
+               "is_fremen" => false,
+               "action" => :delete,
+               "table_name" => source_table.name
+             }
     end
   end
 end

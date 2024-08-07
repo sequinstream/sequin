@@ -500,10 +500,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
           references(:stream_table_columns, on_delete: :delete_all, prefix: @config_schema),
           null: false
 
-      add :object, :"#{@config_schema}.source_table_stream_table_column_mapping_object",
-        null: false
-
-      add :object_field, :text
+      add :mapping, :jsonb, null: false
 
       timestamps()
     end

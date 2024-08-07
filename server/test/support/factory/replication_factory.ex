@@ -2,6 +2,9 @@ defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
+  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
@@ -108,5 +111,72 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> Map.put(:account_id, account_id)
     |> StreamsFactory.stream()
     |> Repo.insert!()
+  end
+
+  def postgres_insert(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %NewRecord{
+        commit_timestamp: Factory.timestamp(),
+        errors: nil,
+        ids: [Factory.unique_integer()],
+        schema: "__postgres_replication_test_schema__",
+        table: "__postgres_replication_test_table__",
+        record: %{
+          "id" => Factory.unique_integer(),
+          "name" => Factory.name(),
+          "house" => Factory.name(),
+          "planet" => Factory.name()
+        },
+        type: "insert"
+      },
+      attrs
+    )
+  end
+
+  def postgres_update(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %UpdatedRecord{
+        commit_timestamp: Factory.timestamp(),
+        errors: nil,
+        ids: [Factory.unique_integer()],
+        schema: Factory.postgres_object(),
+        table: Factory.postgres_object(),
+        old_record: nil,
+        record: %{
+          "id" => Factory.unique_integer(),
+          "name" => Factory.name(),
+          "house" => Factory.name(),
+          "planet" => Factory.name()
+        },
+        type: "update"
+      },
+      attrs
+    )
+  end
+
+  def postgres_delete(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %DeletedRecord{
+        commit_timestamp: Factory.timestamp(),
+        errors: nil,
+        ids: [Factory.unique_integer()],
+        schema: Factory.postgres_object(),
+        table: Factory.postgres_object(),
+        old_record: %{
+          "id" => Factory.unique_integer(),
+          "name" => nil,
+          "house" => nil,
+          "planet" => nil
+        },
+        type: "delete"
+      },
+      attrs
+    )
   end
 end

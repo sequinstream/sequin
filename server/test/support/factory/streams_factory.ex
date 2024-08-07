@@ -396,12 +396,22 @@ defmodule Sequin.Factory.StreamsFactory do
   # SourceTableStreamTableColumnMapping
 
   def source_table_stream_table_column_mapping(attrs \\ []) do
+    mapping_type = Enum.random([:record_field, :metadata])
+
+    mapping_field =
+      case mapping_type do
+        :record_field -> Faker.Lorem.word()
+        :metadata -> Enum.random(["action", "table_name"])
+      end
+
     merge_attributes(
       %SourceTableStreamTableColumnMapping{
         source_table_id: Factory.uuid(),
         stream_column_id: Factory.uuid(),
-        object: Enum.random(SourceTableStreamTableColumnMapping.objects()),
-        object_field: Faker.Lorem.word()
+        mapping: %SourceTableStreamTableColumnMapping.Mapping{
+          type: mapping_type,
+          field_name: mapping_field
+        }
       },
       attrs
     )
@@ -410,6 +420,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def source_table_stream_table_column_mapping_attrs(attrs \\ []) do
     attrs
     |> source_table_stream_table_column_mapping()
+    |> Map.update!(:mapping, &Sequin.Map.from_ecto/1)
     |> Sequin.Map.from_ecto()
   end
 

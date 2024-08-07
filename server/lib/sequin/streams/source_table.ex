@@ -6,6 +6,7 @@ defmodule Sequin.Streams.SourceTable do
 
   alias Sequin.Accounts.Account
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Streams.SourceTableStreamTableColumnMapping
 
   @derive {Jason.Encoder,
            only: [
@@ -27,6 +28,8 @@ defmodule Sequin.Streams.SourceTable do
 
     belongs_to :account, Account
     belongs_to :postgres_database, PostgresDatabase
+
+    has_many :column_mappings, SourceTableStreamTableColumnMapping
 
     timestamps()
   end

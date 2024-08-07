@@ -467,5 +467,59 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
     create index(:stream_table_columns, [:stream_table_id], prefix: @config_schema)
     create unique_index(:stream_table_columns, [:stream_table_id, :name], prefix: @config_schema)
+
+    # Add the new source_tables table
+    create table(:source_tables, prefix: @config_schema) do
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
+      add :postgres_database_id,
+          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
+
+      add :schema_oid, :integer, null: false
+      add :oid, :integer, null: false
+      add :schema_name, :text
+      add :name, :text
+
+      timestamps()
+    end
+
+    create index(:source_tables, [:account_id], prefix: @config_schema)
+    create unique_index(:source_tables, [:postgres_database_id, :oid], prefix: @config_schema)
+    create index(:source_tables, [:postgres_database_id], prefix: @config_schema)
+
+    execute "CREATE TYPE #{@config_schema}.source_table_stream_table_column_mapping_object AS ENUM ('row', 'transform_output', 'metadata');"
+
+    create table(:source_table_stream_table_column_mappings, prefix: @config_schema) do
+      add :source_table_id,
+          references(:source_tables, on_delete: :delete_all, prefix: @config_schema),
+          null: false
+
+      add :stream_column_id,
+          references(:stream_table_columns, on_delete: :delete_all, prefix: @config_schema),
+          null: false
+
+      add :object, :"#{@config_schema}.source_table_stream_table_column_mapping_object",
+        null: false
+
+      add :object_field, :text
+
+      timestamps()
+    end
+
+    create index(:source_table_stream_table_column_mappings, [:source_table_id],
+             prefix: @config_schema
+           )
+
+    create index(:source_table_stream_table_column_mappings, [:stream_column_id],
+             prefix: @config_schema
+           )
+
+    create unique_index(
+             :source_table_stream_table_column_mappings,
+             [:source_table_id, :stream_column_id],
+             prefix: @config_schema
+           )
   end
 end

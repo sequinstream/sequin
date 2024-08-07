@@ -1,7 +1,7 @@
 defmodule SequinWeb.PostgresReplicationController do
   use SequinWeb, :controller
 
-  alias Sequin.Sources
+  alias Sequin.Replication
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -9,14 +9,14 @@ defmodule SequinWeb.PostgresReplicationController do
   def index(conn, _params) do
     account_id = conn.assigns.account_id
 
-    render(conn, "index.json", postgres_replications: Sources.list_pg_replications_for_account(account_id))
+    render(conn, "index.json", postgres_replications: Replication.list_pg_replications_for_account(account_id))
   end
 
   def show(conn, %{"id" => id}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id) do
-      postgres_replication_with_info = Sources.add_info(postgres_replication)
+    with {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id) do
+      postgres_replication_with_info = Replication.add_info(postgres_replication)
       render(conn, "show_with_info.json", postgres_replication: postgres_replication_with_info)
     end
   end
@@ -24,7 +24,7 @@ defmodule SequinWeb.PostgresReplicationController do
   def create(conn, params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, postgres_replication} <- Sources.create_pg_replication_for_account_with_lifecycle(account_id, params) do
+    with {:ok, postgres_replication} <- Replication.create_pg_replication_for_account_with_lifecycle(account_id, params) do
       render(conn, "show.json", postgres_replication: postgres_replication)
     end
   end
@@ -33,8 +33,8 @@ defmodule SequinWeb.PostgresReplicationController do
     account_id = conn.assigns.account_id
 
     with {:ok, params} <- parse_update_params(params),
-         {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
-         {:ok, updated_postgres_replication} <- Sources.update_pg_replication(postgres_replication, params) do
+         {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id),
+         {:ok, updated_postgres_replication} <- Replication.update_pg_replication(postgres_replication, params) do
       render(conn, "show.json", postgres_replication: updated_postgres_replication)
     end
   end
@@ -42,8 +42,8 @@ defmodule SequinWeb.PostgresReplicationController do
   def delete(conn, %{"id" => id}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
-         {:ok, _postgres_replication} <- Sources.delete_pg_replication_with_lifecycle(postgres_replication) do
+    with {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id),
+         {:ok, _postgres_replication} <- Replication.delete_pg_replication_with_lifecycle(postgres_replication) do
       render(conn, "delete.json", postgres_replication: postgres_replication)
     end
   end
@@ -52,8 +52,8 @@ defmodule SequinWeb.PostgresReplicationController do
     account_id = conn.assigns.account_id
 
     with {:ok, valid_tables} <- validate_tables(tables),
-         {:ok, postgres_replication} <- Sources.get_pg_replication_for_account(account_id, id),
-         {:ok, job_ids} <- Sources.create_backfill_jobs(postgres_replication, valid_tables) do
+         {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id),
+         {:ok, job_ids} <- Replication.create_backfill_jobs(postgres_replication, valid_tables) do
       conn
       |> put_status(:created)
       |> render("backfill_jobs.json", job_ids: job_ids)

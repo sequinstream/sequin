@@ -1,4 +1,4 @@
-defmodule Sequin.Sources.PostgresReplication do
+defmodule Sequin.Replication.PostgresReplication do
   @moduledoc false
   use Sequin.ConfigSchema
 

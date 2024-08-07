@@ -5,7 +5,7 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.SourcesFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams
@@ -333,7 +333,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     {source_replication_slot_id, attrs} =
       Map.pop_lazy(attrs, :source_replication_slot_id, fn ->
-        SourcesFactory.insert_postgres_replication!(
+        ReplicationFactory.insert_postgres_replication!(
           account_id: account_id,
           postgres_database_id: source_postgres_database_id
         ).id

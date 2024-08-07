@@ -63,7 +63,8 @@ defmodule Sequin.PostgresReplicationTest do
         name text,
         house text,
         planet text,
-        is_active boolean
+        is_active boolean,
+        tags text[]
       )
       """,
       """
@@ -302,14 +303,14 @@ defmodule Sequin.PostgresReplicationTest do
     } do
       query!(
         conn,
-        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active) VALUES ('Chani', 'Fremen', 'Arrakis', true)"
+        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active, tags) VALUES ('Chani', 'Fremen', 'Arrakis', true, ARRAY['warrior', 'seer', 'royal,compound'])"
       )
 
       assert_receive {Replication, :message_handled}, 1_000
 
       query!(
         conn,
-        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false WHERE id = 1"
+        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false, tags = ARRAY['warrior', 'seer', 'royal,interest'] WHERE id = 1"
       )
 
       assert_receive {Replication, :message_handled}, 1_000
@@ -324,11 +325,19 @@ defmodule Sequin.PostgresReplicationTest do
                "name" => "Chani",
                "house" => "Atreides",
                "planet" => "Caladan",
-               "is_active" => false
+               "is_active" => false,
+               "tags" => ["warrior", "seer", "royal,interest"]
              }
 
       refute decoded_data["deleted"]
-      assert decoded_data["changes"] == %{"house" => "Fremen", "planet" => "Arrakis", "is_active" => true}
+
+      assert decoded_data["changes"] == %{
+               "house" => "Fremen",
+               "planet" => "Arrakis",
+               "is_active" => true,
+               "tags" => ["warrior", "seer", "royal,compound"]
+             }
+
       assert decoded_data["action"] == "update"
     end
   end

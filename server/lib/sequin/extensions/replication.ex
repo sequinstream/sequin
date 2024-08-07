@@ -344,6 +344,14 @@ defmodule Sequin.Extensions.Replication do
   defp cast_value("bool", "t"), do: true
   defp cast_value("bool", "f"), do: false
 
+  defp cast_value("_" <> type, array_string) when is_binary(array_string) do
+    array_string
+    |> String.trim("{")
+    |> String.trim("}")
+    |> parse_pg_array()
+    |> Enum.map(&cast_value(type, &1))
+  end
+
   defp cast_value(type, value) do
     case Ecto.Type.cast(string_to_ecto_type(type), value) do
       {:ok, casted_value} -> casted_value
@@ -351,6 +359,26 @@ defmodule Sequin.Extensions.Replication do
       :error -> value
     end
   end
+
+  defp parse_pg_array(str) do
+    str
+    # split the string on commas, but only when they're not inside quotes.
+    |> String.split(~r/,(?=(?:[^"]*"[^"]*")*[^"]*$)/)
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(&unescape_string/1)
+  end
+
+  # When an array element contains a comma and is coming from Postgres, it will be wrapped in double quotes:
+  # "\"royal,interest\""
+  # We want to remove the double quotes so that we get:
+  # "royal,interest"
+  defp unescape_string(<<"\"", rest::binary>>) do
+    rest
+    |> String.slice(0..-2//1)
+    |> String.replace("\\\"", "\"")
+  end
+
+  defp unescape_string(str), do: str
 
   @postgres_to_ecto_type_mapping %{
     # Numeric Types
@@ -403,7 +431,7 @@ defmodule Sequin.Extensions.Replication do
     "json" => :map,
     "jsonb" => :map,
     # Arrays
-    "array" => {:array, :any},
+    "_text" => {:array, :string},
     # Composite Types
     "composite" => :map,
     # Range Types

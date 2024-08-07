@@ -100,17 +100,17 @@ defmodule Sequin.Streams.StreamTable do
 
     case insert_mode do
       :append ->
-        if Enum.any?(columns, & &1.is_pk) do
-          add_error(changeset, :columns, "cannot have primary keys when insert_mode is :append")
+        if Enum.any?(columns, & &1.is_conflict_key) do
+          add_error(changeset, :columns, "cannot have conflict keys when insert_mode is :append")
         else
           changeset
         end
 
       :upsert ->
-        if Enum.any?(columns, & &1.is_pk) do
+        if Enum.any?(columns, & &1.is_conflict_key) do
           changeset
         else
-          add_error(changeset, :columns, "must have at least one primary key when insert_mode is :upsert")
+          add_error(changeset, :columns, "must have at least one conflict key when insert_mode is :upsert")
         end
 
       _ ->

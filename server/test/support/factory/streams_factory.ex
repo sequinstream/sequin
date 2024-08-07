@@ -284,7 +284,7 @@ defmodule Sequin.Factory.StreamsFactory do
     attrs
     |> Map.put(:stream_table_id, stream_table_id)
     |> stream_table_column_attrs()
-    |> then(&StreamTableColumn.changeset(%StreamTableColumn{}, &1))
+    |> then(&StreamTableColumn.create_changeset(%StreamTableColumn{}, &1))
     |> Repo.insert!()
   end
 
@@ -293,10 +293,23 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream_table(attrs \\ []) do
     attrs = Map.new(attrs)
 
+    {insert_mode, attrs} = Map.pop_lazy(attrs, :insert_mode, fn -> Enum.random([:append, :upsert]) end)
     {stream_columns, attrs} = Map.pop(attrs, :stream_columns)
     {stream_column_count, attrs} = Map.pop(attrs, :stream_column_count, 3)
 
-    stream_columns = stream_columns || for _ <- 1..stream_column_count, do: stream_table_column()
+    stream_columns =
+      stream_columns ||
+        for n <- 1..stream_column_count do
+          is_pk =
+            cond do
+              # Ensure at least one column is a primary key
+              insert_mode == :upsert and n == 1 -> true
+              insert_mode == :upsert -> Enum.random([true, false])
+              true -> false
+            end
+
+          stream_table_column(is_pk: is_pk)
+        end
 
     merge_attributes(
       %StreamTable{
@@ -304,7 +317,7 @@ defmodule Sequin.Factory.StreamsFactory do
         table_schema_name: Factory.unique_postgres_object(),
         table_name: Factory.unique_postgres_object(),
         retention_policy: %{},
-        insert_mode: Enum.random([:append, :upsert]),
+        insert_mode: insert_mode,
         account_id: Factory.uuid(),
         source_postgres_database_id: Factory.uuid(),
         source_replication_slot_id: Factory.uuid(),
@@ -317,6 +330,9 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream_table_attrs(attrs \\ []) do
     attrs
     |> stream_table()
+    |> Map.update(:columns, [], fn columns ->
+      Enum.map(columns, &Sequin.Map.from_ecto/1)
+    end)
     |> Sequin.Map.from_ecto()
   end
 
@@ -341,12 +357,11 @@ defmodule Sequin.Factory.StreamsFactory do
 
     attrs
     |> Map.merge(%{
-      account_id: account_id,
       source_postgres_database_id: source_postgres_database_id,
       source_replication_slot_id: source_replication_slot_id
     })
     |> stream_table_attrs()
-    |> then(&StreamTable.changeset(%StreamTable{}, &1))
+    |> then(&StreamTable.create_changeset(%StreamTable{account_id: account_id}, &1))
     |> Repo.insert!()
   end
 

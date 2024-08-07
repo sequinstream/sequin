@@ -146,7 +146,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Consumer{
-        name: generate_name(),
+        name: Factory.unique_word(),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
@@ -195,7 +195,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        name: generate_name(),
+        name: Factory.unique_word(),
         account_id: Factory.uuid()
       },
       attrs
@@ -259,8 +259,8 @@ defmodule Sequin.Factory.StreamsFactory do
     merge_attributes(
       %StreamTableColumn{
         name: Faker.Lorem.word(),
-        type: Faker.Util.pick(StreamTableColumn.column_types()),
-        primary_key: false,
+        type: Enum.random(StreamTableColumn.column_types()),
+        is_pk: Enum.random([true, false]),
         stream_table_id: Factory.uuid()
       },
       attrs
@@ -289,16 +289,22 @@ defmodule Sequin.Factory.StreamsFactory do
   # StreamTable
 
   def stream_table(attrs \\ []) do
+    {stream_columns, attrs} = Map.pop(attrs, :stream_columns)
+    {stream_column_count, attrs} = Map.pop(attrs, :stream_column_count, 3)
+
+    stream_columns = stream_columns || for _ <- 1..stream_column_count, do: stream_table_column()
+
     merge_attributes(
       %StreamTable{
-        name: generate_name(),
-        table_schema_name: "public",
-        table_name: Faker.Lorem.word(),
+        name: Factory.unique_word(),
+        table_schema_name: Factory.unique_postgres_object(),
+        table_name: Factory.unique_postgres_object(),
         retention_policy: %{},
-        insert_mode: Faker.Util.pick([:append, :upsert]),
+        insert_mode: Enum.random([:append, :upsert]),
         account_id: Factory.uuid(),
         source_postgres_database_id: Factory.uuid(),
-        source_replication_slot_id: Factory.uuid()
+        source_replication_slot_id: Factory.uuid(),
+        columns: stream_columns
       },
       attrs
     )
@@ -343,9 +349,5 @@ defmodule Sequin.Factory.StreamsFactory do
   defp generate_key(parts: parts) when parts > 1 do
     s = Enum.map_join(1..(parts - 1), ".", fn _ -> Faker.Lorem.word() end)
     "#{s}.#{:erlang.unique_integer([:positive])}"
-  end
-
-  defp generate_name do
-    "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
   end
 end

@@ -460,7 +460,7 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
 
       add :name, :text, null: false
       add :type, :text, null: false
-      add :primary_key, :boolean, null: false, default: false
+      add :is_pk, :boolean, null: false, default: false
 
       timestamps()
     end

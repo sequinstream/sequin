@@ -4,6 +4,7 @@ defmodule Sequin.Factory do
   """
 
   def atom, do: String.to_atom(Faker.Internet.domain_word())
+  def append_unique(str), do: str <> "_" <> to_string(:erlang.unique_integer([:positive]))
   def boolean, do: one_of([true, false])
 
   def count(opts \\ []) do
@@ -55,6 +56,8 @@ defmodule Sequin.Factory do
   def timestamp_past, do: Faker.DateTime.backward(365)
   def token, do: Faker.String.base64(32)
   def unique_integer, do: System.unique_integer([:positive])
+  def unique_word, do: Faker.Lorem.word() <> "_" <> to_string(:erlang.unique_integer([:positive]))
+  def unique_postgres_object, do: postgres_object() <> "_" <> to_string(:erlang.unique_integer([:positive]))
   def unix_timestamp, do: DateTime.to_unix(timestamp())
   def url, do: Faker.Internet.url()
   def username, do: Faker.Internet.user_name()

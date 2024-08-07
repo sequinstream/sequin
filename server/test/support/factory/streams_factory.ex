@@ -13,6 +13,8 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
+  alias Sequin.Streams.SourceTable
+  alias Sequin.Streams.SourceTableStreamTableColumnMapping
   alias Sequin.Streams.Stream
   alias Sequin.Streams.StreamTable
   alias Sequin.Streams.StreamTableColumn
@@ -345,6 +347,88 @@ defmodule Sequin.Factory.StreamsFactory do
     })
     |> stream_table_attrs()
     |> then(&StreamTable.changeset(%StreamTable{}, &1))
+    |> Repo.insert!()
+  end
+
+  # SourceTable
+
+  def source_table(attrs \\ []) do
+    merge_attributes(
+      %SourceTable{
+        schema_oid: Enum.random(1..100_000),
+        oid: Enum.random(1..100_000),
+        schema_name: Factory.unique_postgres_object(),
+        name: Factory.unique_postgres_object(),
+        account_id: Factory.uuid(),
+        postgres_database_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def source_table_attrs(attrs \\ []) do
+    attrs
+    |> source_table()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_source_table!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    attrs
+    |> Map.merge(%{
+      account_id: account_id,
+      postgres_database_id: postgres_database_id
+    })
+    |> source_table_attrs()
+    |> then(&SourceTable.changeset(%SourceTable{}, &1))
+    |> Repo.insert!()
+  end
+
+  # SourceTableStreamTableColumnMapping
+
+  def source_table_stream_table_column_mapping(attrs \\ []) do
+    merge_attributes(
+      %SourceTableStreamTableColumnMapping{
+        source_table_id: Factory.uuid(),
+        stream_column_id: Factory.uuid(),
+        object: Enum.random(SourceTableStreamTableColumnMapping.objects()),
+        object_field: Faker.Lorem.word()
+      },
+      attrs
+    )
+  end
+
+  def source_table_stream_table_column_mapping_attrs(attrs \\ []) do
+    attrs
+    |> source_table_stream_table_column_mapping()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_source_table_stream_table_column_mapping!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {source_table_id, attrs} =
+      Map.pop_lazy(attrs, :source_table_id, fn -> insert_source_table!().id end)
+
+    {stream_column_id, attrs} =
+      Map.pop_lazy(attrs, :stream_column_id, fn -> insert_stream_table_column!().id end)
+
+    attrs
+    |> Map.merge(%{
+      source_table_id: source_table_id,
+      stream_column_id: stream_column_id
+    })
+    |> source_table_stream_table_column_mapping_attrs()
+    |> then(&SourceTableStreamTableColumnMapping.changeset(%SourceTableStreamTableColumnMapping{}, &1))
     |> Repo.insert!()
   end
 

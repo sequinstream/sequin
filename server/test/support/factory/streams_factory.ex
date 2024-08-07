@@ -289,6 +289,8 @@ defmodule Sequin.Factory.StreamsFactory do
   # StreamTable
 
   def stream_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
     {stream_columns, attrs} = Map.pop(attrs, :stream_columns)
     {stream_column_count, attrs} = Map.pop(attrs, :stream_column_count, 3)
 

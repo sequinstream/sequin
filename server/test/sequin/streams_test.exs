@@ -885,4 +885,15 @@ defmodule Sequin.StreamsTest do
       assert DateTime.compare(updated_om2.not_visible_until, om2.not_visible_until) == :eq
     end
   end
+
+  describe "stream_table" do
+    test "factory creates a stream table" do
+      stream_table = StreamsFactory.insert_stream_table!()
+      stream_table = Repo.preload(stream_table, :columns)
+
+      Enum.each(stream_table.columns, fn column ->
+        assert column.stream_table_id == stream_table.id
+      end)
+    end
+  end
 end

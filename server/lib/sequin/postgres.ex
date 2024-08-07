@@ -17,4 +17,27 @@ defmodule Sequin.Postgres do
       val
     end
   end
+
+  def quote_names(names) do
+    Enum.map_intersperse(names, ?,, &quote_name/1)
+  end
+
+  @doc """
+  quote_name is vendored from Ecto.Adapters.Postgres.Connection.
+  """
+  def quote_name(nil, name), do: quote_name(name)
+
+  def quote_name(prefix, name), do: [quote_name(prefix), ?., quote_name(name)]
+
+  def quote_name(name) when is_atom(name) do
+    quote_name(Atom.to_string(name))
+  end
+
+  def quote_name(name) when is_binary(name) do
+    if String.contains?(name, "\"") do
+      {:error, "bad literal/field/index/table name #{inspect(name)} (\" is not permitted)"}
+    end
+
+    [?", name, ?"]
+  end
 end

@@ -15,10 +15,12 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.ConsumerMessageWithConsumerInfoss
   alias Sequin.Streams.Message
+  alias Sequin.Streams.Migrations
   alias Sequin.Streams.NewMessage
   alias Sequin.Streams.Query
   alias Sequin.Streams.SourceTable
   alias Sequin.Streams.Stream
+  alias Sequin.Streams.StreamTable
   alias Sequin.StreamsRuntime
 
   require Logger
@@ -803,4 +805,81 @@ defmodule Sequin.Streams do
   defp get_action(%NewRecord{}), do: :insert
   defp get_action(%UpdatedRecord{}), do: :update
   defp get_action(%DeletedRecord{}), do: :delete
+
+  # StreamTable
+
+  def list_stream_tables_for_account(account_id) do
+    account_id |> StreamTable.where_account_id() |> Repo.all()
+  end
+
+  def get_stream_table_for_account(account_id, id) do
+    res = account_id |> StreamTable.where_account_id() |> StreamTable.where_id(id) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :stream_table)}
+      stream_table -> {:ok, stream_table}
+    end
+  end
+
+  def create_stream_table_for_account_with_lifecycle(account_id, attrs) do
+    Repo.transact(fn ->
+      with {:ok, stream_table} <- create_stream_table(account_id, attrs),
+           stream_table = Repo.preload(stream_table, :columns),
+           :ok <- Migrations.provision_stream_table(stream_table) do
+        {:ok, stream_table}
+      else
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  def update_stream_table_with_lifecycle(%StreamTable{} = stream_table, attrs) do
+    stream_table = Repo.preload(stream_table, :columns)
+
+    Repo.transact(fn ->
+      with {:ok, updated_stream_table} <- update_stream_table(stream_table, attrs),
+           updated_stream_table = Repo.preload(updated_stream_table, :columns),
+           :ok <- Migrations.migrate_stream_table(stream_table, updated_stream_table) do
+        {:ok, updated_stream_table}
+      else
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  def delete_stream_table_with_lifecycle(%StreamTable{} = stream_table) do
+    res =
+      Repo.transact(fn ->
+        case delete_stream_table(stream_table) do
+          {:ok, _} ->
+            Migrations.drop_stream_table(stream_table)
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+
+    case res do
+      {:ok, :transaction_committed} -> :ok
+      error -> error
+    end
+  end
+
+  def create_stream_table(account_id, attrs) do
+    %StreamTable{account_id: account_id}
+    |> StreamTable.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_stream_table(%StreamTable{} = stream_table, attrs) do
+    stream_table
+    |> StreamTable.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_stream_table(%StreamTable{} = stream_table) do
+    Repo.delete(stream_table)
+  end
 end

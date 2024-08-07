@@ -11,24 +11,24 @@ defmodule Sequin.Streams.StreamTable do
 
   @derive {Jason.Encoder,
            only: [
-             :id,
-             :name,
-             :table_schema_name,
-             :table_name,
-             :retention_policy,
-             :insert_mode,
              :account_id,
+             :id,
+             :insert_mode,
+             :inserted_at,
+             :name,
+             :retention_policy,
              :source_postgres_database_id,
              :source_replication_slot_id,
-             :inserted_at,
+             :table_name,
+             :table_schema_name,
              :updated_at
            ]}
   typed_schema "stream_tables" do
-    field :name, :string
-    field :table_schema_name, :string
-    field :table_name, :string
-    field :retention_policy, :map
     field :insert_mode, Ecto.Enum, values: [:append, :upsert]
+    field :name, :string
+    field :retention_policy, :map
+    field :table_name, :string
+    field :table_schema_name, :string
 
     belongs_to :account, Account
     belongs_to :source_postgres_database, PostgresDatabase
@@ -68,4 +68,8 @@ defmodule Sequin.Streams.StreamTable do
     |> foreign_key_constraint(:source_replication_slot_id)
     |> unique_constraint([:account_id, :name])
   end
+
+  # defp base_query(query \\ __MODULE__) do
+  #   from(st in query, as: :stream_table)
+  # end
 end

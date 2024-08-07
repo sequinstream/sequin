@@ -1,14 +1,14 @@
-defmodule Sequin.SourcesRuntime.Supervisor do
+defmodule Sequin.ReplicationRuntime.Supervisor do
   @moduledoc """
   """
   use Supervisor
 
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Extensions.Replication
+  alias Sequin.Extensions.Replication, as: ReplicationExt
+  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationMessageHandler
+  alias Sequin.ReplicationRuntime.PostgresReplicationSupervisor
   alias Sequin.Repo
-  alias Sequin.Sources.PostgresReplication
-  alias Sequin.Sources.PostgresReplicationMessageHandler
-  alias Sequin.SourcesRuntime.PostgresReplicationSupervisor
 
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -38,14 +38,14 @@ defmodule Sequin.SourcesRuntime.Supervisor do
 
       opts = Keyword.merge(default_opts, opts)
 
-      Sequin.DynamicSupervisor.start_child(supervisor, {Replication, opts})
+      Sequin.DynamicSupervisor.start_child(supervisor, {ReplicationExt, opts})
     else
       {:error, :backfill_not_completed}
     end
   end
 
   def start_for_pg_replication(supervisor, id, opts) do
-    case Sequin.Sources.get_pg_replication(id) do
+    case Sequin.Replication.get_pg_replication(id) do
       {:ok, pg_replication} -> start_for_pg_replication(supervisor, pg_replication, opts)
       error -> error
     end
@@ -58,7 +58,7 @@ defmodule Sequin.SourcesRuntime.Supervisor do
   end
 
   def stop_for_pg_replication(supervisor, id) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, Replication.via_tuple(id))
+    Sequin.DynamicSupervisor.stop_child(supervisor, ReplicationExt.via_tuple(id))
     :ok
   end
 
@@ -69,8 +69,8 @@ defmodule Sequin.SourcesRuntime.Supervisor do
 
   defp children do
     [
-      Sequin.SourcesRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: Sequin.SourcesRuntime.PostgresReplicationSupervisor)
+      Sequin.ReplicationRuntime.Starter,
+      Sequin.DynamicSupervisor.child_spec(name: Sequin.ReplicationRuntime.PostgresReplicationSupervisor)
     ]
   end
 end

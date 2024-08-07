@@ -1,4 +1,4 @@
-defmodule Sequin.Sources.PostgresReplicationMessageHandler do
+defmodule Sequin.Replication.PostgresReplicationMessageHandler do
   @moduledoc false
   @behaviour Sequin.Extensions.ReplicationMessageHandler
 
@@ -6,7 +6,7 @@ defmodule Sequin.Sources.PostgresReplicationMessageHandler do
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.ReplicationMessageHandler
-  alias Sequin.Sources.PostgresReplication
+  alias Sequin.Replication.PostgresReplication
   alias Sequin.Streams
 
   defmodule Context do

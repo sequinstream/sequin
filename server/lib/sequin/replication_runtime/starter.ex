@@ -1,17 +1,17 @@
-defmodule Sequin.SourcesRuntime.Starter do
+defmodule Sequin.ReplicationRuntime.Starter do
   @moduledoc """
-  Starts processes under SourcesRuntime.Supervisor when Sequin starts and then at regular intervals.
+  Starts processes under ReplicationRuntime.Supervisor when Sequin starts and then at regular intervals.
   """
   use GenServer
 
-  alias Sequin.Sources
-  alias Sequin.SourcesRuntime.Supervisor
+  alias Sequin.Replication
+  alias Sequin.ReplicationRuntime.Supervisor
 
   require Logger
 
   @impl GenServer
   def init(_) do
-    Logger.info("[SourcesRuntimeStarter] Booting")
+    Logger.info("[ReplicationRuntimeStarter] Booting")
 
     schedule_start(:timer.seconds(5))
 
@@ -24,7 +24,7 @@ defmodule Sequin.SourcesRuntime.Starter do
 
   @impl GenServer
   def handle_info(:start, :ignore) do
-    logger_info("[SourcesRuntimeStarter] Starting source-related workers...")
+    logger_info("[ReplicationRuntimeStarter] Starting source-related workers...")
 
     start()
 
@@ -38,7 +38,7 @@ defmodule Sequin.SourcesRuntime.Starter do
   end
 
   defp start do
-    Enum.each(Sources.all_active_pg_replications(), &Supervisor.start_for_pg_replication(&1.id))
+    Enum.each(Replication.all_active_pg_replications(), &Supervisor.start_for_pg_replication(&1.id))
   end
 
   defp logger_info(msg) do

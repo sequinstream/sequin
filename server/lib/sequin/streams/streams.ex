@@ -5,8 +5,8 @@ defmodule Sequin.Streams do
   alias Sequin.Accounts.Account
   alias Sequin.Cache
   alias Sequin.Error
+  alias Sequin.Replication
   alias Sequin.Repo
-  alias Sequin.Sources
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
@@ -81,8 +81,8 @@ defmodule Sequin.Streams do
       consumers = list_consumers_for_stream(stream.id)
       Enum.each(consumers, fn consumer -> {:ok, _} = delete_consumer_with_lifecycle(consumer) end)
 
-      webhooks = Sources.list_webhooks_for_stream(stream.id)
-      Enum.each(webhooks, fn webhook -> {:ok, _} = Sources.delete_webhook(webhook) end)
+      webhooks = Replication.list_webhooks_for_stream(stream.id)
+      Enum.each(webhooks, fn webhook -> {:ok, _} = Replication.delete_webhook(webhook) end)
 
       case delete_stream(stream) do
         {:ok, stream} ->

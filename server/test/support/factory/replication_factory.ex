@@ -1,4 +1,4 @@
-defmodule Sequin.Factory.SourcesFactory do
+defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
@@ -6,9 +6,9 @@ defmodule Sequin.Factory.SourcesFactory do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.StreamsFactory
+  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.Webhook
   alias Sequin.Repo
-  alias Sequin.Sources.PostgresReplication
-  alias Sequin.Sources.Webhook
 
   def postgres_replication(attrs \\ []) do
     attrs = Map.new(attrs)

@@ -4,10 +4,10 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.SourcesFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
-  alias Sequin.Sources
-  alias Sequin.Sources.BackfillPostgresTableWorker
+  alias Sequin.Replication
+  alias Sequin.Replication.BackfillPostgresTableWorker
   alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
@@ -43,14 +43,14 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
     stream = StreamsFactory.insert_stream!(account_id: account.id)
 
     postgres_replication =
-      SourcesFactory.insert_postgres_replication!(
+      ReplicationFactory.insert_postgres_replication!(
         account_id: account.id,
         postgres_database_id: database.id,
         stream_id: stream.id
       )
 
     other_postgres_replication =
-      SourcesFactory.insert_postgres_replication!(
+      ReplicationFactory.insert_postgres_replication!(
         account_id: other_account.id,
         postgres_database_id: other_database.id,
         stream_id: StreamsFactory.insert_stream!(account_id: other_account.id).id
@@ -115,7 +115,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
           slot_name: replication_slot(),
           publication_name: @publication
         ]
-        |> SourcesFactory.postgres_replication_attrs()
+        |> ReplicationFactory.postgres_replication_attrs()
         |> Map.put(:backfill_existing_rows, true)
 
       %{postgres_replication_attrs: postgres_replication_attrs}
@@ -129,7 +129,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      {:ok, postgres_replication} = Replication.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
     end
 
@@ -151,7 +151,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = post(conn, ~p"/api/postgres_replications", postgres_replication_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      {:ok, postgres_replication} = Replication.get_pg_replication_for_account(account.id, id)
       postgres_replication = Repo.preload(postgres_replication, :postgres_database)
       assert postgres_replication.account_id == account.id
       assert %PostgresDatabase{} = postgres_replication.postgres_database
@@ -174,7 +174,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       stream: stream
     } do
       attrs =
-        SourcesFactory.postgres_replication_attrs(
+        ReplicationFactory.postgres_replication_attrs(
           postgres_database_id: other_database.id,
           stream_id: stream.id,
           slot_name: replication_slot(),
@@ -196,7 +196,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      {:ok, postgres_replication} = Replication.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
       assert postgres_replication.postgres_database_id == existing_database.id
       assert_enqueued(worker: BackfillPostgresTableWorker)
@@ -215,7 +215,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = post(conn, ~p"/api/postgres_replications", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      {:ok, postgres_replication} = Sources.get_pg_replication_for_account(account.id, id)
+      {:ok, postgres_replication} = Replication.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
       assert postgres_replication.status == :active
       refute_enqueued(worker: BackfillPostgresTableWorker)
@@ -231,7 +231,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn = put(conn, ~p"/api/postgres_replications/#{postgres_replication.id}", update_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      {:ok, updated_postgres_replication} = Sources.get_pg_replication(id)
+      {:ok, updated_postgres_replication} = Replication.get_pg_replication(id)
       assert updated_postgres_replication.status == :disabled
     end
 
@@ -267,7 +267,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
              }
 
       # Verify the postgres_replication was not updated
-      {:ok, unchanged_postgres_replication} = Sources.get_pg_replication(postgres_replication.id)
+      {:ok, unchanged_postgres_replication} = Replication.get_pg_replication(postgres_replication.id)
       assert unchanged_postgres_replication.postgres_database_id == postgres_replication.postgres_database_id
     end
   end
@@ -279,7 +279,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       assert id == postgres_replication.id
 
       assert {:error, _} =
-               Sources.get_pg_replication_for_account(postgres_replication.account_id, postgres_replication.id)
+               Replication.get_pg_replication_for_account(postgres_replication.account_id, postgres_replication.id)
     end
 
     test "returns 404 if postgres replication belongs to another account", %{

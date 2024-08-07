@@ -6,7 +6,7 @@ defmodule Sequin.Streams.StreamTable do
 
   alias Sequin.Accounts.Account
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Sources.PostgresReplication
+  alias Sequin.Replication.PostgresReplication
   alias Sequin.Streams.StreamTableColumn
 
   @derive {Jason.Encoder,

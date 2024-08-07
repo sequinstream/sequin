@@ -1,17 +1,17 @@
-defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
+defmodule Sequin.Replication.BackfillPostgresTableWorkerTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.SourcesFactory
-  alias Sequin.Sources
-  alias Sequin.Sources.BackfillPostgresTableWorker
+  alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Replication
+  alias Sequin.Replication.BackfillPostgresTableWorker
   alias Sequin.Streams
 
   describe "create/5" do
     test "creates a job with valid args" do
-      postgres_replication = SourcesFactory.insert_postgres_replication!()
+      postgres_replication = ReplicationFactory.insert_postgres_replication!()
 
       assert {:ok, %Oban.Job{}} =
                BackfillPostgresTableWorker.create(
@@ -48,7 +48,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
           status: :backfilling,
           key_format: :basic
         ]
-        |> SourcesFactory.insert_postgres_replication!()
+        |> ReplicationFactory.insert_postgres_replication!()
         |> Repo.preload(:postgres_database)
 
       # Create a test table and insert some data
@@ -97,7 +97,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorkerTest do
       refute_enqueued(worker: BackfillPostgresTableWorker)
 
       # Verify backfill_completed_at was set
-      {:ok, updated_postgres_replication} = Sources.get_pg_replication(postgres_replication.id)
+      {:ok, updated_postgres_replication} = Replication.get_pg_replication(postgres_replication.id)
       assert updated_postgres_replication.backfill_completed_at
       assert updated_postgres_replication.status == :active
     end

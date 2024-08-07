@@ -6,17 +6,17 @@ defmodule Sequin.Streams.StreamTableColumn do
 
   alias Sequin.Streams.StreamTable
 
-  @column_types [:text, :integer, :boolean, :timestamp]
+  @column_types [:text, :integer, :boolean, :timestamp, :uuid]
 
   def column_types do
     @column_types
   end
 
-  @derive {Jason.Encoder, only: [:id, :name, :type, :is_pk, :stream_table_id, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :type, :is_conflict_key, :stream_table_id, :inserted_at, :updated_at]}
   typed_schema "stream_table_columns" do
     field :name, :string
     field :type, Ecto.Enum, values: @column_types
-    field :is_pk, :boolean, default: false
+    field :is_conflict_key, :boolean, default: false
 
     belongs_to :stream_table, StreamTable
 
@@ -25,8 +25,8 @@ defmodule Sequin.Streams.StreamTableColumn do
 
   def create_changeset(%__MODULE__{} = stream_table_column, attrs) do
     stream_table_column
-    |> cast(attrs, [:name, :type, :is_pk, :stream_table_id])
-    |> validate_required([:name, :type, :is_pk])
+    |> cast(attrs, [:name, :type, :is_conflict_key, :stream_table_id])
+    |> validate_required([:name, :type, :is_conflict_key])
     |> foreign_key_constraint(:stream_table_id)
     |> validate_inclusion(:type, column_types())
     |> unique_constraint([:stream_table_id, :name], message: "has already been taken", error_key: :name)

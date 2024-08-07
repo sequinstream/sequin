@@ -773,9 +773,6 @@ defmodule Sequin.Streams do
            stream_table = Repo.preload(stream_table, :columns),
            :ok <- Migrations.provision_stream_table(stream_table) do
         {:ok, stream_table}
-      else
-        {:error, changeset} ->
-          Repo.rollback(changeset)
       end
     end)
   end
@@ -788,9 +785,6 @@ defmodule Sequin.Streams do
            updated_stream_table = Repo.preload(updated_stream_table, :columns),
            :ok <- Migrations.migrate_stream_table(stream_table, updated_stream_table) do
         {:ok, updated_stream_table}
-      else
-        {:error, changeset} ->
-          Repo.rollback(changeset)
       end
     end)
   end
@@ -798,12 +792,8 @@ defmodule Sequin.Streams do
   def delete_stream_table_with_lifecycle(%StreamTable{} = stream_table) do
     res =
       Repo.transact(fn ->
-        case delete_stream_table(stream_table) do
-          {:ok, _} ->
-            Migrations.drop_stream_table(stream_table)
-
-          {:error, changeset} ->
-            Repo.rollback(changeset)
+        with {:ok, _} <- delete_stream_table(stream_table) do
+          Migrations.drop_stream_table(stream_table)
         end
       end)
 

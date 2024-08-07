@@ -32,6 +32,98 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
     # Required for composite foreign keys pointing to this table
     create unique_index(:streams, [:id, :account_id], prefix: @config_schema)
 
+    create table(:postgres_databases, prefix: @config_schema) do
+      add :database, :string, null: false
+      add :hostname, :string, null: false
+      add :password, :binary, null: false
+      add :pool_size, :integer, default: 10, null: false
+      add :port, :integer, null: false
+      add :queue_interval, :integer, default: 50, null: false
+      add :queue_target, :integer, default: 100, null: false
+      add :name, :string, null: false
+      add :ssl, :boolean, default: false, null: false
+      add :username, :string, null: false
+
+      add :account_id, references(:accounts, prefix: @config_schema), null: false
+
+      timestamps()
+    end
+
+    # This is for the FKs from postgres_replication to this table
+    create unique_index(:postgres_databases, [:id, :account_id], prefix: @config_schema)
+
+    create unique_index(:postgres_databases, [:account_id, :name], prefix: @config_schema)
+
+    execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled', 'backfilling');",
+            "drop type if exists #{@config_schema}.replication_status"
+
+    execute "CREATE TYPE #{@config_schema}.postgres_replication_key_format AS ENUM ('basic', 'with_operation');"
+
+    create table(:postgres_replications, prefix: @config_schema) do
+      add :backfill_completed_at, :utc_datetime_usec
+      add :publication_name, :string, null: false
+      add :slot_name, :string, null: false
+      add :status, :"#{@config_schema}.replication_status", null: false, default: "backfilling"
+
+      add :key_format, :"#{@config_schema}.postgres_replication_key_format",
+        null: false,
+        default: "basic"
+
+      add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
+
+      add :postgres_database_id,
+          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
+
+      add :stream_id,
+          references(:streams, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
+
+      timestamps()
+    end
+
+    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
+             prefix: @config_schema
+           )
+
+    create index(:postgres_replications, [:account_id], prefix: @config_schema)
+    create index(:postgres_replications, [:postgres_database_id], prefix: @config_schema)
+    create index(:postgres_replications, [:stream_id], prefix: @config_schema)
+
+    # This is for the FKs from stream_tables to this table
+    create unique_index(:postgres_replications, [:id, :account_id], prefix: @config_schema)
+
+    execute "CREATE TYPE #{@config_schema}.stream_table_insert_mode AS ENUM ('append', 'upsert');",
+            "DROP TYPE IF EXISTS #{@config_schema}.stream_table_insert_mode;"
+
+    create(table(:stream_tables, prefix: @config_schema)) do
+      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
+        null: false
+
+      add :source_postgres_database_id,
+          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
+
+      add :source_replication_slot_id,
+          references(:postgres_replications,
+            with: [account_id: :account_id],
+            prefix: @config_schema
+          ),
+          null: false
+
+      add :table_schema_name, :text, null: false
+      add :table_name, :text, null: false
+      add :name, :text, null: false
+      add :retention_policy, :jsonb, null: false
+      add :insert_mode, :"#{@config_schema}.stream_table_insert_mode", null: false
+
+      timestamps()
+    end
+
+    create index(:stream_tables, [:account_id], prefix: @config_schema)
+
+    # create unique_index(:stream_tables, [:destination_postgres_database_id, :table_schema_name, :table_name], prefix: @config_schema)
+
     execute "create sequence #{@stream_schema}.messages_seq",
             "drop sequence if exists #{@stream_schema}.messages_seq"
 
@@ -330,65 +422,6 @@ defmodule Sequin.Repo.Migrations.CreateStreamTables do
              ],
              prefix: @stream_schema
            )
-
-    create table(:postgres_databases, prefix: @config_schema) do
-      add :database, :string, null: false
-      add :hostname, :string, null: false
-      add :password, :binary, null: false
-      add :pool_size, :integer, default: 10, null: false
-      add :port, :integer, null: false
-      add :queue_interval, :integer, default: 50, null: false
-      add :queue_target, :integer, default: 100, null: false
-      add :name, :string, null: false
-      add :ssl, :boolean, default: false, null: false
-      add :username, :string, null: false
-
-      add :account_id, references(:accounts, prefix: @config_schema), null: false
-
-      timestamps()
-    end
-
-    # This is for the FKs from postgres_replication to this table
-    create unique_index(:postgres_databases, [:id, :account_id], prefix: @config_schema)
-
-    create unique_index(:postgres_databases, [:account_id, :name], prefix: @config_schema)
-
-    execute "create type #{@config_schema}.replication_status as enum ('active', 'disabled', 'backfilling');",
-            "drop type if exists #{@config_schema}.replication_status"
-
-    execute "CREATE TYPE #{@config_schema}.postgres_replication_key_format AS ENUM ('basic', 'with_operation');"
-
-    create table(:postgres_replications, prefix: @config_schema) do
-      add :backfill_completed_at, :utc_datetime_usec
-      add :publication_name, :string, null: false
-      add :slot_name, :string, null: false
-      add :status, :"#{@config_schema}.replication_status", null: false, default: "backfilling"
-      add :ssl, :boolean, default: true, null: false
-
-      add :key_format, :"#{@config_schema}.postgres_replication_key_format",
-        null: false,
-        default: "basic"
-
-      add :account_id, references(:accounts, type: :uuid, prefix: @config_schema), null: false
-
-      add :postgres_database_id,
-          references(:postgres_databases, with: [account_id: :account_id], prefix: @config_schema),
-          null: false
-
-      add :stream_id,
-          references(:streams, with: [account_id: :account_id], prefix: @config_schema),
-          null: false
-
-      timestamps()
-    end
-
-    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
-             prefix: @config_schema
-           )
-
-    create index(:postgres_replications, [:account_id], prefix: @config_schema)
-    create index(:postgres_replications, [:postgres_database_id], prefix: @config_schema)
-    create index(:postgres_replications, [:stream_id], prefix: @config_schema)
 
     create table(:api_keys, prefix: @config_schema) do
       add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),

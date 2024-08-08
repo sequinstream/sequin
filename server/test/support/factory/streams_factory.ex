@@ -367,6 +367,19 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
+  def stream_table_record(attrs \\ []) do
+    merge_attributes(
+      %{
+        sequin_id: Ecto.UUID.generate(),
+        seq: Enum.random(1..1_000_000),
+        data: Jason.encode!(%{random_key: "random_value"}),
+        recorded_at: DateTime.truncate(DateTime.utc_now(), :second),
+        deleted: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
   # SourceTable
 
   def source_table(attrs \\ []) do

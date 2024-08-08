@@ -378,6 +378,115 @@ defmodule Sequin.StreamTablesTest do
     end
   end
 
+  describe "Inserts into stream tables" do
+    setup %{base_attrs: base_attrs} do
+      append_attrs =
+        stream_table_attrs(base_attrs, %{
+          name: "append_test",
+          table_name: "append_table",
+          insert_mode: :append,
+          columns: [
+            %{name: "internal_id", type: :text, is_conflict_key: false},
+            %{name: "value", type: :integer, is_conflict_key: false}
+          ]
+        })
+
+      upsert_attrs =
+        stream_table_attrs(base_attrs, %{
+          name: "upsert_test",
+          table_name: "upsert_table",
+          insert_mode: :upsert,
+          columns: [
+            %{name: "internal_id", type: :text, is_conflict_key: true},
+            %{name: "value", type: :integer, is_conflict_key: false}
+          ]
+        })
+
+      {:ok, append_table} = Streams.create_stream_table_for_account_with_lifecycle(base_attrs.account_id, append_attrs)
+      {:ok, upsert_table} = Streams.create_stream_table_for_account_with_lifecycle(base_attrs.account_id, upsert_attrs)
+
+      {:ok, append_table: append_table, upsert_table: upsert_table}
+    end
+
+    test "append mode: inserts are appended and all fields are set", %{append_table: append_table} do
+      records = [
+        stream_table_record(value: 1),
+        stream_table_record(value: 2)
+      ]
+
+      assert {2, nil} = Streams.insert_into_stream_table(append_table, records)
+
+      inserted_records = fetch_all_records(append_table)
+      assert length(inserted_records) == 2
+      assert_required_fields(inserted_records)
+
+      values = Enum.map(inserted_records, & &1.value)
+      assert_lists_equal([1, 2], values)
+    end
+
+    test "upsert mode: new rows are inserted", %{upsert_table: upsert_table} do
+      records = [
+        stream_table_record(internal_id: "1", value: 1),
+        stream_table_record(internal_id: "2", value: 2)
+      ]
+
+      assert {2, nil} = Streams.insert_into_stream_table(upsert_table, records)
+
+      inserted_records = fetch_all_records(upsert_table)
+      assert length(inserted_records) == 2
+      assert_required_fields(inserted_records)
+
+      internal_ids = Enum.map(inserted_records, & &1.internal_id)
+      assert_lists_equal(["1", "2"], internal_ids)
+    end
+
+    test "upsert mode: rows that conflict with conflict target are upserted", %{upsert_table: upsert_table} do
+      initial_records = [
+        stream_table_record(internal_id: "1", value: 1, data: "data1"),
+        stream_table_record(internal_id: "2", value: 2, data: "data2")
+      ]
+
+      assert {2, nil} = Streams.insert_into_stream_table(upsert_table, initial_records)
+      og_record_1 = upsert_table |> fetch_all_records() |> Enum.find(&(&1.internal_id == "1"))
+
+      updated_record_1 = stream_table_record(internal_id: "1", value: 3, data: "data3")
+
+      upsert_records = [
+        updated_record_1,
+        stream_table_record(internal_id: "3", value: 4, data: "data4")
+      ]
+
+      assert {2, nil} = Streams.insert_into_stream_table(upsert_table, upsert_records)
+
+      inserted_records = fetch_all_records(upsert_table)
+      assert length(inserted_records) == 3
+      assert_required_fields(inserted_records)
+
+      record_1 = Enum.find(inserted_records, &(&1.internal_id == "1"))
+      assert record_1.value == 3
+      assert record_1.data == updated_record_1["data"]
+      assert NaiveDateTime.compare(record_1.recorded_at, DateTime.to_naive(updated_record_1["recorded_at"])) == :eq
+      assert record_1.deleted == updated_record_1["deleted"]
+      # sequin_id should be the same
+      assert og_record_1.sequin_id == record_1.sequin_id
+      assert record_1.seq == updated_record_1["seq"]
+
+      record_2 = Enum.find(inserted_records, &(&1.internal_id == "2"))
+      assert record_2.value == 2
+      assert record_2.data == "data2"
+
+      record_3 = Enum.find(inserted_records, &(&1.internal_id == "3"))
+      assert record_3.value == 4
+      assert record_3.data == "data4"
+    end
+  end
+
+  defp stream_table_record(attrs) do
+    attrs
+    |> StreamsFactory.stream_table_record()
+    |> Sequin.Map.stringify_keys()
+  end
+
   defp list_columns_for_table(schema, table) do
     query = """
     SELECT column_name, data_type, is_identity, column_default
@@ -450,6 +559,25 @@ defmodule Sequin.StreamTablesTest do
       attr_column = Enum.find(attrs.columns, &(&1.name == column.name))
       assert column.type == attr_column.type
       assert column.is_conflict_key == attr_column.is_conflict_key
+    end)
+  end
+
+  defp fetch_all_records(stream_table) do
+    Repo.all(
+      from(r in stream_table.table_name,
+        select: map(r, [:sequin_id, :seq, :data, :recorded_at, :deleted, :value, :internal_id])
+      ),
+      prefix: stream_table.table_schema_name
+    )
+  end
+
+  defp assert_required_fields(records) do
+    Enum.each(records, fn record ->
+      assert is_binary(record.sequin_id)
+      assert is_integer(record.seq)
+      assert is_binary(record.data)
+      assert %NaiveDateTime{} = record.recorded_at
+      assert is_boolean(record.deleted)
     end)
   end
 end

@@ -10,6 +10,20 @@ defmodule Sequin.Streams.StreamTable do
   alias Sequin.Replication.PostgresReplication
   alias Sequin.Streams.StreamTableColumn
 
+  def base_columns do
+    [
+      {:sequin_id, :uuid, primary_key: true},
+      {:seq, :bigserial, null: false},
+      {:data, :text, []},
+      {:recorded_at, :timestamp, null: false},
+      {:deleted, :boolean, null: false}
+    ]
+  end
+
+  def base_column_names do
+    Enum.map(base_columns(), fn {name, _, _} -> name end)
+  end
+
   @derive {Jason.Encoder,
            only: [
              :account_id,
@@ -116,6 +130,11 @@ defmodule Sequin.Streams.StreamTable do
       _ ->
         changeset
     end
+  end
+
+  def all_column_names(%__MODULE__{} = stream_table) do
+    Enum.map(base_column_names(), &Atom.to_string/1) ++
+      Enum.map(stream_table.columns, & &1.name)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

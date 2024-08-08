@@ -21,6 +21,7 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.SourceTable
   alias Sequin.Streams.Stream
   alias Sequin.Streams.StreamTable
+  alias Sequin.Streams.StreamTableColumn
   alias Sequin.StreamsRuntime
 
   require Logger
@@ -871,5 +872,49 @@ defmodule Sequin.Streams do
 
   def delete_stream_table(%StreamTable{} = stream_table) do
     Repo.delete(stream_table)
+  end
+
+  def insert_into_stream_table(%StreamTable{insert_mode: :append} = stream_table, records) do
+    stream_table = Repo.preload(stream_table, :columns)
+
+    Repo.insert_all(stream_table.table_name, records_for_insert(stream_table.columns, records),
+      prefix: stream_table.table_schema_name
+    )
+  end
+
+  def insert_into_stream_table(%StreamTable{insert_mode: :upsert} = stream_table, records) do
+    stream_table = Repo.preload(stream_table, :columns)
+
+    conflict_target =
+      stream_table.columns
+      |> Enum.filter(& &1.is_conflict_key)
+      |> Enum.map(& &1.name)
+
+    replace =
+      stream_table
+      |> StreamTable.all_column_names()
+      |> Enum.reject(&(&1 in conflict_target or &1 == "sequin_id"))
+
+    Repo.insert_all(
+      stream_table.table_name,
+      records_for_insert(stream_table.columns, records),
+      conflict_target: conflict_target,
+      on_conflict: {:replace, replace},
+      prefix: stream_table.table_schema_name
+    )
+  end
+
+  defp records_for_insert(columns, records) do
+    Enum.map(records, fn record ->
+      record = Map.update!(record, "sequin_id", &UUID.string_to_binary!/1)
+
+      Enum.reduce(columns, record, fn %StreamTableColumn{} = column, record ->
+        if column.type == :uuid do
+          Map.update!(record, to_string(column.name), &UUID.string_to_binary!/1)
+        else
+          record
+        end
+      end)
+    end)
   end
 end

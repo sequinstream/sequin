@@ -21,14 +21,7 @@ defmodule Sequin.Streams.Migrations do
     table_name = stream_table.table_name
     schema_name = stream_table.table_schema_name
 
-    required_columns = [
-      {:add, :sequin_id, :uuid, primary_key: true},
-      {:add, :seq, :bigserial, null: false},
-      {:add, :data, :text, []},
-      {:add, :recorded_at, :timestamp, null: false},
-      {:add, :deleted, :boolean, null: false}
-    ]
-
+    base_columns = Enum.map(StreamTable.base_columns(), fn {name, type, opts} -> {:add, name, type, opts} end)
     custom_columns = Enum.map(stream_table.columns, &stream_table_column_to_ecto_column/1)
 
     table = %Table{
@@ -37,7 +30,7 @@ defmodule Sequin.Streams.Migrations do
       primary_key: false
     }
 
-    create_ddl = {:create, table, required_columns ++ custom_columns}
+    create_ddl = {:create, table, base_columns ++ custom_columns}
 
     indexes = indexes(stream_table)
     conflict_key_index = conflict_key_index(stream_table) || nil

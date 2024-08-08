@@ -1,15 +1,15 @@
 defmodule SequinWeb.WebhookIngestionController do
   use SequinWeb, :controller
 
+  alias Sequin.Replication
   alias Sequin.Repo
-  alias Sequin.Sources
   alias Sequin.Streams
 
   def ingest(conn, %{"webhook_name" => webhook_name} = params) do
     account_id = conn.assigns.account.id
     payload = Map.delete(params, "webhook_name")
 
-    case Sources.get_webhook_for_account(account_id, webhook_name) do
+    case Replication.get_webhook_for_account(account_id, webhook_name) do
       {:ok, webhook} ->
         webhook = Repo.preload(webhook, :stream)
         id = :sha256 |> :crypto.hash(Jason.encode!(payload)) |> Base.encode16()

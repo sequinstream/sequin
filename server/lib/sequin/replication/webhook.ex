@@ -1,4 +1,4 @@
-defmodule Sequin.Sources.Webhook do
+defmodule Sequin.Replication.Webhook do
   @moduledoc false
   use Sequin.ConfigSchema
 

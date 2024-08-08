@@ -1,16 +1,16 @@
-defmodule Sequin.Sources do
+defmodule Sequin.Replication do
   @moduledoc false
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.Extensions.Replication
+  alias Sequin.Extensions.Replication, as: ReplicationExt
+  alias Sequin.Replication.BackfillPostgresTableWorker
+  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.Webhook
+  alias Sequin.ReplicationRuntime
   alias Sequin.Repo
-  alias Sequin.Sources.BackfillPostgresTableWorker
-  alias Sequin.Sources.PostgresReplication
-  alias Sequin.Sources.Webhook
-  alias Sequin.SourcesRuntime
   alias Sequin.Streams
 
   # PostgresReplication
@@ -86,14 +86,14 @@ defmodule Sequin.Sources do
 
   def delete_pg_replication_with_lifecycle(%PostgresReplication{} = pg_replication) do
     res = Repo.delete(pg_replication)
-    SourcesRuntime.Supervisor.stop_for_pg_replication(pg_replication)
+    ReplicationRuntime.Supervisor.stop_for_pg_replication(pg_replication)
     res
   end
 
   def add_info(%PostgresReplication{} = pg_replication) do
     pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
-    last_committed_at = Replication.get_last_committed_at(pg_replication.id)
+    last_committed_at = ReplicationExt.get_last_committed_at(pg_replication.id)
     key_pattern = "#{pg_replication.postgres_database.name}.>"
 
     total_ingested_messages =

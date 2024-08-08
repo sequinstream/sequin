@@ -1,6 +1,6 @@
 defmodule SequinWeb.PostgresReplicationJSON do
   @moduledoc false
-  alias Sequin.Sources.PostgresReplication
+  alias Sequin.Replication.PostgresReplication
 
   def render("index.json", %{postgres_replications: postgres_replications}) do
     %{data: postgres_replications}

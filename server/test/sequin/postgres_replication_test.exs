@@ -14,15 +14,15 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
-  alias Sequin.Extensions.Replication
+  alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.SourcesFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Mocks.Extensions.ReplicationMessageHandlerMock
-  alias Sequin.Sources
-  alias Sequin.Sources.PostgresReplication
-  alias Sequin.SourcesRuntime
+  alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplication
+  alias Sequin.ReplicationRuntime
   alias Sequin.Streams
   alias Sequin.Test.Support.ReplicationSlots
 
@@ -92,7 +92,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create PostgresReplication entity
       pg_replication =
-        SourcesFactory.insert_postgres_replication!(
+        ReplicationFactory.insert_postgres_replication!(
           status: :active,
           postgres_database_id: source_db.id,
           stream_id: stream.id,
@@ -103,11 +103,11 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, SourcesRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
       {:ok, _pid} =
-        SourcesRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+        ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
       %{stream: stream, pg_replication: pg_replication, source_db: source_db, sup: sup}
     end
@@ -118,7 +118,7 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
-      assert_receive {Replication, :message_handled}, 500
+      assert_receive {ReplicationExt, :message_handled}, 500
 
       [message] = Streams.list_messages_for_stream(stream.id)
       assert message.key =~ "#{@test_schema}.#{@test_table}"
@@ -136,10 +136,10 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Leto Atreides', 'Atreides', 'Caladan')"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
       assert message.key =~ "#{@test_schema}.#{@test_table}"
@@ -158,10 +158,10 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Duncan Idaho', 'Atreides', 'Caladan')"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
       assert message.key =~ "#{@test_schema}.#{@test_table}"
@@ -182,7 +182,7 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Chani', 'Fremen', 'Arrakis')"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [insert_message] = Streams.list_messages_for_stream(stream.id)
       assert insert_message.key =~ "#{@test_schema}.#{@test_table}"
@@ -193,7 +193,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_insert_data["action"] == "insert"
 
       query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET house = 'Atreides' WHERE id = 1")
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [update_message] = Streams.list_messages_for_stream(stream.id)
       assert update_message.seq > insert_message.seq
@@ -207,7 +207,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_update_data["action"] == "update"
 
       query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [delete_message] = Streams.list_messages_for_stream(stream.id)
       assert delete_message.seq > update_message.seq
@@ -231,7 +231,7 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table_2pk} (id1, id2, name, house, planet) VALUES (1, 2, 'Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [insert_message] = Streams.list_messages_for_stream(stream.id)
       decoded_insert_data = Jason.decode!(insert_message.data)
@@ -242,7 +242,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Delete
       query!(conn, "DELETE FROM #{@test_schema}.#{@test_table_2pk} WHERE id1 = 1 AND id2 = 2")
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [delete_message] = Streams.list_messages_for_stream(stream.id)
       decoded_delete_data = Jason.decode!(delete_message.data)
@@ -259,10 +259,10 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
-      assert_receive {Replication, :message_handled}, 1000
+      assert_receive {ReplicationExt, :message_handled}, 1000
 
       # Call add_info
-      pg_replication_with_info = Sources.add_info(pg_replication)
+      pg_replication_with_info = Replication.add_info(pg_replication)
 
       # Assert that the info field is populated
       assert %PostgresReplication.Info{} = pg_replication_with_info.info
@@ -278,19 +278,19 @@ defmodule Sequin.PostgresReplicationTest do
       pg_replication: pg_replication,
       sup: sup
     } do
-      {:ok, pg_replication} = Sources.update_pg_replication(pg_replication, %{key_format: :with_operation})
+      {:ok, pg_replication} = Replication.update_pg_replication(pg_replication, %{key_format: :with_operation})
 
       # Restart the server
-      SourcesRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
+      ReplicationRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
 
-      {:ok, _pid} = SourcesRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+      {:ok, _pid} = ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
       query!(
         conn,
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
-      assert_receive {Replication, :message_handled}, 500
+      assert_receive {ReplicationExt, :message_handled}, 500
 
       [message] = Streams.list_messages_for_stream(stream.id)
       assert message.key =~ "#{@test_schema}.#{@test_table}.insert"
@@ -306,14 +306,14 @@ defmodule Sequin.PostgresReplicationTest do
         "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active, tags) VALUES ('Chani', 'Fremen', 'Arrakis', true, ARRAY['warrior', 'seer', 'royal,compound'])"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       query!(
         conn,
         "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false, tags = ARRAY['warrior', 'seer', 'royal,interest'] WHERE id = 1"
       )
 
-      assert_receive {Replication, :message_handled}, 1_000
+      assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [update_message] = Streams.list_messages_for_stream(stream.id)
       assert update_message.key == "#{source_db.name}.#{@test_schema}.#{@test_table_full_replica}.1"
@@ -364,13 +364,13 @@ defmodule Sequin.PostgresReplicationTest do
         status: :backfilling
       }
 
-      {:ok, pg_replication} = Sources.create_pg_replication_for_account_with_lifecycle(account.id, attrs)
+      {:ok, pg_replication} = Replication.create_pg_replication_for_account_with_lifecycle(account.id, attrs)
 
       assert pg_replication.status == :backfilling
       assert is_nil(pg_replication.backfill_completed_at)
 
       # Check that backfill jobs are enqueued
-      assert_enqueued(worker: Sequin.Sources.BackfillPostgresTableWorker)
+      assert_enqueued(worker: Sequin.Replication.BackfillPostgresTableWorker)
     end
 
     test "fails to create pg_replication with invalid attributes", %{account: account} do
@@ -382,12 +382,12 @@ defmodule Sequin.PostgresReplicationTest do
       }
 
       assert {:error, _changeset} =
-               Sources.create_pg_replication_for_account_with_lifecycle(account.id, invalid_attrs)
+               Replication.create_pg_replication_for_account_with_lifecycle(account.id, invalid_attrs)
     end
   end
 
   @server_id __MODULE__
-  @server_via Replication.via_tuple(@server_id)
+  @server_via ReplicationExt.via_tuple(@server_id)
 
   describe "replication in isolation" do
     test "changes are buffered, even if the listener is not up", %{conn: conn} do
@@ -533,7 +533,7 @@ defmodule Sequin.PostgresReplicationTest do
         opts
       )
 
-    start_supervised!(Replication.child_spec(opts))
+    start_supervised!(ReplicationExt.child_spec(opts))
   end
 
   defp stop_replication! do

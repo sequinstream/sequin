@@ -4,6 +4,8 @@ defmodule Sequin.Factory.StreamsFactory do
 
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams
@@ -11,7 +13,11 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
+  alias Sequin.Streams.SourceTable
+  alias Sequin.Streams.SourceTableStreamTableColumnMapping
   alias Sequin.Streams.Stream
+  alias Sequin.Streams.StreamTable
+  alias Sequin.Streams.StreamTableColumn
 
   def message_data, do: Faker.String.base64(24)
 
@@ -142,7 +148,7 @@ defmodule Sequin.Factory.StreamsFactory do
 
     merge_attributes(
       %Consumer{
-        name: generate_name(),
+        name: Factory.unique_word(),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
@@ -191,7 +197,7 @@ defmodule Sequin.Factory.StreamsFactory do
   def stream(attrs \\ []) do
     merge_attributes(
       %Stream{
-        name: generate_name(),
+        name: Factory.unique_word(),
         account_id: Factory.uuid()
       },
       attrs
@@ -249,12 +255,213 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
+  # StreamTableColumn
+
+  def stream_table_column(attrs \\ []) do
+    merge_attributes(
+      %StreamTableColumn{
+        id: Factory.uuid(),
+        name: Faker.Lorem.word(),
+        type: Enum.random(StreamTableColumn.column_types()),
+        is_conflict_key: Enum.random([true, false]),
+        stream_table_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def stream_table_column_attrs(attrs \\ []) do
+    attrs
+    |> stream_table_column()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_stream_table_column!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {stream_table_id, attrs} =
+      Map.pop_lazy(attrs, :stream_table_id, fn -> insert_stream_table!().id end)
+
+    attrs
+    |> Map.put(:stream_table_id, stream_table_id)
+    |> stream_table_column_attrs()
+    |> then(&StreamTableColumn.create_changeset(%StreamTableColumn{}, &1))
+    |> Repo.insert!()
+  end
+
+  # StreamTable
+
+  def stream_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {insert_mode, attrs} = Map.pop_lazy(attrs, :insert_mode, fn -> Enum.random([:append, :upsert]) end)
+    {stream_columns, attrs} = Map.pop(attrs, :stream_columns)
+    {stream_column_count, attrs} = Map.pop(attrs, :stream_column_count, 3)
+
+    stream_columns =
+      stream_columns ||
+        for n <- 1..stream_column_count do
+          is_conflict_key =
+            cond do
+              # Ensure at least one column is a primary key
+              insert_mode == :upsert and n == 1 -> true
+              insert_mode == :upsert -> Enum.random([true, false])
+              true -> false
+            end
+
+          stream_table_column(is_conflict_key: is_conflict_key)
+        end
+
+    merge_attributes(
+      %StreamTable{
+        id: Factory.uuid(),
+        name: Factory.unique_word(),
+        table_schema_name: Factory.unique_postgres_object(),
+        table_name: Factory.unique_postgres_object(),
+        retention_policy: %{},
+        insert_mode: insert_mode,
+        account_id: Factory.uuid(),
+        source_postgres_database_id: Factory.uuid(),
+        source_replication_slot_id: Factory.uuid(),
+        columns: stream_columns
+      },
+      attrs
+    )
+  end
+
+  def stream_table_attrs(attrs \\ []) do
+    attrs
+    |> stream_table()
+    |> Map.update(:columns, [], fn columns ->
+      Enum.map(columns, &Sequin.Map.from_ecto/1)
+    end)
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_stream_table!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {source_postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :source_postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    {source_replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :source_replication_slot_id, fn ->
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account_id,
+          postgres_database_id: source_postgres_database_id
+        ).id
+      end)
+
+    attrs
+    |> Map.merge(%{
+      source_postgres_database_id: source_postgres_database_id,
+      source_replication_slot_id: source_replication_slot_id
+    })
+    |> stream_table_attrs()
+    |> then(&StreamTable.create_changeset(%StreamTable{account_id: account_id}, &1))
+    |> Repo.insert!()
+  end
+
+  # SourceTable
+
+  def source_table(attrs \\ []) do
+    merge_attributes(
+      %SourceTable{
+        schema_oid: Enum.random(1..100_000),
+        oid: Enum.random(1..100_000),
+        schema_name: Factory.unique_postgres_object(),
+        name: Factory.unique_postgres_object(),
+        account_id: Factory.uuid(),
+        postgres_database_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def source_table_attrs(attrs \\ []) do
+    attrs
+    |> source_table()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_source_table!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    attrs
+    |> Map.merge(%{
+      account_id: account_id,
+      postgres_database_id: postgres_database_id
+    })
+    |> source_table_attrs()
+    |> then(&SourceTable.changeset(%SourceTable{}, &1))
+    |> Repo.insert!()
+  end
+
+  # SourceTableStreamTableColumnMapping
+
+  def source_table_stream_table_column_mapping(attrs \\ []) do
+    mapping_type = Enum.random([:record_field, :metadata])
+
+    mapping_field =
+      case mapping_type do
+        :record_field -> Faker.Lorem.word()
+        :metadata -> Enum.random(["action", "table_name"])
+      end
+
+    merge_attributes(
+      %SourceTableStreamTableColumnMapping{
+        source_table_id: Factory.uuid(),
+        stream_column_id: Factory.uuid(),
+        mapping: %SourceTableStreamTableColumnMapping.Mapping{
+          type: mapping_type,
+          field_name: mapping_field
+        }
+      },
+      attrs
+    )
+  end
+
+  def source_table_stream_table_column_mapping_attrs(attrs \\ []) do
+    attrs
+    |> source_table_stream_table_column_mapping()
+    |> Map.update!(:mapping, &Sequin.Map.from_ecto/1)
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_source_table_stream_table_column_mapping!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {source_table_id, attrs} =
+      Map.pop_lazy(attrs, :source_table_id, fn -> insert_source_table!().id end)
+
+    {stream_column_id, attrs} =
+      Map.pop_lazy(attrs, :stream_column_id, fn -> insert_stream_table_column!().id end)
+
+    attrs
+    |> Map.merge(%{
+      source_table_id: source_table_id,
+      stream_column_id: stream_column_id
+    })
+    |> source_table_stream_table_column_mapping_attrs()
+    |> then(&SourceTableStreamTableColumnMapping.changeset(%SourceTableStreamTableColumnMapping{}, &1))
+    |> Repo.insert!()
+  end
+
   defp generate_key(parts: parts) when parts > 1 do
     s = Enum.map_join(1..(parts - 1), ".", fn _ -> Faker.Lorem.word() end)
     "#{s}.#{:erlang.unique_integer([:positive])}"
-  end
-
-  defp generate_name do
-    "#{Faker.Lorem.word()}_#{:erlang.unique_integer([:positive])}"
   end
 end

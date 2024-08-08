@@ -5,15 +5,22 @@ defmodule Sequin.Streams do
   alias Sequin.Accounts.Account
   alias Sequin.Cache
   alias Sequin.Error
+  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
+  alias Sequin.Replication
   alias Sequin.Repo
-  alias Sequin.Sources
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.ConsumerMessageWithConsumerInfoss
   alias Sequin.Streams.Message
+  alias Sequin.Streams.Migrations
+  alias Sequin.Streams.NewMessage
   alias Sequin.Streams.Query
+  alias Sequin.Streams.SourceTable
   alias Sequin.Streams.Stream
+  alias Sequin.Streams.StreamTable
   alias Sequin.StreamsRuntime
 
   require Logger
@@ -81,8 +88,8 @@ defmodule Sequin.Streams do
       consumers = list_consumers_for_stream(stream.id)
       Enum.each(consumers, fn consumer -> {:ok, _} = delete_consumer_with_lifecycle(consumer) end)
 
-      webhooks = Sources.list_webhooks_for_stream(stream.id)
-      Enum.each(webhooks, fn webhook -> {:ok, _} = Sources.delete_webhook(webhook) end)
+      webhooks = Replication.list_webhooks_for_stream(stream.id)
+      Enum.each(webhooks, fn webhook -> {:ok, _} = Replication.delete_webhook(webhook) end)
 
       case delete_stream(stream) do
         {:ok, stream} ->
@@ -748,5 +755,121 @@ defmodule Sequin.Streams do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  def message_from_replication_change(%SourceTable{} = source_table, change) do
+    user_fields =
+      Enum.reduce(source_table.column_mappings, %{}, fn mapping, acc ->
+        Map.put(acc, mapping.stream_column.name, extract_field_value(mapping.mapping, change, source_table))
+      end)
+
+    %NewMessage{
+      data: %{
+        record: get_record(change),
+        changes: get_changes(change)
+      },
+      recorded_at: DateTime.utc_now(),
+      user_fields: user_fields,
+      deleted: is_struct(change, DeletedRecord)
+    }
+  end
+
+  defp get_record(%NewRecord{record: record}), do: record
+  defp get_record(%UpdatedRecord{record: record}), do: record
+  defp get_record(%DeletedRecord{old_record: old_record}), do: old_record
+
+  defp extract_field_value(%{type: :record_field, field_name: field_name}, change, _source_table) do
+    case change do
+      %NewRecord{record: record} -> record[field_name]
+      %UpdatedRecord{record: record} -> record[field_name]
+      %DeletedRecord{old_record: old_record} -> old_record[field_name]
+    end
+  end
+
+  defp extract_field_value(%{type: :metadata, field_name: field_name}, change, source_table) do
+    case field_name do
+      "action" -> get_action(change)
+      "table_name" -> source_table.name
+    end
+  end
+
+  defp get_changes(%UpdatedRecord{old_record: old_record, record: record}) do
+    old_record
+    |> Map.new(fn {k, v} -> {k, if(record[k] == v, do: nil, else: v)} end)
+    |> Map.reject(fn {_, v} -> is_nil(v) end)
+  end
+
+  defp get_changes(%NewRecord{}), do: nil
+  defp get_changes(%DeletedRecord{}), do: nil
+
+  defp get_action(%NewRecord{}), do: :insert
+  defp get_action(%UpdatedRecord{}), do: :update
+  defp get_action(%DeletedRecord{}), do: :delete
+
+  # StreamTable
+
+  def list_stream_tables_for_account(account_id) do
+    account_id |> StreamTable.where_account_id() |> Repo.all()
+  end
+
+  def get_stream_table_for_account(account_id, id) do
+    res = account_id |> StreamTable.where_account_id() |> StreamTable.where_id(id) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :stream_table)}
+      stream_table -> {:ok, stream_table}
+    end
+  end
+
+  def create_stream_table_for_account_with_lifecycle(account_id, attrs) do
+    Repo.transact(fn ->
+      with {:ok, stream_table} <- create_stream_table(account_id, attrs),
+           stream_table = Repo.preload(stream_table, :columns),
+           :ok <- Migrations.provision_stream_table(stream_table) do
+        {:ok, stream_table}
+      end
+    end)
+  end
+
+  def update_stream_table_with_lifecycle(%StreamTable{} = stream_table, attrs) do
+    stream_table = Repo.preload(stream_table, :columns)
+
+    Repo.transact(fn ->
+      with {:ok, updated_stream_table} <- update_stream_table(stream_table, attrs),
+           updated_stream_table = Repo.preload(updated_stream_table, :columns),
+           :ok <- Migrations.migrate_stream_table(stream_table, updated_stream_table) do
+        {:ok, updated_stream_table}
+      end
+    end)
+  end
+
+  def delete_stream_table_with_lifecycle(%StreamTable{} = stream_table) do
+    res =
+      Repo.transact(fn ->
+        with {:ok, _} <- delete_stream_table(stream_table) do
+          Migrations.drop_stream_table(stream_table)
+        end
+      end)
+
+    case res do
+      {:ok, :transaction_committed} -> :ok
+      error -> error
+    end
+  end
+
+  def create_stream_table(account_id, attrs) do
+    %StreamTable{account_id: account_id}
+    |> StreamTable.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_stream_table(%StreamTable{} = stream_table, attrs) do
+    stream_table
+    |> StreamTable.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_stream_table(%StreamTable{} = stream_table) do
+    Repo.delete(stream_table)
   end
 end

@@ -1,11 +1,11 @@
-defmodule Sequin.Sources.BackfillPostgresTableWorker do
+defmodule Sequin.Replication.BackfillPostgresTableWorker do
   @moduledoc false
   use Oban.Worker
 
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Sources.PostgresReplication
-  alias Sequin.SourcesRuntime
+  alias Sequin.Replication.PostgresReplication
+  alias Sequin.ReplicationRuntime
   alias Sequin.Streams
 
   require Logger
@@ -67,7 +67,7 @@ defmodule Sequin.Sources.BackfillPostgresTableWorker do
         )
         |> Sequin.Repo.update()
 
-      SourcesRuntime.Supervisor.start_for_pg_replication(postgres_replication)
+      ReplicationRuntime.Supervisor.start_for_pg_replication(postgres_replication)
 
       Logger.info("Backfill completed for postgres_replication_id: #{postgres_replication_id}")
     else

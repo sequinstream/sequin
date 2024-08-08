@@ -16,7 +16,7 @@ defmodule Sequin.Repo do
       fn ->
         case fun.() do
           {:ok, value} -> value
-          :ok -> :transaction_commited
+          :ok -> :transaction_committed
           {:error, reason} -> rollback(reason)
           :error -> rollback(:transaction_rollback_error)
         end

@@ -64,7 +64,7 @@ A `db.m5.xlarge` AWS RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle **5,00
 
 ### Server
 
-Run the server with Docker/compose. Clone the repo:
+Run the server with Docker Compose. Clone the repo:
 
 ```bash
 git clone git@github.com:sequinstream/sequin.git

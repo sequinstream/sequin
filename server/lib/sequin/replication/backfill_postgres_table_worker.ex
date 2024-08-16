@@ -4,7 +4,7 @@ defmodule Sequin.Replication.BackfillPostgresTableWorker do
 
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Streams
 
@@ -43,7 +43,7 @@ defmodule Sequin.Replication.BackfillPostgresTableWorker do
     )
 
     postgres_database = Sequin.Repo.get!(PostgresDatabase, postgres_database_id)
-    postgres_replication = Sequin.Repo.get!(PostgresReplication, postgres_replication_id)
+    postgres_replication = Sequin.Repo.get!(PostgresReplicationSlot, postgres_replication_id)
 
     {:ok, conn} = ConnectionCache.connection(postgres_database)
 

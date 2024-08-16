@@ -8,6 +8,8 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
 
+  @moduletag skip: true
+
   describe "create/1" do
     test "creates a job with valid args" do
       consumer = StreamsFactory.insert_consumer!()

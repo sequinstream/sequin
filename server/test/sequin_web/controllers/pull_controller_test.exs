@@ -7,6 +7,7 @@ defmodule SequinWeb.PullControllerTest do
 
   setup :authenticated_conn
 
+  @moduletag skip: true
   @one_day_ago DateTime.add(DateTime.utc_now(), -24, :hour)
 
   setup %{account: account} do

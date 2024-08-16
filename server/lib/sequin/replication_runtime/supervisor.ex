@@ -5,7 +5,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.Replication, as: ReplicationExt
-  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.ReplicationMessageHandler
   alias Sequin.ReplicationRuntime.PostgresReplicationSupervisor
   alias Sequin.Repo
@@ -22,7 +22,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
 
   def start_for_pg_replication(supervisor \\ PostgresReplicationSupervisor, pg_replication_or_id, opts \\ [])
 
-  def start_for_pg_replication(supervisor, %PostgresReplication{} = pg_replication, opts) do
+  def start_for_pg_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
 
     if pg_replication.status == :active do
@@ -53,7 +53,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
 
   def stop_for_pg_replication(supervisor \\ PostgresReplicationSupervisor, pg_replication_or_id)
 
-  def stop_for_pg_replication(supervisor, %PostgresReplication{id: id}) do
+  def stop_for_pg_replication(supervisor, %PostgresReplicationSlot{id: id}) do
     stop_for_pg_replication(supervisor, id)
   end
 

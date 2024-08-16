@@ -1,7 +1,7 @@
 defmodule Sequin.PostgresReplicationTest do
   @moduledoc """
   This test file contains both unit tests for the Replication extension as well as integration
-  tests with PostgresReplication. The reason for combining the two is interference: when the two
+  tests with PostgresReplicationSlot. The reason for combining the two is interference: when the two
   test suites are run side-by-side, they interfere with each other. We didn't get to the bottom of
   the interference (issues starting the replication connection?), but it definitely seems to occur
   when the two tests are running and connecting to slots at the same time.
@@ -22,7 +22,7 @@ defmodule Sequin.PostgresReplicationTest do
   # alias Sequin.Factory.StreamsFactory
   alias Sequin.Mocks.Extensions.ReplicationMessageHandlerMock
   # alias Sequin.Replication
-  # alias Sequin.Replication.PostgresReplication
+  # alias Sequin.Replication.PostgresReplicationSlot
   # alias Sequin.ReplicationRuntime
   # alias Sequin.Streams
   # alias Sequin.Test.Support.Models.Character
@@ -44,14 +44,14 @@ defmodule Sequin.PostgresReplicationTest do
     :ok
   end
 
-  # describe "PostgresReplication end-to-end" do
+  # describe "PostgresReplicationSlot end-to-end" do
   #   setup do
   #     # Create source database
   #     account_id = AccountsFactory.insert_account!().id
   #     source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
   #     stream = StreamsFactory.insert_stream!(account_id: account_id)
 
-  #     # Create PostgresReplication entity
+  #     # Create PostgresReplicationSlot entity
   #     pg_replication =
   #       ReplicationFactory.insert_postgres_replication!(
   #         status: :active,
@@ -242,7 +242,7 @@ defmodule Sequin.PostgresReplicationTest do
   #     pg_replication_with_info = Replication.add_info(pg_replication)
 
   #     # Assert that the info field is populated
-  #     assert %PostgresReplication.Info{} = pg_replication_with_info.info
+  #     assert %PostgresReplicationSlot.Info{} = pg_replication_with_info.info
 
   #     # Check last_committed_at
   #     assert pg_replication_with_info.info.last_committed_at != nil

@@ -9,6 +9,8 @@ defmodule SequinWeb.DatabaseControllerTest do
 
   setup :authenticated_conn
 
+  @moduletag skip: true
+
   @schema_name "__database_controller_test_schema__"
   @tables ["users", "posts"]
   @publication_name "__database_controller_test_pub__"

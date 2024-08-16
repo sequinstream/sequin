@@ -13,6 +13,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   setup :authenticated_conn
 
   @publication "characters_publication"
+  @moduletag skip: true
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 

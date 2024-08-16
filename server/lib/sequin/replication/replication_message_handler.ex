@@ -6,7 +6,7 @@ defmodule Sequin.Replication.ReplicationMessageHandler do
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.ReplicationMessageHandlerBehaviour
-  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Streams
 
   defmodule Context do
@@ -20,11 +20,9 @@ defmodule Sequin.Replication.ReplicationMessageHandler do
     end
   end
 
-  def context(%PostgresReplication{} = pr) do
+  def context(%PostgresReplicationSlot{} = pr) do
     %Context{
-      stream_id: pr.stream_id,
-      key_prefix: pr.postgres_database.name,
-      key_format: pr.key_format
+      key_prefix: pr.postgres_database.name
     }
   end
 

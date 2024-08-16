@@ -8,21 +8,19 @@ defmodule Sequin.Streams.Consumer do
   alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Streams.HttpEndpoint
-  alias Sequin.Streams.Stream
 
   @derive {Jason.Encoder,
            only: [
              :account_id,
              :ack_wait_ms,
-             :filter_key_pattern,
              :id,
              :inserted_at,
              :kind,
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
+             :message_kind,
              :name,
-             :stream_id,
              :updated_at,
              :http_endpoint_id,
              :status
@@ -34,11 +32,10 @@ defmodule Sequin.Streams.Consumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
-    field :filter_key_pattern, :string
+    field :message_kind, :string, default: "record"
     field :kind, Ecto.Enum, values: [:pull, :push], default: :pull
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
-    belongs_to :stream, Stream
     belongs_to :account, Account
     belongs_to :http_endpoint, HttpEndpoint
 
@@ -48,32 +45,26 @@ defmodule Sequin.Streams.Consumer do
   def create_changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
-      :stream_id,
       :ack_wait_ms,
       :max_ack_pending,
       :max_deliver,
       :max_waiting,
+      :message_kind,
       :name,
-      :filter_key_pattern,
       :backfill_completed_at,
       :kind,
       :http_endpoint_id,
       :status
     ])
-    |> validate_required([:stream_id, :name, :filter_key_pattern, :kind, :status])
+    |> validate_required([:name, :kind, :status])
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
       end
     )
-    |> foreign_key_constraint(:stream_id)
     |> foreign_key_constraint(:http_endpoint_id)
     |> Sequin.Changeset.validate_name()
     |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
-    |> unique_constraint([:stream_id, :name],
-      name: "consumers_stream_id_name_index",
-      message: "Consumer name must be unique within a stream"
-    )
   end
 
   def update_changeset(consumer, attrs) do
@@ -93,10 +84,6 @@ defmodule Sequin.Streams.Consumer do
 
   def where_account_id(query \\ base_query(), account_id) do
     from([consumer: c] in query, where: c.account_id == ^account_id)
-  end
-
-  def where_stream_id(query \\ base_query(), stream_id) do
-    from([consumer: c] in query, where: c.stream_id == ^stream_id)
   end
 
   def where_id(query \\ base_query(), id) do

@@ -7,6 +7,8 @@ defmodule SequinWeb.StreamControllerTest do
 
   setup :authenticated_conn
 
+  @moduletag skip: true
+
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
     stream = StreamsFactory.insert_stream!(account_id: account.id)

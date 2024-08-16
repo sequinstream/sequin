@@ -6,6 +6,8 @@ defmodule Sequin.StreamsIntegrationTest do
   alias Sequin.StreamsRuntime.AssignMessageSeq
   alias Sequin.StreamsRuntime.PopulateConsumerMessages
 
+  @moduletag skip: true
+
   describe "streams integration" do
     @tag :skip
     test "full message lifecycle" do

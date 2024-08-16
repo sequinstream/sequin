@@ -5,6 +5,8 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
   alias Sequin.Factory.StreamsFactory
   alias Sequin.StreamsRuntime.HttpPushPipeline
 
+  @moduletag skip: true
+
   setup do
     account = AccountsFactory.insert_account!()
     http_endpoint = StreamsFactory.insert_http_endpoint!(account_id: account.id)

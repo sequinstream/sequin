@@ -1,6 +1,6 @@
 defmodule SequinWeb.PostgresReplicationJSON do
   @moduledoc false
-  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationSlot
 
   def render("index.json", %{postgres_replications: postgres_replications}) do
     %{data: postgres_replications}
@@ -10,20 +10,10 @@ defmodule SequinWeb.PostgresReplicationJSON do
     postgres_replication
   end
 
-  def render("show_with_info.json", %{postgres_replication: %PostgresReplication{} = pgr}) do
-    # Hack to show backfilling for a little bit longer on fast backfills
-    postgres_replication =
-      if pgr.status == :active and
-           pgr.backfill_completed_at &&
-           DateTime.diff(DateTime.utc_now(), pgr.backfill_completed_at) <= 5 do
-        %{pgr | status: :backfilling, backfill_completed_at: nil}
-      else
-        pgr
-      end
-
+  def render("show_with_info.json", %{postgres_replication: %PostgresReplicationSlot{} = pgr}) do
     %{
-      postgres_replication: postgres_replication,
-      info: postgres_replication.info
+      postgres_replication: pgr,
+      info: pgr.info
     }
   end
 

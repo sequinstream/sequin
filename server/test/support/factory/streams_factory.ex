@@ -154,9 +154,7 @@ defmodule Sequin.Factory.StreamsFactory do
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
-        stream_id: Factory.uuid(),
         account_id: account_id,
-        filter_key_pattern: generate_key(parts: 3),
         kind: kind,
         http_endpoint_id: http_endpoint_id,
         status: :active

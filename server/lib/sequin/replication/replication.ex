@@ -7,35 +7,33 @@ defmodule Sequin.Replication do
   alias Sequin.Error.NotFoundError
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Replication.BackfillPostgresTableWorker
-  alias Sequin.Replication.PostgresReplication
-  alias Sequin.Replication.Webhook
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Repo
-  alias Sequin.Streams
 
-  # PostgresReplication
+  # PostgresReplicationSlot
 
   def all_pg_replications do
-    Repo.all(PostgresReplication)
+    Repo.all(PostgresReplicationSlot)
   end
 
   def all_active_pg_replications do
-    Repo.all(PostgresReplication.where_active())
+    Repo.all(PostgresReplicationSlot)
   end
 
   def list_pg_replications_for_account(account_id) do
-    Repo.all(PostgresReplication.where_account(account_id))
+    Repo.all(PostgresReplicationSlot.where_account(account_id))
   end
 
   def get_pg_replication(id) do
-    case Repo.get(PostgresReplication, id, preload: :postgres_database) do
+    case Repo.get(PostgresReplicationSlot, id, preload: :postgres_database) do
       nil -> {:error, Error.not_found(entity: :pg_replication)}
       pg_replication -> {:ok, pg_replication}
     end
   end
 
   def get_pg_replication_for_account(account_id, id) do
-    case Repo.get_by(PostgresReplication, id: id, account_id: account_id) do
+    case Repo.get_by(PostgresReplicationSlot, id: id, account_id: account_id) do
       nil -> {:error, Error.not_found(entity: :pg_replication)}
       pg_replication -> {:ok, pg_replication}
     end
@@ -50,8 +48,8 @@ defmodule Sequin.Replication do
     with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
          :ok <- validate_replication_config(postgres_database, attrs) do
       pg_replication =
-        %PostgresReplication{account_id: account_id}
-        |> PostgresReplication.create_changeset(attrs)
+        %PostgresReplicationSlot{account_id: account_id}
+        |> PostgresReplicationSlot.create_changeset(attrs)
         |> Repo.insert()
 
       case pg_replication do
@@ -74,34 +72,34 @@ defmodule Sequin.Replication do
     end
   end
 
-  def update_pg_replication(%PostgresReplication{} = pg_replication, attrs) do
+  def update_pg_replication(%PostgresReplicationSlot{} = pg_replication, attrs) do
     pg_replication
-    |> PostgresReplication.update_changeset(attrs)
+    |> PostgresReplicationSlot.update_changeset(attrs)
     |> Repo.update()
   end
 
-  def delete_pg_replication(%PostgresReplication{} = pg_replication) do
+  def delete_pg_replication(%PostgresReplicationSlot{} = pg_replication) do
     Repo.delete(pg_replication)
   end
 
-  def delete_pg_replication_with_lifecycle(%PostgresReplication{} = pg_replication) do
+  def delete_pg_replication_with_lifecycle(%PostgresReplicationSlot{} = pg_replication) do
     res = Repo.delete(pg_replication)
     ReplicationRuntime.Supervisor.stop_for_pg_replication(pg_replication)
     res
   end
 
-  def add_info(%PostgresReplication{} = pg_replication) do
+  def add_info(%PostgresReplicationSlot{} = pg_replication) do
     pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
     last_committed_at = ReplicationExt.get_last_committed_at(pg_replication.id)
-    key_pattern = "#{pg_replication.postgres_database.name}.>"
+    # key_pattern = "#{pg_replication.postgres_database.name}.>"
 
-    total_ingested_messages =
-      Streams.fast_count_messages_for_stream(pg_replication.stream_id, key_pattern: key_pattern)
+    # total_ingested_messages =
+    #   Streams.fast_count_messages_for_stream(pg_replication.stream_id, key_pattern: key_pattern)
 
-    info = %PostgresReplication.Info{
+    info = %PostgresReplicationSlot.Info{
       last_committed_at: last_committed_at,
-      total_ingested_messages: total_ingested_messages
+      total_ingested_messages: nil
     }
 
     %{pg_replication | info: info}
@@ -161,7 +159,7 @@ defmodule Sequin.Replication do
     end
   end
 
-  defp enqueue_backfill_jobs(%PostgresReplication{} = pg_replication) do
+  defp enqueue_backfill_jobs(%PostgresReplicationSlot{} = pg_replication) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
     {:ok, conn} = ConnectionCache.connection(pg_replication.postgres_database)
 
@@ -178,7 +176,7 @@ defmodule Sequin.Replication do
   end
 
   @doc """
-  Creates backfill jobs for the specified tables in a PostgresReplication.
+  Creates backfill jobs for the specified tables in a PostgresReplicationSlot.
   """
   def create_backfill_jobs(postgres_replication, tables) do
     jobs =
@@ -204,61 +202,5 @@ defmodule Sequin.Replication do
 
     {:ok, %{rows: rows}} = Postgrex.query(conn, query, [publication_name])
     Enum.map(rows, fn [schemaname, tablename] -> {schemaname, tablename} end)
-  end
-
-  ## Webhooks
-
-  def create_webhook_for_account(account_id, params) do
-    %Webhook{account_id: account_id}
-    |> Webhook.create_changeset(params)
-    |> Repo.insert()
-  end
-
-  def list_webhooks_for_account(account_id) do
-    account_id
-    |> Webhook.where_account()
-    |> Repo.all()
-  end
-
-  def list_webhooks_for_stream(stream_id) do
-    stream_id
-    |> Webhook.where_stream()
-    |> Repo.all()
-  end
-
-  def get_webhook_for_account(account_id, webhook_id_or_name) do
-    account_id
-    |> Webhook.where_account()
-    |> Webhook.where_id_or_name(webhook_id_or_name)
-    |> Repo.one()
-    |> case do
-      nil -> {:error, Error.not_found(entity: :webhook)}
-      webhook -> {:ok, webhook}
-    end
-  end
-
-  def update_webhook_for_account(account_id, webhook_id_or_name, params) do
-    with {:ok, webhook} <- get_webhook_for_account(account_id, webhook_id_or_name) do
-      webhook
-      |> Webhook.update_changeset(params)
-      |> Repo.update()
-    end
-  end
-
-  def delete_webhook(%Webhook{} = webhook) do
-    Repo.delete(webhook)
-  end
-
-  def delete_webhook_for_account(account_id, webhook_id_or_name) do
-    with {:ok, webhook} <- get_webhook_for_account(account_id, webhook_id_or_name) do
-      delete_webhook(webhook)
-    end
-  end
-
-  def get_webhook!(id) do
-    case Repo.get(Webhook, id) do
-      nil -> raise NotFoundError, entity: :webhook
-      webhook -> webhook
-    end
   end
 end

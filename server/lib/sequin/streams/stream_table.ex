@@ -7,7 +7,7 @@ defmodule Sequin.Streams.StreamTable do
 
   alias Sequin.Accounts.Account
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Replication.PostgresReplication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Streams.StreamTableColumn
 
   @derive {Jason.Encoder,
@@ -33,7 +33,7 @@ defmodule Sequin.Streams.StreamTable do
 
     belongs_to :account, Account
     belongs_to :source_postgres_database, PostgresDatabase
-    belongs_to :source_replication_slot, PostgresReplication
+    belongs_to :source_replication_slot, PostgresReplicationSlot
 
     has_many :columns, StreamTableColumn, on_replace: :delete
 

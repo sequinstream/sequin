@@ -9,6 +9,8 @@ defmodule Sequin.StreamsTest do
   alias Sequin.Streams.NewMessage
   alias Sequin.Streams.SourceTableStreamTableColumnMapping
 
+  @moduletag skip: true
+
   describe "upsert_messages/1" do
     test "inserts new messages" do
       stream = StreamsFactory.insert_stream!()

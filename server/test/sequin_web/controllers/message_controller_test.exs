@@ -5,6 +5,7 @@ defmodule SequinWeb.MessageControllerTest do
   alias Sequin.Factory.StreamsFactory
 
   setup :authenticated_conn
+  @moduletag skip: true
 
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()

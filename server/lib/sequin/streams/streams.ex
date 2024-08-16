@@ -8,7 +8,6 @@ defmodule Sequin.Streams do
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
-  alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
@@ -88,9 +87,6 @@ defmodule Sequin.Streams do
       consumers = list_consumers_for_stream(stream.id)
       Enum.each(consumers, fn consumer -> {:ok, _} = delete_consumer_with_lifecycle(consumer) end)
 
-      webhooks = Replication.list_webhooks_for_stream(stream.id)
-      Enum.each(webhooks, fn webhook -> {:ok, _} = Replication.delete_webhook(webhook) end)
-
       case delete_stream(stream) do
         {:ok, stream} ->
           drop_records_partition(stream)
@@ -133,8 +129,9 @@ defmodule Sequin.Streams do
     Repo.all(Consumer)
   end
 
-  def count_consumers_for_stream(stream_id) do
-    stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
+  def count_consumers_for_stream(_stream_id) do
+    0
+    # stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
   end
 
   def get_consumer(consumer_id) do
@@ -155,8 +152,8 @@ defmodule Sequin.Streams do
     account_id |> Consumer.where_account_id() |> Repo.all()
   end
 
-  def list_consumers_for_stream(stream_id) do
-    stream_id |> Consumer.where_stream_id() |> Repo.all()
+  def list_consumers_for_stream(_stream_id) do
+    Repo.all(Consumer)
   end
 
   def list_active_push_consumers do
@@ -189,8 +186,8 @@ defmodule Sequin.Streams do
     end
   end
 
-  def get_consumer_for_stream(stream_id, id_or_name) do
-    res = stream_id |> Consumer.where_stream_id() |> Consumer.where_id_or_name(id_or_name) |> Repo.one()
+  def get_consumer_for_stream(_stream_id, id_or_name) do
+    res = id_or_name |> Consumer.where_id_or_name() |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}

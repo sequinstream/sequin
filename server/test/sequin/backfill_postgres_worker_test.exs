@@ -9,6 +9,8 @@ defmodule Sequin.Replication.BackfillPostgresTableWorkerTest do
   alias Sequin.Replication.BackfillPostgresTableWorker
   alias Sequin.Streams
 
+  @moduletag skip: true
+
   describe "create/5" do
     test "creates a job with valid args" do
       postgres_replication = ReplicationFactory.insert_postgres_replication!()

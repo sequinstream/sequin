@@ -20,7 +20,7 @@ defmodule Sequin.PostgresReplicationTest do
   # alias Sequin.Factory.DatabasesFactory
   # alias Sequin.Factory.ReplicationFactory
   # alias Sequin.Factory.StreamsFactory
-  alias Sequin.Mocks.Extensions.ReplicationMessageHandlerMock
+  alias Sequin.Mocks.Extensions.MessageHandlerMock
   # alias Sequin.Replication
   # alias Sequin.Replication.PostgresReplicationSlot
   # alias Sequin.ReplicationRuntime
@@ -364,11 +364,11 @@ defmodule Sequin.PostgresReplicationTest do
 
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
       assert_receive {:change, [change]}, :timer.seconds(5)
 
       assert is_struct(change, InsertedRecord), "Expected change to be a InsertedRecord, got: #{inspect(change)}"
@@ -382,11 +382,11 @@ defmodule Sequin.PostgresReplicationTest do
     test "changes in a transaction are buffered then delivered to message handler in order" do
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Create three characters in sequence
       UnboxedRepo.transaction(fn ->
@@ -415,12 +415,12 @@ defmodule Sequin.PostgresReplicationTest do
       test_pid = self()
 
       # simulate a message mis-handle/crash
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
         raise "Simulated crash"
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
@@ -428,11 +428,11 @@ defmodule Sequin.PostgresReplicationTest do
 
       stop_replication!()
 
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       assert_receive {:change, [change]}, :timer.seconds(1)
       assert is_struct(change, InsertedRecord)
@@ -444,11 +444,11 @@ defmodule Sequin.PostgresReplicationTest do
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:change, msgs})
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Test create
       character = CharacterFactory.insert_character_ident_full!(planet: "Caladan")
@@ -490,11 +490,11 @@ defmodule Sequin.PostgresReplicationTest do
     test "messages are processed exactly once, even after crash and reboot" do
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
         send(test_pid, {:changes, msgs})
       end)
 
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert a record
       character1 = CharacterFactory.insert_character!()
@@ -511,7 +511,7 @@ defmodule Sequin.PostgresReplicationTest do
       stop_replication!()
 
       # Restart the replication
-      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+      start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert another record to verify replication is working
       character2 = CharacterFactory.insert_character!()
@@ -534,7 +534,7 @@ defmodule Sequin.PostgresReplicationTest do
           slot_name: replication_slot(),
           test_pid: self(),
           id: @server_id,
-          message_handler_module: ReplicationMessageHandlerMock,
+          message_handler_module: MessageHandlerMock,
           message_handler_ctx: nil
         ],
         opts

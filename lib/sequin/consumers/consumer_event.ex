@@ -25,7 +25,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :consumer_id, Ecto.UUID, primary_key: true
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
-    field :record_pks, :map
+    field :record_pks, {:array, :string}
     field :table_oid, :integer
 
     field :ack_id, Ecto.UUID, read_after_writes: true
@@ -39,6 +39,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
   end
 
   def changeset(consumer_event, attrs) do
+    attrs = stringify_record_pks(attrs)
+
     consumer_event
     |> cast(attrs, [
       :consumer_id,
@@ -58,6 +60,23 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :deliver_count,
       :data
     ])
+  end
+
+  def stringify_record_pks(attrs) when is_map(attrs) do
+    case attrs do
+      %{"record_pks" => pks} ->
+        %{attrs | "record_pks" => stringify_record_pks(pks)}
+
+      %{record_pks: pks} ->
+        %{attrs | record_pks: stringify_record_pks(pks)}
+
+      _ ->
+        attrs
+    end
+  end
+
+  def stringify_record_pks(pks) when is_list(pks) do
+    Enum.map(pks, &to_string/1)
   end
 
   def where_consumer_id(query \\ base_query(), consumer_id) do

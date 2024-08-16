@@ -1,12 +1,12 @@
-defmodule Sequin.Replication.ReplicationMessageHandler do
+defmodule Sequin.Replication.MessageHandler do
   @moduledoc false
-  @behaviour Sequin.Extensions.ReplicationMessageHandlerBehaviour
+  @behaviour Sequin.Extensions.MessageHandlerBehaviour
 
   alias Sequin.Consumers
+  alias Sequin.Extensions.MessageHandlerBehaviour
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
-  alias Sequin.Extensions.ReplicationMessageHandlerBehaviour
   alias Sequin.Replication.PostgresReplicationSlot
 
   defmodule Context do
@@ -22,19 +22,19 @@ defmodule Sequin.Replication.ReplicationMessageHandler do
     %Context{consumers: pr.http_pull_consumers ++ pr.http_push_consumers}
   end
 
-  @impl ReplicationMessageHandlerBehaviour
+  @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
     messages
     |> Enum.flat_map(fn message ->
       Enum.map(ctx.consumers, fn consumer ->
-        %Sequin.Consumers.ConsumerEvent{
+        Sequin.Map.from_ecto(%Sequin.Consumers.ConsumerEvent{
           consumer_id: consumer.id,
           commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-          record_pks: %{ids: message.ids},
+          record_pks: message.ids,
           table_oid: message.table_oid,
           deliver_count: 0,
           data: create_data_from_message(message)
-        }
+        })
       end)
     end)
     |> Consumers.insert_consumer_events()

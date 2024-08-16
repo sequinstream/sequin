@@ -175,7 +175,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :deliver_count, :integer, null: false, default: 0
       add :last_delivered_at, :utc_datetime_usec
 
-      timestamps(updated_at: false, type: :utc_datetime_usec)
+      timestamps(type: :utc_datetime_usec)
     end
 
     create index(:consumer_events, [:consumer_id, :record_pks, :table_oid],

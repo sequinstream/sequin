@@ -14,7 +14,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.PostgresAdapter.Decoder
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Begin
@@ -217,12 +217,13 @@ defmodule Sequin.Extensions.Replication do
   defp process_message(%Insert{} = msg, state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
-    record = %NewRecord{
+    record = %InsertedRecord{
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
-      schema: schema,
-      table: table,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
       record: data_tuple_to_map(columns, msg.tuple_data),
       type: "insert"
     }
@@ -251,8 +252,9 @@ defmodule Sequin.Extensions.Replication do
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
-      schema: schema,
-      table: table,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
       old_record: old_record,
       record: data_tuple_to_map(columns, msg.tuple_data),
       type: "update"
@@ -286,8 +288,9 @@ defmodule Sequin.Extensions.Replication do
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, prev_tuple_data),
-      schema: schema,
-      table: table,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
       old_record: data_tuple_to_map(columns, prev_tuple_data),
       type: "delete"
     }
@@ -303,7 +306,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   # Example change event
-  # %Extensions.PostgresAdapter.Changes.NewRecord{
+  # %Extensions.PostgresAdapter.Changes.InsertedRecord{
   #   columns: [
   #     %{name: "id", type: "int4"},
   #     %{name: "first_name", type: "text"},

@@ -17,7 +17,7 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
     end
   end
 
-  defmodule NewRecord do
+  defmodule InsertedRecord do
     @moduledoc false
     use TypedStruct
 
@@ -28,8 +28,9 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :commit_timestamp, DateTime.t()
       field :errors, any()
       field :ids, list()
-      field :schema, String.t()
-      field :table, String.t()
+      field :table_schema, String.t()
+      field :table_name, String.t()
+      field :table_oid, integer()
       field :record, map()
       field :subscription_ids, list(String.t())
       field :type, String.t()
@@ -47,8 +48,9 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :commit_timestamp, DateTime.t()
       field :errors, any()
       field :ids, list()
-      field :schema, String.t()
-      field :table, String.t()
+      field :table_schema, String.t()
+      field :table_name, String.t()
+      field :table_oid, integer()
       field :old_record, map()
       field :record, map()
       field :subscription_ids, list(String.t())
@@ -67,8 +69,9 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
       field :commit_timestamp, DateTime.t()
       field :errors, any()
       field :ids, list()
-      field :schema, String.t()
-      field :table, String.t()
+      field :table_schema, String.t()
+      field :table_name, String.t()
+      field :table_oid, integer()
       field :old_record, map()
       field :subscription_ids, list(String.t())
       field :type, String.t()

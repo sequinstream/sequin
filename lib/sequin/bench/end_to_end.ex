@@ -24,14 +24,14 @@ defmodule Sequin.Bench.EndToEnd do
         account.id |> Streams.list_streams_for_account() |> List.first()
       end)
 
-    stream.id
-    |> Consumers.list_consumers_for_stream()
-    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
+    # stream.id
+    # |> Consumers.list_consumers_for_stream()
+    # |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
 
     consumers =
       Enum.map(1..10, fn _ ->
         {:ok, consumer} =
-          Consumers.create_consumer_for_account_with_lifecycle(account.id, %{
+          Consumers.create_http_push_consumer_for_account_with_lifecycle(account.id, %{
             stream_id: stream.id
           })
 
@@ -94,9 +94,9 @@ defmodule Sequin.Bench.EndToEnd do
         account.id |> Streams.list_streams_for_account() |> List.first()
       end)
 
-    stream.id
-    |> Consumers.list_consumers_for_stream()
-    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
+    # stream.id
+    # |> Consumers.list_consumers_for_stream()
+    # |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
 
     Repo.delete_all(from(m in Streams.Message, where: is_nil(m.seq)))
     Repo.delete_all(from(m in Streams.ConsumerMessage))
@@ -104,7 +104,7 @@ defmodule Sequin.Bench.EndToEnd do
     consumers =
       Enum.map(1..10, fn _ ->
         {:ok, consumer} =
-          Consumers.create_consumer_for_account_with_lifecycle(account.id, %{
+          Consumers.create_http_push_consumer_for_account_with_lifecycle(account.id, %{
             stream_id: stream.id
           })
 

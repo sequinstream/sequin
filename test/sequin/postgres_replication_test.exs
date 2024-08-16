@@ -359,17 +359,17 @@ defmodule Sequin.PostgresReplicationTest do
   @server_via ReplicationExt.via_tuple(@server_id)
 
   describe "replication in isolation" do
-    test "changes are buffered, even if the listener is not up" do
+    test "changes are buffered in the WAL, even if the listener is not up" do
       record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_message, fn _ctx, msg ->
-        send(test_pid, {:change, msg})
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:change, msgs})
       end)
 
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
-      assert_receive {:change, change}, :timer.seconds(5)
+      assert_receive {:change, [change]}, :timer.seconds(5)
 
       assert is_struct(change, InsertedRecord), "Expected change to be a InsertedRecord, got: #{inspect(change)}"
 
@@ -379,13 +379,44 @@ defmodule Sequin.PostgresReplicationTest do
       assert change.table_schema == "public"
     end
 
+    test "changes in a transaction are buffered then delivered to message handler in order" do
+      test_pid = self()
+
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+      end)
+
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+
+      # Create three characters in sequence
+      UnboxedRepo.transaction(fn ->
+        CharacterFactory.insert_character!(name: "Paul Atreides")
+        CharacterFactory.insert_character!(name: "Leto Atreides")
+        CharacterFactory.insert_character!(name: "Chani")
+      end)
+
+      assert_receive {:changes, changes}, :timer.seconds(1)
+      # Assert the order of changes
+      assert length(changes) == 3
+      [insert1, insert2, insert3] = changes
+
+      assert is_struct(insert1, InsertedRecord)
+      assert insert1.record["name"] == "Paul Atreides"
+
+      assert is_struct(insert2, InsertedRecord)
+      assert insert2.record["name"] == "Leto Atreides"
+
+      assert is_struct(insert3, InsertedRecord)
+      assert insert3.record["name"] == "Chani"
+    end
+
     @tag capture_log: true
     test "changes are delivered at least once" do
       test_pid = self()
 
       # simulate a message mis-handle/crash
-      stub(ReplicationMessageHandlerMock, :handle_message, fn _ctx, msg ->
-        send(test_pid, {:change, msg})
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:change, msgs})
         raise "Simulated crash"
       end)
 
@@ -397,13 +428,13 @@ defmodule Sequin.PostgresReplicationTest do
 
       stop_replication!()
 
-      stub(ReplicationMessageHandlerMock, :handle_message, fn _ctx, msg ->
-        send(test_pid, {:change, msg})
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:change, msgs})
       end)
 
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
-      assert_receive {:change, change}, :timer.seconds(1)
+      assert_receive {:change, [change]}, :timer.seconds(1)
       assert is_struct(change, InsertedRecord)
 
       # Should have received the record (it was re-delivered)
@@ -413,8 +444,8 @@ defmodule Sequin.PostgresReplicationTest do
     test "creates, updates, and deletes are captured" do
       test_pid = self()
 
-      stub(ReplicationMessageHandlerMock, :handle_message, fn _ctx, msg ->
-        send(test_pid, {:change, msg})
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:change, msgs})
       end)
 
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
@@ -423,7 +454,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character_ident_full!(planet: "Caladan")
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
-      assert_receive {:change, create_change}, :timer.seconds(1)
+      assert_receive {:change, [create_change]}, :timer.seconds(1)
       assert is_struct(create_change, InsertedRecord)
 
       assert Map.equal?(create_change.record, record)
@@ -434,7 +465,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
       record = Map.put(record, "planet", "Arrakis")
 
-      assert_receive {:change, update_change}, :timer.seconds(1)
+      assert_receive {:change, [update_change]}, :timer.seconds(1)
       assert is_struct(update_change, UpdatedRecord)
 
       assert Map.equal?(update_change.record, record)
@@ -448,7 +479,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Test delete
       UnboxedRepo.delete!(character)
 
-      assert_receive {:change, delete_change}, :timer.seconds(1)
+      assert_receive {:change, [delete_change]}, :timer.seconds(1)
       assert is_struct(delete_change, DeletedRecord)
 
       assert Map.equal?(delete_change.old_record, record)

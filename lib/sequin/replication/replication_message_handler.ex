@@ -23,17 +23,19 @@ defmodule Sequin.Replication.ReplicationMessageHandler do
   end
 
   @impl ReplicationMessageHandlerBehaviour
-  def handle_message(%Context{} = ctx, message) do
-    ctx.consumers
-    |> Enum.map(fn consumer ->
-      %Sequin.Consumers.ConsumerEvent{
-        consumer_id: consumer.id,
-        commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-        record_pks: %{ids: message.ids},
-        table_oid: message.table_oid,
-        deliver_count: 0,
-        data: create_data_from_message(message)
-      }
+  def handle_messages(%Context{} = ctx, messages) do
+    messages
+    |> Enum.flat_map(fn message ->
+      Enum.map(ctx.consumers, fn consumer ->
+        %Sequin.Consumers.ConsumerEvent{
+          consumer_id: consumer.id,
+          commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+          record_pks: %{ids: message.ids},
+          table_oid: message.table_oid,
+          deliver_count: 0,
+          data: create_data_from_message(message)
+        }
+      end)
     end)
     |> Consumers.insert_consumer_events()
   end

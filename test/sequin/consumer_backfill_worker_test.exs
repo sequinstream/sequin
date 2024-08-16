@@ -2,7 +2,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
@@ -151,7 +151,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
     end
   end
 
-  defp perform_job_for_consumer(%Consumer{} = consumer, seq \\ 0) do
+  defp perform_job_for_consumer(%HttpPushConsumer{} = consumer, seq \\ 0) do
     perform_job(ConsumerBackfillWorker, %{"consumer_id" => consumer.id, "seq" => seq})
   end
 end

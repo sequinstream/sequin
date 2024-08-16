@@ -2,7 +2,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   @moduledoc false
   use Broadway
 
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Streams.HttpEndpoint
@@ -11,7 +11,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   require Logger
 
   def start_link(opts) do
-    %Consumer{} = consumer = Keyword.fetch!(opts, :consumer)
+    %HttpPushConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
     consumer = Repo.preload(consumer, :http_endpoint)
     producer = Keyword.get(opts, :producer, Sequin.StreamsRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])

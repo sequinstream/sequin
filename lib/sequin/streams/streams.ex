@@ -4,7 +4,7 @@ defmodule Sequin.Streams do
 
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
@@ -305,7 +305,7 @@ defmodule Sequin.Streams do
     end)
   end
 
-  # Consumer Messages
+  # HttpPushConsumer Messages
 
   def all_consumer_messages do
     Repo.all(ConsumerMessage)
@@ -372,7 +372,7 @@ defmodule Sequin.Streams do
 
           {:error, %Error.NotFoundError{}} ->
             external_state =
-              if Consumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
+              if HttpPushConsumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
 
             %ConsumerMessageWithConsumerInfoss{
               consumer_id: consumer.id,
@@ -445,8 +445,8 @@ defmodule Sequin.Streams do
     Repo.delete_all(query)
   end
 
-  @spec ack_messages(Sequin.Consumers.Consumer.t(), any()) :: :ok
-  def ack_messages(%Consumer{} = consumer, ack_ids) do
+  @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), any()) :: :ok
+  def ack_messages(%HttpPushConsumer{} = consumer, ack_ids) do
     Repo.transact(fn ->
       {_, _} =
         consumer.id
@@ -455,7 +455,7 @@ defmodule Sequin.Streams do
         |> ConsumerMessage.where_state(:pending_redelivery)
         |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
-      if Consumer.should_delete_acked_messages?(consumer) do
+      if HttpPushConsumer.should_delete_acked_messages?(consumer) do
         {_, _} =
           consumer.id
           |> ConsumerMessage.where_consumer_id()
@@ -477,8 +477,8 @@ defmodule Sequin.Streams do
     :ok
   end
 
-  @spec nack_messages(Sequin.Consumers.Consumer.t(), any()) :: :ok
-  def nack_messages(%Consumer{} = consumer, ack_ids) do
+  @spec nack_messages(Sequin.Consumers.HttpPushConsumer.t(), any()) :: :ok
+  def nack_messages(%HttpPushConsumer{} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerMessage.where_consumer_id()

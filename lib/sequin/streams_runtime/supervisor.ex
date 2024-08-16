@@ -3,7 +3,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
   use Supervisor
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Streams.DynamicSupervisor
   alias Sequin.StreamsRuntime.HttpPushPipeline
 
@@ -19,7 +19,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
 
   def start_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id, opts \\ [])
 
-  def start_for_push_consumer(supervisor, %Consumer{} = consumer, opts) do
+  def start_for_push_consumer(supervisor, %HttpPushConsumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
     opts = Keyword.merge(default_opts, opts)
 
@@ -35,7 +35,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
 
   def stop_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id)
 
-  def stop_for_push_consumer(supervisor, %Consumer{id: id}) do
+  def stop_for_push_consumer(supervisor, %HttpPushConsumer{id: id}) do
     stop_for_push_consumer(supervisor, id)
   end
 

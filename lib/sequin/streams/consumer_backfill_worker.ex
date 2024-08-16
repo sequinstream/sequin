@@ -3,7 +3,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
   use Oban.Worker
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Streams
 
   require Logger
@@ -22,7 +22,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorker do
   def perform(%Oban.Job{args: %{"consumer_id" => consumer_id, "seq" => seq}}) do
     consumer = Consumers.get_consumer!(consumer_id)
 
-    if Consumer.should_delete_acked_messages?(consumer) do
+    if HttpPushConsumer.should_delete_acked_messages?(consumer) do
       delete_acked_messages(consumer)
     else
       case Consumers.backfill_messages_for_consumer(consumer, seq) do

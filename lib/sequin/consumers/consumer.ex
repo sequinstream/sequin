@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.Consumer do
+defmodule Sequin.Consumers.HttpPushConsumer do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -25,7 +25,7 @@ defmodule Sequin.Consumers.Consumer do
              :http_endpoint_id,
              :status
            ]}
-  typed_schema "consumers" do
+  typed_schema "http_push_consumers" do
     field :name, :string
     field :backfill_completed_at, :utc_datetime_usec
     field :ack_wait_ms, :integer, default: 30_000
@@ -64,12 +64,10 @@ defmodule Sequin.Consumers.Consumer do
     )
     |> foreign_key_constraint(:http_endpoint_id)
     |> Sequin.Changeset.validate_name()
-    |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
   end
 
   def update_changeset(consumer, attrs) do
-    consumer
-    |> cast(attrs, [
+    cast(consumer, attrs, [
       :ack_wait_ms,
       :max_ack_pending,
       :max_deliver,
@@ -79,7 +77,6 @@ defmodule Sequin.Consumers.Consumer do
       :http_endpoint_id,
       :status
     ])
-    |> check_constraint(:kind, name: :kind_http_endpoint_constraint)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -117,9 +114,9 @@ defmodule Sequin.Consumers.Consumer do
   @backfill_completed_at_threshold :timer.minutes(5)
   def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
 
-  def should_delete_acked_messages?(%Consumer{backfill_completed_at: nil}, _now), do: false
+  def should_delete_acked_messages?(%HttpPushConsumer{backfill_completed_at: nil}, _now), do: false
 
-  def should_delete_acked_messages?(%Consumer{backfill_completed_at: backfill_completed_at}, now) do
+  def should_delete_acked_messages?(%HttpPushConsumer{backfill_completed_at: backfill_completed_at}, now) do
     backfill_completed_at
     |> DateTime.add(@backfill_completed_at_threshold, :millisecond)
     |> DateTime.compare(now) == :lt

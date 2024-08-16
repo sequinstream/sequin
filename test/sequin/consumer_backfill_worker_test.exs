@@ -4,6 +4,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error.NotFoundError
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerBackfillWorker
@@ -13,7 +14,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
 
   describe "create/1" do
     test "creates a job with valid args" do
-      consumer = StreamsFactory.insert_consumer!()
+      consumer = ConsumersFactory.insert_consumer!()
       assert {:ok, %Oban.Job{}} = ConsumerBackfillWorker.create(consumer.id)
 
       assert_enqueued(worker: ConsumerBackfillWorker, args: %{"consumer_id" => consumer.id, "seq" => 0})
@@ -22,7 +23,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
 
   describe "perform/1" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(filter_key_pattern: "prefix.>", backfill_completed_at: nil)
+      consumer = ConsumersFactory.insert_consumer!(filter_key_pattern: "prefix.>", backfill_completed_at: nil)
 
       %{consumer: consumer}
     end

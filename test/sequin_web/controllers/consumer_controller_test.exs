@@ -3,6 +3,7 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   alias Sequin.Consumers
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
 
   setup :authenticated_conn
@@ -18,8 +19,8 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   describe "index" do
     test "lists consumers for the given stream", %{conn: conn, account: account, stream: stream} do
-      consumer1 = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
-      consumer2 = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer1 = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer2 = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers")
       assert %{"data" => consumers} = json_response(conn, 200)
@@ -32,7 +33,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn: conn,
       other_stream: other_stream
     } do
-      StreamsFactory.insert_consumer!(
+      ConsumersFactory.insert_consumer!(
         account_id: other_stream.account_id,
         stream_id: other_stream.id
       )
@@ -44,7 +45,7 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   describe "show" do
     test "shows consumer details", %{conn: conn, account: account, stream: stream} do
-      consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
       conn = get(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}")
       assert json_response = json_response(conn, 200)
@@ -61,7 +62,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     end
 
     test "shows consumer details by name", %{conn: conn, account: account, stream: stream} do
-      consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
       conn = get(conn, ~p"/api/streams/#{stream.name}/consumers/#{consumer.name}")
       assert json_response = json_response(conn, 200)
@@ -74,7 +75,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       other_stream: other_stream
     } do
       consumer =
-        StreamsFactory.insert_consumer!(
+        ConsumersFactory.insert_consumer!(
           account_id: other_stream.account_id,
           stream_id: other_stream.id
         )
@@ -87,7 +88,7 @@ defmodule SequinWeb.ConsumerControllerTest do
   describe "create" do
     test "creates a pull consumer under the authenticated account", %{conn: conn, stream: stream} do
       attrs =
-        StreamsFactory.consumer_attrs(stream_id: stream.id, max_ack_pending: 5000, kind: :pull)
+        ConsumersFactory.consumer_attrs(stream_id: stream.id, max_ack_pending: 5000, kind: :pull)
 
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
@@ -102,7 +103,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       http_endpoint = StreamsFactory.insert_http_endpoint!(account_id: stream.account_id)
 
       attrs =
-        StreamsFactory.consumer_attrs(
+        ConsumersFactory.consumer_attrs(
           stream_id: stream.id,
           max_ack_pending: 5000,
           kind: :push,
@@ -132,7 +133,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       other_account: other_account
     } do
       attrs =
-        StreamsFactory.consumer_attrs(
+        ConsumersFactory.consumer_attrs(
           account_id: other_account.id,
           max_ack_pending: 5000,
           kind: :pull
@@ -159,7 +160,7 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   describe "update" do
     setup %{account: account, stream: stream} do
-      consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
       %{consumer: consumer}
     end
 
@@ -191,7 +192,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       other_stream: other_stream
     } do
       other_consumer =
-        StreamsFactory.insert_consumer!(
+        ConsumersFactory.insert_consumer!(
           account_id: other_stream.account_id,
           stream_id: other_stream.id
         )
@@ -237,7 +238,7 @@ defmodule SequinWeb.ConsumerControllerTest do
 
   describe "delete" do
     test "deletes the consumer", %{conn: conn, account: account, stream: stream} do
-      consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+      consumer = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
       conn = delete(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}")
       assert %{"id" => id, "deleted" => true} = json_response(conn, 200)
@@ -250,7 +251,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       other_stream: other_stream
     } do
       other_consumer =
-        StreamsFactory.insert_consumer!(
+        ConsumersFactory.insert_consumer!(
           account_id: other_stream.account_id,
           stream_id: other_stream.id
         )

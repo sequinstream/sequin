@@ -2,6 +2,7 @@ defmodule SequinWeb.MessageControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
 
   setup :authenticated_conn
@@ -12,9 +13,9 @@ defmodule SequinWeb.MessageControllerTest do
     stream = StreamsFactory.insert_stream!(account_id: account.id)
     other_stream = StreamsFactory.insert_stream!(account_id: other_account.id)
 
-    consumer = StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
+    consumer = ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id)
 
-    other_consumer = StreamsFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
+    other_consumer = ConsumersFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
     %{stream: stream, other_stream: other_stream, consumer: consumer, other_consumer: other_consumer}
   end
 

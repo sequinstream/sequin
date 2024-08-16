@@ -2,6 +2,7 @@ defmodule SequinWeb.PullControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
 
@@ -16,9 +17,9 @@ defmodule SequinWeb.PullControllerTest do
     other_stream = StreamsFactory.insert_stream!(account_id: other_account.id)
 
     consumer =
-      StreamsFactory.insert_consumer!(account_id: account.id, stream_id: stream.id, backfill_completed_at: @one_day_ago)
+      ConsumersFactory.insert_consumer!(account_id: account.id, stream_id: stream.id, backfill_completed_at: @one_day_ago)
 
-    other_consumer = StreamsFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
+    other_consumer = ConsumersFactory.insert_consumer!(account_id: other_account.id, stream_id: other_stream.id)
     %{stream: stream, consumer: consumer, other_consumer: other_consumer, other_stream: other_stream}
   end
 

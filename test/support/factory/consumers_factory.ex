@@ -151,7 +151,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %ConsumerEvent{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
-        record_pks: %{id: Faker.UUID.v4()},
+        record_pks: [Faker.UUID.v4()],
         table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),

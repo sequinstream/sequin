@@ -58,6 +58,14 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> Repo.insert!()
   end
 
+  def postgres_message(attrs \\ []) do
+    case Enum.random([:insert, :update, :delete]) do
+      :insert -> postgres_insert(attrs)
+      :update -> postgres_update(attrs)
+      :delete -> postgres_delete(attrs)
+    end
+  end
+
   def postgres_insert(attrs \\ []) do
     attrs = Map.new(attrs)
 

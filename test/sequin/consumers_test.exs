@@ -182,7 +182,7 @@ defmodule Sequin.ConsumersTest do
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
-          record_pks: %{"id" => 1},
+          record_pks: [1],
           table_oid: 12_345
         )
 
@@ -200,7 +200,7 @@ defmodule Sequin.ConsumersTest do
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           not_visible_until: nil,
-          record_pks: %{"id" => 2},
+          record_pks: [2],
           table_oid: 67_890
         )
 

@@ -212,10 +212,12 @@ defmodule Sequin.Consumers do
 
     entries =
       Enum.map(consumer_events, fn event ->
-        Map.merge(event, %{
+        event
+        |> Map.merge(%{
           updated_at: now,
           inserted_at: now
         })
+        |> Map.update!(:record_pks, &ConsumerEvent.stringify_record_pks/1)
       end)
 
     {count, _} = Repo.insert_all(ConsumerEvent, entries)

@@ -178,7 +178,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :consumer_id, :uuid, null: false, primary_key: true
       add :id, :serial, null: false, primary_key: true
       add :commit_lsn, :bigint, null: false
-      add :record_pks, :jsonb, null: false
+      add :record_pks, {:array, :string}, null: false
       add :table_oid, :integer, null: false
 
       add :data, :jsonb, null: false

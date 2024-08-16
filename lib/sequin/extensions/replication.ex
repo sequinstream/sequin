@@ -100,7 +100,7 @@ defmodule Sequin.Extensions.Replication do
     Logger.info("[Replication] Initialized")
 
     if state.test_pid do
-      Mox.allow(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.Mocks.Extensions.MessageHandlerMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 

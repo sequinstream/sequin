@@ -5,8 +5,8 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.Replication, as: ReplicationExt
+  alias Sequin.Replication.MessageHandler
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Replication.ReplicationMessageHandler
   alias Sequin.ReplicationRuntime.PostgresReplicationSupervisor
   alias Sequin.Repo
 
@@ -30,8 +30,8 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
         id: pg_replication.id,
         slot_name: pg_replication.slot_name,
         publication: pg_replication.publication_name,
-        message_handler_ctx: ReplicationMessageHandler.context(pg_replication),
-        message_handler_module: ReplicationMessageHandler,
+        message_handler_ctx: MessageHandler.context(pg_replication),
+        message_handler_module: MessageHandler,
         connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
         key_format: pg_replication.key_format
       ]

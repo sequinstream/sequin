@@ -27,6 +27,17 @@ config :sequin, Sequin.Repo,
   queue_interval: 1000,
   ssl: false
 
+config :sequin, Sequin.Test.UnboxedRepo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "sequin_test#{System.get_env("MIX_TEST_PARTITION")}",
+  pool_size: 20,
+  port: 5432,
+  queue_target: 100,
+  queue_interval: 1000,
+  ssl: false
+
 config :sequin, Sequin.Vault,
   ciphers: [
     default: {

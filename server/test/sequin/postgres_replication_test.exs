@@ -25,6 +25,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.ReplicationRuntime
   alias Sequin.Streams
   alias Sequin.Test.Support.ReplicationSlots
+  alias Sequin.Test.UnboxedRepo
 
   @test_schema "__postgres_replication_test_schema__"
   @test_table "__postgres_replication_test_table__"
@@ -36,8 +37,6 @@ defmodule Sequin.PostgresReplicationTest do
 
   setup do
     # This setup needs to happen outside of the sandbox
-    {:ok, conn} = Postgrex.start_link(config())
-
     create_table_ddls = [
       """
       create table if not exists #{@test_schema}.#{@test_table} (
@@ -80,7 +79,7 @@ defmodule Sequin.PostgresReplicationTest do
       create_table_ddls
     )
 
-    %{conn: conn}
+    :ok
   end
 
   describe "PostgresReplication end-to-end" do
@@ -112,9 +111,8 @@ defmodule Sequin.PostgresReplicationTest do
       %{stream: stream, pg_replication: pg_replication, source_db: source_db, sup: sup}
     end
 
-    test "inserts are replicated to the stream", %{conn: conn, stream: stream} do
-      query!(
-        conn,
+    test "inserts are replicated to the stream", %{stream: stream} do
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -130,15 +128,14 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_data["action"] == "insert"
     end
 
-    test "updates are replicated to the stream", %{conn: conn, stream: stream} do
-      query!(
-        conn,
+    test "updates are replicated to the stream", %{stream: stream} do
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Leto Atreides', 'Atreides', 'Caladan')"
       )
 
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
+      UnboxedRepo.query("UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
@@ -152,15 +149,14 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_data["action"] == "update"
     end
 
-    test "deletes are replicated to the stream", %{conn: conn, stream: stream} do
-      query!(
-        conn,
+    test "deletes are replicated to the stream", %{stream: stream} do
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Duncan Idaho', 'Atreides', 'Caladan')"
       )
 
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
+      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [message] = Streams.list_messages_for_stream(stream.id)
@@ -173,12 +169,11 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_data["action"] == "delete"
     end
 
-    test "replication with default replica identity", %{conn: conn, stream: stream} do
+    test "replication with default replica identity", %{stream: stream} do
       # Set replica identity to default
-      # query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
+      # UnboxedRepo.query("ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
 
-      query!(
-        conn,
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Chani', 'Fremen', 'Arrakis')"
       )
 
@@ -192,7 +187,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_insert_data["changes"] == %{}
       assert decoded_insert_data["action"] == "insert"
 
-      query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET house = 'Atreides' WHERE id = 1")
+      UnboxedRepo.query("UPDATE #{@test_schema}.#{@test_table} SET house = 'Atreides' WHERE id = 1")
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [update_message] = Streams.list_messages_for_stream(stream.id)
@@ -206,7 +201,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_update_data["changes"] == %{}
       assert decoded_update_data["action"] == "update"
 
-      query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
+      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [delete_message] = Streams.list_messages_for_stream(stream.id)
@@ -221,13 +216,12 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_delete_data["action"] == "delete"
     end
 
-    test "replication with two primary key columns", %{conn: conn, stream: stream} do
+    test "replication with two primary key columns", %{stream: stream} do
       # Set replica identity to default - make sure even the delete comes through with both PKs
-      # query!(conn, "ALTER TABLE #{@test_schema}.#{@test_table_2pk} REPLICA IDENTITY DEFAULT")
+      # UnboxedRepo.query("ALTER TABLE #{@test_schema}.#{@test_table_2pk} REPLICA IDENTITY DEFAULT")
 
       # Insert
-      query!(
-        conn,
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table_2pk} (id1, id2, name, house, planet) VALUES (1, 2, 'Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -241,7 +235,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_insert_data["action"] == "insert"
 
       # Delete
-      query!(conn, "DELETE FROM #{@test_schema}.#{@test_table_2pk} WHERE id1 = 1 AND id2 = 2")
+      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table_2pk} WHERE id1 = 1 AND id2 = 2")
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
       [delete_message] = Streams.list_messages_for_stream(stream.id)
@@ -252,10 +246,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert decoded_delete_data["action"] == "delete"
     end
 
-    test "add_info returns correct information", %{conn: conn, pg_replication: pg_replication} do
+    test "add_info returns correct information", %{pg_replication: pg_replication} do
       # Insert some data to ensure there's a last committed timestamp
-      query!(
-        conn,
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -273,7 +266,6 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "replication with 'with_operation' key format", %{
-      conn: conn,
       stream: stream,
       pg_replication: pg_replication,
       sup: sup
@@ -285,8 +277,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       {:ok, _pid} = ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
-      query!(
-        conn,
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -297,19 +288,16 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "updates with FULL replica identity include changed fields", %{
-      conn: conn,
       stream: stream,
       source_db: source_db
     } do
-      query!(
-        conn,
+      UnboxedRepo.query(
         "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active, tags) VALUES ('Chani', 'Fremen', 'Arrakis', true, ARRAY['warrior', 'seer', 'royal,compound'])"
       )
 
       assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      query!(
-        conn,
+      UnboxedRepo.query(
         "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false, tags = ARRAY['warrior', 'seer', 'royal,interest'] WHERE id = 1"
       )
 
@@ -390,9 +378,8 @@ defmodule Sequin.PostgresReplicationTest do
   @server_via ReplicationExt.via_tuple(@server_id)
 
   describe "replication in isolation" do
-    test "changes are buffered, even if the listener is not up", %{conn: conn} do
-      query!(
-        conn,
+    test "changes are buffered, even if the listener is not up" do
+      UnboxedRepo.query!(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -419,7 +406,7 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     @tag capture_log: true
-    test "changes are delivered at least once", %{conn: conn} do
+    test "changes are delivered at least once" do
       test_pid = self()
 
       # simulate a message mis-handle/crash
@@ -430,8 +417,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
-      query!(
-        conn,
+      UnboxedRepo.query!(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
       )
 
@@ -457,7 +443,7 @@ defmodule Sequin.PostgresReplicationTest do
              })
     end
 
-    test "creates, updates, and deletes are captured", %{conn: conn} do
+    test "creates, updates, and deletes are captured" do
       test_pid = self()
 
       stub(ReplicationMessageHandlerMock, :handle_message, fn _ctx, msg ->
@@ -467,8 +453,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       # Test create
-      query!(
-        conn,
+      UnboxedRepo.query!(
         "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Caladan')"
       )
 
@@ -485,7 +470,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert create_change.type == "insert"
 
       # Test update
-      query!(conn, "UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
+      UnboxedRepo.query!("UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
 
       assert_receive {:change, update_change}, :timer.seconds(1)
       assert is_struct(update_change, UpdatedRecord)
@@ -502,7 +487,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert update_change.type == "update"
 
       # Test delete
-      query!(conn, "DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
+      UnboxedRepo.query!("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
 
       assert_receive {:change, delete_change}, :timer.seconds(1)
       assert is_struct(delete_change, DeletedRecord)
@@ -538,10 +523,6 @@ defmodule Sequin.PostgresReplicationTest do
 
   defp stop_replication! do
     stop_supervised!(@server_via)
-  end
-
-  defp query!(conn, query, params \\ [], opts \\ []) do
-    Postgrex.query!(conn, query, params, opts)
   end
 
   defp config do

@@ -7,6 +7,8 @@ defmodule Sequin.Extensions.PostgresAdapter.Changes do
   """
   require Protocol
 
+  @type record :: InsertedRecord.t() | UpdatedRecord.t() | DeletedRecord.t()
+
   defmodule Transaction do
     @moduledoc false
     use TypedStruct

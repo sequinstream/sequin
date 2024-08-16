@@ -13,6 +13,7 @@ defmodule Sequin.Extensions.Replication do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Extensions.PostgresAdapter.Changes
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
@@ -46,6 +47,7 @@ defmodule Sequin.Extensions.Replication do
       field :test_pid, pid()
       field :connection, map()
       field :schemas, %{}, default: %{}
+      field :accumulated_messages, [Changes.record()], default: []
     end
   end
 
@@ -200,7 +202,7 @@ defmodule Sequin.Extensions.Replication do
     %{state | schemas: updated_schemas}
   end
 
-  defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{} = state) do
+  defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{accumulated_messages: []} = state) do
     %{state | current_commit_ts: ts, current_xaction_lsn: lsn, current_xid: xid}
   end
 
@@ -211,9 +213,39 @@ defmodule Sequin.Extensions.Replication do
        )
        when current_lsn == lsn do
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
-    %{state | last_committed_lsn: lsn, current_xaction_lsn: nil, current_xid: nil, current_commit_ts: nil}
+
+    # Flush accumulated messages
+    state.message_handler_module.handle_messages(state.message_handler_ctx, Enum.reverse(state.accumulated_messages))
+
+    if state.test_pid do
+      send(state.test_pid, {Replication, :messages_handled})
+    end
+
+    %{
+      state
+      | last_committed_lsn: lsn,
+        current_xaction_lsn: nil,
+        current_xid: nil,
+        current_commit_ts: nil,
+        accumulated_messages: []
+    }
   end
 
+  # Example change event
+  # %Extensions.PostgresAdapter.Changes.InsertedRecord{
+  #   columns: [
+  #     %{name: "id", type: "int4"},
+  #     %{name: "first_name", type: "text"},
+  #     %{name: "last_name", type: "text"}
+  #   ],
+  #   commit_timestamp: ~U[2024-03-01 16:11:32.272722Z],
+  #   errors: nil,
+  #   schema: "__test_cdc__",
+  #   table: "test_table",
+  #   record: %{"first_name" => "Paul", "id" => "1", "last_name" => "Atreides"},
+  #   subscription_ids: nil,
+  #   type: "UPDATE"
+  # }
   defp process_message(%Insert{} = msg, state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
@@ -228,9 +260,7 @@ defmodule Sequin.Extensions.Replication do
       type: "insert"
     }
 
-    handle_message(state, record)
-
-    state
+    %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
 
   # If replication mode is default (not full), we will not get old_tuple_data:
@@ -260,9 +290,7 @@ defmodule Sequin.Extensions.Replication do
       type: "update"
     }
 
-    handle_message(state, record)
-
-    state
+    %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
 
   # When the publication mode is default and we don't get old_tpule_data, we'll get this (first
@@ -295,37 +323,12 @@ defmodule Sequin.Extensions.Replication do
       type: "delete"
     }
 
-    handle_message(state, record)
-
-    state
+    %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
 
   defp process_message(msg, state) do
     Logger.error("Unknown message: #{inspect(msg)}")
     state
-  end
-
-  # Example change event
-  # %Extensions.PostgresAdapter.Changes.InsertedRecord{
-  #   columns: [
-  #     %{name: "id", type: "int4"},
-  #     %{name: "first_name", type: "text"},
-  #     %{name: "last_name", type: "text"}
-  #   ],
-  #   commit_timestamp: ~U[2024-03-01 16:11:32.272722Z],
-  #   errors: nil,
-  #   schema: "__test_cdc__",
-  #   table: "test_table",
-  #   record: %{"first_name" => "Paul", "id" => "1", "last_name" => "Atreides"},
-  #   subscription_ids: nil,
-  #   type: "UPDATE"
-  # }
-  defp handle_message(%State{} = state, change) do
-    state.message_handler_module.handle_message(state.message_handler_ctx, change)
-
-    if state.test_pid do
-      send(state.test_pid, {Replication, :message_handled})
-    end
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

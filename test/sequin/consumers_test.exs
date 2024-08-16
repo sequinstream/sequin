@@ -175,6 +175,47 @@ defmodule Sequin.ConsumersTest do
       assert_lists_equal(events, available ++ redeliver, &assert_maps_equal(&1, &2, [:consumer_id, :id]))
     end
 
+    test "does not deliver events if there is an outstanding event with same record_pks and table_oid", %{
+      consumer: consumer
+    } do
+      # Create an outstanding event
+      outstanding_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+          record_pks: %{"id" => 1},
+          table_oid: 12_345
+        )
+
+      # Create an event with the same record_pks and table_oid
+      same_combo_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          record_pks: outstanding_event.record_pks,
+          table_oid: outstanding_event.table_oid
+        )
+
+      # Create a different event
+      different_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          record_pks: %{"id" => 2},
+          table_oid: 67_890
+        )
+
+      # Attempt to receive events
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+
+      # Check that only the different event was delivered
+      assert length(delivered_events) == 1
+      assert hd(delivered_events).id == different_event.id
+
+      # Verify that the same_combo_event was not delivered
+      refute Repo.get_by(ConsumerEvent, id: same_combo_event.id).not_visible_until
+    end
+
     test "delivers events according to id asc", %{consumer: consumer} do
       event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
       event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)

@@ -11,7 +11,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
-  alias Sequin.StreamsRuntime
 
   require Logger
 
@@ -74,10 +73,6 @@ defmodule Sequin.Consumers do
     )
   end
 
-  def delete_cached_list_consumers_for_stream(stream_id) do
-    Cache.delete(list_consumers_for_stream_cache_key(stream_id))
-  end
-
   defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
 
   def get_consumer_for_account(account_id, id_or_name) do
@@ -99,33 +94,22 @@ defmodule Sequin.Consumers do
   end
 
   def create_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
-    res =
-      Repo.transact(fn ->
-        with {:ok, consumer} <- create_consumer(account_id, attrs),
-             :ok <- create_consumer_partition(consumer) do
-          unless opts[:no_backfill] do
-            backfill_consumer!(consumer)
-          end
-
-          if consumer.kind == :push and env() != :test do
-            StreamsRuntime.Supervisor.start_for_push_consumer(consumer)
-          end
-
-          consumer = Repo.reload!(consumer)
-
-          {:ok, consumer}
+    Repo.transact(fn ->
+      with {:ok, consumer} <- create_consumer(account_id, attrs),
+           :ok <- create_consumer_partition(consumer) do
+        unless opts[:no_backfill] do
+          backfill_consumer!(consumer)
         end
-      end)
 
-    case res do
-      {:ok, consumer} ->
-        delete_cached_list_consumers_for_stream(consumer.stream_id)
+        # if consumer.kind == :push and env() != :test do
+        #   StreamsRuntime.Supervisor.start_for_push_consumer(consumer)
+        # end
+
+        consumer = Repo.reload!(consumer)
 
         {:ok, consumer}
-
-      error ->
-        error
-    end
+      end
+    end)
   end
 
   def create_consumer_with_lifecycle(attrs, opts \\ []) do
@@ -135,40 +119,22 @@ defmodule Sequin.Consumers do
   end
 
   def delete_consumer_with_lifecycle(consumer) do
-    res =
-      Repo.transact(fn ->
-        case delete_consumer(consumer) do
-          {:ok, _} ->
-            :ok = delete_consumer_partition(consumer)
-            {:ok, consumer}
+    Repo.transact(fn ->
+      case delete_consumer(consumer) do
+        {:ok, _} ->
+          :ok = delete_consumer_partition(consumer)
+          {:ok, consumer}
 
-          {:error, error} ->
-            {:error, error}
-        end
-      end)
-
-    case res do
-      {:ok, consumer} ->
-        delete_cached_list_consumers_for_stream(consumer.stream_id)
-        {:ok, consumer}
-
-      error ->
-        error
-    end
+        {:error, error} ->
+          {:error, error}
+      end
+    end)
   end
 
   def update_consumer_with_lifecycle(%HttpPushConsumer{} = consumer, attrs) do
     consumer
     |> HttpPushConsumer.update_changeset(attrs)
     |> Repo.update()
-    |> case do
-      {:ok, consumer} ->
-        delete_cached_list_consumers_for_stream(consumer.stream_id)
-        {:ok, consumer}
-
-      error ->
-        error
-    end
   end
 
   def create_consumer(account_id, attrs) do
@@ -182,10 +148,8 @@ defmodule Sequin.Consumers do
   end
 
   defp create_consumer_partition(%HttpPushConsumer{message_kind: :event} = consumer) do
-    consumer = Repo.preload(consumer, :stream)
-
     """
-    CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.stream.name}_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -195,10 +159,8 @@ defmodule Sequin.Consumers do
   end
 
   defp create_consumer_partition(%HttpPushConsumer{message_kind: :record} = consumer) do
-    consumer = Repo.preload(consumer, :stream)
-
     """
-    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -261,8 +223,8 @@ defmodule Sequin.Consumers do
     {:ok, events}
   end
 
-  @spec ack_event_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
-  def ack_event_messages(%HttpPushConsumer{} = consumer, commit_lsns) do
+  @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  def ack_messages(%{message_kind: :event} = consumer, commit_lsns) do
     Repo.transact(fn ->
       {_, _} =
         consumer.id
@@ -276,8 +238,8 @@ defmodule Sequin.Consumers do
     :ok
   end
 
-  @spec nack_event_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
-  def nack_event_messages(%HttpPushConsumer{} = consumer, commit_lsns) do
+  @spec nack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  def nack_messages(%{message_kind: :event} = consumer, commit_lsns) do
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
@@ -330,16 +292,13 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def insert_consumer_events([]), do: {:ok, []}
-
-  def insert_consumer_events(consumer_events) do
+  def insert_consumer_events(consumer_id, consumer_events) do
     entries =
       Enum.map(consumer_events, fn event ->
-        %{
-          event
-          | inserted_at: NaiveDateTime.utc_now(),
-            updated_at: NaiveDateTime.utc_now()
-        }
+        Map.merge(event, %{
+          consumer_id: consumer_id,
+          inserted_at: DateTime.utc_now()
+        })
       end)
 
     {count, _} = Repo.insert_all(ConsumerEvent, entries)
@@ -390,6 +349,4 @@ defmodule Sequin.Consumers do
 
     {:ok, messages}
   end
-
-  defp env, do: Application.get_env(:sequin, :env)
 end

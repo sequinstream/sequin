@@ -134,29 +134,24 @@ defmodule Sequin.Factory.StreamsFactory do
   def consumer(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {kind, attrs} = Map.pop_lazy(attrs, :kind, fn -> Factory.one_of([:pull, :push]) end)
-
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
     {http_endpoint_id, attrs} =
       Map.pop_lazy(attrs, :http_endpoint_id, fn ->
-        case kind do
-          :push -> insert_http_endpoint!(account_id: account_id).id
-          :pull -> nil
-        end
+        insert_http_endpoint!(account_id: account_id).id
       end)
 
     merge_attributes(
       %HttpPushConsumer{
         name: Factory.unique_word(),
+        message_kind: Factory.one_of([:event, :record]),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         account_id: account_id,
-        kind: kind,
         http_endpoint_id: http_endpoint_id,
         status: :active
       },

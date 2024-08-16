@@ -1,6 +1,7 @@
 defmodule SequinWeb.MessageController do
   use SequinWeb, :controller
 
+  alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Streams
   alias SequinWeb.ApiFallbackPlug
@@ -53,7 +54,7 @@ defmodule SequinWeb.MessageController do
     account_id = conn.assigns.account_id
 
     with {:ok, stream} <- Streams.get_stream_for_account(account_id, stream_id_or_name),
-         {:ok, consumer} <- Streams.get_consumer_for_stream(stream.id, consumer_id_or_name),
+         {:ok, consumer} <- Consumers.get_consumer_for_stream(stream.id, consumer_id_or_name),
          {:ok, list_params} <- parse_consumer_list_params(params) do
       consumer_messages = Streams.list_consumer_messages_for_consumer(stream.id, consumer.id, list_params)
       render(conn, "consumer_list.json", consumer_messages: consumer_messages)

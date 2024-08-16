@@ -4,6 +4,7 @@ defmodule Sequin.Bench.EndToEnd do
 
   alias Sequin.Accounts
   alias Sequin.Bench.Utils
+  alias Sequin.Consumers
   alias Sequin.Repo
   alias Sequin.Streams
 
@@ -24,13 +25,13 @@ defmodule Sequin.Bench.EndToEnd do
       end)
 
     stream.id
-    |> Streams.list_consumers_for_stream()
-    |> Enum.each(&Streams.delete_consumer_with_lifecycle/1)
+    |> Consumers.list_consumers_for_stream()
+    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
 
     consumers =
       Enum.map(1..10, fn _ ->
         {:ok, consumer} =
-          Streams.create_consumer_for_account_with_lifecycle(account.id, %{
+          Consumers.create_consumer_for_account_with_lifecycle(account.id, %{
             stream_id: stream.id
           })
 
@@ -94,8 +95,8 @@ defmodule Sequin.Bench.EndToEnd do
       end)
 
     stream.id
-    |> Streams.list_consumers_for_stream()
-    |> Enum.each(&Streams.delete_consumer_with_lifecycle/1)
+    |> Consumers.list_consumers_for_stream()
+    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
 
     Repo.delete_all(from(m in Streams.Message, where: is_nil(m.seq)))
     Repo.delete_all(from(m in Streams.ConsumerMessage))
@@ -103,7 +104,7 @@ defmodule Sequin.Bench.EndToEnd do
     consumers =
       Enum.map(1..10, fn _ ->
         {:ok, consumer} =
-          Streams.create_consumer_for_account_with_lifecycle(account.id, %{
+          Consumers.create_consumer_for_account_with_lifecycle(account.id, %{
             stream_id: stream.id
           })
 
@@ -234,7 +235,7 @@ defmodule Sequin.Bench.EndToEnd do
   end
 
   def receive_and_ack(consumer, batch_size) do
-    {:ok, messages} = Streams.receive_for_consumer(consumer, batch_size: batch_size)
+    {:ok, messages} = Consumers.receive_for_consumer(consumer, batch_size: batch_size)
     Streams.ack_messages(consumer.id, Enum.map(messages, & &1.ack_id))
     messages
   end

@@ -2,6 +2,8 @@ defmodule Sequin.Factory.StreamsFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
+  alias Sequin.Consumers
+  alias Sequin.Consumers.Consumer
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
@@ -9,7 +11,6 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Streams
-  alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerMessage
   alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
@@ -185,7 +186,7 @@ defmodule Sequin.Factory.StreamsFactory do
       |> consumer_attrs()
 
     {:ok, consumer} =
-      Streams.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+      Consumers.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
 
     consumer
   end

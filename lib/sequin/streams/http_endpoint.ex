@@ -14,7 +14,7 @@ defmodule Sequin.Streams.HttpEndpoint do
 
     belongs_to :account, Sequin.Accounts.Account
 
-    has_many :consumers, Sequin.Streams.Consumer
+    has_many :consumers, Sequin.Consumers.Consumer
 
     timestamps()
   end

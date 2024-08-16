@@ -1,9 +1,9 @@
 defmodule SequinWeb.ConsumerControllerTest do
   use SequinWeb.ConnCase, async: true
 
+  alias Sequin.Consumers
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.StreamsFactory
-  alias Sequin.Streams
 
   setup :authenticated_conn
 
@@ -92,7 +92,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      consumer = Streams.get_consumer!(id)
+      consumer = Consumers.get_consumer!(id)
       assert consumer.account_id == stream.account_id
       assert consumer.stream_id == stream.id
       assert consumer.max_ack_pending == 5000
@@ -112,7 +112,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      consumer = Streams.get_consumer!(id)
+      consumer = Consumers.get_consumer!(id)
       assert consumer.account_id == stream.account_id
       assert consumer.stream_id == stream.id
       assert consumer.max_ack_pending == 5000
@@ -141,7 +141,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = post(conn, ~p"/api/streams/#{stream.id}/consumers", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      consumer = Streams.get_consumer!(id)
+      consumer = Consumers.get_consumer!(id)
       assert consumer.account_id == stream.account_id
       assert consumer.account_id != other_account.id
     end
@@ -172,7 +172,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      updated_consumer = Streams.get_consumer!(id)
+      updated_consumer = Consumers.get_consumer!(id)
       assert updated_consumer.max_ack_pending == 8000
     end
 
@@ -215,7 +215,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = put(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}", attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
-      updated_consumer = Streams.get_consumer!(id)
+      updated_consumer = Consumers.get_consumer!(id)
       assert updated_consumer.account_id == consumer.account_id
       assert updated_consumer.account_id != other_account.id
       assert updated_consumer.max_ack_pending == 8000
@@ -242,7 +242,7 @@ defmodule SequinWeb.ConsumerControllerTest do
       conn = delete(conn, ~p"/api/streams/#{stream.id}/consumers/#{consumer.id}")
       assert %{"id" => id, "deleted" => true} = json_response(conn, 200)
 
-      assert_raise Sequin.Error.NotFoundError, fn -> Streams.get_consumer!(id) end
+      assert_raise Sequin.Error.NotFoundError, fn -> Consumers.get_consumer!(id) end
     end
 
     test "returns 404 if consumer belongs to another account", %{

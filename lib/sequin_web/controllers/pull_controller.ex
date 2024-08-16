@@ -1,6 +1,7 @@
 defmodule SequinWeb.PullController do
   use SequinWeb, :controller
 
+  alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Streams
   alias Sequin.String, as: SequinString
@@ -13,10 +14,10 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     # TODO: Cache this
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.get_consumer_for_account(account_id, id_or_name),
          {:ok, batch_size} <- parse_batch_size(params),
          {:ok, _wait_for} <- parse_wait_for(params),
-         {:ok, messages} <- Streams.receive_for_consumer(consumer, batch_size: batch_size) do
+         {:ok, messages} <- Consumers.receive_for_consumer(consumer, batch_size: batch_size) do
       Logger.metadata(batch_size: batch_size)
       render(conn, "receive.json", messages: messages)
     end
@@ -26,7 +27,7 @@ defmodule SequinWeb.PullController do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.get_consumer_for_account(account_id, id_or_name),
          {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.ack_messages(consumer, message_ids) do
       json(conn, %{success: true})
@@ -37,7 +38,7 @@ defmodule SequinWeb.PullController do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Streams.get_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.get_consumer_for_account(account_id, id_or_name),
          {:ok, message_ids} <- parse_ack_ids(params),
          :ok <- Streams.nack_messages(consumer, message_ids) do
       json(conn, %{success: true})

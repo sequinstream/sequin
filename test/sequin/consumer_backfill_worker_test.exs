@@ -1,10 +1,11 @@
 defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Consumers
+  alias Sequin.Consumers.Consumer
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
-  alias Sequin.Streams.Consumer
   alias Sequin.Streams.ConsumerBackfillWorker
   alias Sequin.Streams.ConsumerMessage
 
@@ -83,7 +84,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
       # Create and perform the Oban job (with no messages in the stream)
       perform_job_for_consumer(consumer, 10)
 
-      assert consumer = Streams.get_consumer!(consumer.id)
+      assert consumer = Consumers.get_consumer!(consumer.id)
       assert consumer.backfill_completed_at
 
       assert_enqueued(
@@ -116,7 +117,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
 
     test "a backfill_completed consumer has acked_messages deleted", %{consumer: consumer} do
       one_day_ago = DateTime.add(DateTime.utc_now(), -24, :hour)
-      assert {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: one_day_ago})
+      assert {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: one_day_ago})
 
       # Insert a message with matching key
       StreamsFactory.insert_message!(stream_id: consumer.stream_id, key: "prefix.matches")
@@ -140,7 +141,7 @@ defmodule Sequin.Streams.ConsumerBackfillWorkerTest do
       consumer: consumer
     } do
       one_day_ago = DateTime.add(DateTime.utc_now(), -24, :hour)
-      assert {:ok, _} = Streams.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: one_day_ago})
+      assert {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{backfill_completed_at: one_day_ago})
 
       # Create and perform the Oban job
       perform_job_for_consumer(consumer)

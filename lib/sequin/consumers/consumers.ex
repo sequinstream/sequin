@@ -2,11 +2,16 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
+  alias Sequin.Cache
+  alias Sequin.Consumers.Consumer
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.Query
   alias Sequin.Error
   alias Sequin.Repo
-  alias Sequin.Streams.Consumer
+  alias Sequin.Streams
+  alias Sequin.Streams.ConsumerBackfillWorker
+  alias Sequin.Streams.ConsumerMessage
+  alias Sequin.StreamsRuntime
 
   require Logger
 
@@ -58,7 +63,192 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def receive_for_consumer(%Consumer{message_kind: :event} = consumer, opts \\ []) do
+  @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
+  @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
+
+  def stream_schema, do: @stream_schema
+  def config_schema, do: @config_schema
+
+  def all_consumers do
+    Repo.all(Consumer)
+  end
+
+  def count_consumers_for_stream(_stream_id) do
+    0
+    # stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
+  end
+
+  def get_consumer(consumer_id) do
+    case consumer_id |> Consumer.where_id() |> Repo.one() do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def get_consumer!(consumer_id) do
+    case get_consumer(consumer_id) do
+      {:ok, consumer} -> consumer
+      {:error, _} -> raise Error.not_found(entity: :consumer)
+    end
+  end
+
+  def list_consumers_for_account(account_id) do
+    account_id |> Consumer.where_account_id() |> Repo.all()
+  end
+
+  def list_consumers_for_stream(_stream_id) do
+    Repo.all(Consumer)
+  end
+
+  def list_active_push_consumers do
+    :push
+    |> Consumer.where_kind()
+    |> Consumer.where_status(:active)
+    |> Repo.all()
+  end
+
+  def cached_list_consumers_for_stream(stream_id) do
+    Cache.get_or_store(
+      list_consumers_for_stream_cache_key(stream_id),
+      fn -> list_consumers_for_stream(stream_id) end,
+      :timer.minutes(10)
+    )
+  end
+
+  def delete_cached_list_consumers_for_stream(stream_id) do
+    Cache.delete(list_consumers_for_stream_cache_key(stream_id))
+  end
+
+  defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
+
+  def get_consumer_for_account(account_id, id_or_name) do
+    res = account_id |> Consumer.where_account_id() |> Consumer.where_id_or_name(id_or_name) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def get_consumer_for_stream(_stream_id, id_or_name) do
+    res = id_or_name |> Consumer.where_id_or_name() |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def create_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
+    res =
+      Repo.transact(fn ->
+        with {:ok, consumer} <- create_consumer(account_id, attrs),
+             :ok <- create_consumer_partition(consumer) do
+          unless opts[:no_backfill] do
+            backfill_consumer!(consumer)
+          end
+
+          if consumer.kind == :push and env() != :test do
+            StreamsRuntime.Supervisor.start_for_push_consumer(consumer)
+          end
+
+          consumer = Repo.reload!(consumer)
+
+          {:ok, consumer}
+        end
+      end)
+
+    case res do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
+
+        {:ok, consumer}
+
+      error ->
+        error
+    end
+  end
+
+  def create_consumer_with_lifecycle(attrs, opts \\ []) do
+    account_id = Map.fetch!(attrs, :account_id)
+
+    create_consumer_for_account_with_lifecycle(account_id, attrs, opts)
+  end
+
+  def delete_consumer_with_lifecycle(consumer) do
+    res =
+      Repo.transact(fn ->
+        case delete_consumer(consumer) do
+          {:ok, _} ->
+            :ok = delete_consumer_partition(consumer)
+            {:ok, consumer}
+
+          {:error, error} ->
+            {:error, error}
+        end
+      end)
+
+    case res do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
+        {:ok, consumer}
+
+      error ->
+        error
+    end
+  end
+
+  def update_consumer_with_lifecycle(%Consumer{} = consumer, attrs) do
+    consumer
+    |> Consumer.update_changeset(attrs)
+    |> Repo.update()
+    |> case do
+      {:ok, consumer} ->
+        delete_cached_list_consumers_for_stream(consumer.stream_id)
+        {:ok, consumer}
+
+      error ->
+        error
+    end
+  end
+
+  def create_consumer(account_id, attrs) do
+    %Consumer{account_id: account_id}
+    |> Consumer.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def delete_consumer(%Consumer{} = consumer) do
+    Repo.delete(consumer)
+  end
+
+  defp create_consumer_partition(%Consumer{} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :create_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp delete_consumer_partition(%Consumer{} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name};
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :drop_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def receive_for_consumer(%Consumer{} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
@@ -127,4 +317,49 @@ defmodule Sequin.Consumers do
 
     :ok
   end
+
+  def backfill_limit, do: 10_000
+
+  # We make the first backfill pull synchronous and maybe mark the consumer as backfilled
+  # The Oban job always runs to catch up with race conditions then to clear acked messages
+  defp backfill_consumer!(consumer) do
+    {:ok, messages} = backfill_messages_for_consumer(consumer)
+
+    if length(messages) < backfill_limit() do
+      {:ok, _} = update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+    end
+
+    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> 0 end)
+    {:ok, _} = ConsumerBackfillWorker.create(consumer.id, next_seq)
+
+    :ok
+  end
+
+  def backfill_messages_for_consumer(consumer, seq \\ 0) do
+    messages =
+      Streams.list_messages_for_stream(consumer.stream_id,
+        seq_gt: seq,
+        limit: backfill_limit(),
+        order_by: [asc: :seq],
+        select: [:key, :seq]
+      )
+
+    {:ok, _} =
+      messages
+      |> Enum.filter(fn message ->
+        Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
+      end)
+      |> Enum.map(fn message ->
+        %ConsumerMessage{
+          consumer_id: consumer.id,
+          message_key: message.key,
+          message_seq: message.seq
+        }
+      end)
+      |> Streams.upsert_consumer_messages()
+
+    {:ok, messages}
+  end
+
+  defp env, do: Application.get_env(:sequin, :env)
 end

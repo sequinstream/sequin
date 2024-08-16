@@ -2,9 +2,9 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   @moduledoc false
   use Broadway
 
+  alias Sequin.Consumers.Consumer
   alias Sequin.Error
   alias Sequin.Repo
-  alias Sequin.Streams.Consumer
   alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
 

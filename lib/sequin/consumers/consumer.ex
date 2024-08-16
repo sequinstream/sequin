@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.Consumer do
+defmodule Sequin.Consumers.Consumer do
   @moduledoc false
   use Sequin.ConfigSchema
 

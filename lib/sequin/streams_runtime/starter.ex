@@ -4,7 +4,7 @@ defmodule Sequin.StreamsRuntime.Starter do
   """
   use GenServer
 
-  alias Sequin.Streams
+  alias Sequin.Consumers
   alias Sequin.StreamsRuntime.Supervisor
 
   require Logger
@@ -38,7 +38,7 @@ defmodule Sequin.StreamsRuntime.Starter do
   end
 
   defp start do
-    Enum.each(Streams.list_active_push_consumers(), &Supervisor.start_for_push_consumer(&1.id))
+    Enum.each(Consumers.list_active_push_consumers(), &Supervisor.start_for_push_consumer(&1.id))
   end
 
   defp logger_info(msg) do

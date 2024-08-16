@@ -181,7 +181,20 @@ defmodule Sequin.Consumers do
     Repo.delete(consumer)
   end
 
-  defp create_consumer_partition(%Consumer{} = consumer) do
+  defp create_consumer_partition(%Consumer{message_kind: :event} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.stream.name}_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :create_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp create_consumer_partition(%Consumer{message_kind: :event} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
@@ -190,6 +203,19 @@ defmodule Sequin.Consumers do
     |> Repo.query()
     |> case do
       {:ok, %Postgrex.Result{command: :create_table}} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp delete_consumer_partition(%Consumer{message_kind: :event} = consumer) do
+    consumer = Repo.preload(consumer, :stream)
+
+    """
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_events_#{consumer.stream.name}_#{consumer.name};
+    """
+    |> Repo.query()
+    |> case do
+      {:ok, %Postgrex.Result{command: :drop_table}} -> :ok
       {:error, error} -> {:error, error}
     end
   end
@@ -207,7 +233,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def receive_for_consumer(%Consumer{} = consumer, opts \\ []) do
+  def receive_for_consumer(%Consumer{message_kind: :event} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()

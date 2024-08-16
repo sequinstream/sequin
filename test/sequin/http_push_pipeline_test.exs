@@ -2,6 +2,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.StreamsRuntime.HttpPushPipeline
 
@@ -13,7 +14,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
 
     consumer =
       [account_id: account.id, http_endpoint_id: http_endpoint.id, kind: :push]
-      |> StreamsFactory.insert_consumer!()
+      |> ConsumersFactory.insert_consumer!()
       |> Repo.preload(:http_endpoint)
 
     {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}

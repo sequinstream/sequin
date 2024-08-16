@@ -2,6 +2,7 @@ defmodule Sequin.StreamsIntegrationTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.StreamsRuntime.AssignMessageSeq
@@ -22,7 +23,7 @@ defmodule Sequin.StreamsIntegrationTest do
           account_id: stream.account_id,
           max_ack_pending: 10
         }
-        |> StreamsFactory.consumer_attrs()
+        |> ConsumersFactory.consumer_attrs()
         |> Consumers.create_consumer_with_lifecycle()
 
       # Upsert a batch of messages for both streams

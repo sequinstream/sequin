@@ -3,6 +3,7 @@ defmodule Sequin.StreamsTest do
 
   alias Sequin.Consumers
   alias Sequin.Factory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
@@ -92,7 +93,7 @@ defmodule Sequin.StreamsTest do
 
     test "creates a consumer and backfills few messages synchronously", %{stream: stream, account: account} do
       attrs =
-        StreamsFactory.consumer_attrs(%{
+        ConsumersFactory.consumer_attrs(%{
           stream_id: stream.id,
           kind: :pull,
           filter_key_pattern: "test.key.>",
@@ -128,7 +129,7 @@ defmodule Sequin.StreamsTest do
 
     test "also upserts to a matching consumer", %{stream: stream, account_id: account_id} do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -153,7 +154,7 @@ defmodule Sequin.StreamsTest do
 
     test "fans out to multiple consumers", %{stream: stream, account_id: account_id} do
       consumer1 =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -161,7 +162,7 @@ defmodule Sequin.StreamsTest do
         })
 
       consumer2 =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -183,7 +184,7 @@ defmodule Sequin.StreamsTest do
       other_stream = StreamsFactory.insert_stream!(account_id: account_id)
 
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: other_stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -202,7 +203,7 @@ defmodule Sequin.StreamsTest do
       account_id: account_id
     } do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "other.key",
           account_id: account_id,
@@ -218,7 +219,7 @@ defmodule Sequin.StreamsTest do
 
     test "upserts over consumer_messages for a :delivered message", %{stream: stream, account_id: account_id} do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -246,7 +247,7 @@ defmodule Sequin.StreamsTest do
 
     test "upserts over consumer_messages for a :available message", %{stream: stream, account_id: account_id} do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -274,7 +275,7 @@ defmodule Sequin.StreamsTest do
 
     test "upserts over consumer_messages for a :acked message", %{stream: stream, account_id: account_id} do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -300,7 +301,7 @@ defmodule Sequin.StreamsTest do
 
     test "does not upsert for a consumer that has not finished backfilling", %{stream: stream, account_id: account_id} do
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           filter_key_pattern: "test.key",
           account_id: account_id,
@@ -379,7 +380,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
 
       consumer =
-        StreamsFactory.insert_consumer!(%{
+        ConsumersFactory.insert_consumer!(%{
           stream_id: stream.id,
           account_id: stream.account_id,
           backfill_completed_at: DateTime.utc_now()
@@ -450,7 +451,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
 
       consumer =
-        StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 1_000})
+        ConsumersFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 1_000})
 
       {:ok, stream: stream, consumer: consumer}
     end
@@ -536,7 +537,7 @@ defmodule Sequin.StreamsTest do
     end
 
     test "does not deliver outstanding messages for another consumer", %{stream: stream, consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
+      other_consumer = ConsumersFactory.insert_consumer!(%{stream_id: stream.id, account_id: stream.account_id})
       message = StreamsFactory.insert_message!(%{stream_id: stream.id})
 
       StreamsFactory.insert_consumer_message!(%{
@@ -689,7 +690,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
 
       consumer =
-        StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 100)
+        ConsumersFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id, max_ack_pending: 100)
 
       # Insert 10 messages
       messages =
@@ -747,7 +748,7 @@ defmodule Sequin.StreamsTest do
       stream = StreamsFactory.insert_stream!()
 
       consumer =
-        StreamsFactory.insert_consumer!(
+        ConsumersFactory.insert_consumer!(
           stream_id: stream.id,
           account_id: stream.account_id,
           backfill_completed_at: @one_day_ago
@@ -784,7 +785,7 @@ defmodule Sequin.StreamsTest do
     end
 
     test "ignores messages with different consumer_id", %{stream: stream, consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+      other_consumer = ConsumersFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
 
       om1 =
         StreamsFactory.insert_consumer_message_with_message!(%{
@@ -827,7 +828,7 @@ defmodule Sequin.StreamsTest do
   describe "nack_messages/2" do
     setup do
       stream = StreamsFactory.insert_stream!()
-      consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+      consumer = ConsumersFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
       %{stream: stream, consumer: consumer}
     end
 
@@ -862,7 +863,7 @@ defmodule Sequin.StreamsTest do
     end
 
     test "does not nack messages belonging to another consumer", %{stream: stream, consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
+      other_consumer = ConsumersFactory.insert_consumer!(stream_id: stream.id, account_id: stream.account_id)
 
       om1 =
         StreamsFactory.insert_consumer_message_with_message!(%{

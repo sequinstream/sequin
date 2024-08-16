@@ -100,6 +100,24 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       timestamps()
     end
 
+    create table(:http_pull_consumers, prefix: @config_schema) do
+      # Using a composite foreign key for stream_id
+      add :account_id, :uuid, null: false
+
+      add :name, :text, null: false
+      add :backfill_completed_at, :utc_datetime_usec
+
+      add :ack_wait_ms, :integer, null: false, default: 30_000
+      add :max_ack_pending, :integer, null: false, default: 10_000
+      add :max_deliver, :integer, null: true
+      add :max_waiting, :integer, null: false, default: 100
+      # TODO: Will remove in favor of separate models
+      add :message_kind, :text, null: false, default: "record"
+      add :status, :"#{@config_schema}.consumer_status", null: false, default: "active"
+
+      timestamps()
+    end
+
     execute "create type #{@stream_schema}.consumer_record_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
             "drop type if exists #{@stream_schema}.consumer_record_state"
 

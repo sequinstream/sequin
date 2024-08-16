@@ -1,22 +1,44 @@
+# The directory Mix will write compiled artifacts to.
+/_build/
+
+# If you run "mix test --cover", coverage assets end up here.
+/cover/
+
+# The directory Mix downloads your dependencies sources to.
+/deps/
+
+# Where 3rd-party dependencies like ExDoc output generated docs.
+/doc/
+
+# Ignore .fetch files in case you like to edit your project deps locally.
+/.fetch
+
 # If the VM crashes, it generates a dump, let's ignore it too.
 erl_crash.dump
 
-.elixir_ls/
+# Also ignore archive artifacts (built via "mix archive.build").
+*.ez
+**/*.secret.exs
 
+.elixir_ls/
+config/*.local.exs
+config/*.secret.exs
+
+.settings.json
+config/docker.env
 dump.rdb
 
+# Ignore assets that are produced by build tools.
+**/priv/static/assets/
+
+# Ignore digested assets cache.
+**/priv/static/cache_manifest.json
+
+docker-compose.override.yaml
 .vscode/settings.json
 
 # IntelliJ things
 *.iml
 
-/.devlocal/
-
 # Mac UI directory attributes
 .DS_Store
-
-.settings.json
-
-sequin.log
-
-.env

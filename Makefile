@@ -1,16 +1,10 @@
-.PHONY: build release dev deviex cli build-cli signoff signoff-dirty signoff_stack merge help init spellcheck addword
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword
 
-dev:
-	@$(MAKE) -C server dev
+dev: ## Run the app locally
+	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
 
-deviex:
-	@$(MAKE) -C server deviex
-
-build-cli:
-	@$(MAKE) -C cli build
-
-cli:
-	@cd cli && go run main.go $(filter-out $@,$(MAKECMDGOALS))
+deviex: ## Open an IEx session on the running local app
+	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
 
 signoff:
 	@./scripts/signoff.sh
@@ -49,16 +43,12 @@ addword:
 
 help:
 	@echo "Available commands:"
-	@echo "  make build     - Build and install the sequin binary (delegated to cli)"
-	@echo "  make release   - Run the release process (delegated to cli)"
-	@echo "  make dev       - Run the app locally (delegated to server)"
-	@echo "  make deviex    - Open an IEx session on the running local app (delegated to server)"
-	@echo "  make build-cli - Build the CLI (delegated to cli)"
+	@echo "  make dev       - Run the app locally"
+	@echo "  make deviex    - Open an IEx session on the running local app"
 	@echo "  make signoff   - Run the signoff script"
 	@echo "  make signoff-dirty - Run the signoff script with --dirty flag"
 	@echo "  make signoff_stack - Run the signoff_stack script"
 	@echo "  make merge     - Run the merge script"
-	@echo "  make cli       - Run 'go run main.go' in the cli/ directory"
 	@echo "  make init      - Create .settings.json from .settings.json.example"
 	@echo "  make help      - Show this help message"
 	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"

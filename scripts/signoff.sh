@@ -70,22 +70,11 @@ fi
 
 echo -e "${BLUE}Attempting to sign off on ${SHA} in ${OWNER}/${REPO} as ${USER}${RESET}"
 
-cd server
 
 # Run steps
 run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
 run_step "mix test"
-
-cd ../cli
-
-run_step "go test ./cli"
-run_step "go fmt ./..."
-run_step "go vet ./..."
-run_step "go build -o /dev/null ./..."
-
-# Return to the project root
-cd ..
 
 # Run cspell check
 run_step "make spellcheck"

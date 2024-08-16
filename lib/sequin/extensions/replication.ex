@@ -40,7 +40,7 @@ defmodule Sequin.Extensions.Replication do
       field :message_handler_ctx, any()
       field :message_handler_module, atom()
       field :id, String.t()
-      field :last_committed_lsn, tuple(), default: 0
+      field :last_committed_lsn, integer(), default: 0
       field :publication, String.t()
       field :slot_name, String.t()
       field :step, :disconnected | :streaming
@@ -131,25 +131,23 @@ defmodule Sequin.Extensions.Replication do
       |> Decoder.decode_message()
       |> process_message(state)
 
-    {:noreply, next_state}
+    if next_state.last_committed_lsn == state.last_committed_lsn do
+      {:noreply, next_state}
+    else
+      {:noreply, ack_message(next_state.last_committed_lsn), next_state}
+    end
   end
 
   # keepalive
   # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
   # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
-  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, state) do
+  def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
     messages =
       case reply do
         1 ->
-          last_lsn =
-            if state.last_committed_lsn do
-              lsn_to_int(state.last_committed_lsn)
-            else
-              # Use the current WAL end if last_committed_lsn is nil
-              wal_end
-            end
-
-          [<<?r, last_lsn::64, last_lsn::64, last_lsn::64, current_time()::64, 0>>]
+          # wal_end is already an int
+          last_lsn = state.last_committed_lsn || wal_end
+          ack_message(last_lsn)
 
         0 ->
           []
@@ -158,16 +156,19 @@ defmodule Sequin.Extensions.Replication do
     {:noreply, messages, state}
   end
 
-  def handle_data(data, state) do
+  def handle_data(data, %State{} = state) do
     Logger.error("Unknown data: #{inspect(data)}")
     {:noreply, state}
+  end
+
+  defp ack_message(lsn) when is_integer(lsn) do
+    lsn = lsn + 1
+    [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
 
   # In Postgres, an LSN is typically represented as a 64-bit integer, but it's sometimes split
   # into two 32-bit parts for easier reading or processing. We'll receive tuples like `{401, 1032909664}`
   # and we'll need to combine them to get the 64-bit LSN.
-  defp lsn_to_int(0), do: 0
-
   defp lsn_to_int({high, low}) do
     high <<< 32 ||| low
   end
@@ -203,23 +204,24 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{accumulated_messages: []} = state) do
-    %{state | current_commit_ts: ts, current_xaction_lsn: lsn, current_xid: xid}
+    %{state | current_commit_ts: ts, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
   defp process_message(
          %Commit{lsn: lsn, commit_timestamp: ts},
          %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state
-       )
-       when current_lsn == lsn do
+       ) do
+    lsn = lsn_to_int(lsn)
+
+    unless current_lsn == lsn do
+      raise "Unexpectedly received a commit LSN that does not match current LSN #{current_lsn} != #{lsn}"
+    end
+
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
     # Flush accumulated messages
     state.message_handler_module.handle_messages(state.message_handler_ctx, Enum.reverse(state.accumulated_messages))
-
-    if state.test_pid do
-      send(state.test_pid, {Replication, :messages_handled})
-    end
 
     %{
       state

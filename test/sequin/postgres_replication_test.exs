@@ -486,6 +486,43 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert delete_change.type == "delete"
     end
+
+    test "messages are processed exactly once, even after crash and reboot" do
+      test_pid = self()
+
+      stub(ReplicationMessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+      end)
+
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+
+      # Insert a record
+      character1 = CharacterFactory.insert_character!()
+
+      # Wait for the message to be handled
+      assert_receive {:changes, [change]}, :timer.seconds(1)
+      assert is_struct(change, InsertedRecord)
+      assert change.record["id"] == character1.id
+
+      # Give the ack_message time to be sent
+      Process.sleep(20)
+
+      # Stop the replication
+      stop_replication!()
+
+      # Restart the replication
+      start_replication!(message_handler_module: ReplicationMessageHandlerMock)
+
+      # Insert another record to verify replication is working
+      character2 = CharacterFactory.insert_character!()
+
+      # Wait for the new message to be handled
+      assert_receive {:changes, [change]}, :timer.seconds(1)
+
+      # Verify we only get the new record
+      assert is_struct(change, InsertedRecord)
+      assert change.record["id"] == character2.id
+    end
   end
 
   defp start_replication!(opts) do

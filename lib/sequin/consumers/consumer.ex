@@ -15,7 +15,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
              :ack_wait_ms,
              :id,
              :inserted_at,
-             :kind,
              :max_ack_pending,
              :max_deliver,
              :max_waiting,
@@ -32,8 +31,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
-    field :message_kind, :string, default: "record"
-    field :kind, Ecto.Enum, values: [:pull, :push], default: :pull
+    field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
     belongs_to :account, Account
@@ -52,11 +50,10 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :message_kind,
       :name,
       :backfill_completed_at,
-      :kind,
       :http_endpoint_id,
       :status
     ])
-    |> validate_required([:name, :kind, :status])
+    |> validate_required([:name, :status])
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
@@ -73,7 +70,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :max_deliver,
       :max_waiting,
       :backfill_completed_at,
-      :kind,
       :http_endpoint_id,
       :status
     ])

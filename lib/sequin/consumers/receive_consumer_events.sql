@@ -31,7 +31,7 @@ deliverable_events as (
       or ce.not_visible_until <= :now)
     and outstanding.record_pks is null
   order by
-    ce.commit_lsn asc
+    ce.id asc
   limit GREATEST(:max_ack_pending -(
       select
         count
@@ -51,7 +51,7 @@ where
       deliverable_events de
       join sequin_streams.consumer_events ce_inner on ce_inner.id = de.id
     order by
-      ce_inner.commit_lsn asc
+      ce_inner.id asc
     limit :batch_size
     for update
       of ce_inner skip locked)

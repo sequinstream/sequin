@@ -147,7 +147,7 @@ defmodule Sequin.Consumers do
     Repo.delete(consumer)
   end
 
-  defp create_consumer_partition(%HttpPushConsumer{message_kind: :event} = consumer) do
+  defp create_consumer_partition(%{message_kind: :event} = consumer) do
     """
     CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
     """
@@ -158,7 +158,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp create_consumer_partition(%HttpPushConsumer{message_kind: :record} = consumer) do
+  defp create_consumer_partition(%{message_kind: :record} = consumer) do
     """
     CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
     """
@@ -169,11 +169,11 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%HttpPushConsumer{message_kind: :event} = consumer) do
+  defp delete_consumer_partition(%{message_kind: :event} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_events_#{consumer.stream.name}_#{consumer.name};
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_events_#{consumer.name};
     """
     |> Repo.query()
     |> case do
@@ -182,11 +182,11 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%HttpPushConsumer{} = consumer) do
+  defp delete_consumer_partition(%{message_kind: :record} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.stream.name}_#{consumer.name};
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.name};
     """
     |> Repo.query()
     |> case do
@@ -195,33 +195,45 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def receive_for_consumer(%HttpPushConsumer{message_kind: :event} = consumer, opts \\ []) do
+  def receive_for_consumer(%{message_kind: :event} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
     max_ack_pending = consumer.max_ack_pending
 
-    {:ok, events} =
-      Query.receive_consumer_events(
-        batch_size: batch_size,
-        consumer_id: UUID.string_to_binary!(consumer.id),
-        max_ack_pending: max_ack_pending,
-        not_visible_until: not_visible_until,
-        now: now
-      )
+    outstanding_count =
+      consumer.id
+      |> ConsumerEvent.where_consumer_id()
+      |> ConsumerEvent.where_not_visible()
+      |> ConsumerEvent.count()
+      |> Repo.one()
 
-    events =
-      Enum.map(events, fn event ->
-        event
-        |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
-        |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
-        |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-        |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-        |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-        |> then(&struct!(ConsumerEvent, &1))
-      end)
+    case min(batch_size, max_ack_pending - outstanding_count) do
+      0 ->
+        {:ok, []}
 
-    {:ok, events}
+      batch_size ->
+        {:ok, events} =
+          Query.receive_consumer_events(
+            batch_size: batch_size,
+            consumer_id: UUID.string_to_binary!(consumer.id),
+            not_visible_until: not_visible_until,
+            now: now
+          )
+
+        events =
+          Enum.map(events, fn event ->
+            event
+            |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
+            |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
+            |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> then(&struct!(ConsumerEvent, &1))
+          end)
+
+        {:ok, events}
+    end
   end
 
   @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok

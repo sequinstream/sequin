@@ -92,6 +92,10 @@ defmodule Sequin.Consumers.ConsumerEvent do
     )
   end
 
+  def count(query \\ base_query()) do
+    from([consumer_event: ce] in query, select: count(ce.id))
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(ce in query, as: :consumer_event)
   end

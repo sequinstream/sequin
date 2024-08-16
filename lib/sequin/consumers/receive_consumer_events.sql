@@ -1,13 +1,4 @@
-with outstanding_count as (
-  select
-    COUNT(*) as count
-  from
-    sequin_streams.consumer_events
-  where
-    consumer_id = :consumer_id
-    and not_visible_until > :now
-),
-deliverable_events as (
+with deliverable_events as (
   select
     ce.id,
     ce.commit_lsn,
@@ -15,27 +6,22 @@ deliverable_events as (
     ce.table_oid
   from
     sequin_streams.consumer_events ce
-    left join (
-      select
-        record_pks,
-        table_oid
-      from
-        sequin_streams.consumer_events
-      where
-        consumer_id = :consumer_id
-        and not_visible_until > :now) as outstanding on ce.record_pks = outstanding.record_pks
-    and ce.table_oid = outstanding.table_oid
   where
     ce.consumer_id = :consumer_id
-    and (ce.not_visible_until is null
-      or ce.not_visible_until <= :now)
-    and outstanding.record_pks is null
+    and (ce.not_visible_until is null or ce.not_visible_until <= :now)
+    and not exists (
+      select 1
+      from sequin_streams.consumer_events outstanding
+      where outstanding.consumer_id = :consumer_id
+        and outstanding.not_visible_until > :now
+        and outstanding.record_pks = ce.record_pks
+        and outstanding.table_oid = ce.table_oid
+    )
   order by
     ce.id asc
-  limit GREATEST(:max_ack_pending -(
-      select
-        count
-      from outstanding_count), 0))
+  limit :batch_size
+  for update skip locked
+)
 update
   sequin_streams.consumer_events ce
 set
@@ -44,16 +30,6 @@ set
   last_delivered_at = :now,
   updated_at = :now
 where
-  ce.id in (
-    select
-      de.id
-    from
-      deliverable_events de
-      join sequin_streams.consumer_events ce_inner on ce_inner.id = de.id
-    order by
-      ce_inner.id asc
-    limit :batch_size
-    for update
-      of ce_inner skip locked)
+  ce.id in (select de.id from deliverable_events de)
 returning
   ce.*

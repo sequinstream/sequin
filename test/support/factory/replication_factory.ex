@@ -3,7 +3,7 @@ defmodule Sequin.Factory.ReplicationFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -41,13 +41,9 @@ defmodule Sequin.Factory.ReplicationFactory do
         DatabasesFactory.insert_postgres_database!(account_id: account_id).id
       end)
 
-    {stream_id, attrs} =
-      Map.pop_lazy(attrs, :stream_id, fn -> StreamsFactory.insert_stream!(account_id: account_id).id end)
-
     attrs
     |> Map.put(:account_id, account_id)
     |> Map.put(:postgres_database_id, postgres_database_id)
-    |> Map.put(:stream_id, stream_id)
     |> postgres_replication()
     |> Repo.insert!()
   end
@@ -66,12 +62,13 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %NewRecord{
+      %InsertedRecord{
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
-        schema: "__postgres_replication_test_schema__",
-        table: "__postgres_replication_test_table__",
+        table_schema: "__postgres_replication_test_schema__",
+        table_name: "__postgres_replication_test_table__",
+        table_oid: Factory.unique_integer(),
         record: %{
           "id" => Factory.unique_integer(),
           "name" => Factory.name(),
@@ -92,8 +89,9 @@ defmodule Sequin.Factory.ReplicationFactory do
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
-        schema: Factory.postgres_object(),
-        table: Factory.postgres_object(),
+        table_schema: Factory.postgres_object(),
+        table_name: Factory.postgres_object(),
+        table_oid: Factory.unique_integer(),
         old_record: nil,
         record: %{
           "id" => Factory.unique_integer(),
@@ -115,8 +113,9 @@ defmodule Sequin.Factory.ReplicationFactory do
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
-        schema: Factory.postgres_object(),
-        table: Factory.postgres_object(),
+        table_schema: Factory.postgres_object(),
+        table_name: Factory.postgres_object(),
+        table_oid: Factory.unique_integer(),
         old_record: %{
           "id" => Factory.unique_integer(),
           "name" => nil,

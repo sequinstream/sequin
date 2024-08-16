@@ -5,18 +5,17 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Factory.StreamsFactory
 
   describe "insert_consumer_events/2" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       %{consumer: consumer}
     end
 
     test "inserts batch of consumer events", %{consumer: consumer} do
       events = for _ <- 1..3, do: ConsumersFactory.consumer_event_attrs(%{consumer_id: consumer.id})
 
-      assert {:ok, 3} = Consumers.insert_consumer_events(consumer.id, events)
+      assert {:ok, 3} = Consumers.insert_consumer_events(events)
 
       inserted_events = Repo.all(ConsumerEvent)
       assert length(inserted_events) == 3
@@ -27,8 +26,8 @@ defmodule Sequin.ConsumersTest do
 
   describe "list_consumer_events_for_consumer/2" do
     setup do
-      consumer1 = StreamsFactory.insert_consumer!(message_kind: :event)
-      consumer2 = StreamsFactory.insert_consumer!(message_kind: :event)
+      consumer1 = ConsumersFactory.insert_consumer!(message_kind: :event)
+      consumer2 = ConsumersFactory.insert_consumer!(message_kind: :event)
 
       events1 =
         for _ <- 1..3 do
@@ -81,7 +80,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "receive_for_consumer/2" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(max_ack_pending: 1_000, message_kind: :event)
+      consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 1_000, message_kind: :event)
       %{consumer: consumer}
     end
 
@@ -141,7 +140,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "does not deliver outstanding events for another consumer", %{consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id, not_visible_until: nil)
 
       assert {:ok, []} = Consumers.receive_for_consumer(consumer)
@@ -253,7 +252,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "receive_for_consumer with concurrent workers" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(max_ack_pending: 100, message_kind: :event)
+      consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 100, message_kind: :event)
 
       for _ <- 1..10 do
         ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
@@ -290,7 +289,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "ConsumerEvent, ack_messages/2" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       %{consumer: consumer}
     end
 
@@ -305,7 +304,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "ignores events with different consumer_id", %{consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
 
       event2 =
@@ -321,7 +320,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "ConsumerEvent, nack_messages/2" do
     setup do
-      consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       %{consumer: consumer}
     end
 
@@ -340,7 +339,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "does not nack events belonging to another consumer", %{consumer: consumer} do
-      other_consumer = StreamsFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
       event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
 
       event2 =

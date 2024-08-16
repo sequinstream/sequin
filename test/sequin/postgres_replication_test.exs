@@ -12,7 +12,7 @@ defmodule Sequin.PostgresReplicationTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.Replication, as: ReplicationExt
   # alias Sequin.Factory.AccountsFactory
@@ -371,12 +371,12 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
       assert_receive {:change, change}, :timer.seconds(5)
 
-      assert is_struct(change, NewRecord), "Expected change to be a NewRecord, got: #{inspect(change)}"
+      assert is_struct(change, InsertedRecord), "Expected change to be a InsertedRecord, got: #{inspect(change)}"
 
       assert Map.equal?(change.record, record)
 
-      assert change.table == "characters"
-      assert change.schema == "public"
+      assert change.table_name == "characters"
+      assert change.table_schema == "public"
     end
 
     @tag capture_log: true
@@ -404,7 +404,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       assert_receive {:change, change}, :timer.seconds(1)
-      assert is_struct(change, NewRecord)
+      assert is_struct(change, InsertedRecord)
 
       # Should have received the record (it was re-delivered)
       assert Map.equal?(change.record, record)
@@ -424,7 +424,7 @@ defmodule Sequin.PostgresReplicationTest do
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, create_change}, :timer.seconds(1)
-      assert is_struct(create_change, NewRecord)
+      assert is_struct(create_change, InsertedRecord)
 
       assert Map.equal?(create_change.record, record)
 

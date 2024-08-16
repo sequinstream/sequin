@@ -4,7 +4,7 @@ defmodule Sequin.Extensions.ReplicationMessageHandlerBehaviour do
   """
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
 
   @doc """
@@ -13,11 +13,12 @@ defmodule Sequin.Extensions.ReplicationMessageHandlerBehaviour do
   ## Parameters
 
     * `context` - Any context passed by the caller to Replication.
-    * `message` - One of the Record types (NewRecord, UpdatedRecord, or DeletedRecord) that Replication handles.
+    * `message` - One of the Record types (InsertedRecord, UpdatedRecord, or DeletedRecord) that Replication handles.
 
   ## Returns
 
     The return value is implementation-specific and may vary based on the needs of the consumer.
   """
-  @callback handle_message(context :: any(), message :: NewRecord.t() | UpdatedRecord.t() | DeletedRecord.t()) :: any()
+  @callback handle_message(context :: any(), message :: InsertedRecord.t() | UpdatedRecord.t() | DeletedRecord.t()) ::
+              any()
 end

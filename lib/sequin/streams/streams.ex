@@ -6,11 +6,10 @@ defmodule Sequin.Streams do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
+  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Repo
   alias Sequin.Streams.ConsumerMessage
-  alias Sequin.Streams.ConsumerMessageWithConsumerInfoss
   alias Sequin.Streams.Message
   alias Sequin.Streams.Migrations
   alias Sequin.Streams.NewMessage
@@ -70,9 +69,6 @@ defmodule Sequin.Streams do
 
   def delete_stream_with_lifecycle(%Stream{} = stream) do
     Repo.transaction(fn ->
-      consumers = Consumers.list_consumers_for_stream(stream.id)
-      Enum.each(consumers, fn consumer -> {:ok, _} = Consumers.delete_consumer_with_lifecycle(consumer) end)
-
       case delete_stream(stream) do
         {:ok, stream} ->
           drop_records_partition(stream)
@@ -230,7 +226,7 @@ defmodule Sequin.Streams do
         ]
       )
 
-    consumers = Consumers.cached_list_consumers_for_stream(stream_id)
+    consumers = []
 
     fn ->
       {count, messages} =
@@ -339,46 +335,6 @@ defmodule Sequin.Streams do
     end)
   end
 
-  def get_consumer_details_for_message(message_key, stream_id) do
-    consumers = Consumers.cached_list_consumers_for_stream(stream_id)
-
-    consumer_message_details =
-      consumers
-      |> Enum.filter(fn consumer -> Sequin.Key.matches?(consumer.filter_key_pattern, message_key) end)
-      |> Enum.map(fn consumer ->
-        case get_consumer_message(consumer.id, message_key) do
-          {:ok, consumer_message} ->
-            %ConsumerMessageWithConsumerInfoss{
-              consumer_id: consumer.id,
-              consumer_name: consumer.name,
-              consumer_filter_key_pattern: consumer.filter_key_pattern,
-              state: ConsumerMessage.external_state(consumer_message),
-              ack_id: consumer_message.ack_id,
-              deliver_count: consumer_message.deliver_count,
-              last_delivered_at: consumer_message.last_delivered_at,
-              not_visible_until: consumer_message.not_visible_until
-            }
-
-          {:error, %Error.NotFoundError{}} ->
-            external_state =
-              if HttpPushConsumer.should_delete_acked_messages?(consumer), do: :acked, else: :available
-
-            %ConsumerMessageWithConsumerInfoss{
-              consumer_id: consumer.id,
-              consumer_name: consumer.name,
-              consumer_filter_key_pattern: consumer.filter_key_pattern,
-              state: external_state,
-              ack_id: nil,
-              deliver_count: nil,
-              last_delivered_at: nil,
-              not_visible_until: nil
-            }
-        end
-      end)
-
-    {:ok, consumer_message_details}
-  end
-
   def get_consumer_message(consumer_id, message_key) do
     consumer_message =
       consumer_id
@@ -476,13 +432,13 @@ defmodule Sequin.Streams do
     }
   end
 
-  defp get_record(%NewRecord{record: record}), do: record
+  defp get_record(%InsertedRecord{record: record}), do: record
   defp get_record(%UpdatedRecord{record: record}), do: record
   defp get_record(%DeletedRecord{old_record: old_record}), do: old_record
 
   defp extract_field_value(%{type: :record_field, field_name: field_name}, change, _source_table) do
     case change do
-      %NewRecord{record: record} -> record[field_name]
+      %InsertedRecord{record: record} -> record[field_name]
       %UpdatedRecord{record: record} -> record[field_name]
       %DeletedRecord{old_record: old_record} -> old_record[field_name]
     end
@@ -501,10 +457,10 @@ defmodule Sequin.Streams do
     |> Map.reject(fn {_, v} -> is_nil(v) end)
   end
 
-  defp get_changes(%NewRecord{}), do: nil
+  defp get_changes(%InsertedRecord{}), do: nil
   defp get_changes(%DeletedRecord{}), do: nil
 
-  defp get_action(%NewRecord{}), do: :insert
+  defp get_action(%InsertedRecord{}), do: :insert
   defp get_action(%UpdatedRecord{}), do: :update
   defp get_action(%DeletedRecord{}), do: :delete
 

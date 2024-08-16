@@ -2,8 +2,6 @@ defmodule Sequin.Factory.StreamsFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
-  alias Sequin.Consumers
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
@@ -127,59 +125,6 @@ defmodule Sequin.Factory.StreamsFactory do
     %Message{}
     |> Message.changeset(attrs)
     |> Repo.insert!()
-  end
-
-  # HttpPushConsumer
-
-  def consumer(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    {http_endpoint_id, attrs} =
-      Map.pop_lazy(attrs, :http_endpoint_id, fn ->
-        insert_http_endpoint!(account_id: account_id).id
-      end)
-
-    merge_attributes(
-      %HttpPushConsumer{
-        name: Factory.unique_word(),
-        message_kind: Factory.one_of([:event, :record]),
-        backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
-        ack_wait_ms: 30_000,
-        max_ack_pending: 10_000,
-        max_deliver: Enum.random(1..100),
-        max_waiting: 20,
-        account_id: account_id,
-        http_endpoint_id: http_endpoint_id,
-        status: :active
-      },
-      attrs
-    )
-  end
-
-  def consumer_attrs(attrs \\ []) do
-    attrs
-    |> consumer()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def insert_consumer!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    attrs =
-      attrs
-      |> Map.put(:account_id, account_id)
-      |> consumer_attrs()
-
-    {:ok, consumer} =
-      Consumers.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
-
-    consumer
   end
 
   # Stream

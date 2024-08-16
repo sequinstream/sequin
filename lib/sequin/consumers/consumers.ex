@@ -3,8 +3,8 @@ defmodule Sequin.Consumers do
   import Ecto.Query
 
   alias Sequin.Cache
-  alias Sequin.Consumers.Consumer
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Error
   alias Sequin.Repo
@@ -29,16 +29,16 @@ defmodule Sequin.Consumers do
   def config_schema, do: @config_schema
 
   def all_consumers do
-    Repo.all(Consumer)
+    Repo.all(HttpPushConsumer)
   end
 
   def count_consumers_for_stream(_stream_id) do
     0
-    # stream_id |> Consumer.where_stream_id() |> Repo.aggregate(:count, :id)
+    # stream_id |> HttpPushConsumer.where_stream_id() |> Repo.aggregate(:count, :id)
   end
 
   def get_consumer(consumer_id) do
-    case consumer_id |> Consumer.where_id() |> Repo.one() do
+    case consumer_id |> HttpPushConsumer.where_id() |> Repo.one() do
       nil -> {:error, Error.not_found(entity: :consumer)}
       consumer -> {:ok, consumer}
     end
@@ -52,17 +52,17 @@ defmodule Sequin.Consumers do
   end
 
   def list_consumers_for_account(account_id) do
-    account_id |> Consumer.where_account_id() |> Repo.all()
+    account_id |> HttpPushConsumer.where_account_id() |> Repo.all()
   end
 
   def list_consumers_for_stream(_stream_id) do
-    Repo.all(Consumer)
+    Repo.all(HttpPushConsumer)
   end
 
   def list_active_push_consumers do
     :push
-    |> Consumer.where_kind()
-    |> Consumer.where_status(:active)
+    |> HttpPushConsumer.where_kind()
+    |> HttpPushConsumer.where_status(:active)
     |> Repo.all()
   end
 
@@ -81,7 +81,7 @@ defmodule Sequin.Consumers do
   defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
 
   def get_consumer_for_account(account_id, id_or_name) do
-    res = account_id |> Consumer.where_account_id() |> Consumer.where_id_or_name(id_or_name) |> Repo.one()
+    res = account_id |> HttpPushConsumer.where_account_id() |> HttpPushConsumer.where_id_or_name(id_or_name) |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -90,7 +90,7 @@ defmodule Sequin.Consumers do
   end
 
   def get_consumer_for_stream(_stream_id, id_or_name) do
-    res = id_or_name |> Consumer.where_id_or_name() |> Repo.one()
+    res = id_or_name |> HttpPushConsumer.where_id_or_name() |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -157,9 +157,9 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def update_consumer_with_lifecycle(%Consumer{} = consumer, attrs) do
+  def update_consumer_with_lifecycle(%HttpPushConsumer{} = consumer, attrs) do
     consumer
-    |> Consumer.update_changeset(attrs)
+    |> HttpPushConsumer.update_changeset(attrs)
     |> Repo.update()
     |> case do
       {:ok, consumer} ->
@@ -172,16 +172,16 @@ defmodule Sequin.Consumers do
   end
 
   def create_consumer(account_id, attrs) do
-    %Consumer{account_id: account_id}
-    |> Consumer.create_changeset(attrs)
+    %HttpPushConsumer{account_id: account_id}
+    |> HttpPushConsumer.create_changeset(attrs)
     |> Repo.insert()
   end
 
-  def delete_consumer(%Consumer{} = consumer) do
+  def delete_consumer(%HttpPushConsumer{} = consumer) do
     Repo.delete(consumer)
   end
 
-  defp create_consumer_partition(%Consumer{message_kind: :event} = consumer) do
+  defp create_consumer_partition(%HttpPushConsumer{message_kind: :event} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
@@ -194,7 +194,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp create_consumer_partition(%Consumer{message_kind: :event} = consumer) do
+  defp create_consumer_partition(%HttpPushConsumer{message_kind: :record} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
@@ -207,7 +207,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%Consumer{message_kind: :event} = consumer) do
+  defp delete_consumer_partition(%HttpPushConsumer{message_kind: :event} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
@@ -220,7 +220,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%Consumer{} = consumer) do
+  defp delete_consumer_partition(%HttpPushConsumer{} = consumer) do
     consumer = Repo.preload(consumer, :stream)
 
     """
@@ -233,7 +233,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def receive_for_consumer(%Consumer{message_kind: :event} = consumer, opts \\ []) do
+  def receive_for_consumer(%HttpPushConsumer{message_kind: :event} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
@@ -261,8 +261,8 @@ defmodule Sequin.Consumers do
     {:ok, events}
   end
 
-  @spec ack_event_messages(Sequin.Consumers.Consumer.t(), [integer()]) :: :ok
-  def ack_event_messages(%Consumer{} = consumer, commit_lsns) do
+  @spec ack_event_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  def ack_event_messages(%HttpPushConsumer{} = consumer, commit_lsns) do
     Repo.transact(fn ->
       {_, _} =
         consumer.id
@@ -276,8 +276,8 @@ defmodule Sequin.Consumers do
     :ok
   end
 
-  @spec nack_event_messages(Sequin.Consumers.Consumer.t(), [integer()]) :: :ok
-  def nack_event_messages(%Consumer{} = consumer, commit_lsns) do
+  @spec nack_event_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  def nack_event_messages(%HttpPushConsumer{} = consumer, commit_lsns) do
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
@@ -346,7 +346,7 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
-  # Consumer Backfills
+  # HttpPushConsumer Backfills
 
   def backfill_limit, do: 10_000
 

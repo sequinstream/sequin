@@ -78,14 +78,14 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
     execute "CREATE TYPE #{@config_schema}.consumer_status AS ENUM ('active', 'disabled');"
 
-    create table(:consumers, prefix: @config_schema) do
+    create table(:http_push_consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
       add :account_id, :uuid, null: false
 
       add :http_endpoint_id,
-          references(:http_endpoints, with: [account_id: :account_id], prefix: @config_schema)
+          references(:http_endpoints, with: [account_id: :account_id], prefix: @config_schema),
+          null: false
 
-      add :kind, :string, null: false, default: "pull"
       add :name, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
 
@@ -99,12 +99,6 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
       timestamps()
     end
-
-    create constraint(:consumers, :kind_http_endpoint_constraint,
-             check:
-               "(kind = 'pull' AND http_endpoint_id IS NULL) OR (kind = 'push' AND http_endpoint_id IS NOT NULL)",
-             prefix: @config_schema
-           )
 
     execute "create type #{@stream_schema}.consumer_record_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
             "drop type if exists #{@stream_schema}.consumer_record_state"

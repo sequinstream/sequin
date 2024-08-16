@@ -3,7 +3,7 @@ defmodule Sequin.Factory.StreamsFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.Consumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
@@ -129,7 +129,7 @@ defmodule Sequin.Factory.StreamsFactory do
     |> Repo.insert!()
   end
 
-  # Consumer
+  # HttpPushConsumer
 
   def consumer(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -148,7 +148,7 @@ defmodule Sequin.Factory.StreamsFactory do
       end)
 
     merge_attributes(
-      %Consumer{
+      %HttpPushConsumer{
         name: Factory.unique_word(),
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,

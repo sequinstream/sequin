@@ -195,6 +195,25 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def upsert_consumer_messages(%{}, []), do: {:ok, []}
+
+  def upsert_consumer_messages(%{}, consumer_messages) do
+    {consumer_ids, message_keys, message_seqs} =
+      consumer_messages
+      |> Enum.map(fn message ->
+        {message.consumer_id, message.message_key, message.message_seq}
+      end)
+      |> Enum.reduce({[], [], []}, fn {consumer_id, message_key, message_seq}, {ids, keys, seqs} ->
+        {[consumer_id | ids], [message_key | keys], [message_seq | seqs]}
+      end)
+
+    Query.upsert_consumer_records(
+      consumer_ids: Enum.map(consumer_ids, &UUID.string_to_binary!/1),
+      message_keys: message_keys,
+      message_seqs: message_seqs
+    )
+  end
+
   def receive_for_consumer(%{message_kind: :event} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
@@ -361,7 +380,7 @@ defmodule Sequin.Consumers do
           message_seq: message.seq
         }
       end)
-      |> Streams.upsert_consumer_messages()
+      |> then(&upsert_consumer_messages(consumer, &1))
 
     {:ok, messages}
   end

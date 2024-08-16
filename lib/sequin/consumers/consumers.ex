@@ -214,6 +214,7 @@ defmodule Sequin.Consumers do
       Enum.map(events, fn event ->
         event
         |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
+        |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
         |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
         |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
         |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
@@ -224,12 +225,12 @@ defmodule Sequin.Consumers do
   end
 
   @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
-  def ack_messages(%{message_kind: :event} = consumer, commit_lsns) do
+  def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
     Repo.transact(fn ->
       {_, _} =
         consumer.id
         |> ConsumerEvent.where_consumer_id()
-        |> ConsumerEvent.where_commit_lsns(commit_lsns)
+        |> ConsumerEvent.where_ack_ids(ack_ids)
         |> Repo.delete_all()
 
       :ok
@@ -239,11 +240,11 @@ defmodule Sequin.Consumers do
   end
 
   @spec nack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
-  def nack_messages(%{message_kind: :event} = consumer, commit_lsns) do
+  def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
-      |> ConsumerEvent.where_commit_lsns(commit_lsns)
+      |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [not_visible_until: nil])
 
     :ok
@@ -293,11 +294,14 @@ defmodule Sequin.Consumers do
   end
 
   def insert_consumer_events(consumer_id, consumer_events) do
+    now = DateTime.utc_now()
+
     entries =
       Enum.map(consumer_events, fn event ->
         Map.merge(event, %{
           consumer_id: consumer_id,
-          inserted_at: DateTime.utc_now()
+          updated_at: now,
+          inserted_at: now
         })
       end)
 

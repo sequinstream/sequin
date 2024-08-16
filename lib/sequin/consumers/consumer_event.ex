@@ -23,7 +23,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
            ]}
   typed_schema "consumer_events" do
     field :consumer_id, Ecto.UUID, primary_key: true
-    field :commit_lsn, :integer, primary_key: true
+    field :id, :integer, primary_key: true, read_after_writes: true
+    field :commit_lsn, :integer
     field :record_pks, :map
     field :table_oid, :integer
 
@@ -34,7 +35,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
     field :data, :map
 
-    timestamps(updated_at: false, type: :utc_datetime_usec)
+    timestamps(type: :utc_datetime_usec)
   end
 
   def changeset(consumer_event, attrs) do

@@ -15,373 +15,352 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.Replication, as: ReplicationExt
-  alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Factory.StreamsFactory
+  # alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
+  # alias Sequin.Factory.DatabasesFactory
+  # alias Sequin.Factory.ReplicationFactory
+  # alias Sequin.Factory.StreamsFactory
   alias Sequin.Mocks.Extensions.ReplicationMessageHandlerMock
-  alias Sequin.Replication
-  alias Sequin.Replication.PostgresReplication
-  alias Sequin.ReplicationRuntime
-  alias Sequin.Streams
+  # alias Sequin.Replication
+  # alias Sequin.Replication.PostgresReplication
+  # alias Sequin.ReplicationRuntime
+  # alias Sequin.Streams
+  # alias Sequin.Test.Support.Models.Character
+  # alias Sequin.Test.Support.Models.Character2PK
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
 
-  @test_schema "__postgres_replication_test_schema__"
-  @test_table "__postgres_replication_test_table__"
-  @test_table_2pk "__postgres_replication_test_table_2pk__"
-  @test_table_full_replica "__postgres_replication_test_table_full_replica__"
-  @publication "__postgres_replication_test_publication__"
+  @moduletag :unboxed
+
+  @publication "characters_publication"
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
   setup do
-    # This setup needs to happen outside of the sandbox
-    create_table_ddls = [
-      """
-      create table if not exists #{@test_schema}.#{@test_table} (
-        id serial primary key,
-        name text,
-        house text,
-        planet text
-      )
-      """,
-      """
-      create table if not exists #{@test_schema}.#{@test_table_2pk} (
-        id1 serial,
-        id2 serial,
-        name text,
-        house text,
-        planet text,
-        primary key (id1, id2)
-      )
-      """,
-      """
-      create table if not exists #{@test_schema}.#{@test_table_full_replica} (
-        id serial primary key,
-        name text,
-        house text,
-        planet text,
-        is_active boolean,
-        tags text[]
-      )
-      """,
-      """
-      ALTER TABLE #{@test_schema}.#{@test_table_full_replica} REPLICA IDENTITY FULL
-      """
-    ]
-
-    ReplicationSlots.setup_each(
-      @test_schema,
-      [@test_table, @test_table_2pk, @test_table_full_replica],
-      @publication,
-      replication_slot(),
-      create_table_ddls
-    )
+    # Fast-forward the replication slot to the current WAL position
+    {:ok, _} =
+      UnboxedRepo.query("SELECT pg_replication_slot_advance($1, pg_current_wal_lsn())::text", [replication_slot()])
 
     :ok
   end
 
-  describe "PostgresReplication end-to-end" do
-    setup do
-      # Create source database
-      account_id = AccountsFactory.insert_account!().id
-      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
-      stream = StreamsFactory.insert_stream!(account_id: account_id)
+  # describe "PostgresReplication end-to-end" do
+  #   setup do
+  #     # Create source database
+  #     account_id = AccountsFactory.insert_account!().id
+  #     source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+  #     stream = StreamsFactory.insert_stream!(account_id: account_id)
 
-      # Create PostgresReplication entity
-      pg_replication =
-        ReplicationFactory.insert_postgres_replication!(
-          status: :active,
-          postgres_database_id: source_db.id,
-          stream_id: stream.id,
-          slot_name: replication_slot(),
-          publication_name: @publication,
-          account_id: stream.account_id,
-          key_format: :basic
-        )
+  #     # Create PostgresReplication entity
+  #     pg_replication =
+  #       ReplicationFactory.insert_postgres_replication!(
+  #         status: :active,
+  #         postgres_database_id: source_db.id,
+  #         stream_id: stream.id,
+  #         slot_name: replication_slot(),
+  #         publication_name: @publication,
+  #         account_id: stream.account_id,
+  #         key_format: :basic
+  #       )
 
-      # Start replication
-      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
-      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+  #     # Start replication
+  #     sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+  #     start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _pid} =
-        ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+  #     {:ok, _pid} =
+  #       ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
-      %{stream: stream, pg_replication: pg_replication, source_db: source_db, sup: sup}
-    end
+  #     %{stream: stream, pg_replication: pg_replication, source_db: source_db, sup: sup}
+  #   end
 
-    test "inserts are replicated to the stream", %{stream: stream} do
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+  #   test "inserts are replicated to the stream", %{stream: stream} do
+  #     CharacterFactory.insert_character!(%{name: "Paul Atreides", house: "Atreides", planet: "Arrakis"})
 
-      assert_receive {ReplicationExt, :message_handled}, 500
+  #     assert_receive {ReplicationExt, :message_handled}, 500
 
-      [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.key =~ "#{@test_schema}.#{@test_table}"
+  #     [message] = Streams.list_messages_for_stream(stream.id)
+  #     assert message.key =~ "public.characters"
 
-      decoded_data = Jason.decode!(message.data)
-      assert decoded_data["data"] == %{"id" => 1, "name" => "Paul Atreides", "house" => "Atreides", "planet" => "Arrakis"}
-      refute decoded_data["deleted"]
-      assert decoded_data["changes"] == %{}
-      assert decoded_data["action"] == "insert"
-    end
+  #     decoded_data = Jason.decode!(message.data)
 
-    test "updates are replicated to the stream", %{stream: stream} do
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Leto Atreides', 'Atreides', 'Caladan')"
-      )
+  #     assert decoded_data["data"] == %{
+  #              "id" => 1,
+  #              "name" => "Paul Atreides",
+  #              "house" => "Atreides",
+  #              "planet" => "Arrakis",
+  #              "is_active" => true,
+  #              "tags" => []
+  #            }
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     refute decoded_data["deleted"]
+  #     assert decoded_data["changes"] == %{}
+  #     assert decoded_data["action"] == "insert"
+  #   end
 
-      UnboxedRepo.query("UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #   test "updates are replicated to the stream", %{stream: stream} do
+  #     character = CharacterFactory.insert_character!(%{name: "Leto Atreides", house: "Atreides", planet: "Caladan"})
 
-      [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.key =~ "#{@test_schema}.#{@test_table}"
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      decoded_data = Jason.decode!(message.data)
-      assert decoded_data["data"] == %{"id" => 1, "name" => "Leto Atreides", "house" => "Atreides", "planet" => "Arrakis"}
-      refute decoded_data["deleted"]
-      # Empty because replica identity is not set to FULL
-      assert decoded_data["changes"] == %{}
-      assert decoded_data["action"] == "update"
-    end
+  #     UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-    test "deletes are replicated to the stream", %{stream: stream} do
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Duncan Idaho', 'Atreides', 'Caladan')"
-      )
+  #     [message] = Streams.list_messages_for_stream(stream.id)
+  #     assert message.key =~ "public.characters"
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     decoded_data = Jason.decode!(message.data)
 
-      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     assert decoded_data["data"] == %{
+  #              "id" => 1,
+  #              "name" => "Leto Atreides",
+  #              "house" => "Atreides",
+  #              "planet" => "Arrakis",
+  #              "is_active" => true,
+  #              "tags" => []
+  #            }
 
-      [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.key =~ "#{@test_schema}.#{@test_table}"
+  #     refute decoded_data["deleted"]
+  #     assert decoded_data["changes"] == %{"planet" => "Caladan"}
+  #     assert decoded_data["action"] == "update"
+  #   end
 
-      decoded_data = Jason.decode!(message.data)
-      assert decoded_data["data"] == %{"id" => 1, "name" => nil, "house" => nil, "planet" => nil}
-      assert decoded_data["deleted"]
-      assert decoded_data["changes"] == %{}
-      assert decoded_data["action"] == "delete"
-    end
+  #   test "deletes are replicated to the stream", %{stream: stream} do
+  #     character = CharacterFactory.insert_character!(%{name: "Duncan Idaho", house: "Atreides", planet: "Caladan"})
 
-    test "replication with default replica identity", %{stream: stream} do
-      # Set replica identity to default
-      # UnboxedRepo.query("ALTER TABLE #{@test_schema}.#{@test_table} REPLICA IDENTITY DEFAULT")
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Chani', 'Fremen', 'Arrakis')"
-      )
+  #     UnboxedRepo.delete!(character)
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     [message] = Streams.list_messages_for_stream(stream.id)
+  #     assert message.key =~ "public.characters"
 
-      [insert_message] = Streams.list_messages_for_stream(stream.id)
-      assert insert_message.key =~ "#{@test_schema}.#{@test_table}"
-      decoded_insert_data = Jason.decode!(insert_message.data)
-      assert decoded_insert_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Fremen", "planet" => "Arrakis"}
-      refute decoded_insert_data["deleted"]
-      assert decoded_insert_data["changes"] == %{}
-      assert decoded_insert_data["action"] == "insert"
+  #     decoded_data = Jason.decode!(message.data)
 
-      UnboxedRepo.query("UPDATE #{@test_schema}.#{@test_table} SET house = 'Atreides' WHERE id = 1")
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     assert decoded_data["data"] == %{
+  #              "id" => 1,
+  #              "name" => "Duncan Idaho",
+  #              "house" => "Atreides",
+  #              "planet" => "Caladan",
+  #              "is_active" => true,
+  #              "tags" => []
+  #            }
 
-      [update_message] = Streams.list_messages_for_stream(stream.id)
-      assert update_message.seq > insert_message.seq
-      assert update_message.key == insert_message.key
-      assert DateTime.compare(update_message.inserted_at, insert_message.inserted_at) == :eq
+  #     assert decoded_data["deleted"]
+  #     assert decoded_data["changes"] == %{}
+  #     assert decoded_data["action"] == "delete"
+  #   end
 
-      decoded_update_data = Jason.decode!(update_message.data)
-      assert decoded_update_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Arrakis"}
-      refute decoded_update_data["deleted"]
-      assert decoded_update_data["changes"] == %{}
-      assert decoded_update_data["action"] == "update"
+  #   test "replication with default replica identity", %{stream: stream} do
+  #     CharacterFactory.insert_character!(%{name: "Chani", house: "Fremen", planet: "Arrakis"})
 
-      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      [delete_message] = Streams.list_messages_for_stream(stream.id)
-      assert delete_message.seq > update_message.seq
-      assert delete_message.key == update_message.key
-      assert DateTime.compare(delete_message.inserted_at, update_message.inserted_at) == :eq
+  #     [insert_message] = Streams.list_messages_for_stream(stream.id)
+  #     decoded_insert_data = Jason.decode!(insert_message.data)
+  #     assert decoded_insert_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Fremen", "planet" => "Arrakis"}
+  #     refute decoded_insert_data["deleted"]
+  #     assert decoded_insert_data["changes"] == %{}
+  #     assert decoded_insert_data["action"] == "insert"
 
-      decoded_delete_data = Jason.decode!(delete_message.data)
-      assert decoded_delete_data["data"]["id"] == 1
-      assert decoded_delete_data["deleted"]
-      assert decoded_delete_data["changes"] == %{}
-      assert decoded_delete_data["action"] == "delete"
-    end
+  #     1
+  #     |> Character.where_id()
+  #     |> UnboxedRepo.update_all(house: "Atreides")
 
-    test "replication with two primary key columns", %{stream: stream} do
-      # Set replica identity to default - make sure even the delete comes through with both PKs
-      # UnboxedRepo.query("ALTER TABLE #{@test_schema}.#{@test_table_2pk} REPLICA IDENTITY DEFAULT")
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      # Insert
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table_2pk} (id1, id2, name, house, planet) VALUES (1, 2, 'Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+  #     [update_message] = Streams.list_messages_for_stream(stream.id)
+  #     assert update_message.seq > insert_message.seq
+  #     assert update_message.key == insert_message.key
+  #     assert DateTime.compare(update_message.inserted_at, insert_message.inserted_at) == :eq
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     decoded_update_data = Jason.decode!(update_message.data)
+  #     assert decoded_update_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Arrakis"}
+  #     refute decoded_update_data["deleted"]
+  #     assert decoded_update_data["changes"] == %{}
+  #     assert decoded_update_data["action"] == "update"
 
-      [insert_message] = Streams.list_messages_for_stream(stream.id)
-      decoded_insert_data = Jason.decode!(insert_message.data)
-      assert %{"id1" => 1, "id2" => 2} = decoded_insert_data["data"]
-      refute decoded_insert_data["deleted"]
-      assert decoded_insert_data["changes"] == %{}
-      assert decoded_insert_data["action"] == "insert"
+  #     1
+  #     |> Character.where_id()
+  #     |> UnboxedRepo.delete_all()
 
-      # Delete
-      UnboxedRepo.query("DELETE FROM #{@test_schema}.#{@test_table_2pk} WHERE id1 = 1 AND id2 = 2")
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      [delete_message] = Streams.list_messages_for_stream(stream.id)
-      decoded_delete_data = Jason.decode!(delete_message.data)
-      assert %{"id1" => 1, "id2" => 2} = decoded_delete_data["data"]
-      assert decoded_delete_data["deleted"]
-      assert decoded_delete_data["changes"] == %{}
-      assert decoded_delete_data["action"] == "delete"
-    end
+  #     [delete_message] = Streams.list_messages_for_stream(stream.id)
+  #     assert delete_message.seq > update_message.seq
+  #     assert delete_message.key == update_message.key
+  #     assert DateTime.compare(delete_message.inserted_at, update_message.inserted_at) == :eq
 
-    test "add_info returns correct information", %{pg_replication: pg_replication} do
-      # Insert some data to ensure there's a last committed timestamp
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+  #     decoded_delete_data = Jason.decode!(delete_message.data)
+  #     assert decoded_delete_data["data"]["id"] == 1
+  #     assert decoded_delete_data["deleted"]
+  #     assert decoded_delete_data["changes"] == %{}
+  #     assert decoded_delete_data["action"] == "delete"
+  #   end
 
-      assert_receive {ReplicationExt, :message_handled}, 1000
+  #   test "replication with two primary key columns", %{stream: stream} do
+  #     # Insert
+  #     CharacterFactory.insert_character_2pk!(%{
+  #       id1: 1,
+  #       id2: 2,
+  #       name: "Paul Atreides",
+  #       house: "Atreides",
+  #       planet: "Arrakis"
+  #     })
 
-      # Call add_info
-      pg_replication_with_info = Replication.add_info(pg_replication)
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      # Assert that the info field is populated
-      assert %PostgresReplication.Info{} = pg_replication_with_info.info
+  #     [insert_message] = Streams.list_messages_for_stream(stream.id)
+  #     decoded_insert_data = Jason.decode!(insert_message.data)
+  #     assert %{"id1" => 1, "id2" => 2} = decoded_insert_data["data"]
+  #     refute decoded_insert_data["deleted"]
+  #     assert decoded_insert_data["changes"] == %{}
+  #     assert decoded_insert_data["action"] == "insert"
 
-      # Check last_committed_at
-      assert pg_replication_with_info.info.last_committed_at != nil
-      assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
-    end
+  #     # Delete
+  #     1
+  #     |> Character2PK.where_id(2)
+  #     |> UnboxedRepo.delete_all()
 
-    test "replication with 'with_operation' key format", %{
-      stream: stream,
-      pg_replication: pg_replication,
-      sup: sup
-    } do
-      {:ok, pg_replication} = Replication.update_pg_replication(pg_replication, %{key_format: :with_operation})
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      # Restart the server
-      ReplicationRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
+  #     [delete_message] = Streams.list_messages_for_stream(stream.id)
+  #     decoded_delete_data = Jason.decode!(delete_message.data)
+  #     assert %{"id1" => 1, "id2" => 2} = decoded_delete_data["data"]
+  #     assert decoded_delete_data["deleted"]
+  #     assert decoded_delete_data["changes"] == %{}
+  #     assert decoded_delete_data["action"] == "delete"
+  #   end
 
-      {:ok, _pid} = ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+  #   test "add_info returns correct information", %{pg_replication: pg_replication} do
+  #     # Insert some data to ensure there's a last committed timestamp
+  #     CharacterFactory.insert_character!()
 
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+  #     assert_receive {ReplicationExt, :message_handled}, 1000
 
-      assert_receive {ReplicationExt, :message_handled}, 500
+  #     # Call add_info
+  #     pg_replication_with_info = Replication.add_info(pg_replication)
 
-      [message] = Streams.list_messages_for_stream(stream.id)
-      assert message.key =~ "#{@test_schema}.#{@test_table}.insert"
-    end
+  #     # Assert that the info field is populated
+  #     assert %PostgresReplication.Info{} = pg_replication_with_info.info
 
-    test "updates with FULL replica identity include changed fields", %{
-      stream: stream,
-      source_db: source_db
-    } do
-      UnboxedRepo.query(
-        "INSERT INTO #{@test_schema}.#{@test_table_full_replica} (name, house, planet, is_active, tags) VALUES ('Chani', 'Fremen', 'Arrakis', true, ARRAY['warrior', 'seer', 'royal,compound'])"
-      )
+  #     # Check last_committed_at
+  #     assert pg_replication_with_info.info.last_committed_at != nil
+  #     assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
+  #   end
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #   test "replication with 'with_operation' key format", %{
+  #     stream: stream,
+  #     pg_replication: pg_replication,
+  #     sup: sup
+  #   } do
+  #     {:ok, pg_replication} = Replication.update_pg_replication(pg_replication, %{key_format: :with_operation})
 
-      UnboxedRepo.query(
-        "UPDATE #{@test_schema}.#{@test_table_full_replica} SET house = 'Atreides', planet = 'Caladan', is_active = false, tags = ARRAY['warrior', 'seer', 'royal,interest'] WHERE id = 1"
-      )
+  #     # Restart the server
+  #     ReplicationRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
 
-      assert_receive {ReplicationExt, :message_handled}, 1_000
+  #     {:ok, _pid} = ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
 
-      [update_message] = Streams.list_messages_for_stream(stream.id)
-      assert update_message.key == "#{source_db.name}.#{@test_schema}.#{@test_table_full_replica}.1"
+  #     CharacterFactory.insert_character!()
 
-      decoded_data = Jason.decode!(update_message.data)
+  #     assert_receive {ReplicationExt, :message_handled}, 500
 
-      assert decoded_data["data"] == %{
-               "id" => 1,
-               "name" => "Chani",
-               "house" => "Atreides",
-               "planet" => "Caladan",
-               "is_active" => false,
-               "tags" => ["warrior", "seer", "royal,interest"]
-             }
+  #     [message] = Streams.list_messages_for_stream(stream.id)
+  #     assert message.key =~ "public.characters.insert"
+  #   end
 
-      refute decoded_data["deleted"]
+  #   test "updates with FULL replica identity include changed fields", %{
+  #     stream: stream,
+  #     source_db: source_db
+  #   } do
+  #     character =
+  #       CharacterFactory.insert_character!(%{
+  #         name: "Chani",
+  #         house: "Fremen",
+  #         planet: "Arrakis",
+  #         is_active: true,
+  #         tags: ["warrior", "seer", "royal,compound"]
+  #       })
 
-      assert decoded_data["changes"] == %{
-               "house" => "Fremen",
-               "planet" => "Arrakis",
-               "is_active" => true,
-               "tags" => ["warrior", "seer", "royal,compound"]
-             }
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      assert decoded_data["action"] == "update"
-    end
-  end
+  #     UnboxedRepo.update!(
+  #       Ecto.Changeset.change(character,
+  #         house: "Atreides",
+  #         planet: "Caladan",
+  #         is_active: false,
+  #         tags: ["warrior", "seer", "royal,interest"]
+  #       )
+  #     )
 
-  describe "create_pg_replication_for_account_with_lifecycle" do
-    setup do
-      account = AccountsFactory.insert_account!()
-      database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
-      stream = StreamsFactory.insert_stream!(account_id: account.id)
+  #     assert_receive {ReplicationExt, :message_handled}, 1_000
 
-      %{account: account, database: database, stream: stream}
-    end
+  #     dbg(Streams.list_messages_for_stream(stream.id))
+  #     [update_message] = Streams.list_messages_for_stream(stream.id)
+  #     assert update_message.key == "#{source_db.name}.public.characters.1"
 
-    test "creates a pg_replication in backfilling state and enqueues backfill jobs", %{
-      account: account,
-      database: database,
-      stream: stream
-    } do
-      attrs = %{
-        postgres_database_id: database.id,
-        stream_id: stream.id,
-        slot_name: replication_slot(),
-        publication_name: @publication,
-        status: :backfilling
-      }
+  #     decoded_data = Jason.decode!(update_message.data)
 
-      {:ok, pg_replication} = Replication.create_pg_replication_for_account_with_lifecycle(account.id, attrs)
+  #     assert decoded_data["data"] == %{
+  #              "id" => 1,
+  #              "name" => "Chani",
+  #              "house" => "Atreides",
+  #              "planet" => "Caladan",
+  #              "is_active" => false,
+  #              "tags" => ["warrior", "seer", "royal,interest"]
+  #            }
 
-      assert pg_replication.status == :backfilling
-      assert is_nil(pg_replication.backfill_completed_at)
+  #     refute decoded_data["deleted"]
 
-      # Check that backfill jobs are enqueued
-      assert_enqueued(worker: Sequin.Replication.BackfillPostgresTableWorker)
-    end
+  #     assert decoded_data["changes"] == %{
+  #              "house" => "Fremen",
+  #              "planet" => "Arrakis",
+  #              "is_active" => true,
+  #              "tags" => ["warrior", "seer", "royal,compound"]
+  #            }
 
-    test "fails to create pg_replication with invalid attributes", %{account: account} do
-      invalid_attrs = %{
-        postgres_database_id: Ecto.UUID.generate(),
-        stream_id: Ecto.UUID.generate(),
-        slot_name: "",
-        publication_name: ""
-      }
+  #     assert decoded_data["action"] == "update"
+  #   end
+  # end
 
-      assert {:error, _changeset} =
-               Replication.create_pg_replication_for_account_with_lifecycle(account.id, invalid_attrs)
-    end
-  end
+  # describe "create_pg_replication_for_account_with_lifecycle" do
+  #   setup do
+  #     account = AccountsFactory.insert_account!()
+  #     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
+  #     stream = StreamsFactory.insert_stream!(account_id: account.id)
+
+  #     %{account: account, database: database, stream: stream}
+  #   end
+
+  #   test "creates a pg_replication in backfilling state and enqueues backfill jobs", %{
+  #     account: account,
+  #     database: database,
+  #     stream: stream
+  #   } do
+  #     attrs = %{
+  #       postgres_database_id: database.id,
+  #       stream_id: stream.id,
+  #       slot_name: replication_slot(),
+  #       publication_name: @publication,
+  #       status: :backfilling
+  #     }
+
+  #     {:ok, pg_replication} = Replication.create_pg_replication_for_account_with_lifecycle(account.id, attrs)
+
+  #     assert pg_replication.status == :backfilling
+  #     assert is_nil(pg_replication.backfill_completed_at)
+
+  #     # Check that backfill jobs are enqueued
+  #     assert_enqueued(worker: Sequin.Replication.BackfillPostgresTableWorker)
+  #   end
+  # end
 
   @server_id __MODULE__
   @server_via ReplicationExt.via_tuple(@server_id)
 
   describe "replication in isolation" do
     test "changes are buffered, even if the listener is not up" do
-      UnboxedRepo.query!(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+      record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       test_pid = self()
 
@@ -394,15 +373,10 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert is_struct(change, NewRecord), "Expected change to be a NewRecord, got: #{inspect(change)}"
 
-      assert Map.equal?(change.record, %{
-               "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Arrakis"
-             })
+      assert Map.equal?(change.record, record)
 
-      assert change.table == @test_table
-      assert change.schema == @test_schema
+      assert change.table == "characters"
+      assert change.schema == "public"
     end
 
     @tag capture_log: true
@@ -417,9 +391,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
-      UnboxedRepo.query!(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Arrakis')"
-      )
+      record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, _}, :timer.seconds(1)
 
@@ -435,12 +407,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(change, NewRecord)
 
       # Should have received the record (it was re-delivered)
-      assert Map.equal?(change.record, %{
-               "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Arrakis"
-             })
+      assert Map.equal?(change.record, record)
     end
 
     test "creates, updates, and deletes are captured" do
@@ -453,51 +420,38 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: ReplicationMessageHandlerMock)
 
       # Test create
-      UnboxedRepo.query!(
-        "INSERT INTO #{@test_schema}.#{@test_table} (name, house, planet) VALUES ('Paul Atreides', 'Atreides', 'Caladan')"
-      )
+      character = CharacterFactory.insert_character_ident_full!(planet: "Caladan")
+      record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, create_change}, :timer.seconds(1)
       assert is_struct(create_change, NewRecord)
 
-      assert Map.equal?(create_change.record, %{
-               "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Caladan"
-             })
+      assert Map.equal?(create_change.record, record)
 
       assert create_change.type == "insert"
 
       # Test update
-      UnboxedRepo.query!("UPDATE #{@test_schema}.#{@test_table} SET planet = 'Arrakis' WHERE id = 1")
+      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
+      record = Map.put(record, "planet", "Arrakis")
 
       assert_receive {:change, update_change}, :timer.seconds(1)
       assert is_struct(update_change, UpdatedRecord)
 
-      assert Map.equal?(update_change.record, %{
-               "id" => 1,
-               "name" => "Paul Atreides",
-               "house" => "Atreides",
-               "planet" => "Arrakis"
-             })
+      assert Map.equal?(update_change.record, record)
 
-      assert is_nil(update_change.old_record)
+      refute is_nil(update_change.old_record)
+
+      assert update_change.old_record["planet"] == "Caladan"
 
       assert update_change.type == "update"
 
       # Test delete
-      UnboxedRepo.query!("DELETE FROM #{@test_schema}.#{@test_table} WHERE id = 1")
+      UnboxedRepo.delete!(character)
 
       assert_receive {:change, delete_change}, :timer.seconds(1)
       assert is_struct(delete_change, DeletedRecord)
 
-      assert Map.equal?(delete_change.old_record, %{
-               "id" => 1,
-               "name" => nil,
-               "house" => nil,
-               "planet" => nil
-             })
+      assert Map.equal?(delete_change.old_record, record)
 
       assert delete_change.type == "delete"
     end

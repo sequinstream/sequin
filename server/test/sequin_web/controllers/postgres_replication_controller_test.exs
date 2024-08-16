@@ -12,31 +12,11 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
 
   setup :authenticated_conn
 
-  @test_schema "__postgres_rep_controller_test_schema__"
-  @test_table "__postgres_rep_controller_test_table__"
-  @publication "__postgres_rep_controller_test_pub__"
+  @publication "characters_publication"
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
   setup %{account: account} do
-    # Controller tests validate that the replication slot and publication exist.  So, we need to
-    # create them for use later. We don't care about the table, but we need it in the database for this to work.
-    create_table_ddl = """
-    create table if not exists #{@test_schema}.#{@test_table} (
-      id serial primary key,
-      name text,
-      value text
-    )
-    """
-
-    ReplicationSlots.setup_each(
-      @test_schema,
-      [@test_table],
-      @publication,
-      replication_slot(),
-      [create_table_ddl]
-    )
-
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
     other_database = DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
@@ -294,8 +274,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   describe "create_backfills" do
     setup %{postgres_replication: postgres_replication} do
       tables = [
-        %{"schema" => @test_schema, "table" => @test_table},
-        %{"schema" => @test_schema, "table" => "another_test_table"}
+        %{"schema" => "public", "table" => "characters"},
+        %{"schema" => "public", "table" => "characters_2pk"}
       ]
 
       %{tables: tables, postgres_replication: postgres_replication}

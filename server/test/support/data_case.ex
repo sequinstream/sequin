@@ -17,6 +17,9 @@ defmodule Sequin.DataCase do
   use ExUnit.CaseTemplate
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Test.Support.Models.Character
+  alias Sequin.Test.Support.Models.Character2PK
+  alias Sequin.Test.UnboxedRepo
 
   using opts do
     quote do
@@ -32,6 +35,11 @@ defmodule Sequin.DataCase do
   end
 
   setup tags do
+    if tags[:unboxed] do
+      UnboxedRepo.delete_all(Character)
+      UnboxedRepo.delete_all(Character2PK)
+    end
+
     Sequin.DataCase.setup_sandbox(tags)
     :ok
   end

@@ -2,8 +2,8 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
-  alias Sequin.Cache
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Error
@@ -14,32 +14,20 @@ defmodule Sequin.Consumers do
 
   require Logger
 
-  def reload(%ConsumerEvent{} = ce) do
-    ce.consumer_id
-    |> ConsumerEvent.where_consumer_id()
-    |> ConsumerEvent.where_commit_lsn(ce.commit_lsn)
-    |> Repo.one()
-  end
-
   @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
+
+  @type consumer :: HttpPullConsumer.t() | HttpPushConsumer.t()
 
   def stream_schema, do: @stream_schema
   def config_schema, do: @config_schema
 
-  def all_consumers do
-    Repo.all(HttpPushConsumer)
-  end
-
-  def count_consumers_for_stream(_stream_id) do
-    0
-    # stream_id |> HttpPushConsumer.where_stream_id() |> Repo.aggregate(:count, :id)
-  end
+  # Consumers
 
   def get_consumer(consumer_id) do
-    case consumer_id |> HttpPushConsumer.where_id() |> Repo.one() do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
+    with {:error, _} <- get_http_pull_consumer(consumer_id),
+         {:error, _} <- get_http_push_consumer(consumer_id) do
+      {:error, Error.not_found(entity: :consumer)}
     end
   end
 
@@ -50,72 +38,20 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_consumers_for_account(account_id) do
-    account_id |> HttpPushConsumer.where_account_id() |> Repo.all()
+  def all_consumers do
+    Repo.all(HttpPushConsumer) ++ Repo.all(HttpPullConsumer)
   end
 
-  def list_consumers_for_stream(_stream_id) do
-    Repo.all(HttpPushConsumer)
+  def update_consumer_with_lifecycle(%HttpPullConsumer{} = consumer, attrs) do
+    consumer
+    |> HttpPullConsumer.update_changeset(attrs)
+    |> Repo.update()
   end
 
-  def list_active_push_consumers do
-    :push
-    |> HttpPushConsumer.where_kind()
-    |> HttpPushConsumer.where_status(:active)
-    |> Repo.all()
-  end
-
-  def cached_list_consumers_for_stream(stream_id) do
-    Cache.get_or_store(
-      list_consumers_for_stream_cache_key(stream_id),
-      fn -> list_consumers_for_stream(stream_id) end,
-      :timer.minutes(10)
-    )
-  end
-
-  defp list_consumers_for_stream_cache_key(stream_id), do: "list_consumers_for_stream_#{stream_id}"
-
-  def get_consumer_for_account(account_id, id_or_name) do
-    res = account_id |> HttpPushConsumer.where_account_id() |> HttpPushConsumer.where_id_or_name(id_or_name) |> Repo.one()
-
-    case res do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
-    end
-  end
-
-  def get_consumer_for_stream(_stream_id, id_or_name) do
-    res = id_or_name |> HttpPushConsumer.where_id_or_name() |> Repo.one()
-
-    case res do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
-    end
-  end
-
-  def create_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
-    Repo.transact(fn ->
-      with {:ok, consumer} <- create_consumer(account_id, attrs),
-           :ok <- create_consumer_partition(consumer) do
-        unless opts[:no_backfill] do
-          backfill_consumer!(consumer)
-        end
-
-        # if consumer.kind == :push and env() != :test do
-        #   StreamsRuntime.Supervisor.start_for_push_consumer(consumer)
-        # end
-
-        consumer = Repo.reload!(consumer)
-
-        {:ok, consumer}
-      end
-    end)
-  end
-
-  def create_consumer_with_lifecycle(attrs, opts \\ []) do
-    account_id = Map.fetch!(attrs, :account_id)
-
-    create_consumer_for_account_with_lifecycle(account_id, attrs, opts)
+  def update_consumer_with_lifecycle(%HttpPushConsumer{} = consumer, attrs) do
+    consumer
+    |> HttpPushConsumer.update_changeset(attrs)
+    |> Repo.update()
   end
 
   def delete_consumer_with_lifecycle(consumer) do
@@ -131,21 +67,162 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def update_consumer_with_lifecycle(%HttpPushConsumer{} = consumer, attrs) do
-    consumer
-    |> HttpPushConsumer.update_changeset(attrs)
-    |> Repo.update()
+  def delete_consumer(consumer) do
+    Repo.delete(consumer)
   end
 
-  def create_consumer(account_id, attrs) do
+  # HttpPullConsumer
+
+  def get_http_pull_consumer(consumer_id) do
+    case Repo.get(HttpPullConsumer, consumer_id) do
+      nil -> {:error, Error.not_found(entity: :http_pull_consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def get_http_pull_consumer_for_account(account_id, id_or_name) do
+    res = account_id |> HttpPullConsumer.where_account_id() |> HttpPullConsumer.where_id_or_name(id_or_name) |> Repo.one()
+
+    case res do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      with {:ok, consumer} <- create_http_pull_consumer(account_id, attrs),
+           :ok <- create_consumer_partition(consumer) do
+        unless opts[:no_backfill] do
+          backfill_consumer!(consumer)
+        end
+
+        consumer = Repo.reload!(consumer)
+
+        {:ok, consumer}
+      end
+    end)
+  end
+
+  def create_http_pull_consumer_with_lifecycle(attrs, opts \\ []) do
+    account_id = Map.fetch!(attrs, :account_id)
+    create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, opts)
+  end
+
+  def create_http_pull_consumer(account_id, attrs) do
+    %HttpPullConsumer{account_id: account_id}
+    |> HttpPullConsumer.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  # HttpPushConsumer
+
+  def get_http_push_consumer(consumer_id) do
+    case Repo.get(HttpPushConsumer, consumer_id) do
+      nil -> {:error, Error.not_found(entity: :http_push_consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
+  def list_active_push_consumers do
+    :push
+    |> HttpPushConsumer.where_kind()
+    |> HttpPushConsumer.where_status(:active)
+    |> Repo.all()
+  end
+
+  def create_http_push_consumer_for_account_with_lifecycle(account_id, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      with {:ok, consumer} <- create_http_push_consumer(account_id, attrs),
+           :ok <- create_consumer_partition(consumer) do
+        unless opts[:no_backfill] do
+          backfill_consumer!(consumer)
+        end
+
+        consumer = Repo.reload!(consumer)
+
+        {:ok, consumer}
+      end
+    end)
+  end
+
+  def create_http_push_consumer_with_lifecycle(attrs, opts \\ []) do
+    account_id = Map.fetch!(attrs, :account_id)
+    create_http_push_consumer_for_account_with_lifecycle(account_id, attrs, opts)
+  end
+
+  def create_http_push_consumer(account_id, attrs) do
     %HttpPushConsumer{account_id: account_id}
     |> HttpPushConsumer.create_changeset(attrs)
     |> Repo.insert()
   end
 
-  def delete_consumer(%HttpPushConsumer{} = consumer) do
-    Repo.delete(consumer)
+  # ConsumerEvent
+
+  def reload(%ConsumerEvent{} = ce) do
+    ce.consumer_id
+    |> ConsumerEvent.where_consumer_id()
+    |> ConsumerEvent.where_commit_lsn(ce.commit_lsn)
+    |> Repo.one()
   end
+
+  def get_consumer_event(consumer_id, commit_lsn) do
+    consumer_event =
+      consumer_id
+      |> ConsumerEvent.where_consumer_id()
+      |> ConsumerEvent.where_commit_lsn(commit_lsn)
+      |> Repo.one()
+
+    case consumer_event do
+      nil -> {:error, Error.not_found(entity: :consumer_event)}
+      consumer_event -> {:ok, consumer_event}
+    end
+  end
+
+  def get_consumer_event!(consumer_id, commit_lsn) do
+    case get_consumer_event(consumer_id, commit_lsn) do
+      {:ok, consumer_event} -> consumer_event
+      {:error, _} -> raise Error.not_found(entity: :consumer_event)
+    end
+  end
+
+  def list_consumer_events_for_consumer(consumer_id, params \\ []) do
+    base_query = ConsumerEvent.where_consumer_id(consumer_id)
+
+    query =
+      Enum.reduce(params, base_query, fn
+        {:is_deliverable, false}, query ->
+          ConsumerEvent.where_not_visible(query)
+
+        {:is_deliverable, true}, query ->
+          ConsumerEvent.where_deliverable(query)
+
+        {:limit, limit}, query ->
+          limit(query, ^limit)
+
+        {:order_by, order_by}, query ->
+          order_by(query, ^order_by)
+      end)
+
+    Repo.all(query)
+  end
+
+  def insert_consumer_events(consumer_events) do
+    now = DateTime.utc_now()
+
+    entries =
+      Enum.map(consumer_events, fn event ->
+        Map.merge(event, %{
+          updated_at: now,
+          inserted_at: now
+        })
+      end)
+
+    {count, _} = Repo.insert_all(ConsumerEvent, entries)
+    {:ok, count}
+  end
+
+  # Consumer Lifecycle
 
   defp create_consumer_partition(%{message_kind: :event} = consumer) do
     """
@@ -194,6 +271,8 @@ defmodule Sequin.Consumers do
       {:error, error} -> {:error, error}
     end
   end
+
+  # Consuming / Acking Messages
 
   def upsert_consumer_messages(%{}, []), do: {:ok, []}
 
@@ -281,71 +360,10 @@ defmodule Sequin.Consumers do
     :ok
   end
 
-  # ConsumerEvent
-
-  def list_consumer_events_for_consumer(consumer_id, params \\ []) do
-    base_query = ConsumerEvent.where_consumer_id(consumer_id)
-
-    query =
-      Enum.reduce(params, base_query, fn
-        {:is_deliverable, false}, query ->
-          ConsumerEvent.where_not_visible(query)
-
-        {:is_deliverable, true}, query ->
-          ConsumerEvent.where_deliverable(query)
-
-        {:limit, limit}, query ->
-          limit(query, ^limit)
-
-        {:order_by, order_by}, query ->
-          order_by(query, ^order_by)
-      end)
-
-    Repo.all(query)
-  end
-
-  def get_consumer_event(consumer_id, commit_lsn) do
-    consumer_event =
-      consumer_id
-      |> ConsumerEvent.where_consumer_id()
-      |> ConsumerEvent.where_commit_lsn(commit_lsn)
-      |> Repo.one()
-
-    case consumer_event do
-      nil -> {:error, Error.not_found(entity: :consumer_event)}
-      consumer_event -> {:ok, consumer_event}
-    end
-  end
-
-  def get_consumer_event!(consumer_id, commit_lsn) do
-    case get_consumer_event(consumer_id, commit_lsn) do
-      {:ok, consumer_event} -> consumer_event
-      {:error, _} -> raise Error.not_found(entity: :consumer_event)
-    end
-  end
-
-  def insert_consumer_events(consumer_id, consumer_events) do
-    now = DateTime.utc_now()
-
-    entries =
-      Enum.map(consumer_events, fn event ->
-        Map.merge(event, %{
-          consumer_id: consumer_id,
-          updated_at: now,
-          inserted_at: now
-        })
-      end)
-
-    {count, _} = Repo.insert_all(ConsumerEvent, entries)
-    {:ok, count}
-  end
-
-  # HttpPushConsumer Backfills
+  # Backfills
 
   def backfill_limit, do: 10_000
 
-  # We make the first backfill pull synchronous and maybe mark the consumer as backfilled
-  # The Oban job always runs to catch up with race conditions then to clear acked messages
   defp backfill_consumer!(consumer) do
     {:ok, messages} = backfill_messages_for_consumer(consumer)
 

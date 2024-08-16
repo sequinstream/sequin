@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Replication.PostgresReplicationSlot
 
   @derive {Jason.Encoder,
            only: [
@@ -33,6 +34,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
     belongs_to :account, Account
+    belongs_to :replication_slot, PostgresReplicationSlot
 
     timestamps()
   end
@@ -47,6 +49,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :message_kind,
       :name,
       :backfill_completed_at,
+      :replication_slot_id,
       :status
     ])
     |> validate_required([:name, :status])

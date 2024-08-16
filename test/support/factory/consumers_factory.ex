@@ -9,6 +9,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Repo
 
@@ -45,6 +46,11 @@ defmodule Sequin.Factory.ConsumersFactory do
         StreamsFactory.insert_http_endpoint!(account_id: account_id).id
       end)
 
+    {replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :replication_slot_id, fn ->
+        ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
+      end)
+
     merge_attributes(
       %HttpPushConsumer{
         name: Factory.unique_word(),
@@ -56,6 +62,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_waiting: 20,
         account_id: account_id,
         http_endpoint_id: http_endpoint_id,
+        replication_slot_id: replication_slot_id,
         status: :active
       },
       attrs
@@ -80,7 +87,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> http_push_consumer_attrs()
 
     {:ok, consumer} =
-      Consumers.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+      Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
 
     consumer
   end
@@ -90,6 +97,11 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :replication_slot_id, fn ->
+        ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
+      end)
 
     merge_attributes(
       %HttpPullConsumer{
@@ -101,6 +113,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         account_id: account_id,
+        replication_slot_id: replication_slot_id,
         status: :active
       },
       attrs
@@ -125,7 +138,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> http_pull_consumer_attrs()
 
     {:ok, consumer} =
-      Consumers.create_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+      Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
 
     consumer
   end

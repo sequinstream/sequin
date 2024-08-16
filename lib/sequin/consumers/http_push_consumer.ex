@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Streams.HttpEndpoint
 
   @derive {Jason.Encoder,
@@ -36,6 +37,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
 
     belongs_to :account, Account
     belongs_to :http_endpoint, HttpEndpoint
+    belongs_to :replication_slot, PostgresReplicationSlot
 
     timestamps()
   end
@@ -51,6 +53,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :name,
       :backfill_completed_at,
       :http_endpoint_id,
+      :replication_slot_id,
       :status
     ])
     |> validate_required([:name, :status])

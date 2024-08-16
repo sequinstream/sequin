@@ -89,6 +89,13 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :name, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
 
+      add :replication_slot_id,
+          references(:postgres_replication_slots,
+            with: [account_id: :account_id],
+            prefix: @config_schema
+          ),
+          null: false
+
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000
       add :max_deliver, :integer, null: true
@@ -106,6 +113,13 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
       add :name, :text, null: false
       add :backfill_completed_at, :utc_datetime_usec
+
+      add :replication_slot_id,
+          references(:postgres_replication_slots,
+            with: [account_id: :account_id],
+            prefix: @config_schema
+          ),
+          null: false
 
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000

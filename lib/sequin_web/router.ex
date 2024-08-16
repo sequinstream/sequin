@@ -26,8 +26,6 @@ defmodule SequinWeb.Router do
   scope "/api", SequinWeb do
     pipe_through(:api)
 
-    resources("/streams", StreamController, except: [:new, :edit], param: "id_or_name")
-
     resources("/streams/:stream_id_or_name/consumers", ConsumerController,
       except: [:new, :edit],
       param: "id_or_name"

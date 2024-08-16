@@ -1,7 +1,7 @@
 # Sequin
 
 > [!IMPORTANT]
-> Sequin is still pre-alpha. Join the [release list](https://sequinstream.com/alpha) to get notified when we hit alpha.
+> _08/15/2024_: Sequin is undergoing major upgrades, and `main` will not be stable for a couple weeks. [See the `0.3.7` tag for the last stable release](https://github.com/sequinstream/sequin/tree/v0.3.7). Join the [release list](https://sequinstream.com/alpha) to get notified when we hit alpha.
 
 ## What is Sequin?
 

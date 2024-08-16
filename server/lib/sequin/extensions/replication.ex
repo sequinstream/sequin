@@ -24,8 +24,6 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
 
-  # alias Sequin.JSON
-
   require Logger
 
   def ets_table, do: __MODULE__
@@ -47,6 +45,7 @@ defmodule Sequin.Extensions.Replication do
       field :step, :disconnected | :streaming
       field :test_pid, pid()
       field :connection, map()
+      field :schemas, %{}, default: %{}
     end
   end
 
@@ -197,8 +196,8 @@ defmodule Sequin.Extensions.Replication do
         %{name: name, type: type, pk?: name in primary_keys}
       end)
 
-    :ets.insert(ets_table(), {{state.id, id}, columns, schema, table})
-    state
+    updated_schemas = Map.put(state.schemas, id, {columns, schema, table})
+    %{state | schemas: updated_schemas}
   end
 
   defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{} = state) do
@@ -216,7 +215,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp process_message(%Insert{} = msg, state) do
-    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
     record = %NewRecord{
       commit_timestamp: state.current_commit_ts,
@@ -241,7 +240,7 @@ defmodule Sequin.Extensions.Replication do
   #   tuple_data: {"1", "Chani", "Atreides", "Arrakis"}
   # },
   defp process_message(%Update{} = msg, %State{} = state) do
-    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
     old_record =
       if msg.old_tuple_data do
@@ -274,7 +273,7 @@ defmodule Sequin.Extensions.Replication do
   # Otherwise, in full mode, we'll get old_tuple_data.
 
   defp process_message(%Delete{} = msg, %State{} = state) do
-    [{_, columns, schema, table}] = :ets.lookup(ets_table(), {state.id, msg.relation_id})
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
     prev_tuple_data =
       if msg.old_tuple_data do

@@ -52,15 +52,15 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       timestamps()
     end
 
-    create unique_index(:postgres_replications, [:slot_name, :postgres_database_id],
+    create unique_index(:postgres_replication_slots, [:slot_name, :postgres_database_id],
              prefix: @config_schema
            )
 
-    create index(:postgres_replications, [:account_id], prefix: @config_schema)
-    create index(:postgres_replications, [:postgres_database_id], prefix: @config_schema)
+    create index(:postgres_replication_slots, [:account_id], prefix: @config_schema)
+    create index(:postgres_replication_slots, [:postgres_database_id], prefix: @config_schema)
 
     # This is for the FKs from stream_tables to this table
-    create unique_index(:postgres_replications, [:id, :account_id], prefix: @config_schema)
+    create unique_index(:postgres_replication_slots, [:id, :account_id], prefix: @config_schema)
 
     create table(:http_endpoints, prefix: @config_schema) do
       add :name, :string, null: true
@@ -144,8 +144,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
              options: "PARTITION BY LIST (consumer_id)"
            ) do
       add :consumer_id, :uuid, null: false, primary_key: true
-      add :id, :uuid, null: false, primary_key: true
-      add :seq, :serial, null: false
+      add :id, :serial, null: false, primary_key: true
       add :commit_lsn, :bigint, null: false
       add :record_pks, :jsonb, null: false
       add :table_oid, :integer, null: false
@@ -173,7 +172,6 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
              :consumer_events,
              [
                :consumer_id,
-               :state,
                :not_visible_until,
                :last_delivered_at
              ],

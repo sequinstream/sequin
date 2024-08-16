@@ -176,12 +176,8 @@ defmodule Sequin.Factory.StreamsFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    {stream_id, attrs} =
-      Map.pop_lazy(attrs, :stream_id, fn -> insert_stream!(account_id: account_id).id end)
-
     attrs =
       attrs
-      |> Map.put(:stream_id, stream_id)
       |> Map.put(:account_id, account_id)
       |> consumer_attrs()
 

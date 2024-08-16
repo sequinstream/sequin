@@ -14,7 +14,6 @@ defmodule Sequin.Streams do
   alias Sequin.Streams.Message
   alias Sequin.Streams.Migrations
   alias Sequin.Streams.NewMessage
-  alias Sequin.Streams.Query
   alias Sequin.Streams.SourceTable
   alias Sequin.Streams.Stream
   alias Sequin.Streams.StreamTable
@@ -254,7 +253,7 @@ defmodule Sequin.Streams do
           %ConsumerMessage{consumer_id: consumer.id, message_key: message.key, message_seq: message.seq}
         end)
       end)
-      |> upsert_consumer_messages()
+      |> then(&Consumers.upsert_consumer_messages(%{}, &1))
 
       {:ok, %{count: count, messages: messages}}
     end
@@ -398,25 +397,6 @@ defmodule Sequin.Streams do
       {:ok, consumer_message} -> consumer_message
       {:error, _} -> raise Error.not_found(entity: :consumer_message)
     end
-  end
-
-  def upsert_consumer_messages([]), do: {:ok, []}
-
-  def upsert_consumer_messages(consumer_messages) do
-    {consumer_ids, message_keys, message_seqs} =
-      consumer_messages
-      |> Enum.map(fn message ->
-        {message.consumer_id, message.message_key, message.message_seq}
-      end)
-      |> Enum.reduce({[], [], []}, fn {consumer_id, message_key, message_seq}, {ids, keys, seqs} ->
-        {[consumer_id | ids], [message_key | keys], [message_seq | seqs]}
-      end)
-
-    Query.upsert_consumer_messages(
-      consumer_ids: Enum.map(consumer_ids, &UUID.string_to_binary!/1),
-      message_keys: message_keys,
-      message_seqs: message_seqs
-    )
   end
 
   def delete_acked_consumer_messages_for_consumer(consumer_id, limit \\ 1000) do

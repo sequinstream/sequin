@@ -1,3 +1,3 @@
 Mox.defmock(Sequin.Mocks.Extensions.ReplicationMessageHandlerMock,
-  for: Sequin.Extensions.ReplicationMessageHandler
+  for: Sequin.Extensions.ReplicationMessageHandlerBehaviour
 )

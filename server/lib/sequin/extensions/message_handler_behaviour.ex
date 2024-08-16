@@ -1,4 +1,4 @@
-defmodule Sequin.Extensions.ReplicationMessageHandler do
+defmodule Sequin.Extensions.ReplicationMessageHandlerBehaviour do
   @moduledoc """
   Defines a behaviour for handling replication messages from Postgres.
   """

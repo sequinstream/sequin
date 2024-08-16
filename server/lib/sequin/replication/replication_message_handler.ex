@@ -1,11 +1,11 @@
-defmodule Sequin.Replication.PostgresReplicationMessageHandler do
+defmodule Sequin.Replication.ReplicationMessageHandler do
   @moduledoc false
-  @behaviour Sequin.Extensions.ReplicationMessageHandler
+  @behaviour Sequin.Extensions.ReplicationMessageHandlerBehaviour
 
   alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.NewRecord
   alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
-  alias Sequin.Extensions.ReplicationMessageHandler
+  alias Sequin.Extensions.ReplicationMessageHandlerBehaviour
   alias Sequin.Replication.PostgresReplication
   alias Sequin.Streams
 
@@ -28,7 +28,7 @@ defmodule Sequin.Replication.PostgresReplicationMessageHandler do
     }
   end
 
-  @impl ReplicationMessageHandler
+  @impl ReplicationMessageHandlerBehaviour
   def handle_message(%Context{} = ctx, message) do
     message = message_for_upsert(ctx.key_prefix, message, ctx.key_format)
     Streams.upsert_messages(ctx.stream_id, [message])

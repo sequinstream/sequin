@@ -6,6 +6,7 @@ defmodule Sequin.Streams.Stream do
   import Ecto.Query
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers
   alias Sequin.Streams
   alias Sequin.Streams.Stream
 
@@ -61,7 +62,7 @@ defmodule Sequin.Streams.Stream do
       stream
       | stats: %{
           message_count: Streams.fast_count_messages_for_stream(stream_id),
-          consumer_count: Streams.count_consumers_for_stream(stream_id),
+          consumer_count: Consumers.count_consumers_for_stream(stream_id),
           storage_size: Streams.approximate_storage_size_for_stream(stream_id)
         }
     }

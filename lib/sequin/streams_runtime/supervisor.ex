@@ -2,7 +2,8 @@ defmodule Sequin.StreamsRuntime.Supervisor do
   @moduledoc false
   use Supervisor
 
-  alias Sequin.Streams
+  alias Sequin.Consumers
+  alias Sequin.Consumers.Consumer
   alias Sequin.Streams.DynamicSupervisor
   alias Sequin.StreamsRuntime.HttpPushPipeline
 
@@ -18,7 +19,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
 
   def start_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id, opts \\ [])
 
-  def start_for_push_consumer(supervisor, %Streams.Consumer{} = consumer, opts) do
+  def start_for_push_consumer(supervisor, %Consumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
     opts = Keyword.merge(default_opts, opts)
 
@@ -26,7 +27,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
   end
 
   def start_for_push_consumer(supervisor, id, opts) do
-    case Streams.get_consumer(id) do
+    case Consumers.get_consumer(id) do
       {:ok, consumer} -> start_for_push_consumer(supervisor, consumer, opts)
       error -> error
     end
@@ -34,7 +35,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
 
   def stop_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id)
 
-  def stop_for_push_consumer(supervisor, %Streams.Consumer{id: id}) do
+  def stop_for_push_consumer(supervisor, %Consumer{id: id}) do
     stop_for_push_consumer(supervisor, id)
   end
 

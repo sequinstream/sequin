@@ -1,6 +1,7 @@
 defmodule Sequin.StreamsIntegrationTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Consumers
   alias Sequin.Factory.StreamsFactory
   alias Sequin.Streams
   alias Sequin.StreamsRuntime.AssignMessageSeq
@@ -22,7 +23,7 @@ defmodule Sequin.StreamsIntegrationTest do
           max_ack_pending: 10
         }
         |> StreamsFactory.consumer_attrs()
-        |> Streams.create_consumer_with_lifecycle()
+        |> Consumers.create_consumer_with_lifecycle()
 
       # Upsert a batch of messages for both streams
       messages_for_stream = for _ <- 1..5, do: StreamsFactory.message_attrs(%{stream_id: stream.id})
@@ -39,14 +40,14 @@ defmodule Sequin.StreamsIntegrationTest do
       assert_receive {PopulateConsumerMessages, :populate_done}
 
       # Call receive_for_consumer
-      {:ok, received_messages} = Streams.receive_for_consumer(consumer)
+      {:ok, received_messages} = Consumers.receive_for_consumer(consumer)
 
       # Assert we got the messages for the correct stream
       assert length(received_messages) == 5
       assert Enum.all?(received_messages, &(&1.stream_id == stream.id))
 
       # Call receive_for_consumer again - we shouldn't receive any messages
-      {:ok, empty_messages} = Streams.receive_for_consumer(consumer)
+      {:ok, empty_messages} = Consumers.receive_for_consumer(consumer)
       assert empty_messages == []
 
       # Get the outstanding messages

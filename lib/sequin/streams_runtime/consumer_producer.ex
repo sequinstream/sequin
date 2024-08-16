@@ -5,6 +5,7 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
   use GenStage
 
   alias Broadway.Message
+  alias Sequin.Consumers
   alias Sequin.Repo
   alias Sequin.Streams
 
@@ -35,7 +36,7 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
     messages_to_fetch = min(demand, state.batch_size)
-    {:ok, messages} = Streams.receive_for_consumer(state.consumer, batch_size: messages_to_fetch)
+    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: messages_to_fetch)
 
     broadway_messages =
       Enum.map(messages, fn message ->

@@ -4,6 +4,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
@@ -296,7 +297,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs = Map.new(attrs)
 
     {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!().id end)
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :event).id end)
 
     attrs
     |> Map.put(:consumer_id, consumer_id)
@@ -335,6 +336,45 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.put(:account_id, account_id)
     |> http_endpoint_attrs()
     |> then(&HttpEndpoint.changeset(%HttpEndpoint{}, &1))
+    |> Repo.insert!()
+  end
+
+  # ConsumerRecord
+  def consumer_record(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %ConsumerRecord{
+        consumer_id: Factory.uuid(),
+        commit_lsn: Enum.random(1..1_000_000),
+        record_pks: [Faker.UUID.v4()],
+        table_oid: Enum.random(1..100_000),
+        state: Enum.random([:available, :acked, :delivered, :pending_redelivery]),
+        ack_id: Factory.uuid(),
+        deliver_count: Enum.random(0..10),
+        last_delivered_at: Factory.timestamp(),
+        not_visible_until: Enum.random([nil, Factory.timestamp()])
+      },
+      attrs
+    )
+  end
+
+  def consumer_record_attrs(attrs \\ []) do
+    attrs
+    |> consumer_record()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_consumer_record!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {consumer_id, attrs} =
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :record).id end)
+
+    attrs
+    |> Map.put(:consumer_id, consumer_id)
+    |> consumer_record_attrs()
+    |> then(&ConsumerRecord.create_changeset(%ConsumerRecord{}, &1))
     |> Repo.insert!()
   end
 end

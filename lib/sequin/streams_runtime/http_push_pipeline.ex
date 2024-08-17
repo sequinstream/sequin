@@ -6,7 +6,6 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Streams.HttpEndpoint
-  alias Sequin.Streams.Message
 
   require Logger
 
@@ -46,14 +45,14 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   end
 
   @impl Broadway
-  def handle_message(_, %Broadway.Message{data: %Message{} = m} = message, %{
+  def handle_message(_, %Broadway.Message{data: message_data} = message, %{
         consumer: consumer,
         http_endpoint: http_endpoint,
         req_opts: req_opts
       }) do
     Logger.metadata(consumer_id: consumer.id, http_endpoint_id: http_endpoint.id)
 
-    case push_message(http_endpoint, m, req_opts) do
+    case push_message(http_endpoint, message_data, req_opts) do
       :ok ->
         message
 
@@ -63,12 +62,12 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
     end
   end
 
-  defp push_message(%HttpEndpoint{} = http_endpoint, %Message{} = message, req_opts) do
+  defp push_message(%HttpEndpoint{} = http_endpoint, message_data, req_opts) do
     req =
       [
         base_url: http_endpoint.base_url,
         headers: http_endpoint.headers,
-        json: %{data: message.data, key: message.key}
+        json: message_data
       ]
       |> Keyword.merge(req_opts)
       |> Req.new()

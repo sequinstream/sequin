@@ -2,6 +2,44 @@ defmodule Sequin.Postgres do
   @moduledoc false
   alias Sequin.Repo
 
+  def list_schemas(conn) do
+    with {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
+      filtered_schemas =
+        rows
+        |> List.flatten()
+        |> Enum.reject(&(&1 in ["pg_toast", "pg_catalog", "information_schema"]))
+
+      {:ok, filtered_schemas}
+    end
+  end
+
+  def list_tables(conn, schema) do
+    with {:ok, %{rows: rows}} <-
+           Postgrex.query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
+      {:ok, List.flatten(rows)}
+    end
+  end
+
+  def fetch_table_oid(conn, schema, table) do
+    case Postgrex.query(conn, "SELECT '#{schema}.#{table}'::regclass::oid", []) do
+      {:ok, %{rows: [[oid]]}} -> oid
+      _ -> nil
+    end
+  end
+
+  def list_columns(conn, schema, table) do
+    res = Postgrex.query(conn, "
+    SELECT attnum, attname, format_type(atttypid, atttypmod)
+    FROM pg_attribute
+    WHERE attrelid = '#{schema}.#{table}'::regclass AND attnum > 0 AND NOT attisdropped
+    ORDER BY attnum
+  ", [])
+
+    with {:ok, %{rows: rows}} <- res do
+      {:ok, rows}
+    end
+  end
+
   def try_advisory_xact_lock(term) do
     lock_key = :erlang.phash2(term)
 
@@ -26,20 +64,20 @@ defmodule Sequin.Postgres do
     identifier(identifier, prefix: prefix, suffix: suffix)
   end
 
-  def identifier(identifier, opts) when is_list(opts) do
+  def identifier(identifier, opts \\ []) when is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
     suffix = Keyword.get(opts, :suffix)
 
     max_identifier_length =
       63 -
         if(prefix, do: byte_size(to_string(prefix)) + 1, else: 0) -
-        if suffix, do: byte_size(to_string(suffix)) + 1, else: 0
+        if(suffix, do: byte_size(to_string(suffix)) + 1, else: 0)
 
     truncated_identifier = String.slice(identifier, 0, max_identifier_length)
 
-    [prefix, ?_, truncated_identifier, ?_, suffix]
+    [prefix, truncated_identifier, suffix]
     |> Enum.reject(&is_nil/1)
-    |> to_string()
+    |> Enum.join("_")
   end
 
   def quote_names(names) do

@@ -11,8 +11,8 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Factory.StreamsFactory
   alias Sequin.Repo
+  alias Sequin.Streams.HttpEndpoint
 
   # Consumer
   def consumer(attrs \\ []) do
@@ -44,7 +44,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {http_endpoint_id, attrs} =
       Map.pop_lazy(attrs, :http_endpoint_id, fn ->
-        StreamsFactory.insert_http_endpoint!(account_id: account_id).id
+        ConsumersFactory.insert_http_endpoint!(account_id: account_id).id
       end)
 
     {replication_slot_id, attrs} =
@@ -195,6 +195,10 @@ defmodule Sequin.Factory.ConsumersFactory do
   def consumer_event(attrs \\ []) do
     attrs = Map.new(attrs)
 
+    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
+
+    data = create_data_for_action(action)
+
     merge_attributes(
       %ConsumerEvent{
         consumer_id: Factory.uuid(),
@@ -205,13 +209,41 @@ defmodule Sequin.Factory.ConsumersFactory do
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
         not_visible_until: Enum.random([nil, Factory.timestamp()]),
-        data: %{
-          "action" => Enum.random(["INSERT", "UPDATE", "DELETE"]),
-          "data" => %{"column" => Faker.Lorem.word()}
-        }
+        data: data
       },
       attrs
     )
+  end
+
+  defp create_data_for_action(:insert) do
+    record = %{"column" => Faker.Lorem.word()}
+
+    %{
+      "record" => record,
+      "changes" => nil,
+      "action" => :insert
+    }
+  end
+
+  defp create_data_for_action(:update) do
+    record = %{"column" => Faker.Lorem.word()}
+    changes = %{"column" => Faker.Lorem.word()}
+
+    %{
+      "record" => record,
+      "changes" => changes,
+      "action" => :update
+    }
+  end
+
+  defp create_data_for_action(:delete) do
+    record = %{"column" => Faker.Lorem.word()}
+
+    %{
+      "record" => record,
+      "changes" => nil,
+      "action" => :delete
+    }
   end
 
   def consumer_event_attrs(attrs \\ []) do
@@ -230,6 +262,39 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.put(:consumer_id, consumer_id)
     |> consumer_event_attrs()
     |> then(&ConsumerEvent.changeset(%ConsumerEvent{}, &1))
+    |> Repo.insert!()
+  end
+
+  # HttpEndpoint
+
+  def http_endpoint(attrs \\ []) do
+    merge_attributes(
+      %HttpEndpoint{
+        name: "Test Endpoint",
+        base_url: "https://example.com/webhook",
+        headers: %{"Content-Type" => "application/json"},
+        account_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def http_endpoint_attrs(attrs \\ []) do
+    attrs
+    |> http_endpoint()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_http_endpoint!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    attrs
+    |> Map.put(:account_id, account_id)
+    |> http_endpoint_attrs()
+    |> then(&HttpEndpoint.changeset(%HttpEndpoint{}, &1))
     |> Repo.insert!()
   end
 end

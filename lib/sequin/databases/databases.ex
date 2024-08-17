@@ -2,6 +2,7 @@ defmodule Sequin.Databases do
   @moduledoc false
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
+  alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.TcpUtils
 
@@ -78,13 +79,36 @@ defmodule Sequin.Databases do
     |> Postgrex.start_link()
   end
 
-  @spec with_connection(%PostgresDatabase{}, (pid() -> any())) :: any()
-  def with_connection(%PostgresDatabase{} = db, fun) do
+  @spec with_connection(%PostgresDatabase{}, (pid() -> any()), keyword()) :: any()
+  def with_connection(%PostgresDatabase{} = db, fun, opts \\ []) do
+    Logger.metadata(database_id: db.id)
+
+    timeout =
+      Keyword.get_lazy(opts, :timeout, fn ->
+        if env() == :test do
+          200
+        else
+          30_000
+        end
+      end)
+
     with {:ok, conn} <- start_link(db) do
       try do
-        fun.(conn)
+        task =
+          Task.async(fn ->
+            Logger.metadata(database_id: db.id)
+            fun.(conn)
+          end)
+
+        Task.await(task, timeout)
+      catch
+        :exit, _ ->
+          {:error, Error.service(service: :database, message: "Database operation timed out", code: :timeout)}
       after
-        GenServer.stop(conn)
+        # issue with this crashing tests, not sure why
+        unless env() == :test do
+          GenServer.stop(conn)
+        end
       end
     end
   end
@@ -269,23 +293,78 @@ defmodule Sequin.Databases do
     end
   end
 
-  def list_schemas(%PostgresDatabase{} = database) do
-    with {:ok, conn} <- start_link(database),
-         {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
-      filtered_schemas =
-        rows
-        |> List.flatten()
-        |> Enum.reject(&(&1 in ["pg_toast", "pg_catalog", "information_schema"]))
-
-      {:ok, filtered_schemas}
+  @spec tables(%PostgresDatabase{}) :: {:ok, [PostgresDatabase.Table.t()]} | {:error, term()}
+  def tables(%PostgresDatabase{tables: []} = db) do
+    with {:ok, updated_db} <- update_tables(db) do
+      {:ok, updated_db.tables}
     end
   end
 
-  def list_tables(%PostgresDatabase{} = database, schema) do
-    with {:ok, conn} <- start_link(database),
-         {:ok, %{rows: rows}} <-
-           Postgrex.query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
-      {:ok, List.flatten(rows)}
+  def tables(%PostgresDatabase{tables: tables}) do
+    {:ok, tables}
+  end
+
+  @spec update_tables(%PostgresDatabase{}) :: {:ok, %PostgresDatabase{}} | {:error, term()}
+  def update_tables(%PostgresDatabase{} = db) do
+    with_connection(db, fn conn ->
+      update_tables(conn, db)
+    end)
+  end
+
+  defp update_tables(conn, %PostgresDatabase{} = db) do
+    with {:ok, schemas} <- list_schemas(conn),
+         {:ok, tables} <- list_tables_for_schemas(conn, schemas) do
+      tables = PostgresDatabase.tables_to_map(tables)
+
+      db
+      |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
+      |> Repo.update()
     end
+  end
+
+  defp list_tables_for_schemas(conn, schemas) do
+    Enum.reduce_while(schemas, {:ok, []}, fn schema, {:ok, acc} ->
+      case list_tables(conn, schema) do
+        {:ok, tables} ->
+          schema_tables =
+            Enum.map(tables, fn table ->
+              %PostgresDatabase.Table{
+                oid: Postgres.fetch_table_oid(conn, schema, table),
+                schema: schema,
+                name: table,
+                columns: list_columns(conn, schema, table)
+              }
+            end)
+
+          {:cont, {:ok, acc ++ schema_tables}}
+
+        error ->
+          {:halt, error}
+      end
+    end)
+  end
+
+  def list_schemas(%PostgresDatabase{} = database) do
+    with_connection(database, &list_schemas/1)
+  end
+
+  def list_schemas(conn), do: Postgres.list_schemas(conn)
+
+  def list_tables(%PostgresDatabase{} = database, schema) do
+    with_connection(database, &Postgres.list_tables(&1, schema))
+  end
+
+  def list_tables(conn, schema), do: Postgres.list_tables(conn, schema)
+
+  defp list_columns(conn, schema, table) do
+    with {:ok, rows} <- Postgres.list_columns(conn, schema, table) do
+      Enum.map(rows, fn [attnum, name, type] ->
+        %PostgresDatabase.Table.Column{attnum: attnum, name: name, type: type}
+      end)
+    end
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

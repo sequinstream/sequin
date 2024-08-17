@@ -214,6 +214,45 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
              prefix: @stream_schema
            )
 
+    create table(:consumer_records,
+             prefix: @stream_schema,
+             primary_key: false,
+             options: "PARTITION BY LIST (consumer_id)"
+           ) do
+      add :consumer_id, :uuid, null: false, primary_key: true
+      add :id, :serial, null: false, primary_key: true
+      add :commit_lsn, :bigint
+      add :record_pks, {:array, :string}, null: false
+      add :table_oid, :integer, null: false
+      add :state, :"#{@stream_schema}.consumer_record_state", null: false
+
+      add :ack_id, :uuid, null: false, default: fragment("uuid_generate_v4()")
+
+      add :not_visible_until, :utc_datetime_usec
+      add :deliver_count, :integer, null: false, default: 0
+      add :last_delivered_at, :utc_datetime_usec
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create unique_index(:consumer_records, [:consumer_id, :record_pks, :table_oid],
+             prefix: @stream_schema
+           )
+
+    create unique_index(:consumer_records, [:consumer_id, :ack_id], prefix: @stream_schema)
+
+    create index(:consumer_records, [:consumer_id], prefix: @stream_schema)
+
+    create index(
+             :consumer_records,
+             [
+               :consumer_id,
+               :not_visible_until,
+               :last_delivered_at
+             ],
+             prefix: @stream_schema
+           )
+
     create table(:api_keys, prefix: @config_schema) do
       add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
         null: false

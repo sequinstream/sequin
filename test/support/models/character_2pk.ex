@@ -13,6 +13,15 @@ defmodule Sequin.Test.Support.Models.Character2PK do
     field :planet, :string
   end
 
+  def table_oid do
+    Sequin.Repo.one(
+      from(pg in "pg_class",
+        where: pg.relname == "characters_2pk",
+        select: pg.oid
+      )
+    )
+  end
+
   def where_id(query \\ base_query(), id1, id2) do
     from(c2 in query, where: c2.id1 == ^id1 and c2.id2 == ^id2)
   end

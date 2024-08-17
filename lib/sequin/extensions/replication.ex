@@ -87,6 +87,10 @@ defmodule Sequin.Extensions.Replication do
     }
   end
 
+  def update_message_handler_ctx(id, ctx) do
+    GenServer.call(via_tuple(id), {:update_message_handler_ctx, ctx})
+  end
+
   def via_tuple(id) do
     {:via, Registry, {Sequin.Registry, {Replication, id}}}
   end
@@ -155,6 +159,14 @@ defmodule Sequin.Extensions.Replication do
 
   def handle_data(data, %State{} = state) do
     Logger.error("Unknown data: #{inspect(data)}")
+    {:noreply, state}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_call({:update_message_handler_ctx, ctx}, from, state) do
+    state = %{state | message_handler_ctx: ctx}
+    # Need to manually send reply
+    GenServer.reply(from, :ok)
     {:noreply, state}
   end
 

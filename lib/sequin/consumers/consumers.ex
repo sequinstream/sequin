@@ -428,14 +428,35 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp apply_filter(:==, field_value, filter_value), do: to_string(field_value) == filter_value
-  defp apply_filter(:!=, field_value, filter_value), do: to_string(field_value) != filter_value
-  defp apply_filter(:>, field_value, filter_value), do: field_value > String.to_float(filter_value)
-  defp apply_filter(:<, field_value, filter_value), do: field_value < String.to_float(filter_value)
-  defp apply_filter(:>=, field_value, filter_value), do: field_value >= String.to_float(filter_value)
-  defp apply_filter(:<=, field_value, filter_value), do: field_value <= String.to_float(filter_value)
-  defp apply_filter(:in, field_value, filter_value), do: field_value in String.split(filter_value, ",")
-  defp apply_filter(:not_in, field_value, filter_value), do: field_value not in String.split(filter_value, ",")
+  defp apply_filter(:==, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.compare(field_value, filter_value) == :eq
+
+  defp apply_filter(:!=, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.compare(field_value, filter_value) != :eq
+
+  defp apply_filter(:>, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.after?(field_value, filter_value)
+
+  defp apply_filter(:<, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.before?(field_value, filter_value)
+
+  defp apply_filter(:>=, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.compare(field_value, filter_value) in [:gt, :eq]
+
+  defp apply_filter(:<=, field_value, %{value: filter_value, __type__: :datetime}),
+    do: DateTime.compare(field_value, filter_value) in [:lt, :eq]
+
+  defp apply_filter(op, field_value, %{value: filter_value}) when op in [:==, :!=, :>, :<, :>=, :<=],
+    do: apply(Kernel, op, [field_value, filter_value])
+
   defp apply_filter(:is_null, field_value, _), do: is_nil(field_value)
   defp apply_filter(:not_null, field_value, _), do: not is_nil(field_value)
+
+  defp apply_filter(:in, field_value, %{value: filter_value}) when is_list(filter_value) do
+    field_value in filter_value or to_string(field_value) in Enum.map(filter_value, &to_string/1)
+  end
+
+  defp apply_filter(:not_in, field_value, %{value: filter_value}) when is_list(filter_value) do
+    field_value not in filter_value and to_string(field_value) not in Enum.map(filter_value, &to_string/1)
+  end
 end

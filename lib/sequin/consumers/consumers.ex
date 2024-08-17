@@ -7,6 +7,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Error
+  alias Sequin.ReplicationRuntime.Supervisor
   alias Sequin.Repo
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerBackfillWorker
@@ -42,16 +43,24 @@ defmodule Sequin.Consumers do
     Repo.all(HttpPushConsumer) ++ Repo.all(HttpPullConsumer)
   end
 
-  def update_consumer_with_lifecycle(%HttpPullConsumer{} = consumer, attrs) do
+  def update_consumer(%HttpPullConsumer{} = consumer, attrs) do
     consumer
     |> HttpPullConsumer.update_changeset(attrs)
     |> Repo.update()
   end
 
-  def update_consumer_with_lifecycle(%HttpPushConsumer{} = consumer, attrs) do
+  def update_consumer(%HttpPushConsumer{} = consumer, attrs) do
     consumer
     |> HttpPushConsumer.update_changeset(attrs)
     |> Repo.update()
+  end
+
+  def update_consumer_with_lifecycle(consumer, attrs) do
+    with {:ok, updated_consumer} <- update_consumer(consumer, attrs) do
+      :ok = Supervisor.refresh_message_handler_ctx(updated_consumer.replication_slot_id)
+
+      {:ok, updated_consumer}
+    end
   end
 
   def delete_consumer_with_lifecycle(consumer) do

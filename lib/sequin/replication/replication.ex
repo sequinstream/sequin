@@ -27,7 +27,7 @@ defmodule Sequin.Replication do
 
   def get_pg_replication(id) do
     case Repo.get(PostgresReplicationSlot, id, preload: :postgres_database) do
-      nil -> {:error, Error.not_found(entity: :pg_replication)}
+      nil -> {:error, Error.not_found(entity: :pg_replication, params: %{id: id})}
       pg_replication -> {:ok, pg_replication}
     end
   end
@@ -84,7 +84,7 @@ defmodule Sequin.Replication do
 
   def delete_pg_replication_with_lifecycle(%PostgresReplicationSlot{} = pg_replication) do
     res = Repo.delete(pg_replication)
-    ReplicationRuntime.Supervisor.stop_for_pg_replication(pg_replication)
+    ReplicationRuntime.Supervisor.stop_replication(pg_replication)
     res
   end
 

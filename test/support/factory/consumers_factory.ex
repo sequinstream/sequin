@@ -170,6 +170,12 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
+  def source_table_attrs(attrs \\ []) do
+    attrs
+    |> source_table()
+    |> Sequin.Map.from_ecto()
+  end
+
   def column_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
@@ -184,6 +190,12 @@ defmodule Sequin.Factory.ConsumersFactory do
       },
       Map.delete(attrs, :value_type)
     )
+  end
+
+  def column_filter_attrs(attrs \\ []) do
+    attrs
+    |> column_filter()
+    |> Sequin.Map.from_ecto()
   end
 
   defp generate_value(:string), do: Faker.Lorem.sentence()

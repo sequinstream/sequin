@@ -24,6 +24,22 @@ defmodule Sequin.Test.Support.ReplicationSlots do
 
   def slot_name(mod), do: Map.fetch!(replication_slots(), mod)
 
+  def reset_slot(repo, slot, attempt \\ 0) do
+    case repo.query("SELECT pg_replication_slot_advance($1, pg_current_wal_lsn())::text", [slot]) do
+      {:ok, _} ->
+        :ok
+
+      {:error, _} = error ->
+        # There is sometimes a race where the slot is still in use by the previous test.
+        if attempt < 3 do
+          Process.sleep(10)
+          reset_slot(repo, slot, attempt + 1)
+        else
+          raise "Failed to reset replication slot #{slot} after #{attempt} attempts: #{inspect(error)}"
+        end
+    end
+  end
+
   @doc """
   Run this before ExUnit.start/0. Because replication slots and sandboxes don't play nicely, we
   want to create the slots just once before we run the test suite.

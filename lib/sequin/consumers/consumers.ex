@@ -404,4 +404,38 @@ defmodule Sequin.Consumers do
 
     {:ok, messages}
   end
+
+  # Source Table Matching
+
+  def matches_message?(consumer, message) do
+    Enum.any?(consumer.source_tables, fn source_table ->
+      source_table.oid == message.table_oid &&
+        action_matches?(source_table.actions, message.action) &&
+        column_filters_match?(source_table.column_filters, message)
+    end)
+  end
+
+  defp action_matches?(source_table_actions, message_action) do
+    message_action in source_table_actions
+  end
+
+  defp column_filters_match?([], _message), do: true
+
+  defp column_filters_match?(column_filters, message) do
+    Enum.all?(column_filters, fn filter ->
+      field = Enum.find(message.fields, &(&1.column_attnum == filter.column_attnum))
+      field && apply_filter(filter.operator, field.value, filter.value)
+    end)
+  end
+
+  defp apply_filter(:==, field_value, filter_value), do: to_string(field_value) == filter_value
+  defp apply_filter(:!=, field_value, filter_value), do: to_string(field_value) != filter_value
+  defp apply_filter(:>, field_value, filter_value), do: field_value > String.to_float(filter_value)
+  defp apply_filter(:<, field_value, filter_value), do: field_value < String.to_float(filter_value)
+  defp apply_filter(:>=, field_value, filter_value), do: field_value >= String.to_float(filter_value)
+  defp apply_filter(:<=, field_value, filter_value), do: field_value <= String.to_float(filter_value)
+  defp apply_filter(:in, field_value, filter_value), do: field_value in String.split(filter_value, ",")
+  defp apply_filter(:not_in, field_value, filter_value), do: field_value not in String.split(filter_value, ",")
+  defp apply_filter(:is_null, field_value, _), do: is_nil(field_value)
+  defp apply_filter(:not_null, field_value, _), do: not is_nil(field_value)
 end

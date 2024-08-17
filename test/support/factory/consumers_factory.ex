@@ -6,6 +6,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -51,18 +52,22 @@ defmodule Sequin.Factory.ConsumersFactory do
         ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
       end)
 
+    {source_tables, attrs} =
+      Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
+
     merge_attributes(
       %HttpPushConsumer{
-        name: Factory.unique_word(),
-        message_kind: Factory.one_of([:event, :record]),
-        backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
+        account_id: account_id,
         ack_wait_ms: 30_000,
+        backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
+        http_endpoint_id: http_endpoint_id,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
-        account_id: account_id,
-        http_endpoint_id: http_endpoint_id,
+        message_kind: Factory.one_of([:event, :record]),
+        name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
+        source_tables: source_tables,
         status: :active
       },
       attrs
@@ -73,6 +78,15 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> http_push_consumer()
     |> Sequin.Map.from_ecto()
+    |> Map.update!(:source_tables, fn source_tables ->
+      Enum.map(source_tables, fn source_table ->
+        source_table
+        |> Sequin.Map.from_ecto()
+        |> Map.update!(:column_filters, fn column_filters ->
+          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
+        end)
+      end)
+    end)
   end
 
   def insert_http_push_consumer!(attrs \\ []) do
@@ -141,6 +155,32 @@ defmodule Sequin.Factory.ConsumersFactory do
       Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
 
     consumer
+  end
+
+  def source_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequin.Consumers.SourceTable{
+        oid: Factory.unique_integer(),
+        actions: [:insert, :update, :delete],
+        column_filters: [column_filter()]
+      },
+      attrs
+    )
+  end
+
+  def column_filter(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %ColumnFilter{
+        column_attnum: Factory.unique_integer(),
+        operator: Factory.one_of([:==, :!=, :>, :>=, :<, :<=]),
+        value: Factory.one_of([Factory.integer(), Factory.boolean(), Factory.float(), Factory.timestamp()])
+      },
+      attrs
+    )
   end
 
   # ConsumerEvent

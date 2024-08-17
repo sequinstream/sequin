@@ -96,6 +96,8 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
           ),
           null: false
 
+      add :source_tables, {:array, :jsonb}, null: false, default: "{}"
+
       add :ack_wait_ms, :integer, null: false, default: 30_000
       add :max_ack_pending, :integer, null: false, default: 10_000
       add :max_deliver, :integer, null: true

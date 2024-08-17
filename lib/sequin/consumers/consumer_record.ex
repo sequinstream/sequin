@@ -42,6 +42,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
       :consumer_id,
       :commit_lsn,
       :record_pks,
+      :state,
       :table_oid,
       :not_visible_until,
       :deliver_count,
@@ -103,6 +104,10 @@ defmodule Sequin.Consumers.ConsumerRecord do
 
   def where_ack_ids(query \\ base_query(), ack_ids) do
     where(query, [consumer_record: cr], cr.ack_id in ^ack_ids)
+  end
+
+  def where_state_not(query \\ base_query(), state) do
+    from([consumer_record: cr] in query, where: cr.state != ^state)
   end
 
   def where_deliverable(query \\ base_query()) do

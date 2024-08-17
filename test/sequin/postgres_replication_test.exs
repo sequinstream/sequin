@@ -37,8 +37,7 @@ defmodule Sequin.PostgresReplicationTest do
 
   setup do
     # Fast-forward the replication slot to the current WAL position
-    {:ok, _} =
-      UnboxedRepo.query("SELECT pg_replication_slot_advance($1, pg_current_wal_lsn())::text", [replication_slot()])
+    :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
 
     :ok
   end

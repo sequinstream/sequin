@@ -217,11 +217,9 @@ defmodule Sequin.Consumers do
           updated_at: now,
           inserted_at: now
         })
-        |> Map.update!(:record_pks, &ConsumerEvent.stringify_record_pks/1)
-        |> Map.update!(:data, fn data ->
-          data = Sequin.Map.atomize_keys(data)
-          struct!(ConsumerEvent.Data, data)
-        end)
+        |> ConsumerEvent.from_map()
+        # insert_all expects a plain outer-map, but struct embeds
+        |> Sequin.Map.from_ecto()
       end)
 
     {count, _} = Repo.insert_all(ConsumerEvent, entries)
@@ -333,7 +331,7 @@ defmodule Sequin.Consumers do
             |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
             |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
             |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> then(&struct!(ConsumerEvent, &1))
+            |> ConsumerEvent.from_map()
           end)
 
         {:ok, events}

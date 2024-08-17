@@ -99,6 +99,19 @@ defmodule Sequin.Consumers.ConsumerEvent do
     Enum.map(pks, &to_string/1)
   end
 
+  def from_map(attrs) do
+    attrs =
+      attrs
+      |> Sequin.Map.atomize_keys()
+      |> Map.update!(:record_pks, &stringify_record_pks/1)
+      |> Map.update!(:data, fn data ->
+        data = Sequin.Map.atomize_keys(data)
+        struct!(Data, data)
+      end)
+
+    struct!(__MODULE__, attrs)
+  end
+
   def where_consumer_id(query \\ base_query(), consumer_id) do
     from([consumer_event: ce] in query, where: ce.consumer_id == ^consumer_id)
   end

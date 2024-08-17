@@ -60,7 +60,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot
       consumer =
-        ConsumersFactory.insert_http_push_consumer!(
+        ConsumersFactory.insert_consumer!(
           message_kind: :event,
           replication_slot_id: pg_replication.id,
           account_id: account_id,

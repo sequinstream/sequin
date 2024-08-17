@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.PostgresReplicationSlot
 
   @derive {Jason.Encoder,
@@ -33,6 +34,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
+    embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
 
@@ -52,12 +54,14 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :replication_slot_id,
       :status
     ])
+    |> cast_embed(:source_tables)
     |> validate_required([:name, :status])
     |> Sequin.Changeset.validate_name()
   end
 
   def update_changeset(consumer, attrs) do
-    cast(consumer, attrs, [
+    consumer
+    |> cast(attrs, [
       :ack_wait_ms,
       :max_ack_pending,
       :max_deliver,
@@ -65,6 +69,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :backfill_completed_at,
       :status
     ])
+    |> cast_embed(:source_tables)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

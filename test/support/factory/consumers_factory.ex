@@ -117,6 +117,9 @@ defmodule Sequin.Factory.ConsumersFactory do
         ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
       end)
 
+    {source_tables, attrs} =
+      Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
+
     merge_attributes(
       %HttpPullConsumer{
         name: Factory.unique_word(),
@@ -128,6 +131,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_waiting: 20,
         account_id: account_id,
         replication_slot_id: replication_slot_id,
+        source_tables: source_tables,
         status: :active
       },
       attrs
@@ -138,6 +142,15 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> http_pull_consumer()
     |> Sequin.Map.from_ecto()
+    |> Map.update!(:source_tables, fn source_tables ->
+      Enum.map(source_tables, fn source_table ->
+        source_table
+        |> Sequin.Map.from_ecto()
+        |> Map.update!(:column_filters, fn column_filters ->
+          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
+        end)
+      end)
+    end)
   end
 
   def insert_http_pull_consumer!(attrs \\ []) do

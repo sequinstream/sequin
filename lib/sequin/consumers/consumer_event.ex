@@ -12,18 +12,32 @@ defmodule Sequin.Consumers.ConsumerEvent do
     use Ecto.Schema
 
     @primary_key false
-    @derive {Jason.Encoder, only: [:record, :changes, :action]}
+    @derive Jason.Encoder
 
     embedded_schema do
       field :record, :map
       field :changes, :map
       field :action, Ecto.Enum, values: [:insert, :update, :delete]
+
+      embeds_one :metadata, Metadata, primary_key: false do
+        @derive Jason.Encoder
+        field :table, :string
+        field :schema, :string
+        field :commit_timestamp, :utc_datetime_usec
+      end
     end
 
     def changeset(data, attrs) do
       data
       |> cast(attrs, [:record, :changes, :action])
-      |> validate_required([:record, :action])
+      |> cast_embed(:metadata, required: true, with: &metadata_changeset/2)
+      |> validate_required([:record, :action, :metadata])
+    end
+
+    defp metadata_changeset(metadata, attrs) do
+      metadata
+      |> cast(attrs, [:table, :schema, :commit_timestamp])
+      |> validate_required([:table, :schema, :commit_timestamp])
     end
   end
 
@@ -106,6 +120,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
       |> Map.update!(:record_pks, &stringify_record_pks/1)
       |> Map.update!(:data, fn data ->
         data = Sequin.Map.atomize_keys(data)
+        metadata = Sequin.Map.atomize_keys(data.metadata)
+        data = Map.put(data, :metadata, struct!(Data.Metadata, metadata))
         struct!(Data, data)
       end)
 

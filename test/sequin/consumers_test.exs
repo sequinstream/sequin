@@ -18,7 +18,11 @@ defmodule Sequin.ConsumersTest do
         for _ <- 1..3 do
           %{consumer_id: consumer.id}
           |> ConsumersFactory.consumer_event_attrs()
-          |> Map.update(:data, %{}, &Sequin.Map.atomize_keys/1)
+          |> Map.update(:data, %{}, fn data ->
+            data
+            |> Sequin.Map.atomize_keys()
+            |> Map.update!(:metadata, &Sequin.Map.atomize_keys/1)
+          end)
         end
 
       assert {:ok, 3} = Consumers.insert_consumer_events(events)
@@ -28,7 +32,11 @@ defmodule Sequin.ConsumersTest do
 
       assert_lists_equal(inserted_events, events, fn e1, e2 ->
         e1
-        |> Map.update!(:data, &Map.from_struct/1)
+        |> Map.update!(:data, fn data ->
+          data
+          |> Map.update!(:metadata, &Map.from_struct/1)
+          |> Map.from_struct()
+        end)
         |> assert_maps_equal(e2, [:consumer_id, :commit_lsn, :data])
       end)
     end

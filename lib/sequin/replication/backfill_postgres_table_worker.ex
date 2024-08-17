@@ -67,7 +67,7 @@ defmodule Sequin.Replication.BackfillPostgresTableWorker do
         )
         |> Sequin.Repo.update()
 
-      ReplicationRuntime.Supervisor.start_for_pg_replication(postgres_replication)
+      ReplicationRuntime.Supervisor.start_replication(postgres_replication)
 
       Logger.info("Backfill completed for postgres_replication_id: #{postgres_replication_id}")
     else

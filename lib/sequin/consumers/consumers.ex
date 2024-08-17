@@ -8,6 +8,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Error
+  alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor
   alias Sequin.Repo
   alias Sequin.Streams
@@ -18,6 +19,7 @@ defmodule Sequin.Consumers do
 
   @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
+  @consumer_record_state_enum Postgres.quote_name(@stream_schema, "consumer_record_state")
 
   @type consumer :: HttpPullConsumer.t() | HttpPushConsumer.t()
 
@@ -286,6 +288,54 @@ defmodule Sequin.Consumers do
     Repo.all(query)
   end
 
+  # Only way to get this fragment to compile with the dynamic enum name.
+  # Part of Ecto's SQL injection protection.
+  @case_frag """
+    CASE
+      WHEN ? IN ('delivered', 'pending_redelivery') THEN ?
+      ELSE ?
+    END::#{@consumer_record_state_enum}
+  """
+  def insert_consumer_records(consumer_records) do
+    now = DateTime.utc_now()
+
+    records =
+      Enum.map(consumer_records, fn record ->
+        record
+        |> Map.put(:inserted_at, now)
+        |> Map.put(:updated_at, now)
+      end)
+
+    conflict_target = [:consumer_id, :record_pks, :table_oid]
+
+    on_conflict =
+      from(cr in ConsumerRecord,
+        update: [
+          set: [
+            commit_lsn: fragment("EXCLUDED.commit_lsn"),
+            state:
+              fragment(
+                @case_frag,
+                cr.state,
+                "pending_redelivery",
+                "available"
+              ),
+            updated_at: fragment("EXCLUDED.updated_at")
+          ]
+        ]
+      )
+
+    {count, _records} =
+      Repo.insert_all(
+        ConsumerRecord,
+        records,
+        on_conflict: on_conflict,
+        conflict_target: conflict_target
+      )
+
+    {:ok, count}
+  end
+
   # Consumer Lifecycle
 
   defp create_consumer_partition(%{message_kind: :event} = consumer) do
@@ -338,25 +388,6 @@ defmodule Sequin.Consumers do
 
   # Consuming / Acking Messages
 
-  def upsert_consumer_messages(%{}, []), do: {:ok, []}
-
-  def upsert_consumer_messages(%{}, consumer_messages) do
-    {consumer_ids, message_keys, message_seqs} =
-      consumer_messages
-      |> Enum.map(fn message ->
-        {message.consumer_id, message.message_key, message.message_seq}
-      end)
-      |> Enum.reduce({[], [], []}, fn {consumer_id, message_key, message_seq}, {ids, keys, seqs} ->
-        {[consumer_id | ids], [message_key | keys], [message_seq | seqs]}
-      end)
-
-    Query.upsert_consumer_records(
-      consumer_ids: Enum.map(consumer_ids, &UUID.string_to_binary!/1),
-      message_keys: message_keys,
-      message_seqs: message_seqs
-    )
-  end
-
   def receive_for_consumer(%{message_kind: :event} = consumer, opts \\ []) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
@@ -398,28 +429,53 @@ defmodule Sequin.Consumers do
     end
   end
 
-  @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  @spec ack_messages(consumer(), [integer()]) :: :ok
   def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
-    Repo.transact(fn ->
-      {_, _} =
-        consumer.id
-        |> ConsumerEvent.where_consumer_id()
-        |> ConsumerEvent.where_ack_ids(ack_ids)
-        |> Repo.delete_all()
-
-      :ok
-    end)
+    {_, _} =
+      consumer.id
+      |> ConsumerEvent.where_consumer_id()
+      |> ConsumerEvent.where_ack_ids(ack_ids)
+      |> Repo.delete_all()
 
     :ok
   end
 
-  @spec nack_messages(Sequin.Consumers.HttpPushConsumer.t(), [integer()]) :: :ok
+  @spec ack_messages(consumer(), [String.t()]) :: :ok
+  def ack_messages(%{message_kind: :record} = consumer, ack_ids) do
+    {_, _} =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_ack_ids(ack_ids)
+      |> ConsumerRecord.where_state_not(:pending_redelivery)
+      |> Repo.delete_all()
+
+    {_, _} =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_ack_ids(ack_ids)
+      |> Repo.update_all(set: [state: :available, not_visible_until: nil])
+
+    :ok
+  end
+
+  @spec nack_messages(consumer(), [integer()]) :: :ok
   def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [not_visible_until: nil])
+
+    :ok
+  end
+
+  @spec nack_messages(consumer(), [String.t()]) :: :ok
+  def nack_messages(%{message_kind: :record} = consumer, ack_ids) do
+    {_, _} =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_ack_ids(ack_ids)
+      |> Repo.update_all(set: [not_visible_until: nil, state: :available])
 
     :ok
   end
@@ -462,7 +518,8 @@ defmodule Sequin.Consumers do
           message_seq: message.seq
         }
       end)
-      |> then(&upsert_consumer_messages(consumer, &1))
+
+    # |> then(&upsert_consumer_messages(consumer, &1))
 
     {:ok, messages}
   end

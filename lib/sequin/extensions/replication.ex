@@ -13,10 +13,6 @@ defmodule Sequin.Extensions.Replication do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Extensions.PostgresAdapter.Changes
-  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.PostgresAdapter.Decoder
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Commit
@@ -24,6 +20,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.Replication.Message
 
   require Logger
 
@@ -47,7 +44,7 @@ defmodule Sequin.Extensions.Replication do
       field :test_pid, pid()
       field :connection, map()
       field :schemas, %{}, default: %{}
-      field :accumulated_messages, [Changes.record()], default: []
+      field :accumulated_messages, [Message.t()], default: []
     end
   end
 
@@ -179,7 +176,12 @@ defmodule Sequin.Extensions.Replication do
   # end
 
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
-    query = """
+    conn = get_cached_conn(state)
+
+    # Query to get primary keys
+    # We can't trust the `flags` when replica identity is set to full - all columns are indicated
+    # as primary keys.
+    pk_query = """
     SELECT a.attname
     FROM pg_index i
     JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
@@ -187,19 +189,30 @@ defmodule Sequin.Extensions.Replication do
     AND i.indisprimary;
     """
 
-    conn = get_cached_conn(state)
-    {:ok, %{rows: rows}} = Postgrex.query(conn, query, [schema, table])
+    {:ok, %{rows: pk_rows}} = Postgrex.query(conn, pk_query, [schema, table])
+    primary_keys = List.flatten(pk_rows)
 
-    primary_keys = List.flatten(rows)
+    # Query to get attnums
+    # The Relation message does not include the attnums, so we need to query the pg_attribute
+    # table to get them.
+    attnum_query = """
+    SELECT attname, attnum
+    FROM pg_attribute
+    WHERE attrelid = ($1::text || '.' || $2::text)::regclass
+    AND attnum > 0
+    AND NOT attisdropped;
+    """
 
-    # We can't trust the `flags` when replica identity is set to full - all columns are indicated
-    # as primary keys.
-    columns =
-      Enum.map(columns, fn %{name: name, type: type} ->
-        %{name: name, type: type, pk?: name in primary_keys}
+    {:ok, %{rows: attnum_rows}} = Postgrex.query(conn, attnum_query, [schema, table])
+    attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
+
+    # Enrich columns with primary key information and attnums
+    enriched_columns =
+      Enum.map(columns, fn %{name: name} = column ->
+        %{column | pk?: name in primary_keys, attnum: Map.get(attnum_map, name)}
       end)
 
-    updated_schemas = Map.put(state.schemas, id, {columns, schema, table})
+    updated_schemas = Map.put(state.schemas, id, {enriched_columns, schema, table})
     %{state | schemas: updated_schemas}
   end
 
@@ -221,7 +234,10 @@ defmodule Sequin.Extensions.Replication do
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
     # Flush accumulated messages
-    state.message_handler_module.handle_messages(state.message_handler_ctx, Enum.reverse(state.accumulated_messages))
+    state.message_handler_module.handle_messages(
+      state.message_handler_ctx,
+      Enum.reverse(state.accumulated_messages)
+    )
 
     %{
       state
@@ -233,76 +249,45 @@ defmodule Sequin.Extensions.Replication do
     }
   end
 
-  # Example change event
-  # %Extensions.PostgresAdapter.Changes.InsertedRecord{
-  #   columns: [
-  #     %{name: "id", type: "int4"},
-  #     %{name: "first_name", type: "text"},
-  #     %{name: "last_name", type: "text"}
-  #   ],
-  #   commit_timestamp: ~U[2024-03-01 16:11:32.272722Z],
-  #   errors: nil,
-  #   schema: "__test_cdc__",
-  #   table: "test_table",
-  #   record: %{"first_name" => "Paul", "id" => "1", "last_name" => "Atreides"},
-  #   subscription_ids: nil,
-  #   type: "UPDATE"
-  # }
   defp process_message(%Insert{} = msg, state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
-    record = %InsertedRecord{
+    record = %Message{
+      action: :insert,
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      record: data_tuple_to_map(columns, msg.tuple_data),
-      type: "insert"
+      fields: data_tuple_to_fields(columns, msg.tuple_data)
     }
 
     %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
 
-  # If replication mode is default (not full), we will not get old_tuple_data:
-  # msg: %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update{
-  #   relation_id: 15465878,
-  #   changed_key_tuple_data: nil,
-  #   old_tuple_data: nil,
-  #   tuple_data: {"1", "Chani", "Atreides", "Arrakis"}
-  # },
   defp process_message(%Update{} = msg, %State{} = state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
-    old_record =
+    old_fields =
       if msg.old_tuple_data do
-        data_tuple_to_map(columns, msg.old_tuple_data)
+        data_tuple_to_fields(columns, msg.old_tuple_data)
       end
 
-    record = %UpdatedRecord{
+    record = %Message{
+      action: :update,
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      old_record: old_record,
-      record: data_tuple_to_map(columns, msg.tuple_data),
-      type: "update"
+      old_fields: old_fields,
+      fields: data_tuple_to_fields(columns, msg.tuple_data)
     }
 
     %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
-
-  # When the publication mode is default and we don't get old_tpule_data, we'll get this (first
-  # element is PK):
-  # msg: %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Delete{
-  #   relation_id: 15465677,
-  #   changed_key_tuple_data: {"1", nil, nil, nil},
-  #   old_tuple_data: nil
-  # },
-  # Otherwise, in full mode, we'll get old_tuple_data.
 
   defp process_message(%Delete{} = msg, %State{} = state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
@@ -314,15 +299,15 @@ defmodule Sequin.Extensions.Replication do
         msg.changed_key_tuple_data
       end
 
-    record = %DeletedRecord{
+    record = %Message{
+      action: :delete,
       commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: data_tuple_to_ids(columns, prev_tuple_data),
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      old_record: data_tuple_to_map(columns, prev_tuple_data),
-      type: "delete"
+      old_fields: data_tuple_to_fields(columns, prev_tuple_data)
     }
 
     %{state | accumulated_messages: [record | state.accumulated_messages]}
@@ -340,11 +325,15 @@ defmodule Sequin.Extensions.Replication do
     |> Enum.map(fn {_, value} -> value end)
   end
 
-  def data_tuple_to_map(columns, tuple_data) do
+  def data_tuple_to_fields(columns, tuple_data) do
     columns
     |> Enum.zip(Tuple.to_list(tuple_data))
-    |> Map.new(fn {%{name: name, type: type}, value} ->
-      {name, cast_value(type, value)}
+    |> Enum.map(fn {%{name: name, attnum: attnum, type: type}, value} ->
+      %Message.Field{
+        column_name: name,
+        column_attnum: attnum,
+        value: cast_value(type, value)
+      }
     end)
   end
 

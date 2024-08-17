@@ -2,13 +2,12 @@ defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
-  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.StreamsFactory
+  alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
 
@@ -59,31 +58,44 @@ defmodule Sequin.Factory.ReplicationFactory do
   end
 
   def postgres_message(attrs \\ []) do
-    case Enum.random([:insert, :update, :delete]) do
+    case attrs[:action] || Enum.random([:insert, :update, :delete]) do
       :insert -> postgres_insert(attrs)
       :update -> postgres_update(attrs)
       :delete -> postgres_delete(attrs)
     end
   end
 
+  def field(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Message.Field{
+        column_name: Factory.postgres_object(),
+        column_attnum: Factory.unique_integer(),
+        value: Factory.name()
+      },
+      attrs
+    )
+  end
+
   def postgres_insert(attrs \\ []) do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %InsertedRecord{
+      %Message{
+        action: :insert,
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: "__postgres_replication_test_schema__",
         table_name: "__postgres_replication_test_table__",
         table_oid: Factory.unique_integer(),
-        record: %{
-          "id" => Factory.unique_integer(),
-          "name" => Factory.name(),
-          "house" => Factory.name(),
-          "planet" => Factory.name()
-        },
-        type: "insert"
+        fields: [
+          field(column_name: "id", value: Factory.unique_integer()),
+          field(column_name: "name", value: Factory.name()),
+          field(column_name: "house", value: Factory.name()),
+          field(column_name: "planet", value: Factory.name())
+        ]
       },
       attrs
     )
@@ -93,21 +105,23 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %UpdatedRecord{
+      %Message{
+        action: :update,
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: Factory.postgres_object(),
         table_name: Factory.postgres_object(),
         table_oid: Factory.unique_integer(),
-        old_record: nil,
-        record: %{
-          "id" => Factory.unique_integer(),
-          "name" => Factory.name(),
-          "house" => Factory.name(),
-          "planet" => Factory.name()
-        },
-        type: "update"
+        old_fields: [
+          field(column_name: "name", value: "old_name")
+        ],
+        fields: [
+          field(column_name: "id", value: Factory.unique_integer()),
+          field(column_name: "name", value: Factory.name()),
+          field(column_name: "house", value: Factory.name()),
+          field(column_name: "planet", value: Factory.name())
+        ]
       },
       attrs
     )
@@ -117,20 +131,51 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %DeletedRecord{
+      %Message{
+        action: :delete,
         commit_timestamp: Factory.timestamp(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: Factory.postgres_object(),
         table_name: Factory.postgres_object(),
         table_oid: Factory.unique_integer(),
-        old_record: %{
-          "id" => Factory.unique_integer(),
-          "name" => nil,
-          "house" => nil,
-          "planet" => nil
-        },
-        type: "delete"
+        old_fields: [
+          field(column_name: "id", value: Factory.unique_integer()),
+          field(column_name: "name", value: nil),
+          field(column_name: "house", value: nil),
+          field(column_name: "planet", value: nil)
+        ]
+      },
+      attrs
+    )
+  end
+
+  def relation(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Relation{
+        id: Factory.unique_integer(),
+        namespace: Factory.postgres_object(),
+        name: Factory.postgres_object(),
+        replica_identity: Enum.random([:default, :nothing, :all_columns, :index]),
+        columns: [relation_column()]
+      },
+      attrs
+    )
+  end
+
+  def relation_column(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Relation.Column{
+        flags: Enum.random([[:key], []]),
+        name: Factory.postgres_object(),
+        type: Enum.random(["int8", "text", "timestamp", "bool"]),
+        pk?: Enum.random([true, false]),
+        type_modifier: Factory.unique_integer(),
+        attnum: Factory.unique_integer()
       },
       attrs
     )

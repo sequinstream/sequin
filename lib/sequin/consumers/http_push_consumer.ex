@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Streams.HttpEndpoint
 
@@ -35,6 +36,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
+    embeds_many :source_tables, SourceTable
+
     belongs_to :account, Account
     belongs_to :http_endpoint, HttpEndpoint
     belongs_to :replication_slot, PostgresReplicationSlot
@@ -62,6 +65,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
         HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
       end
     )
+    |> cast_embed(:source_tables)
     |> foreign_key_constraint(:http_endpoint_id)
     |> Sequin.Changeset.validate_name()
   end

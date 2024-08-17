@@ -385,8 +385,10 @@ defmodule Sequin.Consumers do
   end
 
   # Consuming / Acking Messages
+  @spec receive_for_consumer(consumer(), keyword()) :: {:ok, [ConsumerEvent.t()]} | {:ok, [ConsumerRecord.t()]}
+  def receive_for_consumer(consumer, opts \\ [])
 
-  def receive_for_consumer(%{message_kind: :event} = consumer, opts \\ []) do
+  def receive_for_consumer(%{message_kind: :event} = consumer, opts) do
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
@@ -424,6 +426,48 @@ defmodule Sequin.Consumers do
           end)
 
         {:ok, events}
+    end
+  end
+
+  # TODO: Populate data by joining against source tables
+  def receive_for_consumer(%{message_kind: :record} = consumer, opts) do
+    batch_size = Keyword.get(opts, :batch_size, 100)
+    not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
+    now = NaiveDateTime.utc_now()
+    max_ack_pending = consumer.max_ack_pending
+
+    outstanding_count =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_not_visible()
+      |> ConsumerRecord.count()
+      |> Repo.one()
+
+    case min(batch_size, max_ack_pending - outstanding_count) do
+      0 ->
+        {:ok, []}
+
+      batch_size ->
+        {:ok, records} =
+          Query.receive_consumer_records(
+            batch_size: batch_size,
+            consumer_id: UUID.string_to_binary!(consumer.id),
+            not_visible_until: not_visible_until,
+            now: now
+          )
+
+        records =
+          Enum.map(records, fn record ->
+            record
+            |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
+            |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
+            |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
+            |> ConsumerRecord.from_map()
+          end)
+
+        {:ok, records}
     end
   end
 

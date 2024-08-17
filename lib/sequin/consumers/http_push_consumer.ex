@@ -36,7 +36,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
-    embeds_many :source_tables, SourceTable
+    embeds_many :source_tables, SourceTable, on_replace: :delete
 
     belongs_to :account, Account
     belongs_to :http_endpoint, HttpEndpoint
@@ -71,7 +71,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
   end
 
   def update_changeset(consumer, attrs) do
-    cast(consumer, attrs, [
+    consumer
+    |> cast(attrs, [
       :ack_wait_ms,
       :max_ack_pending,
       :max_deliver,
@@ -80,6 +81,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :http_endpoint_id,
       :status
     ])
+    |> cast_embed(:source_tables)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

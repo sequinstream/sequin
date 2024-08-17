@@ -41,18 +41,22 @@ defmodule Sequin.Map do
   maps that we can pass into e.g. changesets. This function takes an Ecto schema struct and
   returns a map, stripped of any nil or Ecto.Association.NotLoaded values.
   """
-  @spec from_ecto(Ecto.Schema.t() | map()) :: map()
-  def from_ecto(struct) when is_struct(struct) do
+  @spec from_ecto(Ecto.Schema.t() | map(), Keyword.t() | nil) :: map()
+  def from_ecto(struct, opts \\ [])
+
+  def from_ecto(struct, opts) when is_struct(struct) do
     struct
     |> Map.from_struct()
-    |> from_ecto()
+    |> from_ecto(opts)
   end
 
   # May be a struct that was recently converted into a map
-  def from_ecto(map) do
+  def from_ecto(map, opts) do
+    keep_nils = Keyword.get(opts, :keep_nils, false)
+
     map
     |> Enum.reject(fn {_k, v} ->
-      is_nil(v) or is_struct(v, Ecto.Association.NotLoaded) or is_struct(v, Ecto.Schema.Metadata)
+      (not keep_nils and is_nil(v)) or is_struct(v, Ecto.Association.NotLoaded) or is_struct(v, Ecto.Schema.Metadata)
     end)
     |> Map.new()
   end

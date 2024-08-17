@@ -11,16 +11,14 @@ defmodule Sequin.PostgresReplicationTest do
   """
   use Sequin.DataCase, async: true
 
-  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
   alias Sequin.Extensions.Replication, as: ReplicationExt
-  # alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
+  alias Sequin.Mocks.Extensions.MessageHandlerMock
+  alias Sequin.Replication.Message
+  # alias Sequin.Factory.AccountsFactory
   # alias Sequin.Factory.DatabasesFactory
   # alias Sequin.Factory.ReplicationFactory
   # alias Sequin.Factory.StreamsFactory
-  alias Sequin.Mocks.Extensions.MessageHandlerMock
   # alias Sequin.Replication
   # alias Sequin.Replication.PostgresReplicationSlot
   # alias Sequin.ReplicationRuntime
@@ -371,9 +369,9 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: MessageHandlerMock)
       assert_receive {:change, [change]}, :timer.seconds(5)
 
-      assert is_struct(change, InsertedRecord), "Expected change to be a InsertedRecord, got: #{inspect(change)}"
+      assert is_action(change, :insert), "Expected change to be an insert, got: #{inspect(change)}"
 
-      assert Map.equal?(change.record, record)
+      assert fields_equal?(change.fields, record)
 
       assert change.table_name == "characters"
       assert change.table_schema == "public"
@@ -400,14 +398,14 @@ defmodule Sequin.PostgresReplicationTest do
       assert length(changes) == 3
       [insert1, insert2, insert3] = changes
 
-      assert is_struct(insert1, InsertedRecord)
-      assert insert1.record["name"] == "Paul Atreides"
+      assert is_action(insert1, :insert)
+      assert get_field_value(insert1.fields, "name") == "Paul Atreides"
 
-      assert is_struct(insert2, InsertedRecord)
-      assert insert2.record["name"] == "Leto Atreides"
+      assert is_action(insert2, :insert)
+      assert get_field_value(insert2.fields, "name") == "Leto Atreides"
 
-      assert is_struct(insert3, InsertedRecord)
-      assert insert3.record["name"] == "Chani"
+      assert is_action(insert3, :insert)
+      assert get_field_value(insert3.fields, "name") == "Chani"
     end
 
     @tag capture_log: true
@@ -435,10 +433,10 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: MessageHandlerMock)
 
       assert_receive {:change, [change]}, :timer.seconds(1)
-      assert is_struct(change, InsertedRecord)
+      assert is_action(change, :insert)
 
       # Should have received the record (it was re-delivered)
-      assert Map.equal?(change.record, record)
+      assert fields_equal?(change.fields, record)
     end
 
     test "creates, updates, and deletes are captured" do
@@ -455,36 +453,36 @@ defmodule Sequin.PostgresReplicationTest do
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, [create_change]}, :timer.seconds(1)
-      assert is_struct(create_change, InsertedRecord)
+      assert is_action(create_change, :insert)
 
-      assert Map.equal?(create_change.record, record)
+      assert fields_equal?(create_change.fields, record)
 
-      assert create_change.type == "insert"
+      assert create_change.action == :insert
 
       # Test update
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
       record = Map.put(record, "planet", "Arrakis")
 
       assert_receive {:change, [update_change]}, :timer.seconds(1)
-      assert is_struct(update_change, UpdatedRecord)
+      assert is_action(update_change, :update)
 
-      assert Map.equal?(update_change.record, record)
+      assert fields_equal?(update_change.fields, record)
 
-      refute is_nil(update_change.old_record)
+      refute is_nil(update_change.old_fields)
 
-      assert update_change.old_record["planet"] == "Caladan"
+      assert Enum.find(update_change.old_fields, &(&1.column_name == "planet")).value == "Caladan"
 
-      assert update_change.type == "update"
+      assert update_change.action == :update
 
       # Test delete
       UnboxedRepo.delete!(character)
 
       assert_receive {:change, [delete_change]}, :timer.seconds(1)
-      assert is_struct(delete_change, DeletedRecord)
+      assert is_action(delete_change, :delete)
 
-      assert Map.equal?(delete_change.old_record, record)
+      assert fields_equal?(delete_change.old_fields, record)
 
-      assert delete_change.type == "delete"
+      assert delete_change.action == :delete
     end
 
     test "messages are processed exactly once, even after crash and reboot" do
@@ -501,8 +499,8 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
-      assert is_struct(change, InsertedRecord)
-      assert change.record["id"] == character1.id
+      assert is_action(change, :insert)
+      assert get_field_value(change.fields, "id") == character1.id
 
       # Give the ack_message time to be sent
       Process.sleep(20)
@@ -520,8 +518,8 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:changes, [change]}, :timer.seconds(1)
 
       # Verify we only get the new record
-      assert is_struct(change, InsertedRecord)
-      assert change.record["id"] == character2.id
+      assert is_action(change, :insert)
+      assert get_field_value(change.fields, "id") == character2.id
     end
   end
 
@@ -543,6 +541,10 @@ defmodule Sequin.PostgresReplicationTest do
     start_supervised!(ReplicationExt.child_spec(opts))
   end
 
+  defp is_action(change, action) do
+    is_struct(change, Message) and change.action == action
+  end
+
   defp stop_replication! do
     stop_supervised!(@server_via)
   end
@@ -551,5 +553,21 @@ defmodule Sequin.PostgresReplicationTest do
     :sequin
     |> Application.get_env(Sequin.Repo)
     |> Keyword.take([:username, :password, :hostname, :database, :port])
+  end
+
+  # Helper functions
+
+  defp get_field_value(fields, column_name) do
+    Enum.find_value(fields, fn %{column_name: name, value: value} ->
+      if name == column_name, do: value
+    end)
+  end
+
+  defp fields_equal?(fields, record) do
+    record_fields = Enum.map(record, fn {key, value} -> %{column_name: key, value: value} end)
+
+    assert_lists_equal(fields, record_fields, fn field1, field2 ->
+      field1.column_name == field2.column_name && field1.value == field2.value
+    end)
   end
 end

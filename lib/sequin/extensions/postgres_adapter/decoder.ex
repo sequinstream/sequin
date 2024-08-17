@@ -67,9 +67,11 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
         * `flags` - Bitmask of flags associated with this column.
         * `name` - The name of the column.
         * `type` - The OID of the data type of the column.
+        * `pk?` - Whether the column is a primary key. Added post decoder when handling the relation message.
         * `type_modifier` - The type modifier of the column.
+        * `attnum` - The attribute number (column position) in the table. Added post decoder when handling the relation message.
         """
-        defstruct [:flags, :name, :type, :type_modifier]
+        defstruct [:flags, :name, :type, :pk?, :type_modifier, :attnum]
       end
     end
 

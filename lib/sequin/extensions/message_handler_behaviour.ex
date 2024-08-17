@@ -3,9 +3,7 @@ defmodule Sequin.Extensions.MessageHandlerBehaviour do
   Defines a behaviour for handling replication messages from Postgres.
   """
 
-  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
+  alias Sequin.Replication.Message
 
   @doc """
   Callback invoked to handle a batch of replication messages.
@@ -19,6 +17,5 @@ defmodule Sequin.Extensions.MessageHandlerBehaviour do
 
     The return value is implementation-specific and may vary based on the needs of the consumer.
   """
-  @callback handle_messages(context :: any(), messages :: [InsertedRecord.t() | UpdatedRecord.t() | DeletedRecord.t()]) ::
-              any()
+  @callback handle_messages(context :: any(), messages :: [Message.t()]) :: any()
 end

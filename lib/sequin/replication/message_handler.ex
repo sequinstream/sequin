@@ -4,9 +4,7 @@ defmodule Sequin.Replication.MessageHandler do
 
   alias Sequin.Consumers
   alias Sequin.Extensions.MessageHandlerBehaviour
-  alias Sequin.Extensions.PostgresAdapter.Changes.DeletedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.InsertedRecord
-  alias Sequin.Extensions.PostgresAdapter.Changes.UpdatedRecord
+  alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
 
   defmodule Context do
@@ -26,50 +24,63 @@ defmodule Sequin.Replication.MessageHandler do
   def handle_messages(%Context{} = ctx, messages) do
     messages
     |> Enum.flat_map(fn message ->
-      Enum.map(ctx.consumers, fn consumer ->
-        Sequin.Map.from_ecto(%Sequin.Consumers.ConsumerEvent{
-          consumer_id: consumer.id,
-          commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-          record_pks: message.ids,
-          table_oid: message.table_oid,
-          deliver_count: 0,
-          data: create_data_from_message(message)
-        })
+      Enum.flat_map(ctx.consumers, fn consumer ->
+        if Consumers.matches_message?(consumer, message) do
+          [
+            Sequin.Map.from_ecto(%Sequin.Consumers.ConsumerEvent{
+              consumer_id: consumer.id,
+              commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+              record_pks: message.ids,
+              table_oid: message.table_oid,
+              deliver_count: 0,
+              data: create_data_from_message(message)
+            })
+          ]
+        else
+          []
+        end
       end)
     end)
     |> Consumers.insert_consumer_events()
   end
 
-  defp create_data_from_message(%InsertedRecord{} = message) do
+  defp create_data_from_message(%Message{action: :insert} = message) do
     %{
-      record: message.record,
+      record: fields_to_map(message.fields),
       changes: nil,
       action: :insert
     }
   end
 
-  defp create_data_from_message(%UpdatedRecord{} = message) do
-    changes = if message.old_record, do: filter_changes(message.old_record, message.record), else: %{}
+  defp create_data_from_message(%Message{action: :update} = message) do
+    changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
 
     %{
-      record: message.record,
+      record: fields_to_map(message.fields),
       changes: changes,
       action: :update
     }
   end
 
-  defp create_data_from_message(%DeletedRecord{} = message) do
+  defp create_data_from_message(%Message{action: :delete} = message) do
     %{
-      record: message.old_record,
+      record: fields_to_map(message.old_fields),
       changes: nil,
       action: :delete
     }
   end
 
-  defp filter_changes(old_record, new_record) do
-    old_record
+  defp fields_to_map(fields) do
+    Map.new(fields, fn %{column_name: name, value: value} -> {name, value} end)
+  end
+
+  defp filter_changes(old_fields, new_fields) do
+    old_map = fields_to_map(old_fields)
+    new_map = fields_to_map(new_fields)
+
+    old_map
     |> Enum.reduce(%{}, fn {k, v}, acc ->
-      if v == Map.get(new_record, k) do
+      if v == Map.get(new_map, k) do
         acc
       else
         Map.put(acc, k, v)

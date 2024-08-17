@@ -343,17 +343,20 @@ defmodule Sequin.Factory.ConsumersFactory do
   def consumer_record(attrs \\ []) do
     attrs = Map.new(attrs)
 
+    state = Map.get_lazy(attrs, :state, fn -> Enum.random([:available, :acked, :delivered, :pending_redelivery]) end)
+    not_visible_until = if state == :available, do: nil, else: Factory.timestamp()
+
     merge_attributes(
       %ConsumerRecord{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
         record_pks: [Faker.UUID.v4()],
         table_oid: Enum.random(1..100_000),
-        state: Enum.random([:available, :acked, :delivered, :pending_redelivery]),
+        state: state,
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
-        not_visible_until: Enum.random([nil, Factory.timestamp()])
+        not_visible_until: not_visible_until
       },
       attrs
     )

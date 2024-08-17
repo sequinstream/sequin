@@ -2,6 +2,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Factory.ConsumersFactory
 
   describe "consumer_record" do
@@ -88,6 +89,158 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       [first, second] = Consumers.list_consumer_records_for_consumer(consumer.id, order_by: [desc: :id])
       assert first.id == record2.id
       assert second.id == record1.id
+    end
+
+    test "ack_messages/2 deletes non-pending_redelivery records and marks pending_redelivery as available" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
+      record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+      record4 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
+
+      :ok = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id, record3.ack_id])
+
+      assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record3.id) == nil
+
+      updated_record2 = Consumers.reload(record2)
+      assert updated_record2.state == :available
+
+      # record4 should remain unchanged
+      updated_record4 = Consumers.reload(record4)
+      assert updated_record4.state == :pending_redelivery
+    end
+
+    test "nack_messages/2 marks consumer records as available and resets not_visible_until" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      future = DateTime.add(DateTime.utc_now(), 3600, :second)
+
+      record1 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
+
+      record2 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
+
+      record3 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
+
+      :ok = Consumers.nack_messages(consumer, [record1.ack_id, record2.ack_id])
+
+      updated_record1 = Consumers.reload(record1)
+      updated_record2 = Consumers.reload(record2)
+      updated_record3 = Consumers.reload(record3)
+
+      assert updated_record1.state == :available
+      assert updated_record1.not_visible_until == nil
+      assert updated_record2.state == :available
+      assert updated_record2.not_visible_until == nil
+      assert updated_record3.state == :delivered
+      assert updated_record3.not_visible_until == future
+    end
+  end
+
+  describe "insert_consumer_records/1" do
+    test "inserts a single new record" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      record_attrs = ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id, state: :delivered)
+
+      assert {:ok, 1} = Consumers.insert_consumer_records([record_attrs])
+
+      inserted_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
+      assert inserted_record.consumer_id == record_attrs.consumer_id
+      assert inserted_record.commit_lsn == record_attrs.commit_lsn
+      assert inserted_record.record_pks == record_attrs.record_pks
+      assert inserted_record.table_oid == record_attrs.table_oid
+      assert inserted_record.state == record_attrs.state
+      assert inserted_record.ack_id
+      assert inserted_record.deliver_count == record_attrs.deliver_count
+      assert inserted_record.last_delivered_at == record_attrs.last_delivered_at
+      assert inserted_record.not_visible_until == record_attrs.not_visible_until
+      assert %DateTime{} = inserted_record.inserted_at
+      assert %DateTime{} = inserted_record.updated_at
+    end
+
+    test "inserts multiple new records" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      records = Enum.map(1..3, fn _ -> ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id) end)
+
+      assert {:ok, 3} = Consumers.insert_consumer_records(records)
+
+      inserted_records = Repo.all(ConsumerRecord)
+      assert length(inserted_records) == 3
+    end
+
+    test "upserts a record that already exists" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+
+      updated_attrs = %{
+        consumer_id: existing_record.consumer_id,
+        record_pks: existing_record.record_pks,
+        table_oid: existing_record.table_oid,
+        commit_lsn: existing_record.commit_lsn + 1,
+        state: :available
+      }
+
+      assert {:ok, 1} = Consumers.insert_consumer_records([updated_attrs])
+
+      updated_record = Consumers.reload(existing_record)
+      assert updated_record.commit_lsn == updated_attrs.commit_lsn
+      assert updated_record.state == :available
+    end
+
+    test "upserts multiple records, some new and some existing" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
+      new_record = ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id)
+
+      updated_attrs = %{
+        consumer_id: existing_record.consumer_id,
+        record_pks: existing_record.record_pks,
+        table_oid: existing_record.table_oid,
+        commit_lsn: existing_record.commit_lsn + 1,
+        state: :available
+      }
+
+      assert {:ok, 2} = Consumers.insert_consumer_records([updated_attrs, new_record])
+
+      updated_existing = Consumers.reload(existing_record)
+      assert updated_existing.commit_lsn == updated_attrs.commit_lsn
+
+      assert Repo.aggregate(ConsumerRecord, :count, :id) == 2
+    end
+
+    test "state transitions" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+
+      records = [
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available),
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered),
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery),
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :acked)
+      ]
+
+      update_attrs =
+        Enum.map(records, fn record ->
+          %{
+            consumer_id: record.consumer_id,
+            record_pks: record.record_pks,
+            table_oid: record.table_oid,
+            commit_lsn: record.commit_lsn + 1,
+            state: :available
+          }
+        end)
+
+      assert {:ok, 4} = Consumers.insert_consumer_records(update_attrs)
+
+      updated_records = Enum.map(records, &Consumers.reload/1)
+
+      assert Enum.map(updated_records, & &1.state) == [
+               :available,
+               :pending_redelivery,
+               :pending_redelivery,
+               :available
+             ]
     end
   end
 end

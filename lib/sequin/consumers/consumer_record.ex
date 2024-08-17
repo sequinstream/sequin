@@ -31,6 +31,8 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
 
+    field :data, :map, virtual: true
+
     timestamps(type: :utc_datetime_usec)
   end
 

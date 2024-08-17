@@ -28,8 +28,11 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :name, :string, null: false
       add :ssl, :boolean, default: false, null: false
       add :username, :string, null: false
+      add :tables_refreshed_at, :utc_datetime
 
       add :account_id, references(:accounts, prefix: @config_schema), null: false
+
+      add :tables, {:array, :map}, null: false, default: "{}"
 
       timestamps()
     end

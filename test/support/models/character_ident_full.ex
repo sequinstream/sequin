@@ -12,6 +12,15 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
     field :tags, {:array, :string}
   end
 
+  def table_oid do
+    Sequin.Repo.one(
+      from(pg in "pg_class",
+        where: pg.relname == "characters_ident_full",
+        select: pg.oid
+      )
+    )
+  end
+
   def where_id(query \\ base_query(), id) do
     from(cf in query, where: cf.id == ^id)
   end

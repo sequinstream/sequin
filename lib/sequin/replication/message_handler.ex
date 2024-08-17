@@ -24,22 +24,20 @@ defmodule Sequin.Replication.MessageHandler do
   def handle_messages(%Context{} = ctx, messages) do
     messages
     |> Enum.flat_map(fn message ->
-      Enum.flat_map(ctx.consumers, fn consumer ->
+      ctx.consumers
+      |> Enum.map(fn consumer ->
         if Consumers.matches_message?(consumer, message) do
-          [
-            Sequin.Map.from_ecto(%Sequin.Consumers.ConsumerEvent{
-              consumer_id: consumer.id,
-              commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-              record_pks: message.ids,
-              table_oid: message.table_oid,
-              deliver_count: 0,
-              data: create_data_from_message(message)
-            })
-          ]
-        else
-          []
+          Sequin.Map.from_ecto(%Sequin.Consumers.ConsumerEvent{
+            consumer_id: consumer.id,
+            commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+            record_pks: message.ids,
+            table_oid: message.table_oid,
+            deliver_count: 0,
+            data: create_data_from_message(message)
+          })
         end
       end)
+      |> Enum.reject(&is_nil/1)
     end)
     |> Consumers.insert_consumer_events()
   end
@@ -48,7 +46,8 @@ defmodule Sequin.Replication.MessageHandler do
     %{
       record: fields_to_map(message.fields),
       changes: nil,
-      action: :insert
+      action: :insert,
+      metadata: metadata(message)
     }
   end
 
@@ -58,7 +57,8 @@ defmodule Sequin.Replication.MessageHandler do
     %{
       record: fields_to_map(message.fields),
       changes: changes,
-      action: :update
+      action: :update,
+      metadata: metadata(message)
     }
   end
 
@@ -66,7 +66,16 @@ defmodule Sequin.Replication.MessageHandler do
     %{
       record: fields_to_map(message.old_fields),
       changes: nil,
-      action: :delete
+      action: :delete,
+      metadata: metadata(message)
+    }
+  end
+
+  defp metadata(%Message{} = message) do
+    %{
+      table: message.table_name,
+      schema: message.table_schema,
+      commit_timestamp: message.commit_timestamp
     }
   end
 

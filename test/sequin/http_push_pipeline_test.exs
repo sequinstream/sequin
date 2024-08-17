@@ -25,11 +25,25 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
       assert to_string(req.url) == http_endpoint.base_url
       json = Jason.decode!(req.body)
 
-      assert json == %{
-               "record" => event.data.record,
-               "changes" => nil,
-               "action" => "insert"
-             }
+      assert_maps_equal(
+        json,
+        %{
+          "record" => event.data.record,
+          "changes" => nil,
+          "action" => "insert"
+        },
+        ["record", "changes", "action"]
+      )
+
+      assert_maps_equal(
+        json["metadata"],
+        %{
+          "table" => event.data.metadata.table,
+          "schema" => event.data.metadata.schema,
+          "commit_timestamp" => DateTime.to_iso8601(event.data.metadata.commit_timestamp)
+        },
+        ["table", "schema", "commit_timestamp"]
+      )
 
       send(test_pid, :sent)
       {req, Req.Response.new(status: 200)}

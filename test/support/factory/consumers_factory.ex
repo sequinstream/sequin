@@ -216,33 +216,48 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   defp create_data_for_action(:insert) do
-    record = %{"column" => Faker.Lorem.word()}
+    record = %{"column" => Factory.word()}
 
     %{
       "record" => record,
       "changes" => nil,
-      "action" => :insert
+      "action" => :insert,
+      "metadata" => %{
+        "table" => Factory.postgres_object(),
+        "schema" => Factory.postgres_object(),
+        "commit_timestamp" => Factory.timestamp()
+      }
     }
   end
 
   defp create_data_for_action(:update) do
-    record = %{"column" => Faker.Lorem.word()}
-    changes = %{"column" => Faker.Lorem.word()}
+    record = %{"column" => Factory.word()}
+    changes = %{"column" => Factory.word()}
 
     %{
       "record" => record,
       "changes" => changes,
-      "action" => :update
+      "action" => :update,
+      "metadata" => %{
+        "table" => Factory.postgres_object(),
+        "schema" => Factory.postgres_object(),
+        "commit_timestamp" => Factory.timestamp()
+      }
     }
   end
 
   defp create_data_for_action(:delete) do
-    record = %{"column" => Faker.Lorem.word()}
+    record = %{"column" => Factory.word()}
 
     %{
       "record" => record,
       "changes" => nil,
-      "action" => :delete
+      "action" => :delete,
+      "metadata" => %{
+        "table" => Factory.postgres_object(),
+        "schema" => Factory.postgres_object(),
+        "commit_timestamp" => Factory.timestamp()
+      }
     }
   end
 

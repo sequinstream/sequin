@@ -5,7 +5,6 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Factory.StreamsFactory
   alias Sequin.Replication
   alias Sequin.Replication.BackfillPostgresTableWorker
   alias Sequin.Test.Support.ReplicationSlots
@@ -13,7 +12,6 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   setup :authenticated_conn
 
   @publication "characters_publication"
-  @moduletag skip: true
 
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
@@ -21,20 +19,17 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
     other_account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
     other_database = DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
-    stream = StreamsFactory.insert_stream!(account_id: account.id)
 
     postgres_replication =
       ReplicationFactory.insert_postgres_replication!(
         account_id: account.id,
-        postgres_database_id: database.id,
-        stream_id: stream.id
+        postgres_database_id: database.id
       )
 
     other_postgres_replication =
       ReplicationFactory.insert_postgres_replication!(
         account_id: other_account.id,
-        postgres_database_id: other_database.id,
-        stream_id: StreamsFactory.insert_stream!(account_id: other_account.id).id
+        postgres_database_id: other_database.id
       )
 
     %{
@@ -42,7 +37,6 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       other_postgres_replication: other_postgres_replication,
       database: database,
       other_database: other_database,
-      stream: stream,
       other_account: other_account
     }
   end
@@ -71,11 +65,8 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
         :id,
         :slot_name,
         :publication_name,
-        :postgres_database_id,
-        :stream_id
+        :postgres_database_id
       ])
-
-      assert String.to_existing_atom(atomized_response.key_format) == postgres_replication.key_format
     end
 
     test "returns 404 if postgres replication belongs to another account", %{
@@ -88,11 +79,10 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   end
 
   describe "create" do
-    setup %{database: database, stream: stream} do
+    setup %{database: database} do
       postgres_replication_attrs =
         [
           postgres_database_id: database.id,
-          stream_id: stream.id,
           slot_name: replication_slot(),
           publication_name: @publication
         ]
@@ -116,15 +106,13 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
 
     test "creates a postgres replication with a new postgres database", %{
       conn: conn,
-      account: account,
-      stream: stream
+      account: account
     } do
       db_attrs = DatabasesFactory.configured_postgres_database_attrs()
 
       postgres_replication_attrs = %{
         slot_name: replication_slot(),
         publication_name: @publication,
-        stream_id: stream.id,
         postgres_database: db_attrs,
         status: :backfilling
       }
@@ -151,13 +139,11 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
 
     test "cannot create a postgres replication for a database in another account", %{
       conn: conn,
-      other_database: other_database,
-      stream: stream
+      other_database: other_database
     } do
       attrs =
         ReplicationFactory.postgres_replication_attrs(
           postgres_database_id: other_database.id,
-          stream_id: stream.id,
           slot_name: replication_slot(),
           publication_name: @publication
         )
@@ -198,7 +184,6 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
 
       {:ok, postgres_replication} = Replication.get_pg_replication_for_account(account.id, id)
       assert postgres_replication.account_id == account.id
-      assert postgres_replication.status == :active
       refute_enqueued(worker: BackfillPostgresTableWorker)
     end
   end
@@ -208,12 +193,12 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       conn: conn,
       postgres_replication: postgres_replication
     } do
-      update_attrs = %{status: "disabled"}
+      update_attrs = %{publication_name: "new_publication"}
       conn = put(conn, ~p"/api/postgres_replications/#{postgres_replication.id}", update_attrs)
       assert %{"id" => id} = json_response(conn, 200)
 
       {:ok, updated_postgres_replication} = Replication.get_pg_replication(id)
-      assert updated_postgres_replication.status == :disabled
+      assert updated_postgres_replication.publication_name == "new_publication"
     end
 
     test "returns validation error for invalid attributes", %{conn: conn, postgres_replication: postgres_replication} do
@@ -240,9 +225,9 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
       assert json_response(conn, 422)
 
       assert json_response(conn, 422) == %{
-               "summary" => "Cannot update stream_id or postgres_database_id",
+               "summary" => "Cannot update postgres_database_id",
                "validation_errors" => %{
-                 "base" => ["Updating stream_id or postgres_database_id is not allowed"]
+                 "base" => ["Updating postgres_database_id is not allowed"]
                },
                "code" => nil
              }

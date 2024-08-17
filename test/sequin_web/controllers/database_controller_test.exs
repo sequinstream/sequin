@@ -4,17 +4,8 @@ defmodule SequinWeb.DatabaseControllerTest do
   alias Sequin.Databases
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Test.Support
-  alias Sequin.Test.Support.ReplicationSlots
 
   setup :authenticated_conn
-
-  @moduletag skip: true
-
-  @schema_name "__database_controller_test_schema__"
-  @tables ["users", "posts"]
-  @publication_name "__database_controller_test_pub__"
-  def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
@@ -22,29 +13,6 @@ defmodule SequinWeb.DatabaseControllerTest do
 
     other_database =
       DatabasesFactory.insert_configured_postgres_database!(account_id: other_account.id)
-
-    conn = Support.Postgres.start_test_db_link!()
-
-    # Create schema and sample tables
-    Postgrex.query!(conn, "create schema if not exists #{@schema_name}", [])
-
-    Enum.each(@tables, fn table ->
-      Postgrex.query!(
-        conn,
-        """
-          create table if not exists #{@schema_name}.#{table} (
-          id serial primary key
-        )
-        """,
-        []
-      )
-    end)
-
-    on_exit(fn ->
-      conn = Support.Postgres.start_test_db_link!()
-      Postgrex.query!(conn, "DROP SCHEMA IF EXISTS #{@schema_name} CASCADE", [])
-      Postgrex.query!(conn, "DROP PUBLICATION IF EXISTS #{@publication_name}", [])
-    end)
 
     %{database: database, other_database: other_database, other_account: other_account}
   end
@@ -238,61 +206,6 @@ defmodule SequinWeb.DatabaseControllerTest do
     end
   end
 
-  describe "setup_replication" do
-    test "sets up replication slot and publication for a database", %{
-      conn: conn,
-      database: database
-    } do
-      conn =
-        post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
-          slot_name: replication_slot(),
-          publication_name: @publication_name,
-          tables: [[@schema_name, "users"], [@schema_name, "posts"]]
-        })
-
-      assert %{
-               "success" => true,
-               "slot_name" => _,
-               "publication_name" => @publication_name,
-               "tables" => [[@schema_name, "users"], [@schema_name, "posts"]]
-             } =
-               json_response(conn, 200)
-
-      assert {:ok, %{num_rows: 1}} =
-               Repo.query("SELECT 1 FROM pg_catalog.pg_publication WHERE pubname = $1", [
-                 @publication_name
-               ])
-    end
-
-    test "returns error for a database belonging to another account", %{
-      conn: conn,
-      other_database: other_database
-    } do
-      conn =
-        post(conn, ~p"/api/databases/#{other_database.id}/setup_replication", %{
-          slot_name: "test_slot",
-          publication_name: "test_pub",
-          tables: [[@schema_name, "users"], [@schema_name, "posts"]]
-        })
-
-      assert json_response(conn, 404)
-    end
-
-    test "returns error for invalid slot, publication name, or tables", %{
-      conn: conn,
-      database: database
-    } do
-      conn =
-        post(conn, ~p"/api/databases/#{database.id}/setup_replication", %{
-          slot_name: "",
-          publication_name: "",
-          tables: []
-        })
-
-      assert %{"summary" => _} = json_response(conn, 422)
-    end
-  end
-
   describe "list_schemas" do
     test "lists schemas for a database", %{conn: conn, database: database} do
       conn = get(conn, ~p"/api/databases/#{database.id}/schemas")
@@ -315,6 +228,7 @@ defmodule SequinWeb.DatabaseControllerTest do
       conn = get(conn, ~p"/api/databases/#{database.id}/schemas/public/tables")
       assert %{"tables" => tables} = json_response(conn, 200)
       assert is_list(tables)
+      assert "characters" in tables
     end
 
     test "returns 404 if database belongs to another account", %{

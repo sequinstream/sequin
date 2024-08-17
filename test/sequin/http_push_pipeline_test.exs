@@ -26,7 +26,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
       json = Jason.decode!(req.body)
 
       assert json == %{
-               "record" => event.data["record"],
+               "record" => event.data.record,
                "changes" => nil,
                "action" => "insert"
              }
@@ -38,7 +38,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
     start_pipeline!(consumer, adapter)
 
     ref = send_test_event(consumer, event.data)
-    assert_receive {:ack, ^ref, [%{data: %{"action" => :insert}}], []}, 1_000
+    assert_receive {:ack, ^ref, [%{data: %{action: :insert}}], []}, 1_000
     assert_receive :sent, 1_000
   end
 

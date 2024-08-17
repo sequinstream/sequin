@@ -14,14 +14,23 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "inserts batch of consumer events", %{consumer: consumer} do
-      events = for _ <- 1..3, do: ConsumersFactory.consumer_event_attrs(%{consumer_id: consumer.id})
+      events =
+        for _ <- 1..3 do
+          %{consumer_id: consumer.id}
+          |> ConsumersFactory.consumer_event_attrs()
+          |> Map.update(:data, %{}, &Sequin.Map.atomize_keys/1)
+        end
 
       assert {:ok, 3} = Consumers.insert_consumer_events(events)
 
       inserted_events = Repo.all(ConsumerEvent)
       assert length(inserted_events) == 3
 
-      assert_lists_equal(inserted_events, events, &assert_maps_equal(&1, &2, [:consumer_id, :commit_lsn, :data]))
+      assert_lists_equal(inserted_events, events, fn e1, e2 ->
+        e1
+        |> Map.update!(:data, &Map.from_struct/1)
+        |> assert_maps_equal(e2, [:consumer_id, :commit_lsn, :data])
+      end)
     end
   end
 

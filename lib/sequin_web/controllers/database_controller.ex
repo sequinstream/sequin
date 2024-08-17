@@ -165,8 +165,8 @@ defmodule SequinWeb.DatabaseController do
     new_attrs = Map.drop(new_attrs, ["id", "id_or_name"])
     database = Map.merge(database, Sequin.Map.atomize_keys(new_attrs))
 
-    with :ok <- Databases.test_tcp_reachability(database, connection_test_timeouts()),
-         :ok <- Databases.test_connect(database, connection_test_timeouts()) do
+    with :ok <- Databases.test_tcp_reachability(database, connection_test_timeout()),
+         :ok <- Databases.test_connect(database, connection_test_timeout()) do
       Databases.test_permissions(database)
     else
       {:error, %Error.ValidationError{}} = error ->
@@ -199,9 +199,9 @@ defmodule SequinWeb.DatabaseController do
     test_database_connection(database)
   end
 
-  defp connection_test_timeouts do
+  defp connection_test_timeout do
     if Application.fetch_env!(:sequin, :env) == :test do
-      25
+      50
     else
       10_000
     end

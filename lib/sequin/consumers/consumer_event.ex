@@ -7,6 +7,26 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   alias Sequin.Streams.ConsumerEventWithConsumerInfo
 
+  defmodule Data do
+    @moduledoc false
+    use Ecto.Schema
+
+    @primary_key false
+    @derive {Jason.Encoder, only: [:record, :changes, :action]}
+
+    embedded_schema do
+      field :record, :map
+      field :changes, :map
+      field :action, Ecto.Enum, values: [:insert, :update, :delete]
+    end
+
+    def changeset(data, attrs) do
+      data
+      |> cast(attrs, [:record, :changes, :action])
+      |> validate_required([:record, :action])
+    end
+  end
+
   @primary_key false
   @derive {Jason.Encoder,
            only: [
@@ -33,7 +53,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
 
-    field :data, :map
+    embeds_one :data, Data
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -49,9 +69,9 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :table_oid,
       :not_visible_until,
       :deliver_count,
-      :last_delivered_at,
-      :data
+      :last_delivered_at
     ])
+    |> cast_embed(:data, required: true)
     |> validate_required([
       :consumer_id,
       :commit_lsn,

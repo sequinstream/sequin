@@ -81,14 +81,14 @@ defmodule SequinWeb.PostgresReplicationController do
   end
 
   defp parse_update_params(params) do
-    forbidden_keys = ["stream_id", "postgres_database_id"]
+    forbidden_keys = ["postgres_database_id"]
 
     if Enum.any?(forbidden_keys, &Map.has_key?(params, &1)) do
       {:error,
        Sequin.Error.validation(
-         summary: "Cannot update stream_id or postgres_database_id",
+         summary: "Cannot update postgres_database_id",
          errors: %{
-           base: ["Updating stream_id or postgres_database_id is not allowed"]
+           base: ["Updating postgres_database_id is not allowed"]
          }
        )}
     else

@@ -218,6 +218,10 @@ defmodule Sequin.Consumers do
           inserted_at: now
         })
         |> Map.update!(:record_pks, &ConsumerEvent.stringify_record_pks/1)
+        |> Map.update!(:data, fn data ->
+          data = Sequin.Map.atomize_keys(data)
+          struct!(ConsumerEvent.Data, data)
+        end)
       end)
 
     {count, _} = Repo.insert_all(ConsumerEvent, entries)

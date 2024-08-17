@@ -292,8 +292,8 @@ defmodule Sequin.Consumers do
   # Part of Ecto's SQL injection protection.
   @case_frag """
     CASE
-      WHEN ? IN ('delivered', 'pending_redelivery') THEN ?
-      ELSE ?
+      WHEN ? IN ('delivered', 'pending_redelivery') THEN 'pending_redelivery'
+      ELSE 'available'
     END::#{@consumer_record_state_enum}
   """
   def insert_consumer_records(consumer_records) do
@@ -316,9 +316,7 @@ defmodule Sequin.Consumers do
             state:
               fragment(
                 @case_frag,
-                cr.state,
-                "pending_redelivery",
-                "available"
+                cr.state
               ),
             updated_at: fragment("EXCLUDED.updated_at")
           ]

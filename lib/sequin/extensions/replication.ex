@@ -239,6 +239,10 @@ defmodule Sequin.Extensions.Replication do
       Enum.reverse(state.accumulated_messages)
     )
 
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :flush_messages})
+    end
+
     %{
       state
       | last_committed_lsn: lsn,

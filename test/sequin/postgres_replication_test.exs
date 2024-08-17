@@ -24,7 +24,8 @@ defmodule Sequin.PostgresReplicationTest do
   # alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Test.Support.Models.Character
-  # alias Sequin.Test.Support.Models.Character2PK
+  alias Sequin.Test.Support.Models.Character2PK
+  alias Sequin.Test.Support.Models.CharacterIdentFull
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
 
@@ -66,6 +67,14 @@ defmodule Sequin.PostgresReplicationTest do
           source_tables: [
             ConsumersFactory.source_table(
               oid: Character.table_oid(),
+              column_filters: []
+            ),
+            ConsumersFactory.source_table(
+              oid: CharacterIdentFull.table_oid(),
+              column_filters: []
+            ),
+            ConsumersFactory.source_table(
+              oid: Character2PK.table_oid(),
               column_filters: []
             )
           ]
@@ -112,230 +121,185 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    # test "updates are replicated to the stream", %{stream: stream} do
-    #   character = CharacterFactory.insert_character!(%{name: "Leto Atreides", house: "Atreides", planet: "Caladan"})
+    test "updates are replicated to consumer events when replica identity default", %{consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!(%{name: "Leto Atreides", house: "Atreides", planet: "Caladan"})
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      # Update the character
+      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
 
-    #   [message] = Streams.list_messages_for_stream(stream.id)
-    #   assert message.key =~ "public.characters"
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   decoded_data = Jason.decode!(message.data)
+      # Fetch consumer events
+      [_insert_event, update_event] =
+        Consumers.list_consumer_events_for_consumer(consumer.id, order_by: [asc: :inserted_at])
 
-    #   assert decoded_data["data"] == %{
-    #            "id" => 1,
-    #            "name" => "Leto Atreides",
-    #            "house" => "Atreides",
-    #            "planet" => "Arrakis",
-    #            "is_active" => true,
-    #            "tags" => []
-    #          }
+      # Assert the consumer event details
+      assert update_event.consumer_id == consumer.id
+      assert update_event.table_oid == Character.table_oid()
+      assert update_event.record_pks == [to_string(character.id)]
+      %{data: data} = update_event
 
-    #   refute decoded_data["deleted"]
-    #   assert decoded_data["changes"] == %{"planet" => "Caladan"}
-    #   assert decoded_data["action"] == "update"
-    # end
+      assert data.record == %{
+               "id" => character.id,
+               "name" => character.name,
+               "house" => character.house,
+               "planet" => "Arrakis",
+               "is_active" => character.is_active,
+               "tags" => character.tags
+             }
 
-    # test "deletes are replicated to the stream", %{stream: stream} do
-    #   character = CharacterFactory.insert_character!(%{name: "Duncan Idaho", house: "Atreides", planet: "Caladan"})
+      assert data.changes == %{}
+      assert data.action == :update
+      assert_maps_equal(data.metadata, %{table: "characters", schema: "public"}, [:table, :schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+    test "updates are replicated to consumer events when replica identity full", %{consumer: consumer} do
+      # Insert a character with full replica identity
+      character =
+        CharacterFactory.insert_character_ident_full!(%{
+          name: "Paul Atreides",
+          house: "Atreides",
+          planet: "Caladan",
+          is_active: true,
+          tags: ["heir", "kwisatz haderach"]
+        })
 
-    #   UnboxedRepo.delete!(character)
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   [message] = Streams.list_messages_for_stream(stream.id)
-    #   assert message.key =~ "public.characters"
+      # Update the character
+      UnboxedRepo.update!(
+        Ecto.Changeset.change(character, %{
+          house: "Emperor",
+          planet: "Arrakis",
+          is_active: false,
+          tags: ["emperor", "kwisatz haderach"]
+        })
+      )
 
-    #   decoded_data = Jason.decode!(message.data)
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   assert decoded_data["data"] == %{
-    #            "id" => 1,
-    #            "name" => "Duncan Idaho",
-    #            "house" => "Atreides",
-    #            "planet" => "Caladan",
-    #            "is_active" => true,
-    #            "tags" => []
-    #          }
+      # Fetch consumer events
+      [_insert_event, update_event] =
+        Consumers.list_consumer_events_for_consumer(consumer.id, order_by: [asc: :inserted_at])
 
-    #   assert decoded_data["deleted"]
-    #   assert decoded_data["changes"] == %{}
-    #   assert decoded_data["action"] == "delete"
-    # end
+      # Assert the consumer event details
+      %{data: data} = update_event
 
-    # test "replication with default replica identity", %{stream: stream} do
-    #   CharacterFactory.insert_character!(%{name: "Chani", house: "Fremen", planet: "Arrakis"})
+      assert data.changes == %{
+               "house" => "Atreides",
+               "planet" => "Caladan",
+               "is_active" => true,
+               "tags" => ["heir", "kwisatz haderach"]
+             }
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      assert data.action == :update
+    end
 
-    #   [insert_message] = Streams.list_messages_for_stream(stream.id)
-    #   decoded_insert_data = Jason.decode!(insert_message.data)
-    #   assert decoded_insert_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Fremen", "planet" => "Arrakis"}
-    #   refute decoded_insert_data["deleted"]
-    #   assert decoded_insert_data["changes"] == %{}
-    #   assert decoded_insert_data["action"] == "insert"
+    test "deletes are replicated to consumer events when replica identity default", %{consumer: consumer} do
+      character = CharacterFactory.insert_character!()
 
-    #   1
-    #   |> Character.where_id()
-    #   |> UnboxedRepo.update_all(house: "Atreides")
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      UnboxedRepo.delete!(character)
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   [update_message] = Streams.list_messages_for_stream(stream.id)
-    #   assert update_message.seq > insert_message.seq
-    #   assert update_message.key == insert_message.key
-    #   assert DateTime.compare(update_message.inserted_at, insert_message.inserted_at) == :eq
+      [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
 
-    #   decoded_update_data = Jason.decode!(update_message.data)
-    #   assert decoded_update_data["data"] == %{"id" => 1, "name" => "Chani", "house" => "Atreides", "planet" => "Arrakis"}
-    #   refute decoded_update_data["deleted"]
-    #   assert decoded_update_data["changes"] == %{}
-    #   assert decoded_update_data["action"] == "update"
+      %{data: data} = delete_event
 
-    #   1
-    #   |> Character.where_id()
-    #   |> UnboxedRepo.delete_all()
+      assert data.record == %{
+               "house" => nil,
+               "id" => character.id,
+               "is_active" => nil,
+               "name" => nil,
+               "planet" => nil,
+               "tags" => nil
+             }
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      assert data.changes == nil
+      assert data.action == :delete
+      assert_maps_equal(data.metadata, %{table: "characters", schema: "public"}, [:table, :schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
 
-    #   [delete_message] = Streams.list_messages_for_stream(stream.id)
-    #   assert delete_message.seq > update_message.seq
-    #   assert delete_message.key == update_message.key
-    #   assert DateTime.compare(delete_message.inserted_at, update_message.inserted_at) == :eq
+    test "deletes are replicated to consumer events when replica identity full", %{consumer: consumer} do
+      character = CharacterFactory.insert_character_ident_full!()
 
-    #   decoded_delete_data = Jason.decode!(delete_message.data)
-    #   assert decoded_delete_data["data"]["id"] == 1
-    #   assert decoded_delete_data["deleted"]
-    #   assert decoded_delete_data["changes"] == %{}
-    #   assert decoded_delete_data["action"] == "delete"
-    # end
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    # test "replication with two primary key columns", %{stream: stream} do
-    #   # Insert
-    #   CharacterFactory.insert_character_2pk!(%{
-    #     id1: 1,
-    #     id2: 2,
-    #     name: "Paul Atreides",
-    #     house: "Atreides",
-    #     planet: "Arrakis"
-    #   })
+      UnboxedRepo.delete!(character)
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
 
-    #   [insert_message] = Streams.list_messages_for_stream(stream.id)
-    #   decoded_insert_data = Jason.decode!(insert_message.data)
-    #   assert %{"id1" => 1, "id2" => 2} = decoded_insert_data["data"]
-    #   refute decoded_insert_data["deleted"]
-    #   assert decoded_insert_data["changes"] == %{}
-    #   assert decoded_insert_data["action"] == "insert"
+      %{data: data} = delete_event
 
-    #   # Delete
-    #   1
-    #   |> Character2PK.where_id(2)
-    #   |> UnboxedRepo.delete_all()
+      assert data.record == %{
+               "id" => character.id,
+               "name" => character.name,
+               "house" => character.house,
+               "planet" => character.planet,
+               "is_active" => character.is_active,
+               "tags" => character.tags
+             }
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
+      assert data.changes == nil
+      assert data.action == :delete
+      assert_maps_equal(data.metadata, %{table: "characters_ident_full", schema: "public"}, [:table, :schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
 
-    #   [delete_message] = Streams.list_messages_for_stream(stream.id)
-    #   decoded_delete_data = Jason.decode!(delete_message.data)
-    #   assert %{"id1" => 1, "id2" => 2} = decoded_delete_data["data"]
-    #   assert decoded_delete_data["deleted"]
-    #   assert decoded_delete_data["changes"] == %{}
-    #   assert decoded_delete_data["action"] == "delete"
-    # end
+    test "replication with two primary key columns", %{consumer: consumer} do
+      # Insert
+      character = CharacterFactory.insert_character_2pk!()
 
-    # test "add_info returns correct information", %{pg_replication: pg_replication} do
-    #   # Insert some data to ensure there's a last committed timestamp
-    #   CharacterFactory.insert_character!()
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   assert_receive {ReplicationExt, :flush_messages}, 1000
+      [insert_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+      %{data: data} = insert_event
 
-    #   # Call add_info
-    #   pg_replication_with_info = Replication.add_info(pg_replication)
+      assert data.record == %{
+               "id1" => character.id1,
+               "id2" => character.id2,
+               "name" => character.name,
+               "house" => character.house,
+               "planet" => character.planet
+             }
 
-    #   # Assert that the info field is populated
-    #   assert %PostgresReplicationSlot.Info{} = pg_replication_with_info.info
+      assert is_nil(data.changes)
+      assert data.action == :insert
+      assert_maps_equal(data.metadata, %{table: "characters_2pk", schema: "public"}, [:table, :schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
 
-    #   # Check last_committed_at
-    #   assert pg_replication_with_info.info.last_committed_at != nil
-    #   assert DateTime.before?(pg_replication_with_info.info.last_committed_at, DateTime.utc_now())
-    # end
+      # Delete
+      UnboxedRepo.delete!(character)
 
-    # test "replication with 'with_operation' key format", %{
-    #   stream: stream,
-    #   pg_replication: pg_replication,
-    #   sup: sup
-    # } do
-    #   {:ok, pg_replication} = Replication.update_pg_replication(pg_replication, %{key_format: :with_operation})
+      assert_receive {ReplicationExt, :flush_messages}, 500
 
-    #   # Restart the server
-    #   ReplicationRuntime.Supervisor.stop_for_pg_replication(sup, pg_replication)
+      [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+      %{data: data} = delete_event
 
-    #   {:ok, _pid} = ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+      assert data.record == %{
+               "id1" => character.id1,
+               "id2" => character.id2,
+               "name" => nil,
+               "house" => nil,
+               "planet" => nil
+             }
 
-    #   CharacterFactory.insert_character!()
-
-    #   assert_receive {ReplicationExt, :flush_messages}, 500
-
-    #   [message] = Streams.list_messages_for_stream(stream.id)
-    #   assert message.key =~ "public.characters.insert"
-    # end
-
-    # test "updates with FULL replica identity include changed fields", %{
-    #   stream: stream,
-    #   source_db: source_db
-    # } do
-    #   character =
-    #     CharacterFactory.insert_character!(%{
-    #       name: "Chani",
-    #       house: "Fremen",
-    #       planet: "Arrakis",
-    #       is_active: true,
-    #       tags: ["warrior", "seer", "royal,compound"]
-    #     })
-
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
-
-    #   UnboxedRepo.update!(
-    #     Ecto.Changeset.change(character,
-    #       house: "Atreides",
-    #       planet: "Caladan",
-    #       is_active: false,
-    #       tags: ["warrior", "seer", "royal,interest"]
-    #     )
-    #   )
-
-    #   assert_receive {ReplicationExt, :flush_messages}, 1_000
-
-    #   dbg(Streams.list_messages_for_stream(stream.id))
-    #   [update_message] = Streams.list_messages_for_stream(stream.id)
-    #   assert update_message.key == "#{source_db.name}.public.characters.1"
-
-    #   decoded_data = Jason.decode!(update_message.data)
-
-    #   assert decoded_data["data"] == %{
-    #            "id" => 1,
-    #            "name" => "Chani",
-    #            "house" => "Atreides",
-    #            "planet" => "Caladan",
-    #            "is_active" => false,
-    #            "tags" => ["warrior", "seer", "royal,interest"]
-    #          }
-
-    #   refute decoded_data["deleted"]
-
-    #   assert decoded_data["changes"] == %{
-    #            "house" => "Fremen",
-    #            "planet" => "Arrakis",
-    #            "is_active" => true,
-    #            "tags" => ["warrior", "seer", "royal,compound"]
-    #          }
-
-    #   assert decoded_data["action"] == "update"
-    # end
+      assert is_nil(data.changes)
+      assert data.action == :delete
+      assert_maps_equal(data.metadata, %{table: "characters_2pk", schema: "public"}, [:table, :schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
   end
 
   @server_id __MODULE__

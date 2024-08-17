@@ -173,15 +173,23 @@ defmodule Sequin.Factory.ConsumersFactory do
   def column_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
+    value_type = Map.get(attrs, :value_type, Enum.random([:string, :integer, :float, :boolean]))
+    value = generate_value(value_type)
+
     merge_attributes(
       %ColumnFilter{
         column_attnum: Factory.unique_integer(),
         operator: Factory.one_of([:==, :!=, :>, :>=, :<, :<=]),
-        value: Factory.one_of([Factory.integer(), Factory.boolean(), Factory.float(), Factory.timestamp()])
+        value: %{__type__: value_type, value: value}
       },
-      attrs
+      Map.delete(attrs, :value_type)
     )
   end
+
+  defp generate_value(:string), do: Faker.Lorem.sentence()
+  defp generate_value(:integer), do: Factory.integer()
+  defp generate_value(:float), do: Factory.float()
+  defp generate_value(:boolean), do: Factory.boolean()
 
   # ConsumerEvent
   def consumer_event(attrs \\ []) do

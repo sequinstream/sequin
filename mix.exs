@@ -34,6 +34,7 @@ defmodule Sequin.MixProject do
     [
       {:phoenix, "~> 1.7.12"},
       {:phoenix_ecto, "~> 4.4"},
+      {:polymorphic_embed, "~> 4.1.1"},
       {:ecto_sql, "~> 3.10"},
       {:postgrex, ">= 0.0.0"},
       {:phoenix_html, "~> 4.0"},

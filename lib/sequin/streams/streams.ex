@@ -2,7 +2,6 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
-  alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Repo
@@ -186,103 +185,11 @@ defmodule Sequin.Streams do
     end
   end
 
-  def upsert_messages(stream_id, messages) do
-    with :ok <- validate_messages(messages) do
-      do_upsert_messages(stream_id, messages)
-    end
-  end
-
-  defp do_upsert_messages(stream_id, messages, is_retry? \\ false) do
-    now = DateTime.utc_now()
-
-    messages =
-      Enum.map(messages, fn message ->
-        message
-        |> Sequin.Map.from_ecto()
-        |> Message.put_tokens()
-        |> Message.put_data_hash()
-        |> Map.put(:updated_at, now)
-        |> Map.put(:inserted_at, now)
-        |> Map.put(:stream_id, stream_id)
-      end)
-
-    seq_nextval = "#{stream_schema()}.messages_seq"
-
-    on_conflict =
-      from(m in Message,
-        where: fragment("? IS DISTINCT FROM ?", m.data_hash, fragment("EXCLUDED.data_hash")),
-        update: [
-          set: [
-            data: fragment("EXCLUDED.data"),
-            data_hash: fragment("EXCLUDED.data_hash"),
-            seq: fragment("nextval(?::text::regclass)", ^seq_nextval),
-            updated_at: fragment("EXCLUDED.updated_at")
-          ]
-        ]
-      )
-
-    consumers = []
-
-    fn ->
-      {count, messages} =
-        Repo.insert_all(
-          Message,
-          messages,
-          on_conflict: on_conflict,
-          conflict_target: [:key, :stream_id],
-          timeout: :timer.seconds(30),
-          # FIXME: Do not select data here. It's just to pass data to ObserveChannel.
-          returning: [:key, :stream_id, :seq]
-        )
-
-      consumers
-      |> Enum.reject(&(&1.backfill_completed_at == nil))
-      |> Enum.flat_map(fn consumer ->
-        messages
-        |> Enum.filter(fn message -> Sequin.Key.matches?(consumer.filter_key_pattern, message.key) end)
-        |> Enum.map(fn message ->
-          %ConsumerMessage{consumer_id: consumer.id, message_key: message.key, message_seq: message.seq}
-        end)
-      end)
-      |> then(&Consumers.upsert_consumer_messages(%{}, &1))
-
-      {:ok, %{count: count, messages: messages}}
-    end
-    |> Repo.transact()
-    |> case do
-      {:ok, %{count: count}} ->
-        {:ok, count}
-
-      {:error, e} ->
-        {:error, e}
-    end
-  rescue
-    e in Postgrex.Error ->
-      if e.postgres.code == :character_not_in_repertoire and is_retry? == false do
-        messages =
-          Enum.map(messages, fn %{data: data} = message ->
-            Map.put(message, :data, String.replace(data, "\u0000", ""))
-          end)
-
-        do_upsert_messages(stream_id, messages, true)
-      else
-        reraise e, __STACKTRACE__
-      end
-  end
-
-  defp validate_messages(messages) do
-    Enum.reduce_while(messages, :ok, fn message, :ok ->
-      case message do
-        %{key: key, data: data} when is_binary(key) and is_binary(data) ->
-          case Sequin.Key.validate_key(key) do
-            :ok -> {:cont, :ok}
-            {:error, reason} -> {:halt, {:error, Error.bad_request(message: "Invalid key format: #{reason}")}}
-          end
-
-        _ ->
-          {:halt, {:error, Error.bad_request(message: "Invalid message format")}}
-      end
-    end)
+  def upsert_messages(_stream_id, _messages) do
+    # with :ok <- validate_messages(messages) do
+    #   do_upsert_messages(stream_id, messages)
+    # end
+    :ok
   end
 
   # HttpPushConsumer Messages

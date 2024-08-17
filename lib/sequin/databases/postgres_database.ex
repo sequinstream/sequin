@@ -36,6 +36,19 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :ssl, :boolean, default: false
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
+    field :tables_updated_at, :utc_datetime
+
+    embeds_many :tables, Table, on_replace: :delete, primary_key: false do
+      field :oid, :integer, primary_key: true
+      field :schema, :string
+      field :name, :string
+
+      embeds_many :columns, Column, on_replace: :delete, primary_key: false do
+        field :attnum, :integer, primary_key: true
+        field :name, :string
+        field :type, :string
+      end
+    end
 
     belongs_to(:account, Sequin.Accounts.Account)
 
@@ -47,22 +60,44 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> cast(attrs, [
       :database,
       :hostname,
+      :name,
+      :password,
       :pool_size,
       :port,
       :queue_interval,
       :queue_target,
-      :name,
       :ssl,
-      :username,
-      :password
+      :tables_updated_at,
+      :username
     ])
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> Sequin.Changeset.validate_name()
+    |> cast_embed(:tables, with: &tables_changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,
       message: "Database name must be unique"
     )
+  end
+
+  def tables_changeset(table, attrs) do
+    table
+    |> cast(attrs, [:oid, :schema, :name])
+    |> cast_embed(:columns, with: &columns_changeset/2, required: true)
+  end
+
+  def columns_changeset(column, attrs) do
+    cast(column, attrs, [:attnum, :name, :type])
+  end
+
+  def tables_to_map(tables) do
+    Enum.map(tables, fn table ->
+      table
+      |> Sequin.Map.from_ecto()
+      |> Map.update!(:columns, fn columns ->
+        Enum.map(columns, &Sequin.Map.from_ecto/1)
+      end)
+    end)
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
@@ -95,7 +130,19 @@ defmodule Sequin.Databases.PostgresDatabase do
     opts =
       pd
       |> Sequin.Map.from_ecto()
-      |> Map.take([:database, :hostname, :pool_size, :port, :queue_interval, :queue_target, :password, :ssl, :username])
+      |> Map.take([
+        :database,
+        :hostname,
+        :pool_size,
+        :port,
+        :queue_interval,
+        :queue_target,
+        :password,
+        :ssl,
+        :username,
+        :connect_timeout,
+        :max_restarts
+      ])
       |> Enum.to_list()
 
     if opts[:ssl] do

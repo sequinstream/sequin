@@ -10,6 +10,13 @@ defmodule Sequin.Factory.DatabasesFactory do
   # PostgresDatabase
 
   def postgres_database(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {tables, attrs} = Map.pop_lazy(attrs, :tables, fn -> Enum.random([[table()], []]) end)
+
+    {tables_updated_at, attrs} =
+      Map.pop_lazy(attrs, :tables_updated_at, fn -> unless tables == [], do: Factory.timestamp() end)
+
     merge_attributes(
       %PostgresDatabase{
         id: Factory.uuid(),
@@ -23,7 +30,8 @@ defmodule Sequin.Factory.DatabasesFactory do
         ssl: Factory.boolean(),
         username: Factory.username(),
         password: Factory.password(),
-        account_id: Factory.uuid()
+        tables: tables,
+        tables_updated_at: tables_updated_at
       },
       attrs
     )
@@ -33,6 +41,11 @@ defmodule Sequin.Factory.DatabasesFactory do
     attrs
     |> postgres_database()
     |> Sequin.Map.from_ecto()
+    |> Map.update(:tables, [], fn tables ->
+      Enum.map(tables, fn table ->
+        table |> Sequin.Map.from_ecto() |> table_attrs()
+      end)
+    end)
   end
 
   def insert_postgres_database!(attrs \\ []) do
@@ -58,12 +71,12 @@ defmodule Sequin.Factory.DatabasesFactory do
       :database,
       :username,
       :password,
-      :ssl,
       :queue_interval,
       :queue_target,
       :pool_size
     ])
     |> Map.merge(attrs)
+    |> Map.put(:ssl, false)
     |> postgres_database_attrs()
   end
 
@@ -71,5 +84,43 @@ defmodule Sequin.Factory.DatabasesFactory do
     attrs
     |> configured_postgres_database_attrs()
     |> insert_postgres_database!()
+  end
+
+  def table(attrs \\ []) do
+    merge_attributes(
+      %PostgresDatabase.Table{
+        schema: Factory.postgres_object(),
+        name: Factory.postgres_object(),
+        oid: Factory.unique_integer(),
+        columns: [column()]
+      },
+      attrs
+    )
+  end
+
+  def table_attrs(attrs \\ []) do
+    attrs
+    |> table()
+    |> Sequin.Map.from_ecto()
+    |> Map.update!(:columns, fn columns ->
+      Enum.map(columns, &Sequin.Map.from_ecto/1)
+    end)
+  end
+
+  def column(attrs \\ []) do
+    merge_attributes(
+      %PostgresDatabase.Table.Column{
+        name: Factory.postgres_object(),
+        type: Factory.one_of(["integer", "text", "boolean", "timestamp", "uuid"]),
+        attnum: Factory.unique_integer()
+      },
+      attrs
+    )
+  end
+
+  def column_attrs(attrs \\ []) do
+    attrs
+    |> column()
+    |> Sequin.Map.from_ecto()
   end
 end

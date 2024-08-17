@@ -201,7 +201,7 @@ defmodule SequinWeb.DatabaseController do
 
   defp connection_test_timeout do
     if Application.fetch_env!(:sequin, :env) == :test do
-      50
+      100
     else
       10_000
     end

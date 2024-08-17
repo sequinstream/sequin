@@ -3,6 +3,7 @@ defmodule Sequin.Consumers do
   import Ecto.Query
 
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
@@ -37,6 +38,20 @@ defmodule Sequin.Consumers do
       {:ok, consumer} -> consumer
       {:error, _} -> raise Error.not_found(entity: :consumer)
     end
+  end
+
+  def reload(%ConsumerEvent{} = ce) do
+    ce.consumer_id
+    |> ConsumerEvent.where_consumer_id()
+    |> ConsumerEvent.where_commit_lsn(ce.commit_lsn)
+    |> Repo.one()
+  end
+
+  def reload(%ConsumerRecord{} = cr) do
+    cr.consumer_id
+    |> ConsumerRecord.where_consumer_id()
+    |> ConsumerRecord.where_id(cr.id)
+    |> Repo.one()
   end
 
   def all_consumers do
@@ -168,13 +183,6 @@ defmodule Sequin.Consumers do
 
   # ConsumerEvent
 
-  def reload(%ConsumerEvent{} = ce) do
-    ce.consumer_id
-    |> ConsumerEvent.where_consumer_id()
-    |> ConsumerEvent.where_commit_lsn(ce.commit_lsn)
-    |> Repo.one()
-  end
-
   def get_consumer_event(consumer_id, commit_lsn) do
     consumer_event =
       consumer_id
@@ -235,6 +243,49 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
+  # ConsumerRecord
+
+  def get_consumer_record(consumer_id, id) do
+    consumer_record =
+      consumer_id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_id(id)
+      |> Repo.one()
+
+    case consumer_record do
+      nil -> {:error, Error.not_found(entity: :consumer_record)}
+      consumer_record -> {:ok, consumer_record}
+    end
+  end
+
+  def get_consumer_record!(consumer_id, id) do
+    case get_consumer_record(consumer_id, id) do
+      {:ok, consumer_record} -> consumer_record
+      {:error, _} -> raise Error.not_found(entity: :consumer_record)
+    end
+  end
+
+  def list_consumer_records_for_consumer(consumer_id, params \\ []) do
+    base_query = ConsumerRecord.where_consumer_id(consumer_id)
+
+    query =
+      Enum.reduce(params, base_query, fn
+        {:is_deliverable, false}, query ->
+          ConsumerRecord.where_not_visible(query)
+
+        {:is_deliverable, true}, query ->
+          ConsumerRecord.where_deliverable(query)
+
+        {:limit, limit}, query ->
+          limit(query, ^limit)
+
+        {:order_by, order_by}, query ->
+          order_by(query, ^order_by)
+      end)
+
+    Repo.all(query)
+  end
+
   # Consumer Lifecycle
 
   defp create_consumer_partition(%{message_kind: :event} = consumer) do
@@ -250,7 +301,7 @@ defmodule Sequin.Consumers do
 
   defp create_consumer_partition(%{message_kind: :record} = consumer) do
     """
-    CREATE TABLE #{stream_schema()}.consumer_messages_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_messages FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.consumer_records_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_records FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -276,7 +327,7 @@ defmodule Sequin.Consumers do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_messages_#{consumer.name};
+    DROP TABLE IF EXISTS #{stream_schema()}.consumer_records_#{consumer.name};
     """
     |> Repo.query()
     |> case do

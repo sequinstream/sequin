@@ -16,6 +16,15 @@ defmodule Sequin.Test.Support.Models.Character do
     from(c in query, where: c.id == ^id)
   end
 
+  def table_oid do
+    Sequin.Repo.one(
+      from(pg in "pg_class",
+        where: pg.relname == "characters",
+        select: pg.oid
+      )
+    )
+  end
+
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :character)
   end

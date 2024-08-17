@@ -6,6 +6,7 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Extensions.MessageHandlerBehaviour
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Repo
 
   defmodule Context do
     @moduledoc false
@@ -17,6 +18,7 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
+    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers])
     %Context{consumers: pr.http_pull_consumers ++ pr.http_push_consumers}
   end
 

@@ -10,7 +10,6 @@ defmodule Sequin.Factory.StreamsFactory do
   alias Sequin.Repo
   alias Sequin.Streams
   alias Sequin.Streams.ConsumerMessage
-  alias Sequin.Streams.HttpEndpoint
   alias Sequin.Streams.Message
   alias Sequin.Streams.SourceTable
   alias Sequin.Streams.SourceTableStreamTableColumnMapping
@@ -155,39 +154,6 @@ defmodule Sequin.Factory.StreamsFactory do
       Streams.create_stream_for_account_with_lifecycle(account_id, stream_attrs(attrs))
 
     stream
-  end
-
-  # HttpEndpoint
-
-  def http_endpoint(attrs \\ []) do
-    merge_attributes(
-      %HttpEndpoint{
-        name: "Test Endpoint",
-        base_url: "https://example.com/webhook",
-        headers: %{"Content-Type" => "application/json"},
-        account_id: Factory.uuid()
-      },
-      attrs
-    )
-  end
-
-  def http_endpoint_attrs(attrs \\ []) do
-    attrs
-    |> http_endpoint()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def insert_http_endpoint!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    attrs
-    |> Map.put(:account_id, account_id)
-    |> http_endpoint_attrs()
-    |> then(&HttpEndpoint.changeset(%HttpEndpoint{}, &1))
-    |> Repo.insert!()
   end
 
   # StreamTableColumn

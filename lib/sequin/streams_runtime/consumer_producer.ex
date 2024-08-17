@@ -41,7 +41,7 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
     broadway_messages =
       Enum.map(messages, fn message ->
         %Message{
-          data: message,
+          data: message.data,
           acknowledger: {__MODULE__, state.consumer, nil}
         }
       end)

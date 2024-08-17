@@ -100,7 +100,7 @@ defmodule SequinWeb.ConsumerControllerTest do
     end
 
     test "creates a push consumer under the authenticated account", %{conn: conn, stream: stream} do
-      http_endpoint = StreamsFactory.insert_http_endpoint!(account_id: stream.account_id)
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: stream.account_id)
 
       attrs =
         ConsumersFactory.consumer_attrs(

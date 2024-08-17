@@ -5,41 +5,9 @@ defmodule Sequin.Consumers.ConsumerEvent do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerMessageMetadata
   alias Sequin.Streams.ConsumerEventWithConsumerInfo
-
-  defmodule Data do
-    @moduledoc false
-    use Ecto.Schema
-
-    @primary_key false
-    @derive Jason.Encoder
-
-    embedded_schema do
-      field :record, :map
-      field :changes, :map
-      field :action, Ecto.Enum, values: [:insert, :update, :delete]
-
-      embeds_one :metadata, Metadata, primary_key: false do
-        @derive Jason.Encoder
-        field :table, :string
-        field :schema, :string
-        field :commit_timestamp, :utc_datetime_usec
-      end
-    end
-
-    def changeset(data, attrs) do
-      data
-      |> cast(attrs, [:record, :changes, :action])
-      |> cast_embed(:metadata, required: true, with: &metadata_changeset/2)
-      |> validate_required([:record, :action, :metadata])
-    end
-
-    defp metadata_changeset(metadata, attrs) do
-      metadata
-      |> cast(attrs, [:table, :schema, :commit_timestamp])
-      |> validate_required([:table, :schema, :commit_timestamp])
-    end
-  end
 
   @primary_key false
   @derive {Jason.Encoder,
@@ -67,7 +35,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
 
-    embeds_one :data, Data
+    embeds_one :data, ConsumerEventData
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -121,8 +89,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
       |> Map.update!(:data, fn data ->
         data = Sequin.Map.atomize_keys(data)
         metadata = Sequin.Map.atomize_keys(data.metadata)
-        data = Map.put(data, :metadata, struct!(Data.Metadata, metadata))
-        struct!(Data, data)
+        data = Map.put(data, :metadata, struct!(ConsumerMessageMetadata, metadata))
+        struct!(ConsumerEventData, data)
       end)
 
     struct!(__MODULE__, attrs)

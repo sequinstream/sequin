@@ -4,7 +4,10 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerMessageMetadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
@@ -217,95 +220,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   defp generate_value(:float), do: Factory.float()
   defp generate_value(:boolean), do: Factory.boolean()
 
-  # ConsumerEvent
-  def consumer_event(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
-
-    data = create_data_for_action(action)
-
-    merge_attributes(
-      %ConsumerEvent{
-        consumer_id: Factory.uuid(),
-        commit_lsn: Enum.random(1..1_000_000),
-        record_pks: [Faker.UUID.v4()],
-        table_oid: Enum.random(1..100_000),
-        ack_id: Factory.uuid(),
-        deliver_count: Enum.random(0..10),
-        last_delivered_at: Factory.timestamp(),
-        not_visible_until: Enum.random([nil, Factory.timestamp()]),
-        data: data
-      },
-      attrs
-    )
-  end
-
-  defp create_data_for_action(:insert) do
-    record = %{"column" => Factory.word()}
-
-    %{
-      "record" => record,
-      "changes" => nil,
-      "action" => :insert,
-      "metadata" => %{
-        "table" => Factory.postgres_object(),
-        "schema" => Factory.postgres_object(),
-        "commit_timestamp" => Factory.timestamp()
-      }
-    }
-  end
-
-  defp create_data_for_action(:update) do
-    record = %{"column" => Factory.word()}
-    changes = %{"column" => Factory.word()}
-
-    %{
-      "record" => record,
-      "changes" => changes,
-      "action" => :update,
-      "metadata" => %{
-        "table" => Factory.postgres_object(),
-        "schema" => Factory.postgres_object(),
-        "commit_timestamp" => Factory.timestamp()
-      }
-    }
-  end
-
-  defp create_data_for_action(:delete) do
-    record = %{"column" => Factory.word()}
-
-    %{
-      "record" => record,
-      "changes" => nil,
-      "action" => :delete,
-      "metadata" => %{
-        "table" => Factory.postgres_object(),
-        "schema" => Factory.postgres_object(),
-        "commit_timestamp" => Factory.timestamp()
-      }
-    }
-  end
-
-  def consumer_event_attrs(attrs \\ []) do
-    attrs
-    |> consumer_event()
-    |> Sequin.Map.from_ecto()
-  end
-
-  def insert_consumer_event!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :event).id end)
-
-    attrs
-    |> Map.put(:consumer_id, consumer_id)
-    |> consumer_event_attrs()
-    |> then(&ConsumerEvent.changeset(%ConsumerEvent{}, &1))
-    |> Repo.insert!()
-  end
-
   # HttpEndpoint
 
   def http_endpoint(attrs \\ []) do
@@ -339,6 +253,97 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Repo.insert!()
   end
 
+  # ConsumerMessageMetadata
+  def consumer_message_metadata(attrs \\ []) do
+    merge_attributes(
+      %ConsumerMessageMetadata{
+        table: Factory.postgres_object(),
+        schema: Factory.postgres_object(),
+        commit_timestamp: Factory.timestamp()
+      },
+      attrs
+    )
+  end
+
+  def consumer_message_metadata_attrs(attrs \\ []) do
+    attrs
+    |> consumer_message_metadata()
+    |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  # ConsumerEvent
+  def consumer_event(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
+
+    merge_attributes(
+      %ConsumerEvent{
+        consumer_id: Factory.uuid(),
+        commit_lsn: Enum.random(1..1_000_000),
+        record_pks: [Faker.UUID.v4()],
+        table_oid: Enum.random(1..100_000),
+        ack_id: Factory.uuid(),
+        deliver_count: Enum.random(0..10),
+        last_delivered_at: Factory.timestamp(),
+        not_visible_until: Enum.random([nil, Factory.timestamp()]),
+        data: consumer_event_data(action: action)
+      },
+      attrs
+    )
+  end
+
+  def consumer_event_data(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
+
+    record = %{"column" => Factory.word()}
+    changes = if action == :update, do: %{"column" => Factory.word()}
+
+    merge_attributes(
+      %ConsumerEventData{
+        record: record,
+        changes: changes,
+        action: action,
+        metadata: consumer_message_metadata()
+      },
+      attrs
+    )
+  end
+
+  def consumer_event_data_attrs(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> consumer_event_data()
+    |> Map.update!(:metadata, fn metadata ->
+      metadata |> Map.from_struct() |> consumer_message_metadata_attrs()
+    end)
+    |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  def consumer_event_attrs(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> consumer_event()
+    |> Map.update!(:data, fn data ->
+      data |> Map.from_struct() |> consumer_event_data_attrs()
+    end)
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_consumer_event!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {consumer_id, attrs} =
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :event).id end)
+
+    attrs
+    |> Map.put(:consumer_id, consumer_id)
+    |> consumer_event_attrs()
+    |> then(&ConsumerEvent.changeset(%ConsumerEvent{}, &1))
+    |> Repo.insert!()
+  end
+
   # ConsumerRecord
   def consumer_record(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -364,6 +369,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   def consumer_record_attrs(attrs \\ []) do
     attrs
+    |> Map.new()
     |> consumer_record()
     |> Sequin.Map.from_ecto()
   end
@@ -379,5 +385,26 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> consumer_record_attrs()
     |> then(&ConsumerRecord.create_changeset(%ConsumerRecord{}, &1))
     |> Repo.insert!()
+  end
+
+  # ConsumerRecordData
+  def consumer_record_data(attrs \\ []) do
+    merge_attributes(
+      %ConsumerRecordData{
+        record: %{"column" => Factory.word()},
+        metadata: consumer_message_metadata()
+      },
+      attrs
+    )
+  end
+
+  def consumer_record_data_attrs(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> consumer_record_data()
+    |> Map.update!(:metadata, fn metadata ->
+      metadata |> Map.from_struct() |> consumer_message_metadata_attrs()
+    end)
+    |> Sequin.Map.from_ecto(keep_nils: true)
   end
 end

@@ -6,7 +6,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
 
-  describe "receive_for_consumer/2" do
+  describe "receive_for_consumer/2 with event message kind" do
     setup do
       consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 1_000, message_kind: :event)
       %{consumer: consumer}

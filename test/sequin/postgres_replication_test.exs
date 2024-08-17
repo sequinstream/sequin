@@ -306,7 +306,6 @@ defmodule Sequin.PostgresReplicationTest do
           actions: [:insert, :update],
           column_filters: [
             ConsumersFactory.column_filter_attrs(
-              # Assuming 'name' is the second column
               column_attnum: Character.column_attnum("is_active"),
               column_name: "is_active",
               operator: :==,

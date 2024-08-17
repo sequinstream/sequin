@@ -84,10 +84,9 @@ defmodule Sequin.PostgresReplicationTest do
       sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _pid} =
-        ReplicationRuntime.Supervisor.start_for_pg_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
-      %{pg_replication: pg_replication, source_db: source_db, sup: sup, consumer: consumer}
+      %{pg_replication: pg_replication, source_db: source_db, consumer: consumer}
     end
 
     test "inserts are replicated to consumer events", %{consumer: consumer} do
@@ -297,6 +296,58 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.action == :delete
       assert_maps_equal(data.metadata, %{table: "characters_2pk", schema: "public"}, [:table, :schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
+
+    test "consumer with column filter only receives relevant events", %{consumer: consumer} do
+      # Create a consumer with a column filter
+      source_tables = [
+        ConsumersFactory.source_table_attrs(
+          oid: Character.table_oid(),
+          actions: [:insert, :update],
+          column_filters: [
+            ConsumersFactory.column_filter_attrs(
+              # Assuming 'name' is the second column
+              column_attnum: Character.column_attnum("is_active"),
+              column_name: "is_active",
+              operator: :==,
+              value_type: :boolean,
+              value: %{__type__: :boolean, value: true}
+            )
+          ]
+        )
+      ]
+
+      Consumers.update_consumer_with_lifecycle(consumer, %{source_tables: source_tables})
+
+      # Insert a character that doesn't match the filter
+      CharacterFactory.insert_character!(is_active: false)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Verify no consumer event was created
+      assert Consumers.list_consumer_events_for_consumer(consumer.id) == []
+
+      # Insert a character that matches the filter
+      matching_character = CharacterFactory.insert_character!(is_active: true)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      assert consumer_event.consumer_id == consumer.id
+
+      # Update the non-matching character (should not trigger an event)
+      UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Verify no new consumer event was created
+      assert length(Consumers.list_consumer_events_for_consumer(consumer.id)) == 1
     end
   end
 

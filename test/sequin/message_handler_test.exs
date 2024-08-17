@@ -71,7 +71,14 @@ defmodule Sequin.MessageHandlerTest do
 
     test "inserts message for consumer with matching source table and passing filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      column_filter = ConsumersFactory.column_filter(column_attnum: 1, operator: :==, value: "test")
+
+      column_filter =
+        ConsumersFactory.column_filter(
+          column_attnum: 1,
+          operator: :==,
+          value: %{__type__: :string, value: "test"}
+        )
+
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
       consumer = ConsumersFactory.insert_http_push_consumer!(message_kind: :event, source_tables: [source_table])
 
@@ -90,7 +97,14 @@ defmodule Sequin.MessageHandlerTest do
 
     test "does not insert message for consumer with matching source table but failing filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      column_filter = ConsumersFactory.column_filter(column_attnum: 1, operator: :==, value: "test")
+
+      column_filter =
+        ConsumersFactory.column_filter(
+          column_attnum: 1,
+          operator: :==,
+          value: %{__type__: :string, value: "test"}
+        )
+
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
       consumer = ConsumersFactory.insert_http_push_consumer!(message_kind: :event, source_tables: [source_table])
 

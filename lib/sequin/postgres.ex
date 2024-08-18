@@ -1,5 +1,6 @@
 defmodule Sequin.Postgres do
   @moduledoc false
+  alias Sequin.Error
   alias Sequin.Repo
 
   def list_schemas(conn) do
@@ -28,15 +29,32 @@ defmodule Sequin.Postgres do
   end
 
   def list_columns(conn, schema, table) do
-    res = Postgrex.query(conn, "
-    SELECT attnum, attname, format_type(atttypid, atttypmod)
-    FROM pg_attribute
-    WHERE attrelid = '#{schema}.#{table}'::regclass AND attnum > 0 AND NOT attisdropped
-    ORDER BY attnum
-  ", [])
+    res =
+      Postgrex.query(
+        conn,
+        """
+        SELECT DISTINCT ON (a.attnum)
+          a.attnum,
+          a.attname,
+          format_type(a.atttypid, a.atttypmod),
+          COALESCE(i.indisprimary, false) as is_pk
+        FROM pg_attribute a
+        JOIN pg_class c ON a.attrelid = c.oid
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        LEFT JOIN pg_index i ON c.oid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE n.nspname = $1
+          AND c.relname = $2
+          AND a.attnum > 0
+          AND NOT a.attisdropped
+        ORDER BY a.attnum
+        """,
+        [schema, table]
+      )
 
-    with {:ok, %{rows: rows}} <- res do
-      {:ok, rows}
+    case res do
+      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: "table", params: %{schema: schema, table: table})}
+      {:ok, %{rows: rows}} -> {:ok, rows}
+      {:error, _} = error -> error
     end
   end
 
@@ -64,7 +82,7 @@ defmodule Sequin.Postgres do
     identifier(identifier, prefix: prefix, suffix: suffix)
   end
 
-  def identifier(identifier, opts \\ []) when is_list(opts) do
+  def identifier(identifier, opts) when is_list(opts) do
     prefix = Keyword.get(opts, :prefix)
     suffix = Keyword.get(opts, :suffix)
 

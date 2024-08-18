@@ -9,6 +9,8 @@ defmodule Sequin.PostgresTest do
     %{conn: conn}
   end
 
+  @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+
   describe "list_schemas/1" do
     test "returns a list of schemas", %{conn: conn} do
       {:ok, schemas} = Postgres.list_schemas(conn)
@@ -47,11 +49,32 @@ defmodule Sequin.PostgresTest do
       assert is_list(columns)
       assert length(columns) > 0
       [first_column | _] = columns
-      assert length(first_column) == 3
-      assert [attnum, name, type] = first_column
+      assert length(first_column) == 4
+      assert [attnum, name, type, is_pk] = first_column
       assert is_integer(attnum)
       assert is_binary(name)
       assert is_binary(type)
+      assert is_boolean(is_pk)
+    end
+
+    test "returns correct columns for a partitioned table without duplicates", %{conn: conn} do
+      {:ok, columns} = Postgres.list_columns(conn, @stream_schema, "consumer_events")
+      assert is_list(columns)
+      assert length(columns) > 0
+
+      # Check for no duplicate columns
+      unique_columns = Enum.uniq_by(columns, fn [attnum, name, _, _] -> {attnum, name} end)
+      assert length(unique_columns) == length(columns), "Duplicate columns were found"
+
+      # Check for expected columns
+      column_names = Enum.map(columns, fn [_, name, _, _] -> name end)
+      assert "consumer_id" in column_names
+      assert "id" in column_names
+      assert "commit_lsn" in column_names
+
+      # Check primary key
+      pk_columns = Enum.filter(columns, fn [_, _, _, is_pk] -> is_pk end)
+      assert length(pk_columns) > 0
     end
 
     test "returns an error for an unknown table", %{conn: conn} do

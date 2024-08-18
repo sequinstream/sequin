@@ -31,29 +31,35 @@ defmodule Sequin.Replication.MessageHandler do
       ctx.consumers
       |> Enum.map(fn consumer ->
         if Consumers.matches_message?(consumer, message) do
-          case consumer.message_kind do
-            :event -> create_consumer_event(consumer, message)
-            :record -> create_consumer_record(consumer, message)
+          cond do
+            consumer.message_kind == :event ->
+              {:insert, consumer_event(consumer, message)}
+
+            consumer.message_kind == :record and message.action == :delete ->
+              {:delete, consumer_record(consumer, message)}
+
+            consumer.message_kind == :record ->
+              {:insert, consumer_record(consumer, message)}
           end
         end
       end)
       |> Enum.reject(&is_nil/1)
     end)
-    |> insert_consumer_messages()
+    |> insert_or_delete_consumer_messages()
   end
 
-  defp create_consumer_event(consumer, message) do
+  defp consumer_event(consumer, message) do
     %ConsumerEvent{
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: message.ids,
       table_oid: message.table_oid,
       deliver_count: 0,
-      data: create_event_data_from_message(message)
+      data: event_data_from_message(message)
     }
   end
 
-  defp create_consumer_record(consumer, message) do
+  defp consumer_record(consumer, message) do
     %ConsumerRecord{
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
@@ -63,7 +69,7 @@ defmodule Sequin.Replication.MessageHandler do
     }
   end
 
-  defp create_event_data_from_message(%Message{action: :insert} = message) do
+  defp event_data_from_message(%Message{action: :insert} = message) do
     %{
       record: fields_to_map(message.fields),
       changes: nil,
@@ -72,7 +78,7 @@ defmodule Sequin.Replication.MessageHandler do
     }
   end
 
-  defp create_event_data_from_message(%Message{action: :update} = message) do
+  defp event_data_from_message(%Message{action: :update} = message) do
     changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
 
     %{
@@ -83,7 +89,7 @@ defmodule Sequin.Replication.MessageHandler do
     }
   end
 
-  defp create_event_data_from_message(%Message{action: :delete} = message) do
+  defp event_data_from_message(%Message{action: :delete} = message) do
     %{
       record: fields_to_map(message.old_fields),
       changes: nil,
@@ -119,16 +125,27 @@ defmodule Sequin.Replication.MessageHandler do
     |> Map.new()
   end
 
-  defp insert_consumer_messages(messages) do
+  defp insert_or_delete_consumer_messages(messages) do
     Repo.transact(fn ->
-      {events, records} = Enum.split_with(messages, &is_struct(&1, ConsumerEvent))
+      groups =
+        Enum.group_by(
+          messages,
+          fn
+            {:insert, %ConsumerEvent{}} -> :events
+            {:insert, %ConsumerRecord{}} -> :record_inserts
+            {:delete, %ConsumerRecord{}} -> :record_deletes
+          end,
+          &elem(&1, 1)
+        )
 
-      events_map = Enum.map(events, &Sequin.Map.from_ecto/1)
-      records_map = Enum.map(records, &Sequin.Map.from_ecto/1)
+      events = Enum.map(Map.get(groups, :events, []), &Sequin.Map.from_ecto/1)
+      records = Enum.map(Map.get(groups, :record_inserts, []), &Sequin.Map.from_ecto/1)
+      record_deletes = Enum.map(Map.get(groups, :record_deletes, []), &Sequin.Map.from_ecto/1)
 
-      with {:ok, event_count} <- Consumers.insert_consumer_events(events_map),
-           {:ok, record_count} <- Consumers.insert_consumer_records(records_map) do
-        {:ok, event_count + record_count}
+      with {:ok, event_count} <- Consumers.insert_consumer_events(events),
+           {:ok, record_count} <- Consumers.insert_consumer_records(records),
+           {:ok, delete_count} <- Consumers.delete_consumer_records(record_deletes) do
+        {:ok, event_count + record_count + delete_count}
       end
     end)
   end

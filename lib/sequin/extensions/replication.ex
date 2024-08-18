@@ -338,6 +338,8 @@ defmodule Sequin.Extensions.Replication do
     columns
     |> Enum.zip(Tuple.to_list(tuple_data))
     |> Enum.filter(fn {col, _} -> col.pk? end)
+    # Very important - the system expects the PKs to be sorted by attnum
+    |> Enum.sort_by(fn {col, _} -> col.attnum end)
     |> Enum.map(fn {_, value} -> value end)
   end
 

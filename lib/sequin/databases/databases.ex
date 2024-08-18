@@ -86,7 +86,7 @@ defmodule Sequin.Databases do
     timeout =
       Keyword.get_lazy(opts, :timeout, fn ->
         if env() == :test do
-          200
+          500
         else
           30_000
         end
@@ -344,6 +344,14 @@ defmodule Sequin.Databases do
     end)
   end
 
+  defp list_columns(conn, schema, table) do
+    with {:ok, rows} <- Postgres.list_columns(conn, schema, table) do
+      Enum.map(rows, fn [attnum, name, type, is_pk] ->
+        %PostgresDatabase.Table.Column{attnum: attnum, name: name, type: type, is_pk?: is_pk}
+      end)
+    end
+  end
+
   def list_schemas(%PostgresDatabase{} = database) do
     with_connection(database, &list_schemas/1)
   end
@@ -355,14 +363,6 @@ defmodule Sequin.Databases do
   end
 
   def list_tables(conn, schema), do: Postgres.list_tables(conn, schema)
-
-  defp list_columns(conn, schema, table) do
-    with {:ok, rows} <- Postgres.list_columns(conn, schema, table) do
-      Enum.map(rows, fn [attnum, name, type] ->
-        %PostgresDatabase.Table.Column{attnum: attnum, name: name, type: type}
-      end)
-    end
-  end
 
   defp env do
     Application.get_env(:sequin, :env)

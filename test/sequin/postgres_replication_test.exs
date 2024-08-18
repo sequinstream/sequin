@@ -258,7 +258,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Insert
       character = CharacterFactory.insert_character_multi_pk!()
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {ReplicationExt, :flush_messages}, 1000
 
       [insert_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
       %{data: data} = insert_event

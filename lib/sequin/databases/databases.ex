@@ -1,7 +1,9 @@
 defmodule Sequin.Databases do
   @moduledoc false
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.TcpUtils
@@ -79,37 +81,23 @@ defmodule Sequin.Databases do
     |> Postgrex.start_link()
   end
 
-  @spec with_connection(%PostgresDatabase{}, (pid() -> any()), keyword()) :: any()
-  def with_connection(%PostgresDatabase{} = db, fun, opts \\ []) do
+  @spec with_connection(%PostgresDatabase{}, (pid() -> any())) :: any()
+  def with_connection(%PostgresDatabase{} = db, fun) do
     Logger.metadata(database_id: db.id)
 
-    timeout =
-      Keyword.get_lazy(opts, :timeout, fn ->
-        if env() == :test do
-          500
-        else
-          30_000
-        end
-      end)
+    case ConnectionCache.existing_connection(db) do
+      {:ok, conn} ->
+        fun.(conn)
 
-    with {:ok, conn} <- start_link(db) do
-      try do
-        task =
-          Task.async(fn ->
-            Logger.metadata(database_id: db.id)
+      # Not already started, create a temporary connection
+      {:error, %NotFoundError{}} ->
+        with {:ok, conn} <- start_link(db) do
+          try do
             fun.(conn)
-          end)
-
-        Task.await(task, timeout)
-      catch
-        :exit, _ ->
-          {:error, Error.service(service: :database, message: "Database operation timed out", code: :timeout)}
-      after
-        # issue with this crashing tests, not sure why
-        unless env() == :test do
-          GenServer.stop(conn)
+          after
+            GenServer.stop(conn)
+          end
         end
-      end
     end
   end
 
@@ -363,8 +351,4 @@ defmodule Sequin.Databases do
   end
 
   def list_tables(conn, schema), do: Postgres.list_tables(conn, schema)
-
-  defp env do
-    Application.get_env(:sequin, :env)
-  end
 end

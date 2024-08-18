@@ -20,6 +20,7 @@ defmodule Sequin.Databases.ConnectionCache do
   use GenServer
 
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error.NotFoundError
 
   require Logger
 
@@ -114,8 +115,8 @@ defmodule Sequin.Databases.ConnectionCache do
       }
     end
 
-    @spec find_or_create_connection(t(), database()) :: {:ok, pid(), t()} | {:error, term()}
-    def find_or_create_connection(%__MODULE__{} = state, db) do
+    @spec find_or_create_connection(t(), database(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
+    def find_or_create_connection(%__MODULE__{} = state, db, create_on_miss) do
       case Cache.lookup(state.cache, db) do
         {:ok, conn} ->
           {:ok, conn, state}
@@ -123,15 +124,17 @@ defmodule Sequin.Databases.ConnectionCache do
         {:error, :stale} ->
           state
           |> invalidate_connection(db)
-          |> find_or_create_connection(db)
+          |> find_or_create_connection(db, create_on_miss)
 
-        {:error, :not_found} ->
-          # TODO: We should probably do this in an async task and use GenServer.reply
+        {:error, :not_found} when create_on_miss ->
           with {:ok, conn} <- state.start_fn.(db) do
             new_cache = Cache.store(state.cache, db, conn)
             new_state = %{state | cache: new_cache}
             {:ok, conn, new_state}
           end
+
+        {:error, :not_found} ->
+          {:error, :not_found}
       end
     end
 
@@ -168,7 +171,12 @@ defmodule Sequin.Databases.ConnectionCache do
 
   @spec connection(GenServer.server(), database()) :: start_result()
   def connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
-    GenServer.call(server, {:connection, db})
+    GenServer.call(server, {:connection, db, true})
+  end
+
+  @spec existing_connection(GenServer.server(), database()) :: start_result() | {:error, NotFoundError.t()}
+  def existing_connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
+    GenServer.call(server, {:connection, db, false})
   end
 
   @spec invalidate_connection(GenServer.server(), database()) :: :ok
@@ -184,10 +192,13 @@ defmodule Sequin.Databases.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_call({:connection, %PostgresDatabase{} = db}, _from, %State{} = state) do
-    case State.find_or_create_connection(state, db) do
+  def handle_call({:connection, %PostgresDatabase{} = db, create_on_miss}, _from, %State{} = state) do
+    case State.find_or_create_connection(state, db, create_on_miss) do
       {:ok, conn, new_state} ->
         {:reply, {:ok, conn}, new_state}
+
+      {:error, :not_found} ->
+        {:reply, {:error, Sequin.Error.not_found(entity: :database_connection)}, state}
 
       error ->
         {:reply, error, state}

@@ -261,7 +261,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
     setup %{postgres_replication: postgres_replication} do
       tables = [
         %{"schema" => "public", "table" => "characters"},
-        %{"schema" => "public", "table" => "characters_2pk"}
+        %{"schema" => "public", "table" => "characters_multi_pk"}
       ]
 
       %{tables: tables, postgres_replication: postgres_replication}

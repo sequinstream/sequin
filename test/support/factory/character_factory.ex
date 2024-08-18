@@ -53,7 +53,7 @@ defmodule Sequin.Factory.CharacterFactory do
     attrs =
       Map.merge(
         %{
-          id_integer: Factory.unique_integer(),
+          # Omit id_integer, allow it to be auto-generated, so it's auto-incremented
           id_string: Faker.UUID.v4(),
           id_uuid: Faker.UUID.v4(),
           name: Faker.Person.name()

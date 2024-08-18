@@ -24,7 +24,7 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++ [Sequin.ReplicationRuntime.Supervisor, Sequin.StreamsRuntime.Supervisor]
+    base_children() ++ [Sequin.ReplicationRuntime.Supervisor]
   end
 
   defp base_children do

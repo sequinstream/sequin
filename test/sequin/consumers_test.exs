@@ -3,8 +3,14 @@ defmodule Sequin.ConsumersTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Test.Support.Models.Character
+  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.Test.Support.Models.CharacterMultiPK
+  alias Sequin.Test.UnboxedRepo
 
   describe "receive_for_consumer/2 with event message kind" do
     setup do
@@ -212,6 +218,190 @@ defmodule Sequin.ConsumersTest do
 
       unique_events = Enum.uniq_by(successful, & &1.id)
       assert length(unique_events) == 10
+    end
+  end
+
+  describe "put_source_data/3" do
+    setup do
+      database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: database.id,
+          account_id: database.account_id
+        )
+
+      source_tables = [
+        ConsumersFactory.source_table(
+          oid: Character.table_oid(),
+          column_filters: []
+        ),
+        ConsumersFactory.source_table(
+          oid: CharacterDetailed.table_oid(),
+          column_filters: []
+        ),
+        ConsumersFactory.source_table(
+          oid: CharacterMultiPK.table_oid(),
+          column_filters: []
+        )
+      ]
+
+      consumer =
+        ConsumersFactory.insert_http_pull_consumer!(
+          account_id: database.account_id,
+          replication_slot_id: slot.id,
+          source_tables: source_tables
+        )
+
+      consumer = Repo.preload(consumer, :postgres_database)
+
+      {:ok, conn} = Postgrex.start_link(UnboxedRepo.config())
+      {:ok, consumer: consumer, conn: conn}
+    end
+
+    test "fetches multiple records from the same table with single PK", %{consumer: consumer, conn: conn} do
+      characters = Enum.map(1..3, fn _ -> CharacterFactory.insert_character!() end)
+      records = Enum.map(characters, &create_consumer_record(consumer, &1))
+
+      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+
+      assert length(fetched_records) == 3
+
+      for {record, character} <- Enum.zip(fetched_records, characters) do
+        assert record.data.record == %{
+                 "id" => character.id,
+                 "name" => character.name,
+                 "house" => character.house,
+                 "planet" => character.planet,
+                 "is_active" => character.is_active,
+                 "tags" => character.tags
+               }
+
+        assert record.data.metadata.table == "characters"
+        assert record.data.metadata.schema == "public"
+      end
+    end
+
+    test "fetches multiple records from the same table with compound PK", %{consumer: consumer, conn: conn} do
+      characters = Enum.map(1..3, fn _ -> CharacterFactory.insert_character_multi_pk!() end)
+      records = Enum.map(characters, &create_consumer_record(consumer, &1, :multi_pk))
+
+      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+
+      assert length(fetched_records) == 3
+
+      for {record, character} <- Enum.zip(fetched_records, characters) do
+        assert record.data.record == %{
+                 "id_integer" => character.id_integer,
+                 "id_string" => character.id_string,
+                 "id_uuid" => character.id_uuid,
+                 "name" => character.name
+               }
+
+        assert record.data.metadata.table == "characters_multi_pk"
+        assert record.data.metadata.schema == "public"
+      end
+    end
+
+    test "handles different primary key data types", %{consumer: consumer, conn: conn} do
+      character = CharacterFactory.insert_character_multi_pk!()
+      record = create_consumer_record(consumer, character, :multi_pk)
+
+      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+
+      assert fetched_record.data.record["id_integer"] == character.id_integer
+      assert fetched_record.data.record["id_string"] == character.id_string
+      assert fetched_record.data.record["id_uuid"] == character.id_uuid
+    end
+
+    test "handles records that no longer exist in the source table", %{consumer: consumer, conn: conn} do
+      existing_character = CharacterFactory.insert_character!()
+      deleted_character = CharacterFactory.insert_character!()
+      Sequin.Test.UnboxedRepo.delete!(deleted_character)
+
+      records = [
+        create_consumer_record(consumer, existing_character),
+        create_consumer_record(consumer, deleted_character)
+      ]
+
+      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+
+      assert length(fetched_records) == 1
+      assert hd(fetched_records).data.record["id"] == existing_character.id
+    end
+
+    test "casts different column types appropriately", %{consumer: consumer, conn: conn} do
+      character = CharacterFactory.insert_character_detailed!()
+      record = create_consumer_record(consumer, character, :detailed)
+
+      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+
+      assert fetched_record.data.record["age"] == character.age
+      assert fetched_record.data.record["height"] == character.height
+      assert fetched_record.data.record["is_hero"] == character.is_hero
+      assert fetched_record.data.record["birth_date"] == character.birth_date
+
+      assert Time.truncate(fetched_record.data.record["last_seen"], :second) ==
+               character.last_seen
+
+      assert NaiveDateTime.truncate(fetched_record.data.record["created_at"], :second) ==
+               NaiveDateTime.truncate(character.created_at, :second)
+
+      assert NaiveDateTime.truncate(fetched_record.data.record["updated_at"], :second) ==
+               NaiveDateTime.truncate(character.updated_at, :second)
+
+      assert fetched_record.data.record["powers"] == character.powers
+      assert fetched_record.data.record["metadata"] == character.metadata
+      assert Decimal.equal?(fetched_record.data.record["rating"], character.rating)
+      assert fetched_record.data.record["avatar"] == character.avatar
+    end
+
+    test "handles when the source table is not listed in PostgresDatabase", %{consumer: consumer, conn: conn} do
+      character = CharacterFactory.insert_character!()
+      record = create_consumer_record(consumer, character)
+
+      # Simulate the table not being listed in PostgresDatabase
+      consumer = %{consumer | postgres_database: %{consumer.postgres_database | tables: []}}
+
+      assert {:error, _} = Consumers.put_source_data(conn, consumer, [record])
+    end
+
+    test "handles when the source table is listed but not in the database", %{consumer: consumer, conn: conn} do
+      character = CharacterFactory.insert_character!()
+      record = create_consumer_record(consumer, character)
+
+      # Simulate the table being listed but not in the database
+      fake_table = %{oid: 999_999, name: "non_existent_table", schema: "public", columns: []}
+      consumer = %{consumer | postgres_database: %{consumer.postgres_database | tables: [fake_table]}}
+
+      assert {:error, _} = Consumers.put_source_data(conn, consumer, [record])
+    end
+
+    test "handles when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer, conn: conn} do
+      character = CharacterFactory.insert_character!()
+      record = create_consumer_record(consumer, character)
+
+      # Add a non-existent column to the table definition
+      fake_column = %{name: "non_existent_column", type: :string}
+
+      consumer =
+        update_in(consumer.postgres_database.tables, fn tables ->
+          Enum.map(tables, fn table ->
+            if table.name == "characters", do: %{table | columns: [fake_column | table.columns]}, else: table
+          end)
+        end)
+
+      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+
+      assert fetched_record.data.record["non_existent_column"] == nil
+    end
+
+    test "handles when the source database is unreachable", %{consumer: consumer} do
+      character = CharacterFactory.insert_character!()
+      record = create_consumer_record(consumer, character)
+      {:ok, conn} = Postgrex.start_link(Keyword.put(UnboxedRepo.config(), :host, "unreachable_host"))
+
+      assert {:error, _} = Consumers.put_source_data(conn, consumer, [record])
     end
   end
 
@@ -1882,5 +2072,28 @@ defmodule Sequin.ConsumersTest do
       assert Consumers.matches_message?(consumer, matching_message)
       refute Consumers.matches_message?(consumer, non_matching_message)
     end
+  end
+
+  # Helper function to create a consumer record from a character
+  defp create_consumer_record(consumer, character, type \\ :default) do
+    table_oid =
+      case type do
+        :default -> Character.table_oid()
+        :multi_pk -> CharacterMultiPK.table_oid()
+        :detailed -> CharacterDetailed.table_oid()
+      end
+
+    record_pks =
+      case type do
+        :default -> [character.id]
+        :multi_pk -> [character.id_integer, character.id_string, character.id_uuid]
+        :detailed -> [character.id]
+      end
+
+    ConsumersFactory.consumer_record(
+      consumer_id: consumer.id,
+      table_oid: table_oid,
+      record_pks: record_pks
+    )
   end
 end

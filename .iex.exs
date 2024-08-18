@@ -1,1 +1,1 @@
-
+alias Sequin.Repo

@@ -349,6 +349,22 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
+  def delete_consumer_records([]), do: {:ok, 0}
+
+  def delete_consumer_records(consumer_records) do
+    record_pks = Enum.map(consumer_records, & &1.record_pks)
+
+    delete_query =
+      from cr in ConsumerRecord,
+        where:
+          cr.consumer_id in ^Enum.map(consumer_records, & &1.consumer_id) and
+            cr.table_oid in ^Enum.map(consumer_records, & &1.table_oid) and
+            fragment("? in (?)", cr.record_pks, splice(^record_pks))
+
+    {count, _} = Repo.delete_all(delete_query)
+    {:ok, count}
+  end
+
   # Consumer Lifecycle
 
   defp create_consumer_partition(%{message_kind: :event} = consumer) do

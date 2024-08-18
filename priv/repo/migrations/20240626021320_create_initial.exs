@@ -185,7 +185,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :consumer_id, :uuid, null: false, primary_key: true
       add :id, :serial, null: false, primary_key: true
       add :commit_lsn, :bigint, null: false
-      add :record_pks, {:array, :string}, null: false
+      add :record_pks, {:array, :text}, null: false
       add :table_oid, :integer, null: false
 
       add :data, :jsonb, null: false
@@ -225,7 +225,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :consumer_id, :uuid, null: false, primary_key: true
       add :id, :serial, null: false, primary_key: true
       add :commit_lsn, :bigint
-      add :record_pks, {:array, :string}, null: false
+      add :record_pks, {:array, :text}, null: false
       add :table_oid, :integer, null: false
       add :state, :"#{@stream_schema}.consumer_record_state", null: false
 

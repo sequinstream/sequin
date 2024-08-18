@@ -23,7 +23,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
 
     # New table with multiple primary keys of different types
     create table(:characters_multi_pk, primary_key: false) do
-      add :id_integer, :integer, primary_key: true
+      add :id_integer, :serial, primary_key: true
       add :id_string, :string, primary_key: true
       add :id_uuid, :uuid, primary_key: true
       add :name, :text

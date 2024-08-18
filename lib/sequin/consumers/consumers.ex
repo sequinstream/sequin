@@ -481,7 +481,14 @@ defmodule Sequin.Consumers do
   end
 
   def put_source_data(conn, consumer, records) do
-    consumer = Repo.preload(consumer, :postgres_database)
+    # I can't reproduce this behaviour outside of the test suite. But it appears that without assoc_loaded?,
+    # Ecto preloads the association regardless of whether it's loaded or not.
+    # This messes up tests, which modify the postgres_database directly before passing in.
+    consumer =
+      if Ecto.assoc_loaded?(consumer.postgres_database),
+        do: consumer,
+        else: Repo.preload(consumer, :postgres_database)
+
     postgres_db = consumer.postgres_database
 
     # Fetch the tables for the database
@@ -546,7 +553,7 @@ defmodule Sequin.Consumers do
     query = "select * from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
 
     # Execute the query
-    with {:ok, result} = Postgrex.query(conn, query, casted_pks) do
+    with {:ok, result} <- Postgrex.query(conn, query, casted_pks) do
       # Match the results with the original records
       updated_records =
         records

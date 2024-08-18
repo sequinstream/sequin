@@ -18,7 +18,8 @@ defmodule Sequin.DataCase do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.Character2PK
+  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.Test.Support.Models.CharacterMultiPK
   alias Sequin.Test.UnboxedRepo
 
   using opts do
@@ -37,7 +38,8 @@ defmodule Sequin.DataCase do
   setup tags do
     if tags[:unboxed] do
       UnboxedRepo.delete_all(Character)
-      UnboxedRepo.delete_all(Character2PK)
+      UnboxedRepo.delete_all(CharacterDetailed)
+      UnboxedRepo.delete_all(CharacterMultiPK)
     end
 
     Sequin.DataCase.setup_sandbox(tags)

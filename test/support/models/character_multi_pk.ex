@@ -6,7 +6,7 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
 
   @primary_key false
   schema "characters_multi_pk" do
-    field :id_integer, :integer, primary_key: true
+    field :id_integer, :integer, primary_key: true, read_after_writes: true
     field :id_string, :string, primary_key: true
     field :id_uuid, Ecto.UUID, primary_key: true
     field :name, :string

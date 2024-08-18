@@ -28,4 +28,8 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :character_multi_pk)
   end
+
+  def changeset(character, attrs) do
+    Ecto.Changeset.cast(character, attrs, [:id_integer, :id_string, :id_uuid, :name])
+  end
 end

@@ -36,4 +36,22 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :character_detailed)
   end
+
+  def changeset(character, attrs) do
+    Ecto.Changeset.cast(character, attrs, [
+      :name,
+      :age,
+      :height,
+      :is_hero,
+      :biography,
+      :birth_date,
+      :last_seen,
+      :created_at,
+      :updated_at,
+      :powers,
+      :metadata,
+      :rating,
+      :avatar
+    ])
+  end
 end

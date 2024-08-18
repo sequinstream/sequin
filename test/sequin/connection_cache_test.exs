@@ -92,6 +92,13 @@ defmodule Sequin.Databases.ConnectionCacheTest do
       assert Process.alive?(new_pid)
     end
 
+    test "returns error when connection is not found and create_on_miss is false" do
+      db = DatabasesFactory.postgres_database()
+      cache = start_cache()
+
+      assert {:error, %Sequin.Error.NotFoundError{}} = ConnectionCache.existing_connection(cache, db)
+    end
+
     defp start_cache(overrides \\ []) do
       opts =
         Keyword.merge(

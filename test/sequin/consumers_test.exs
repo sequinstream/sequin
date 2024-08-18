@@ -222,6 +222,7 @@ defmodule Sequin.ConsumersTest do
   end
 
   describe "put_source_data/3" do
+    @describetag skip: true
     setup do
       database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
 

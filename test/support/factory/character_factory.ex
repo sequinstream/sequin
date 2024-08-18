@@ -1,5 +1,6 @@
 defmodule Sequin.Factory.CharacterFactory do
   @moduledoc false
+  alias Sequin.Factory
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
   alias Sequin.Test.Support.Models.CharacterIdentFull
@@ -22,7 +23,7 @@ defmodule Sequin.Factory.CharacterFactory do
       )
 
     %Character{}
-    |> Ecto.Changeset.cast(attrs, [:name, :house, :planet, :is_active, :tags])
+    |> Character.changeset(attrs)
     |> UnboxedRepo.insert!()
   end
 
@@ -42,7 +43,7 @@ defmodule Sequin.Factory.CharacterFactory do
       )
 
     %CharacterIdentFull{}
-    |> Ecto.Changeset.cast(attrs, [:name, :house, :planet, :is_active, :tags])
+    |> CharacterIdentFull.changeset(attrs)
     |> UnboxedRepo.insert!()
   end
 
@@ -52,16 +53,16 @@ defmodule Sequin.Factory.CharacterFactory do
     attrs =
       Map.merge(
         %{
-          id_integer: :rand.uniform(1000),
+          id_integer: Factory.unique_integer(),
           id_string: Faker.UUID.v4(),
-          id_uuid: Ecto.UUID.generate(),
+          id_uuid: Faker.UUID.v4(),
           name: Faker.Person.name()
         },
         attrs
       )
 
     %CharacterMultiPK{}
-    |> Ecto.Changeset.cast(attrs, [:id_integer, :id_string, :id_uuid, :name])
+    |> CharacterMultiPK.changeset(attrs)
     |> UnboxedRepo.insert!()
   end
 
@@ -71,46 +72,28 @@ defmodule Sequin.Factory.CharacterFactory do
     attrs =
       Map.merge(
         %{
-          name: Faker.Person.name(),
-          age: Enum.random(18..100),
-          # 1-3 meters
-          height: :rand.uniform() * 2 + 1,
-          is_hero: Enum.random([true, false]),
+          name: Factory.name(),
+          age: Factory.integer(),
+          height: Factory.float(min: 1, max: 3),
+          is_hero: Factory.boolean(),
           biography: Faker.Lorem.paragraph(),
-          # Up to 100 years ago
-          birth_date: Faker.Date.backward(36_500),
-          # Random time in a day
-          last_seen: Time.add(~T[00:00:00], :rand.uniform(86_400)),
-          created_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second),
-          updated_at: DateTime.truncate(DateTime.utc_now(), :second),
+          birth_date: Factory.date(),
+          last_seen: Factory.naive_timestamp(),
+          created_at: Factory.naive_timestamp(),
+          updated_at: Factory.utc_datetime(),
           powers: Enum.take_random(["flight", "strength", "invisibility", "telepathy"], Enum.random(1..3)),
           metadata: %{
             "origin" => Faker.Address.country(),
-            "alignment" => Enum.random(["good", "neutral", "evil"])
+            "alignment" => Factory.one_of(["good", "neutral", "evil"])
           },
-          rating: Decimal.from_float(:rand.uniform() * 10),
-          # 16 random bytes
+          rating: Decimal.from_float(Factory.float(max: 10)),
           avatar: :crypto.strong_rand_bytes(16)
         },
         attrs
       )
 
     %CharacterDetailed{}
-    |> Ecto.Changeset.cast(attrs, [
-      :name,
-      :age,
-      :height,
-      :is_hero,
-      :biography,
-      :birth_date,
-      :last_seen,
-      :created_at,
-      :updated_at,
-      :powers,
-      :metadata,
-      :rating,
-      :avatar
-    ])
+    |> CharacterDetailed.changeset(attrs)
     |> UnboxedRepo.insert!()
   end
 end

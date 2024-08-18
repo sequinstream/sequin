@@ -6,10 +6,11 @@ defmodule Sequin.PostgresReplicationTest do
   the interference (issues starting the replication connection?), but it definitely seems to occur
   when the two tests are running and connecting to slots at the same time.
 
-  To keep them async, we're just co-locating them in this one test file. That ensures they run
-  serially, avoiding interference, while remaining concurrent with the rest of the test suite.
+  We're making this test async: false to avoid interference with other tests, as they need to use
+  character tables un-sandboxed (to produce WAL). We can make these async true with a clever trick
+  like isolating tests with partitioned tables. (Cost is low, at time of writing these tests take 0.6s)
   """
-  use Sequin.DataCase, async: true
+  use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
   alias Sequin.Extensions.Replication, as: ReplicationExt

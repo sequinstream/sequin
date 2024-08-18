@@ -28,4 +28,8 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
   defp base_query(query \\ __MODULE__) do
     from(cf in query, as: :character_ident_full)
   end
+
+  def changeset(character, attrs) do
+    Ecto.Changeset.cast(character, attrs, [:name, :house, :planet, :is_active, :tags])
+  end
 end

@@ -42,4 +42,8 @@ defmodule Sequin.Test.Support.Models.Character do
   defp base_query(query \\ __MODULE__) do
     from(c in query, as: :character)
   end
+
+  def changeset(character, attrs) do
+    Ecto.Changeset.cast(character, attrs, [:name, :house, :planet, :is_active, :tags])
+  end
 end

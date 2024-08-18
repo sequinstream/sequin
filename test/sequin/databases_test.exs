@@ -41,7 +41,9 @@ defmodule Sequin.DatabasesTest do
       table = hd(updated_db.tables)
       assert %PostgresDatabase.Table{} = table
       assert length(table.columns) > 0
-      assert %PostgresDatabase.Table.Column{} = hd(table.columns)
+      column = hd(table.columns)
+      assert %PostgresDatabase.Table.Column{} = column
+      assert is_boolean(column.is_pk?)
     end
   end
 

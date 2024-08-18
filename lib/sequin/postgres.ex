@@ -3,6 +3,34 @@ defmodule Sequin.Postgres do
   alias Sequin.Error
   alias Sequin.Repo
 
+  def pg_type_to_ecto_type(pg_type) do
+    case pg_type do
+      "integer" -> :integer
+      "bigint" -> :integer
+      "smallint" -> :integer
+      "text" -> :string
+      "varchar" -> :string
+      "char" -> :string
+      "boolean" -> :boolean
+      "float" -> :float
+      "double precision" -> :float
+      "numeric" -> :decimal
+      "date" -> :date
+      "timestamp" -> :naive_datetime
+      "timestamptz" -> :utc_datetime
+      "uuid" -> :binary_id
+      "jsonb" -> :map
+      "json" -> :map
+      # Default to string for unknown types
+      _ -> :string
+    end
+  end
+
+  def parameterized_tuple(count, offset \\ 0) do
+    params = Enum.map_join(1..count, ", ", fn n -> "$#{n + offset}" end)
+    "(#{params})"
+  end
+
   def list_schemas(conn) do
     with {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
       filtered_schemas =

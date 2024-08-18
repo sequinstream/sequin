@@ -243,4 +243,63 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
              ]
     end
   end
+
+  describe "delete_consumer_records/1" do
+    test "deletes matching records" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["1"])
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["2"])
+      record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["3"])
+
+      assert {:ok, 2} = Consumers.delete_consumer_records([record1, record2])
+
+      assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record2.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record3.id) != nil
+    end
+
+    test "doesn't delete records with non-matching consumer_id or table_oid" do
+      consumer1 = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer2 = ConsumersFactory.insert_consumer!(message_kind: :record)
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer1.id, table_oid: 1000, record_pks: ["1"])
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer2.id, table_oid: 1000, record_pks: ["2"])
+
+      assert {:ok, 0} = Consumers.delete_consumer_records([%{record1 | consumer_id: consumer2.id}])
+      assert {:ok, 0} = Consumers.delete_consumer_records([%{record1 | table_oid: 1001}])
+
+      assert Repo.get_by(ConsumerRecord, id: record1.id) != nil
+      assert Repo.get_by(ConsumerRecord, id: record2.id) != nil
+    end
+
+    test "deletes records with multi-column primary keys respecting order" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+
+      record1 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["1", "a"])
+
+      record2 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["a", "1"])
+
+      record3 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["2", "b"])
+
+      record4 =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["b", "2"])
+
+      assert {:ok, 2} =
+               Consumers.delete_consumer_records([
+                 %{record1 | record_pks: ["1", "a"]},
+                 %{record3 | record_pks: ["2", "b"]}
+               ])
+
+      assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record2.id) != nil
+      assert Repo.get_by(ConsumerRecord, id: record3.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record4.id) != nil
+    end
+
+    test "deletes nothing when given an empty list" do
+      assert {:ok, 0} = Consumers.delete_consumer_records([])
+    end
+  end
 end

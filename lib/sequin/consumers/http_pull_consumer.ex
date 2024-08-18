@@ -37,6 +37,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
+    has_one :postgres_database, through: [:replication_slot, :postgres_database]
 
     timestamps()
   end

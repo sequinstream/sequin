@@ -2,11 +2,17 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
+  alias Ecto.Type
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerMessageMetadata
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
+  alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor
@@ -429,8 +435,8 @@ defmodule Sequin.Consumers do
     end
   end
 
-  # TODO: Populate data by joining against source tables
   def receive_for_consumer(%{message_kind: :record} = consumer, opts) do
+    consumer = Repo.preload(consumer, :postgres_database)
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()
@@ -467,7 +473,121 @@ defmodule Sequin.Consumers do
             |> ConsumerRecord.from_map()
           end)
 
-        {:ok, records}
+        # Fetch source data for the records
+        with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database) do
+          put_source_data(conn, consumer, records)
+        end
+    end
+  end
+
+  def put_source_data(conn, consumer, records) do
+    consumer = Repo.preload(consumer, :postgres_database)
+    postgres_db = consumer.postgres_database
+
+    # Fetch the tables for the database
+    {:ok, tables} = Databases.tables(postgres_db)
+
+    # Group records by table_oid
+    records_by_oid = Enum.group_by(records, & &1.table_oid)
+
+    # Fetch data for each group of records
+    Enum.reduce_while(records_by_oid, {:ok, []}, fn {table_oid, oid_records}, {:ok, acc} ->
+      table = Enum.find(tables, &(&1.oid == table_oid))
+
+      if table do
+        case fetch_records_data(conn, table, oid_records) do
+          {:ok, fetched_records} -> {:cont, {:ok, acc ++ fetched_records}}
+          {:error, _} = error -> {:halt, error}
+        end
+      else
+        Logger.error("Table not found for table_oid: #{table_oid}")
+        error = Error.not_found(entity: :table, params: %{table_oid: table_oid, consumer_id: consumer.id})
+        {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp fetch_records_data(conn, %PostgresDatabase.Table{} = table, records) do
+    record_count = length(records)
+    # Get the primary key columns and their types
+    pk_columns = Enum.filter(table.columns, & &1.is_pk?)
+    pk_column_count = length(pk_columns)
+    pk_types = Enum.map(pk_columns, & &1.type)
+
+    # Cast record_pks to the correct types
+    casted_pks =
+      records
+      |> Enum.map(fn record ->
+        record.record_pks
+        |> Enum.zip(pk_types)
+        |> Enum.map(fn {value, type} -> cast_value(value, type) end)
+      end)
+      |> List.flatten()
+
+    where_clause =
+      if pk_column_count == 1 do
+        # This one needs to not use a row tuple on the left- or right-hand sides
+        # pk_column_name = Postgres.quote_name(List.first(pk_columns).name)
+        pk_column_name = "id"
+        "where #{pk_column_name} in #{Postgres.parameterized_tuple(record_count)}"
+      else
+        # the where clause is (col1, col2) IN ((val1, val2), (val3, val4))
+        # which is too challenging to pull off with Ecto fragments
+        pk_column_names = pk_columns |> Enum.map(& &1.name) |> Enum.map_join(", ", &Postgres.quote_name/1)
+
+        value_params =
+          Enum.map_join(1..record_count, ", ", fn n ->
+            Postgres.parameterized_tuple(pk_column_count, (n - 1) * pk_column_count)
+          end)
+
+        "where (#{pk_column_names}) in (#{value_params})"
+      end
+
+    query = "select * from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
+
+    # Execute the query
+    with {:ok, result} = Postgrex.query(conn, query, casted_pks) do
+      # Match the results with the original records
+      updated_records =
+        records
+        |> Enum.zip(result.rows)
+        |> Enum.map(fn {record, row} ->
+          data =
+            table.columns
+            |> Enum.zip(row)
+            |> Map.new(fn {col, val} ->
+              casted_val = if col.type == "uuid", do: UUID.binary_to_string!(val), else: val
+              {col.name, casted_val}
+            end)
+
+          metadata = %ConsumerMessageMetadata{
+            table: table.name,
+            schema: table.schema,
+            # TODO: Either add to table or drop entirely
+            commit_timestamp: nil
+          }
+
+          %{record | data: %ConsumerRecordData{record: data, metadata: metadata}}
+        end)
+
+      {:ok, updated_records}
+    end
+  end
+
+  # Helper function to cast values using Ecto's type system
+  defp cast_value(value, "uuid"), do: UUID.string_to_binary!(value)
+
+  defp cast_value(value, pg_type) do
+    ecto_type = Postgres.pg_type_to_ecto_type(pg_type)
+
+    case Type.cast(ecto_type, value) do
+      {:ok, casted_value} ->
+        casted_value
+
+      :error ->
+        Logger.warning("Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}")
+        # Return original value if casting fails
+        value
     end
   end
 

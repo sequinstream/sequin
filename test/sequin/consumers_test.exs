@@ -261,7 +261,8 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "fetches multiple records from the same table with single PK", %{consumer: consumer, conn: conn} do
-      characters = Enum.map(1..3, fn _ -> CharacterFactory.insert_character!() end)
+      characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
+      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
       records = Enum.map(characters, &build_consumer_record(consumer, &1))
 
       {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
@@ -285,7 +286,8 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "fetches multiple records from the same table with compound PK", %{consumer: consumer, conn: conn} do
-      characters = Enum.map(1..3, fn _ -> CharacterFactory.insert_character_multi_pk!() end)
+      characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
+      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
       records = Enum.map(characters, &build_consumer_record(consumer, &1, :multi_pk))
 
       {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)

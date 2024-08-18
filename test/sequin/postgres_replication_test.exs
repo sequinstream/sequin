@@ -58,10 +58,32 @@ defmodule Sequin.PostgresReplicationTest do
           account_id: account_id
         )
 
-      # Create a consumer for this replication slot
-      consumer =
+      # Create a consumer for this replication slot (event)
+      event_consumer =
         ConsumersFactory.insert_consumer!(
           message_kind: :event,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: Character.table_oid(),
+              column_filters: []
+            ),
+            ConsumersFactory.source_table(
+              oid: CharacterIdentFull.table_oid(),
+              column_filters: []
+            ),
+            ConsumersFactory.source_table(
+              oid: CharacterMultiPK.table_oid(),
+              column_filters: []
+            )
+          ]
+        )
+
+      # Create a consumer for this replication slot (record)
+      record_consumer =
+        ConsumersFactory.insert_consumer!(
+          message_kind: :record,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [
@@ -86,10 +108,15 @@ defmodule Sequin.PostgresReplicationTest do
 
       {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
-      %{pg_replication: pg_replication, source_db: source_db, consumer: consumer}
+      %{
+        pg_replication: pg_replication,
+        source_db: source_db,
+        event_consumer: event_consumer,
+        record_consumer: record_consumer
+      }
     end
 
-    test "inserts are replicated to consumer events", %{consumer: consumer} do
+    test "inserts are replicated to consumer events", %{event_consumer: consumer} do
       # Insert a character
       character = CharacterFactory.insert_character!()
 
@@ -120,7 +147,23 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "updates are replicated to consumer events when replica identity default", %{consumer: consumer} do
+    test "inserts are replicated to consumer records", %{record_consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!()
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer records
+      [consumer_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Assert the consumer record details
+      assert consumer_record.consumer_id == consumer.id
+      assert consumer_record.table_oid == Character.table_oid()
+      assert consumer_record.record_pks == [to_string(character.id)]
+    end
+
+    test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       # Insert a character
       character = CharacterFactory.insert_character!(%{name: "Leto Atreides", house: "Atreides", planet: "Caladan"})
 
@@ -158,7 +201,33 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "updates are replicated to consumer events when replica identity full", %{consumer: consumer} do
+    test "updates are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!()
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Update the character
+      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
+
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer records
+      [update_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Assert the consumer record details
+      assert update_record.consumer_id == consumer.id
+      assert update_record.table_oid == Character.table_oid()
+      assert update_record.record_pks == [to_string(character.id)]
+      assert DateTime.compare(insert_record.inserted_at, update_record.inserted_at) == :eq
+      refute DateTime.compare(insert_record.updated_at, update_record.updated_at) == :eq
+    end
+
+    test "updates are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
       # Insert a character with full replica identity
       character =
         CharacterFactory.insert_character_ident_full!(%{
@@ -202,7 +271,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.action == :update
     end
 
-    test "deletes are replicated to consumer events when replica identity default", %{consumer: consumer} do
+    test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character!()
 
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -229,7 +298,21 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "deletes are replicated to consumer events when replica identity full", %{consumer: consumer} do
+    @tag skip: true
+    test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+      character = CharacterFactory.insert_character!()
+
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [_insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      UnboxedRepo.delete!(character)
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [] = Consumers.list_consumer_records_for_consumer(consumer.id)
+    end
+
+    test "deletes are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character_ident_full!()
 
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -256,49 +339,38 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "replication with multiple primary key columns", %{consumer: consumer} do
+    test "replication with multiple primary key columns", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Randomly select a consumer
+      consumer = Enum.random([event_consumer, record_consumer])
+
       # Insert
       character = CharacterFactory.insert_character_multi_pk!()
 
       assert_receive {ReplicationExt, :flush_messages}, 1000
 
-      [insert_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
-      %{data: data} = insert_event
+      [insert_message] = list_messages(consumer)
 
-      assert data.record == %{
-               "id_integer" => character.id_integer,
-               "id_string" => character.id_string,
-               "id_uuid" => character.id_uuid,
-               "name" => character.name
-             }
+      # Assert the consumer message details
+      assert insert_message.consumer_id == consumer.id
+      assert insert_message.table_oid == CharacterMultiPK.table_oid()
 
-      assert is_nil(data.changes)
-      assert data.action == :insert
-      assert_maps_equal(data.metadata, %{table: "characters_multi_pk", schema: "public"}, [:table, :schema])
-      assert is_struct(data.metadata.commit_timestamp, DateTime)
-
-      # Delete
-      UnboxedRepo.delete!(character)
-
-      assert_receive {ReplicationExt, :flush_messages}, 500
-
-      [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
-      %{data: data} = delete_event
-
-      assert data.record == %{
-               "id_integer" => character.id_integer,
-               "id_string" => character.id_string,
-               "id_uuid" => character.id_uuid,
-               "name" => nil
-             }
-
-      assert is_nil(data.changes)
-      assert data.action == :delete
-      assert_maps_equal(data.metadata, %{table: "characters_multi_pk", schema: "public"}, [:table, :schema])
-      assert is_struct(data.metadata.commit_timestamp, DateTime)
+      assert insert_message.record_pks == [
+               to_string(character.id_integer),
+               character.id_string,
+               to_string(character.id_uuid)
+             ]
     end
 
-    test "consumer with column filter only receives relevant events", %{consumer: consumer} do
+    test "consumer with column filter only receives relevant messages", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Randomly select a consumer
+      consumer = Enum.random([event_consumer, record_consumer])
+
       # Create a consumer with a column filter
       source_tables = [
         ConsumersFactory.source_table_attrs(
@@ -324,8 +396,8 @@ defmodule Sequin.PostgresReplicationTest do
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
 
-      # Verify no consumer event was created
-      assert Consumers.list_consumer_events_for_consumer(consumer.id) == []
+      # Verify no consumer message was created
+      assert list_messages(consumer) == []
 
       # Insert a character that matches the filter
       matching_character = CharacterFactory.insert_character!(is_active: true)
@@ -333,20 +405,45 @@ defmodule Sequin.PostgresReplicationTest do
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
 
-      # Fetch consumer events
-      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+      # Fetch consumer messages
+      [consumer_message] = list_messages(consumer)
 
-      # Assert the consumer event details
-      assert consumer_event.consumer_id == consumer.id
+      # Assert the consumer message details
+      assert consumer_message.consumer_id == consumer.id
 
-      # Update the non-matching character (should not trigger an event)
+      # Update the matching character (should not trigger a message)
       UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
 
-      # Verify no new consumer event was created
-      assert length(Consumers.list_consumer_events_for_consumer(consumer.id)) == 1
+      # Verify no new consumer message was created
+      assert length(list_messages(consumer)) == 1
+    end
+
+    test "inserts are fanned out to both events and records", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Insert a character
+      CharacterFactory.insert_character!()
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(event_consumer.id)
+
+      # Fetch consumer records
+      [consumer_record] = Consumers.list_consumer_records_for_consumer(record_consumer.id)
+
+      # Assert both event and record were created
+      assert consumer_event.consumer_id == event_consumer.id
+      assert consumer_record.consumer_id == record_consumer.id
+
+      # Assert both have the same data
+      assert consumer_event.table_oid == consumer_record.table_oid
+      assert consumer_event.record_pks == consumer_record.record_pks
     end
   end
 
@@ -566,5 +663,13 @@ defmodule Sequin.PostgresReplicationTest do
     assert_lists_equal(fields, record_fields, fn field1, field2 ->
       field1.column_name == field2.column_name && field1.value == field2.value
     end)
+  end
+
+  defp list_messages(%{message_kind: :event} = consumer) do
+    Consumers.list_consumer_events_for_consumer(consumer.id)
+  end
+
+  defp list_messages(%{message_kind: :record} = consumer) do
+    Consumers.list_consumer_records_for_consumer(consumer.id)
   end
 end

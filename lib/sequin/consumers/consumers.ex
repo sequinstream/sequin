@@ -232,6 +232,8 @@ defmodule Sequin.Consumers do
     Repo.all(query)
   end
 
+  def insert_consumer_events([]), do: {:ok, 0}
+
   def insert_consumer_events(consumer_events) do
     now = DateTime.utc_now()
 
@@ -302,6 +304,8 @@ defmodule Sequin.Consumers do
       ELSE 'available'
     END::#{@consumer_record_state_enum}
   """
+  def insert_consumer_records([]), do: {:ok, 0}
+
   def insert_consumer_records(consumer_records) do
     now = DateTime.utc_now()
 
@@ -310,6 +314,9 @@ defmodule Sequin.Consumers do
         record
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
+        |> ConsumerRecord.from_map()
+        # insert_all expects a plain outer-map, but struct embeds
+        |> Sequin.Map.from_ecto()
       end)
 
     conflict_target = [:consumer_id, :record_pks, :table_oid]

@@ -24,8 +24,8 @@ defmodule Sequin.PostgresReplicationTest do
   # alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.Character2PK
   alias Sequin.Test.Support.Models.CharacterIdentFull
+  alias Sequin.Test.Support.Models.CharacterMultiPK
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
 
@@ -73,7 +73,7 @@ defmodule Sequin.PostgresReplicationTest do
               column_filters: []
             ),
             ConsumersFactory.source_table(
-              oid: Character2PK.table_oid(),
+              oid: CharacterMultiPK.table_oid(),
               column_filters: []
             )
           ]
@@ -255,9 +255,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "replication with two primary key columns", %{consumer: consumer} do
+    test "replication with multiple primary key columns", %{consumer: consumer} do
       # Insert
-      character = CharacterFactory.insert_character_2pk!()
+      character = CharacterFactory.insert_character_multi_pk!()
 
       assert_receive {ReplicationExt, :flush_messages}, 500
 
@@ -265,16 +265,15 @@ defmodule Sequin.PostgresReplicationTest do
       %{data: data} = insert_event
 
       assert data.record == %{
-               "id1" => character.id1,
-               "id2" => character.id2,
-               "name" => character.name,
-               "house" => character.house,
-               "planet" => character.planet
+               "id_integer" => character.id_integer,
+               "id_string" => character.id_string,
+               "id_uuid" => character.id_uuid,
+               "name" => character.name
              }
 
       assert is_nil(data.changes)
       assert data.action == :insert
-      assert_maps_equal(data.metadata, %{table: "characters_2pk", schema: "public"}, [:table, :schema])
+      assert_maps_equal(data.metadata, %{table: "characters_multi_pk", schema: "public"}, [:table, :schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
 
       # Delete
@@ -286,16 +285,15 @@ defmodule Sequin.PostgresReplicationTest do
       %{data: data} = delete_event
 
       assert data.record == %{
-               "id1" => character.id1,
-               "id2" => character.id2,
-               "name" => nil,
-               "house" => nil,
-               "planet" => nil
+               "id_integer" => character.id_integer,
+               "id_string" => character.id_string,
+               "id_uuid" => character.id_uuid,
+               "name" => nil
              }
 
       assert is_nil(data.changes)
       assert data.action == :delete
-      assert_maps_equal(data.metadata, %{table: "characters_2pk", schema: "public"}, [:table, :schema])
+      assert_maps_equal(data.metadata, %{table: "characters_multi_pk", schema: "public"}, [:table, :schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 

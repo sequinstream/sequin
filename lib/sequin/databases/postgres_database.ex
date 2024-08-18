@@ -45,6 +45,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
       embeds_many :columns, Column, on_replace: :delete, primary_key: false do
         field :attnum, :integer, primary_key: true
+        field :is_pk?, :boolean
         field :name, :string
         field :type, :string
       end
@@ -87,7 +88,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def columns_changeset(column, attrs) do
-    cast(column, attrs, [:attnum, :name, :type])
+    cast(column, attrs, [:attnum, :name, :type, :is_pk?])
   end
 
   def tables_to_map(tables) do

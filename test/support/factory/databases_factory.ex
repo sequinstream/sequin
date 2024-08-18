@@ -112,7 +112,8 @@ defmodule Sequin.Factory.DatabasesFactory do
       %PostgresDatabase.Table.Column{
         name: Factory.postgres_object(),
         type: Factory.one_of(["integer", "text", "boolean", "timestamp", "uuid"]),
-        attnum: Factory.unique_integer()
+        attnum: Factory.unique_integer(),
+        is_pk?: Factory.boolean()
       },
       attrs
     )

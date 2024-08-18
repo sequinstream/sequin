@@ -41,6 +41,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     belongs_to :account, Account
     belongs_to :http_endpoint, HttpEndpoint
     belongs_to :replication_slot, PostgresReplicationSlot
+    has_one :postgres_database, through: [:replication_slot, :postgres_database]
 
     timestamps()
   end

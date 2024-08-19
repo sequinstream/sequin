@@ -4,7 +4,6 @@ defmodule Sequin.Consumers do
 
   alias Ecto.Type
   alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerMessageMetadata
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpPullConsumer
@@ -590,9 +589,9 @@ defmodule Sequin.Consumers do
               {col.name, casted_val}
             end)
 
-          metadata = %ConsumerMessageMetadata{
-            table: table.name,
-            schema: table.schema,
+          metadata = %ConsumerRecordData.Metadata{
+            table_name: table.name,
+            table_schema: table.schema,
             # TODO: Either add to table or drop entirely
             commit_timestamp: nil
           }

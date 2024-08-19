@@ -23,8 +23,8 @@ defmodule Sequin.MessageHandlerTest do
       assert event.data.action == :insert
       assert event.data.record == fields_to_map(message.fields)
       assert event.data.changes == nil
-      assert event.data.metadata.table == message.table_name
-      assert event.data.metadata.schema == message.table_schema
+      assert event.data.metadata.table_name == message.table_name
+      assert event.data.metadata.table_schema == message.table_schema
       assert event.data.metadata.commit_timestamp == message.commit_timestamp
     end
 
@@ -75,8 +75,8 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "two messages with two consumers are fanned out to each consumer" do
-      message1 = ReplicationFactory.postgres_message(table_oid: 123)
-      message2 = ReplicationFactory.postgres_message(table_oid: 123)
+      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+      message2 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       consumer1 = ConsumersFactory.insert_consumer!(source_tables: [source_table])
       consumer2 = ConsumersFactory.insert_consumer!(source_tables: [source_table])

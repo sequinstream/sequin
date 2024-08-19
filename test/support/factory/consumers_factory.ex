@@ -5,7 +5,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerMessageMetadata
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpPullConsumer
@@ -253,24 +252,6 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Repo.insert!()
   end
 
-  # ConsumerMessageMetadata
-  def consumer_message_metadata(attrs \\ []) do
-    merge_attributes(
-      %ConsumerMessageMetadata{
-        table: Factory.postgres_object(),
-        schema: Factory.postgres_object(),
-        commit_timestamp: Factory.timestamp()
-      },
-      attrs
-    )
-  end
-
-  def consumer_message_metadata_attrs(attrs \\ []) do
-    attrs
-    |> consumer_message_metadata()
-    |> Sequin.Map.from_ecto(keep_nils: true)
-  end
-
   # ConsumerEvent
   def consumer_event(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -305,7 +286,11 @@ defmodule Sequin.Factory.ConsumersFactory do
         record: record,
         changes: changes,
         action: action,
-        metadata: consumer_message_metadata()
+        metadata: %{
+          table_schema: Factory.postgres_object(),
+          table_name: Factory.postgres_object(),
+          commit_timestamp: Factory.timestamp()
+        }
       },
       attrs
     )
@@ -315,9 +300,6 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.new()
     |> consumer_event_data()
-    |> Map.update!(:metadata, fn metadata ->
-      metadata |> Map.from_struct() |> consumer_message_metadata_attrs()
-    end)
     |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
@@ -392,7 +374,11 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %ConsumerRecordData{
         record: %{"column" => Factory.word()},
-        metadata: consumer_message_metadata()
+        metadata: %{
+          table_schema: Factory.postgres_object(),
+          table_name: Factory.postgres_object(),
+          commit_timestamp: Factory.timestamp()
+        }
       },
       attrs
     )
@@ -402,9 +388,6 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.new()
     |> consumer_record_data()
-    |> Map.update!(:metadata, fn metadata ->
-      metadata |> Map.from_struct() |> consumer_message_metadata_attrs()
-    end)
     |> Sequin.Map.from_ecto(keep_nils: true)
   end
 end

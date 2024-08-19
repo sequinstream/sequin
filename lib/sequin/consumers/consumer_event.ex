@@ -6,7 +6,6 @@ defmodule Sequin.Consumers.ConsumerEvent do
   import Ecto.Query
 
   alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerMessageMetadata
 
   @primary_key false
   @derive {Jason.Encoder,
@@ -88,7 +87,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
       |> Map.update!(:data, fn data ->
         data = Sequin.Map.atomize_keys(data)
         metadata = Sequin.Map.atomize_keys(data.metadata)
-        data = Map.put(data, :metadata, struct!(ConsumerMessageMetadata, metadata))
+        data = Map.put(data, :metadata, struct!(ConsumerEventData.Metadata, metadata))
         struct!(ConsumerEventData, data)
       end)
 

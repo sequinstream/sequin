@@ -100,8 +100,8 @@ defmodule Sequin.Replication.MessageHandler do
 
   defp metadata(%Message{} = message) do
     %{
-      table: message.table_name,
-      schema: message.table_schema,
+      table_name: message.table_name,
+      table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp
     }
   end

@@ -38,8 +38,8 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
       assert_maps_equal(
         json["metadata"],
         %{
-          "table" => event.data.metadata.table,
-          "schema" => event.data.metadata.schema,
+          "table_name" => event.data.metadata.table_name,
+          "table_schema" => event.data.metadata.table_schema,
           "commit_timestamp" => DateTime.to_iso8601(event.data.metadata.commit_timestamp)
         },
         ["table", "schema", "commit_timestamp"]

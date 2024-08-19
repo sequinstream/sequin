@@ -280,8 +280,8 @@ defmodule Sequin.ConsumersTest do
                  "tags" => character.tags
                }
 
-        assert record.data.metadata.table == "characters"
-        assert record.data.metadata.schema == "public"
+        assert record.data.metadata.table_name == "characters"
+        assert record.data.metadata.table_schema == "public"
       end
     end
 
@@ -303,8 +303,8 @@ defmodule Sequin.ConsumersTest do
                  "name" => character.name
                }
 
-        assert record.data.metadata.table == "characters_multi_pk"
-        assert record.data.metadata.schema == "public"
+        assert record.data.metadata.table_name == "characters_multi_pk"
+        assert record.data.metadata.table_schema == "public"
       end
     end
 

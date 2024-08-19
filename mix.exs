@@ -25,6 +25,7 @@ defmodule Sequin.MixProject do
 
   # Specifies which paths to compile per environment.
   defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:dev), do: ["lib", "test/support/factory"]
   defp elixirc_paths(_), do: ["lib"]
 
   # Specifies your project dependencies.
@@ -56,16 +57,16 @@ defmodule Sequin.MixProject do
       {:typed_ecto_schema, "~> 0.4.1"},
       {:typed_struct, "~> 0.3.0"},
       {:yesql, "~> 1.0"},
-      {:faker, "~> 0.18.0", [only: :test]},
+      {:faker, "~> 0.18.0", only: [:dev, :test]},
       {:uuid, "~> 1.1"},
-      {:mix_test_interactive, "~> 2.0", [only: :dev, runtime: false]},
+      {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
       {:uxid, "~> 0.2"},
       {:flow, "~> 1.2"},
       {:con_cache, "~> 1.1"},
       {:cloak_ecto, "~> 1.3.0"},
       {:mox, "~> 1.0"},
       {:oban, "~> 2.17"},
-      {:hammox, "~> 0.7", [only: :test]},
+      {:hammox, "~> 0.7", only: :test},
       {:broadway, "~> 1.0"},
       {:req, "~> 0.5"},
       {:observer_cli, "~> 1.7"}

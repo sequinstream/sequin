@@ -52,7 +52,7 @@ defmodule Sequin.Replication.MessageHandler do
     %ConsumerEvent{
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-      record_pks: message.ids,
+      record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0,
       data: event_data_from_message(message)
@@ -63,7 +63,7 @@ defmodule Sequin.Replication.MessageHandler do
     %ConsumerRecord{
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
-      record_pks: message.ids,
+      record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0
     }

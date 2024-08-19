@@ -1,5 +1,7 @@
 defmodule Sequin.Postgres do
   @moduledoc false
+  import Ecto.Query, only: [from: 2]
+
   alias Sequin.Error
   alias Sequin.Repo
 
@@ -47,6 +49,17 @@ defmodule Sequin.Postgres do
            Postgrex.query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
       {:ok, List.flatten(rows)}
     end
+  end
+
+  def ecto_model_oid(model) do
+    rel_name = model.__schema__(:source)
+
+    Sequin.Repo.one(
+      from(pg in "pg_class",
+        where: pg.relname == ^rel_name,
+        select: pg.oid
+      )
+    )
   end
 
   def fetch_table_oid(conn, schema, table) do

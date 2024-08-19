@@ -4,6 +4,8 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
 
   import Ecto.Query
 
+  alias Sequin.Postgres
+
   @primary_key false
   schema "characters_multi_pk" do
     field :id_integer, :integer, primary_key: true, read_after_writes: true
@@ -13,12 +15,7 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
   end
 
   def table_oid do
-    Sequin.Repo.one(
-      from(pg in "pg_class",
-        where: pg.relname == "characters_multi_pk",
-        select: pg.oid
-      )
-    )
+    Postgres.ecto_model_oid(__MODULE__)
   end
 
   def where_id(query \\ base_query(), id_integer, id_string, id_uuid) do

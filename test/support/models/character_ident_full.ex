@@ -4,6 +4,8 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
 
   import Ecto.Query
 
+  alias Sequin.Postgres
+
   schema "characters_ident_full" do
     field :name, :string
     field :house, :string
@@ -13,12 +15,7 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
   end
 
   def table_oid do
-    Sequin.Repo.one(
-      from(pg in "pg_class",
-        where: pg.relname == "characters_ident_full",
-        select: pg.oid
-      )
-    )
+    Postgres.ecto_model_oid(__MODULE__)
   end
 
   def where_id(query \\ base_query(), id) do

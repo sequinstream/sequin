@@ -7,7 +7,6 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerMessageMetadata
-  alias Sequin.Streams.ConsumerEventWithConsumerInfo
 
   @primary_key false
   @derive {Jason.Encoder,
@@ -136,7 +135,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     from(ce in query, as: :consumer_event)
   end
 
-  @spec external_state(%__MODULE__{}) :: ConsumerEventWithConsumerInfo.state()
+  @spec external_state(%__MODULE__{}) :: :available | :pending
   def external_state(%__MODULE__{} = ce) do
     now = DateTime.utc_now()
 

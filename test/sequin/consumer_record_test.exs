@@ -277,25 +277,34 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       record1 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["1", "a"])
 
+      record1_other_table =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 2000, record_pks: ["1", "a"])
+
       record2 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["a", "1"])
 
       record3 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["2", "b"])
 
+      record3_other_table =
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 2000, record_pks: ["2", "b"])
+
       record4 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["b", "2"])
 
-      assert {:ok, 2} =
+      assert {:ok, 3} =
                Consumers.delete_consumer_records([
-                 %{record1 | record_pks: ["1", "a"]},
-                 %{record3 | record_pks: ["2", "b"]}
+                 record1,
+                 record2,
+                 record3_other_table
                ])
 
-      assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
-      assert Repo.get_by(ConsumerRecord, id: record2.id) != nil
-      assert Repo.get_by(ConsumerRecord, id: record3.id) == nil
-      assert Repo.get_by(ConsumerRecord, id: record4.id) != nil
+      refute Repo.get_by(ConsumerRecord, id: record1.id)
+      refute Repo.get_by(ConsumerRecord, id: record2.id)
+      refute Repo.get_by(ConsumerRecord, id: record3_other_table.id)
+      assert Repo.get_by(ConsumerRecord, id: record3.id)
+      assert Repo.get_by(ConsumerRecord, id: record4.id)
+      assert Repo.get_by(ConsumerRecord, id: record1_other_table.id)
     end
 
     test "deletes nothing when given an empty list" do

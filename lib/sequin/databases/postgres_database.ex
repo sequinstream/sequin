@@ -7,6 +7,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   alias __MODULE__
   alias Ecto.Queryable
+  alias Sequin.Databases.PostgresDatabase.Table
 
   require Logger
 
@@ -97,6 +98,17 @@ defmodule Sequin.Databases.PostgresDatabase do
       |> Sequin.Map.from_ecto()
       |> Map.update!(:columns, fn columns ->
         Enum.map(columns, &Sequin.Map.from_ecto/1)
+      end)
+    end)
+  end
+
+  def cast_rows(%Table{} = table, rows) do
+    Enum.map(rows, fn row ->
+      Map.new(table.columns, fn col ->
+        casted_val =
+          if col.type == "uuid", do: UUID.binary_to_string!(row[col.name]), else: row[col.name]
+
+        {col.name, casted_val}
       end)
     end)
   end

@@ -9,7 +9,6 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     typedstruct do
       field :table_schema, :string
       field :table_name, :string
-      field :commit_timestamp, :utc_datetime_usec
     end
   end
 

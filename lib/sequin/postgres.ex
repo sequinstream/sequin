@@ -28,6 +28,14 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def result_to_map(%Postgrex.Result{} = result) do
+    %{columns: columns, rows: rows} = result
+
+    Enum.map(rows, fn row ->
+      columns |> Enum.zip(row) |> Map.new()
+    end)
+  end
+
   def parameterized_tuple(count, offset \\ 0) do
     params = Enum.map_join(1..count, ", ", fn n -> "$#{n + offset}" end)
     "(#{params})"

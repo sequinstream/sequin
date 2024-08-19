@@ -258,11 +258,14 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
 
+    {record_pks, attrs} = Map.pop_lazy(attrs, :record_pks, fn -> [Faker.UUID.v4()] end)
+    record_pks = Enum.map(record_pks, &to_string/1)
+
     merge_attributes(
       %ConsumerEvent{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
-        record_pks: [Faker.UUID.v4()],
+        record_pks: record_pks,
         table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
@@ -333,11 +336,14 @@ defmodule Sequin.Factory.ConsumersFactory do
     state = Map.get_lazy(attrs, :state, fn -> Enum.random([:available, :acked, :delivered, :pending_redelivery]) end)
     not_visible_until = if state == :available, do: nil, else: Factory.timestamp()
 
+    {record_pks, attrs} = Map.pop_lazy(attrs, :record_pks, fn -> [Faker.UUID.v4()] end)
+    record_pks = Enum.map(record_pks, &to_string/1)
+
     merge_attributes(
       %ConsumerRecord{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
-        record_pks: [Faker.UUID.v4()],
+        record_pks: record_pks,
         table_oid: Enum.random(1..100_000),
         state: state,
         ack_id: Factory.uuid(),

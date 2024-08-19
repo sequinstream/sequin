@@ -349,14 +349,16 @@ defmodule Sequin.Consumers do
   def delete_consumer_records([]), do: {:ok, 0}
 
   def delete_consumer_records(consumer_records) do
-    record_pks = Enum.map(consumer_records, & &1.record_pks)
-
     delete_query =
-      from cr in ConsumerRecord,
-        where:
-          cr.consumer_id in ^Enum.map(consumer_records, & &1.consumer_id) and
-            cr.table_oid in ^Enum.map(consumer_records, & &1.table_oid) and
-            fragment("? in (?)", cr.record_pks, splice(^record_pks))
+      Enum.reduce(consumer_records, ConsumerRecord, fn record, query ->
+        or_where(
+          query,
+          [cr],
+          cr.consumer_id == ^record.consumer_id and
+            cr.table_oid == ^record.table_oid and
+            cr.record_pks == ^record.record_pks
+        )
+      end)
 
     {count, _} = Repo.delete_all(delete_query)
     {:ok, count}
@@ -496,8 +498,9 @@ defmodule Sequin.Consumers do
           end)
 
         # Fetch source data for the records
-        with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database) do
-          put_source_data(conn, consumer, records)
+        with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database),
+             {:ok, fetched_records} <- put_source_data(conn, consumer, records) do
+          filter_and_delete_records(consumer.id, fetched_records)
         end
     end
   end
@@ -540,6 +543,7 @@ defmodule Sequin.Consumers do
     record_count = length(records)
     # Get the primary key columns and their types
     pk_columns = Enum.filter(table.columns, & &1.is_pk?)
+    ordered_pk_columns = Enum.sort_by(pk_columns, & &1.attnum)
     pk_column_count = length(pk_columns)
     pk_types = Enum.map(pk_columns, & &1.type)
 
@@ -576,31 +580,59 @@ defmodule Sequin.Consumers do
 
     # Execute the query
     with {:ok, result} <- Postgrex.query(conn, query, casted_pks) do
+      # Convert result to map
+      rows = Postgres.result_to_map(result)
+
+      rows = PostgresDatabase.cast_rows(table, rows)
+
       # Match the results with the original records
       updated_records =
-        records
-        |> Enum.zip(result.rows)
-        |> Enum.map(fn {record, row} ->
-          data =
-            table.columns
-            |> Enum.zip(row)
-            |> Map.new(fn {col, val} ->
-              casted_val = if col.type == "uuid", do: UUID.binary_to_string!(val), else: val
-              {col.name, casted_val}
-            end)
-
+        Enum.map(records, fn record ->
           metadata = %ConsumerRecordData.Metadata{
             table_name: table.name,
-            table_schema: table.schema,
-            # TODO: Either add to table or drop entirely
-            commit_timestamp: nil
+            table_schema: table.schema
           }
 
-          %{record | data: %ConsumerRecordData{record: data, metadata: metadata}}
+          source_row =
+            Enum.find(rows, fn row ->
+              # Using ordered pk_columns is important to ensure it lines up with `record_pks`
+              pk_values =
+                ordered_pk_columns
+                |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
+                |> Enum.map(&to_string/1)
+
+              pk_values == record.record_pks
+            end)
+
+          if source_row do
+            %{record | data: %ConsumerRecordData{record: source_row, metadata: metadata}}
+          else
+            %{record | data: %ConsumerRecordData{record: nil, metadata: metadata}}
+          end
         end)
 
       {:ok, updated_records}
     end
+  end
+
+  # If they deleted a record from the source table, but that hasn't propagated to ConsumerRecord yet,
+  # this function will clean those records out.
+  def filter_and_delete_records(consumer_id, records) do
+    {valid_records, nil_records} = Enum.split_with(records, &(&1.data.record != nil))
+
+    if Enum.any?(nil_records) do
+      nil_record_ids = Enum.map(nil_records, & &1.id)
+
+      {deleted_count, _} =
+        ConsumerRecord
+        |> where([cr], cr.id in ^nil_record_ids)
+        |> where([cr], cr.consumer_id == ^consumer_id)
+        |> Repo.delete_all()
+
+      Logger.info("Deleted #{deleted_count} ConsumerRecords with nil data.record")
+    end
+
+    {:ok, valid_records}
   end
 
   # Helper function to cast values using Ecto's type system

@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Error.NotFoundError
+  alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -248,7 +249,8 @@ defmodule Sequin.ConsumersTest do
       ]
 
       consumer =
-        ConsumersFactory.insert_http_pull_consumer!(
+        ConsumersFactory.insert_consumer!(
+          message_kind: :record,
           account_id: database.account_id,
           replication_slot_id: slot.id,
           source_tables: source_tables
@@ -317,22 +319,6 @@ defmodule Sequin.ConsumersTest do
       assert fetched_record.data.record["id_integer"] == character.id_integer
       assert fetched_record.data.record["id_string"] == character.id_string
       assert fetched_record.data.record["id_uuid"] == character.id_uuid
-    end
-
-    test "handles records that no longer exist in the source table", %{consumer: consumer, conn: conn} do
-      existing_character = CharacterFactory.insert_character!()
-      deleted_character = CharacterFactory.insert_character!()
-      Sequin.Test.UnboxedRepo.delete!(deleted_character)
-
-      records = [
-        build_consumer_record(consumer, existing_character),
-        build_consumer_record(consumer, deleted_character)
-      ]
-
-      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
-
-      assert length(fetched_records) == 1
-      assert hd(fetched_records).data.record["id"] == existing_character.id
     end
 
     test "casts different column types appropriately", %{consumer: consumer, conn: conn} do
@@ -417,6 +403,39 @@ defmodule Sequin.ConsumersTest do
       {:ok, conn} = Postgrex.start_link(config)
 
       assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(conn, consumer, [record])
+    end
+
+    test "deletes consumer records when they are missing from the source table", %{consumer: consumer, conn: conn} do
+      # Insert characters into the database
+      existing_character = CharacterFactory.insert_character!()
+      deleted_record_id = Factory.unique_integer()
+
+      # Create consumer records for both characters
+      existing_record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          table_oid: Character.table_oid(),
+          record_pks: [existing_character.id]
+        )
+
+      deleted_record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          table_oid: Character.table_oid(),
+          record_pks: [deleted_record_id]
+        )
+
+      # Call put_source_data with both records
+      records = [deleted_record, existing_record]
+
+      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+
+      # Assert that only the existing record is returned
+      assert length(fetched_records) == 2
+      records_with_data = Enum.filter(fetched_records, &(&1.data.record != nil))
+      assert length(records_with_data) == 1
+      assert hd(records_with_data).data.record["id"] == existing_character.id
+      assert hd(records_with_data).record_pks == [to_string(existing_character.id)]
     end
   end
 
@@ -2105,10 +2124,6 @@ defmodule Sequin.ConsumersTest do
         :detailed -> [character.id]
       end
 
-    ConsumersFactory.consumer_record(
-      consumer_id: consumer.id,
-      table_oid: table_oid,
-      record_pks: record_pks
-    )
+    ConsumersFactory.consumer_record(consumer_id: consumer.id, table_oid: table_oid, record_pks: record_pks)
   end
 end

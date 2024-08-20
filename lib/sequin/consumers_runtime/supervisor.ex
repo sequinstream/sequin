@@ -52,7 +52,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   defp children do
     [
       Sequin.ConsumersRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: DynamicSupervisor)
+      Sequin.DynamicSupervisor.child_spec(name: ConsumersRuntime.DynamicSupervisor)
     ]
   end
 end

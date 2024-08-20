@@ -5,6 +5,16 @@ defmodule Sequin.Consumers.SourceTable do
   import Ecto.Changeset
   import PolymorphicEmbed
 
+  alias Sequin.Consumers.SourceTable.ColumnFilter
+
+  @type t :: %__MODULE__{
+          oid: integer,
+          schema_name: String.t(),
+          table_name: String.t(),
+          actions: [atom()],
+          column_filters: [ColumnFilter.t()]
+        }
+
   defmodule ColumnFilter do
     @moduledoc false
     use Ecto.Schema
@@ -13,6 +23,13 @@ defmodule Sequin.Consumers.SourceTable do
 
     @operators [:==, :!=, :>, :<, :>=, :<=, :in, :not_in, :is_null, :not_null]
     def operator_values, do: @operators
+
+    @type t :: %__MODULE__{
+            column_attnum: integer,
+            column_name: String.t(),
+            operator: atom(),
+            value: %{value: any()}
+          }
 
     embedded_schema do
       field :column_attnum, :integer

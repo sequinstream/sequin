@@ -369,7 +369,7 @@ defmodule Sequin.Consumers do
 
   # Consumer Lifecycle
 
-  defp create_consumer_partition(%{message_kind: :event} = consumer) do
+  def create_consumer_partition(%{message_kind: :event} = consumer) do
     """
     CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
     """
@@ -380,7 +380,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp create_consumer_partition(%{message_kind: :record} = consumer) do
+  def create_consumer_partition(%{message_kind: :record} = consumer) do
     """
     CREATE TABLE #{stream_schema()}.consumer_records_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_records FOR VALUES IN ('#{consumer.id}');
     """

@@ -14,11 +14,12 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     consumer = Repo.preload(consumer, :http_endpoint)
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
+    test_pid = Keyword.get(opts, :test_pid)
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer]}
+        module: {producer, [consumer: consumer, test_pid: test_pid]}
       ],
       processors: [
         default: [

@@ -5,7 +5,9 @@
   "flagWords": [],
   "ignorePaths": [
     "../server/deps/**",
-    "../cli/**"
+    "../cli/**",
+    "../assets/node_modules/**",
+    "../deps/**"
   ],
   "dictionaryDefinitions": [
     {

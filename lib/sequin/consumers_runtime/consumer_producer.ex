@@ -1,4 +1,4 @@
-defmodule Sequin.StreamsRuntime.ConsumerProducer do
+defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   @moduledoc false
   @behaviour Broadway.Producer
 
@@ -7,7 +7,6 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
   alias Broadway.Message
   alias Sequin.Consumers
   alias Sequin.Repo
-  alias Sequin.Streams
 
   @impl GenStage
   def init(opts) do
@@ -41,7 +40,7 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
     broadway_messages =
       Enum.map(messages, fn message ->
         %Message{
-          data: message.data,
+          data: message,
           acknowledger: {__MODULE__, state.consumer, nil}
         }
       end)
@@ -77,11 +76,11 @@ defmodule Sequin.StreamsRuntime.ConsumerProducer do
     failed_ids = Enum.map(failed, & &1.data.ack_id)
 
     if length(successful_ids) > 0 do
-      Streams.ack_messages(consumer, successful_ids)
+      Consumers.ack_messages(consumer, successful_ids)
     end
 
     if length(failed_ids) > 0 do
-      Streams.nack_messages(consumer, failed_ids)
+      Consumers.nack_messages(consumer, failed_ids)
     end
 
     :ok

@@ -1,11 +1,11 @@
-defmodule Sequin.StreamsRuntime.Supervisor do
+defmodule Sequin.ConsumersRuntime.Supervisor do
   @moduledoc false
   use Supervisor
 
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushConsumer
-  alias Sequin.Streams.DynamicSupervisor
-  alias Sequin.StreamsRuntime.HttpPushPipeline
+  alias Sequin.ConsumersRuntime
+  alias Sequin.ConsumersRuntime.HttpPushPipeline
 
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -17,7 +17,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id, opts \\ [])
+  def start_for_push_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
 
   def start_for_push_consumer(supervisor, %HttpPushConsumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
@@ -33,7 +33,7 @@ defmodule Sequin.StreamsRuntime.Supervisor do
     end
   end
 
-  def stop_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id)
+  def stop_for_push_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
 
   def stop_for_push_consumer(supervisor, %HttpPushConsumer{id: id}) do
     stop_for_push_consumer(supervisor, id)
@@ -44,14 +44,14 @@ defmodule Sequin.StreamsRuntime.Supervisor do
     :ok
   end
 
-  def restart_for_push_consumer(supervisor \\ DynamicSupervisor, consumer_or_id) do
+  def restart_for_push_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
     stop_for_push_consumer(supervisor, consumer_or_id)
     start_for_push_consumer(supervisor, consumer_or_id)
   end
 
   defp children do
     [
-      Sequin.StreamsRuntime.Starter,
+      Sequin.ConsumersRuntime.Starter,
       Sequin.DynamicSupervisor.child_spec(name: DynamicSupervisor)
     ]
   end

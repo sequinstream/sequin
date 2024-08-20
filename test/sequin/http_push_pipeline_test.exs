@@ -1,9 +1,9 @@
-defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
+defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.StreamsRuntime.HttpPushPipeline
 
   setup do
     account = AccountsFactory.insert_account!()
@@ -51,8 +51,8 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
 
     start_pipeline!(consumer, adapter)
 
-    ref = send_test_event(consumer, event.data)
-    assert_receive {:ack, ^ref, [%{data: %{action: :insert}}], []}, 1_000
+    ref = send_test_event(consumer, event)
+    assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
     assert_receive :sent, 1_000
   end
 
@@ -88,7 +88,7 @@ defmodule Sequin.StreamsRuntime.HttpPushPipelineTest do
   end
 
   defp send_test_event(consumer, event \\ nil) do
-    event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id).data
+    event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
     Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
   end
 

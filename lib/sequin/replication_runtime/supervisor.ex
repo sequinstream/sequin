@@ -54,7 +54,12 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
           {__MODULE__, id},
           fn ->
             new_ctx = MessageHandler.context(pg_replication)
-            ReplicationExt.update_message_handler_ctx(id, new_ctx)
+
+            case ReplicationExt.update_message_handler_ctx(id, new_ctx) do
+              :ok -> :ok
+              {:error, :not_running} -> :ok
+              error -> error
+            end
           end,
           [node() | Node.list()],
           # This is retries, not timeout

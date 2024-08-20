@@ -80,6 +80,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
     create unique_index(:http_endpoints, [:id, :account_id], prefix: @config_schema)
 
     execute "CREATE TYPE #{@config_schema}.consumer_status AS ENUM ('active', 'disabled');"
+    execute "CREATE TYPE #{@config_schema}.consumer_message_kind AS ENUM ('record', 'event');"
 
     create table(:http_push_consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
@@ -105,8 +106,11 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :max_ack_pending, :integer, null: false, default: 10_000
       add :max_deliver, :integer, null: true
       add :max_waiting, :integer, null: false, default: 100
-      # TODO: Will remove in favor of separate models
-      add :message_kind, :text, null: false, default: "record"
+
+      add :message_kind, :"#{@config_schema}.consumer_message_kind",
+        null: false,
+        default: "record"
+
       add :status, :"#{@config_schema}.consumer_status", null: false, default: "active"
 
       timestamps()

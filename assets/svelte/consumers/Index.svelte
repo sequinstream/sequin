@@ -1,15 +1,15 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-  } from "$lib/components/ui/dialog";
+  // import { Input } from "$lib/components/ui/input";
+  // import { Label } from "$lib/components/ui/label";
+  // import {
+  //   Dialog,
+  //   DialogContent,
+  //   DialogHeader,
+  //   DialogTitle,
+  //   DialogTrigger,
+  // } from "$lib/components/ui/dialog";
 
   export let consumers: Array<{
     id: string;
@@ -18,7 +18,7 @@
     type: "pull" | "push";
     status: "active" | "disabled";
   }>;
-  export let formErrors: Record<string, string>;
+  // export let formErrors;
   export let live: any;
 
   let newConsumerName = "";

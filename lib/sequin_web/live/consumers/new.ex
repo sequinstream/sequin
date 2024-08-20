@@ -19,7 +19,7 @@ defmodule SequinWeb.ConsumersLive.New do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div id="new-consumer">
+    <div id="new-consumer" class="w-full">
       <.svelte
         name="consumers/New"
         props={

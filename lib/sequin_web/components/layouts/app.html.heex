@@ -1,11 +1,15 @@
 <div class="flex min-h-screen">
-  <SequinWeb.Components.Sidenav.render current_path={@current_path} />
-  <div class="flex-1">
-    <main class="px-4 py-8 sm:px-6 lg:px-8">
-      <div class="mx-auto max-w-4xl">
-        <.flash_group flash={@flash} />
-        <%= @inner_content %>
-      </div>
-    </main>
-  </div>
+  <SequinWeb.Components.Sidenav.render :if={@show_nav} current_path={@current_path} />
+  <%= if @no_main do %>
+    <%= @inner_content %>
+  <% else %>
+    <div class="flex-1">
+      <main class="px-4 py-8 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-4xl">
+          <.flash_group flash={@flash} />
+          <%= @inner_content %>
+        </div>
+      </main>
+    </div>
+  <% end %>
 </div>

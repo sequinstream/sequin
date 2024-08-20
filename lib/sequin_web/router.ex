@@ -22,9 +22,11 @@ defmodule SequinWeb.Router do
   scope "/", SequinWeb do
     pipe_through :browser
 
-    live_session :default, on_mount: [{SequinWeb.LiveHooks, :global}] do
+    live_session :default, on_mount: [SequinWeb.UserAuth, {SequinWeb.LiveHooks, :global}] do
       get "/", PageController, :home
       live "/consumers", ConsumersLive.Index, :index
+      live "/consumers/new", ConsumersLive.New, :new
+      live "/consumers/:id", ConsumersLive.Show, :show
     end
   end
 

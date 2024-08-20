@@ -88,6 +88,7 @@ defmodule SequinWeb do
       # Core UI components and translation
       import SequinWeb.CoreComponents
       import SequinWeb.Gettext
+      import SequinWeb.LiveHelpers
 
       # Shortcut for generating JS commands
       alias Phoenix.LiveView.JS

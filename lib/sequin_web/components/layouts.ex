@@ -11,4 +11,27 @@ defmodule SequinWeb.Layouts do
   use SequinWeb, :html
 
   embed_templates "layouts/*"
+
+  attr :show_nav, :boolean, default: true
+  attr :no_main, :boolean, default: false
+  def app(assigns)
+
+  def app_no_sidenav(assigns) do
+    assigns = assign(assigns, :show_nav, false)
+
+    app(assigns)
+  end
+
+  def app_no_main(assigns) do
+    assigns = assign(assigns, :no_main, true)
+
+    app(assigns)
+  end
+
+  def app_no_main_no_sidenav(assigns) do
+    assigns = assign(assigns, :show_nav, false)
+    assigns = assign(assigns, :no_main, true)
+
+    app(assigns)
+  end
 end

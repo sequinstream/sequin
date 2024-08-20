@@ -46,6 +46,23 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def get_consumer_for_account(account_id, consumer_id) do
+    pull_consumer =
+      account_id
+      |> HttpPullConsumer.where_account_id()
+      |> HttpPullConsumer.where_id_or_name(consumer_id)
+      |> Repo.one()
+
+    if pull_consumer do
+      pull_consumer
+    else
+      account_id
+      |> HttpPushConsumer.where_account_id()
+      |> HttpPushConsumer.where_id_or_name(consumer_id)
+      |> Repo.one()
+    end
+  end
+
   def reload(%ConsumerEvent{} = ce) do
     ce.consumer_id
     |> ConsumerEvent.where_consumer_id()
@@ -62,6 +79,20 @@ defmodule Sequin.Consumers do
 
   def all_consumers do
     Repo.all(HttpPushConsumer) ++ Repo.all(HttpPullConsumer)
+  end
+
+  def list_consumers_for_account(account_id) do
+    pull_consumers =
+      account_id
+      |> HttpPullConsumer.where_account_id()
+      |> Repo.all()
+
+    push_consumers =
+      account_id
+      |> HttpPushConsumer.where_account_id()
+      |> Repo.all()
+
+    Enum.sort_by(pull_consumers ++ push_consumers, & &1.inserted_at, {:desc, DateTime})
   end
 
   def update_consumer(%HttpPullConsumer{} = consumer, attrs) do

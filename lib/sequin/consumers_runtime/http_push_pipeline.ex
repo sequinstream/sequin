@@ -1,18 +1,18 @@
-defmodule Sequin.StreamsRuntime.HttpPushPipeline do
+defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   @moduledoc false
   use Broadway
 
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Repo
-  alias Sequin.Streams.HttpEndpoint
 
   require Logger
 
   def start_link(opts) do
     %HttpPushConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
     consumer = Repo.preload(consumer, :http_endpoint)
-    producer = Keyword.get(opts, :producer, Sequin.StreamsRuntime.ConsumerProducer)
+    producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
 
     Broadway.start_link(__MODULE__,
@@ -45,14 +45,14 @@ defmodule Sequin.StreamsRuntime.HttpPushPipeline do
   end
 
   @impl Broadway
-  def handle_message(_, %Broadway.Message{data: message_data} = message, %{
+  def handle_message(_, %Broadway.Message{data: consumer_event} = message, %{
         consumer: consumer,
         http_endpoint: http_endpoint,
         req_opts: req_opts
       }) do
     Logger.metadata(consumer_id: consumer.id, http_endpoint_id: http_endpoint.id)
 
-    case push_message(http_endpoint, message_data, req_opts) do
+    case push_message(http_endpoint, consumer_event.data, req_opts) do
       :ok ->
         message
 

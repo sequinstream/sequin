@@ -7,6 +7,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
@@ -15,7 +16,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
-  alias Sequin.Streams.HttpEndpoint
 
   # Consumer
   def consumer(attrs \\ []) do
@@ -248,7 +248,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.put(:account_id, account_id)
     |> http_endpoint_attrs()
-    |> then(&HttpEndpoint.changeset(%HttpEndpoint{}, &1))
+    |> then(&HttpEndpoint.create_changeset(%HttpEndpoint{account_id: account_id}, &1))
     |> Repo.insert!()
   end
 

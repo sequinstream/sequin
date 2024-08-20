@@ -1,4 +1,4 @@
-defmodule Sequin.Streams.HttpEndpoint do
+defmodule Sequin.Consumers.HttpEndpoint do
   use Sequin.ConfigSchema
 
   import Ecto.Changeset
@@ -19,12 +19,18 @@ defmodule Sequin.Streams.HttpEndpoint do
     timestamps()
   end
 
-  def changeset(http_endpoint, attrs) do
+  def create_changeset(http_endpoint, attrs) do
     http_endpoint
-    |> cast(attrs, [:name, :base_url, :headers, :account_id])
-    |> validate_required([:base_url, :account_id])
+    |> cast(attrs, [:name, :base_url, :headers])
+    |> validate_required([:base_url])
     |> validate_base_url()
     |> foreign_key_constraint(:account_id)
+  end
+
+  def update_changeset(http_endpoint, attrs) do
+    http_endpoint
+    |> cast(attrs, [:name, :base_url, :headers])
+    |> validate_base_url()
   end
 
   def where_account_id(query \\ base_query(), account_id) do

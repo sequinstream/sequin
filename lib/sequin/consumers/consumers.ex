@@ -6,19 +6,18 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
+  alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Postgres
-  alias Sequin.ReplicationRuntime.Supervisor
+  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
-  alias Sequin.Streams
-  alias Sequin.Streams.ConsumerBackfillWorker
-  alias Sequin.Streams.ConsumerMessage
 
   require Logger
 
@@ -79,7 +78,7 @@ defmodule Sequin.Consumers do
 
   def update_consumer_with_lifecycle(consumer, attrs) do
     with {:ok, updated_consumer} <- update_consumer(consumer, attrs) do
-      :ok = Supervisor.refresh_message_handler_ctx(updated_consumer.replication_slot_id)
+      :ok = notify_consumer_update(updated_consumer)
 
       {:ok, updated_consumer}
     end
@@ -90,6 +89,7 @@ defmodule Sequin.Consumers do
       case delete_consumer(consumer) do
         {:ok, _} ->
           :ok = delete_consumer_partition(consumer)
+          notify_consumer_delete(consumer)
           {:ok, consumer}
 
         {:error, error} ->
@@ -128,6 +128,8 @@ defmodule Sequin.Consumers do
           backfill_consumer!(consumer)
         end
 
+        :ok = notify_consumer_update(consumer)
+
         consumer = Repo.reload!(consumer)
 
         {:ok, consumer}
@@ -156,9 +158,8 @@ defmodule Sequin.Consumers do
   end
 
   def list_active_push_consumers do
-    :push
-    |> HttpPushConsumer.where_kind()
-    |> HttpPushConsumer.where_status(:active)
+    :active
+    |> HttpPushConsumer.where_status()
     |> Repo.all()
   end
 
@@ -169,6 +170,8 @@ defmodule Sequin.Consumers do
         unless opts[:no_backfill] do
           backfill_consumer!(consumer)
         end
+
+        :ok = notify_consumer_update(consumer)
 
         consumer = Repo.reload!(consumer)
 
@@ -703,48 +706,88 @@ defmodule Sequin.Consumers do
     :ok
   end
 
+  # HttpEndpoint
+
+  def get_http_endpoint(id) do
+    case Repo.get(HttpEndpoint, id) do
+      nil -> {:error, Error.not_found(entity: :http_endpoint)}
+      http_endpoint -> {:ok, http_endpoint}
+    end
+  end
+
+  def get_http_endpoint!(id) do
+    case get_http_endpoint(id) do
+      {:ok, http_endpoint} -> http_endpoint
+      {:error, _} -> raise Error.not_found(entity: :http_endpoint)
+    end
+  end
+
+  def list_http_endpoints(account_id) do
+    HttpEndpoint
+    |> HttpEndpoint.where_account_id(account_id)
+    |> Repo.all()
+  end
+
+  def create_http_endpoint_for_account(account_id, attrs) do
+    %HttpEndpoint{account_id: account_id}
+    |> HttpEndpoint.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_http_endpoint(%HttpEndpoint{} = http_endpoint, attrs) do
+    http_endpoint
+    |> HttpEndpoint.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
+    Repo.delete(http_endpoint)
+  end
+
   # Backfills
 
   def backfill_limit, do: 10_000
 
-  defp backfill_consumer!(consumer) do
-    {:ok, messages} = backfill_messages_for_consumer(consumer)
+  defp backfill_consumer!(_consumer) do
+    # {:ok, messages} = backfill_messages_for_consumer(consumer)
 
-    if length(messages) < backfill_limit() do
-      {:ok, _} = update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
-    end
+    # if length(messages) < backfill_limit() do
+    #   {:ok, _} = update_consumer_with_lifecycle(consumer, %{backfill_completed_at: DateTime.utc_now()})
+    # end
 
-    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> 0 end)
-    {:ok, _} = ConsumerBackfillWorker.create(consumer.id, next_seq)
+    # next_seq = messages |> Enum.map(& &1.seq) |> Enum.max(fn -> 0 end)
+    # {:ok, _} = ConsumerBackfillWorker.create(consumer.id, next_seq)
 
     :ok
   end
 
-  def backfill_messages_for_consumer(consumer, seq \\ 0) do
-    messages =
-      Streams.list_messages_for_stream(consumer.stream_id,
-        seq_gt: seq,
-        limit: backfill_limit(),
-        order_by: [asc: :seq],
-        select: [:key, :seq]
-      )
+  # def backfill_messages_for_consumer(_consumer, seq \\ 0) do
+  def backfill_messages_for_consumer(_consumer, _seq) do
+    #   messages =
+    #     Streams.list_messages_for_stream(consumer.stream_id,
+    #       seq_gt: seq,
+    #       limit: backfill_limit(),
+    #       order_by: [asc: :seq],
+    #       select: [:key, :seq]
+    #     )
 
-    {:ok, _} =
-      messages
-      |> Enum.filter(fn message ->
-        Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
-      end)
-      |> Enum.map(fn message ->
-        %ConsumerMessage{
-          consumer_id: consumer.id,
-          message_key: message.key,
-          message_seq: message.seq
-        }
-      end)
+    #   {:ok, _} =
+    #     messages
+    #     |> Enum.filter(fn message ->
+    #       Sequin.Key.matches?(consumer.filter_key_pattern, message.key)
+    #     end)
+    #     |> Enum.map(fn message ->
+    #       %ConsumerMessage{
+    #         consumer_id: consumer.id,
+    #         message_key: message.key,
+    #         message_seq: message.seq
+    #       }
+    #     end)
 
-    # |> then(&upsert_consumer_messages(consumer, &1))
+    #   # |> then(&upsert_consumer_messages(consumer, &1))
 
-    {:ok, messages}
+    #   {:ok, messages}
+    :ok
   end
 
   # Source Table Matching
@@ -800,5 +843,38 @@ defmodule Sequin.Consumers do
 
   defp apply_filter(:not_in, field_value, %{value: filter_value}) when is_list(filter_value) do
     field_value not in filter_value and to_string(field_value) not in Enum.map(filter_value, &to_string/1)
+  end
+
+  defp notify_consumer_update(%HttpPullConsumer{} = consumer) do
+    ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+  end
+
+  defp notify_consumer_update(%HttpPushConsumer{} = consumer) do
+    if env() == :test do
+      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+    else
+      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id),
+           {:ok, _} <- ConsumersSupervisor.restart_for_push_consumer(consumer) do
+        :ok
+      end
+    end
+  end
+
+  defp notify_consumer_delete(%HttpPullConsumer{} = consumer) do
+    ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+  end
+
+  defp notify_consumer_delete(%HttpPushConsumer{} = consumer) do
+    if env() == :test do
+      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+    else
+      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+        ConsumersSupervisor.stop_for_push_consumer(consumer)
+      end
+    end
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

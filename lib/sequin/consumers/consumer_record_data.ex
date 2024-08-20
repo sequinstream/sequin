@@ -6,6 +6,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     @moduledoc false
     use TypedStruct
 
+    @derive Jason.Encoder
     typedstruct do
       field :table_schema, :string
       field :table_name, :string

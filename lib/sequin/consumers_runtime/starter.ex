@@ -1,17 +1,17 @@
-defmodule Sequin.StreamsRuntime.Starter do
+defmodule Sequin.ConsumersRuntime.Starter do
   @moduledoc """
-  Starts processes under StreamsRuntime.Supervisor when Sequin starts and then at regular intervals.
+  Starts processes under ConsumersRuntime.Supervisor when Sequin starts and then at regular intervals.
   """
   use GenServer
 
   alias Sequin.Consumers
-  alias Sequin.StreamsRuntime.Supervisor
+  alias Sequin.ConsumersRuntime.Supervisor
 
   require Logger
 
   @impl GenServer
   def init(_) do
-    Logger.info("[StreamsRuntimeStarter] Booting")
+    Logger.info("[ConsumersRuntimeStarter] Booting")
 
     schedule_start(:timer.seconds(5))
 
@@ -24,7 +24,7 @@ defmodule Sequin.StreamsRuntime.Starter do
 
   @impl GenServer
   def handle_info(:start, :ignore) do
-    logger_info("[StreamsRuntimeStarter] Starting stream-related workers...")
+    logger_info("[ConsumersRuntimeStarter] Starting consumer-related workers...")
 
     start()
 

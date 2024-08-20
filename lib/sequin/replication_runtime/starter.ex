@@ -33,7 +33,7 @@ defmodule Sequin.ReplicationRuntime.Starter do
     {:noreply, :ignore}
   end
 
-  defp schedule_start(timeout \\ :timer.seconds(60)) do
+  defp schedule_start(timeout \\ :timer.seconds(30)) do
     Process.send_after(self(), :start, timeout)
   end
 

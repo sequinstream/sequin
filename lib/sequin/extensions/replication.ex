@@ -5,6 +5,8 @@ defmodule Sequin.Extensions.Replication do
 
   Borrowed heavily from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
   """
+
+  # See below, where we set restart: :temporary
   use Postgrex.ReplicationConnection
 
   import Bitwise
@@ -81,14 +83,21 @@ defmodule Sequin.Extensions.Replication do
     # Not used by DynamicSupervisor, but used by Supervisor in test
     id = Keyword.fetch!(opts, :id)
 
-    %{
+    spec = %{
       id: via_tuple(id),
       start: {__MODULE__, :start_link, [opts]}
     }
+
+    # Eventually, we can wrap this in a Supervisor, to get faster retries on restarts before "giving up"
+    # The Starter will eventually restart this Replication GenServer.
+    Supervisor.child_spec(spec, restart: :temporary)
   end
 
   def update_message_handler_ctx(id, ctx) do
     GenServer.call(via_tuple(id), {:update_message_handler_ctx, ctx})
+  catch
+    :exit, _e ->
+      {:error, :not_running}
   end
 
   def via_tuple(id) do

@@ -41,6 +41,7 @@ defmodule Sequin.Consumers.SourceTable do
     end
   end
 
+  @primary_key false
   embedded_schema do
     field :oid, :integer
     field :schema_name, :string, virtual: true

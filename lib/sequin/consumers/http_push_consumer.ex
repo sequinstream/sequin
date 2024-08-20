@@ -7,9 +7,9 @@ defmodule Sequin.Consumers.HttpPushConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Streams.HttpEndpoint
 
   @derive {Jason.Encoder,
            only: [
@@ -63,7 +63,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     |> validate_required([:name, :status])
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
-        HttpEndpoint.changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
+        HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
       end
     )
     |> cast_embed(:source_tables)

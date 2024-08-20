@@ -49,16 +49,6 @@
               item.path
             )}"
           >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 18 18"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-18px w-[18px]"
-            >
-              <path d={item.icon} fill="currentColor" />
-            </svg>
             <span class="ml-2.5 text-sm leading-tight">{item.text}</span>
           </div>
         </a>

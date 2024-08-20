@@ -1,10 +1,19 @@
 {
     "compilerOptions": {
+        "verbatimModuleSyntax": true,
         "types": ["node"],
         "baseUrl": ".",
         "paths": {
-            "$lib": ["svelte"],
-            "$lib/*": ["svelte/*"]
-        }
+            "$lib": ["svelte",  "./src/lib"],
+            "$lib/*": ["svelte/*", "./src/lib/*"]
+        },
+        "moduleResolution": "bundler",
+        "target": "ESNext",
+        "useDefineForClassFields": true,
+        "allowJs": true,
+        "checkJs": true,
+        "isolatedModules": true,
+        "module": "ESNext",
+        "allowImportingTsExtensions": true
     }
 }

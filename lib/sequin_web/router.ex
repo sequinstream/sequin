@@ -21,6 +21,7 @@ defmodule SequinWeb.Router do
     pipe_through(:browser)
 
     get("/", PageController, :home)
+    live "/consumers", ConsumersLive.Index, :index
   end
 
   scope "/api", SequinWeb do

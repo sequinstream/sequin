@@ -50,7 +50,8 @@ config :sequin, SequinWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "F9DmzIZCZ4Kl17OcwJgcvsRRH34s2lkEvq8HTA0IORAMsEMuWd+pSNUFsX4V9no/",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
+    node: ["build.js", "--watch", cd: Path.expand("../assets", __DIR__)],
+    # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:sequin, ~w(--watch)]}
   ]
 

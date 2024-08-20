@@ -41,9 +41,9 @@ defmodule Sequin.MixProject do
       {:phoenix_html, "~> 4.0"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 0.20.2"},
+      {:live_svelte, "~> 0.13.3"},
       {:floki, ">= 0.30.0", only: :test},
       {:phoenix_live_dashboard, "~> 0.8.3"},
-      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:styler, "~> 1.0.0-rc.1", only: [:dev, :test], runtime: false},
       {:swoosh, "~> 1.5"},
@@ -81,7 +81,7 @@ defmodule Sequin.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ecto.setup", "npm install --prefix assets"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
@@ -89,7 +89,7 @@ defmodule Sequin.MixProject do
       "assets.build": ["tailwind sequin", "esbuild sequin"],
       "assets.deploy": [
         "tailwind sequin --minify",
-        "esbuild sequin --minify",
+        "node build.js --deploy --prefix assets",
         "phx.digest"
       ]
     ]

@@ -4,6 +4,13 @@ defmodule Sequin.Consumers.ConsumerEventData do
 
   import Ecto.Changeset
 
+  @type t :: %__MODULE__{
+          record: map(),
+          changes: map(),
+          action: atom(),
+          metadata: map()
+        }
+
   @primary_key false
   @derive Jason.Encoder
 

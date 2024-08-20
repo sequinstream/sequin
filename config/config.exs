@@ -10,15 +10,6 @@ import Config
 sequin_config_schema = "sequin_config"
 sequin_stream_schema = "sequin_streams"
 
-# Configure esbuild (the version is required)
-config :esbuild,
-  version: "0.17.11",
-  sequin: [
-    args: ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets --external:/fonts/* --external:/images/*),
-    cd: Path.expand("../assets", __DIR__),
-    env: %{"NODE_PATH" => Path.expand("../deps", __DIR__)}
-  ]
-
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

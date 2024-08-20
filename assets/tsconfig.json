@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "types": ["node"],
+        "baseUrl": ".",
+        "paths": {
+            "$lib": ["svelte"],
+            "$lib/*": ["svelte/*"]
+        }
+    }
+}

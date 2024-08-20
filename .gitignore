@@ -42,3 +42,11 @@ docker-compose.override.yaml
 
 # Mac UI directory attributes
 .DS_Store
+
+# Ignore automatically generated Svelte files by the ~V sigil
+/assets/svelte/_build/
+
+# Ignore ssr build for svelte.
+/priv/svelte/
+
+assets/node_modules

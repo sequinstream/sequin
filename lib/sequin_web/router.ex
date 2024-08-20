@@ -1,6 +1,7 @@
 defmodule SequinWeb.Router do
   use SequinWeb, :router
 
+  alias SequinWeb.Plugs.AssignCurrentPath
   alias SequinWeb.Plugs.FetchUser
 
   pipeline :browser do
@@ -10,6 +11,7 @@ defmodule SequinWeb.Router do
     plug(:put_root_layout, html: {SequinWeb.Layouts, :root})
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
+    plug(AssignCurrentPath)
   end
 
   pipeline :api do
@@ -18,10 +20,12 @@ defmodule SequinWeb.Router do
   end
 
   scope "/", SequinWeb do
-    pipe_through(:browser)
+    pipe_through :browser
 
-    get("/", PageController, :home)
-    live "/consumers", ConsumersLive.Index, :index
+    live_session :default, on_mount: [{SequinWeb.LiveHooks, :global}] do
+      get "/", PageController, :home
+      live "/consumers", ConsumersLive.Index, :index
+    end
   end
 
   scope "/api", SequinWeb do

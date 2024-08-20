@@ -33,6 +33,8 @@ const config = {
         secondary: {
           DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
           foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
+          "3xSubtle": "rgb(var(--color-secondary-3xSubtle))",
+          "2xSubtle": "rgb(var(--color-secondary-2xSubtle))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive) / <alpha-value>)",
@@ -55,6 +57,58 @@ const config = {
           foreground: "hsl(var(--card-foreground) / <alpha-value>)",
         },
         brand: "#FD4F00",
+        canvasBase: "rgb(var(--color-canvasBase))",
+        canvasSubtle: "rgb(var(--color-canvasSubtle))",
+        canvasMuted: "rgb(var(--color-canvasMuted))",
+        subtle: "rgb(var(--color-subtle))",
+        disabled: "rgb(var(--color-disabled))",
+        info: {
+          DEFAULT: "rgb(var(--color-foreground-info))",
+        },
+        basis: "rgb(var(--color-basis))",
+        carbon: {
+          0: "rgb(var(--color-carbon-0))",
+          50: "rgb(var(--color-carbon-50))",
+          100: "rgb(var(--color-carbon-100))",
+          1000: "rgb(var(--color-carbon-1000))",
+        },
+        matcha: {
+          0: "rgb(var(--color-matcha-0))",
+          100: "rgb(var(--color-matcha-100))",
+          900: "rgb(var(--color-matcha-900))",
+        },
+        breeze: {
+          0: "rgb(var(--color-breeze-0))",
+          100: "rgb(var(--color-breeze-100))",
+          1000: "rgb(var(--color-breeze-1000))",
+        },
+        ruby: {
+          0: "rgb(var(--color-ruby-0))",
+          100: "rgb(var(--color-ruby-100))",
+          900: "rgb(var(--color-ruby-900))",
+        },
+        honey: {
+          0: "rgb(var(--color-honey-0))",
+          100: "rgb(var(--color-honey-100))",
+          900: "rgb(var(--color-honey-900))",
+        },
+      },
+      backgroundColor: {
+        canvas: {
+          base: "rgb(var(--color-background-canvas-base))",
+          subtle: "rgb(var(--color-background-canvas-subtle))",
+          muted: "rgb(var(--color-background-canvas-muted))",
+        },
+        surface: {
+          base: "rgb(var(--color-background-surface-base))",
+          subtle: "rgb(var(--color-background-surface-subtle))",
+          muted: "rgb(var(--color-background-surface-muted))",
+        },
+      },
+      textColor: {
+        base: "rgb(var(--color-foreground-base))",
+        subtle: "rgb(var(--color-foreground-subtle))",
+        muted: "rgb(var(--color-foreground-muted))",
       },
       borderRadius: {
         lg: "var(--radius)",

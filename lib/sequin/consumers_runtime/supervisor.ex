@@ -17,7 +17,11 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_for_push_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
+  def start_for_push_consumer(
+        supervisor \\ ConsumersRuntime.DynamicSupervisor,
+        consumer_or_id,
+        opts \\ []
+      )
 
   def start_for_push_consumer(supervisor, %HttpPushConsumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
@@ -52,7 +56,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   defp children do
     [
       Sequin.ConsumersRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: DynamicSupervisor)
+      Sequin.DynamicSupervisor.child_spec(name: ConsumersRuntime.DynamicSupervisor)
     ]
   end
 end

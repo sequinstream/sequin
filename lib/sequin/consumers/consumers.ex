@@ -753,10 +753,20 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_http_endpoints(account_id) do
-    HttpEndpoint
-    |> HttpEndpoint.where_account_id(account_id)
+  def list_http_endpoints_for_account(account_id) do
+    account_id
+    |> HttpEndpoint.where_account_id()
     |> Repo.all()
+  end
+
+  def get_http_endpoint_for_account(account_id, id) do
+    account_id
+    |> HttpEndpoint.where_account_id()
+    |> Repo.get(id)
+    |> case do
+      %HttpEndpoint{} = http_endpoint -> {:ok, http_endpoint}
+      nil -> {:error, Error.not_found(entity: :http_endpoint)}
+    end
   end
 
   def create_http_endpoint_for_account(account_id, attrs) do

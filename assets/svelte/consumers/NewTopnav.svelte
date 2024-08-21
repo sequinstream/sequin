@@ -1,6 +1,33 @@
-<script lang="ts">
+<script lang="js">
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { Button } from "$lib/components/ui/button";
+
+  export let currentStep;
+
+  $: steps = [
+    {
+      id: "selectStream",
+      label: "Select stream",
+      active:
+        currentStep === "select_stream" || currentStep === "select_consumer",
+    },
+    {
+      id: "selectTable",
+      label: "Select table",
+      active:
+        currentStep === "select_table" || currentStep === "configure_filters",
+    },
+    {
+      id: "configure",
+      label: "Configure consumer",
+      active: currentStep === "configure_consumer",
+    },
+    {
+      id: "finalize",
+      label: "Finalize consumer",
+      active: currentStep === "confirmation",
+    },
+  ];
 </script>
 
 <div
@@ -9,45 +36,27 @@
   <div class="flex items-center justify-between w-full px-8">
     <h3 class="font-heading font-medium text-lg text-base">New consumer</h3>
     <div class="flex items-center justify-center flex-grow mx-8">
-      <div class="flex gap-2 items-center">
-        <div
-          class="flex-shrink-0 flex items-center justify-center border border-matcha-600 bg-matcha-600 w-3.5 h-3.5 text-sm rounded-full"
-        ></div>
-        <div>
-          <span class="text-md leading-5 text-matcha-600 font-semibold"
-            >Select model</span
-          >
+      {#each steps as step, index}
+        {#if index > 0}
+          <div class="flex h-px bg-carbon-100 flex-grow mx-4 max-w-[48px]" />
+        {/if}
+        <div class="flex gap-2 items-center">
+          <div
+            class="flex-shrink-0 flex items-center justify-center w-4 h-4 rounded-full transition-all duration-300 ease-in-out
+            {step.active
+              ? 'bg-matcha-600 border-2 border-matcha-200 bg-slate-500'
+              : 'border border-carbon-300'}"
+          />
+          <div class="hidden sm:block">
+            <span
+              class="text-md leading-5 font-semibold
+              {step.active ? 'text-matcha-600' : 'text-carbon-600'}"
+            >
+              {step.label}
+            </span>
+          </div>
         </div>
-      </div>
-      <div class="flex h-px bg-carbon-100 flex-grow mx-4 max-w-[48px]"></div>
-      <div class="flex gap-2 items-center">
-        <div
-          class="flex-shrink-0 flex items-center justify-center border border-carbon-300 w-3.5 h-3.5 text-sm rounded-full"
-        ></div>
-        <div>
-          <span class="text-md leading-5 text-carbon-600"
-            >Select destination</span
-          >
-        </div>
-      </div>
-      <div class="flex h-px bg-carbon-100 flex-grow mx-4 max-w-[48px]"></div>
-      <div class="flex gap-2 items-center">
-        <div
-          class="flex-shrink-0 flex items-center justify-center border border-carbon-300 w-3.5 h-3.5 text-sm rounded-full"
-        ></div>
-        <div>
-          <span class="text-md leading-5 text-carbon-600">Configure sync</span>
-        </div>
-      </div>
-      <div class="flex h-px bg-carbon-100 flex-grow mx-4 max-w-[48px]"></div>
-      <div class="flex gap-2 items-center">
-        <div
-          class="flex-shrink-0 flex items-center justify-center border border-carbon-300 w-3.5 h-3.5 text-sm rounded-full"
-        ></div>
-        <div>
-          <span class="text-md leading-5 text-carbon-600">Finalize sync</span>
-        </div>
-      </div>
+      {/each}
     </div>
     <AlertDialog.Root>
       <AlertDialog.Trigger asChild let:builder>
@@ -68,6 +77,7 @@
               href="/consumers"
               data-phx-link="redirect"
               data-phx-link-state="push"
+              on:click|stopPropagation
             >
               Exit
             </a>

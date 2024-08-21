@@ -1,4 +1,6 @@
 import { fontFamily } from "tailwindcss/defaultTheme";
+import path from "path";
+import fs from "fs";
 
 /** @type {import('tailwindcss').Config} */
 const config = {
@@ -70,6 +72,14 @@ const config = {
           0: "rgb(var(--color-carbon-0))",
           50: "rgb(var(--color-carbon-50))",
           100: "rgb(var(--color-carbon-100))",
+          200: "rgb(var(--color-carbon-200))",
+          300: "rgb(var(--color-carbon-300))",
+          400: "rgb(var(--color-carbon-400))",
+          500: "rgb(var(--color-carbon-500))",
+          600: "rgb(var(--color-carbon-600))",
+          700: "rgb(var(--color-carbon-700))",
+          800: "rgb(var(--color-carbon-800))",
+          900: "rgb(var(--color-carbon-900))",
           1000: "rgb(var(--color-carbon-1000))",
         },
         matcha: {
@@ -141,55 +151,52 @@ const config = {
         ".phx-change-loading &",
       ]);
     },
+    // Embeds heroicons, bundled with phoenix
+    function ({ matchComponents, theme }) {
+      let iconsDir = path.join(__dirname, "./vendor/heroicons/optimized");
+      let values = {};
+      let icons = [
+        ["", "/24/outline"],
+        ["-solid", "/24/solid"],
+        ["-mini", "/20/solid"],
+        // ["-micro", "/16/solid"],
+      ];
+      icons.forEach(([suffix, dir]) => {
+        fs.readdirSync(path.join(iconsDir, dir)).forEach((file) => {
+          let name = path.basename(file, ".svg") + suffix;
+          values[name] = { name, fullPath: path.join(iconsDir, dir, file) };
+        });
+      });
+      matchComponents(
+        {
+          hero: ({ name, fullPath }) => {
+            let content = fs
+              .readFileSync(fullPath)
+              .toString()
+              .replace(/\r?\n|\r/g, "");
+            let size = theme("spacing.6");
+            if (name.endsWith("-mini")) {
+              size = theme("spacing.5");
+            } else if (name.endsWith("-micro")) {
+              size = theme("spacing.4");
+            }
+            return {
+              [`--hero-${name}`]: `url('data:image/svg+xml;utf8,${content}')`,
+              "-webkit-mask": `var(--hero-${name})`,
+              mask: `var(--hero-${name})`,
+              "mask-repeat": "no-repeat",
+              "background-color": "currentColor",
+              "vertical-align": "middle",
+              display: "inline-block",
+              width: size,
+              height: size,
+            };
+          },
+        },
+        { values }
+      );
+    },
   ],
 };
-
-// Embeds Heroicons (https://heroicons.com) into your app.css bundle
-// See your `CoreComponents.icon/1` for more information.
-//
-// plugin(function ({ matchComponents, theme }) {
-//   let iconsDir = path.join(__dirname, "../deps/heroicons/optimized");
-//   let values = {};
-//   let icons = [
-//     ["", "/24/outline"],
-//     ["-solid", "/24/solid"],
-//     ["-mini", "/20/solid"],
-//     ["-micro", "/16/solid"],
-//   ];
-//   icons.forEach(([suffix, dir]) => {
-//     fs.readdirSync(path.join(iconsDir, dir)).forEach((file) => {
-//       let name = path.basename(file, ".svg") + suffix;
-//       values[name] = { name, fullPath: path.join(iconsDir, dir, file) };
-//     });
-//   });
-//   matchComponents(
-//     {
-//       hero: ({ name, fullPath }) => {
-//         let content = fs
-//           .readFileSync(fullPath)
-//           .toString()
-//           .replace(/\r?\n|\r/g, "");
-//         let size = theme("spacing.6");
-//         if (name.endsWith("-mini")) {
-//           size = theme("spacing.5");
-//         } else if (name.endsWith("-micro")) {
-//           size = theme("spacing.4");
-//         }
-//         return {
-//           [`--hero-${name}`]: `url('data:image/svg+xml;utf8,${content}')`,
-//           "-webkit-mask": `var(--hero-${name})`,
-//           mask: `var(--hero-${name})`,
-//           "mask-repeat": "no-repeat",
-//           "background-color": "currentColor",
-//           "vertical-align": "middle",
-//           display: "inline-block",
-//           width: size,
-//           height: size,
-//         };
-//       },
-//     },
-//     { values }
-//   );
-// }),
 
 export default config;

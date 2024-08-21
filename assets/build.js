@@ -3,6 +3,8 @@ const sveltePlugin = require("esbuild-svelte");
 const importGlobPlugin = require("esbuild-plugin-import-glob").default;
 const sveltePreprocess = require("svelte-preprocess");
 const postcss = require("postcss");
+const tailwindcss = require("tailwindcss");
+const autoprefixer = require("autoprefixer");
 
 const args = process.argv.slice(2);
 const watch = args.includes("--watch");
@@ -22,19 +24,22 @@ let optsClient = {
   plugins: [
     importGlobPlugin(),
     sveltePlugin({
-      preprocess: sveltePreprocess(),
+      preprocess: sveltePreprocess({
+        postcss: {
+          plugins: [tailwindcss(), autoprefixer()],
+        },
+      }),
       compilerOptions: { dev: !deploy, hydratable: true, css: "injected" },
     }),
-    // added for PostCSS
     {
       name: "css",
       setup(build) {
         build.onLoad({ filter: /\.css$/ }, async (args) => {
           const css = await require("fs").promises.readFile(args.path, "utf8");
-          const result = await postcss([
-            require("tailwindcss"),
-            require("autoprefixer"),
-          ]).process(css, { from: args.path });
+          const result = await postcss([tailwindcss(), autoprefixer()]).process(
+            css,
+            { from: args.path }
+          );
           return { contents: result.css, loader: "css" };
         });
       },
@@ -57,7 +62,11 @@ let optsServer = {
   plugins: [
     importGlobPlugin(),
     sveltePlugin({
-      preprocess: sveltePreprocess(),
+      preprocess: sveltePreprocess({
+        postcss: {
+          plugins: [tailwindcss(), autoprefixer()],
+        },
+      }),
       compilerOptions: { dev: !deploy, hydratable: true, generate: "ssr" },
     }),
   ],

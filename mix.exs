@@ -69,7 +69,8 @@ defmodule Sequin.MixProject do
       {:hammox, "~> 0.7", only: :test},
       {:broadway, "~> 1.0"},
       {:req, "~> 0.5"},
-      {:observer_cli, "~> 1.7"}
+      {:observer_cli, "~> 1.7"},
+      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev}
     ]
   end
 
@@ -81,7 +82,7 @@ defmodule Sequin.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "ecto.setup", "npm install --prefix assets"],
+      setup: ["deps.get", "ecto.setup", "cmd npm install --prefix assets"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],

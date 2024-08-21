@@ -10,6 +10,8 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
+  alias Sequin.Consumers.SourceTable.DateTimeValue
+  alias Sequin.Consumers.SourceTable.NullValue
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
@@ -18,7 +20,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
-  alias Sequin.Consumers.SourceTable.DateTimeValue
 
   require Logger
 
@@ -693,9 +694,7 @@ defmodule Sequin.Consumers do
         casted_value
 
       :error ->
-        Logger.warning(
-          "Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}"
-        )
+        Logger.warning("Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}")
 
         # Return original value if casting fails
         value
@@ -905,9 +904,16 @@ defmodule Sequin.Consumers do
     DateTime.compare(field_value, filter_value) in [:lt, :eq]
   end
 
-  defp apply_filter(op, field_value, %{value: filter_value})
-       when op in [:==, :!=, :>, :<, :>=, :<=],
-       do: apply(Kernel, op, [field_value, filter_value])
+  defp apply_filter(:is_null, field_value, %NullValue{}) do
+    is_nil(field_value)
+  end
+
+  defp apply_filter(:not_null, field_value, %NullValue{}) do
+    not is_nil(field_value)
+  end
+
+  defp apply_filter(op, field_value, %{value: filter_value}) when op in [:==, :!=, :>, :<, :>=, :<=],
+    do: apply(Kernel, op, [field_value, filter_value])
 
   defp apply_filter(:is_null, field_value, _), do: is_nil(field_value)
   defp apply_filter(:not_null, field_value, _), do: not is_nil(field_value)

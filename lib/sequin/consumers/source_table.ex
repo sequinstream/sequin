@@ -6,6 +6,7 @@ defmodule Sequin.Consumers.SourceTable do
   import PolymorphicEmbed
 
   alias Sequin.Consumers.SourceTable.ColumnFilter
+  alias Sequin.Consumers.SourceTable.NullValue
 
   @type t :: %__MODULE__{
           oid: integer,
@@ -43,7 +44,8 @@ defmodule Sequin.Consumers.SourceTable do
           float: Sequin.Consumers.SourceTable.FloatValue,
           boolean: Sequin.Consumers.SourceTable.BooleanValue,
           datetime: Sequin.Consumers.SourceTable.DateTimeValue,
-          list: Sequin.Consumers.SourceTable.ListValue
+          list: Sequin.Consumers.SourceTable.ListValue,
+          null: NullValue
         ],
         on_replace: :update
       )
@@ -55,6 +57,18 @@ defmodule Sequin.Consumers.SourceTable do
       |> cast_polymorphic_embed(:value)
       |> validate_required([:column_attnum, :operator, :value])
       |> validate_inclusion(:operator, @operators)
+      |> validate_null_value_operators()
+    end
+
+    defp validate_null_value_operators(changeset) do
+      value_type = get_field(changeset, :value).__struct__
+      operator = get_field(changeset, :operator)
+
+      if value_type == NullValue and operator not in [:is_null, :not_null] do
+        add_error(changeset, :operator, "must be either is_null or not_null for NullValue")
+      else
+        changeset
+      end
     end
   end
 
@@ -181,5 +195,21 @@ defmodule Sequin.Consumers.SourceTable.ListValue do
     struct
     |> cast(params, [:value])
     |> validate_required([:value])
+  end
+end
+
+defmodule Sequin.Consumers.SourceTable.NullValue do
+  @moduledoc false
+  use Ecto.Schema
+
+  import Ecto.Changeset
+
+  @primary_key false
+  embedded_schema do
+    field :value, :boolean
+  end
+
+  def changeset(struct, _params) do
+    cast(struct, %{value: true}, [])
   end
 end

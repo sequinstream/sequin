@@ -3,6 +3,12 @@ defmodule Sequin.ConsumersTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.SourceTable.BooleanValue
+  alias Sequin.Consumers.SourceTable.DateTimeValue
+  alias Sequin.Consumers.SourceTable.IntegerValue
+  alias Sequin.Consumers.SourceTable.ListValue
+  alias Sequin.Consumers.SourceTable.NullValue
+  alias Sequin.Consumers.SourceTable.StringValue
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
@@ -543,12 +549,12 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -592,17 +598,17 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 3,
                   operator: :!=,
-                  value: %{__type__: :string, value: "excluded_value"}
+                  value: %StringValue{value: "excluded_value"}
                 )
               ]
             )
@@ -660,7 +666,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 )
               ]
             )
@@ -702,7 +708,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :integer, value: 123}
+                  value: %IntegerValue{value: 123}
                 )
               ]
             )
@@ -744,7 +750,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :boolean, value: true}
+                  value: %BooleanValue{value: true}
                 )
               ]
             )
@@ -786,7 +792,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -828,7 +834,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :!=,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 )
               ]
             )
@@ -870,7 +876,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :!=,
-                  value: %{__type__: :integer, value: 123}
+                  value: %IntegerValue{value: 123}
                 )
               ]
             )
@@ -912,7 +918,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :!=,
-                  value: %{__type__: :boolean, value: true}
+                  value: %BooleanValue{value: true}
                 )
               ]
             )
@@ -954,7 +960,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :!=,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -996,7 +1002,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -1038,7 +1044,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -1080,7 +1086,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -1122,7 +1128,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -1164,7 +1170,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>=,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -1206,7 +1212,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>=,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -1248,7 +1254,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<=,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -1290,7 +1296,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<=,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -1332,7 +1338,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :in,
-                  value: %{__type__: :list, value: ["value1", "value2"]}
+                  value: %ListValue{value: ["value1", "value2"]}
                 )
               ]
             )
@@ -1374,7 +1380,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :in,
-                  value: %{__type__: :list, value: [1, 2, 3]}
+                  value: %ListValue{value: [1, 2, 3]}
                 )
               ]
             )
@@ -1416,7 +1422,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :not_in,
-                  value: %{__type__: :list, value: ["value1", "value2"]}
+                  value: %ListValue{value: ["value1", "value2"]}
                 )
               ]
             )
@@ -1458,7 +1464,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :not_in,
-                  value: %{__type__: :list, value: [1, 2, 3]}
+                  value: %ListValue{value: [1, 2, 3]}
                 )
               ]
             )
@@ -1500,7 +1506,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :is_null,
-                  value: %{__type__: :null, value: nil}
+                  value: %NullValue{value: nil}
                 )
               ]
             )
@@ -1542,7 +1548,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :is_null,
-                  value: %{__type__: :null, value: nil}
+                  value: %NullValue{value: nil}
                 )
               ]
             )
@@ -1574,7 +1580,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :not_null,
-                  value: %{__type__: :null, value: nil}
+                  value: %NullValue{value: nil}
                 )
               ]
             )
@@ -1616,7 +1622,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :not_null,
-                  value: %{__type__: :null, value: nil}
+                  value: %NullValue{value: nil}
                 )
               ]
             )
@@ -1648,12 +1654,12 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %{__type__: :datetime, value: ~U[2022-03-31 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-03-31 12:00:00Z]}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :<,
-                  value: %{__type__: :datetime, value: ~U[2022-04-02 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-04-02 12:00:00Z]}
                 )
               ]
             )
@@ -1751,12 +1757,12 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 )
               ]
             )
@@ -1800,7 +1806,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "test_value"}
+                  value: %StringValue{value: "test_value"}
                 )
               ]
             )
@@ -1840,7 +1846,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: "TestValue"}
+                  value: %StringValue{value: "TestValue"}
                 )
               ]
             )
@@ -1882,7 +1888,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :string, value: " test value "}
+                  value: %StringValue{value: " test value "}
                 )
               ]
             )
@@ -1924,7 +1930,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :datetime, value: ~U[2022-01-01 12:00:00Z]}
+                  value: %DateTimeValue{value: ~U[2022-01-01 12:00:00Z]}
                 )
               ]
             )
@@ -1966,7 +1972,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %{__type__: :boolean, value: true}
+                  value: %BooleanValue{value: true}
                 )
               ]
             )
@@ -2008,12 +2014,12 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :in,
-                  value: %{__type__: :list, value: [:in_value]}
+                  value: %ListValue{value: [:in_value]}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :not_in,
-                  value: %{__type__: :list, value: [:not_in_value]}
+                  value: %ListValue{value: [:not_in_value]}
                 )
               ]
             )
@@ -2057,22 +2063,22 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %{__type__: :integer, value: 10}
+                  value: %IntegerValue{value: 10}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :<,
-                  value: %{__type__: :integer, value: 20}
+                  value: %IntegerValue{value: 20}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 3,
                   operator: :>=,
-                  value: %{__type__: :integer, value: 30}
+                  value: %IntegerValue{value: 30}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 4,
                   operator: :<=,
-                  value: %{__type__: :integer, value: 40}
+                  value: %IntegerValue{value: 40}
                 )
               ]
             )

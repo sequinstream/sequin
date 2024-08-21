@@ -78,7 +78,8 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> cast_embed(:tables, with: &tables_changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,
-      message: "Database name must be unique"
+      message: "Database name must be unique",
+      error_key: :name
     )
   end
 

@@ -27,6 +27,11 @@ defmodule SequinWeb.Router do
       live "/consumers", ConsumersLive.Index, :index
       live "/consumers/new", ConsumersLive.New, :new
       live "/consumers/:id", ConsumersLive.Show, :show
+
+      # New live routes for databases
+      live "/databases", DatabasesLive.Index, :index
+      live "/databases/new", DatabasesLive.New, :new
+      live "/databases/:id", DatabasesLive.Show, :show
     end
   end
 

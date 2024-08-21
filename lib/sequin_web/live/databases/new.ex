@@ -102,6 +102,9 @@ defmodule SequinWeb.DatabasesLive.New do
       {:error, %Sequin.Error.ValidationError{errors: errors, summary: summary}} ->
         {:error, :validation_error, errors, summary}
 
+      {:error, %Postgrex.Error{message: "ssl not available"}} ->
+        {:error, :ssl_not_available}
+
       {:error, %Postgrex.Error{postgres: %{message: message}}} ->
         {:error, :database_error, message}
 
@@ -145,6 +148,17 @@ defmodule SequinWeb.DatabasesLive.New do
      socket
      |> assign(:validating, false)
      |> put_flash(:error, "Database error: #{message}")
+     |> push_event("validation_complete", %{})}
+  end
+
+  defp handle_validation_result({:error, :ssl_not_available}, socket) do
+    {:noreply,
+     socket
+     |> assign(:validating, false)
+     |> put_flash(
+       :error,
+       "SSL connection is not available. Please check your database configuration and ensure SSL is properly set up."
+     )
      |> push_event("validation_complete", %{})}
   end
 

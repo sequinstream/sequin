@@ -7,7 +7,6 @@
     headers: Record<string, string>;
   };
   export let formErrors: Record<string, string | string[]>;
-  export let validating: boolean;
   export let parent: string;
   export let live;
 
@@ -18,7 +17,16 @@
     pushEvent("save", { http_endpoint: formData });
   }
 
-  $: pushEvent("validate", { http_endpoint: formData });
+  let userInput = false;
+
+  $: if (userInput) {
+    pushEvent("validate", { http_endpoint: formData });
+    userInput = false;
+  }
+
+  function handleInput() {
+    userInput = true;
+  }
 
   $: getError = (field: string): string | undefined => {
     if (!formData[field]) return undefined;
@@ -66,6 +74,7 @@
         type="text"
         id="name"
         bind:value={formData.name}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("name")}<p class="mt-2 text-sm text-red-600">
@@ -81,6 +90,7 @@
         type="text"
         id="base_url"
         bind:value={formData.base_url}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("base_url")}<p class="mt-2 text-sm text-red-600">
@@ -89,33 +99,43 @@
     </div>
 
     <div>
-      <label class="block text-sm font-medium text-gray-700">Headers</label>
-      {#each Object.entries(formData.headers) as [key, value]}
-        <div class="flex space-x-2 mt-2">
-          <input
-            type="text"
-            value={key}
-            on:input={(e) => updateHeaderKey(key, e.target.value)}
-            placeholder="Key"
-            class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-          />
-          <input
-            type="text"
-            {value}
-            on:input={(e) => updateHeaderValue(key, e.target.value)}
-            placeholder="Value"
-            class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-          />
-          <button
-            type="button"
-            on:click={() => removeHeader(key)}
-            class="text-red-600">Remove</button
-          >
-        </div>
-      {/each}
-      <button type="button" on:click={addHeader} class="mt-2 text-indigo-600"
-        >Add Header</button
+      <label for="headers" class="block text-sm font-medium text-gray-700"
+        >Headers</label
       >
+      <div id="headers">
+        {#each Object.entries(formData.headers) as [key, value]}
+          <div class="flex space-x-2 mt-2">
+            <input
+              type="text"
+              value={key}
+              on:input={(e) => updateHeaderKey(key, e.currentTarget.value)}
+              placeholder="Key"
+              class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+            />
+            <input
+              type="text"
+              {value}
+              on:input={(e) => updateHeaderValue(key, e.currentTarget.value)}
+              placeholder="Value"
+              class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
+            />
+            <button
+              type="button"
+              on:click={() => removeHeader(key)}
+              class="text-red-600 hover:text-red-800"
+              aria-label="Remove header">Remove</button
+            >
+          </div>
+        {/each}
+      </div>
+      <button
+        type="button"
+        on:click={addHeader}
+        class="mt-2 text-indigo-600 hover:text-indigo-800"
+        aria-label="Add new header"
+      >
+        Add Header
+      </button>
     </div>
 
     <div>

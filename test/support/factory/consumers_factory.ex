@@ -195,13 +195,13 @@ defmodule Sequin.Factory.ConsumersFactory do
   def column_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    value_type = Map.get(attrs, :value_type, Enum.random([:string, :integer, :float, :boolean]))
+    value_type = Map.get(attrs, :value_type, Enum.random([:string, :integer, :float, :boolean, :null]))
     value = generate_value(value_type)
 
     merge_attributes(
       %ColumnFilter{
         column_attnum: Factory.unique_integer(),
-        operator: Factory.one_of([:==, :!=, :>, :>=, :<, :<=]),
+        operator: generate_operator(value_type),
         value: %{__type__: value_type, value: value}
       },
       Map.delete(attrs, :value_type)
@@ -218,7 +218,11 @@ defmodule Sequin.Factory.ConsumersFactory do
   defp generate_value(:integer), do: Factory.integer()
   defp generate_value(:float), do: Factory.float()
   defp generate_value(:boolean), do: Factory.boolean()
+  defp generate_value(:null), do: nil
 
+  defp generate_operator(:null), do: Factory.one_of([:is_null, :not_null])
+  defp generate_operator(:list), do: Factory.one_of([:in, :not_in])
+  defp generate_operator(_), do: Factory.one_of([:==, :!=, :>, :<, :>=, :<=, :in, :not_in])
   # HttpEndpoint
 
   def http_endpoint(attrs \\ []) do

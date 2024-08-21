@@ -18,13 +18,22 @@
 
   const dispatch = createEventDispatcher();
 
+  let userInput = false;
+
+  function handleInput() {
+    userInput = true;
+  }
+
   function handleSubmit(event: Event) {
     event.preventDefault();
     pushEvent("save", { postgres_database: formData });
   }
 
   // Update this reactive statement
-  $: pushEvent("validate", { postgres_database: formData });
+  $: if (userInput) {
+    pushEvent("validate", { postgres_database: formData });
+    userInput = false;
+  }
 
   // Update the getError function to hide errors for empty fields
   $: getError = (field: string): string | undefined => {
@@ -56,6 +65,7 @@
         type="text"
         id="name"
         bind:value={formData.name}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("name")}<p class="mt-2 text-sm text-red-600">
@@ -71,6 +81,7 @@
         type="text"
         id="database"
         bind:value={formData.database}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("database")}<p class="mt-2 text-sm text-red-600">
@@ -86,6 +97,7 @@
         type="text"
         id="hostname"
         bind:value={formData.hostname}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("hostname")}<p class="mt-2 text-sm text-red-600">
@@ -101,6 +113,7 @@
         type="number"
         id="port"
         bind:value={formData.port}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("port")}<p class="mt-2 text-sm text-red-600">
@@ -116,6 +129,7 @@
         type="text"
         id="username"
         bind:value={formData.username}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("username")}<p class="mt-2 text-sm text-red-600">
@@ -131,6 +145,7 @@
         type="password"
         id="password"
         bind:value={formData.password}
+        on:input={handleInput}
         class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
       />
       {#if getError("password")}<p class="mt-2 text-sm text-red-600">
@@ -146,6 +161,7 @@
         type="checkbox"
         id="ssl"
         bind:checked={formData.ssl}
+        on:change={handleInput}
         class="mt-1 focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
       />
       {#if getError("ssl")}<p class="mt-2 text-sm text-red-600">

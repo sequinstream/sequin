@@ -18,6 +18,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
+  alias Sequin.Consumers.SourceTable.DateTimeValue
 
   require Logger
 
@@ -143,7 +144,11 @@ defmodule Sequin.Consumers do
   end
 
   def get_http_pull_consumer_for_account(account_id, id_or_name) do
-    res = account_id |> HttpPullConsumer.where_account_id() |> HttpPullConsumer.where_id_or_name(id_or_name) |> Repo.one()
+    res =
+      account_id
+      |> HttpPullConsumer.where_account_id()
+      |> HttpPullConsumer.where_id_or_name(id_or_name)
+      |> Repo.one()
 
     case res do
       nil -> {:error, Error.not_found(entity: :consumer)}
@@ -449,7 +454,8 @@ defmodule Sequin.Consumers do
   end
 
   # Consuming / Acking Messages
-  @spec receive_for_consumer(consumer(), keyword()) :: {:ok, [ConsumerEvent.t()]} | {:ok, [ConsumerRecord.t()]}
+  @spec receive_for_consumer(consumer(), keyword()) ::
+          {:ok, [ConsumerEvent.t()]} | {:ok, [ConsumerRecord.t()]}
   def receive_for_consumer(consumer, opts \\ [])
 
   def receive_for_consumer(%{message_kind: :event} = consumer, opts) do
@@ -567,7 +573,13 @@ defmodule Sequin.Consumers do
         end
       else
         Logger.error("Table not found for table_oid: #{table_oid}")
-        error = Error.not_found(entity: :table, params: %{table_oid: table_oid, consumer_id: consumer.id})
+
+        error =
+          Error.not_found(
+            entity: :table,
+            params: %{table_oid: table_oid, consumer_id: consumer.id}
+          )
+
         {:halt, {:error, error}}
       end
     end)
@@ -600,7 +612,8 @@ defmodule Sequin.Consumers do
       else
         # the where clause is (col1, col2) IN ((val1, val2), (val3, val4))
         # which is too challenging to pull off with Ecto fragments
-        pk_column_names = pk_columns |> Enum.map(& &1.name) |> Enum.map_join(", ", &Postgres.quote_name/1)
+        pk_column_names =
+          pk_columns |> Enum.map(& &1.name) |> Enum.map_join(", ", &Postgres.quote_name/1)
 
         value_params =
           Enum.map_join(1..record_count, ", ", fn n ->
@@ -680,7 +693,10 @@ defmodule Sequin.Consumers do
         casted_value
 
       :error ->
-        Logger.warning("Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}")
+        Logger.warning(
+          "Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}"
+        )
+
         # Return original value if casting fails
         value
     end
@@ -835,9 +851,10 @@ defmodule Sequin.Consumers do
 
   def matches_message?(consumer, message) do
     Enum.any?(consumer.source_tables, fn source_table ->
-      source_table.oid == message.table_oid &&
-        action_matches?(source_table.actions, message.action) &&
-        column_filters_match?(source_table.column_filters, message)
+      table_matches = source_table.oid == message.table_oid
+      action_matches = action_matches?(source_table.actions, message.action)
+      column_filters_match = column_filters_match?(source_table.column_filters, message)
+      table_matches && action_matches && column_filters_match
     end)
   end
 
@@ -854,26 +871,43 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp apply_filter(:==, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.compare(field_value, filter_value) == :eq
+  defp apply_filter(operator, %Date{} = field_value, %DateTimeValue{} = filter_value) do
+    field_value_as_datetime = DateTime.new!(field_value, ~T[00:00:00])
+    apply_filter(operator, field_value_as_datetime, filter_value)
+  end
 
-  defp apply_filter(:!=, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.compare(field_value, filter_value) != :eq
+  defp apply_filter(operator, %NaiveDateTime{} = field_value, %DateTimeValue{} = filter_value) do
+    field_value_as_datetime = DateTime.from_naive!(field_value, "Etc/UTC")
+    apply_filter(operator, field_value_as_datetime, filter_value)
+  end
 
-  defp apply_filter(:>, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.after?(field_value, filter_value)
+  defp apply_filter(:==, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.compare(field_value, filter_value) == :eq
+  end
 
-  defp apply_filter(:<, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.before?(field_value, filter_value)
+  defp apply_filter(:!=, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.compare(field_value, filter_value) != :eq
+  end
 
-  defp apply_filter(:>=, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.compare(field_value, filter_value) in [:gt, :eq]
+  defp apply_filter(:>, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.after?(field_value, filter_value)
+  end
 
-  defp apply_filter(:<=, field_value, %{value: filter_value, __type__: :datetime}),
-    do: DateTime.compare(field_value, filter_value) in [:lt, :eq]
+  defp apply_filter(:<, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.before?(field_value, filter_value)
+  end
 
-  defp apply_filter(op, field_value, %{value: filter_value}) when op in [:==, :!=, :>, :<, :>=, :<=],
-    do: apply(Kernel, op, [field_value, filter_value])
+  defp apply_filter(:>=, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.compare(field_value, filter_value) in [:gt, :eq]
+  end
+
+  defp apply_filter(:<=, field_value, %DateTimeValue{value: filter_value}) do
+    DateTime.compare(field_value, filter_value) in [:lt, :eq]
+  end
+
+  defp apply_filter(op, field_value, %{value: filter_value})
+       when op in [:==, :!=, :>, :<, :>=, :<=],
+       do: apply(Kernel, op, [field_value, filter_value])
 
   defp apply_filter(:is_null, field_value, _), do: is_nil(field_value)
   defp apply_filter(:not_null, field_value, _), do: not is_nil(field_value)
@@ -883,7 +917,8 @@ defmodule Sequin.Consumers do
   end
 
   defp apply_filter(:not_in, field_value, %{value: filter_value}) when is_list(filter_value) do
-    field_value not in filter_value and to_string(field_value) not in Enum.map(filter_value, &to_string/1)
+    field_value not in filter_value and
+      to_string(field_value) not in Enum.map(filter_value, &to_string/1)
   end
 
   defp notify_consumer_update(%HttpPullConsumer{} = consumer) do

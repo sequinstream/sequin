@@ -24,7 +24,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
     ~H"""
     <div id="new-http-endpoint" class="w-full">
       <.svelte
-        name="http_endpoints/New"
+        name="http_endpoints/HttpEndpointContainer"
         props={
           %{
             formData: @form_data,

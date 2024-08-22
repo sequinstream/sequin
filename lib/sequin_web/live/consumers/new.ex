@@ -2,12 +2,15 @@ defmodule SequinWeb.ConsumersLive.New do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase.Table
+
   # alias Sequin.Consumers
   # alias Sequin.Error
 
   require Logger
 
-  @steps [:select_stream, :select_consumer, :select_table, :configure_filters, :configure_consumer, :confirmation]
+  @steps [:select_stream, :select_consumer, :select_table, :configure_filters, :configure_consumer]
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -15,20 +18,20 @@ defmodule SequinWeb.ConsumersLive.New do
       socket
       |> assign(:changeset, %{})
       |> assign(:form_errors, %{})
-      |> assign(:step, :select_consumer)
+      |> assign(:step, :configure_filters)
+      |> assign_databases()
       |> assign(:form, %{
-        message_kind: nil,
-        consumer_kind: nil,
-        source_table: %{
-          name: nil,
-          filters: [
-            %{
-              column: nil,
-              operator: nil,
-              value: nil
-            }
-          ]
-        }
+        message_kind: :event,
+        consumer_kind: :http_pull,
+        postgres_database_id: "21592f17-4648-4b14-860b-cddb7a35d57c",
+        table_oid: 16_199_901,
+        source_table_filters: [
+          %{
+            column: nil,
+            operator: nil,
+            value: nil
+          }
+        ]
       })
 
     {:ok, socket, layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
@@ -56,7 +59,8 @@ defmodule SequinWeb.ConsumersLive.New do
             formErrors: @form_errors,
             currentStep: @step,
             form: @encoded_form,
-            parent: @parent_id
+            parent: @parent_id,
+            databases: @databases
           }
         }
         socket={@socket}
@@ -71,7 +75,7 @@ defmodule SequinWeb.ConsumersLive.New do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("consumer_updated", %{"consumer" => consumer, "step_forward" => true}, socket) do
+  def handle_event("form_updated", %{"form" => consumer, "step_forward" => true}, socket) do
     form = decode_form(consumer)
 
     socket =
@@ -82,7 +86,7 @@ defmodule SequinWeb.ConsumersLive.New do
     {:noreply, socket}
   end
 
-  def handle_event("consumer_updated", %{"consumer" => consumer}, socket) do
+  def handle_event("form_updated", %{"form" => consumer}, socket) do
     form = decode_form(consumer)
 
     socket =
@@ -98,6 +102,21 @@ defmodule SequinWeb.ConsumersLive.New do
 
   def handle_event("step_back", _params, socket) do
     {:noreply, step_back(socket)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("refresh_databases", _params, socket) do
+    {:noreply, assign_databases(socket)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("refresh_tables", %{"database_id" => database_id}, socket) do
+    with {:ok, database} <- Databases.get_db(database_id),
+         {:ok, _updated_database} <- Databases.update_tables(database) do
+      {:noreply, assign_databases(socket)}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   defp step_forward(socket) do
@@ -132,17 +151,16 @@ defmodule SequinWeb.ConsumersLive.New do
     %{
       message_kind: encoded_form["messageKind"],
       consumer_kind: encoded_form["consumerKind"],
-      source_table: %{
-        name: encoded_form["sourceTable"]["name"],
-        filters:
-          Enum.map(encoded_form["sourceTable"]["filters"] || [], fn filter ->
-            %{
-              column: filter["column"],
-              operator: filter["operator"],
-              value: filter["value"]
-            }
-          end)
-      }
+      postgres_database_id: encoded_form["postgresDatabaseId"],
+      table_oid: encoded_form["tableOid"],
+      source_table_filters:
+        Enum.map(encoded_form["sourceTableFilters"] || [], fn filter ->
+          %{
+            column: filter["column"],
+            operator: filter["operator"],
+            value: filter["value"]
+          }
+        end)
     }
   end
 
@@ -150,18 +168,48 @@ defmodule SequinWeb.ConsumersLive.New do
     %{
       "messageKind" => form.message_kind,
       "consumerKind" => form.consumer_kind,
-      "sourceTable" => %{
-        "name" => form.source_table.name,
-        "filters" =>
-          Enum.map(form.source_table.filters, fn filter ->
-            %{
-              "column" => filter.column,
-              "operator" => filter.operator,
-              "value" => filter.value
-            }
-          end)
-      }
+      "postgresDatabaseId" => form.postgres_database_id,
+      "tableOid" => form.table_oid,
+      "sourceTableFilters" =>
+        Enum.map(form.source_table_filters, fn filter ->
+          %{
+            "column" => filter.column,
+            "operator" => filter.operator,
+            "value" => filter.value
+          }
+        end)
     }
+  end
+
+  defp encode_database(database) do
+    %{
+      "id" => database.id,
+      "name" => database.name,
+      "tables" =>
+        Enum.map(database.tables, fn %Table{} = table ->
+          %{
+            "oid" => table.oid,
+            "schema" => table.schema,
+            "name" => table.name,
+            "columns" =>
+              Enum.map(table.columns, fn %Table.Column{} = column ->
+                %{
+                  "attnum" => column.attnum,
+                  "isPk?" => column.is_pk?,
+                  "name" => column.name,
+                  "type" => column.type
+                }
+              end)
+          }
+        end)
+    }
+  end
+
+  defp assign_databases(socket) do
+    account_id = current_account_id(socket)
+    databases = Databases.list_dbs_for_account(account_id)
+    encoded_databases = Enum.map(databases, &encode_database/1)
+    assign(socket, :databases, encoded_databases)
   end
 
   # defp create_consumer(%{"consumer_kind" => "http_pull"} = params) do

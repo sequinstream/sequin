@@ -3,6 +3,10 @@ defmodule SequinWeb.ConsumersLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.HttpPushConsumer
+  alias SequinWeb.Live.Consumers.HttpPullConsumerForm
+  alias SequinWeb.Live.Consumers.HttpPushConsumerForm
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -14,11 +18,28 @@ defmodule SequinWeb.ConsumersLive.Index do
       socket
       |> assign(:consumers, encoded_consumers)
       |> assign(:form_errors, %{})
+      |> assign(:http_pull_consumer, %HttpPullConsumer{})
+      |> assign(:http_push_consumer, %HttpPushConsumer{})
 
     {:ok, socket}
   end
 
   @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  @impl Phoenix.LiveView
+  def render(%{live_action: :new} = assigns) do
+    ~H"""
+    <div id="consumers-index">
+      <%= if @live_action == :new do %>
+        <%= render_consumer_form(assigns) %>
+      <% end %>
+    </div>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <div id="consumers-index">
@@ -63,6 +84,60 @@ defmodule SequinWeb.ConsumersLive.Index do
         errors = Sequin.Error.errors_on(changeset)
         {:noreply, assign(socket, :form_errors, errors)}
     end
+  end
+
+  defp apply_action(socket, :index, _params) do
+    socket
+    |> assign(:page_title, "Consumers")
+    |> assign(:live_action, :index)
+  end
+
+  defp apply_action(socket, :new, %{"kind" => kind}) do
+    socket
+    |> assign(:page_title, "New Consumer")
+    |> assign(:live_action, :new)
+    |> assign(:consumer_kind, kind)
+  end
+
+  defp render_consumer_form(%{consumer_kind: "pull"} = assigns) do
+    ~H"""
+    <.live_component
+      current_account={@current_account}
+      module={HttpPullConsumerForm}
+      id="new-http-pull-consumer"
+      action={:new}
+      http_pull_consumer={@http_pull_consumer}
+      on_finish={&handle_create_finish/1}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{consumer_kind: "push"} = assigns) do
+    ~H"""
+    <.live_component
+      current_account={@current_account}
+      module={HttpPushConsumerForm}
+      id="new-http-push-consumer"
+      action={:new}
+      http_push_consumer={@http_push_consumer}
+      on_finish={&handle_create_finish/1}
+    />
+    """
+  end
+
+  defp handle_create_finish(consumer) do
+    send(self(), {:consumer_created, consumer})
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:consumer_created, consumer}, socket) do
+    encoded_consumer = encode_consumer(consumer)
+
+    {:noreply,
+     socket
+     |> update(:consumers, fn consumers -> [encoded_consumer | consumers] end)
+     |> push_navigate(to: ~p"/consumers/#{consumer.id}")
+     |> put_flash(:info, "Consumer created successfully")}
   end
 
   defp encode_consumer(consumer) do

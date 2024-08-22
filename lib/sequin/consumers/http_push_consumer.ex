@@ -33,7 +33,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :max_ack_pending, :integer, default: 10_000
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
-    field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
+    field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
 
     embeds_many :source_tables, SourceTable, on_replace: :delete

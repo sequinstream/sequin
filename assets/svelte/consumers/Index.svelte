@@ -1,6 +1,13 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
+  import { ChevronDown } from "lucide-svelte";
+  import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+  } from "$lib/components/ui/dropdown-menu";
   // import { Input } from "$lib/components/ui/input";
   // import { Label } from "$lib/components/ui/label";
   // import {
@@ -38,13 +45,51 @@
 <div class="container mx-auto py-10">
   <div class="flex justify-between items-center mb-4">
     <h1 class="text-2xl font-bold">Consumers</h1>
-    <a
-      href="/consumers/new"
-      data-phx-link="redirect"
-      data-phx-link-state="push"
-    >
-      <Button>Create Consumer</Button>
-    </a>
+    <div class="relative inline-block text-left">
+      <div class="inline-flex rounded-md shadow-sm">
+        <a
+          href="/consumers/new"
+          data-phx-link="redirect"
+          data-phx-link-state="push"
+        >
+          <Button class="rounded-r-none" variant="default"
+            >Create Consumer</Button
+          >
+        </a>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild let:builder>
+            <Button
+              variant="default"
+              builders={[builder]}
+              class="px-2 rounded-l-none border-l border-primary/20"
+            >
+              <ChevronDown class="h-4 w-4" />
+              <span class="sr-only">Open options</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <a
+              href="/consumers/new/quick?kind=push"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
+              <DropdownMenuItem class="cursor-pointer">
+                Quick create Push Consumer
+              </DropdownMenuItem>
+            </a>
+            <a
+              href="/consumers/new/quick?kind=pull"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
+              <DropdownMenuItem class="cursor-pointer">
+                Quick create Pull Consumer
+              </DropdownMenuItem>
+            </a>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   </div>
 
   <Table.Root>

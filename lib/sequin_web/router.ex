@@ -25,6 +25,7 @@ defmodule SequinWeb.Router do
     live_session :default, on_mount: [SequinWeb.UserAuth, {SequinWeb.LiveHooks, :global}] do
       get "/", PageController, :home
       live "/consumers", ConsumersLive.Index, :index
+      live "/consumers/new/quick", ConsumersLive.Index, :new
       live "/consumers/new", ConsumersLive.New, :new
       live "/consumers/:id", ConsumersLive.Show, :show
 

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-
   export let formData: {
     name: string;
     base_url: string;
@@ -9,8 +7,6 @@
   export let formErrors: Record<string, string | string[]>;
   export let parent: string;
   export let live;
-
-  const dispatch = createEventDispatcher();
 
   function handleSubmit(event: Event) {
     event.preventDefault();

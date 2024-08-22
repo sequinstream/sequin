@@ -22,11 +22,6 @@
       label: "Configure consumer",
       active: currentStep === "configure_consumer",
     },
-    {
-      id: "finalize",
-      label: "Finalize consumer",
-      active: currentStep === "confirmation",
-    },
   ];
 </script>
 

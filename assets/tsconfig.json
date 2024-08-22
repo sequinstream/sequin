@@ -1,7 +1,7 @@
 {
     "compilerOptions": {
         "verbatimModuleSyntax": true,
-        "types": ["node"],
+        "types": ["@types/node"],
         "baseUrl": ".",
         "paths": {
             "$lib": ["svelte",  "./src/lib"],
@@ -14,6 +14,6 @@
         "checkJs": true,
         "isolatedModules": true,
         "module": "ESNext",
-        "allowImportingTsExtensions": true
+        "outDir": "./dist"
     }
 }

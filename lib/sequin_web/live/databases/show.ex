@@ -3,11 +3,13 @@ defmodule SequinWeb.DatabasesLive.Show do
   use SequinWeb, :live_view
 
   alias Sequin.Databases
+  alias Sequin.Repo
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
     case Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, database} ->
+        database = Repo.preload(database, :replication_slot)
         {:ok, assign(socket, database: database, refreshing_tables: false)}
 
       {:error, _} ->
@@ -54,7 +56,7 @@ defmodule SequinWeb.DatabasesLive.Show do
             <p class="mt-2 text-sm text-gray-500">Database ID: <%= @database.id %></p>
           </div>
 
-          <div class="px-6 py-6 grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
+          <div class="px-6 py-6 grid grid-cols-1 gap-y-6 gap-x-4">
             <div>
               <h2 class="text-lg font-medium text-gray-900">Connection Details</h2>
               <dl class="mt-3 space-y-3">
@@ -82,25 +84,27 @@ defmodule SequinWeb.DatabasesLive.Show do
             </div>
 
             <div>
-              <h2 class="text-lg font-medium text-gray-900">Configuration</h2>
-              <dl class="mt-3 space-y-3">
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-500">Pool Size</dt>
-                  <dd class="text-sm text-gray-900"><%= @database.pool_size %></dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-500">Queue Target</dt>
-                  <dd class="text-sm text-gray-900"><%= @database.queue_target %></dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-500">Queue Interval</dt>
-                  <dd class="text-sm text-gray-900"><%= @database.queue_interval %></dd>
-                </div>
-                <div class="flex justify-between">
-                  <dt class="text-sm font-medium text-gray-500">Tables Refreshed At</dt>
-                  <dd class="text-sm text-gray-900"><%= @database.tables_refreshed_at %></dd>
-                </div>
-              </dl>
+              <h2 class="text-lg font-medium text-gray-900">Replication Slot</h2>
+              <%= if @database.replication_slot do %>
+                <dl class="mt-3 space-y-3">
+                  <div class="flex justify-between">
+                    <dt class="text-sm font-medium text-gray-500">Slot Name</dt>
+                    <dd class="text-sm text-gray-900">
+                      <%= @database.replication_slot.slot_name %>
+                    </dd>
+                  </div>
+                  <div class="flex justify-between">
+                    <dt class="text-sm font-medium text-gray-500">Publication Name</dt>
+                    <dd class="text-sm text-gray-900">
+                      <%= @database.replication_slot.publication_name %>
+                    </dd>
+                  </div>
+                </dl>
+              <% else %>
+                <p class="mt-3 text-sm text-gray-500">
+                  No replication slot configured for this database.
+                </p>
+              <% end %>
             </div>
           </div>
 

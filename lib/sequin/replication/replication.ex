@@ -119,7 +119,7 @@ defmodule Sequin.Replication do
     end
   end
 
-  defp validate_replication_config(%PostgresDatabase{} = db, attrs) do
+  def validate_replication_config(%PostgresDatabase{} = db, attrs) do
     Databases.with_connection(db, fn conn ->
       with :ok <- validate_slot(conn, attrs.slot_name) do
         validate_publication(conn, attrs.publication_name)

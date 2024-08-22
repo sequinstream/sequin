@@ -8,6 +8,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   alias __MODULE__
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
 
@@ -53,6 +54,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     end
 
     belongs_to(:account, Sequin.Accounts.Account)
+    has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
 
     timestamps()
   end

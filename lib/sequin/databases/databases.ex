@@ -1,5 +1,7 @@
 defmodule Sequin.Databases do
   @moduledoc false
+  import Ecto.Query, only: [preload: 2]
+
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -16,9 +18,10 @@ defmodule Sequin.Databases do
     Repo.all(PostgresDatabase)
   end
 
-  def list_dbs_for_account(account_id) do
+  def list_dbs_for_account(account_id, preload \\ []) do
     account_id
     |> PostgresDatabase.where_account()
+    |> preload(^preload)
     |> Repo.all()
   end
 

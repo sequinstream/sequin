@@ -280,6 +280,8 @@
                 on:keydown={(e) =>
                   e.key === "Enter" && handleStreamClick(stream)}
                 tabindex={stream.comingSoon ? -1 : 0}
+                role="button"
+                aria-disabled={stream.comingSoon}
               >
                 {#if stream.comingSoon}
                   <div class="coming-soon-badge">Coming Soon</div>
@@ -357,6 +359,8 @@
                 e.key === "Enter" &&
                 handleConsumerClick(consumer)}
               tabindex={consumer.comingSoon ? -1 : 0}
+              role="button"
+              aria-disabled={consumer.comingSoon}
             >
               <div class="p-4">
                 <h2 class="text-lg font-medium text-gray-700 mb-2">

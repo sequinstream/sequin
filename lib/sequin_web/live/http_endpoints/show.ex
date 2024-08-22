@@ -39,9 +39,25 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   def handle_event("delete_http_endpoint", _, socket) do
     %{http_endpoint: http_endpoint} = socket.assigns
 
-    {:ok, _} = Consumers.delete_http_endpoint(http_endpoint)
+    case Consumers.delete_http_endpoint(http_endpoint) do
+      {:ok, _} ->
+        {:noreply, push_navigate(socket, to: ~p"/http-endpoints")}
 
-    {:noreply, push_navigate(socket, to: ~p"/http-endpoints")}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        error_message =
+          case changeset.errors do
+            [http_push_consumers: {"does not exist", _}] ->
+              "Cannot delete because there are consumers using this endpoint"
+
+            _ ->
+              "Failed to delete HTTP endpoint"
+          end
+
+        {:noreply, put_flash(socket, :error, error_message)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "An unexpected error occurred while deleting the HTTP endpoint")}
+    end
   end
 
   @impl Phoenix.LiveView

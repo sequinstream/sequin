@@ -79,10 +79,15 @@ defmodule SequinWeb.HttpEndpointsLive.New do
     end
   end
 
+  @impl Phoenix.LiveView
+  def handle_event("form_closed", _params, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/http-endpoints")}
+  end
+
   defp changeset_to_form_data(changeset) do
     %{
-      name: Ecto.Changeset.get_field(changeset, :name) || "",
-      base_url: Ecto.Changeset.get_field(changeset, :base_url) || "",
+      name: Ecto.Changeset.get_field(changeset, :name),
+      base_url: Ecto.Changeset.get_field(changeset, :base_url),
       headers: Ecto.Changeset.get_field(changeset, :headers) || %{}
     }
   end

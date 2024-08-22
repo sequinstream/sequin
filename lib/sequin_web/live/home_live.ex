@@ -3,26 +3,17 @@ defmodule SequinWeb.HomeLive do
   use SequinWeb, :live_view
 
   def mount(_params, _session, socket) do
-    if connected?(socket) do
-      case check_user_setup() do
-        {:ok, :complete} ->
-          {:ok, push_navigate(socket, to: "/consumers")}
+    case check_user_setup() do
+      {:ok, :complete} ->
+        {:ok, push_navigate(socket, to: "/consumers")}
 
-        {:ok, :incomplete, account} ->
-          db_info = get_db_info()
+      {:ok, :incomplete, account} ->
+        db_info = get_db_info()
 
-          {:ok,
-           socket
-           |> assign(step: :welcome_connected, replication_form: %{})
-           |> assign(account: account, db_info: db_info), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
-      end
-    else
-      db_info = get_db_info()
-
-      {:ok,
-       socket
-       |> assign(step: :welcome_connected, replication_form: %{})
-       |> assign(account: nil, db_info: db_info), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
+        {:ok,
+         socket
+         |> assign(step: :welcome_connected, replication_form: %{})
+         |> assign(account: account, db_info: db_info), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
     end
   end
 

@@ -84,16 +84,12 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
 
-    dbg(params)
-
     socket =
       if socket.assigns.http_push_consumer.id do
         update_http_push_consumer(socket, params)
       else
         create_http_push_consumer(socket, params)
       end
-
-    dbg(socket.assigns.changeset)
 
     socket = assign(socket, :show_errors?, true)
     {:noreply, socket}
@@ -145,15 +141,20 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       "message_kind" => form["messageKind"],
       "name" => form["name"],
       "postgres_database_id" => form["postgresDatabaseId"],
-      "source_table_filters" =>
-        Enum.map(form["sourceTableFilters"], fn filter ->
-          %{
-            "column" => filter["column"],
-            "operator" => filter["operator"],
-            "value" => filter["value"]
-          }
-        end),
-      "table_oid" => form["tableOid"]
+      "source_tables" => [
+        %{
+          "oid" => form["tableOid"],
+          "column_filters" =>
+            Enum.map(form["sourceTableFilters"], fn filter ->
+              %{
+                "column" => filter["column"],
+                "operator" => filter["operator"],
+                "value" => %{value: filter["value"], __type__: "string"}
+              }
+            end),
+          "actions" => form["sourceTableActions"] || []
+        }
+      ]
     }
 
     if params["http_endpoint_id"] do
@@ -164,6 +165,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   defp encode_http_push_consumer(%HttpPushConsumer{} = http_push_consumer) do
+    source_table = List.first(http_push_consumer.source_tables)
+
     %{
       "id" => http_push_consumer.id,
       "name" => http_push_consumer.name,
@@ -173,16 +176,13 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       "max_waiting" => http_push_consumer.max_waiting,
       "message_kind" => http_push_consumer.message_kind,
       "status" => http_push_consumer.status,
-      "http_endpoint_id" => http_push_consumer.http_endpoint_id
+      "http_endpoint_id" => http_push_consumer.http_endpoint_id,
+      "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete]
     }
   end
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
-    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
-      Enum.reduce(opts, msg, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
-    end)
+    Sequin.Error.errors_on(changeset)
   end
 
   defp encode_database(database) do

@@ -20,6 +20,8 @@
   export let columns: Array<{ attnum: number; name: string }>;
   export let onFilterChange: (filters: Array<Filter>) => void;
   export let disabled: boolean = false;
+  export let errors: Array<{ operator?: string[]; column_attnum?: string[] }> =
+    [];
 
   const operators = [
     "=",
@@ -63,10 +65,17 @@
     );
     onFilterChange(filters);
   }
+
+  function getErrorMessage(index: number): string {
+    if (!errors[index]) return "";
+    const error = errors[index];
+    if (error.column_attnum) return error.column_attnum[0];
+    if (error.operator) return error.operator[0];
+    return "";
+  }
 </script>
 
 <div class="mb-6">
-  <h3 class="text-lg font-semibold mb-2">Filters</h3>
   {#each filters as filter, index}
     <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
       <Select
@@ -120,6 +129,11 @@
         <icon class="hero-x-mark w-4 h-4" />
       </button>
     </div>
+    {#if Array.isArray(errors) && errors[index]}
+      <p class="text-destructive text-sm mt-1 mb-2">
+        {getErrorMessage(index)}
+      </p>
+    {/if}
   {/each}
   <div class="grid grid-cols-1 gap-4 max-w-fit">
     <Button

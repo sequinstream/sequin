@@ -62,6 +62,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :status
     ])
     |> validate_required([:name, :status, :replication_slot_id])
+    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
@@ -84,6 +85,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :http_endpoint_id,
       :status
     ])
+    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> cast_embed(:source_tables)
   end
 

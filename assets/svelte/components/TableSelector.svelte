@@ -45,6 +45,7 @@
   export let selectedTableOid: number | null;
 
   let selectedDatabase;
+  let autoRefreshedDatabaseTables = [];
 
   let filteredTables: Array<{ oid: number; schema: string; name: string }> = [];
   let searchQuery = "";
@@ -59,6 +60,17 @@
           .toLowerCase()
           .includes(searchQuery.toLowerCase())
       ) || [];
+  }
+
+  $: {
+    if (
+      selectedDatabase &&
+      selectedDatabase.tables.length === 0 &&
+      !autoRefreshedDatabaseTables.includes(selectedDatabaseId)
+    ) {
+      autoRefreshedDatabaseTables.push(selectedDatabaseId);
+      refreshTables();
+    }
   }
 
   let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";

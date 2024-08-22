@@ -1,4 +1,8 @@
 <script lang="ts">
+  import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+
   export let formData: {
     name: string;
     base_url: string;
@@ -6,8 +10,12 @@
   };
   export let formErrors: Record<string, string | string[]>;
 
+  $: console.log("formErrors", formErrors);
+
   $: getError = (field: string): string | undefined => {
-    if (!formData[field]) return undefined;
+    console.log("field", field);
+    console.log("formData", formData);
+    if (!formErrors[field]) return undefined;
     const error = formErrors[field];
     if (Array.isArray(error)) {
       return error.join(", ");
@@ -34,70 +42,48 @@
   }
 </script>
 
-<div>
-  <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-  <input
-    type="text"
-    id="name"
-    bind:value={formData.name}
-    class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-  />
-  {#if getError("name")}<p class="mt-2 text-sm text-red-600">
-      {getError("name")}
-    </p>{/if}
-</div>
-
-<div>
-  <label for="base_url" class="block text-sm font-medium text-gray-700"
-    >Base URL</label
-  >
-  <input
-    type="text"
-    id="base_url"
-    bind:value={formData.base_url}
-    class="mt-1 block w-full shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-  />
-  {#if getError("base_url")}<p class="mt-2 text-sm text-red-600">
-      {getError("base_url")}
-    </p>{/if}
-</div>
-
-<div>
-  <label for="headers" class="block text-sm font-medium text-gray-700"
-    >Headers</label
-  >
-  <div id="headers">
-    {#each Object.entries(formData.headers) as [key, value]}
-      <div class="flex space-x-2 mt-2">
-        <input
-          type="text"
-          value={key}
-          on:input={(e) => updateHeaderKey(key, e.currentTarget.value)}
-          placeholder="Key"
-          class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-        />
-        <input
-          type="text"
-          {value}
-          on:input={(e) => updateHeaderValue(key, e.currentTarget.value)}
-          placeholder="Value"
-          class="flex-1 shadow-sm sm:text-sm focus:ring-indigo-500 focus:border-indigo-500 border-gray-300 rounded-md"
-        />
-        <button
-          type="button"
-          on:click={() => removeHeader(key)}
-          class="text-red-600 hover:text-red-800"
-          aria-label="Remove header">Remove</button
-        >
-      </div>
-    {/each}
+<div class="space-y-4">
+  <div class="space-y-2">
+    <Label for="name">Name</Label>
+    <Input id="name" bind:value={formData.name} />
+    {#if getError("name")}
+      <p class="text-sm text-red-500">{getError("name")}</p>
+    {/if}
   </div>
-  <button
-    type="button"
-    on:click={addHeader}
-    class="mt-2 text-indigo-600 hover:text-indigo-800"
-    aria-label="Add new header"
-  >
-    Add Header
-  </button>
+
+  <div class="space-y-2">
+    <Label for="base_url">Base URL</Label>
+    <Input id="base_url" bind:value={formData.base_url} />
+    {#if getError("base_url")}
+      <p class="text-sm text-red-500">{getError("base_url")}</p>
+    {/if}
+  </div>
+
+  <div class="space-y-2">
+    <Label>Headers</Label>
+    <div class="space-y-2">
+      {#each Object.entries(formData.headers) as [key, value]}
+        <div class="flex items-center space-x-2">
+          <Input
+            value={key}
+            on:input={(e) => updateHeaderKey(key, e.currentTarget.value)}
+            placeholder="Key"
+          />
+          <Input
+            {value}
+            on:input={(e) => updateHeaderValue(key, e.currentTarget.value)}
+            placeholder="Value"
+          />
+          <Button
+            variant="destructive"
+            size="sm"
+            on:click={() => removeHeader(key)}
+          >
+            Remove
+          </Button>
+        </div>
+      {/each}
+    </div>
+    <Button variant="outline" on:click={addHeader}>Add Header</Button>
+  </div>
 </div>

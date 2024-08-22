@@ -172,28 +172,30 @@
       </div>
 
       <div class="border rounded-lg overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Table Name</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {#each filteredTables as table}
-              <TableRow
-                on:click={() => handleTableSelect(table)}
-                class="cursor-pointer  {table.oid === selectedTableOid
-                  ? 'bg-blue-50 hover:bg-blue-100'
-                  : 'hover:bg-gray-100'}"
-              >
-                <TableCell class="flex items-center space-x-2">
-                  <TableIcon class="h-4 w-4 text-gray-400" />
-                  <span>{table.schema}.{table.name}</span>
-                </TableCell>
+        <div class="max-h-[400px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Table Name</TableHead>
               </TableRow>
-            {/each}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {#each filteredTables as table}
+                <TableRow
+                  on:click={() => handleTableSelect(table)}
+                  class="cursor-pointer {table.oid === selectedTableOid
+                    ? 'bg-blue-50 hover:bg-blue-100'
+                    : 'hover:bg-gray-100'}"
+                >
+                  <TableCell class="flex items-center space-x-2">
+                    <TableIcon class="h-4 w-4 text-gray-400" />
+                    <span>{table.schema}.{table.name}</span>
+                  </TableCell>
+                </TableRow>
+              {/each}
+            </TableBody>
+          </Table>
+        </div>
       </div>
     </div>
   {/if}

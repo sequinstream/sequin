@@ -135,6 +135,14 @@ defmodule Sequin.Consumers do
     Repo.delete(consumer)
   end
 
+  def partition_name(%{message_kind: :event} = consumer) do
+    "consumer_events_#{consumer.seq}"
+  end
+
+  def partition_name(%{message_kind: :record} = consumer) do
+    "consumer_records_#{consumer.seq}"
+  end
+
   # HttpPullConsumer
 
   def get_http_pull_consumer(consumer_id) do
@@ -408,7 +416,7 @@ defmodule Sequin.Consumers do
 
   def create_consumer_partition(%{message_kind: :event} = consumer) do
     """
-    CREATE TABLE #{stream_schema()}.consumer_events_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.#{partition_name(consumer)} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -419,7 +427,7 @@ defmodule Sequin.Consumers do
 
   def create_consumer_partition(%{message_kind: :record} = consumer) do
     """
-    CREATE TABLE #{stream_schema()}.consumer_records_#{consumer.name} PARTITION OF #{stream_schema()}.consumer_records FOR VALUES IN ('#{consumer.id}');
+    CREATE TABLE #{stream_schema()}.#{partition_name(consumer)} PARTITION OF #{stream_schema()}.consumer_records FOR VALUES IN ('#{consumer.id}');
     """
     |> Repo.query()
     |> case do
@@ -432,7 +440,7 @@ defmodule Sequin.Consumers do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_events_#{consumer.name};
+    DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
     """
     |> Repo.query()
     |> case do
@@ -445,7 +453,7 @@ defmodule Sequin.Consumers do
     consumer = Repo.preload(consumer, :stream)
 
     """
-    DROP TABLE IF EXISTS #{stream_schema()}.consumer_records_#{consumer.name};
+    DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
     """
     |> Repo.query()
     |> case do

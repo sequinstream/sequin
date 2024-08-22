@@ -84,12 +84,16 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
 
+    dbg(params)
+
     socket =
       if socket.assigns.http_push_consumer.id do
         update_http_push_consumer(socket, params)
       else
         create_http_push_consumer(socket, params)
       end
+
+    dbg(socket.assigns.changeset)
 
     socket = assign(socket, :show_errors?, true)
     {:noreply, socket}

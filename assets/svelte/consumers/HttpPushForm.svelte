@@ -46,6 +46,7 @@
   };
 
   console.log("form", form);
+  $: console.log("errors", errors);
 
   const pushEvent = (event, payload = {}, cb = () => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
@@ -105,9 +106,7 @@
     showConfirmDialog = false;
   }
 
-  function toggleHttpEndpointForm() {
-    showNewHttpEndpointForm = !showNewHttpEndpointForm;
-  }
+  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 </script>
 
 <Dialog.Root bind:open={dialogOpen} preventScroll={false}>
@@ -225,15 +224,7 @@
                     bind:value={form.ackWaitMs}
                     class="w-24"
                   />
-                  <Select>
-                    <SelectTrigger class="w-[180px]">
-                      <SelectValue placeholder="Select unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="seconds">Seconds</SelectItem>
-                      <SelectItem value="minutes">Minutes</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <span class="text-sm text-gray-500">ms</span>
                 </div>
                 <p class="text-sm text-gray-500 mt-1">
                   The maximum duration allowed for the HTTP request to complete.
@@ -318,7 +309,7 @@
                   onSelectedChange={(event) => {
                     if (event.value === "new") {
                       form.httpEndpointId = null;
-                      toggleHttpEndpointForm();
+                      showNewHttpEndpointForm = true;
                     } else {
                       form.httpEndpointId = event.value;
                     }
@@ -341,8 +332,12 @@
               {#if showNewHttpEndpointForm}
                 <HttpEndpointForm
                   formData={form.httpEndpoint}
-                  formErrors={errors.httpEndpoint || {}}
+                  formErrors={errors.http_endpoint || {}}
                 />
+              {:else if errors.http_endpoint_id || errors.http_endpoint}
+                <p class="text-red-500 text-sm">
+                  Please select or create an HTTP endpoint
+                </p>
               {/if}
             </div>
             <div class="space-y-6">
@@ -354,7 +349,7 @@
                   class="block font-medium text-sm text-gray-700">Name</label
                 >
                 <Input
-                  id="name"
+                  id="consumer-name"
                   bind:value={form.name}
                   placeholder="Enter a unique name for your consumer"
                   data-1p-ignore
@@ -366,7 +361,9 @@
                 {/if}
               </div>
 
-              <Button type="submit">Create Consumer</Button>
+              <Button type="submit" disabled={isCreateConsumerDisabled}
+                >Create Consumer</Button
+              >
               {#if submitError}
                 <p class="text-red-500 text-sm mt-2">{submitError}</p>
               {/if}

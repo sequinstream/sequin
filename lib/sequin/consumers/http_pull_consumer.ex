@@ -33,6 +33,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     field :max_waiting, :integer, default: 20
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
+    field :seq, :integer, read_after_writes: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :account, Account
@@ -57,6 +58,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     ])
     |> cast_embed(:source_tables)
     |> validate_required([:name, :status])
+    |> unique_constraint([:account_id, :name], error_key: :name)
     |> Sequin.Changeset.validate_name()
   end
 

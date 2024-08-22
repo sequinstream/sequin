@@ -78,9 +78,11 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
     # Required for composite foreign keys pointing to this table
     create unique_index(:http_endpoints, [:id, :account_id], prefix: @config_schema)
-
     execute "CREATE TYPE #{@config_schema}.consumer_status AS ENUM ('active', 'disabled');"
     execute "CREATE TYPE #{@config_schema}.consumer_message_kind AS ENUM ('record', 'event');"
+
+    # Create a shared sequence for http_push_consumers and http_pull_consumers
+    execute "CREATE SEQUENCE #{@config_schema}.consumer_seq;"
 
     create table(:http_push_consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
@@ -113,8 +115,15 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
       add :status, :"#{@config_schema}.consumer_status", null: false, default: "active"
 
+      # Add the seq column referencing the shared sequence
+      add :seq, :integer,
+        null: false,
+        default: fragment("nextval('#{@config_schema}.consumer_seq')")
+
       timestamps()
     end
+
+    create unique_index(:http_push_consumers, [:account_id, :name], prefix: @config_schema)
 
     create table(:http_pull_consumers, prefix: @config_schema) do
       # Using a composite foreign key for stream_id
@@ -140,8 +149,15 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :message_kind, :text, null: false, default: "record"
       add :status, :"#{@config_schema}.consumer_status", null: false, default: "active"
 
+      # Add the seq column referencing the shared sequence
+      add :seq, :integer,
+        null: false,
+        default: fragment("nextval('#{@config_schema}.consumer_seq')")
+
       timestamps()
     end
+
+    create unique_index(:http_pull_consumers, [:account_id, :name], prefix: @config_schema)
 
     execute "create type #{@stream_schema}.consumer_record_state as enum ('acked', 'available', 'delivered', 'pending_redelivery');",
             "drop type if exists #{@stream_schema}.consumer_record_state"

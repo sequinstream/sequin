@@ -10,6 +10,8 @@ import Config
 sequin_config_schema = "sequin_config"
 sequin_stream_schema = "sequin_streams"
 
+config :esbuild, :version, "0.17.11"
+
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",

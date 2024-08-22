@@ -865,7 +865,8 @@ defmodule Sequin.Consumers do
 
   defp column_filters_match?(column_filters, message) do
     Enum.all?(column_filters, fn filter ->
-      field = Enum.find(message.fields, &(&1.column_attnum == filter.column_attnum))
+      fields = if message.action == :delete, do: message.old_fields, else: message.fields
+      field = Enum.find(fields, &(&1.column_attnum == filter.column_attnum))
       field && apply_filter(filter.operator, field.value, filter.value)
     end)
   end

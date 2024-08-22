@@ -96,6 +96,11 @@ defmodule SequinWeb.DatabasesLive.New do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("form_closed", _params, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/databases")}
+  end
+
+  @impl Phoenix.LiveView
   def handle_info({ref, result}, socket) when is_reference(ref) do
     Process.demonitor(ref, [:flush])
     handle_validation_result(result, socket)

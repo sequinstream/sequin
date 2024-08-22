@@ -805,7 +805,10 @@ defmodule Sequin.Consumers do
   end
 
   def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
-    Repo.delete(http_endpoint)
+    http_endpoint
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.foreign_key_constraint(:http_push_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
+    |> Repo.delete()
   end
 
   # Backfills

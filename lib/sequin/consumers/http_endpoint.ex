@@ -22,7 +22,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
   def create_changeset(http_endpoint, attrs) do
     http_endpoint
     |> cast(attrs, [:name, :base_url, :headers])
-    |> validate_required([:base_url])
+    |> validate_required([:name, :base_url])
     |> validate_base_url()
     |> foreign_key_constraint(:account_id)
   end
@@ -48,7 +48,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
             changeset
 
           _ ->
-            add_error(changeset, :base_url, "must be a valid URL with scheme and host")
+            add_error(changeset, :base_url, "must be a valid URL with scheme and host (ie. https://example.com)")
         end
     end
   end

@@ -23,7 +23,7 @@ defmodule SequinWeb.Router do
     pipe_through :browser
 
     live_session :default, on_mount: [SequinWeb.UserAuth, {SequinWeb.LiveHooks, :global}] do
-      get "/", PageController, :home
+      live "/", HomeLive, :index
       live "/consumers", ConsumersLive.Index, :index
       live "/consumers/new", ConsumersLive.New, :new
       live "/consumers/:id", ConsumersLive.Show, :show
@@ -35,6 +35,8 @@ defmodule SequinWeb.Router do
       live "/http-endpoints", HttpEndpointsLive.Index, :index
       live "/http-endpoints/new", HttpEndpointsLive.New, :new
       live "/http-endpoints/:id", HttpEndpointsLive.Show, :show
+
+      get "/easter-egg", EasterEggController, :home
     end
   end
 

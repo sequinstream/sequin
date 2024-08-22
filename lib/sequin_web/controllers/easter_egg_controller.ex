@@ -1,4 +1,4 @@
-defmodule SequinWeb.PageController do
+defmodule SequinWeb.EasterEggController do
   use SequinWeb, :controller
 
   def home(conn, _params) do

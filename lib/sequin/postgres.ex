@@ -82,20 +82,20 @@ defmodule Sequin.Postgres do
       Postgrex.query(
         conn,
         """
-        SELECT DISTINCT ON (a.attnum)
-          a.attnum,
-          a.attname,
-          format_type(a.atttypid, a.atttypmod),
-          COALESCE(i.indisprimary, false) as is_pk
-        FROM pg_attribute a
-        JOIN pg_class c ON a.attrelid = c.oid
-        JOIN pg_namespace n ON c.relnamespace = n.oid
-        LEFT JOIN pg_index i ON c.oid = i.indrelid AND a.attnum = ANY(i.indkey)
-        WHERE n.nspname = $1
-          AND c.relname = $2
-          AND a.attnum > 0
-          AND NOT a.attisdropped
-        ORDER BY a.attnum
+        select distinct on (a.attnum)
+        a.attnum,
+        a.attname,
+        pg_catalog.format_type(a.atttypid, -1) as simple_type,
+        coalesce(i.indisprimary, false) as is_pk
+        from pg_attribute a
+        join pg_class c on a.attrelid = c.oid
+        join pg_namespace n on c.relnamespace = n.oid
+        left join pg_index i on c.oid = i.indrelid and a.attnum = any(i.indkey)
+        where n.nspname = $1
+        and c.relname = $2
+        and a.attnum > 0
+        and not a.attisdropped
+        order by a.attnum
         """,
         [schema, table]
       )

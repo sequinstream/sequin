@@ -18,13 +18,13 @@ defmodule SequinWeb.ConsumersLive.New do
       socket
       |> assign(:changeset, %{})
       |> assign(:form_errors, %{})
-      |> assign(:step, :configure_filters)
+      |> assign(:step, :select_stream)
       |> assign_databases()
       |> assign(:form, %{
         message_kind: :event,
         consumer_kind: :http_pull,
-        postgres_database_id: "21592f17-4648-4b14-860b-cddb7a35d57c",
-        table_oid: 16_199_901,
+        postgres_database_id: nil,
+        table_oid: nil,
         source_table_filters: [
           %{
             column: nil,

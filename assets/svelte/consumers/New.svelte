@@ -175,14 +175,14 @@
   function handleStreamClick(stream) {
     if (!stream.comingSoon) {
       form.messageKind = stream.id;
-      pushEvent("form_updated", { consumer: form, step_forward: true });
+      pushEvent("form_updated", { form, step_forward: true });
     }
   }
 
   function handleConsumerClick(consumer) {
     if (!consumer.comingSoon) {
       form.consumerKind = consumer.id;
-      pushEvent("form_updated", { consumer: form, step_forward: true });
+      pushEvent("form_updated", { form, step_forward: true });
     }
   }
 
@@ -264,7 +264,7 @@
   }
 
   function handleConsumerConfigSubmit() {
-    pushEvent("form_updated", { consumer: form, step_forward: true });
+    pushEvent("form_updated", { form, step_forward: true });
   }
 
   let activeInfo = "";
@@ -305,12 +305,12 @@
   }
 
   function onConsumerCreate() {
-    pushEvent("form_updated", { consumer: form, step_forward: true });
+    pushEvent("form_updated", { form, step_forward: true });
   }
 
   function handleFilterChange(newFilters) {
     form.sourceTableFilters = newFilters;
-    pushEvent("form_updated", { consumer: form });
+    pushEvent("form_updated", { form });
   }
 </script>
 
@@ -463,23 +463,7 @@
         </div>
       </div>
       <div class="p-8 max-w-5xl mx-auto">
-        <div class="flex justify-end mb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            on:click={() => refreshTables(form.postgresDatabaseId)}
-            disabled={tableRefreshState === "refreshing"}
-          >
-            {#if tableRefreshState === "refreshing"}
-              <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
-            {:else if tableRefreshState === "done"}
-              <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
-            {:else}
-              <RefreshCwIcon class="h-4 w-4 mr-2" />
-            {/if}
-            Refresh
-          </Button>
-        </div>
+        <div class="flex justify-end mb-4"></div>
         <TableSelector
           {databases}
           onSelect={handleTableSelect}

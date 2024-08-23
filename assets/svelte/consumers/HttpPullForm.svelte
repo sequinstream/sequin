@@ -26,6 +26,7 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
+  import { cn } from "$lib/utils";
 
   export let live;
   export let parent;
@@ -95,10 +96,14 @@
   }
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+
+  const isEditMode = !!http_pull_consumer.id;
 </script>
 
 <FullPageModal
-  title="Create an HTTP pull consumer"
+  title={isEditMode
+    ? "Edit an HTTP pull consumer"
+    : "Create an HTTP pull consumer"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   showConfirmOnExit={isDirty}
@@ -122,8 +127,14 @@
                 form.messageKind === "event" ? "Change stream" : "Sync stream",
             }}
             onSelectedChange={(event) => (form.messageKind = event.value)}
+            disabled={isEditMode}
           >
-            <SelectTrigger class="w-full">
+            <SelectTrigger
+              class={cn(
+                "w-full",
+                isEditMode && "bg-muted text-muted-foreground opacity-100"
+              )}
+            >
               <SelectValue placeholder="Select stream type" />
             </SelectTrigger>
             <SelectContent>
@@ -153,13 +164,48 @@
 
         <div class="space-y-2">
           <Label>Source table</Label>
-          <TableSelector
-            {pushEvent}
-            {databases}
-            selectedDatabaseId={form.postgresDatabaseId}
-            selectedTableOid={form.tableOid}
-            onSelect={handleTableSelect}
-          />
+          {#if isEditMode}
+            <Select
+              disabled
+              selected={{
+                value: form.postgresDatabaseId,
+                label: selectedDatabase?.name || "Selected database",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected database" />
+              </SelectTrigger>
+            </Select>
+            <Select
+              disabled
+              selected={{
+                value: form.tableOid,
+                label: selectedTable?.name || "Selected table",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected table" />
+              </SelectTrigger>
+            </Select>
+          {:else}
+            <TableSelector
+              {pushEvent}
+              {databases}
+              selectedDatabaseId={form.postgresDatabaseId}
+              selectedTableOid={form.tableOid}
+              onSelect={handleTableSelect}
+            />
+          {/if}
           {#if errors.postgres_database_id || errors.table_oid}
             <p class="text-destructive text-sm">
               {errors.postgres_database_id || errors.table_oid}
@@ -311,6 +357,7 @@
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
+            disabled={isEditMode}
           />
           {#if errors.name}
             <p class="text-destructive text-sm">{errors.name}</p>
@@ -318,7 +365,7 @@
         </div>
 
         <Button type="submit" disabled={isCreateConsumerDisabled}
-          >Create Consumer</Button
+          >{isEditMode ? "Update" : "Create"} consumer</Button
         >
         {#if submitError}
           <p class="text-destructive text-sm">{submitError}</p>

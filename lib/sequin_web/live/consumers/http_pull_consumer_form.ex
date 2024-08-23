@@ -154,17 +154,20 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   end
 
   defp encode_http_pull_consumer(%HttpPullConsumer{} = http_pull_consumer) do
+    postgres_database_id = if http_pull_consumer.postgres_database, do: http_pull_consumer.postgres_database.id
     source_table = List.first(http_pull_consumer.source_tables)
 
     %{
       "id" => http_pull_consumer.id,
       "name" => http_pull_consumer.name,
-      "ack_wait_s" => div(http_pull_consumer.ack_wait_ms, 1000),
+      "ack_wait_ms" => http_pull_consumer.ack_wait_ms,
       "max_ack_pending" => http_pull_consumer.max_ack_pending,
       "max_deliver" => http_pull_consumer.max_deliver,
       "max_waiting" => http_pull_consumer.max_waiting,
       "message_kind" => http_pull_consumer.message_kind,
       "status" => http_pull_consumer.status,
+      "postgres_database_id" => postgres_database_id,
+      "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete]
     }
   end
@@ -203,7 +206,10 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
     case Consumers.update_consumer_with_lifecycle(consumer, params) do
       {:ok, http_pull_consumer} ->
         socket.assigns.on_finish.(http_pull_consumer)
-        assign(socket, :http_pull_consumer, http_pull_consumer)
+
+        socket
+        |> assign(:http_pull_consumer, http_pull_consumer)
+        |> push_navigate(to: ~p"/consumers/#{http_pull_consumer.id}")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         assign(socket, :changeset, changeset)

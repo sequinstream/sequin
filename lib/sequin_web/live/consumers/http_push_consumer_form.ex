@@ -83,6 +83,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       form
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
+      # Remove nil values to allow defaults to be applied
+      |> Sequin.Map.reject_nil_values()
 
     socket =
       if socket.assigns.http_push_consumer.id do
@@ -165,18 +167,21 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   defp encode_http_push_consumer(%HttpPushConsumer{} = http_push_consumer) do
+    postgres_database_id = if http_push_consumer.postgres_database, do: http_push_consumer.postgres_database.id
     source_table = List.first(http_push_consumer.source_tables)
 
     %{
       "id" => http_push_consumer.id,
       "name" => http_push_consumer.name,
-      "ack_wait_s" => div(http_push_consumer.ack_wait_ms, 1000),
+      "ack_wait_ms" => http_push_consumer.ack_wait_ms,
       "max_ack_pending" => http_push_consumer.max_ack_pending,
       "max_deliver" => http_push_consumer.max_deliver,
       "max_waiting" => http_push_consumer.max_waiting,
       "message_kind" => http_push_consumer.message_kind,
       "status" => http_push_consumer.status,
       "http_endpoint_id" => http_push_consumer.http_endpoint_id,
+      "postgres_database_id" => postgres_database_id,
+      "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete]
     }
   end
@@ -223,7 +228,10 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     case Consumers.update_consumer_with_lifecycle(consumer, params) do
       {:ok, http_push_consumer} ->
         socket.assigns.on_finish.(http_push_consumer)
-        assign(socket, :http_push_consumer, http_push_consumer)
+
+        socket
+        |> assign(:http_push_consumer, http_push_consumer)
+        |> push_navigate(to: ~p"/consumers/#{http_push_consumer.id}")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         assign(socket, :changeset, changeset)

@@ -12,7 +12,6 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   require Logger
 
-  @derive {Inspect, except: [:password]}
   @derive {Jason.Encoder,
            only: [
              :id,
@@ -27,6 +26,7 @@ defmodule Sequin.Databases.PostgresDatabase do
              :username,
              :password
            ]}
+  @derive {Inspect, except: [:tables, :password]}
   typed_schema "postgres_databases" do
     field :database, :string
     field :hostname, :string

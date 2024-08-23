@@ -14,22 +14,19 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-  import * as Dialog from "$lib/components/ui/dialog";
   import TableSelector from "../components/TableSelector.svelte";
   import TableFilters from "../components/TableFilters.svelte";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import HttpEndpointForm from "../http_endpoints/HttpEndpointForm.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
-  import { onMount } from "svelte";
   import FullPageModal from "../components/FullPageModal.svelte";
+  import { cn } from "$lib/utils";
 
   export let live;
   export let parent;
@@ -62,12 +59,24 @@
 
   $: pushEvent("form_updated", { form });
 
-  let selectedDatabase: any;
-  let selectedTable: any;
-  let selectedHttpEndpoint: any;
+  let selectedDatabase = form.postgresDatabaseId
+    ? databases.find((db) => db.id === form.postgresDatabaseId)
+    : null;
+  let selectedTable =
+    form.tableOid && selectedDatabase
+      ? selectedDatabase.tables.find((table) => table.oid === form.tableOid)
+      : null;
+  let selectedHttpEndpoint = form.httpEndpointId
+    ? httpEndpoints.find((endpoint) => endpoint.id === form.httpEndpointId)
+    : null;
+
+  console.log(selectedDatabase, selectedTable, selectedHttpEndpoint);
+  console.log(http_push_consumer);
+
+  const isEditMode = !!http_push_consumer.id;
 
   $: {
-    if (form.postgresDatabaseId && form.tableOid) {
+    if (isEditMode || (form.postgresDatabaseId && form.tableOid)) {
       selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId
       );
@@ -112,7 +121,9 @@
 </script>
 
 <FullPageModal
-  title="Create an HTTP push consumer"
+  title={isEditMode
+    ? "Edit an HTTP push consumer"
+    : "Create an HTTP push consumer"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -135,8 +146,14 @@
                 form.messageKind === "event" ? "Change stream" : "Sync stream",
             }}
             onSelectedChange={(event) => (form.messageKind = event.value)}
+            disabled={isEditMode}
           >
-            <SelectTrigger class="w-full">
+            <SelectTrigger
+              class={cn(
+                "w-full",
+                isEditMode && "bg-muted text-muted-foreground opacity-100"
+              )}
+            >
               <SelectValue placeholder="Select stream type" />
             </SelectTrigger>
             <SelectContent>
@@ -166,13 +183,48 @@
 
         <div class="space-y-2">
           <Label>Source table</Label>
-          <TableSelector
-            {pushEvent}
-            {databases}
-            selectedDatabaseId={form.postgresDatabaseId}
-            selectedTableOid={form.tableOid}
-            onSelect={handleTableSelect}
-          />
+          {#if isEditMode}
+            <Select
+              disabled
+              selected={{
+                value: form.postgresDatabaseId,
+                label: selectedDatabase?.name || "Selected database",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected database" />
+              </SelectTrigger>
+            </Select>
+            <Select
+              disabled
+              selected={{
+                value: form.tableOid,
+                label: selectedTable?.name || "Selected table",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected table" />
+              </SelectTrigger>
+            </Select>
+          {:else}
+            <TableSelector
+              {pushEvent}
+              {databases}
+              selectedDatabaseId={form.postgresDatabaseId}
+              selectedTableOid={form.tableOid}
+              onSelect={handleTableSelect}
+            />
+          {/if}
           {#if errors.postgres_database_id || errors.table_oid}
             <p class="text-destructive text-sm">
               {errors.postgres_database_id || errors.table_oid}
@@ -298,30 +350,49 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="http-endpoint">HTTP Endpoint</Label>
-          <Select
-            selected={{
-              value: form.httpEndpointId,
-              label: selectedHttpEndpoint?.name || "Select an endpoint",
-            }}
-            onSelectedChange={(event) => {
-              if (event.value === "new") {
-                form.httpEndpointId = null;
-                showNewHttpEndpointForm = true;
-              } else {
-                form.httpEndpointId = event.value;
-              }
-            }}
-          >
-            <SelectTrigger class="w-full">
-              <SelectValue placeholder="Select an endpoint" />
-            </SelectTrigger>
-            <SelectContent>
-              {#each httpEndpoints as endpoint}
-                <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
-              {/each}
-              <SelectItem value="new">+ Add new</SelectItem>
-            </SelectContent>
-          </Select>
+          {#if isEditMode}
+            <Select
+              disabled
+              selected={{
+                value: form.httpEndpointId,
+                label: selectedHttpEndpoint?.name || "Selected HTTP endpoint",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected HTTP endpoint" />
+              </SelectTrigger>
+            </Select>
+          {:else}
+            <Select
+              selected={{
+                value: form.httpEndpointId,
+                label: selectedHttpEndpoint?.name || "Select an endpoint",
+              }}
+              onSelectedChange={(event) => {
+                if (event.value === "new") {
+                  form.httpEndpointId = null;
+                  showNewHttpEndpointForm = true;
+                } else {
+                  form.httpEndpointId = event.value;
+                }
+              }}
+            >
+              <SelectTrigger class="w-full">
+                <SelectValue placeholder="Select an endpoint" />
+              </SelectTrigger>
+              <SelectContent>
+                {#each httpEndpoints as endpoint}
+                  <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
+                {/each}
+                <SelectItem value="new">+ Add new</SelectItem>
+              </SelectContent>
+            </Select>
+          {/if}
         </div>
 
         {#if showNewHttpEndpointForm}
@@ -336,7 +407,6 @@
         {/if}
       </CardContent>
     </Card>
-
     <Card>
       <CardHeader>
         <CardTitle>Consumer</CardTitle>
@@ -351,6 +421,7 @@
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
+            disabled={isEditMode}
           />
           {#if errors.name}
             <p class="text-destructive text-sm">{errors.name}</p>
@@ -358,7 +429,7 @@
         </div>
 
         <Button type="submit" disabled={isCreateConsumerDisabled}
-          >Create Consumer</Button
+          >{isEditMode ? "Update" : "Create"} consumer</Button
         >
         {#if submitError}
           <p class="text-destructive text-sm">{submitError}</p>

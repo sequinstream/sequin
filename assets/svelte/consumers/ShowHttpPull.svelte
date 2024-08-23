@@ -21,8 +21,11 @@
     TableRow,
   } from "$lib/components/ui/table";
   import { getColorFromName } from "../utils";
+  import * as AlertDialog from "$lib/components/ui/alert-dialog";
 
   export let consumer;
+  export let live;
+  export let parent;
 
   $: healthColor =
     consumer.health > 90
@@ -34,6 +37,25 @@
   function formatTimestamp(timestamp: string) {
     const date = new Date(timestamp);
     return formatDistanceToNow(date, { addSuffix: true });
+  }
+
+  function handleEdit() {
+    live.pushEventTo("#" + parent, "edit", {});
+  }
+
+  let showDeleteConfirmDialog = false;
+
+  function handleDelete() {
+    showDeleteConfirmDialog = true;
+  }
+
+  function confirmDelete() {
+    showDeleteConfirmDialog = false;
+    live.pushEventTo("#" + parent, "delete", {});
+  }
+
+  function cancelDelete() {
+    showDeleteConfirmDialog = false;
   }
 </script>
 
@@ -67,12 +89,16 @@
               <span>Updated {formatTimestamp(consumer.updated_at)}</span>
             </div>
           </div>
-          <Button variant="outline" size="sm">Edit</Button>
+          <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button
+          >
           <Button
             variant="outline"
             size="sm"
-            class="text-red-600 hover:text-red-700">Delete</Button
+            class="text-red-600 hover:text-red-700"
+            on:click={handleDelete}
           >
+            Delete
+          </Button>
         </div>
       </div>
     </div>
@@ -214,3 +240,20 @@
     </div>
   </div>
 </div>
+
+<AlertDialog.Root bind:open={showDeleteConfirmDialog}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title
+        >Are you sure you want to delete this consumer?</AlertDialog.Title
+      >
+      <AlertDialog.Description>
+        This action cannot be undone.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel on:click={cancelDelete}>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Action on:click={confirmDelete}>Delete</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>

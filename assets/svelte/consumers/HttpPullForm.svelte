@@ -34,7 +34,7 @@
   export let errors: any = {};
   export let submitError;
 
-  let form = {
+  let initialForm = {
     messageKind: http_pull_consumer.message_kind || "record",
     postgresDatabaseId: http_pull_consumer.postgres_database_id,
     tableOid: http_pull_consumer.table_oid,
@@ -46,14 +46,17 @@
     maxWaiting: http_pull_consumer.max_waiting || 20,
   };
 
-  console.log("form", form);
-  $: console.log("errors", errors);
+  let form = { ...initialForm };
+  let isDirty = false;
+
+  $: {
+    isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
+    pushEvent("form_updated", { form });
+  }
 
   const pushEvent = (event, payload = {}, cb = () => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
-
-  $: pushEvent("form_updated", { form });
 
   let selectedDatabase: any;
   let selectedTable: any;
@@ -98,6 +101,7 @@
   title="Create an HTTP pull consumer"
   bind:open={dialogOpen}
   bind:showConfirmDialog
+  showConfirmOnExit={isDirty}
   on:close={handleClose}
 >
   <form

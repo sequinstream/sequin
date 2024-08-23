@@ -20,19 +20,86 @@ defmodule SequinWeb.ConsumersLive.Show do
           Repo.preload(consumer, [:postgres_database])
       end
 
-    {:ok, assign(socket, :consumer, consumer)}
+    {:ok, assign(socket, consumer: consumer)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :show, _params) do
+    assign(socket, :page_title, "Show Consumer")
+  end
+
+  defp apply_action(socket, :edit, _params) do
+    assign(socket, :page_title, "Edit Consumer")
   end
 
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <%= case @consumer do %>
-      <% %HttpPushConsumer{} -> %>
-        <.svelte name="consumers/ShowHttpPush" props={%{consumer: encode_consumer(@consumer)}} />
-      <% %HttpPullConsumer{} -> %>
-        <.svelte name="consumers/ShowHttpPull" props={%{consumer: encode_consumer(@consumer)}} />
-    <% end %>
+    <div id="consumer-show">
+      <%= case {@live_action, @consumer} do %>
+        <% {:edit, %HttpPushConsumer{}} -> %>
+          <.live_component
+            module={SequinWeb.Live.Consumers.HttpPushConsumerForm}
+            id="edit-http-push-consumer"
+            http_push_consumer={@consumer}
+            on_finish={&handle_edit_finish/1}
+            current_account={@current_account}
+          />
+        <% {:edit, %HttpPullConsumer{}} -> %>
+          <.live_component
+            module={SequinWeb.Live.Consumers.HttpPullConsumerForm}
+            id="edit-http-pull-consumer"
+            http_pull_consumer={@consumer}
+            on_finish={&handle_edit_finish/1}
+            current_account={@current_account}
+          />
+        <% {:show, %HttpPushConsumer{}} -> %>
+          <.svelte
+            name="consumers/ShowHttpPush"
+            props={%{consumer: encode_consumer(@consumer), parent: "consumer-show"}}
+          />
+        <% {:show, %HttpPullConsumer{}} -> %>
+          <.svelte
+            name="consumers/ShowHttpPull"
+            props={%{consumer: encode_consumer(@consumer), parent: "consumer-show"}}
+          />
+      <% end %>
+    </div>
     """
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("edit", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}/edit")}
+  end
+
+  def handle_event("delete", _params, socket) do
+    case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
+      {:ok, _deleted_consumer} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Consumer deleted successfully.")
+         |> push_navigate(to: ~p"/consumers")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to delete consumer. Please try again.")}
+    end
+  end
+
+  defp handle_edit_finish(updated_consumer) do
+    send(self(), {:updated_consumer, updated_consumer})
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:updated_consumer, updated_consumer}, socket) do
+    {:noreply,
+     socket
+     |> assign(consumer: updated_consumer)
+     |> push_patch(to: ~p"/consumers/#{updated_consumer.id}")}
   end
 
   defp encode_consumer(%HttpPushConsumer{} = consumer) do

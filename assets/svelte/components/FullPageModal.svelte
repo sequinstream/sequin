@@ -7,13 +7,19 @@
   export let title: string;
   export let open = true;
   export let showConfirmDialog = false;
+  export let showConfirmOnExit = false;
 
   const dispatch = createEventDispatcher();
 
   function handleEscapeKey(event: KeyboardEvent) {
     if (event.key === "Escape" && !showConfirmDialog) {
       event.preventDefault();
-      showConfirmDialog = true;
+      if (showConfirmOnExit) {
+        showConfirmDialog = true;
+      } else {
+        open = false;
+        dispatch("close");
+      }
     }
   }
 
@@ -49,7 +55,14 @@
           <Dialog.Close asChild>
             <Button
               variant="outline"
-              on:click={() => (showConfirmDialog = true)}
+              on:click={() => {
+                if (showConfirmOnExit) {
+                  showConfirmDialog = true;
+                } else {
+                  open = false;
+                  dispatch("close");
+                }
+              }}
             >
               Exit
             </Button>

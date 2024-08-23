@@ -437,8 +437,6 @@ defmodule Sequin.Consumers do
   end
 
   defp delete_consumer_partition(%{message_kind: :event} = consumer) do
-    consumer = Repo.preload(consumer, :stream)
-
     """
     DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
     """
@@ -450,8 +448,6 @@ defmodule Sequin.Consumers do
   end
 
   defp delete_consumer_partition(%{message_kind: :record} = consumer) do
-    consumer = Repo.preload(consumer, :stream)
-
     """
     DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
     """

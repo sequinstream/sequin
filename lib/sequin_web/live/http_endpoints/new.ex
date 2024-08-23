@@ -15,6 +15,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
       |> assign(:form_data, changeset_to_form_data(changeset))
       |> assign(:form_errors, %{})
       |> assign(:validating, false)
+      |> assign(:show_errors?, false)
 
     {:ok, socket}
   end
@@ -28,7 +29,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
         props={
           %{
             formData: @form_data,
-            formErrors: @form_errors,
+            formErrors: if(@show_errors?, do: @form_errors, else: %{}),
             validating: @validating,
             parent: "new-http-endpoint"
           }
@@ -75,7 +76,8 @@ defmodule SequinWeb.HttpEndpointsLive.New do
          socket
          |> assign(:changeset, changeset)
          |> assign(:form_data, form_data)
-         |> assign(:form_errors, form_errors)}
+         |> assign(:form_errors, form_errors)
+         |> assign(:show_errors?, true)}
     end
   end
 

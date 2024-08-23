@@ -28,7 +28,7 @@
       slot_name: string;
     };
   };
-  export let formErrors: Record<string, string | string[]>;
+  export let formErrors: Record<string, any> = {};
   export let validating: boolean;
   export let parent: string;
   export let live;
@@ -59,14 +59,14 @@
     userInput = false;
   }
 
-  $: getError = (field: string): string | undefined => {
-    if (!formData[field]) return undefined;
-    const error = formErrors[field];
-    if (Array.isArray(error)) {
-      return error.join(", ");
+  function getError(field: string): string | undefined {
+    const [category, subfield] = field.split(".");
+    if (formErrors[category] && formErrors[category][subfield]) {
+      const error = formErrors[category][subfield];
+      return Array.isArray(error) ? error.join(", ") : error;
     }
-    return error;
-  };
+    return undefined;
+  }
 
   function pushEvent(event: string, payload = {}) {
     live.pushEventTo(`#${parent}`, event, payload);
@@ -76,8 +76,6 @@
     pushEvent("form_closed");
   }
 </script>
-
-// ... (previous code remains unchanged)
 
 <FullPageModal
   title="Create Database"

@@ -33,6 +33,7 @@
   import HttpPullVisual from "./HttpPullVisual.svelte";
   import TableSelector from "../components/TableSelector.svelte";
   import TableFilters from "../components/TableFilters.svelte";
+  import { getColorFromName } from "../utils";
 
   export let currentStep: string;
   export let live;
@@ -194,30 +195,6 @@
     { name: "mydb → public.users" },
     { name: "mydb → public.orders" },
   ];
-
-  function getColorFromTableName(tableName: string): string {
-    const colors = [
-      "bg-red-100",
-      "bg-red-300",
-      "bg-blue-100",
-      "bg-blue-300",
-      "bg-green-100",
-      "bg-green-300",
-      "bg-indigo-100",
-      "bg-indigo-300",
-      "bg-purple-100",
-      "bg-purple-300",
-      "bg-pink-100",
-      "bg-pink-300",
-      "bg-teal-100",
-      "bg-teal-300",
-    ];
-    const hash = tableName.split("").reduce((acc, char) => {
-      return char.charCodeAt(0) + ((acc << 5) - acc);
-    }, 0);
-    const index = Math.abs(hash) % colors.length;
-    return colors[index];
-  }
 
   const columns = ["id", "name", "email", "created_at"];
   const operators = [
@@ -497,7 +474,7 @@
                 class="grid grid-cols-[auto_1fr_1fr_15px] gap-4 mb-2 items-center"
               >
                 <icon
-                  class="hero-table-cells w-6 h-6 rounded {getColorFromTableName(
+                  class="hero-table-cells w-6 h-6 rounded {getColorFromName(
                     `${selectedTable.schema}.${selectedTable.name}`
                   )}"
                 ></icon>

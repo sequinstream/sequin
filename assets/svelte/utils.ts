@@ -7,6 +7,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function getColorFromName(name: string): string {
+  const colors = [
+    "bg-red-100",
+    "bg-red-300",
+    "bg-blue-100",
+    "bg-blue-300",
+    "bg-green-100",
+    "bg-green-300",
+    "bg-indigo-100",
+    "bg-indigo-300",
+    "bg-purple-100",
+    "bg-purple-300",
+    "bg-pink-100",
+    "bg-pink-300",
+    "bg-teal-100",
+    "bg-teal-300",
+  ];
+  const hash = name.split("").reduce((acc, char) => {
+    return char.charCodeAt(0) + ((acc << 5) - acc);
+  }, 0);
+  const index = Math.abs(hash) % colors.length;
+  return colors[index];
+}
+
 type FlyAndScaleParams = {
   y?: number;
   x?: number;

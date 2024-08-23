@@ -16,6 +16,7 @@
   "dependencies": {
     "bits-ui": "^0.21.13",
     "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
     "live_svelte": "file:../deps/live_svelte",
     "lucide-svelte": "^0.428.0",
     "phoenix": "file:../deps/phoenix",

@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
+  import { formatRelativeTimestamp } from "$lib/utils";
 
   export let httpEndpoints: Array<{
     id: string;
@@ -49,7 +50,7 @@
         <Table.Row>
           <Table.Head>Name</Table.Head>
           <Table.Head>Base URL</Table.Head>
-          <Table.Head>Created At</Table.Head>
+          <Table.Head>Created at</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -61,7 +62,7 @@
             <Table.Cell>{endpoint.name}</Table.Cell>
             <Table.Cell>{endpoint.baseUrl}</Table.Cell>
             <Table.Cell
-              >{new Date(endpoint.insertedAt).toLocaleString()}</Table.Cell
+              >{formatRelativeTimestamp(endpoint.insertedAt)}</Table.Cell
             >
           </Table.Row>
         {/each}

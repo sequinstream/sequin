@@ -78,6 +78,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> Sequin.Changeset.validate_name()
     |> cast_embed(:tables, with: &tables_changeset/2, required: false)
+    |> cast_assoc(:replication_slot, with: &Sequin.Replication.PostgresReplicationSlot.changeset/2)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,
       message: "Database name must be unique",

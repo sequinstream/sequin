@@ -36,6 +36,7 @@ defmodule SequinWeb.Router do
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.New, :new
       live "/databases/:id", DatabasesLive.Show, :show
+      live "/databases/:id/edit", DatabasesLive.Show, :edit
 
       live "/http-endpoints", HttpEndpointsLive.Index, :index
       live "/http-endpoints/new", HttpEndpointsLive.New, :new

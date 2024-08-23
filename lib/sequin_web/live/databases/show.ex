@@ -18,6 +18,19 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_params(params, _url, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :show, _params) do
+    assign(socket, :page_title, "Show Database")
+  end
+
+  defp apply_action(socket, :edit, _params) do
+    assign(socket, :page_title, "Edit Database")
+  end
+
+  @impl Phoenix.LiveView
   def handle_event("refresh_tables", _, socket) do
     %{database: database} = socket.assigns
 
@@ -34,10 +47,21 @@ defmodule SequinWeb.DatabasesLive.Show do
     {:noreply, push_navigate(socket, to: ~p"/databases")}
   end
 
+  def handle_event("edit", _params, socket) do
+    {:noreply, push_patch(socket, to: ~p"/databases/#{socket.assigns.database.id}/edit")}
+  end
+
   @impl Phoenix.LiveView
   def handle_info({ref, {:ok, updated_db}}, socket) do
     Process.demonitor(ref, [:flush])
     {:noreply, assign(socket, database: updated_db, refreshing_tables: false)}
+  end
+
+  def handle_info({:updated_database, updated_database}, socket) do
+    {:noreply,
+     socket
+     |> assign(database: updated_database)
+     |> push_patch(to: ~p"/databases/#{updated_database.id}")}
   end
 
   def handle_info({ref, {:error, _reason}}, socket) do

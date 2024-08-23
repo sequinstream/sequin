@@ -11,6 +11,8 @@
 
   const dispatch = createEventDispatcher();
 
+  let listening = false;
+
   function handleEscapeKey(event: KeyboardEvent) {
     if (event.key === "Escape" && !showConfirmDialog) {
       event.preventDefault();
@@ -23,8 +25,19 @@
     }
   }
 
+  $: {
+    if (open && !listening) {
+      window.addEventListener("keydown", handleEscapeKey);
+      listening = true;
+    } else if (!open && listening) {
+      window.removeEventListener("keydown", handleEscapeKey);
+      listening = false;
+    }
+  }
+
   onMount(() => {
     window.addEventListener("keydown", handleEscapeKey);
+    listening = true;
   });
 
   onDestroy(() => {

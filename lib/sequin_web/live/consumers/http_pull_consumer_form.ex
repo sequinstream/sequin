@@ -112,7 +112,13 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   end
 
   def handle_event("form_closed", _params, socket) do
-    socket = push_navigate(socket, to: ~p"/consumers")
+    socket =
+      if socket.assigns.http_pull_consumer.id do
+        push_patch(socket, to: ~p"/consumers/#{socket.assigns.http_pull_consumer.id}")
+      else
+        push_navigate(socket, to: ~p"/consumers")
+      end
+
     {:noreply, socket}
   end
 

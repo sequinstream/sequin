@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
+  import { formatRelativeTimestamp } from "$lib/utils";
 
   export let databases: Array<{
     id: string;
@@ -51,7 +52,7 @@
           <Table.Head>Name</Table.Head>
           <Table.Head>Hostname</Table.Head>
           <Table.Head>Port</Table.Head>
-          <Table.Head>Created At</Table.Head>
+          <Table.Head>Created at</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -64,7 +65,7 @@
             <Table.Cell>{database.hostname}</Table.Cell>
             <Table.Cell>{database.port}</Table.Cell>
             <Table.Cell
-              >{new Date(database.insertedAt).toLocaleString()}</Table.Cell
+              >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
             >
           </Table.Row>
         {/each}

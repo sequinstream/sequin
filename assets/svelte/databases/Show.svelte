@@ -6,12 +6,14 @@
     Clock,
     Database,
     ExternalLink,
+    RefreshCw,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Badge } from "$lib/components/ui/badge";
   import { formatDistanceToNow } from "date-fns";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import { formatRelativeTimestamp } from "$lib/utils";
 
   interface Table {
     schema: string;
@@ -37,11 +39,16 @@
 
   export let database: PostgresDatabase;
   export let live: any;
+  export let parent: string;
+
+  function pushEvent(event: string, params = {}) {
+    live.pushEventTo("#" + parent, event, params);
+  }
 
   let showDeleteConfirmDialog = false;
 
   function handleEdit() {
-    live.pushEventTo("#database-show", "edit", {});
+    pushEvent("edit");
   }
 
   function handleDelete() {
@@ -50,15 +57,11 @@
 
   function confirmDelete() {
     showDeleteConfirmDialog = false;
-    live.pushEventTo("#database-show", "delete_database", {});
+    pushEvent("delete_database");
   }
 
   function cancelDelete() {
     showDeleteConfirmDialog = false;
-  }
-
-  function handleRefreshTables() {
-    live.pushEventTo("#database-show", "refresh_tables", {});
   }
 </script>
 
@@ -77,20 +80,24 @@
             active
           </Badge>
         </div>
-        <div class="flex items-center space-x-4 text-sm text-gray-500">
-          <span
-            >Created {formatDistanceToNow(new Date(database.inserted_at), {
-              addSuffix: true,
-            })}</span
+        <div class="flex items-center space-x-4">
+          <div
+            class="hidden lg:flex flex-col items-left gap-1 text-xs text-gray-500"
           >
-          <span
-            >Updated {formatDistanceToNow(new Date(database.updated_at), {
-              addSuffix: true,
-            })}</span
+            <div class="flex items-center gap-2">
+              <Clock class="h-4 w-4" />
+              <span
+                >Created {formatRelativeTimestamp(database.inserted_at)}</span
+              >
+            </div>
+            <div class="flex items-center gap-2">
+              <RefreshCw class="h-4 w-4" />
+              <span>Updated {formatRelativeTimestamp(database.updated_at)}</span
+              >
+            </div>
+          </div>
+          <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button
           >
-          <Button variant="outline" size="sm" on:click={handleEdit}>
-            Edit
-          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -174,39 +181,6 @@
             <p class="font-medium">{database.queue_interval} ms</p>
           </div>
         </div>
-      </CardContent>
-    </Card>
-
-    <Card>
-      <CardContent class="p-6">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-semibold">Source Tables</h2>
-          <Button variant="outline" size="sm" on:click={handleRefreshTables}>
-            <ExternalLink class="h-4 w-4 mr-2" />
-            Refresh Tables
-          </Button>
-        </div>
-        <div class="space-y-2">
-          {#each database.tables as table}
-            <div class="flex items-center space-x-2">
-              <Database class="h-4 w-4 text-gray-400" />
-              <span class="font-medium">{table.schema}</span>
-              <span class="text-gray-500">{table.name}</span>
-            </div>
-          {/each}
-        </div>
-        {#if database.tables.length === 0}
-          <div class="text-center py-6 bg-gray-50 rounded-lg">
-            <Database class="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <h3 class="text-sm font-medium text-gray-900 mb-1">
-              No tables found
-            </h3>
-            <p class="text-sm text-gray-500">
-              This database doesn't have any tables yet, or they haven't been
-              refreshed.
-            </p>
-          </div>
-        {/if}
       </CardContent>
     </Card>
   </main>

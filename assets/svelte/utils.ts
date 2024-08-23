@@ -2,9 +2,38 @@ import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { cubicOut } from "svelte/easing";
 import type { TransitionConfig } from "svelte/transition";
-
+import { formatDistanceToNow } from "date-fns";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+export function formatRelativeTimestamp(timestamp: string): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffInMilliseconds = now.getTime() - date.getTime();
+  const diffInDays = Math.floor(diffInMilliseconds / (1000 * 60 * 60 * 24));
+  const diffInWeeks = Math.floor(diffInDays / 7);
+  const diffInMonths =
+    (now.getFullYear() - date.getFullYear()) * 12 +
+    now.getMonth() -
+    date.getMonth();
+  const diffInYears = now.getFullYear() - date.getFullYear();
+
+  if (diffInDays < 7) {
+    return formatDistanceToNow(date, { addSuffix: true });
+  } else if (diffInWeeks === 1) {
+    return "last week";
+  } else if (diffInWeeks < 4) {
+    return `${diffInWeeks} weeks ago`;
+  } else if (diffInMonths === 1) {
+    return "last month";
+  } else if (diffInMonths < 12) {
+    return `${diffInMonths} months ago`;
+  } else if (diffInYears === 1) {
+    return "last year";
+  } else {
+    return `${diffInYears} years ago`;
+  }
 }
 
 export function getColorFromName(name: string): string {

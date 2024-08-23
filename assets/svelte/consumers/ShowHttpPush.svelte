@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { formatDistanceToNow } from "date-fns";
   import {
     ArrowLeft,
     CheckCircle2,
@@ -21,7 +20,7 @@
     TableHeader,
     TableRow,
   } from "$lib/components/ui/table";
-  import { getColorFromName } from "../utils";
+  import { formatRelativeTimestamp, getColorFromName } from "../utils";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
 
   export let consumer;
@@ -34,11 +33,6 @@
       : consumer.health > 70
         ? "text-yellow-500"
         : "text-red-500";
-
-  function formatTimestamp(timestamp: string) {
-    const date = new Date(timestamp);
-    return formatDistanceToNow(date, { addSuffix: true });
-  }
 
   function handleEdit() {
     live.pushEventTo("#" + parent, "edit", {});
@@ -79,15 +73,18 @@
         </div>
         <div class="flex items-center space-x-4">
           <div
-            class="hidden md:flex items-center space-x-4 text-sm text-gray-500"
+            class="hidden lg:flex flex-col items-left gap-1 text-xs text-gray-500"
           >
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center gap-2">
               <Clock class="h-4 w-4" />
-              <span>Created {formatTimestamp(consumer.inserted_at)}</span>
+              <span
+                >Created {formatRelativeTimestamp(consumer.inserted_at)}</span
+              >
             </div>
-            <div class="flex items-center space-x-2">
+            <div class="flex items-center gap-2">
               <RefreshCw class="h-4 w-4" />
-              <span>Updated {formatTimestamp(consumer.updated_at)}</span>
+              <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span
+              >
             </div>
           </div>
           <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button

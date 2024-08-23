@@ -8,6 +8,7 @@
     DropdownMenuItem,
     DropdownMenuTrigger,
   } from "$lib/components/ui/dropdown-menu";
+  import { formatRelativeTimestamp } from "$lib/utils";
   // import { Input } from "$lib/components/ui/input";
   // import { Label } from "$lib/components/ui/label";
   // import {
@@ -98,7 +99,7 @@
         <Table.Head>Name</Table.Head>
         <Table.Head>Type</Table.Head>
         <Table.Head>Status</Table.Head>
-        <Table.Head>Created At</Table.Head>
+        <Table.Head>Created at</Table.Head>
       </Table.Row>
     </Table.Header>
     <Table.Body>
@@ -110,8 +111,7 @@
           <Table.Cell>{consumer.name}</Table.Cell>
           <Table.Cell>{consumer.type}</Table.Cell>
           <Table.Cell>{consumer.status}</Table.Cell>
-          <Table.Cell
-            >{new Date(consumer.insertedAt).toLocaleString()}</Table.Cell
+          <Table.Cell>{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
           >
         </Table.Row>
       {/each}

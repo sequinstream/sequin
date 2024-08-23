@@ -45,6 +45,7 @@
     name: http_push_consumer.name || "",
     ackWaitMs: http_push_consumer.ack_wait_ms || 30000,
     maxAckPending: http_push_consumer.max_ack_pending || 10000,
+    maxWaiting: http_push_consumer.max_waiting,
     httpEndpointId: http_push_consumer.http_endpoint_id,
     httpEndpoint: {
       name: "",
@@ -111,6 +112,8 @@
 
   function handleFilterChange(newFilters) {
     form.sourceTableFilters = newFilters;
+    // Trigger a form update to refresh error messages
+    pushEvent("form_updated", { form });
   }
 
   function handleClose() {
@@ -281,7 +284,7 @@
             columns={selectedTable ? selectedTable.columns : []}
             onFilterChange={handleFilterChange}
             disabled={!form.postgresDatabaseId && !form.tableOid}
-            errors={errors.source_tables?.[0]?.column_filters}
+            errors={errors.source_tables?.[0]?.column_filters || []}
           />
         </div>
       </CardContent>

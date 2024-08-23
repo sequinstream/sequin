@@ -5,9 +5,9 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.SourceTable.BooleanValue
   alias Sequin.Consumers.SourceTable.DateTimeValue
-  alias Sequin.Consumers.SourceTable.IntegerValue
   alias Sequin.Consumers.SourceTable.ListValue
   alias Sequin.Consumers.SourceTable.NullValue
+  alias Sequin.Consumers.SourceTable.NumberValue
   alias Sequin.Consumers.SourceTable.StringValue
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
@@ -554,7 +554,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -603,7 +603,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 3,
@@ -708,7 +708,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :==,
-                  value: %IntegerValue{value: 123}
+                  value: %NumberValue{value: 123}
                 )
               ]
             )
@@ -876,7 +876,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :!=,
-                  value: %IntegerValue{value: 123}
+                  value: %NumberValue{value: 123}
                 )
               ]
             )
@@ -1002,7 +1002,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -1086,7 +1086,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -1170,7 +1170,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>=,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -1254,7 +1254,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :<=,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -1762,7 +1762,7 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :>,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 )
               ]
             )
@@ -2063,22 +2063,22 @@ defmodule Sequin.ConsumersTest do
                 ConsumersFactory.column_filter(
                   column_attnum: 1,
                   operator: :>,
-                  value: %IntegerValue{value: 10}
+                  value: %NumberValue{value: 10}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 2,
                   operator: :<,
-                  value: %IntegerValue{value: 20}
+                  value: %NumberValue{value: 20}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 3,
                   operator: :>=,
-                  value: %IntegerValue{value: 30}
+                  value: %NumberValue{value: 30}
                 ),
                 ConsumersFactory.column_filter(
                   column_attnum: 4,
                   operator: :<=,
-                  value: %IntegerValue{value: 40}
+                  value: %NumberValue{value: 40}
                 )
               ]
             )

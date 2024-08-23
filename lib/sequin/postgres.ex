@@ -2,6 +2,7 @@ defmodule Sequin.Postgres do
   @moduledoc false
   import Ecto.Query, only: [from: 2]
 
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Error
   alias Sequin.Repo
 
@@ -24,6 +25,22 @@ defmodule Sequin.Postgres do
       "jsonb" -> :map
       "json" -> :map
       # Default to string for unknown types
+      _ -> :string
+    end
+  end
+
+  @spec pg_simple_type_to_filter_type(String.t()) :: SourceTable.filter_type()
+  def pg_simple_type_to_filter_type(pg_type) do
+    case pg_type do
+      "bigint" -> :number
+      "boolean" -> :boolean
+      "character varying" -> :string
+      "integer" -> :number
+      "text" -> :string
+      "timestamp" <> _ -> :datetime
+      "uuid" -> :string
+      "numeric" -> :number
+      "date" -> :datetime
       _ -> :string
     end
   end

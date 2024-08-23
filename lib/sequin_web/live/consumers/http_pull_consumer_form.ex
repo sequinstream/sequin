@@ -4,9 +4,11 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Postgres
   alias Sequin.Repo
 
   @impl Phoenix.LiveComponent
@@ -48,6 +50,8 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   def update(assigns, socket) do
     http_pull_consumer =
       assigns[:http_pull_consumer] || %HttpPullConsumer{account_id: current_account_id(assigns)}
+
+    http_pull_consumer = Repo.preload(http_pull_consumer, [:postgres_database])
 
     socket =
       socket
@@ -146,14 +150,7 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
       "source_tables" => [
         %{
           "oid" => form["tableOid"],
-          "column_filters" =>
-            Enum.map(form["sourceTableFilters"], fn filter ->
-              %{
-                "column" => filter["column"],
-                "operator" => filter["operator"],
-                "value" => %{value: filter["value"], __type__: "string"}
-              }
-            end),
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"] || []
         }
       ]
@@ -182,7 +179,9 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   end
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
-    Sequin.Error.errors_on(changeset)
+    changeset
+    |> Sequin.Error.errors_on()
+    |> dbg()
   end
 
   defp encode_database(database) do
@@ -201,7 +200,8 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
                   "attnum" => column.attnum,
                   "isPk?" => column.is_pk?,
                   "name" => column.name,
-                  "type" => column.type
+                  "type" => column.type,
+                  "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
                 }
               end)
           }

@@ -1,0 +1,923 @@
+diff --git a/assets/svelte/components/TableFilters.svelte b/assets/svelte/components/TableFilters.svelte
+index 69daf11..b4aa0d7 100644
+--- a/assets/svelte/components/TableFilters.svelte
++++ b/assets/svelte/components/TableFilters.svelte
+@@ -11,17 +11,27 @@
+   import { PlusCircle } from "lucide-svelte";
+ 
+   type Filter = {
+-    column: number | null;
++    columnAttnum: number | null;
+     operator: string | null;
+     value: string;
++    valueType: string | null;
+   };
+ 
+   export let filters: Array<Filter>;
+-  export let columns: Array<{ attnum: number; name: string }>;
++  export let columns: Array<{
++    attnum: number;
++    name: string;
++    filterType: string;
++  }>;
+   export let onFilterChange: (filters: Array<Filter>) => void;
+   export let disabled: boolean = false;
+-  export let errors: Array<{ operator?: string[]; column_attnum?: string[] }> =
+-    [];
++  export let errors: Array<{
++    operator?: string[];
++    columnAttnum?: string[];
++    value?: { value?: string[] };
++  } | null> = [];
++
++  $: console.log(errors);
+ 
+   const operators = [
+     "=",
+@@ -37,7 +47,13 @@
+   ];
+ 
+   function addFilter() {
+-    filters = [...filters, { column: null, operator: null, value: "" }];
++    const newFilter: Filter = {
++      columnAttnum: null,
++      operator: null,
++      value: "",
++      valueType: null,
++    };
++    filters = [...filters, newFilter];
+     onFilterChange(filters);
+   }
+ 
+@@ -49,30 +65,49 @@
+   function updateFilter(
+     index: number,
+     key: keyof {
+-      column: number | null;
++      columnAttnum: number | null;
+       operator: string | null;
+-      value: string;
++      value: string | null;
++      valueType: string | null;
+     },
+     value: any
+   ) {
+-    filters = filters.map((filter, i) =>
+-      i === index
+-        ? {
+-            ...filter,
+-            [key]: value,
+-          }
+-        : filter
+-    );
++    filters = filters.map((filter, i) => {
++      if (i === index) {
++        const updatedFilter = { ...filter, [key]: value };
++
++        // Clear and disable value field for IS NULL and IS NOT NULL operators
++        if (key === "operator" && ["IS NULL", "IS NOT NULL"].includes(value)) {
++          updatedFilter.value = "";
++        }
++
++        // Set valueType when columnAttnum is updated
++        if (key === "columnAttnum") {
++          const selectedColumn = columns.find((col) => col.attnum === value);
++          updatedFilter.valueType = selectedColumn
++            ? selectedColumn.filterType
++            : "";
++        }
++
++        return updatedFilter;
++      }
++      return filter;
++    });
+     onFilterChange(filters);
+   }
+ 
+-  function getErrorMessage(index: number): string {
+-    if (!errors[index]) return "";
+-    const error = errors[index];
+-    if (error.column_attnum) return error.column_attnum[0];
+-    if (error.operator) return error.operator[0];
+-    return "";
+-  }
++  $: errorMessages = errors.reduce(
++    (acc, error, index) => {
++      if (error) {
++        if (error.columnAttnum) acc[index] = error.columnAttnum[0];
++        else if (error.operator) acc[index] = error.operator[0];
++        else if (error.value && error.value.value)
++          acc[index] = error.value.value[0];
++      }
++      return acc;
++    },
++    {} as Record<number, string>
++  );
+ </script>
+ 
+ <div class="mb-6">
+@@ -80,12 +115,12 @@
+     <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
+       <Select
+         selected={{
+-          value: filter.column,
++          value: filter.columnAttnum,
+           label:
+-            columns.find((col) => col.attnum === filter.column)?.name ||
++            columns.find((col) => col.attnum === filter.columnAttnum)?.name ||
+             "Column",
+         }}
+-        onSelectedChange={(e) => updateFilter(index, "column", e.value)}
++        onSelectedChange={(e) => updateFilter(index, "columnAttnum", e.value)}
+         {disabled}
+       >
+         <SelectTrigger class="border-carbon-100">
+@@ -119,7 +154,8 @@
+         placeholder="Value"
+         value={filter.value}
+         on:input={(e) => updateFilter(index, "value", e.currentTarget.value)}
+-        {disabled}
++        disabled={disabled ||
++          ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
+       />
+       <button
+         on:click={() => removeFilter(index)}
+@@ -129,9 +165,9 @@
+         <icon class="hero-x-mark w-4 h-4" />
+       </button>
+     </div>
+-    {#if Array.isArray(errors) && errors[index]}
++    {#if errorMessages[index]}
+       <p class="text-destructive text-sm mt-1 mb-2">
+-        {getErrorMessage(index)}
++        {errorMessages[index]}
+       </p>
+     {/if}
+   {/each}
+diff --git a/assets/svelte/consumers/HttpPushForm.svelte b/assets/svelte/consumers/HttpPushForm.svelte
+index 6f90b83..f41e4d4 100644
+--- a/assets/svelte/consumers/HttpPushForm.svelte
++++ b/assets/svelte/consumers/HttpPushForm.svelte
+@@ -45,6 +45,7 @@
+     name: http_push_consumer.name || "",
+     ackWaitMs: http_push_consumer.ack_wait_ms || 30000,
+     maxAckPending: http_push_consumer.max_ack_pending || 10000,
++    maxWaiting: http_push_consumer.max_waiting,
+     httpEndpointId: http_push_consumer.http_endpoint_id,
+     httpEndpoint: {
+       name: "",
+@@ -111,6 +112,8 @@
+ 
+   function handleFilterChange(newFilters) {
+     form.sourceTableFilters = newFilters;
++    // Trigger a form update to refresh error messages
++    pushEvent("form_updated", { form });
+   }
+ 
+   function handleClose() {
+@@ -281,7 +284,7 @@
+             columns={selectedTable ? selectedTable.columns : []}
+             onFilterChange={handleFilterChange}
+             disabled={!form.postgresDatabaseId && !form.tableOid}
+-            errors={errors.source_tables?.[0]?.column_filters}
++            errors={errors.source_tables?.[0]?.column_filters || []}
+           />
+         </div>
+       </CardContent>
+diff --git a/lib/sequin/consumers/consumer_event_data.ex b/lib/sequin/consumers/consumer_event_data.ex
+index 9401755..0e3ab5b 100644
+--- a/lib/sequin/consumers/consumer_event_data.ex
++++ b/lib/sequin/consumers/consumer_event_data.ex
+@@ -25,6 +25,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
+       field :table_schema, :string
+       field :table_name, :string
+       field :commit_timestamp, :utc_datetime_usec
++      field :consumer, :map
+     end
+   end
+ 
+diff --git a/lib/sequin/consumers/consumer_record_data.ex b/lib/sequin/consumers/consumer_record_data.ex
+index 15df8c9..3a0614b 100644
+--- a/lib/sequin/consumers/consumer_record_data.ex
++++ b/lib/sequin/consumers/consumer_record_data.ex
+@@ -10,6 +10,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
+     typedstruct do
+       field :table_schema, :string
+       field :table_name, :string
++      field :consumer, :map
+     end
+   end
+ 
+diff --git a/lib/sequin/consumers/consumers.ex b/lib/sequin/consumers/consumers.ex
+index 7008efe..50f5d34 100644
+--- a/lib/sequin/consumers/consumers.ex
++++ b/lib/sequin/consumers/consumers.ex
+@@ -856,10 +856,27 @@ defmodule Sequin.Consumers do
+   # Source Table Matching
+ 
+   def matches_message?(consumer, message) do
++    Logger.info("[Consumers] Matching message to consumer #{consumer.id}")
++
+     Enum.any?(consumer.source_tables, fn source_table ->
+       table_matches = source_table.oid == message.table_oid
+       action_matches = action_matches?(source_table.actions, message.action)
+       column_filters_match = column_filters_match?(source_table.column_filters, message)
++
++      Logger.debug("""
++      [Consumers]
++        matches?: #{table_matches && action_matches && column_filters_match}
++          table_matches: #{table_matches}
++          action_matches: #{action_matches}
++          column_filters_match: #{column_filters_match}
++
++        consumer:
++          #{inspect(consumer, pretty: true)}
++
++        message:
++          #{inspect(message, pretty: true)}
++      """)
++
+       table_matches && action_matches && column_filters_match
+     end)
+   end
+diff --git a/lib/sequin/consumers/source_table.ex b/lib/sequin/consumers/source_table.ex
+index 02b242b..85a7034 100644
+--- a/lib/sequin/consumers/source_table.ex
++++ b/lib/sequin/consumers/source_table.ex
+@@ -16,6 +16,8 @@ defmodule Sequin.Consumers.SourceTable do
+           column_filters: [ColumnFilter.t()]
+         }
+ 
++  @type filter_type :: :string | :number | :boolean | :datetime
++
+   defmodule ColumnFilter do
+     @moduledoc false
+     use Ecto.Schema
+@@ -25,6 +27,62 @@ defmodule Sequin.Consumers.SourceTable do
+     @operators [:==, :!=, :>, :<, :>=, :<=, :in, :not_in, :is_null, :not_null]
+     def operator_values, do: @operators
+ 
++    def from_external_operator(nil), do: nil
++
++    def from_external_operator(external_operator) do
++      case String.downcase(external_operator) do
++        "=" -> :==
++        "!=" -> :!=
++        ">" -> :>
++        "<" -> :<
++        ">=" -> :>=
++        "<=" -> :<=
++        "in" -> :in
++        "not in" -> :not_in
++        "is null" -> :is_null
++        "not null" -> :not_null
++        _ -> raise "Invalid operator: #{external_operator}"
++      end
++    end
++
++    def from_external(%{
++          "columnAttnum" => column_attnum,
++          "operator" => operator,
++          "valueType" => value_type,
++          "value" => value
++        }) do
++      operator = from_external_operator(operator)
++
++      value_type =
++        case operator do
++          :is_null -> :null
++          :not_null -> :null
++          :in -> :list
++          :not_in -> :list
++          _ -> value_type
++        end
++
++      value =
++        case value_type do
++          :list ->
++            (value || "")
++            |> String.split(",")
++            |> Enum.map(&String.trim/1)
++
++          :null ->
++            nil
++
++          _ ->
++            value
++        end
++
++      %{
++        column_attnum: column_attnum,
++        operator: operator,
++        value: %{value: value, __type__: value_type}
++      }
++    end
++
+     @type t :: %__MODULE__{
+             column_attnum: integer,
+             column_name: String.t(),
+@@ -40,8 +98,7 @@ defmodule Sequin.Consumers.SourceTable do
+       polymorphic_embeds_one(:value,
+         types: [
+           string: Sequin.Consumers.SourceTable.StringValue,
+-          integer: Sequin.Consumers.SourceTable.IntegerValue,
+-          float: Sequin.Consumers.SourceTable.FloatValue,
++          number: Sequin.Consumers.SourceTable.NumberValue,
+           boolean: Sequin.Consumers.SourceTable.BooleanValue,
+           datetime: Sequin.Consumers.SourceTable.DateTimeValue,
+           list: Sequin.Consumers.SourceTable.ListValue,
+@@ -61,10 +118,10 @@ defmodule Sequin.Consumers.SourceTable do
+     end
+ 
+     defp validate_null_value_operators(changeset) do
+-      value_type = get_field(changeset, :value).__struct__
++      value = get_field(changeset, :value)
+       operator = get_field(changeset, :operator)
+ 
+-      if value_type == NullValue and operator not in [:is_null, :not_null] do
++      if is_struct(value, NullValue) and operator not in [:is_null, :not_null] do
+         add_error(changeset, :operator, "must be either is_null or not_null for NullValue")
+       else
+         changeset
+@@ -108,7 +165,7 @@ defmodule Sequin.Consumers.SourceTable.StringValue do
+   end
+ end
+ 
+-defmodule Sequin.Consumers.SourceTable.IntegerValue do
++defmodule Sequin.Consumers.SourceTable.NumberValue do
+   @moduledoc false
+   use Ecto.Schema
+ 
+@@ -116,7 +173,7 @@ defmodule Sequin.Consumers.SourceTable.IntegerValue do
+ 
+   @primary_key false
+   embedded_schema do
+-    field :value, :integer
++    field :value, :float
+   end
+ 
+   def changeset(struct, params) do
+@@ -126,7 +183,7 @@ defmodule Sequin.Consumers.SourceTable.IntegerValue do
+   end
+ end
+ 
+-defmodule Sequin.Consumers.SourceTable.FloatValue do
++defmodule Sequin.Consumers.SourceTable.BooleanValue do
+   @moduledoc false
+   use Ecto.Schema
+ 
+@@ -134,32 +191,45 @@ defmodule Sequin.Consumers.SourceTable.FloatValue do
+ 
+   @primary_key false
+   embedded_schema do
+-    field :value, :float
++    field :value, :boolean
+   end
+ 
+   def changeset(struct, params) do
+-    struct
+-    |> cast(params, [:value])
+-    |> validate_required([:value])
++    case validate_boolean_format(params) do
++      {:ok, validated_params} ->
++        struct
++        |> cast(validated_params, [:value])
++        |> validate_required([:value])
++
++      {:error, error} ->
++        struct
++        |> cast(%{}, [])
++        |> add_error(:value, error)
++    end
+   end
+-end
+-
+-defmodule Sequin.Consumers.SourceTable.BooleanValue do
+-  @moduledoc false
+-  use Ecto.Schema
+ 
+-  import Ecto.Changeset
++  @error_msg ~s(must be either "true" or "false")
++  defp validate_boolean_format(%{"value" => value}) when is_binary(value) do
++    case String.downcase(value) do
++      "true" -> {:ok, %{value: true}}
++      "false" -> {:ok, %{value: false}}
++      _ -> {:error, @error_msg}
++    end
++  end
+ 
+-  @primary_key false
+-  embedded_schema do
+-    field :value, :boolean
++  defp validate_boolean_format(%{value: value}) when is_boolean(value) do
++    {:ok, %{value: value}}
+   end
+ 
+-  def changeset(struct, params) do
+-    struct
+-    |> cast(params, [:value])
+-    |> validate_required([:value])
++  defp validate_boolean_format(%{value: value}) when is_binary(value) do
++    case String.downcase(value) do
++      "true" -> {:ok, %{value: true}}
++      "false" -> {:ok, %{value: false}}
++      _ -> {:error, @error_msg}
++    end
+   end
++
++  defp validate_boolean_format(_), do: {:error, @error_msg}
+ end
+ 
+ defmodule Sequin.Consumers.SourceTable.DateTimeValue do
+@@ -174,10 +244,34 @@ defmodule Sequin.Consumers.SourceTable.DateTimeValue do
+   end
+ 
+   def changeset(struct, params) do
+-    struct
+-    |> cast(params, [:value])
+-    |> validate_required([:value])
++    case validate_datetime_format(params) do
++      :ok ->
++        struct
++        |> cast(params, [:value])
++        |> validate_required([:value])
++
++      {:error, error} ->
++        struct
++        |> cast(params, [])
++        |> add_error(:value, error)
++    end
++  end
++
++  defp validate_datetime_format(%{"value" => value}) when is_binary(value) do
++    case DateTime.from_iso8601(value) do
++      {:ok, _, _} -> :ok
++      {:error, _} -> {:error, "must be a valid UTC datetime in ISO 8601 format (e.g., 2023-04-13T14:30:00Z)"}
++    end
+   end
++
++  defp validate_datetime_format(%{value: value}) when is_binary(value) do
++    case DateTime.from_iso8601(value) do
++      {:ok, _, _} -> :ok
++      {:error, _} -> {:error, "must be a valid UTC datetime in ISO 8601 format (e.g., 2023-04-13T14:30:00Z)"}
++    end
++  end
++
++  defp validate_datetime_format(_), do: :ok
+ end
+ 
+ defmodule Sequin.Consumers.SourceTable.ListValue do
+diff --git a/lib/sequin/error.ex b/lib/sequin/error.ex
+index 56148c8..519f903 100644
+--- a/lib/sequin/error.ex
++++ b/lib/sequin/error.ex
+@@ -266,8 +266,11 @@ defmodule Sequin.Error do
+     embedded_errors =
+       changeset.changes
+       |> Enum.map(fn
+-        {key, %Ecto.Changeset{valid?: false} = embedded_changeset} ->
+-          {key, traverse_errors(embedded_changeset)}
++        {key, %Ecto.Changeset{} = embedded_changeset} ->
++          {key, errors_on(embedded_changeset)}
++
++        {key, value} when is_list(value) ->
++          {key, errors_on_list(value)}
+ 
+         _ ->
+           nil
+@@ -278,13 +281,22 @@ defmodule Sequin.Error do
+     Map.merge(errors, embedded_errors)
+   end
+ 
++  def errors_on(_), do: %{}
++
++  defp errors_on_list(list) do
++    list
++    |> Enum.map(fn
++      %Ecto.Changeset{} = changeset -> errors_on(changeset)
++      _ -> nil
++    end)
++    |> Enum.reject(&is_nil/1)
++  end
++
+   defp traverse_errors(changeset) do
+-    changeset
+-    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
++    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+       Regex.replace(~r"%{(\w+)}", msg, fn _match, key ->
+         opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+       end)
+     end)
+-    |> Map.new()
+   end
+ end
+diff --git a/lib/sequin/extensions/replication.ex b/lib/sequin/extensions/replication.ex
+index eb38e93..1370ff2 100644
+--- a/lib/sequin/extensions/replication.ex
++++ b/lib/sequin/extensions/replication.ex
+@@ -76,6 +76,8 @@ defmodule Sequin.Extensions.Replication do
+       connection: connection
+     }
+ 
++    Logger.debug("[Replication] Starting link with opts: #{inspect(rep_conn_opts, pretty: true)}")
++
+     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
+   end
+ 
+@@ -119,6 +121,8 @@ defmodule Sequin.Extensions.Replication do
+ 
+   @impl Postgrex.ReplicationConnection
+   def handle_connect(state) do
++    Logger.debug("[Replication] Handling connect")
++
+     query =
+       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
+ 
+@@ -152,6 +156,8 @@ defmodule Sequin.Extensions.Replication do
+   # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+   # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
+   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
++    # Logger.debug("[Replication] Received keepalive message")
++
+     messages =
+       case reply do
+         1 ->
+diff --git a/lib/sequin/postgres.ex b/lib/sequin/postgres.ex
+index 0ab3fd4..d6261e0 100644
+--- a/lib/sequin/postgres.ex
++++ b/lib/sequin/postgres.ex
+@@ -2,6 +2,7 @@ defmodule Sequin.Postgres do
+   @moduledoc false
+   import Ecto.Query, only: [from: 2]
+ 
++  alias Sequin.Consumers.SourceTable
+   alias Sequin.Error
+   alias Sequin.Repo
+ 
+@@ -28,6 +29,22 @@ defmodule Sequin.Postgres do
+     end
+   end
+ 
++  @spec pg_simple_type_to_filter_type(String.t()) :: SourceTable.filter_type()
++  def pg_simple_type_to_filter_type(pg_type) do
++    case pg_type do
++      "bigint" -> :number
++      "boolean" -> :boolean
++      "character varying" -> :string
++      "integer" -> :number
++      "text" -> :string
++      "timestamp" <> _ -> :datetime
++      "uuid" -> :string
++      "numeric" -> :number
++      "date" -> :datetime
++      _ -> :string
++    end
++  end
++
+   def result_to_map(%Postgrex.Result{} = result) do
+     %{columns: columns, rows: rows} = result
+ 
+diff --git a/lib/sequin/replication/message_handler.ex b/lib/sequin/replication/message_handler.ex
+index 0daa798..e28dafd 100644
+--- a/lib/sequin/replication/message_handler.ex
++++ b/lib/sequin/replication/message_handler.ex
+@@ -10,6 +10,8 @@ defmodule Sequin.Replication.MessageHandler do
+   alias Sequin.Replication.PostgresReplicationSlot
+   alias Sequin.Repo
+ 
++  require Logger
++
+   defmodule Context do
+     @moduledoc false
+     use TypedStruct
+@@ -26,11 +28,15 @@ defmodule Sequin.Replication.MessageHandler do
+ 
+   @impl MessageHandlerBehaviour
+   def handle_messages(%Context{} = ctx, messages) do
++    Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
++
+     messages
+     |> Enum.flat_map(fn message ->
+       ctx.consumers
+       |> Enum.map(fn consumer ->
+         if Consumers.matches_message?(consumer, message) do
++          Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
++
+           cond do
+             consumer.message_kind == :event ->
+               {:insert, consumer_event(consumer, message)}
+@@ -55,7 +61,7 @@ defmodule Sequin.Replication.MessageHandler do
+       record_pks: Enum.map(message.ids, &to_string/1),
+       table_oid: message.table_oid,
+       deliver_count: 0,
+-      data: event_data_from_message(message)
++      data: event_data_from_message(message, consumer)
+     }
+   end
+ 
+@@ -69,40 +75,44 @@ defmodule Sequin.Replication.MessageHandler do
+     }
+   end
+ 
+-  defp event_data_from_message(%Message{action: :insert} = message) do
++  defp event_data_from_message(%Message{action: :insert} = message, consumer) do
+     %{
+       record: fields_to_map(message.fields),
+       changes: nil,
+       action: :insert,
+-      metadata: metadata(message)
++      metadata: metadata(message, consumer)
+     }
+   end
+ 
+-  defp event_data_from_message(%Message{action: :update} = message) do
++  defp event_data_from_message(%Message{action: :update} = message, consumer) do
+     changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
+ 
+     %{
+       record: fields_to_map(message.fields),
+       changes: changes,
+       action: :update,
+-      metadata: metadata(message)
++      metadata: metadata(message, consumer)
+     }
+   end
+ 
+-  defp event_data_from_message(%Message{action: :delete} = message) do
++  defp event_data_from_message(%Message{action: :delete} = message, consumer) do
+     %{
+       record: fields_to_map(message.old_fields),
+       changes: nil,
+       action: :delete,
+-      metadata: metadata(message)
++      metadata: metadata(message, consumer)
+     }
+   end
+ 
+-  defp metadata(%Message{} = message) do
++  defp metadata(%Message{} = message, consumer) do
+     %{
+       table_name: message.table_name,
+       table_schema: message.table_schema,
+-      commit_timestamp: message.commit_timestamp
++      commit_timestamp: message.commit_timestamp,
++      consumer: %{
++        id: consumer.id,
++        name: consumer.name
++      }
+     }
+   end
+ 
+diff --git a/lib/sequin/string.ex b/lib/sequin/string.ex
+index 6baf920..e8b2fcb 100644
+--- a/lib/sequin/string.ex
++++ b/lib/sequin/string.ex
+@@ -93,4 +93,7 @@ defmodule Sequin.String do
+ 
+   defp validate_token(""), do: "invalid_key_token"
+   defp validate_token(identifier), do: identifier
++
++  def downcase(nil), do: nil
++  def downcase(string) when is_binary(string), do: String.downcase(string)
+ end
+diff --git a/lib/sequin_web/live/consumers/http_pull_consumer_form.ex b/lib/sequin_web/live/consumers/http_pull_consumer_form.ex
+index 18bb180..2001d71 100644
+--- a/lib/sequin_web/live/consumers/http_pull_consumer_form.ex
++++ b/lib/sequin_web/live/consumers/http_pull_consumer_form.ex
+@@ -49,6 +49,8 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
+     http_pull_consumer =
+       assigns[:http_pull_consumer] || %HttpPullConsumer{account_id: current_account_id(assigns)}
+ 
++    http_pull_consumer = Repo.preload(http_pull_consumer, [:postgres_database])
++
+     socket =
+       socket
+       |> assign(assigns)
+diff --git a/lib/sequin_web/live/consumers/http_push_consumer_form.ex b/lib/sequin_web/live/consumers/http_push_consumer_form.ex
+index 13204e2..584b5ba 100644
+--- a/lib/sequin_web/live/consumers/http_push_consumer_form.ex
++++ b/lib/sequin_web/live/consumers/http_push_consumer_form.ex
+@@ -4,9 +4,11 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+ 
+   alias Sequin.Consumers
+   alias Sequin.Consumers.HttpPushConsumer
++  alias Sequin.Consumers.SourceTable.ColumnFilter
+   alias Sequin.Databases
+   alias Sequin.Databases.PostgresDatabase
+   alias Sequin.Databases.PostgresDatabase.Table
++  alias Sequin.Postgres
+   alias Sequin.Repo
+ 
+   @impl Phoenix.LiveComponent
+@@ -51,6 +53,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+     http_push_consumer =
+       assigns[:http_push_consumer] || %HttpPushConsumer{account_id: current_account_id(assigns)}
+ 
++    http_push_consumer = Repo.preload(http_push_consumer, [:http_endpoint, :postgres_database])
++
+     socket =
+       socket
+       |> assign(assigns)
+@@ -153,14 +157,7 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+       "source_tables" => [
+         %{
+           "oid" => form["tableOid"],
+-          "column_filters" =>
+-            Enum.map(form["sourceTableFilters"], fn filter ->
+-              %{
+-                "column" => filter["column"],
+-                "operator" => filter["operator"],
+-                "value" => %{value: filter["value"], __type__: "string"}
+-              }
+-            end),
++          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+           "actions" => form["sourceTableActions"] || []
+         }
+       ]
+@@ -196,7 +193,9 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+   end
+ 
+   defp encode_errors(%Ecto.Changeset{} = changeset) do
+-    Sequin.Error.errors_on(changeset)
++    changeset
++    |> Sequin.Error.errors_on()
++    |> dbg()
+   end
+ 
+   defp encode_database(database) do
+@@ -215,7 +214,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+                   "attnum" => column.attnum,
+                   "isPk?" => column.is_pk?,
+                   "name" => column.name,
+-                  "type" => column.type
++                  "type" => column.type,
++                  "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
+                 }
+               end)
+           }
+diff --git a/test/sequin/consumers_test.exs b/test/sequin/consumers_test.exs
+index b92df48..da59368 100644
+--- a/test/sequin/consumers_test.exs
++++ b/test/sequin/consumers_test.exs
+@@ -5,9 +5,9 @@ defmodule Sequin.ConsumersTest do
+   alias Sequin.Consumers.ConsumerEvent
+   alias Sequin.Consumers.SourceTable.BooleanValue
+   alias Sequin.Consumers.SourceTable.DateTimeValue
+-  alias Sequin.Consumers.SourceTable.IntegerValue
+   alias Sequin.Consumers.SourceTable.ListValue
+   alias Sequin.Consumers.SourceTable.NullValue
++  alias Sequin.Consumers.SourceTable.NumberValue
+   alias Sequin.Consumers.SourceTable.StringValue
+   alias Sequin.Error.NotFoundError
+   alias Sequin.Factory
+@@ -554,7 +554,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 2,
+                   operator: :>,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -603,7 +603,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 2,
+                   operator: :>,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 ),
+                 ConsumersFactory.column_filter(
+                   column_attnum: 3,
+@@ -708,7 +708,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :==,
+-                  value: %IntegerValue{value: 123}
++                  value: %NumberValue{value: 123}
+                 )
+               ]
+             )
+@@ -876,7 +876,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :!=,
+-                  value: %IntegerValue{value: 123}
++                  value: %NumberValue{value: 123}
+                 )
+               ]
+             )
+@@ -1002,7 +1002,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :>,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -1086,7 +1086,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :<,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -1170,7 +1170,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :>=,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -1254,7 +1254,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :<=,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -1762,7 +1762,7 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 2,
+                   operator: :>,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 )
+               ]
+             )
+@@ -2063,22 +2063,22 @@ defmodule Sequin.ConsumersTest do
+                 ConsumersFactory.column_filter(
+                   column_attnum: 1,
+                   operator: :>,
+-                  value: %IntegerValue{value: 10}
++                  value: %NumberValue{value: 10}
+                 ),
+                 ConsumersFactory.column_filter(
+                   column_attnum: 2,
+                   operator: :<,
+-                  value: %IntegerValue{value: 20}
++                  value: %NumberValue{value: 20}
+                 ),
+                 ConsumersFactory.column_filter(
+                   column_attnum: 3,
+                   operator: :>=,
+-                  value: %IntegerValue{value: 30}
++                  value: %NumberValue{value: 30}
+                 ),
+                 ConsumersFactory.column_filter(
+                   column_attnum: 4,
+                   operator: :<=,
+-                  value: %IntegerValue{value: 40}
++                  value: %NumberValue{value: 40}
+                 )
+               ]
+             )
+diff --git a/test/support/factory/consumers_factory.ex b/test/support/factory/consumers_factory.ex
+index 4b4da5d..9fd3f48 100644
+--- a/test/support/factory/consumers_factory.ex
++++ b/test/support/factory/consumers_factory.ex
+@@ -195,7 +195,7 @@ defmodule Sequin.Factory.ConsumersFactory do
+   def column_filter(attrs \\ []) do
+     attrs = Map.new(attrs)
+ 
+-    value_type = Map.get(attrs, :value_type, Enum.random([:string, :integer, :float, :boolean, :null, :list]))
++    value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
+ 
+     merge_attributes(
+       %ColumnFilter{
+@@ -214,8 +214,7 @@ defmodule Sequin.Factory.ConsumersFactory do
+   end
+ 
+   defp generate_value(:string), do: Faker.Lorem.sentence()
+-  defp generate_value(:integer), do: Factory.integer()
+-  defp generate_value(:float), do: Factory.float()
++  defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])
+   defp generate_value(:boolean), do: Factory.boolean()
+   defp generate_value(:null), do: nil
+   defp generate_value(:list), do: Enum.map(1..3, fn _ -> Factory.word() end)
+@@ -297,7 +296,8 @@ defmodule Sequin.Factory.ConsumersFactory do
+         metadata: %{
+           table_schema: Factory.postgres_object(),
+           table_name: Factory.postgres_object(),
+-          commit_timestamp: Factory.timestamp()
++          commit_timestamp: Factory.timestamp(),
++          consumer: %{}
+         }
+       },
+       attrs
+@@ -388,7 +388,8 @@ defmodule Sequin.Factory.ConsumersFactory do
+         metadata: %{
+           table_schema: Factory.postgres_object(),
+           table_name: Factory.postgres_object(),
+-          commit_timestamp: Factory.timestamp()
++          commit_timestamp: Factory.timestamp(),
++          consumer: %{}
+         }
+       },
+       attrs

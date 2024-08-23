@@ -10,6 +10,8 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
 
+  require Logger
+
   defmodule Context do
     @moduledoc false
     use TypedStruct
@@ -26,11 +28,15 @@ defmodule Sequin.Replication.MessageHandler do
 
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
+    Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
+
     messages
     |> Enum.flat_map(fn message ->
       ctx.consumers
       |> Enum.map(fn consumer ->
         if Consumers.matches_message?(consumer, message) do
+          Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
+
           cond do
             consumer.message_kind == :event ->
               {:insert, consumer_event(consumer, message)}
@@ -55,7 +61,7 @@ defmodule Sequin.Replication.MessageHandler do
       record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0,
-      data: event_data_from_message(message)
+      data: event_data_from_message(message, consumer)
     }
   end
 
@@ -69,40 +75,44 @@ defmodule Sequin.Replication.MessageHandler do
     }
   end
 
-  defp event_data_from_message(%Message{action: :insert} = message) do
+  defp event_data_from_message(%Message{action: :insert} = message, consumer) do
     %{
       record: fields_to_map(message.fields),
       changes: nil,
       action: :insert,
-      metadata: metadata(message)
+      metadata: metadata(message, consumer)
     }
   end
 
-  defp event_data_from_message(%Message{action: :update} = message) do
+  defp event_data_from_message(%Message{action: :update} = message, consumer) do
     changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
 
     %{
       record: fields_to_map(message.fields),
       changes: changes,
       action: :update,
-      metadata: metadata(message)
+      metadata: metadata(message, consumer)
     }
   end
 
-  defp event_data_from_message(%Message{action: :delete} = message) do
+  defp event_data_from_message(%Message{action: :delete} = message, consumer) do
     %{
       record: fields_to_map(message.old_fields),
       changes: nil,
       action: :delete,
-      metadata: metadata(message)
+      metadata: metadata(message, consumer)
     }
   end
 
-  defp metadata(%Message{} = message) do
+  defp metadata(%Message{} = message, consumer) do
     %{
       table_name: message.table_name,
       table_schema: message.table_schema,
-      commit_timestamp: message.commit_timestamp
+      commit_timestamp: message.commit_timestamp,
+      consumer: %{
+        id: consumer.id,
+        name: consumer.name
+      }
     }
   end
 

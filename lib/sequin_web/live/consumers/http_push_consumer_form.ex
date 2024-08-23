@@ -4,9 +4,11 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Postgres
   alias Sequin.Repo
 
   @impl Phoenix.LiveComponent
@@ -50,6 +52,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   def update(assigns, socket) do
     http_push_consumer =
       assigns[:http_push_consumer] || %HttpPushConsumer{account_id: current_account_id(assigns)}
+
+    http_push_consumer = Repo.preload(http_push_consumer, [:http_endpoint, :postgres_database])
 
     socket =
       socket
@@ -153,14 +157,7 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       "source_tables" => [
         %{
           "oid" => form["tableOid"],
-          "column_filters" =>
-            Enum.map(form["sourceTableFilters"], fn filter ->
-              %{
-                "column" => filter["column"],
-                "operator" => filter["operator"],
-                "value" => %{value: filter["value"], __type__: "string"}
-              }
-            end),
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"] || []
         }
       ]
@@ -196,7 +193,9 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
-    Sequin.Error.errors_on(changeset)
+    changeset
+    |> Sequin.Error.errors_on()
+    |> dbg()
   end
 
   defp encode_database(database) do
@@ -215,7 +214,8 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
                   "attnum" => column.attnum,
                   "isPk?" => column.is_pk?,
                   "name" => column.name,
-                  "type" => column.type
+                  "type" => column.type,
+                  "filterType" => Postgres.pg_simple_type_to_filter_type(column.type)
                 }
               end)
           }

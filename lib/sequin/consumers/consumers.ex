@@ -856,10 +856,27 @@ defmodule Sequin.Consumers do
   # Source Table Matching
 
   def matches_message?(consumer, message) do
+    Logger.info("[Consumers] Matching message to consumer #{consumer.id}")
+
     Enum.any?(consumer.source_tables, fn source_table ->
       table_matches = source_table.oid == message.table_oid
       action_matches = action_matches?(source_table.actions, message.action)
       column_filters_match = column_filters_match?(source_table.column_filters, message)
+
+      Logger.debug("""
+      [Consumers]
+        matches?: #{table_matches && action_matches && column_filters_match}
+          table_matches: #{table_matches}
+          action_matches: #{action_matches}
+          column_filters_match: #{column_filters_match}
+
+        consumer:
+          #{inspect(consumer, pretty: true)}
+
+        message:
+          #{inspect(message, pretty: true)}
+      """)
+
       table_matches && action_matches && column_filters_match
     end)
   end

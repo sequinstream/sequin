@@ -25,6 +25,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
       field :table_schema, :string
       field :table_name, :string
       field :commit_timestamp, :utc_datetime_usec
+      field :consumer, :map
     end
   end
 

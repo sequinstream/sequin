@@ -76,6 +76,8 @@ defmodule Sequin.Extensions.Replication do
       connection: connection
     }
 
+    Logger.debug("[Replication] Starting link with opts: #{inspect(rep_conn_opts, pretty: true)}")
+
     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
   end
 
@@ -119,6 +121,8 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_connect(state) do
+    Logger.debug("[Replication] Handling connect")
+
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 

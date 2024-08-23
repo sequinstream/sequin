@@ -5,6 +5,7 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Repo
 
@@ -167,7 +168,9 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   defp encode_http_push_consumer(%HttpPushConsumer{} = http_push_consumer) do
-    postgres_database_id = if http_push_consumer.postgres_database, do: http_push_consumer.postgres_database.id
+    postgres_database_id =
+      if is_struct(http_push_consumer.postgres_database, PostgresDatabase), do: http_push_consumer.postgres_database.id
+
     source_table = List.first(http_push_consumer.source_tables)
 
     %{

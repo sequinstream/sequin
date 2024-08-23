@@ -5,6 +5,7 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Repo
 
@@ -154,7 +155,9 @@ defmodule SequinWeb.Live.Consumers.HttpPullConsumerForm do
   end
 
   defp encode_http_pull_consumer(%HttpPullConsumer{} = http_pull_consumer) do
-    postgres_database_id = if http_pull_consumer.postgres_database, do: http_pull_consumer.postgres_database.id
+    postgres_database_id =
+      if is_struct(http_pull_consumer.postgres_database, PostgresDatabase), do: http_pull_consumer.postgres_database.id
+
     source_table = List.first(http_pull_consumer.source_tables)
 
     %{

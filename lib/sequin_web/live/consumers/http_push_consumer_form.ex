@@ -114,7 +114,7 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   def handle_event("form_closed", _params, socket) do
-    socket = push_patch(socket, to: ~p"/consumers")
+    socket = push_navigate(socket, to: ~p"/consumers")
     {:noreply, socket}
   end
 

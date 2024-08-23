@@ -19,6 +19,10 @@
   let dialogOpen = true;
   let showConfirmDialog = false;
 
+  function pushEvent(event: string, payload = {}) {
+    live.pushEventTo(`#${parent}`, event, payload);
+  }
+
   function handleSubmit(event: Event) {
     event.preventDefault();
     isSubmitted = true;
@@ -62,10 +66,6 @@
     if (userInput) {
       pushEvent("validate", { http_endpoint: formData });
     }
-  }
-
-  function pushEvent(event: string, payload: any) {
-    live.pushEventTo(`#${parent}`, event, payload);
   }
 </script>
 

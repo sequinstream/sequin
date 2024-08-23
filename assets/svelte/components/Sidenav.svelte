@@ -13,12 +13,8 @@
     },
   ];
 
-  const bottomNavItems = [
-    { path: "/docs", text: "Docs", icon: "docs-icon" },
-    { path: "/support", text: "Support", icon: "support-icon" },
-  ];
   function navLink(path: string) {
-    return currentPath === path
+    return currentPath.startsWith(path)
       ? "bg-secondary-3xSubtle text-info hover:bg-secondary-2xSubtle"
       : "text-muted hover:text-basis hover:bg-canvasSubtle";
   }
@@ -56,17 +52,28 @@
     </div>
 
     <div class="mx-4 mb-4">
-      {#each bottomNavItems as item}
-        <a href={item.path} data-phx-link="redirect" data-phx-link-state="push">
-          <div
-            class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-              item.path
-            )}"
-          >
-            <span class="ml-2.5 text-sm leading-tight">{item.text}</span>
-          </div>
-        </a>
-      {/each}
+      <a
+        href="https://sequinstream.com/docs"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <div
+          class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+            'https://sequinstream.com/docs'
+          )}"
+        >
+          <span class="ml-2.5 text-sm leading-tight">Docs</span>
+        </div>
+      </a>
+      <a href="mailto:support@sequinstream.com">
+        <div
+          class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+            'mailto:support@sequinstream.com'
+          )}"
+        >
+          <span class="ml-2.5 text-sm leading-tight">Support</span>
+        </div>
+      </a>
       <div class="border-t border-solid mt-2"></div>
       <Button variant="ghost" class="w-full cursor-pointer ring-0">
         <div

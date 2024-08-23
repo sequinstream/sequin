@@ -266,8 +266,11 @@ defmodule Sequin.Error do
     embedded_errors =
       changeset.changes
       |> Enum.map(fn
-        {key, %Ecto.Changeset{valid?: false} = embedded_changeset} ->
-          {key, traverse_errors(embedded_changeset)}
+        {key, %Ecto.Changeset{} = embedded_changeset} ->
+          {key, errors_on(embedded_changeset)}
+
+        {key, value} when is_list(value) ->
+          {key, errors_on_list(value)}
 
         _ ->
           nil
@@ -278,13 +281,22 @@ defmodule Sequin.Error do
     Map.merge(errors, embedded_errors)
   end
 
+  def errors_on(_), do: %{}
+
+  defp errors_on_list(list) do
+    list
+    |> Enum.map(fn
+      %Ecto.Changeset{} = changeset -> errors_on(changeset)
+      _ -> nil
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
   defp traverse_errors(changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(fn {msg, opts} ->
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _match, key ->
         opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
       end)
     end)
-    |> Map.new()
   end
 end

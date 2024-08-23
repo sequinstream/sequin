@@ -89,6 +89,8 @@
 
   function handleFilterChange(newFilters) {
     form.sourceTableFilters = newFilters;
+    // Trigger a form update to refresh error messages
+    pushEvent("form_updated", { form });
   }
 
   function handleClose() {
@@ -262,7 +264,7 @@
             columns={selectedTable ? selectedTable.columns : []}
             onFilterChange={handleFilterChange}
             disabled={!form.postgresDatabaseId && !form.tableOid}
-            errors={errors.source_tables?.[0]?.column_filters}
+            errors={errors.source_tables?.[0]?.column_filters || []}
           />
         </div>
       </CardContent>

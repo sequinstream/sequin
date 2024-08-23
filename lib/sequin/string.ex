@@ -93,4 +93,7 @@ defmodule Sequin.String do
 
   defp validate_token(""), do: "invalid_key_token"
   defp validate_token(identifier), do: identifier
+
+  def downcase(nil), do: nil
+  def downcase(string) when is_binary(string), do: String.downcase(string)
 end

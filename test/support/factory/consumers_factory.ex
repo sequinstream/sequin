@@ -195,7 +195,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   def column_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    value_type = Map.get(attrs, :value_type, Enum.random([:string, :integer, :float, :boolean, :null, :list]))
+    value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
 
     merge_attributes(
       %ColumnFilter{
@@ -214,8 +214,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   defp generate_value(:string), do: Faker.Lorem.sentence()
-  defp generate_value(:integer), do: Factory.integer()
-  defp generate_value(:float), do: Factory.float()
+  defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])
   defp generate_value(:boolean), do: Factory.boolean()
   defp generate_value(:null), do: nil
   defp generate_value(:list), do: Enum.map(1..3, fn _ -> Factory.word() end)
@@ -297,7 +296,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         metadata: %{
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
-          commit_timestamp: Factory.timestamp()
+          commit_timestamp: Factory.timestamp(),
+          consumer: %{}
         }
       },
       attrs
@@ -388,7 +388,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         metadata: %{
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
-          commit_timestamp: Factory.timestamp()
+          commit_timestamp: Factory.timestamp(),
+          consumer: %{}
         }
       },
       attrs

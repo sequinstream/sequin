@@ -10,6 +10,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
     typedstruct do
       field :table_schema, :string
       field :table_name, :string
+      field :consumer, :map
     end
   end
 

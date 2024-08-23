@@ -11,17 +11,27 @@
   import { PlusCircle } from "lucide-svelte";
 
   type Filter = {
-    column: number | null;
+    columnAttnum: number | null;
     operator: string | null;
     value: string;
+    valueType: string | null;
   };
 
   export let filters: Array<Filter>;
-  export let columns: Array<{ attnum: number; name: string }>;
+  export let columns: Array<{
+    attnum: number;
+    name: string;
+    filterType: string;
+  }>;
   export let onFilterChange: (filters: Array<Filter>) => void;
   export let disabled: boolean = false;
-  export let errors: Array<{ operator?: string[]; column_attnum?: string[] }> =
-    [];
+  export let errors: Array<{
+    operator?: string[];
+    columnAttnum?: string[];
+    value?: { value?: string[] };
+  } | null> = [];
+
+  $: console.log(errors);
 
   const operators = [
     "=",
@@ -37,7 +47,13 @@
   ];
 
   function addFilter() {
-    filters = [...filters, { column: null, operator: null, value: "" }];
+    const newFilter: Filter = {
+      columnAttnum: null,
+      operator: null,
+      value: "",
+      valueType: null,
+    };
+    filters = [...filters, newFilter];
     onFilterChange(filters);
   }
 
@@ -49,30 +65,49 @@
   function updateFilter(
     index: number,
     key: keyof {
-      column: number | null;
+      columnAttnum: number | null;
       operator: string | null;
-      value: string;
+      value: string | null;
+      valueType: string | null;
     },
     value: any
   ) {
-    filters = filters.map((filter, i) =>
-      i === index
-        ? {
-            ...filter,
-            [key]: value,
-          }
-        : filter
-    );
+    filters = filters.map((filter, i) => {
+      if (i === index) {
+        const updatedFilter = { ...filter, [key]: value };
+
+        // Clear and disable value field for IS NULL and IS NOT NULL operators
+        if (key === "operator" && ["IS NULL", "IS NOT NULL"].includes(value)) {
+          updatedFilter.value = "";
+        }
+
+        // Set valueType when columnAttnum is updated
+        if (key === "columnAttnum") {
+          const selectedColumn = columns.find((col) => col.attnum === value);
+          updatedFilter.valueType = selectedColumn
+            ? selectedColumn.filterType
+            : "";
+        }
+
+        return updatedFilter;
+      }
+      return filter;
+    });
     onFilterChange(filters);
   }
 
-  function getErrorMessage(index: number): string {
-    if (!errors[index]) return "";
-    const error = errors[index];
-    if (error.column_attnum) return error.column_attnum[0];
-    if (error.operator) return error.operator[0];
-    return "";
-  }
+  $: errorMessages = errors.reduce(
+    (acc, error, index) => {
+      if (error) {
+        if (error.columnAttnum) acc[index] = error.columnAttnum[0];
+        else if (error.operator) acc[index] = error.operator[0];
+        else if (error.value && error.value.value)
+          acc[index] = error.value.value[0];
+      }
+      return acc;
+    },
+    {} as Record<number, string>
+  );
 </script>
 
 <div class="mb-6">
@@ -80,12 +115,12 @@
     <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
       <Select
         selected={{
-          value: filter.column,
+          value: filter.columnAttnum,
           label:
-            columns.find((col) => col.attnum === filter.column)?.name ||
+            columns.find((col) => col.attnum === filter.columnAttnum)?.name ||
             "Column",
         }}
-        onSelectedChange={(e) => updateFilter(index, "column", e.value)}
+        onSelectedChange={(e) => updateFilter(index, "columnAttnum", e.value)}
         {disabled}
       >
         <SelectTrigger class="border-carbon-100">
@@ -119,7 +154,8 @@
         placeholder="Value"
         value={filter.value}
         on:input={(e) => updateFilter(index, "value", e.currentTarget.value)}
-        {disabled}
+        disabled={disabled ||
+          ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
       />
       <button
         on:click={() => removeFilter(index)}
@@ -129,9 +165,9 @@
         <icon class="hero-x-mark w-4 h-4" />
       </button>
     </div>
-    {#if Array.isArray(errors) && errors[index]}
+    {#if errorMessages[index]}
       <p class="text-destructive text-sm mt-1 mb-2">
-        {getErrorMessage(index)}
+        {errorMessages[index]}
       </p>
     {/if}
   {/each}

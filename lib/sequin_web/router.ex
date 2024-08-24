@@ -39,8 +39,9 @@ defmodule SequinWeb.Router do
       live "/databases/:id/edit", DatabasesLive.Form, :edit
 
       live "/http-endpoints", HttpEndpointsLive.Index, :index
-      live "/http-endpoints/new", HttpEndpointsLive.New, :new
+      live "/http-endpoints/new", HttpEndpointsLive.Form, :new
       live "/http-endpoints/:id", HttpEndpointsLive.Show, :show
+      live "/http-endpoints/:id/edit", HttpEndpointsLive.Form, :edit
 
       get "/easter-egg", EasterEggController, :home
     end

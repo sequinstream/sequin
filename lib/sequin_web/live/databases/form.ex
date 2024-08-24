@@ -206,17 +206,16 @@ defmodule SequinWeb.DatabasesLive.Form do
     temp_db = struct(PostgresDatabase, Sequin.Map.atomize_keys(db_params))
     temp_slot = struct(PostgresReplicationSlot, Sequin.Map.atomize_keys(replication_params))
 
-    with_result =
-      with :ok <- Databases.test_tcp_reachability(temp_db),
-           :ok <- Databases.test_connect(temp_db, 10_000),
-           :ok <- Databases.test_permissions(temp_db),
-           :ok <- Databases.test_slot_permissions(temp_db, temp_slot) do
-        if socket.assigns.is_edit? do
-          update_database(socket.assigns.database, db_params, replication_params)
-        else
-          create_database(account_id, db_params, replication_params)
-        end
+    with :ok <- Databases.test_tcp_reachability(temp_db),
+         :ok <- Databases.test_connect(temp_db, 10_000),
+         :ok <- Databases.test_permissions(temp_db),
+         :ok <- Databases.test_slot_permissions(temp_db, temp_slot) do
+      if socket.assigns.is_edit? do
+        update_database(socket.assigns.database, db_params, replication_params)
+      else
+        create_database(account_id, db_params, replication_params)
       end
+    end
   end
 
   defp update_database(database, db_params, replication_params) do

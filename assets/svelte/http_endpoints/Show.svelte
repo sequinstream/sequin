@@ -1,58 +1,39 @@
 <script lang="ts">
-  import { formatDistanceToNow } from "date-fns";
-  import {
-    ArrowLeft,
-    Globe,
-    Clock,
-    RefreshCw,
-    ExternalLink,
-  } from "lucide-svelte";
+  import { ArrowLeft, Globe, Clock, RefreshCw } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import { Input } from "$lib/components/ui/input";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+  } from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
 
   export let http_endpoint;
-  export let editing;
   export let live;
+  export let parent_id;
 
   let showDeleteConfirmDialog = false;
+  let showDeleteErrorDialog = false;
+  let deleteErrorDialogMessage: string | null = null;
 
   function handleEdit() {
-    live.pushEventTo("#http-endpoint-show", "edit", {});
-  }
-
-  function handleCancelEdit() {
-    live.pushEventTo("#http-endpoint-show", "cancel_edit", {});
-  }
-
-  function handleSave() {
-    live.pushEventTo("#http-endpoint-show", "save", {
-      http_endpoint: {
-        name: http_endpoint.name,
-        base_url: http_endpoint.base_url,
-        headers: http_endpoint.headers,
-      },
-    });
-  }
-
-  function handleDelete() {
-    showDeleteConfirmDialog = true;
+    live.pushEventTo(`#${parent_id}`, "edit", {});
   }
 
   function confirmDelete() {
+    deleteErrorDialogMessage = null;
     showDeleteConfirmDialog = false;
-    live.pushEventTo("#http-endpoint-show", "delete_http_endpoint", {});
-  }
-
-  function cancelDelete() {
-    showDeleteConfirmDialog = false;
-  }
-
-  function formatTimestamp(timestamp: string) {
-    return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+    live.pushEventTo(`#${parent_id}`, "delete", {}, (res: any) => {
+      if (res.error) {
+        showDeleteErrorDialog = true;
+        deleteErrorDialogMessage = res.error;
+      }
+    });
   }
 </script>
 
@@ -89,26 +70,16 @@
               >
             </div>
           </div>
-          {#if editing}
-            <Button variant="outline" size="sm" on:click={handleCancelEdit}
-              >Cancel</Button
-            >
-            <Button variant="default" size="sm" on:click={handleSave}
-              >Save</Button
-            >
-          {:else}
-            <Button variant="outline" size="sm" on:click={handleEdit}
-              >Edit</Button
-            >
-            <Button
-              variant="outline"
-              size="sm"
-              class="text-red-600 hover:text-red-700"
-              on:click={handleDelete}
-            >
-              Delete
-            </Button>
-          {/if}
+          <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button
+          >
+          <Button
+            variant="outline"
+            size="sm"
+            class="text-red-600 hover:text-red-700"
+            on:click={() => (showDeleteConfirmDialog = true)}
+          >
+            Delete
+          </Button>
         </div>
       </div>
     </div>
@@ -126,27 +97,11 @@
             </div>
             <div>
               <span class="text-sm text-gray-500">Name</span>
-              {#if editing}
-                <Input
-                  type="text"
-                  bind:value={http_endpoint.name}
-                  class="mt-1"
-                />
-              {:else}
-                <p class="font-medium">{http_endpoint.name}</p>
-              {/if}
+              <p class="font-medium">{http_endpoint.name}</p>
             </div>
             <div class="md:col-span-2">
               <span class="text-sm text-gray-500">Base URL</span>
-              {#if editing}
-                <Input
-                  type="text"
-                  bind:value={http_endpoint.base_url}
-                  class="mt-1"
-                />
-              {:else}
-                <p class="font-medium">{http_endpoint.base_url}</p>
-              {/if}
+              <p class="font-medium">{http_endpoint.base_url}</p>
             </div>
           </div>
         </CardContent>
@@ -156,14 +111,22 @@
         <CardContent class="p-6">
           <h2 class="text-lg font-semibold mb-4">Headers</h2>
           {#if Object.keys(http_endpoint.headers).length > 0}
-            <div class="space-y-2">
-              {#each Object.entries(http_endpoint.headers) as [key, value]}
-                <div class="flex justify-between items-center">
-                  <span class="font-medium">{key}</span>
-                  <span class="text-gray-600">{value}</span>
-                </div>
-              {/each}
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {#each Object.entries(http_endpoint.headers) as [key, value]}
+                  <TableRow>
+                    <TableCell class="font-medium">{key}</TableCell>
+                    <TableCell>{value}</TableCell>
+                  </TableRow>
+                {/each}
+              </TableBody>
+            </Table>
           {:else}
             <div class="text-center py-6 bg-gray-50 rounded-lg">
               <Globe class="h-12 w-12 text-gray-300 mx-auto mb-3" />
@@ -189,8 +152,29 @@
       </AlertDialog.Title>
     </AlertDialog.Header>
     <AlertDialog.Footer>
-      <AlertDialog.Cancel on:click={cancelDelete}>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Cancel on:click={() => (showDeleteConfirmDialog = false)}
+        >Cancel</AlertDialog.Cancel
+      >
       <AlertDialog.Action on:click={confirmDelete}>Delete</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root bind:open={showDeleteErrorDialog}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Error deleting the HTTP endpoint</AlertDialog.Title>
+      <AlertDialog.Description
+        >{deleteErrorDialogMessage}</AlertDialog.Description
+      >
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel
+        on:click={() => {
+          showDeleteErrorDialog = false;
+          deleteErrorDialogMessage = null;
+        }}>Close</AlertDialog.Cancel
+      >
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

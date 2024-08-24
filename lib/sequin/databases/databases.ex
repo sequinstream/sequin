@@ -2,11 +2,15 @@ defmodule Sequin.Databases do
   @moduledoc false
   import Ecto.Query, only: [preload: 2]
 
+  alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ValidationError
   alias Sequin.Postgres
+  alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
   alias Sequin.TcpUtils
 
@@ -72,6 +76,29 @@ defmodule Sequin.Databases do
     Repo.delete(db)
   end
 
+  def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
+    Repo.transact(fn ->
+      db = Repo.preload(db, :replication_slot)
+      # Check for related entities that need to be removed first
+      with :ok <- check_related_entities(db),
+           {:ok, _} <- Replication.delete_pg_replication_with_lifecycle(db.replication_slot),
+           {:ok, _} <- Repo.delete(db) do
+        :ok
+      end
+    end)
+  end
+
+  defp check_related_entities(db) do
+    http_pull_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
+    http_push_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
+
+    if http_pull_consumers != [] or http_push_consumers != [] do
+      {:error, Error.validation(summary: "Cannot delete database with associated consumers")}
+    else
+      :ok
+    end
+  end
+
   # PostgresDatabase runtime
 
   @spec start_link(%PostgresDatabase{}) :: {:ok, pid()} | {:error, Postgrex.Error.t()}
@@ -84,7 +111,6 @@ defmodule Sequin.Databases do
     |> Postgrex.start_link()
   end
 
-  @spec with_connection(%PostgresDatabase{}, (pid() -> any())) :: any()
   def with_connection(%PostgresDatabase{} = db, fun) do
     Logger.metadata(database_id: db.id)
 
@@ -94,13 +120,17 @@ defmodule Sequin.Databases do
 
       # Not already started, create a temporary connection
       {:error, %NotFoundError{}} ->
-        with {:ok, conn} <- start_link(db) do
-          try do
-            fun.(conn)
-          after
-            GenServer.stop(conn)
-          end
-        end
+        with_uncached_connection(db, fun)
+    end
+  end
+
+  def with_uncached_connection(%PostgresDatabase{} = db, fun) do
+    with {:ok, conn} <- start_link(db) do
+      try do
+        fun.(conn)
+      after
+        GenServer.stop(conn)
+      end
     end
   end
 
@@ -144,75 +174,78 @@ defmodule Sequin.Databases do
 
   # This query checks on db $1, if user has grant $2
   @db_privilege_query "select has_database_privilege($1, $2);"
-  @db_read_only_query "show transaction_read_only;"
 
-  @spec test_permissions(%PostgresDatabase{}) ::
-          :ok
-          | {:error,
-             :database_connect_forbidden
-             | :database_create_forbidden
-             | :transaction_read_only
-             | :unknown_privileges}
+  @spec test_permissions(%PostgresDatabase{}) :: :ok | {:error, Error.Validation.t()} | {:error, Postgrex.Error.t()}
   def test_permissions(%PostgresDatabase{} = db) do
-    with {:ok, conn} <- start_link(db),
-         {:ok, has_connect} <-
-           run_test_query(conn, @db_privilege_query, [db.database, "connect"]),
-         {:ok, has_create} <-
-           run_test_query(conn, @db_privilege_query, [db.database, "create"]),
-         {:ok, {:ok, is_read_only}} <-
-           Postgrex.transaction(conn, fn conn ->
-             run_test_query(conn, @db_read_only_query, [])
-           end) do
-      case {has_connect, has_create, is_read_only} do
-        {true, true, "off"} ->
+    with_uncached_connection(db, fn conn ->
+      with {:ok, %{rows: [[result]]}} <- Postgrex.query(conn, @db_privilege_query, [db.database, "connect"]) do
+        if result do
           :ok
-
-        {false, _, _} ->
-          {:error, :database_connect_forbidden}
-
-        {_, false, _} ->
-          {:error, :database_create_forbidden}
-
-        {_, _, "on"} ->
-          {:error, :transaction_read_only}
-
-        _ ->
-          {:error, :unknown_privileges}
+        else
+          {:error, Error.validation(summary: "User does not have connect permission on database")}
+        end
       end
-    end
+    end)
   end
 
-  @namespace_exists_query "select exists(select 1 from pg_namespace WHERE nspname = $1);"
-  @namespace_privilege_query "select has_schema_privilege($1, $2);"
+  def test_slot_permissions(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
+    with_uncached_connection(database, fn conn ->
+      with :ok <- check_replication_slot_exists(conn, slot.slot_name),
+           :ok <- check_publication_exists(conn, slot.publication_name) do
+        check_replication_permissions(conn)
+      end
+    end)
+  end
 
-  def maybe_test_namespace_permissions(%PostgresDatabase{} = db, namespace) do
-    with {:ok, conn} <- start_link(db),
-         {:ok, namespace_exists} <- run_test_query(conn, @namespace_exists_query, [namespace]) do
-      if namespace_exists do
-        test_namespace_permissions(conn, namespace)
-      else
+  defp check_replication_slot_exists(conn, slot_name) do
+    query = "select 1 from pg_replication_slots where slot_name = $1"
+
+    case Postgrex.query(conn, query, [slot_name]) do
+      {:ok, %{num_rows: 1}} ->
         :ok
-      end
+
+      {:ok, %{num_rows: 0}} ->
+        {:error, Error.validation(summary: "Replication slot '#{slot_name}' does not exist")}
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check replication slot: ", error)}
     end
   end
 
-  defp test_namespace_permissions(conn, namespace) do
-    with {:ok, has_usage} <-
-           run_test_query(conn, @namespace_privilege_query, [namespace, "usage"]),
-         {:ok, has_create} <-
-           run_test_query(conn, @namespace_privilege_query, [namespace, "create"]) do
-      case {has_usage, has_create} do
-        {true, true} -> :ok
-        {false, _} -> {:error, :namespace_usage_forbidden}
-        {_, false} -> {:error, :namespace_create_forbidden}
-        _ -> {:error, :unknown_privileges}
-      end
+  defp check_publication_exists(conn, publication_name) do
+    query = "select 1 from pg_publication where pubname = $1"
+
+    case Postgrex.query(conn, query, [publication_name]) do
+      {:ok, %{num_rows: 1}} ->
+        :ok
+
+      {:ok, %{num_rows: 0}} ->
+        {:error, Error.validation(summary: "Publication '#{publication_name}' does not exist")}
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check publication: ", error)}
     end
   end
 
-  defp run_test_query(conn, query, params) do
-    with {:ok, %{rows: [[result]]}} <- Postgrex.query(conn, query, params) do
-      {:ok, result}
+  defp check_replication_permissions(conn) do
+    query =
+      "select pg_is_in_recovery(), current_setting('max_replication_slots')::int > 0"
+
+    case Postgrex.query(conn, query, []) do
+      {:ok, %{rows: [[is_in_recovery, has_replication_slots]]}} ->
+        cond do
+          is_in_recovery ->
+            {:error, Error.validation(summary: "Database is in recovery mode and cannot be used for replication")}
+
+          not has_replication_slots ->
+            {:error, Error.validation(summary: "Database does not have replication slots enabled")}
+
+          true ->
+            :ok
+        end
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check replication permissions: ", error)}
     end
   end
 

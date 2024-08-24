@@ -10,11 +10,6 @@
     hostname: string;
     port: number;
   }>;
-  export let live: any;
-
-  function handleDatabaseClick(id: string) {
-    live.pushEvent("database_clicked", { id });
-  }
 </script>
 
 <div class="container mx-auto py-10">
@@ -57,17 +52,20 @@
       </Table.Header>
       <Table.Body>
         {#each databases as database}
-          <Table.Row
-            on:click={() => handleDatabaseClick(database.id)}
-            class="cursor-pointer"
+          <a
+            href={`/databases/${database.id}`}
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
-            <Table.Cell>{database.name}</Table.Cell>
-            <Table.Cell>{database.hostname}</Table.Cell>
-            <Table.Cell>{database.port}</Table.Cell>
-            <Table.Cell
-              >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
-            >
-          </Table.Row>
+            <Table.Row class="cursor-pointer">
+              <Table.Cell>{database.name}</Table.Cell>
+              <Table.Cell>{database.hostname}</Table.Cell>
+              <Table.Cell>{database.port}</Table.Cell>
+              <Table.Cell
+                >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
+              >
+            </Table.Row>
+          </a>
         {/each}
       </Table.Body>
     </Table.Root>

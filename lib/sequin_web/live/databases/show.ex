@@ -42,13 +42,17 @@ defmodule SequinWeb.DatabasesLive.Show do
   def handle_event("delete_database", _, socket) do
     %{database: database} = socket.assigns
 
-    {:ok, _} = Databases.delete_db(database)
+    case Databases.delete_db_with_replication_slot(database) do
+      {:ok, _} ->
+        {:noreply, push_navigate(socket, to: ~p"/databases")}
 
-    {:noreply, push_navigate(socket, to: ~p"/databases")}
+      {:error, error} ->
+        {:reply, %{error: Exception.message(error)}, socket}
+    end
   end
 
   def handle_event("edit", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/databases/#{socket.assigns.database.id}/edit")}
+    {:noreply, push_navigate(socket, to: ~p"/databases/#{socket.assigns.database.id}/edit")}
   end
 
   @impl Phoenix.LiveView
@@ -71,11 +75,32 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    assigns =
+      assign(assigns, :parent, "database-show")
+
     ~H"""
-    <div id="database-show">
-      <.svelte name="databases/Show" props={%{database: encode_database(@database)}} />
+    <div id={@parent}>
+      <%= case @live_action do %>
+        <% :edit -> %>
+          <.live_component
+            module={SequinWeb.Live.Databases.Form}
+            id="edit-database"
+            database={@database}
+            on_finish={&handle_edit_finish/1}
+            current_account={@current_account}
+          />
+        <% :show -> %>
+          <.svelte
+            name="databases/Show"
+            props={%{database: encode_database(@database), parent: @parent}}
+          />
+      <% end %>
     </div>
     """
+  end
+
+  defp handle_edit_finish(updated_database) do
+    send(self(), {:updated_database, updated_database})
   end
 
   defp encode_database(database) do

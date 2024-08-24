@@ -4,14 +4,11 @@
     Activity,
     CheckCircle,
     Clock,
-    Database,
-    ExternalLink,
     RefreshCw,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Badge } from "$lib/components/ui/badge";
-  import { formatDistanceToNow } from "date-fns";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { formatRelativeTimestamp } from "$lib/utils";
 
@@ -41,27 +38,27 @@
   export let live: any;
   export let parent: string;
 
-  function pushEvent(event: string, params = {}) {
-    live.pushEventTo("#" + parent, event, params);
+  function pushEvent(event: string, params = {}, callback: any = () => {}) {
+    live.pushEventTo("#" + parent, event, params, callback);
   }
 
   let showDeleteConfirmDialog = false;
+  let showDeleteErrorDialog = false;
+  let deleteErrorDialogMessage: string | null = null;
 
   function handleEdit() {
     pushEvent("edit");
   }
 
-  function handleDelete() {
-    showDeleteConfirmDialog = true;
-  }
-
   function confirmDelete() {
+    deleteErrorDialogMessage = null;
     showDeleteConfirmDialog = false;
-    pushEvent("delete_database");
-  }
-
-  function cancelDelete() {
-    showDeleteConfirmDialog = false;
+    pushEvent("delete_database", {}, (res: any) => {
+      if (res.error) {
+        showDeleteErrorDialog = true;
+        deleteErrorDialogMessage = res.error;
+      }
+    });
   }
 </script>
 
@@ -102,7 +99,7 @@
             variant="outline"
             size="sm"
             class="text-red-600 hover:text-red-700"
-            on:click={handleDelete}
+            on:click={() => (showDeleteConfirmDialog = true)}
           >
             Delete
           </Button>
@@ -192,14 +189,30 @@
       <AlertDialog.Title
         >Are you sure you want to delete this database?</AlertDialog.Title
       >
-      <AlertDialog.Description>
-        This action cannot be undone. All data associated with this database
-        will be permanently removed.
-      </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
-      <AlertDialog.Cancel on:click={cancelDelete}>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Cancel on:click={() => (showDeleteConfirmDialog = false)}
+        >Cancel</AlertDialog.Cancel
+      >
       <AlertDialog.Action on:click={confirmDelete}>Delete</AlertDialog.Action>
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root bind:open={showDeleteErrorDialog}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title
+        >Error deleting the database: {deleteErrorDialogMessage}</AlertDialog.Title
+      >
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel
+        on:click={() => {
+          showDeleteErrorDialog = false;
+          deleteErrorDialogMessage = null;
+        }}>Close</AlertDialog.Cancel
+      >
     </AlertDialog.Footer>
   </AlertDialog.Content>
 </AlertDialog.Root>

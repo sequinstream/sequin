@@ -42,10 +42,6 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     timestamps()
   end
 
-  def changeset(replication, attrs) do
-    create_changeset(replication, attrs)
-  end
-
   def create_changeset(replication, attrs) do
     replication
     |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id])

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -8,36 +7,45 @@
   import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
 
-  export let formData: {
-    database: {
-      name: string;
-      database: string;
-      hostname: string;
-      port: number;
-      username: string;
-      password: string;
-      ssl: boolean;
-    };
-    replication: {
-      publication_name: string;
-      slot_name: string;
-    };
+  export let database: {
+    id?: string;
+    name: string;
+    database: string;
+    hostname: string;
+    port: number;
+    username: string;
+    password: string;
+    ssl: boolean;
+    publication_name: string;
+    slot_name: string;
   };
-  export let formErrors: Record<string, any> = {};
-  export let validating: boolean;
+  export let errors: Record<string, any> = {};
+  export let submitError: string | null = null;
   export let parent: string;
   export let live;
 
-  const dispatch = createEventDispatcher();
+  const isEdit = !!database.id;
+
+  let databaseErrors: any = {};
+  let replicationErrors: any = {};
+
+  $: {
+    databaseErrors = errors.database || {};
+    replicationErrors = errors.replication || {};
+  }
+
+  function pushEvent(event: string, payload = {}, callback = () => {}) {
+    live.pushEventTo(`#${parent}`, event, payload, callback);
+  }
 
   let userInput = false;
   let dialogOpen = true;
   let showConfirmDialog = false;
+  let validating = false;
 
   function handleInput() {
     userInput = true;
@@ -45,31 +53,15 @@
 
   function handleSubmit(event: Event) {
     event.preventDefault();
-    pushEvent("save", {
-      postgres_database: formData.database,
-      postgres_replication_slot: formData.replication,
+    validating = true;
+    pushEvent("form_submitted", { form: database }, () => {
+      validating = false;
     });
   }
 
   $: if (userInput) {
-    pushEvent("validate", {
-      postgres_database: formData.database,
-      postgres_replication_slot: formData.replication,
-    });
+    pushEvent("form_updated", { form: database });
     userInput = false;
-  }
-
-  function getError(field: string): string | undefined {
-    const [category, subfield] = field.split(".");
-    if (formErrors[category] && formErrors[category][subfield]) {
-      const error = formErrors[category][subfield];
-      return Array.isArray(error) ? error.join(", ") : error;
-    }
-    return undefined;
-  }
-
-  function pushEvent(event: string, payload = {}) {
-    live.pushEventTo(`#${parent}`, event, payload);
   }
 
   function handleClose() {
@@ -94,13 +86,11 @@
           <Input
             type="text"
             id="database"
-            bind:value={formData.database.database}
+            bind:value={database.database}
             on:input={handleInput}
           />
-          {#if getError("database.database")}
-            <p class="text-destructive text-sm">
-              {getError("database.database")}
-            </p>
+          {#if databaseErrors.database}
+            <p class="text-destructive text-sm">{databaseErrors.database}</p>
           {/if}
         </div>
 
@@ -109,13 +99,11 @@
           <Input
             type="text"
             id="hostname"
-            bind:value={formData.database.hostname}
+            bind:value={database.hostname}
             on:input={handleInput}
           />
-          {#if getError("database.hostname")}
-            <p class="text-destructive text-sm">
-              {getError("database.hostname")}
-            </p>
+          {#if databaseErrors.hostname}
+            <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
           {/if}
         </div>
 
@@ -124,11 +112,11 @@
           <Input
             type="number"
             id="port"
-            bind:value={formData.database.port}
+            bind:value={database.port}
             on:input={handleInput}
           />
-          {#if getError("database.port")}
-            <p class="text-destructive text-sm">{getError("database.port")}</p>
+          {#if databaseErrors.port}
+            <p class="text-destructive text-sm">{databaseErrors.port}</p>
           {/if}
         </div>
 
@@ -137,13 +125,11 @@
           <Input
             type="text"
             id="username"
-            bind:value={formData.database.username}
+            bind:value={database.username}
             on:input={handleInput}
           />
-          {#if getError("database.username")}
-            <p class="text-destructive text-sm">
-              {getError("database.username")}
-            </p>
+          {#if databaseErrors.username}
+            <p class="text-destructive text-sm">{databaseErrors.username}</p>
           {/if}
         </div>
 
@@ -152,29 +138,27 @@
           <Input
             type="password"
             id="password"
-            bind:value={formData.database.password}
+            bind:value={database.password}
             on:input={handleInput}
           />
-          {#if getError("database.password")}
-            <p class="text-destructive text-sm">
-              {getError("database.password")}
-            </p>
+          {#if databaseErrors.password}
+            <p class="text-destructive text-sm">{databaseErrors.password}</p>
           {/if}
         </div>
 
         <div class="flex items-center space-x-2">
           <Switch
             id="ssl"
-            checked={formData.database.ssl}
+            checked={database.ssl}
             onCheckedChange={(checked) => {
-              formData.database.ssl = checked;
+              database.ssl = checked;
               handleInput();
             }}
           />
           <Label for="ssl">SSL</Label>
         </div>
-        {#if getError("database.ssl")}
-          <p class="text-destructive text-sm">{getError("database.ssl")}</p>
+        {#if databaseErrors.ssl}
+          <p class="text-destructive text-sm">{databaseErrors.ssl}</p>
         {/if}
       </CardContent>
     </Card>
@@ -189,7 +173,7 @@
           following SQL command on your database:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-select pg_create_logical_replication_slot('{formData.replication.slot_name ||
+select pg_create_logical_replication_slot('{database.slot_name ||
             "my_slot"}', 'pgoutput');</pre>
         <p class="text-sm text-muted-foreground">
           Next, you need to create a publication. You have two options:
@@ -198,13 +182,12 @@ select pg_create_logical_replication_slot('{formData.replication.slot_name ||
           1. Create a publication for all tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {formData.replication.publication_name ||
-            "my_pub"} for all tables;</pre>
+create publication {database.publication_name || "my_pub"} for all tables;</pre>
         <p class="text-sm font-medium">
           2. Create a publication for specific tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {formData.replication.publication_name ||
+create publication {database.publication_name ||
             "my_pub"} for table table1, table2, table3;</pre>
 
         <div class="space-y-2">
@@ -212,12 +195,12 @@ create publication {formData.replication.publication_name ||
           <Input
             type="text"
             id="slot_name"
-            bind:value={formData.replication.slot_name}
+            bind:value={database.slot_name}
             on:input={handleInput}
           />
-          {#if getError("replication.slot_name")}
+          {#if replicationErrors.slot_name}
             <p class="text-destructive text-sm">
-              {getError("replication.slot_name")}
+              {replicationErrors.slot_name}
             </p>
           {/if}
         </div>
@@ -227,12 +210,12 @@ create publication {formData.replication.publication_name ||
           <Input
             type="text"
             id="publication_name"
-            bind:value={formData.replication.publication_name}
+            bind:value={database.publication_name}
             on:input={handleInput}
           />
-          {#if getError("replication.publication_name")}
+          {#if replicationErrors.publication_name}
             <p class="text-destructive text-sm">
-              {getError("replication.publication_name")}
+              {replicationErrors.publication_name}
             </p>
           {/if}
         </div>
@@ -249,22 +232,30 @@ create publication {formData.replication.publication_name ||
           <Input
             type="text"
             id="name"
-            bind:value={formData.database.name}
+            bind:value={database.name}
             on:input={handleInput}
             placeholder="Enter a unique name for your database"
             data-1p-ignore
             data-lpignore="true"
             data-form-type="other"
           />
-          {#if getError("database.name")}
-            <p class="text-destructive text-sm">{getError("database.name")}</p>
+          {#if errors.name}
+            <p class="text-destructive text-sm">{errors.name}</p>
           {/if}
         </div>
+
+        {#if submitError}
+          <p class="text-destructive text-sm">{submitError}</p>
+        {:else if Object.keys(errors).length > 0}
+          <p class="text-destructive text-sm">Validation errors, see above</p>
+        {/if}
 
         <Button type="submit" disabled={validating} variant="default">
           {#if validating}
             <span class="loading loading-spinner" />
             Validating...
+          {:else if isEdit}
+            Update Database
           {:else}
             Create Database
           {/if}

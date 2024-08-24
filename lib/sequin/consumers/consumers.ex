@@ -97,6 +97,13 @@ defmodule Sequin.Consumers do
     Enum.sort_by(pull_consumers ++ push_consumers, & &1.inserted_at, {:desc, DateTime})
   end
 
+  def list_consumers_for_replication_slot(replication_slot_id) do
+    pull = HttpPullConsumer.where_replication_slot_id(replication_slot_id)
+    push = HttpPushConsumer.where_replication_slot_id(replication_slot_id)
+
+    Repo.all(pull) ++ Repo.all(push)
+  end
+
   def update_consumer(%HttpPullConsumer{} = consumer, attrs) do
     consumer
     |> HttpPullConsumer.update_changeset(attrs)

@@ -168,6 +168,18 @@ defmodule Sequin.Error do
     end
 
     def from_json(json), do: JSON.struct(json, __MODULE__)
+
+    def from_postgrex(summary_prefix \\ "Postgres error: ", %Postgrex.Error{} = error) do
+      pg_code = error.postgres && error.postgres.code
+      message = error.message || (error.postgres && error.postgres.message)
+      code = if pg_code, do: {:postgrex_error, pg_code}, else: :postgrex_error
+
+      %__MODULE__{
+        errors: %{},
+        summary: message,
+        code: code
+      }
+    end
   end
 
   # defmodule Guards do

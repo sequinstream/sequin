@@ -187,10 +187,6 @@
       <AlertDialog.Title>
         Are you sure you want to delete this HTTP endpoint?
       </AlertDialog.Title>
-      <AlertDialog.Description>
-        This action cannot be undone. All data associated with this HTTP
-        endpoint will be permanently removed.
-      </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
       <AlertDialog.Cancel on:click={cancelDelete}>Cancel</AlertDialog.Cancel>

@@ -93,6 +93,10 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     from([consumer: c] in query, where: c.account_id == ^account_id)
   end
 
+  def where_replication_slot_id(query \\ base_query(), replication_slot_id) do
+    from([consumer: c] in query, where: c.replication_slot_id == ^replication_slot_id)
+  end
+
   def where_id(query \\ base_query(), id) do
     from([consumer: c] in query, where: c.id == ^id)
   end

@@ -16,7 +16,7 @@
   } from "$lib/components/ui/accordion";
   import TableSelector from "../components/TableSelector.svelte";
   import TableFilters from "../components/TableFilters.svelte";
-  import HttpEndpointForm from "../http_endpoints/HttpEndpointForm.svelte";
+  import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import {
     Card,
@@ -400,8 +400,8 @@
 
         {#if showNewHttpEndpointForm}
           <HttpEndpointForm
-            formData={form.httpEndpoint}
-            formErrors={errors.http_endpoint || {}}
+            httpEndpoint={form.httpEndpoint}
+            errors={errors.http_endpoint || {}}
           />
         {:else if errors.http_endpoint_id || errors.http_endpoint}
           <p class="text-destructive text-sm">

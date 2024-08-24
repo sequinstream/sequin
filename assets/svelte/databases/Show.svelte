@@ -202,8 +202,9 @@
 <AlertDialog.Root bind:open={showDeleteErrorDialog}>
   <AlertDialog.Content>
     <AlertDialog.Header>
-      <AlertDialog.Title
-        >Error deleting the database: {deleteErrorDialogMessage}</AlertDialog.Title
+      <AlertDialog.Title>Error deleting the database</AlertDialog.Title>
+      <AlertDialog.Description
+        >{deleteErrorDialogMessage}</AlertDialog.Description
       >
     </AlertDialog.Header>
     <AlertDialog.Footer>

@@ -176,7 +176,7 @@ defmodule Sequin.Error do
 
       %__MODULE__{
         errors: %{},
-        summary: message,
+        summary: summary_prefix <> message,
         code: code
       }
     end

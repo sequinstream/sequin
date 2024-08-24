@@ -104,6 +104,12 @@ defmodule Sequin.Consumers do
     Repo.all(pull) ++ Repo.all(push)
   end
 
+  def list_consumers_for_http_endpoint(http_endpoint_id) do
+    http_endpoint_id
+    |> HttpPushConsumer.where_http_endpoint_id()
+    |> Repo.all()
+  end
+
   def update_consumer(%HttpPullConsumer{} = consumer, attrs) do
     consumer
     |> HttpPullConsumer.update_changeset(attrs)

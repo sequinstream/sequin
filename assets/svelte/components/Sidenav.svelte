@@ -1,16 +1,20 @@
 <script lang="ts">
   import { Button } from "./ui/button";
+  import {
+    Radio,
+    Database,
+    Webhook,
+    FileText,
+    LifeBuoy,
+    CircleUserRound,
+  } from "lucide-svelte";
 
   export let currentPath: string;
 
   const navItems = [
-    { path: "/consumers", text: "Consumers", icon: "consumers-icon" },
-    { path: "/databases", text: "Databases", icon: "databases-icon" },
-    {
-      path: "/http-endpoints",
-      text: "HTTP Endpoints",
-      icon: "http-endpoints-icon",
-    },
+    { path: "/consumers", text: "Consumers" },
+    { path: "/databases", text: "Databases" },
+    { path: "/http-endpoints", text: "HTTP Endpoints" },
   ];
 
   function navLink(path: string) {
@@ -45,7 +49,14 @@
               item.path
             )}"
           >
-            <span class="ml-2.5 text-sm leading-tight">{item.text}</span>
+            {#if item.text === "Databases"}
+              <Database class="h-4 w-4 mr-2" />
+            {:else if item.text === "Consumers"}
+              <Radio class="h-4 w-4 mr-2" />
+            {:else if item.text === "HTTP Endpoints"}
+              <Webhook class="h-4 w-4 mr-2" />
+            {/if}
+            <span class="text-sm leading-tight">{item.text}</span>
           </div>
         </a>
       {/each}
@@ -62,7 +73,8 @@
             'https://sequinstream.com/docs'
           )}"
         >
-          <span class="ml-2.5 text-sm leading-tight">Docs</span>
+          <FileText class="h-4 w-4 mr-2" />
+          <span class="text-sm leading-tight">Docs</span>
         </div>
       </a>
       <a href="mailto:support@sequinstream.com">
@@ -71,26 +83,19 @@
             'mailto:support@sequinstream.com'
           )}"
         >
-          <span class="ml-2.5 text-sm leading-tight">Support</span>
+          <LifeBuoy class="h-4 w-4 mr-2" />
+          <span class="text-sm leading-tight">Support</span>
         </div>
       </a>
-      <div class="border-t border-solid mt-2"></div>
-      <Button variant="ghost" class="w-full cursor-pointer ring-0">
+      <div class="border-t border-solid my-2"></div>
+      <Button variant="ghost" class="w-full cursor-pointer ring-0 p-0">
         <div
-          class="flex h-16 w-full flex-row items-center justify-start px-2.5"
+          class="flex w-full flex-row items-center rounded p-1 justify-start hover:bg-canvasSubtle text-muted"
         >
-          <div
-            class="flex w-full flex-row items-center rounded p-1 justify-start hover:bg-canvasSubtle text-muted"
-          >
-            <div
-              class="bg-canvasMuted text-muted flex h-8 w-8 items-center justify-center rounded-full text-xs uppercase"
-            >
-              se
-            </div>
-            <div class="ml-2 flex flex-col items-start justify-start">
-              <div class="text-muted leading-1 text-sm">sequin</div>
-              <div class="text-subtle text-xs leading-4">Paul Mu'adib</div>
-            </div>
+          <CircleUserRound class="h-6 w-6" />
+          <div class="ml-2 flex flex-col items-start justify-start">
+            <div class="text-muted leading-1 text-sm">Paul Mu'adib</div>
+            <div class="text-subtle text-xs leading-4">Sequin</div>
           </div>
         </div>
       </Button>

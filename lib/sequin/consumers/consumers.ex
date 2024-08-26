@@ -83,15 +83,17 @@ defmodule Sequin.Consumers do
     Repo.all(HttpPushConsumer) ++ Repo.all(HttpPullConsumer)
   end
 
-  def list_consumers_for_account(account_id) do
+  def list_consumers_for_account(account_id, preload \\ []) do
     pull_consumers =
       account_id
       |> HttpPullConsumer.where_account_id()
+      |> preload(^preload)
       |> Repo.all()
 
     push_consumers =
       account_id
       |> HttpPushConsumer.where_account_id()
+      |> preload(^preload)
       |> Repo.all()
 
     Enum.sort_by(pull_consumers ++ push_consumers, & &1.inserted_at, {:desc, DateTime})

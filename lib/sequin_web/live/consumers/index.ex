@@ -10,7 +10,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    consumers = Consumers.list_consumers_for_account(account_id)
+    consumers = Consumers.list_consumers_for_account(account_id, :postgres_database)
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
     socket =
@@ -133,7 +133,8 @@ defmodule SequinWeb.ConsumersLive.Index do
       name: consumer.name,
       insertedAt: consumer.inserted_at,
       type: consumer_type(consumer),
-      status: consumer.status
+      status: consumer.status,
+      database_name: consumer.postgres_database.name
     }
   end
 

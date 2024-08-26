@@ -8,6 +8,7 @@
     name: string;
     baseUrl: string;
     insertedAt: string;
+    httpPushConsumersCount: number;
   }>;
   export let live: any;
 
@@ -51,6 +52,7 @@
           <Table.Head>Name</Table.Head>
           <Table.Head>Base URL</Table.Head>
           <Table.Head>Created at</Table.Head>
+          <Table.Head>Consumers</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -60,10 +62,21 @@
             class="cursor-pointer"
           >
             <Table.Cell>{endpoint.name}</Table.Cell>
-            <Table.Cell>{endpoint.baseUrl}</Table.Cell>
+            <Table.Cell>
+              <span class="font-mono underline decoration-dotted">
+                {endpoint.baseUrl}
+              </span>
+            </Table.Cell>
             <Table.Cell
               >{formatRelativeTimestamp(endpoint.insertedAt)}</Table.Cell
             >
+            <Table.Cell>
+              {#if endpoint.httpPushConsumersCount === 0}
+                <span class="text-gray-400">No consumers</span>
+              {:else}
+                {endpoint.httpPushConsumersCount}
+              {/if}
+            </Table.Cell>
           </Table.Row>
         {/each}
       </Table.Body>

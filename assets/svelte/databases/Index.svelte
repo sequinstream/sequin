@@ -62,17 +62,17 @@
             }}
           >
             <Table.Cell>{database.name}</Table.Cell>
-            <Table.Cell
-              ><span class="font-mono underline decoration-dotted"
-                >{database.hostname}</span
-              ></Table.Cell
-            >
-            <Table.Cell
-              >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
-            >
+            <Table.Cell>
+              <span class="font-mono underline decoration-dotted">
+                {database.hostname}
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              {formatRelativeTimestamp(database.insertedAt)}
+            </Table.Cell>
             <Table.Cell>
               {#if database.consumers === 0}
-                <span class="text-gray-300">No consumers</span>
+                <span class="text-gray-400">No consumers</span>
               {:else}
                 {database.consumers}
               {/if}

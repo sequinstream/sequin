@@ -7,7 +7,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
+    http_endpoints = Consumers.list_http_endpoints_for_account(account_id, [:http_push_consumers])
     encoded_http_endpoints = Enum.map(http_endpoints, &encode_http_endpoint/1)
 
     socket =
@@ -46,7 +46,8 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
       id: http_endpoint.id,
       name: http_endpoint.name,
       baseUrl: http_endpoint.base_url,
-      insertedAt: http_endpoint.inserted_at
+      insertedAt: http_endpoint.inserted_at,
+      httpPushConsumersCount: length(http_endpoint.http_push_consumers)
     }
   end
 end

@@ -70,7 +70,7 @@
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <a
-              href="/consumers/new/quick?kind=push"
+              href="/consumers/new?kind=push"
               data-phx-link="redirect"
               data-phx-link-state="push"
             >
@@ -79,7 +79,7 @@
               </DropdownMenuItem>
             </a>
             <a
-              href="/consumers/new/quick?kind=pull"
+              href="/consumers/new?kind=pull"
               data-phx-link="redirect"
               data-phx-link-state="push"
             >

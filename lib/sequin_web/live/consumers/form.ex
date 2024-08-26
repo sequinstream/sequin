@@ -1,15 +1,19 @@
-defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
+defmodule SequinWeb.ConsumersLive.Form do
   @moduledoc false
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Error
   alias Sequin.Postgres
   alias Sequin.Repo
+
+  require Logger
 
   @impl Phoenix.LiveComponent
   def render(assigns) do
@@ -22,7 +26,7 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
 
     assigns =
       assigns
-      |> assign(:encoded_http_push_consumer, encode_http_push_consumer(assigns.http_push_consumer))
+      |> assign(:encoded_consumer, encode_consumer(assigns.consumer))
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
@@ -30,11 +34,11 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     ~H"""
     <div id={@id}>
       <.svelte
-        name="consumers/HttpPushForm"
+        name={@component}
         ssr={false}
         props={
           %{
-            http_push_consumer: @encoded_http_push_consumer,
+            consumer: @encoded_consumer,
             errors: @encoded_errors,
             submitError: @submit_error,
             parent: @id,
@@ -50,18 +54,31 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
 
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
-    http_push_consumer =
-      assigns[:http_push_consumer] || %HttpPushConsumer{account_id: current_account_id(assigns)}
+    consumer = assigns[:consumer]
 
-    http_push_consumer = Repo.preload(http_push_consumer, [:http_endpoint, :postgres_database])
+    component =
+      cond do
+        is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
+        is_struct(consumer, HttpPushConsumer) -> "consumers/HttpPushForm"
+        true -> "consumers/Wizard"
+      end
+
+    consumer =
+      case consumer do
+        %HttpPullConsumer{} -> Repo.preload(consumer, [:postgres_database])
+        %HttpPushConsumer{} -> Repo.preload(consumer, [:http_endpoint, :postgres_database])
+        _ -> consumer
+      end
 
     socket =
       socket
       |> assign(assigns)
       |> assign(
-        http_push_consumer: http_push_consumer,
+        consumer: consumer,
         show_errors?: false,
-        submit_error: nil
+        submit_error: nil,
+        changeset: nil,
+        component: component
       )
       |> assign_databases()
       |> assign_http_endpoints()
@@ -71,13 +88,22 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   @impl Phoenix.LiveComponent
+  def handle_event("validate", _params, socket) do
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveComponent
   def handle_event("form_updated", %{"form" => form}, socket) do
     params =
       form
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
 
-    socket = merge_changeset(socket, params)
+    socket =
+      socket
+      |> maybe_put_base_consumer(params)
+      |> merge_changeset(params)
+
     {:noreply, socket}
   end
 
@@ -88,42 +114,23 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
       form
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
-      # Remove nil values to allow defaults to be applied
       |> Sequin.Map.reject_nil_values()
 
     socket =
-      if socket.assigns.http_push_consumer.id do
-        update_http_push_consumer(socket, params)
+      if socket.assigns.consumer.id do
+        update_consumer(socket, params)
       else
-        create_http_push_consumer(socket, params)
+        create_consumer(socket, params)
       end
 
     socket = assign(socket, :show_errors?, true)
     {:noreply, socket}
   end
 
-  def handle_event("delete_submitted", _params, socket) do
-    consumer = socket.assigns.http_push_consumer
-
-    case Consumers.delete_consumer_with_lifecycle(consumer) do
-      {:ok, _} ->
-        socket =
-          socket
-          |> put_flash(:info, "HTTP Push Consumer deleted successfully")
-          |> push_navigate(to: ~p"/consumers")
-
-        {:noreply, socket}
-
-      {:error, _} ->
-        socket = put_flash(socket, :error, "Failed to delete HTTP Push Consumer")
-        {:noreply, socket}
-    end
-  end
-
   def handle_event("form_closed", _params, socket) do
     socket =
-      if socket.assigns.http_push_consumer.id do
-        push_patch(socket, to: ~p"/consumers/#{socket.assigns.http_push_consumer.id}")
+      if socket.assigns.consumer.id do
+        push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
       else
         push_navigate(socket, to: ~p"/consumers")
       end
@@ -131,10 +138,12 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     {:noreply, socket}
   end
 
+  @impl Phoenix.LiveComponent
   def handle_event("refresh_databases", _params, socket) do
     {:noreply, assign_databases(socket)}
   end
 
+  @impl Phoenix.LiveComponent
   def handle_event("refresh_tables", %{"database_id" => database_id}, socket) do
     with {:ok, database} <- Databases.get_db(database_id),
          {:ok, _updated_database} <- Databases.update_tables(database) do
@@ -170,32 +179,45 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     end
   end
 
-  defp encode_http_push_consumer(%HttpPushConsumer{} = http_push_consumer) do
+  defp encode_consumer(%{__struct__: consumer_type} = consumer) do
     postgres_database_id =
-      if is_struct(http_push_consumer.postgres_database, PostgresDatabase), do: http_push_consumer.postgres_database.id
+      if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
-    source_table = List.first(http_push_consumer.source_tables)
+    source_table = List.first(consumer.source_tables)
 
-    %{
-      "id" => http_push_consumer.id,
-      "name" => http_push_consumer.name,
-      "ack_wait_ms" => http_push_consumer.ack_wait_ms,
-      "max_ack_pending" => http_push_consumer.max_ack_pending,
-      "max_deliver" => http_push_consumer.max_deliver,
-      "max_waiting" => http_push_consumer.max_waiting,
-      "message_kind" => http_push_consumer.message_kind,
-      "status" => http_push_consumer.status,
-      "http_endpoint_id" => http_push_consumer.http_endpoint_id,
+    base = %{
+      "id" => consumer.id,
+      "name" => consumer.name,
+      "ack_wait_ms" => consumer.ack_wait_ms,
+      "max_ack_pending" => consumer.max_ack_pending,
+      "max_deliver" => consumer.max_deliver,
+      "max_waiting" => consumer.max_waiting,
+      "message_kind" => consumer.message_kind,
+      "status" => consumer.status,
       "postgres_database_id" => postgres_database_id,
       "table_oid" => source_table && source_table.oid,
-      "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete]
+      "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
+      "source_table_filters" => source_table && Enum.map(source_table.column_filters, &encode_column_filter/1)
+    }
+
+    case consumer_type do
+      HttpPushConsumer -> Map.put(base, "http_endpoint_id", consumer.http_endpoint_id)
+      HttpPullConsumer -> base
+    end
+  end
+
+  defp encode_column_filter(column_filter) do
+    %{
+      "columnAttnum" => column_filter.column_attnum,
+      "operator" => column_filter.operator,
+      "value" => column_filter.value.value,
+      # FIXME: Use the value type from column filter
+      "valueType" => "string"
     }
   end
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
-    changeset
-    |> Sequin.Error.errors_on()
-    |> dbg()
+    Error.errors_on(changeset)
   end
 
   defp encode_database(database) do
@@ -231,29 +253,38 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     }
   end
 
-  defp update_http_push_consumer(socket, params) do
-    consumer = socket.assigns.http_push_consumer
+  defp update_consumer(socket, params) do
+    consumer = socket.assigns.consumer
 
     case Consumers.update_consumer_with_lifecycle(consumer, params) do
-      {:ok, http_push_consumer} ->
-        socket.assigns.on_finish.(http_push_consumer)
+      {:ok, updated_consumer} ->
+        socket.assigns.on_finish.(updated_consumer)
 
         socket
-        |> assign(:http_push_consumer, http_push_consumer)
-        |> push_navigate(to: ~p"/consumers/#{http_push_consumer.id}")
+        |> assign(:consumer, updated_consumer)
+        |> push_navigate(to: ~p"/consumers/#{updated_consumer.id}")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         assign(socket, :changeset, changeset)
     end
   end
 
-  defp create_http_push_consumer(socket, params) do
+  defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
 
-    case Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params) do
-      {:ok, http_push_consumer} ->
-        socket.assigns.on_finish.(http_push_consumer)
-        push_navigate(socket, to: ~p"/consumers/#{http_push_consumer.id}")
+    case_result =
+      case socket.assigns.consumer do
+        %HttpPullConsumer{} ->
+          Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params)
+
+        %HttpPushConsumer{} ->
+          Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params)
+      end
+
+    case case_result do
+      {:ok, consumer} ->
+        socket.assigns.on_finish.(consumer)
+        push_navigate(socket, to: ~p"/consumers/#{consumer.id}")
 
       {:error, %Ecto.Changeset{} = changeset} ->
         assign(socket, :changeset, changeset)
@@ -261,29 +292,36 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
   end
 
   defp reset_changeset(socket) do
-    account_id = current_account_id(socket)
-
-    changeset =
-      if socket.assigns.http_push_consumer.id do
-        HttpPushConsumer.update_changeset(socket.assigns.http_push_consumer, %{})
-      else
-        HttpPushConsumer.create_changeset(%HttpPushConsumer{account_id: account_id}, %{})
-      end
-
-    assign(socket, :changeset, changeset)
+    consumer = socket.assigns.consumer
+    assign(socket, :changeset, changeset(socket, consumer, %{}))
   end
 
   defp merge_changeset(socket, params) do
+    consumer = socket.assigns.consumer
+    assign(socket, :changeset, changeset(socket, consumer, params))
+  end
+
+  defp changeset(socket, %HttpPullConsumer{id: nil}, params) do
     account_id = current_account_id(socket)
+    HttpPullConsumer.create_changeset(%HttpPullConsumer{account_id: account_id}, params)
+  end
 
-    changeset =
-      if socket.assigns.http_push_consumer.id do
-        HttpPushConsumer.update_changeset(socket.assigns.http_push_consumer, params)
-      else
-        HttpPushConsumer.create_changeset(%HttpPushConsumer{account_id: account_id}, params)
-      end
+  defp changeset(_socket, %HttpPullConsumer{} = consumer, params) do
+    HttpPullConsumer.update_changeset(consumer, params)
+  end
 
-    assign(socket, :changeset, changeset)
+  defp changeset(socket, %HttpPushConsumer{id: nil}, params) do
+    account_id = current_account_id(socket)
+    HttpPushConsumer.create_changeset(%HttpPushConsumer{account_id: account_id}, params)
+  end
+
+  defp changeset(_socket, %HttpPushConsumer{} = consumer, params) do
+    HttpPushConsumer.update_changeset(consumer, params)
+  end
+
+  # user is in wizard and hasn't selected a consumer_kind yet
+  defp changeset(_socket, nil, _params) do
+    nil
   end
 
   defp assign_databases(socket) do
@@ -306,6 +344,23 @@ defmodule SequinWeb.Live.Consumers.HttpPushConsumerForm do
     with {:ok, database} <- Databases.get_db_for_account(current_account_id(socket), postgres_database_id) do
       database = Repo.preload(database, :replication_slot)
       Map.put(params, "replication_slot_id", database.replication_slot.id)
+    end
+  end
+
+  defp maybe_put_base_consumer(socket, params) do
+    consumer_kind = params["consumerKind"]
+    consumer = socket.assigns.consumer
+
+    if is_nil(consumer) and consumer_kind do
+      case consumer_kind do
+        "pull" ->
+          assign(socket, :consumer, %HttpPullConsumer{})
+
+        "push" ->
+          assign(socket, :consumer, %HttpPushConsumer{})
+      end
+    else
+      socket
     end
   end
 end

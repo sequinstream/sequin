@@ -48,17 +48,17 @@
       operator: string | null;
       value: string;
     }[];
+    sourceTableActions: string[];
     name: string;
     ackWaitMs: number;
     maxAckPending: number;
-    maxDeliver: number;
     maxWaiting: number;
-    status: "active" | "disabled";
-    httpEndpoint?: {
-      url: string;
-      headers: { [key: string]: string };
+    httpEndpointId: string | null;
+    httpEndpoint: {
+      name: string;
+      baseUrl: string;
+      headers: Record<string, string>;
     };
-    replicationSlotId: string;
   };
 
   export let databases: Array<{
@@ -74,6 +74,15 @@
       }>;
     }>;
   }>;
+
+  export let httpEndpoints: Array<{
+    id: string;
+    name: string;
+    baseUrl: string;
+  }>;
+
+  export let formErrors: Record<string, string[]> = {};
+  export let submitError: string | null = null;
 
   let continueDisabled = true;
   $: {
@@ -175,15 +184,15 @@
 
   function handleStreamClick(stream) {
     if (!stream.comingSoon) {
-      form.messageKind = stream.id;
-      pushEvent("form_updated", { form, step_forward: true });
+      handleFormUpdate({ messageKind: stream.id });
+      pushEvent("form_updated", { form }, () => pushEvent("step_forward"));
     }
   }
 
   function handleConsumerClick(consumer) {
     if (!consumer.comingSoon) {
-      form.consumerKind = consumer.id;
-      pushEvent("form_updated", { form, step_forward: true });
+      handleFormUpdate({ consumerKind: consumer.id });
+      pushEvent("form_updated", { form }, () => pushEvent("step_forward"));
     }
   }
 
@@ -241,21 +250,29 @@
   }
 
   function handleConsumerConfigSubmit() {
-    pushEvent("form_updated", { form, step_forward: true });
+    pushEvent("form_updated", { form }, () => pushEvent("step_forward"));
   }
 
   let activeInfo = "";
+
+  const ackWaitMsInfo =
+    form.consumerKind === "http_push"
+      ? [
+          "The maximum duration allowed for the HTTP request to complete.",
+          "If the request doesn't finish within this time, it will be considered failed and may be retried.",
+        ]
+      : [
+          "The visibility timeout is the duration that a message is hidden from other consumers after it's been received.",
+          "This prevents multiple consumers from processing the same message simultaneously.",
+          "If the message isn't processed within this time, it becomes visible to other consumers again.",
+        ];
 
   const infoContent = {
     name: [
       "Choose a unique name for your consumer.",
       "You'll use this name in HTTP requests to Sequin.",
     ],
-    ackWaitMs: [
-      "The visibility timeout is the duration that a message is hidden from other consumers after it's been received.",
-      "This prevents multiple consumers from processing the same message simultaneously.",
-      "If the message isn't processed within this time, it becomes visible to other consumers again.",
-    ],
+    ackWaitMs: ackWaitMsInfo,
     maxAckPending: [
       "Max ack pending sets the maximum number of messages that can be pending acknowledgment at any time.",
       "This helps control the flow of messages and prevents overwhelming the consumer.",
@@ -277,16 +294,27 @@
   };
 
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
-    form.postgresDatabaseId = event.databaseId;
-    form.tableOid = event.tableOid;
+    handleFormUpdate({
+      postgresDatabaseId: event.databaseId,
+      tableOid: event.tableOid,
+    });
   }
 
   function onConsumerCreate() {
-    pushEvent("form_updated", { form, step_forward: true });
+    pushEvent("form_updated", { form }, () => pushEvent("step_forward"));
   }
 
   function handleFilterChange(newFilters) {
-    form.sourceTableFilters = newFilters;
+    handleFormUpdate({
+      sourceTableFilters: newFilters.map((filter) => ({
+        ...filter,
+        column: filter.column ? parseInt(filter.column, 10) : null,
+      })),
+    });
+  }
+
+  function handleFormUpdate(updatedForm: Partial<typeof form>) {
+    form = { ...form, ...updatedForm };
     pushEvent("form_updated", { form });
   }
 </script>
@@ -525,7 +553,9 @@
         <div class="flex gap-6">
           <div class="w-full max-w-3xl">
             <h2 class="text-2xl font-bold mb-2">
-              Create an HTTP pull consumer
+              Create an HTTP {form.consumerKind === "http_pull"
+                ? "pull"
+                : "push"} consumer
             </h2>
             <p class="text-muted-foreground mb-6">
               Configure your consumer settings
@@ -555,13 +585,20 @@
                   id="name"
                   bind:value={form.name}
                   placeholder="Enter consumer name"
+                  on:input={() => handleFormUpdate({ name: form.name })}
                   on:focus={() => (activeInfo = "name")}
                 />
+                {#if formErrors.name}
+                  <p class="text-destructive text-sm">{formErrors.name[0]}</p>
+                {/if}
               </div>
 
               <div class="space-y-2">
-                <Label for="visibility-timeout" class="flex items-center gap-2">
-                  Visibility timeout
+                <Label for="ack-wait-ms" class="flex items-center gap-2">
+                  {form.consumerKind === "http_push"
+                    ? "Request timeout"
+                    : "Visibility timeout"}
+                  <span> (ms)</span>
                   <button
                     type="button"
                     on:click={() => (activeInfo = "ackWaitMs")}
@@ -570,24 +607,14 @@
                     <InfoIcon class="h-4 w-4" />
                   </button>
                 </Label>
-                <div class="flex items-center gap-2">
-                  <Input
-                    id="visibility-timeout"
-                    type="number"
-                    bind:value={form.ackWaitMs}
-                    class="w-24"
-                    on:focus={() => (activeInfo = "ackWaitMs")}
-                  />
-                  <Select>
-                    <SelectTrigger class="w-[180px]">
-                      <SelectValue placeholder="Select unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="seconds">Seconds</SelectItem>
-                      <SelectItem value="minutes">Minutes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Input
+                  id="ack-wait-ms"
+                  type="number"
+                  bind:value={form.ackWaitMs}
+                  on:input={() =>
+                    handleFormUpdate({ ackWaitMs: form.ackWaitMs })}
+                  on:focus={() => (activeInfo = "ackWaitMs")}
+                />
               </div>
 
               <Accordion class="w-full">
@@ -613,6 +640,10 @@
                           id="max-ack-pending"
                           type="number"
                           bind:value={form.maxAckPending}
+                          on:input={() =>
+                            handleFormUpdate({
+                              maxAckPending: form.maxAckPending,
+                            })}
                           on:focus={() => (activeInfo = "maxAckPending")}
                         />
                       </div>
@@ -634,6 +665,8 @@
                           id="max-waiting"
                           type="number"
                           bind:value={form.maxWaiting}
+                          on:input={() =>
+                            handleFormUpdate({ maxWaiting: form.maxWaiting })}
                           on:focus={() => (activeInfo = "maxWaiting")}
                         />
                       </div>

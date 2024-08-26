@@ -28,8 +28,7 @@ defmodule SequinWeb.Router do
 
     live_session :default, on_mount: [SequinWeb.UserAuth, {SequinWeb.LiveHooks, :global}] do
       live "/consumers", ConsumersLive.Index, :index
-      live "/consumers/new/quick", ConsumersLive.Index, :new
-      live "/consumers/new", ConsumersLive.New, :new
+      live "/consumers/new", ConsumersLive.Index, :new
       live "/consumers/:id", ConsumersLive.Show, :show
       live "/consumers/:id/edit", ConsumersLive.Show, :edit
 

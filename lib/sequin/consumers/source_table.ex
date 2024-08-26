@@ -32,6 +32,7 @@ defmodule Sequin.Consumers.SourceTable do
     def from_external_operator(external_operator) do
       case String.downcase(external_operator) do
         "=" -> :==
+        "==" -> :==
         "!=" -> :!=
         ">" -> :>
         "<" -> :<
@@ -39,8 +40,11 @@ defmodule Sequin.Consumers.SourceTable do
         "<=" -> :<=
         "in" -> :in
         "not in" -> :not_in
+        "not_in" -> :not_in
         "is null" -> :is_null
+        "is_null" -> :is_null
         "not null" -> :not_null
+        "not_null" -> :not_null
         _ -> raise "Invalid operator: #{external_operator}"
       end
     end

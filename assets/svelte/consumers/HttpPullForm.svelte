@@ -21,7 +21,6 @@
   import {
     Card,
     CardContent,
-    CardDescription,
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
@@ -30,21 +29,21 @@
 
   export let live;
   export let parent;
-  export let http_pull_consumer;
+  export let consumer;
   export let databases;
   export let errors: any = {};
   export let submitError;
 
   let initialForm = {
-    messageKind: http_pull_consumer.message_kind || "record",
-    postgresDatabaseId: http_pull_consumer.postgres_database_id,
-    tableOid: http_pull_consumer.table_oid,
-    sourceTableFilters: http_pull_consumer.source_table_filters || [],
-    sourceTableActions: http_pull_consumer.source_table_actions || [],
-    name: http_pull_consumer.name || "",
-    ackWaitMs: http_pull_consumer.ack_wait_ms || 30000,
-    maxAckPending: http_pull_consumer.max_ack_pending || 10000,
-    maxWaiting: http_pull_consumer.max_waiting || 20,
+    messageKind: consumer.message_kind || "record",
+    postgresDatabaseId: consumer.postgres_database_id,
+    tableOid: consumer.table_oid,
+    sourceTableFilters: consumer.source_table_filters || [],
+    sourceTableActions: consumer.source_table_actions || [],
+    name: consumer.name || "",
+    ackWaitMs: consumer.ack_wait_ms || 30000,
+    maxAckPending: consumer.max_ack_pending || 10000,
+    maxWaiting: consumer.max_waiting || 20,
   };
 
   let form = { ...initialForm };
@@ -99,7 +98,7 @@
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
-  const isEditMode = !!http_pull_consumer.id;
+  const isEditMode = !!consumer.id;
 </script>
 
 <FullPageModal

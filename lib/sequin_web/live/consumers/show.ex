@@ -6,6 +6,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Repo
+  alias SequinWeb.ConsumersLive.Form
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -41,19 +42,11 @@ defmodule SequinWeb.ConsumersLive.Show do
     ~H"""
     <div id="consumer-show">
       <%= case {@live_action, @consumer} do %>
-        <% {:edit, %HttpPushConsumer{}} -> %>
+        <% {:edit, _consumer} -> %>
           <.live_component
-            module={SequinWeb.Live.Consumers.HttpPushConsumerForm}
-            id="edit-http-push-consumer"
-            http_push_consumer={@consumer}
-            on_finish={&handle_edit_finish/1}
-            current_account={@current_account}
-          />
-        <% {:edit, %HttpPullConsumer{}} -> %>
-          <.live_component
-            module={SequinWeb.Live.Consumers.HttpPullConsumerForm}
-            id="edit-http-pull-consumer"
-            http_pull_consumer={@consumer}
+            module={Form}
+            id="edit-consumer"
+            consumer={@consumer}
             on_finish={&handle_edit_finish/1}
             current_account={@current_account}
           />

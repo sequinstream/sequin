@@ -76,15 +76,11 @@
   let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  $: console.log(databaseRefreshState, tableRefreshState);
-
   function handleDbChange(event: any) {
     selectedDatabaseId = event.value;
   }
 
   function refreshDatabases() {
-    console.log("refreshDBs");
-    console.log("refreshDatabases");
     databaseRefreshState = "refreshing";
     pushEvent("refresh_databases", {}, () => {
       databaseRefreshState = "done";

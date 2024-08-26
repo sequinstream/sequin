@@ -5,8 +5,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
-  alias SequinWeb.Live.Consumers.HttpPullConsumerForm
-  alias SequinWeb.Live.Consumers.HttpPushConsumerForm
+  alias SequinWeb.ConsumersLive.Form
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -18,8 +17,6 @@ defmodule SequinWeb.ConsumersLive.Index do
       socket
       |> assign(:consumers, encoded_consumers)
       |> assign(:form_errors, %{})
-      |> assign(:http_pull_consumer, %HttpPullConsumer{})
-      |> assign(:http_push_consumer, %HttpPushConsumer{})
 
     {:ok, socket}
   end
@@ -33,9 +30,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   def render(%{live_action: :new} = assigns) do
     ~H"""
     <div id="consumers-index">
-      <%= if @live_action == :new do %>
-        <%= render_consumer_form(assigns) %>
-      <% end %>
+      <%= render_consumer_form(assigns) %>
     </div>
     """
   end
@@ -62,30 +57,6 @@ defmodule SequinWeb.ConsumersLive.Index do
     {:noreply, push_navigate(socket, to: ~p"/consumers/#{id}")}
   end
 
-  @impl Phoenix.LiveView
-  def handle_event("consumer_submitted", %{"name" => name}, socket) do
-    account_id = current_account_id(socket)
-
-    case Consumers.create_http_pull_consumer_with_lifecycle(%{
-           account_id: account_id,
-           name: name
-         }) do
-      {:ok, consumer} ->
-        encoded_consumer = encode_consumer(consumer)
-
-        socket =
-          socket
-          |> update(:consumers, fn consumers -> [encoded_consumer | consumers] end)
-          |> assign(:form_errors, %{})
-
-        {:noreply, push_navigate(socket, to: ~p"/consumers/#{consumer.id}")}
-
-      {:error, changeset} ->
-        errors = Sequin.Error.errors_on(changeset)
-        {:noreply, assign(socket, :form_errors, errors)}
-    end
-  end
-
   defp apply_action(socket, :index, _params) do
     socket
     |> assign(:page_title, "Consumers")
@@ -96,30 +67,46 @@ defmodule SequinWeb.ConsumersLive.Index do
     socket
     |> assign(:page_title, "New Consumer")
     |> assign(:live_action, :new)
-    |> assign(:consumer_kind, kind)
+    |> assign(:form_kind, kind)
   end
 
-  defp render_consumer_form(%{consumer_kind: "pull"} = assigns) do
+  defp apply_action(socket, :new, _params) do
+    apply_action(socket, :new, %{"kind" => "wizard"})
+  end
+
+  defp render_consumer_form(%{form_kind: "wizard"} = assigns) do
     ~H"""
     <.live_component
       current_account={@current_account}
-      module={HttpPullConsumerForm}
-      id="new-http-pull-consumer"
+      module={Form}
+      id="new-consumer"
       action={:new}
-      http_pull_consumer={@http_pull_consumer}
       on_finish={&handle_create_finish/1}
     />
     """
   end
 
-  defp render_consumer_form(%{consumer_kind: "push"} = assigns) do
+  defp render_consumer_form(%{form_kind: "pull"} = assigns) do
     ~H"""
     <.live_component
       current_account={@current_account}
-      module={HttpPushConsumerForm}
-      id="new-http-push-consumer"
+      module={Form}
+      id="new-consumer"
       action={:new}
-      http_push_consumer={@http_push_consumer}
+      consumer={%HttpPullConsumer{}}
+      on_finish={&handle_create_finish/1}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "push"} = assigns) do
+    ~H"""
+    <.live_component
+      current_account={@current_account}
+      module={Form}
+      id="new-consumer"
+      action={:new}
+      consumer={%HttpPushConsumer{}}
       on_finish={&handle_create_finish/1}
     />
     """

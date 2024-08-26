@@ -30,23 +30,23 @@
 
   export let live;
   export let parent;
-  export let http_push_consumer;
+  export let consumer;
   export let databases;
   export let httpEndpoints;
   export let errors: any = {};
   export let submitError;
 
   let form = {
-    messageKind: http_push_consumer.message_kind || "event",
-    postgresDatabaseId: http_push_consumer.postgres_database_id,
-    tableOid: http_push_consumer.table_oid,
-    sourceTableFilters: http_push_consumer.source_table_filters || [],
-    sourceTableActions: http_push_consumer.source_table_actions || [],
-    name: http_push_consumer.name || "",
-    ackWaitMs: http_push_consumer.ack_wait_ms || 30000,
-    maxAckPending: http_push_consumer.max_ack_pending || 10000,
-    maxWaiting: http_push_consumer.max_waiting,
-    httpEndpointId: http_push_consumer.http_endpoint_id,
+    messageKind: consumer.message_kind || "event",
+    postgresDatabaseId: consumer.postgres_database_id,
+    tableOid: consumer.table_oid,
+    sourceTableFilters: consumer.source_table_filters || [],
+    sourceTableActions: consumer.source_table_actions || [],
+    name: consumer.name || "",
+    ackWaitMs: consumer.ack_wait_ms || 30000,
+    maxAckPending: consumer.max_ack_pending || 10000,
+    maxWaiting: consumer.max_waiting,
+    httpEndpointId: consumer.http_endpoint_id,
     httpEndpoint: {
       name: "",
       base_url: "",
@@ -71,10 +71,7 @@
     ? httpEndpoints.find((endpoint) => endpoint.id === form.httpEndpointId)
     : null;
 
-  console.log(selectedDatabase, selectedTable, selectedHttpEndpoint);
-  console.log(http_push_consumer);
-
-  const isEditMode = !!http_push_consumer.id;
+  const isEditMode = !!consumer.id;
 
   $: {
     if (isEditMode || (form.postgresDatabaseId && form.tableOid)) {
@@ -148,7 +145,9 @@
               label:
                 form.messageKind === "event" ? "Change stream" : "Sync stream",
             }}
-            onSelectedChange={(event) => (form.messageKind = event.value)}
+            onSelectedChange={(event) => {
+              form.messageKind = event.value;
+            }}
             disabled={isEditMode}
           >
             <SelectTrigger
@@ -271,9 +270,9 @@
                 </div>
               {/each}
             </div>
-            {#if errors.source_table?.actions}
+            {#if errors.source_tables?.[1]?.actions}
               <p class="text-destructive text-sm">
-                {errors.source_table?.actions}
+                {errors.source_tables[1].actions}
               </p>
             {/if}
           </div>

@@ -43,6 +43,7 @@ defmodule SequinWeb.Router do
       live "/http-endpoints/:id/edit", HttpEndpointsLive.Form, :edit
 
       get "/easter-egg", EasterEggController, :home
+      live "/health", HealthLive, :index
     end
   end
 

@@ -125,7 +125,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     %{
       id: Ecto.Changeset.get_field(changeset, :id),
       name: Ecto.Changeset.get_field(changeset, :name),
-      base_url: Ecto.Changeset.get_field(changeset, :base_url),
+      baseUrl: Ecto.Changeset.get_field(changeset, :base_url),
       headers: Ecto.Changeset.get_field(changeset, :headers) || %{}
     }
   end
@@ -134,7 +134,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     %{
       "http_endpoint" => %{
         "name" => form["name"],
-        "base_url" => form["base_url"],
+        "base_url" => form["baseUrl"],
         "headers" => form["headers"] || %{}
       }
     }

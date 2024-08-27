@@ -78,7 +78,8 @@ defmodule SequinWeb.ConsumersLive.Form do
         show_errors?: false,
         submit_error: nil,
         changeset: nil,
-        component: component
+        component: component,
+        prev_params: %{}
       )
       |> assign_databases()
       |> assign_http_endpoints()
@@ -94,15 +95,13 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   @impl Phoenix.LiveComponent
   def handle_event("form_updated", %{"form" => form}, socket) do
-    params =
-      form
-      |> decode_params()
-      |> maybe_put_replication_slot_id(socket)
+    params = form |> decode_params() |> maybe_put_replication_slot_id(socket)
 
     socket =
       socket
-      |> maybe_put_base_consumer(params)
+      |> handle_params_changes(params)
       |> merge_changeset(params)
+      |> assign(prev_params: params)
 
     {:noreply, socket}
   end
@@ -116,20 +115,26 @@ defmodule SequinWeb.ConsumersLive.Form do
       |> maybe_put_replication_slot_id(socket)
       |> Sequin.Map.reject_nil_values()
 
-    socket =
+    res =
       if socket.assigns.consumer.id do
         update_consumer(socket, params)
       else
         create_consumer(socket, params)
       end
 
-    socket = assign(socket, :show_errors?, true)
-    {:noreply, socket}
+    case res do
+      {:ok, socket} ->
+        {:reply, %{ok: true}, socket}
+
+      {:error, socket} ->
+        socket = assign(socket, :show_errors?, true)
+        {:reply, %{ok: false}, socket}
+    end
   end
 
   def handle_event("form_closed", _params, socket) do
     socket =
-      if socket.assigns.consumer.id do
+      if socket.assigns.consumer && socket.assigns.consumer.id do
         push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
       else
         push_navigate(socket, to: ~p"/consumers")
@@ -154,20 +159,30 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp decode_params(form) do
+    message_kind = form["messageKind"]
+
+    source_table_actions =
+      if message_kind == "change" do
+        [:insert, :update, :delete]
+      else
+        form["sourceTableActions"] || []
+      end
+
     params = %{
+      "consumer_kind" => form["consumerKind"],
       "ack_wait_ms" => form["ackWaitMs"],
-      "http_endpoint" => form["httpEndpoint"],
+      "http_endpoint" => decode_http_endpoint(form["httpEndpoint"]),
       "http_endpoint_id" => form["httpEndpointId"],
       "max_ack_pending" => form["maxAckPending"],
       "max_waiting" => form["maxWaiting"],
-      "message_kind" => form["messageKind"],
+      "message_kind" => message_kind,
       "name" => form["name"],
       "postgres_database_id" => form["postgresDatabaseId"],
       "source_tables" => [
         %{
           "oid" => form["tableOid"],
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => form["sourceTableActions"] || []
+          "actions" => source_table_actions
         }
       ]
     }
@@ -178,6 +193,19 @@ defmodule SequinWeb.ConsumersLive.Form do
       params
     end
   end
+
+  defp handle_params_changes(socket, next_params) do
+    if is_nil(socket.assigns.prev_params["consumer_kind"]) and next_params["consumer_kind"] do
+      case next_params["consumer_kind"] do
+        "http_pull" -> assign(socket, :consumer, %HttpPullConsumer{})
+        "http_push" -> assign(socket, :consumer, %HttpPushConsumer{})
+      end
+    else
+      socket
+    end
+  end
+
+  defp encode_consumer(nil), do: nil
 
   defp encode_consumer(%{__struct__: consumer_type} = consumer) do
     postgres_database_id =
@@ -197,23 +225,13 @@ defmodule SequinWeb.ConsumersLive.Form do
       "postgres_database_id" => postgres_database_id,
       "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
-      "source_table_filters" => source_table && Enum.map(source_table.column_filters, &encode_column_filter/1)
+      "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1)
     }
 
     case consumer_type do
       HttpPushConsumer -> Map.put(base, "http_endpoint_id", consumer.http_endpoint_id)
       HttpPullConsumer -> base
     end
-  end
-
-  defp encode_column_filter(column_filter) do
-    %{
-      "columnAttnum" => column_filter.column_attnum,
-      "operator" => column_filter.operator,
-      "value" => column_filter.value.value,
-      # FIXME: Use the value type from column filter
-      "valueType" => "string"
-    }
   end
 
   defp encode_errors(%Ecto.Changeset{} = changeset) do
@@ -249,23 +267,34 @@ defmodule SequinWeb.ConsumersLive.Form do
     %{
       "id" => http_endpoint.id,
       "name" => http_endpoint.name,
-      "base_url" => http_endpoint.base_url
+      "baseUrl" => http_endpoint.base_url
     }
   end
+
+  defp decode_http_endpoint(http_endpoint) when is_map(http_endpoint) do
+    %{
+      "name" => http_endpoint["name"],
+      "base_url" => http_endpoint["baseUrl"],
+      "headers" => http_endpoint["headers"]
+    }
+  end
+
+  defp decode_http_endpoint(_http_endpoint), do: nil
 
   defp update_consumer(socket, params) do
     consumer = socket.assigns.consumer
 
     case Consumers.update_consumer_with_lifecycle(consumer, params) do
       {:ok, updated_consumer} ->
-        socket.assigns.on_finish.(updated_consumer)
+        socket =
+          socket
+          |> assign(:consumer, updated_consumer)
+          |> push_navigate(to: ~p"/consumers/#{updated_consumer.id}")
 
-        socket
-        |> assign(:consumer, updated_consumer)
-        |> push_navigate(to: ~p"/consumers/#{updated_consumer.id}")
+        {:ok, socket}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        assign(socket, :changeset, changeset)
+        {:error, assign(socket, :changeset, changeset)}
     end
   end
 
@@ -283,11 +312,10 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case case_result do
       {:ok, consumer} ->
-        socket.assigns.on_finish.(consumer)
-        push_navigate(socket, to: ~p"/consumers/#{consumer.id}")
+        {:ok, push_navigate(socket, to: ~p"/consumers/#{consumer.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        assign(socket, :changeset, changeset)
+        {:error, assign(socket, :changeset, changeset)}
     end
   end
 
@@ -341,26 +369,13 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp maybe_put_replication_slot_id(%{"postgres_database_id" => postgres_database_id} = params, socket) do
-    with {:ok, database} <- Databases.get_db_for_account(current_account_id(socket), postgres_database_id) do
-      database = Repo.preload(database, :replication_slot)
-      Map.put(params, "replication_slot_id", database.replication_slot.id)
-    end
-  end
+    case Databases.get_db_for_account(current_account_id(socket), postgres_database_id) do
+      {:ok, database} ->
+        database = Repo.preload(database, :replication_slot)
+        Map.put(params, "replication_slot_id", database.replication_slot.id)
 
-  defp maybe_put_base_consumer(socket, params) do
-    consumer_kind = params["consumerKind"]
-    consumer = socket.assigns.consumer
-
-    if is_nil(consumer) and consumer_kind do
-      case consumer_kind do
-        "pull" ->
-          assign(socket, :consumer, %HttpPullConsumer{})
-
-        "push" ->
-          assign(socket, :consumer, %HttpPushConsumer{})
-      end
-    else
-      socket
+      _ ->
+        Map.merge(params, %{"replication_slot_id" => nil, "postgres_database_id" => nil})
     end
   end
 end

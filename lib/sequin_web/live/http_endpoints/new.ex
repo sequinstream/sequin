@@ -89,7 +89,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
   defp changeset_to_form_data(changeset) do
     %{
       name: Ecto.Changeset.get_field(changeset, :name),
-      base_url: Ecto.Changeset.get_field(changeset, :base_url),
+      baseUrl: Ecto.Changeset.get_field(changeset, :base_url),
       headers: Ecto.Changeset.get_field(changeset, :headers) || %{}
     }
   end

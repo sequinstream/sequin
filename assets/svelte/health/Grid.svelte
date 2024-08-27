@@ -6,20 +6,23 @@
   export let healthy: any;
   export let warning: any;
   export let unhealthy: any;
+  export let initializing: any;
 </script>
 
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-2xl font-semibold mb-6">Health Dashboard</h1>
 
-  <div class="grid grid-cols-3 gap-6">
+  <div class="grid grid-cols-4 gap-6">
     <!-- Pill row -->
     <HealthPill status={healthy.status} />
     <HealthPill status={warning.status} />
     <HealthPill status={unhealthy.status} />
+    <HealthPill status={initializing.status} />
 
     <!-- Component row -->
     <HealthComponent health={healthy} expanded={false} />
     <HealthComponent health={warning} expanded={false} />
     <HealthComponent health={unhealthy} expanded={false} />
+    <HealthComponent health={initializing} expanded={false} />
   </div>
 </div>

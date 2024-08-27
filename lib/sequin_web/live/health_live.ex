@@ -1,18 +1,3 @@
-defmodule Sequin.Health do
-  @moduledoc """
-  This is a temporary module to hold health data for the health dashboard.
-  """
-
-  @derive Jason.Encoder
-  defstruct [:component, :status, :message, :checks]
-
-  defmodule Check do
-    @moduledoc false
-    @derive Jason.Encoder
-    defstruct [:name, :status, :message, :error]
-  end
-end
-
 defmodule SequinWeb.HealthLive do
   @moduledoc false
   use SequinWeb, :live_view
@@ -26,100 +11,137 @@ defmodule SequinWeb.HealthLive do
     socket = assign(socket, page_title: "Health Dashboard")
 
     socket =
-      socket
-      |> assign(
-        healthy: %Health{
-          status: :healthy,
-          message: "Your push consumer is healthy",
-          checks: [
-            %Check{
-              name: "Database WAL replication",
-              status: :healthy,
-              message: "WAL replication is functioning normally"
+      assign(socket,
+        healthy:
+          Health.to_external(%Health{
+            org_id: "org_123",
+            entity_id: "consumer_1",
+            entity_kind: :http_push_consumer,
+            status: :healthy,
+            checks: %{
+              "wal_replication" => %Check{
+                id: "wal_replication",
+                name: "Database WAL replication",
+                status: :healthy,
+                error: nil
+              },
+              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :healthy, error: nil},
+              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :healthy, error: nil},
+              "http_endpoint" => %Check{
+                id: "http_endpoint",
+                name: "HTTP endpoint reachability",
+                status: :healthy,
+                error: nil
+              }
             },
-            %Check{
-              name: "Consumer ingestion",
-              status: :healthy,
-              message: "Data ingestion is working as expected"
+            last_healthy_at: DateTime.utc_now(),
+            erroring_since: nil,
+            consecutive_errors: 0
+          }),
+        warning:
+          Health.to_external(%Health{
+            org_id: "org_123",
+            entity_id: "consumer_2",
+            entity_kind: :http_push_consumer,
+            status: :warning,
+            checks: %{
+              "wal_replication" => %Check{
+                id: "wal_replication",
+                name: "Database WAL replication",
+                status: :healthy,
+                error: nil
+              },
+              "ingestion" => %Check{
+                id: "ingestion",
+                name: "Consumer ingestion",
+                status: :warning,
+                error:
+                  Error.service(
+                    code: "SLOW_INGESTION",
+                    message: "Data ingestion is slower than usual",
+                    service: :push_consumer
+                  )
+              },
+              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :healthy, error: nil},
+              "http_endpoint" => %Check{
+                id: "http_endpoint",
+                name: "HTTP endpoint reachability",
+                status: :healthy,
+                error: nil
+              }
             },
-            %Check{
-              name: "Consumer push webhooks",
-              status: :healthy,
-              message: "Webhooks are being pushed successfully"
+            last_healthy_at: DateTime.add(DateTime.utc_now(), -1800, :second),
+            erroring_since: DateTime.add(DateTime.utc_now(), -900, :second),
+            consecutive_errors: 1
+          }),
+        unhealthy:
+          Health.to_external(%Health{
+            org_id: "org_123",
+            entity_id: "consumer_3",
+            entity_kind: :http_push_consumer,
+            status: :error,
+            checks: %{
+              "wal_replication" => %Check{
+                id: "wal_replication",
+                name: "Database WAL replication",
+                status: :healthy,
+                error: nil
+              },
+              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :healthy, error: nil},
+              "webhooks" => %Check{
+                id: "webhooks",
+                name: "Consumer push webhooks",
+                status: :error,
+                error:
+                  Error.service(
+                    code: "WEBHOOK_DELAYS",
+                    message: "Webhooks are being pushed with delays",
+                    service: :push_consumer
+                  )
+              },
+              "http_endpoint" => %Check{
+                id: "http_endpoint",
+                name: "HTTP endpoint reachability",
+                status: :error,
+                error:
+                  Error.service(
+                    code: "HTTP_ENDPOINT_UNREACHABLE",
+                    message: "Failed to connect to the HTTP endpoint",
+                    service: :push_consumer,
+                    details: "Connection timed out after 30 seconds"
+                  )
+              }
             },
-            %Check{
-              name: "HTTP endpoint reachability",
-              status: :healthy,
-              message: "HTTP endpoint is reachable"
-            }
-          ],
-          component: "Push Consumer"
-        }
-      )
-      |> assign(
-        warning: %Health{
-          status: :warning,
-          message: "Your push consumer has some issues",
-          checks: [
-            %Check{
-              name: "Database WAL replication",
-              status: :healthy,
-              message: "WAL replication is functioning normally"
+            last_healthy_at: DateTime.add(DateTime.utc_now(), -3600, :second),
+            erroring_since: DateTime.add(DateTime.utc_now(), -1800, :second),
+            consecutive_errors: 3
+          }),
+        initializing:
+          Health.to_external(%Health{
+            org_id: "org_123",
+            entity_id: "consumer_4",
+            entity_kind: :http_push_consumer,
+            status: :initializing,
+            checks: %{
+              "wal_replication" => %Check{
+                id: "wal_replication",
+                name: "Database WAL replication",
+                status: :healthy,
+                error: nil
+              },
+              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :initializing, error: nil},
+              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :initializing, error: nil},
+              "http_endpoint" => %Check{
+                id: "http_endpoint",
+                name: "HTTP endpoint reachability",
+                status: :initializing,
+                error: nil
+              }
             },
-            %Check{
-              name: "Consumer ingestion",
-              status: :warning,
-              message: "Data ingestion is slower than usual"
-            },
-            %Check{
-              name: "Consumer push webhooks",
-              status: :healthy,
-              message: "Webhooks are being pushed successfully"
-            },
-            %Check{
-              name: "HTTP endpoint reachability",
-              status: :healthy,
-              message: "HTTP endpoint is reachable"
-            }
-          ],
-          component: "Push Consumer"
-        }
-      )
-      |> assign(
-        unhealthy: %Health{
-          status: :unhealthy,
-          message: "Your push consumer has some critical issues",
-          checks: [
-            %Check{
-              name: "Database WAL replication",
-              status: :healthy,
-              message: "WAL replication is functioning normally"
-            },
-            %Check{
-              name: "Consumer ingestion",
-              status: :healthy,
-              message: "Data ingestion is working as expected"
-            },
-            %Check{
-              name: "Consumer push webhooks",
-              status: :warning,
-              message: "Webhooks are being pushed with delays"
-            },
-            %Check{
-              name: "HTTP endpoint reachability",
-              status: :unhealthy,
-              message: "HTTP endpoint is unreachable",
-              error:
-                Error.service(
-                  code: "HTTP_ENDPOINT_UNREACHABLE",
-                  message: "Failed to connect to the HTTP endpoint",
-                  service: :push_consumer,
-                  details: "Connection timed out after 30 seconds"
-                )
-            }
-          ],
-          component: "Push Consumer"
-        }
+            last_healthy_at: nil,
+            erroring_since: nil,
+            consecutive_errors: 0
+          })
       )
 
     {:ok, socket}
@@ -138,7 +160,8 @@ defmodule SequinWeb.HealthLive do
             parent_id: @parent_id,
             healthy: @healthy,
             warning: @warning,
-            unhealthy: @unhealthy
+            unhealthy: @unhealthy,
+            initializing: @initializing
           }
         }
       />

@@ -13,5 +13,10 @@ services:
     volumes:
       - sequin_dev_postgres:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
 volumes:
   sequin_dev_postgres:

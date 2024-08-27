@@ -3,67 +3,74 @@
   import { slide } from "svelte/transition";
   import { ChevronDown } from "lucide-svelte";
 
-  export let health: {
-    status: "healthy" | "warning" | "unhealthy";
-    message: string;
-    checks: Array<{
-      name: string;
-      status: "healthy" | "warning" | "unhealthy";
+  type Check = {
+    name: string;
+    status: "healthy" | "error" | "warning" | "initializing";
+    error?: {
       message: string;
-      error?: {
-        code: string;
-        message: string;
-        service: string;
-        details?: string;
-      };
-    }>;
-    component: string;
+    };
   };
+
+  type Health = {
+    entity_kind: string;
+    entity_id: string;
+    status: "healthy" | "error" | "warning" | "initializing";
+    checks: Record<string, Check>;
+  };
+
+  export let health: Health;
   export let expanded = false;
 
   const toggleExpanded = () => (expanded = !expanded);
 
   const statusColor = {
     healthy: "border-green-500",
+    error: "border-red-500",
     warning: "border-yellow-500",
-    unhealthy: "border-red-500",
+    initializing: "border-blue-500",
   };
 
   const checkStatusColor = {
     healthy: "text-green-600",
+    error: "text-red-600",
     warning: "text-yellow-600",
-    unhealthy: "text-red-600",
+    initializing: "text-blue-600",
   };
 
-  $: checkCounts = health.checks.reduce(
-    (acc, check) => {
+  $: checkCounts = Object.values(health.checks).reduce(
+    (acc, check: Check) => {
       acc[check.status]++;
       return acc;
     },
-    { healthy: 0, warning: 0, unhealthy: 0 }
+    { healthy: 0, error: 0, warning: 0, initializing: 0 } as Record<
+      Health["status"],
+      number
+    >
   );
 
-  // Update statusMessage to use more natural language
   $: statusMessage = (() => {
     const count = checkCounts[health.status];
     if (count === 0) return "";
 
-    const totalChecks = health.checks.length;
+    const totalChecks = Object.keys(health.checks).length;
 
     if (health.status === "healthy" && count === totalChecks) {
       return `All ${totalChecks} health checks are passing`;
-    } else if (health.status === "warning") {
-      return `${count} health check${count > 1 ? "s have" : " has"} a warning`;
-    } else if (health.status === "unhealthy") {
+    } else if (health.status === "error") {
       return `${count} health check${count > 1 ? "s are" : " is"} failing`;
+    } else if (health.status === "warning") {
+      return `${count} health check${count > 1 ? "s are" : " is"} warning`;
+    } else if (health.status === "initializing") {
+      return `${count} health check${count > 1 ? "s are" : " is"} initializing`;
     } else {
       return `${count} health check${count > 1 ? "s are" : " is"} ${health.status}`;
     }
   })();
 
-  $: lastError = health.checks.find((check) => check.error)?.error;
+  $: lastError = Object.values(health.checks).find(
+    (check): check is Check => "error" in check
+  )?.error;
 
-  // Add this line to track the container's dimensions
   let containerElement: HTMLElement;
   let containerRect: DOMRect;
 
@@ -81,7 +88,7 @@
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center">
       <HealthIcon status={health.status} />
-      <h2 class="text-lg font-medium ml-2">{health.component}</h2>
+      <h2 class="text-lg font-medium ml-2">{health.entity_kind}</h2>
     </div>
     <button
       on:click={toggleExpanded}
@@ -96,7 +103,7 @@
       </div>
     </button>
   </div>
-  <p class="mb-2 text-sm">{health.message}</p>
+  <p class="mb-2 text-sm">Entity ID: {health.entity_id}</p>
   <p class="text-xs {checkStatusColor[health.status]}">{statusMessage}</p>
 
   {#if expanded}
@@ -109,13 +116,12 @@
              width: calc(100% + 4px); 
              border-color: inherit;"
     >
-      {#each health.checks as check}
+      {#each Object.entries(health.checks) as [checkId, check]}
         <div class="py-3 border-b last:border-b-0">
           <div class="flex items-center">
             <HealthIcon status={check.status} />
             <span class="font-medium ml-2 text-sm">{check.name}</span>
           </div>
-          <p class="text-xs text-gray-600 mt-2 ml-1">{check.message}</p>
           {#if check.error}
             <p class="text-xs text-red-600 mt-2 ml-1">
               Error: {check.error.message}

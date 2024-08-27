@@ -69,6 +69,7 @@ defmodule Sequin.MixProject do
       {:hammox, "~> 0.7", only: :test},
       {:broadway, "~> 1.0"},
       {:req, "~> 0.5"},
+      {:redix, "~> 1.0"},
       {:observer_cli, "~> 1.7"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev}
     ]

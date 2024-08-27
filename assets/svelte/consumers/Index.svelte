@@ -3,10 +3,12 @@
   import { Button } from "$lib/components/ui/button";
   import {
     ChevronDown,
+    Radio,
     ArrowRightToLine,
     ArrowLeftFromLine,
     CirclePlay,
     CircleStop,
+    Database,
   } from "lucide-svelte";
   import {
     DropdownMenu,
@@ -52,7 +54,10 @@
 
 <div class="container mx-auto py-10">
   <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold">Consumers</h1>
+    <div class="flex items-center">
+      <Radio class="h-6 w-6 mr-2" />
+      <h1 class="text-2xl font-bold">Consumers</h1>
+    </div>
     <div class="relative inline-block text-left">
       <div class="inline-flex rounded-md shadow-sm">
         <a
@@ -104,7 +109,12 @@
     <Table.Header>
       <Table.Row>
         <Table.Head>Name</Table.Head>
-        <Table.Head>Database</Table.Head>
+        <Table.Head>
+          <div class="flex items-center">
+            <Database class="h-4 w-4 mr-2" />
+            <span>Database</span>
+          </div>
+        </Table.Head>
         <Table.Head>Type</Table.Head>
         <Table.Head>Status</Table.Head>
         <Table.Head>Created at</Table.Head>

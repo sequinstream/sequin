@@ -2,6 +2,7 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
+  import { Webhook, Radio } from "lucide-svelte";
 
   export let httpEndpoints: Array<{
     id: string;
@@ -19,7 +20,10 @@
 
 <div class="container mx-auto py-10">
   <div class="flex justify-between items-center mb-4">
-    <h1 class="text-2xl font-bold">HTTP Endpoints</h1>
+    <div class="flex items-center">
+      <Webhook class="h-6 w-6 mr-2" />
+      <h1 class="text-2xl font-bold">HTTP Endpoints</h1>
+    </div>
     {#if httpEndpoints.length > 0}
       <a
         href="/http-endpoints/new"
@@ -52,7 +56,12 @@
           <Table.Head>Name</Table.Head>
           <Table.Head>Base URL</Table.Head>
           <Table.Head>Created at</Table.Head>
-          <Table.Head>Consumers</Table.Head>
+          <Table.Head>
+            <div class="flex items-center">
+              <Radio class="h-4 w-4 mr-2" />
+              <span>Consumers</span>
+            </div>
+          </Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>

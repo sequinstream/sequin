@@ -10,7 +10,6 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { previousTuesday } from "date-fns";
 
   export let database: {
     id?: string;

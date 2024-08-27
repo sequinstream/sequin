@@ -787,9 +787,10 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_http_endpoints_for_account(account_id) do
+  def list_http_endpoints_for_account(account_id, preload \\ []) do
     account_id
     |> HttpEndpoint.where_account_id()
+    |> preload(^preload)
     |> Repo.all()
   end
 

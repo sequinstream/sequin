@@ -41,6 +41,8 @@ defmodule Sequin.Consumers.HttpPullConsumer do
 
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
 
+    field :health, :map, virtual: true
+
     timestamps()
   end
 

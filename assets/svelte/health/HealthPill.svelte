@@ -9,11 +9,13 @@
     error: "bg-red-100 text-red-800",
     initializing: "bg-blue-100 text-blue-800",
   };
+
+  $: displayStatus = status === "initializing" ? "waiting" : status;
 </script>
 
 <div
   class={`inline-flex items-center px-2 py-1 rounded-full ${pillStyle[status]} mx-auto`}
 >
-  <span class="font-medium capitalize text-sm">{status}</span>
+  <span class="font-medium capitalize text-sm">{displayStatus}</span>
   <HealthIcon {status} />
 </div>

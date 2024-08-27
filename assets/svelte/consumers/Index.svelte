@@ -23,6 +23,7 @@
     AlertDescription,
     AlertTitle,
   } from "$lib/components/ui/alert";
+  import HealthPill from "../health/HealthPill.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -31,6 +32,9 @@
     type: "pull" | "push";
     status: "active" | "disabled";
     database_name: string;
+    health: {
+      status: "healthy" | "warning" | "error" | "initializing";
+    };
   }>;
   export let live: any;
   export let hasDatabases: boolean;
@@ -128,6 +132,7 @@
     <Table.Header>
       <Table.Row>
         <Table.Head>Name</Table.Head>
+        <Table.Head>Health</Table.Head>
         <Table.Head>
           <div class="flex items-center">
             <Database class="h-4 w-4 mr-2" />
@@ -146,6 +151,9 @@
           class="cursor-pointer"
         >
           <Table.Cell>{consumer.name}</Table.Cell>
+          <Table.Cell>
+            <HealthPill status={consumer.health.status} />
+          </Table.Cell>
           <Table.Cell>{consumer.database_name}</Table.Cell>
           <Table.Cell>
             <div class="flex items-center">

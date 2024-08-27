@@ -14,7 +14,6 @@ defmodule SequinWeb.HealthLive do
       assign(socket,
         healthy:
           Health.to_external(%Health{
-            org_id: "org_123",
             entity_id: "consumer_1",
             entity_kind: :http_push_consumer,
             status: :healthy,
@@ -40,7 +39,6 @@ defmodule SequinWeb.HealthLive do
           }),
         warning:
           Health.to_external(%Health{
-            org_id: "org_123",
             entity_id: "consumer_2",
             entity_kind: :http_push_consumer,
             status: :warning,
@@ -76,7 +74,6 @@ defmodule SequinWeb.HealthLive do
           }),
         unhealthy:
           Health.to_external(%Health{
-            org_id: "org_123",
             entity_id: "consumer_3",
             entity_kind: :http_push_consumer,
             status: :error,
@@ -118,7 +115,6 @@ defmodule SequinWeb.HealthLive do
           }),
         initializing:
           Health.to_external(%Health{
-            org_id: "org_123",
             entity_id: "consumer_4",
             entity_kind: :http_push_consumer,
             status: :initializing,

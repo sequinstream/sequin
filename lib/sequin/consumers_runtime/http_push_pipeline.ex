@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
+  alias Sequin.Health
   alias Sequin.Repo
 
   require Logger
@@ -55,9 +56,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
     case push_message(http_endpoint, consumer_event.data, req_opts) do
       :ok ->
+        Health.update(consumer, :push, :healthy)
+
         message
 
       {:error, reason} ->
+        Health.update(consumer, :push, :unhealthy, reason)
+
         Logger.error("Failed to push message: #{inspect(reason)}")
         Broadway.Message.failed(message, reason)
     end

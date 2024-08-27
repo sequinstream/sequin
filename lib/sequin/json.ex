@@ -146,4 +146,11 @@ defmodule Sequin.JSON do
     format = Map.get(schema, "format")
     caster_module.cast(value, type, format)
   end
+
+  @spec decode_map_of_structs(map(), String.t(), module()) :: map()
+  def decode_map_of_structs(json, key, module) do
+    Map.update(json, key, %{}, fn map ->
+      Map.new(map, fn {k, v} -> {k, convert_struct(v, module)} end)
+    end)
+  end
 end

@@ -5,6 +5,10 @@ defmodule SequinWeb.LiveHelpers do
   alias Phoenix.LiveView.Socket
   alias Sequin.Accounts.Account
 
+  def push_toast(socket, kind, title, description \\ nil) do
+    Phoenix.LiveView.push_event(socket, "toast", %{kind: kind, title: title, description: description})
+  end
+
   @spec current_account(Socket.t()) :: Account.t()
   def current_account(socket) do
     socket.assigns.current_account

@@ -1,6 +1,7 @@
 <div class="flex min-h-screen">
   <SequinWeb.Components.Sidenav.render :if={@show_nav} current_path={@current_path} />
   <%= if @no_main do %>
+    <.flash_group flash={@flash} />
     <%= @inner_content %>
   <% else %>
     <div class="flex-1">

@@ -9,6 +9,7 @@
     insertedAt: string;
     hostname: string;
     port: number;
+    consumers: number;
   }>;
 </script>
 
@@ -46,26 +47,37 @@
         <Table.Row>
           <Table.Head>Name</Table.Head>
           <Table.Head>Hostname</Table.Head>
-          <Table.Head>Port</Table.Head>
           <Table.Head>Created at</Table.Head>
+          <Table.Head>Consumers</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
         {#each databases as database}
-          <a
-            href={`/databases/${database.id}`}
-            data-phx-link="redirect"
-            data-phx-link-state="push"
+          <Table.Row
+            class="cursor-pointer"
+            on:click={() => {
+              const url = `/databases/${database.id}`;
+              window.history.pushState({}, "", url);
+              dispatchEvent(new PopStateEvent("popstate"));
+            }}
           >
-            <Table.Row class="cursor-pointer">
-              <Table.Cell>{database.name}</Table.Cell>
-              <Table.Cell>{database.hostname}</Table.Cell>
-              <Table.Cell>{database.port}</Table.Cell>
-              <Table.Cell
-                >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
-              >
-            </Table.Row>
-          </a>
+            <Table.Cell>{database.name}</Table.Cell>
+            <Table.Cell
+              ><span class="font-mono underline decoration-dotted"
+                >{database.hostname}</span
+              ></Table.Cell
+            >
+            <Table.Cell
+              >{formatRelativeTimestamp(database.insertedAt)}</Table.Cell
+            >
+            <Table.Cell>
+              {#if database.consumers === 0}
+                <span class="text-gray-300">No consumers</span>
+              {:else}
+                {database.consumers}
+              {/if}
+            </Table.Cell>
+          </Table.Row>
         {/each}
       </Table.Body>
     </Table.Root>

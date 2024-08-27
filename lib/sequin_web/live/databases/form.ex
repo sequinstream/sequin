@@ -263,7 +263,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       name: Ecto.Changeset.get_field(changeset, :name),
       database: Ecto.Changeset.get_field(changeset, :database),
       hostname: Ecto.Changeset.get_field(changeset, :hostname),
-      port: Ecto.Changeset.get_field(changeset, :port) || 5432,
+      port: Ecto.Changeset.get_field(changeset, :port),
       username: Ecto.Changeset.get_field(changeset, :username),
       password: Ecto.Changeset.get_field(changeset, :password),
       ssl: Ecto.Changeset.get_field(changeset, :ssl) || false,
@@ -273,7 +273,13 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   defp decode_params(form) do
-    port = if is_binary(form["port"]), do: String.to_integer(form["port"]), else: form["port"]
+    port =
+      case form["port"] do
+        nil -> nil
+        "" -> nil
+        port when is_binary(port) -> String.to_integer(port)
+        port when is_integer(port) -> port
+      end
 
     %{
       "database" => %{

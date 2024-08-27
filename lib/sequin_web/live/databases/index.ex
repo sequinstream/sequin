@@ -7,7 +7,7 @@ defmodule SequinWeb.DatabasesLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    databases = Databases.list_dbs_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id, replication_slot: [:http_pull_consumers, :http_push_consumers])
     encoded_databases = Enum.map(databases, &encode_database/1)
 
     socket =
@@ -39,7 +39,9 @@ defmodule SequinWeb.DatabasesLive.Index do
       name: database.name,
       insertedAt: database.inserted_at,
       hostname: database.hostname,
-      port: database.port
+      port: database.port,
+      consumers:
+        length(database.replication_slot.http_pull_consumers) + length(database.replication_slot.http_push_consumers)
     }
   end
 end

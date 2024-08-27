@@ -10,6 +10,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import { previousTuesday } from "date-fns";
 
   export let database: {
     id?: string;
@@ -114,6 +115,7 @@
             id="port"
             bind:value={database.port}
             on:input={handleInput}
+            placeholder="5432"
           />
           {#if databaseErrors.port}
             <p class="text-destructive text-sm">{databaseErrors.port}</p>

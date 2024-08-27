@@ -31,8 +31,6 @@
     value?: { value?: string[] };
   } | null> = [];
 
-  $: console.log(errors);
-
   const operators = [
     "=",
     "!=",

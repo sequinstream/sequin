@@ -47,7 +47,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      base_url: http_endpoint.base_url,
+      baseUrl: http_endpoint.base_url,
       headers: http_endpoint.headers,
       inserted_at: http_endpoint.inserted_at,
       updated_at: http_endpoint.updated_at

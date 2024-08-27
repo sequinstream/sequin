@@ -1,8 +1,6 @@
 <script lang="ts">
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
   import {
     Card,
     CardContent,
@@ -14,7 +12,7 @@
   export let httpEndpoint: {
     id?: string;
     name: string;
-    base_url: string;
+    baseUrl: string;
     headers: Record<string, string>;
   };
   export let errors: Record<string, any> = {};

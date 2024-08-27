@@ -76,13 +76,7 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   defp render_consumer_form(%{form_kind: "wizard"} = assigns) do
     ~H"""
-    <.live_component
-      current_account={@current_account}
-      module={Form}
-      id="new-consumer"
-      action={:new}
-      on_finish={&handle_create_finish/1}
-    />
+    <.live_component current_account={@current_account} module={Form} id="new-consumer" action={:new} />
     """
   end
 
@@ -94,7 +88,6 @@ defmodule SequinWeb.ConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%HttpPullConsumer{}}
-      on_finish={&handle_create_finish/1}
     />
     """
   end
@@ -107,24 +100,8 @@ defmodule SequinWeb.ConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%HttpPushConsumer{}}
-      on_finish={&handle_create_finish/1}
     />
     """
-  end
-
-  defp handle_create_finish(consumer) do
-    send(self(), {:consumer_created, consumer})
-  end
-
-  @impl Phoenix.LiveView
-  def handle_info({:consumer_created, consumer}, socket) do
-    encoded_consumer = encode_consumer(consumer)
-
-    {:noreply,
-     socket
-     |> update(:consumers, fn consumers -> [encoded_consumer | consumers] end)
-     |> push_navigate(to: ~p"/consumers/#{consumer.id}")
-     |> put_flash(:info, "Consumer created successfully")}
   end
 
   defp encode_consumer(consumer) do

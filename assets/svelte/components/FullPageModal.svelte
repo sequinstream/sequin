@@ -4,10 +4,11 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { createEventDispatcher, onMount, onDestroy } from "svelte";
 
-  export let title: string;
+  export let title: string = "";
   export let open = true;
   export let showConfirmDialog = false;
   export let showConfirmOnExit = false;
+  export let bodyPadding = 6;
 
   const dispatch = createEventDispatcher();
 
@@ -59,12 +60,17 @@
   <Dialog.Portal>
     <Dialog.Content
       closeButton={false}
-      class="w-full h-full max-w-full max-h-full"
+      class="w-full h-full max-w-full max-h-full min-h-screen"
     >
       <div id="full-page-modal"></div>
       <div class="flex flex-col h-full bg-background">
         <div class="flex justify-between items-center p-6 border-b">
-          <Dialog.Title class="text-2xl font-semibold">{title}</Dialog.Title>
+          {#if $$slots.header}
+            <slot name="header" />
+          {:else}
+            <Dialog.Title class="text-2xl font-semibold">{title}</Dialog.Title>
+          {/if}
+
           <Dialog.Close asChild>
             <Button
               variant="outline"
@@ -82,9 +88,18 @@
           </Dialog.Close>
         </div>
 
-        <div class="flex-grow p-6 overflow-y-auto">
+        <div
+          class="flex-grow overflow-y-auto"
+          style="padding: {bodyPadding}px;"
+        >
           <slot />
         </div>
+
+        {#if $$slots.footer}
+          <div class="flex-shrink-0 border-t">
+            <slot name="footer" />
+          </div>
+        {/if}
       </div>
     </Dialog.Content>
   </Dialog.Portal>

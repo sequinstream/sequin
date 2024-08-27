@@ -49,7 +49,7 @@
     httpEndpointId: consumer.http_endpoint_id,
     httpEndpoint: {
       name: "",
-      base_url: "",
+      baseUrl: "",
       headers: {},
     },
   };
@@ -399,7 +399,7 @@
 
         {#if showNewHttpEndpointForm}
           <HttpEndpointForm
-            httpEndpoint={form.httpEndpoint}
+            bind:httpEndpoint={form.httpEndpoint}
             errors={errors.http_endpoint || {}}
           />
         {:else if errors.http_endpoint_id || errors.http_endpoint}

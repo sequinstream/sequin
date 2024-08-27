@@ -101,7 +101,7 @@
             </div>
             <div class="md:col-span-2">
               <span class="text-sm text-gray-500">Base URL</span>
-              <p class="font-medium">{http_endpoint.base_url}</p>
+              <p class="font-medium">{http_endpoint.baseUrl}</p>
             </div>
           </div>
         </CardContent>

@@ -6,7 +6,7 @@
 
   export let httpEndpoint: {
     name: string;
-    base_url: string;
+    baseUrl: string;
     headers: Record<string, string>;
   };
 
@@ -35,7 +35,7 @@
   <div class="space-y-2">
     <Label for="name">Name</Label>
     <Input
-      id="name"
+      id="http-endpoint-name"
       bind:value={httpEndpoint.name}
       on:input
       autocomplete="off"
@@ -48,10 +48,10 @@
   </div>
 
   <div class="space-y-2">
-    <Label for="base_url">Base URL</Label>
+    <Label for="baseUrl">Base URL</Label>
     <Input
-      id="base_url"
-      bind:value={httpEndpoint.base_url}
+      id="http-endpoint-baseUrl"
+      bind:value={httpEndpoint.baseUrl}
       on:input
       placeholder="https://api.example.com"
     />
@@ -65,11 +65,13 @@
     {#each Object.entries(httpEndpoint.headers) as [key, value], index}
       <div class="grid grid-cols-[1fr_1fr_15px] gap-4 mb-2">
         <Input
+          id="http-endpoint-header-key-{index}"
           value={key}
           on:input={(e) => updateHeaderKey(key, e.currentTarget.value)}
           placeholder="Key"
         />
         <Input
+          id="http-endpoint-header-value-{index}"
           {value}
           on:input={(e) => updateHeaderValue(key, e.currentTarget.value)}
           placeholder="Value"

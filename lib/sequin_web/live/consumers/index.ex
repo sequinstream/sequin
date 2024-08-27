@@ -6,6 +6,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases
+  alias Sequin.Health
   alias SequinWeb.ConsumersLive.Form
 
   @impl Phoenix.LiveView
@@ -13,11 +14,15 @@ defmodule SequinWeb.ConsumersLive.Index do
     account = current_account(socket)
     consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
-    encoded_consumers = Enum.map(consumers, &encode_consumer/1)
+    consumers = load_consumer_health(consumers)
+
+    if connected?(socket) do
+      Process.send_after(self(), :update_health, 1000)
+    end
 
     socket =
       socket
-      |> assign(:consumers, encoded_consumers)
+      |> assign(:consumers, consumers)
       |> assign(:form_errors, %{})
       |> assign(:has_databases?, has_databases?)
 
@@ -39,13 +44,16 @@ defmodule SequinWeb.ConsumersLive.Index do
   end
 
   def render(assigns) do
+    encoded_consumers = Enum.map(assigns.consumers, &encode_consumer/1)
+    assigns = assign(assigns, :encoded_consumers, encoded_consumers)
+
     ~H"""
     <div id="consumers-index">
       <.svelte
         name="consumers/Index"
         props={
           %{
-            consumers: @consumers,
+            consumers: @encoded_consumers,
             formErrors: @form_errors,
             hasDatabases: @has_databases?
           }
@@ -108,6 +116,21 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
+  @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 1000)
+    {:noreply, assign(socket, :consumers, load_consumer_health(socket.assigns.consumers))}
+  end
+
+  defp load_consumer_health(consumers) do
+    Enum.map(consumers, fn consumer ->
+      case Health.get(consumer) do
+        {:ok, health} -> %{consumer | health: health}
+        {:error, _} -> consumer
+      end
+    end)
+  end
+
   defp encode_consumer(consumer) do
     %{
       id: consumer.id,
@@ -115,7 +138,8 @@ defmodule SequinWeb.ConsumersLive.Index do
       insertedAt: consumer.inserted_at,
       type: consumer_type(consumer),
       status: consumer.status,
-      database_name: consumer.postgres_database.name
+      database_name: consumer.postgres_database.name,
+      health: Health.to_external(consumer.health)
     }
   end
 

@@ -14,6 +14,7 @@
   type Health = {
     entity_kind: string;
     entity_id: string;
+    name: string; // Add this line
     status: "healthy" | "error" | "warning" | "initializing";
     checks: Record<string, Check>;
   };
@@ -61,7 +62,8 @@
     } else if (health.status === "warning") {
       return `${count} health check${count > 1 ? "s are" : " is"} warning`;
     } else if (health.status === "initializing") {
-      return `${count} health check${count > 1 ? "s are" : " is"} initializing`;
+      const healthyCount = checkCounts.healthy;
+      return `${healthyCount} of ${totalChecks} checks healthy, ${count} waiting`;
     } else {
       return `${count} health check${count > 1 ? "s are" : " is"} ${health.status}`;
     }
@@ -71,50 +73,89 @@
     (check): check is Check => "error" in check
   )?.error;
 
+  $: hasChecks = Object.keys(health.checks).length > 0;
+
   let containerElement: HTMLElement;
-  let containerRect: DOMRect;
+  let expandedContentElement: HTMLElement;
+  let containerRect: DOMRect; // Add this line
+
+  function updateExpandedContentPosition() {
+    if (containerElement && expandedContentElement) {
+      const rect = containerElement.getBoundingClientRect();
+      const scrollY = window.scrollY || window.pageYOffset;
+
+      expandedContentElement.style.position = "fixed";
+      expandedContentElement.style.top = `${rect.bottom + scrollY}px`;
+      expandedContentElement.style.left = `${rect.left}px`;
+      expandedContentElement.style.width = `${rect.width}px`;
+      expandedContentElement.style.zIndex = "1000";
+    }
+  }
+
+  $: if (expanded && hasChecks) {
+    // Use setTimeout to ensure the DOM has updated
+    setTimeout(updateExpandedContentPosition, 0);
+  }
+
+  // Update position on scroll and resize
+  if (typeof window !== "undefined") {
+    window.addEventListener("scroll", updateExpandedContentPosition);
+    window.addEventListener("resize", updateExpandedContentPosition);
+  }
 
   $: if (containerElement) {
     containerRect = containerElement.getBoundingClientRect();
   }
+
+  $: initializingProgress =
+    health.status === "initializing"
+      ? (checkCounts.healthy / Object.keys(health.checks).length) * 100
+      : 0;
 </script>
 
 <div
   bind:this={containerElement}
   class={`inline-block p-4 rounded-lg border-2 ${statusColor[health.status]} relative ${
-    expanded ? "rounded-b-none border-b-0" : ""
+    expanded && hasChecks ? "rounded-b-none border-b-0" : ""
   }`}
 >
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center">
       <HealthIcon status={health.status} />
-      <h2 class="text-lg font-medium ml-2">{health.entity_kind}</h2>
+      <h2 class="text-lg font-medium ml-2">{health.name}</h2>
     </div>
-    <button
-      on:click={toggleExpanded}
-      class="text-gray-500 hover:text-gray-700 transition-colors duration-200"
-      aria-label={expanded ? "Collapse" : "Expand"}
-    >
-      <div
-        class="transform transition-transform duration-200"
-        class:rotate-180={expanded}
+    {#if hasChecks}
+      <button
+        on:click={toggleExpanded}
+        class="text-gray-500 hover:text-gray-700 transition-colors duration-200"
+        aria-label={expanded ? "Collapse" : "Expand"}
       >
-        <ChevronDown size={20} />
-      </div>
-    </button>
+        <div
+          class="transform transition-transform duration-200"
+          class:rotate-180={expanded}
+        >
+          <ChevronDown size={20} />
+        </div>
+      </button>
+    {/if}
   </div>
-  <p class="mb-2 text-sm">Entity ID: {health.entity_id}</p>
   <p class="text-xs {checkStatusColor[health.status]}">{statusMessage}</p>
 
-  {#if expanded}
+  {#if health.status === "initializing"}
+    <div class="mt-2 h-1 bg-gray-200 rounded-full overflow-hidden">
+      <div
+        class="h-full bg-blue-500 transition-all duration-300 ease-in-out"
+        style="width: {initializingProgress}%"
+      ></div>
+    </div>
+  {/if}
+
+  {#if expanded && hasChecks}
     <div
+      bind:this={expandedContentElement}
       transition:slide={{ duration: 300 }}
-      class="space-y-2 absolute bg-white z-10 border-2 border-t-0 rounded-b-lg shadow-lg p-4"
-      style="top: {containerRect ? containerRect.height - 2 + 'px' : 'auto'}; 
-             left: -2px; 
-             right: -2px; 
-             width: calc(100% + 4px); 
-             border-color: inherit;"
+      class="space-y-2 bg-white border-2 border-t-0 rounded-b-lg shadow-lg p-4"
+      style="border-color: inherit;"
     >
       {#each Object.entries(health.checks) as [checkId, check]}
         <div class="py-3 border-b last:border-b-0">

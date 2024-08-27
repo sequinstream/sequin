@@ -17,6 +17,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
+  alias Sequin.Health
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
@@ -515,6 +516,10 @@ defmodule Sequin.Consumers do
             |> ConsumerEvent.from_map()
           end)
 
+        if length(events) > 0 do
+          Health.update(consumer, :receive, :healthy)
+        end
+
         {:ok, events}
     end
   end
@@ -559,8 +564,13 @@ defmodule Sequin.Consumers do
 
         # Fetch source data for the records
         with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database),
-             {:ok, fetched_records} <- put_source_data(conn, consumer, records) do
-          filter_and_delete_records(consumer.id, fetched_records)
+             {:ok, fetched_records} <- put_source_data(conn, consumer, records),
+             {:ok, fetched_records} <- filter_and_delete_records(consumer.id, fetched_records) do
+          if length(fetched_records) > 0 do
+            Health.update(consumer, :receive, :healthy)
+          end
+
+          {:ok, fetched_records}
         end
     end
   end
@@ -728,6 +738,8 @@ defmodule Sequin.Consumers do
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.delete_all()
 
+    Health.update(consumer, :acknowledgement, :healthy)
+
     :ok
   end
 
@@ -745,6 +757,8 @@ defmodule Sequin.Consumers do
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
+
+    Health.update(consumer, :acknowledgement, :healthy)
 
     :ok
   end
@@ -874,27 +888,45 @@ defmodule Sequin.Consumers do
   def matches_message?(consumer, message) do
     Logger.info("[Consumers] Matching message to consumer #{consumer.id}")
 
-    Enum.any?(consumer.source_tables, fn source_table ->
-      table_matches = source_table.oid == message.table_oid
-      action_matches = action_matches?(source_table.actions, message.action)
-      column_filters_match = column_filters_match?(source_table.column_filters, message)
+    matches? =
+      Enum.any?(consumer.source_tables, fn source_table ->
+        table_matches = source_table.oid == message.table_oid
+        action_matches = action_matches?(source_table.actions, message.action)
+        column_filters_match = column_filters_match?(source_table.column_filters, message)
 
-      Logger.debug("""
-      [Consumers]
-        matches?: #{table_matches && action_matches && column_filters_match}
-          table_matches: #{table_matches}
-          action_matches: #{action_matches}
-          column_filters_match: #{column_filters_match}
+        Logger.debug("""
+        [Consumers]
+          matches?: #{table_matches && action_matches && column_filters_match}
+            table_matches: #{table_matches}
+            action_matches: #{action_matches}
+            column_filters_match: #{column_filters_match}
 
-        consumer:
-          #{inspect(consumer, pretty: true)}
+          consumer:
+            #{inspect(consumer, pretty: true)}
 
-        message:
-          #{inspect(message, pretty: true)}
-      """)
+          message:
+            #{inspect(message, pretty: true)}
+        """)
 
-      table_matches && action_matches && column_filters_match
-    end)
+        table_matches && action_matches && column_filters_match
+      end)
+
+    Health.update(consumer, :filters, :healthy)
+
+    matches?
+  rescue
+    error in [ArgumentError] ->
+      Health.update(
+        consumer,
+        :filters,
+        :unhealthy,
+        Error.service(
+          code: :argument_error,
+          message: Exception.message(error)
+        )
+      )
+
+      reraise error, __STACKTRACE__
   end
 
   defp action_matches?(source_table_actions, message_action) do

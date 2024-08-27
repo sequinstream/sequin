@@ -20,6 +20,9 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :redix,
+  url: "redis://localhost:6379"
+
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [default: 10],

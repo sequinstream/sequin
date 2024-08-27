@@ -297,6 +297,10 @@ defmodule Sequin.Error do
 
   defp errors_on_list(list) do
     list
+    |> Enum.reject(fn
+      %Ecto.Changeset{action: :replace} -> true
+      _ -> false
+    end)
     |> Enum.map(fn
       %Ecto.Changeset{} = changeset -> errors_on(changeset)
       _ -> nil

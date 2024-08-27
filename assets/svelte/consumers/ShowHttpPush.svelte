@@ -5,6 +5,7 @@
     Database,
     Webhook,
     Activity,
+    Globe,
     ExternalLink,
     ArrowLeftFromLine,
     ArrowRightToLine,
@@ -25,6 +26,7 @@
   import { getColorFromName, formatNumberWithCommas } from "../utils";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import ShowHeader from "./ShowHeader.svelte";
+  import HealthComponent from "../health/HealthComponent.svelte";
 
   export let consumer;
   export let live;
@@ -71,19 +73,7 @@
 
   <div class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Health</span>
-            <Activity class="h-5 w-5 {healthColor}" />
-          </div>
-          <div class="flex items-baseline space-x-2">
-            <span class="text-2xl font-bold {healthColor}"
-              >{consumer.health}%</span
-            >
-          </div>
-        </CardContent>
-      </Card>
+      <HealthComponent health={consumer.health} />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">

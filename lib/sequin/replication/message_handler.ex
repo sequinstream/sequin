@@ -6,6 +6,7 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Extensions.MessageHandlerBehaviour
+  alias Sequin.Health
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
@@ -30,28 +31,43 @@ defmodule Sequin.Replication.MessageHandler do
   def handle_messages(%Context{} = ctx, messages) do
     Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
 
-    messages
-    |> Enum.flat_map(fn message ->
-      ctx.consumers
-      |> Enum.map(fn consumer ->
-        if Consumers.matches_message?(consumer, message) do
-          Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
+    messages_by_consumer =
+      Enum.flat_map(messages, fn message ->
+        ctx.consumers
+        |> Enum.map(fn consumer ->
+          if Consumers.matches_message?(consumer, message) do
+            Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
 
-          cond do
-            consumer.message_kind == :event ->
-              {:insert, consumer_event(consumer, message)}
+            cond do
+              consumer.message_kind == :event ->
+                {{:insert, consumer_event(consumer, message)}, consumer}
 
-            consumer.message_kind == :record and message.action == :delete ->
-              {:delete, consumer_record(consumer, message)}
+              consumer.message_kind == :record and message.action == :delete ->
+                {{:delete, consumer_record(consumer, message)}, consumer}
 
-            consumer.message_kind == :record ->
-              {:insert, consumer_record(consumer, message)}
+              consumer.message_kind == :record ->
+                {{:insert, consumer_record(consumer, message)}, consumer}
+            end
           end
-        end
+        end)
+        |> Enum.reject(&is_nil/1)
       end)
-      |> Enum.reject(&is_nil/1)
-    end)
-    |> insert_or_delete_consumer_messages()
+
+    {messages, consumers} = Enum.unzip(messages_by_consumer)
+
+    case insert_or_delete_consumer_messages(messages) do
+      {:ok, count} ->
+        consumers
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.each(fn consumer ->
+          Health.update(consumer, :ingestion, :healthy)
+        end)
+
+        {:ok, count}
+
+      error ->
+        error
+    end
   end
 
   defp consumer_event(consumer, message) do

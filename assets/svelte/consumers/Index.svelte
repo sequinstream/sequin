@@ -1,7 +1,13 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
-  import { ChevronDown } from "lucide-svelte";
+  import {
+    ChevronDown,
+    ArrowRightToLine,
+    ArrowLeftFromLine,
+    CirclePlay,
+    CircleStop,
+  } from "lucide-svelte";
   import {
     DropdownMenu,
     DropdownMenuContent,
@@ -25,6 +31,7 @@
     insertedAt: string;
     type: "pull" | "push";
     status: "active" | "disabled";
+    database_name: string;
   }>;
   // export let formErrors;
   export let live: any;
@@ -97,6 +104,7 @@
     <Table.Header>
       <Table.Row>
         <Table.Head>Name</Table.Head>
+        <Table.Head>Database</Table.Head>
         <Table.Head>Type</Table.Head>
         <Table.Head>Status</Table.Head>
         <Table.Head>Created at</Table.Head>
@@ -109,8 +117,39 @@
           class="cursor-pointer"
         >
           <Table.Cell>{consumer.name}</Table.Cell>
-          <Table.Cell>{consumer.type}</Table.Cell>
-          <Table.Cell>{consumer.status}</Table.Cell>
+          <Table.Cell>{consumer.database_name}</Table.Cell>
+          <Table.Cell>
+            <div class="flex items-center">
+              <span
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                class:bg-green-50={consumer.type === "pull"}
+                class:text-green-400={consumer.type === "pull"}
+                class:bg-blue-50={consumer.type === "push"}
+                class:text-blue-400={consumer.type === "push"}
+              >
+                {#if consumer.type === "pull"}
+                  <ArrowLeftFromLine class="h-4 w-4 mr-1 text-green-400" />
+                {:else if consumer.type === "push"}
+                  <ArrowRightToLine class="h-4 w-4 mr-1 text-blue-400" />
+                {/if}
+                {consumer.type[0].toUpperCase() + consumer.type.slice(1)} consumer
+              </span>
+            </div>
+          </Table.Cell>
+          <Table.Cell>
+            <span
+              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+              class:text-purple-500={consumer.status === "active"}
+              class:text-gray-400={consumer.status === "disabled"}
+            >
+              {#if consumer.status === "active"}
+                <CirclePlay class="h-4 w-4 mr-1" />
+              {:else if consumer.status === "disabled"}
+                <CircleStop class="h-4 w-4 mr-1" />
+              {/if}
+              {consumer.status[0].toUpperCase() + consumer.status.slice(1)}
+            </span>
+          </Table.Cell>
           <Table.Cell>{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
           >
         </Table.Row>

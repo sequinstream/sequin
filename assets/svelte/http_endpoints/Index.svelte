@@ -72,9 +72,7 @@
           >
             <Table.Cell>{endpoint.name}</Table.Cell>
             <Table.Cell>
-              <span class="font-mono underline decoration-dotted">
-                {endpoint.baseUrl}
-              </span>
+              {endpoint.baseUrl}
             </Table.Cell>
             <Table.Cell
               >{formatRelativeTimestamp(endpoint.insertedAt)}</Table.Cell

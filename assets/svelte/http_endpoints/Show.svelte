@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, Globe, Clock, RefreshCw } from "lucide-svelte";
+  import { ArrowLeft, Webhook, Braces, Clock, RefreshCw } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
@@ -47,7 +47,10 @@
               <ArrowLeft class="h-4 w-4" />
             </Button>
           </a>
-          <h1 class="text-xl font-semibold">{http_endpoint.name}</h1>
+          <div class="flex items-center">
+            <Webhook class="h-6 w-6 mr-2" />
+            <h1 class="text-xl font-semibold">{http_endpoint.name}</h1>
+          </div>
         </div>
         <div class="flex items-center space-x-4">
           <div
@@ -89,21 +92,12 @@
     <div class="space-y-6">
       <Card>
         <CardContent class="p-6">
-          <h2 class="text-lg font-semibold mb-4">Configuration</h2>
-          <div class="grid md:grid-cols-2 gap-4">
-            <div>
-              <span class="text-sm text-gray-500">ID</span>
-              <p class="font-medium">{http_endpoint.id}</p>
-            </div>
-            <div>
-              <span class="text-sm text-gray-500">Name</span>
-              <p class="font-medium">{http_endpoint.name}</p>
-            </div>
-            <div class="md:col-span-2">
-              <span class="text-sm text-gray-500">Base URL</span>
-              <p class="font-medium">{http_endpoint.baseUrl}</p>
-            </div>
-          </div>
+          <h2 class="text-lg font-semibold mb-4">Base URL</h2>
+          <p
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-mdm"
+          >
+            {http_endpoint.baseUrl}
+          </p>
         </CardContent>
       </Card>
 
@@ -129,7 +123,7 @@
             </Table>
           {:else}
             <div class="text-center py-6 bg-gray-50 rounded-lg">
-              <Globe class="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <Braces class="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <h3 class="text-sm font-medium text-gray-900 mb-1">
                 No headers configured
               </h3>

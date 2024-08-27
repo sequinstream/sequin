@@ -2,6 +2,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Repo
 
@@ -9,7 +10,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   def mount(%{"id" => id}, _session, socket) do
     case Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, database} ->
-        database = Repo.preload(database, :replication_slot)
+        database = Repo.preload(database, replication_slot: [:http_pull_consumers, :http_push_consumers])
         {:ok, assign(socket, database: database, refreshing_tables: false)}
 
       {:error, _} ->
@@ -118,8 +119,23 @@ defmodule SequinWeb.DatabasesLive.Show do
       tables: encode_tables(database.tables),
       tables_refreshed_at: database.tables_refreshed_at,
       inserted_at: database.inserted_at,
-      updated_at: database.updated_at
+      updated_at: database.updated_at,
+      consumers:
+        encode_consumers(database.replication_slot.http_pull_consumers, database) ++
+          encode_consumers(database.replication_slot.http_push_consumers, database)
     }
+  end
+
+  defp encode_consumers(consumers, database) do
+    Enum.map(consumers, fn consumer ->
+      %{
+        id: consumer.id,
+        consumer_kind: if(consumer.__struct__ == Sequin.Consumers.HttpPushConsumer, do: :http_push, else: :http_pull),
+        name: consumer.name,
+        message_kind: consumer.message_kind,
+        source_tables: Consumers.enrich_source_tables(consumer.source_tables, database)
+      }
+    end)
   end
 
   defp encode_tables(tables) do

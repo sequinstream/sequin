@@ -5,16 +5,29 @@
     CheckCircle,
     Clock,
     RefreshCw,
+    Database,
+    Radio,
+    ExternalLink,
+    SquareStack,
+    ArrowRightToLine,
+    ArrowLeftFromLine,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import { Badge } from "$lib/components/ui/badge";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
-  import { formatRelativeTimestamp } from "$lib/utils";
+  import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
 
   interface Table {
-    schema: string;
+    schema_name: string;
+    table_name: string;
+  }
+
+  interface Consumer {
+    id: string;
     name: string;
+    message_kind: string;
+    consumer_kind: string;
+    source_tables: Table[];
   }
 
   interface PostgresDatabase {
@@ -32,6 +45,7 @@
     tables_refreshed_at: string;
     inserted_at: string;
     updated_at: string;
+    consumers: Consumer[];
   }
 
   export let database: PostgresDatabase;
@@ -72,10 +86,10 @@
               <ArrowLeft class="h-4 w-4" />
             </Button>
           </a>
-          <h1 class="text-xl font-semibold">{database.name}</h1>
-          <Badge variant="secondary" class="bg-gray-900 text-white">
-            active
-          </Badge>
+          <div class="flex items-center">
+            <Database class="h-6 w-6 mr-2" />
+            <h1 class="text-xl font-semibold">{database.name}</h1>
+          </div>
         </div>
         <div class="flex items-center space-x-4">
           <div
@@ -146,12 +160,8 @@
         <h2 class="text-lg font-semibold mb-4">Configuration</h2>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <p class="text-sm text-gray-500">ID</p>
-            <p class="font-medium">{database.id}</p>
-          </div>
-          <div>
             <p class="text-sm text-gray-500">Hostname</p>
-            <p class="font-medium">{database.hostname}</p>
+            <p class="font-medium text-wrap break-all">{database.hostname}</p>
           </div>
           <div>
             <p class="text-sm text-gray-500">Port</p>
@@ -173,11 +183,113 @@
             <p class="text-sm text-gray-500">Pool Size</p>
             <p class="font-medium">{database.pool_size}</p>
           </div>
-          <div>
+          <!-- <div>
             <p class="text-sm text-gray-500">Queue Interval</p>
             <p class="font-medium">{database.queue_interval} ms</p>
-          </div>
+          </div> -->
         </div>
+      </CardContent>
+    </Card>
+
+    <Card class="mb-6">
+      <CardContent class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Consumers</h2>
+        {#if database.consumers && database.consumers.length > 0}
+          <div class="flex flex-wrap gap-4">
+            {#each database.consumers as consumer}
+              <Card class="w-1/3">
+                <CardContent class="p-4">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center">
+                      <Radio class="h-4 w-4 mr-2" />
+                      <span class="font-medium">{consumer.name}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      href={`/consumers/${consumer.id}`}
+                    >
+                      <ExternalLink class="h-4 w-4 mr-2" />
+                      View Consumer
+                    </Button>
+                  </div>
+                  <div
+                    class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-3 mb-2 auto-rows-fr"
+                  >
+                    <p
+                      class="text-sm text-gray-500 justify-self-end self-center"
+                    >
+                      Tables:
+                    </p>
+                    <div>
+                      {#each consumer.source_tables as table}
+                        <div
+                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+                        >
+                          <icon
+                            class="hero-table-cells w-4 h-4 mr-1 rounded {getColorFromName(
+                              `${table.schema_name}.${table.table_name}`
+                            )}"
+                          ></icon>
+
+                          <pre
+                            class="font-medium">{table.schema_name}.{table.table_name}</pre>
+                        </div>
+                      {/each}
+                    </div>
+                    <p
+                      class="text-sm text-gray-500 justify-self-end self-center"
+                    >
+                      Stream type:
+                    </p>
+                    <div
+                      class="w-fit inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+                    >
+                      <SquareStack class="h-4 w-4 mr-1 text-black" />
+                      <p class="font-medium">
+                        {#if consumer.message_kind === "event"}
+                          Change stream
+                        {:else if consumer.message_kind === "record"}
+                          Sync stream
+                        {/if}
+                      </p>
+                    </div>
+                    <p
+                      class="text-sm text-gray-500 justify-self-end self-center"
+                    >
+                      Consumer type:
+                    </p>
+                    <div class="flex items-center">
+                      <span
+                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+                      >
+                        {#if consumer.consumer_kind === "http_push"}
+                          <ArrowRightToLine class="h-4 w-4 mr-1 text-black" />
+                          Push consumer
+                        {:else if consumer.consumer_kind === "http_pull"}
+                          <ArrowLeftFromLine class="h-4 w-4 mr-1 text-black" />
+                          Pull consumer
+                        {/if}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            {/each}
+          </div>
+        {:else}
+          <div
+            class="bg-gray-100 p-6 rounded-lg flex flex-col items-center justify-center"
+          >
+            <Radio class="h-12 w-12 mb-4 text-gray-400" />
+            <p class="text-sm font-medium text-gray-900 mb-3">
+              No consumers attached to database
+            </p>
+            <Button href="/consumers/new" variant="outline"
+              >Add a consumer</Button
+            >
+          </div>
+        {/if}
       </CardContent>
     </Card>
   </main>

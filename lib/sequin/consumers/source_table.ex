@@ -174,6 +174,8 @@ defmodule Sequin.Consumers.SourceTable do
   alias Sequin.Consumers.SourceTable.NumberValue
   alias Sequin.Consumers.SourceTable.StringValue
 
+  @derive {Jason.Encoder, only: [:oid, :schema_name, :table_name, :actions, :column_filters]}
+
   @type t :: %__MODULE__{
           oid: integer,
           schema_name: String.t(),

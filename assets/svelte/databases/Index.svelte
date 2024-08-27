@@ -72,9 +72,7 @@
           >
             <Table.Cell>{database.name}</Table.Cell>
             <Table.Cell>
-              <span class="font-mono underline decoration-dotted">
-                {database.hostname}
-              </span>
+              {database.hostname}
             </Table.Cell>
             <Table.Cell>
               {formatRelativeTimestamp(database.insertedAt)}

@@ -131,16 +131,12 @@
           <Table.Cell>
             <div class="flex items-center">
               <span
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                class:bg-green-50={consumer.type === "pull"}
-                class:text-green-400={consumer.type === "pull"}
-                class:bg-blue-50={consumer.type === "push"}
-                class:text-blue-400={consumer.type === "push"}
+                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-black"
               >
                 {#if consumer.type === "pull"}
-                  <ArrowLeftFromLine class="h-4 w-4 mr-1 text-green-400" />
+                  <ArrowLeftFromLine class="h-4 w-4 mr-1 text-black" />
                 {:else if consumer.type === "push"}
-                  <ArrowRightToLine class="h-4 w-4 mr-1 text-blue-400" />
+                  <ArrowRightToLine class="h-4 w-4 mr-1 text-black" />
                 {/if}
                 {consumer.type[0].toUpperCase() + consumer.type.slice(1)} consumer
               </span>

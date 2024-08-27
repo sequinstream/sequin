@@ -7,10 +7,10 @@ defmodule Sequin.Health.Check do
   alias Sequin.Error
   alias Sequin.JSON
 
-  typedstruct enforce: true do
-    field :id, String.t()
-    field :name, String.t()
-    field :status, Sequin.Health.status()
+  typedstruct do
+    field :id, String.t(), enforce: true
+    field :name, String.t(), enforce: true
+    field :status, Sequin.Health.status(), enforce: true
     field :error, Error.t() | nil
   end
 
@@ -24,6 +24,7 @@ defmodule Sequin.Health.Check do
   @spec from_json(map()) :: t()
   def from_json(json) when is_map(json) do
     json
+    |> JSON.decode_atom("id")
     |> JSON.decode_atom("status")
     |> JSON.decode_polymorphic("error")
     |> JSON.struct(Check)

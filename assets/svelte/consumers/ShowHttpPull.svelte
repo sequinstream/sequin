@@ -24,6 +24,8 @@
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import ShowHeader from "./ShowHeader.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import HealthComponent from "../health/HealthComponent.svelte";
+
   export let consumer;
   export let live;
   export let parent;
@@ -60,19 +62,7 @@
 
   <div class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Health</span>
-            <Activity class="h-5 w-5 {healthColor}" />
-          </div>
-          <div class="flex items-baseline space-x-2">
-            <span class="text-2xl font-bold {healthColor}"
-              >{consumer.health}%</span
-            >
-          </div>
-        </CardContent>
-      </Card>
+      <HealthComponent health={consumer.health} />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
@@ -81,9 +71,11 @@
             >
             <CheckCircle2 class="h-5 w-5 text-green-500" />
           </div>
-          <span class="text-2xl font-bold"
-            >{consumer.messages_processed.toLocaleString()}</span
-          >
+          <span class="text-2xl font-bold">
+            {consumer.messages_processed
+              ? consumer.messages_processed.toLocaleString()
+              : "N/A"}
+          </span>
         </CardContent>
       </Card>
       <Card>
@@ -92,7 +84,9 @@
             <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
             <Clock class="h-5 w-5 text-blue-500" />
           </div>
-          <span class="text-2xl font-bold">{consumer.avg_latency} ms</span>
+          <span class="text-2xl font-bold"
+            >{consumer.avg_latency ?? "N/A"} ms</span
+          >
         </CardContent>
       </Card>
     </div>

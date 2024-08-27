@@ -246,6 +246,7 @@ defmodule Sequin.Consumers.SourceTable do
         case value_type do
           :list ->
             (value || "")
+            |> to_string()
             |> String.trim()
             |> String.trim_leading("[")
             |> String.trim_leading("{")
@@ -317,9 +318,20 @@ defmodule Sequin.Consumers.SourceTable do
       %{
         "columnAttnum" => column_filter.column_attnum,
         "operator" => to_external_operator(column_filter.operator),
-        "value" => column_filter.value.value,
+        "value" => to_external_value(column_filter.value),
         "valueType" => get_value_type(column_filter.value)
       }
+    end
+
+    defp to_external_value(value) do
+      case value do
+        %StringValue{value: value} -> value
+        %NumberValue{value: value} -> value
+        %BooleanValue{value: value} -> value
+        %DateTimeValue{value: value} -> DateTime.to_iso8601(value)
+        %ListValue{value: value} -> Enum.join(value, ", ")
+        %NullValue{} -> "null"
+      end
     end
 
     defp to_external_operator(operator) do

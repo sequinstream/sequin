@@ -13,10 +13,8 @@ defmodule Sequin.Health do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
-  alias Sequin.Error.NotFoundError
   alias Sequin.Health.Check
   alias Sequin.JSON
-  alias Sequin.Replication.PostgresReplicationSlot
 
   @type status :: :healthy | :warning | :error | :initializing
   @type entity ::
@@ -24,22 +22,21 @@ defmodule Sequin.Health do
           | HttpPullConsumer.t()
           | HttpPushConsumer.t()
           | PostgresDatabase.t()
-          | PostgresReplicationSlot.t()
 
   @derive Jason.Encoder
   typedstruct do
     field :org_id, String.t()
     field :entity_id, String.t()
+    field :name, String.t()
 
     field :entity_kind,
           :http_endpoint
           | :http_pull_consumer
           | :http_push_consumer
           | :postgres_database
-          | :postgres_replication_slot
 
     field :status, status()
-    field :checks, %{required(String.t()) => Check.t()}
+    field :checks, [Check.t()]
     field :last_healthy_at, DateTime.t() | nil
     field :erroring_since, DateTime.t() | nil
     field :consecutive_errors, non_neg_integer()
@@ -53,7 +50,7 @@ defmodule Sequin.Health do
     |> JSON.decode_atom("entity_kind")
     |> JSON.decode_timestamp("last_healthy_at")
     |> JSON.decode_timestamp("erroring_since")
-    |> JSON.decode_map_of_structs("checks", Check)
+    |> JSON.decode_list_of_structs("checks", Check)
     |> JSON.struct(Health)
   end
 
@@ -61,8 +58,7 @@ defmodule Sequin.Health do
            when is_struct(entity, HttpEndpoint) or
                   is_struct(entity, HttpPullConsumer) or
                   is_struct(entity, HttpPushConsumer) or
-                  is_struct(entity, PostgresDatabase) or
-                  is_struct(entity, PostgresReplicationSlot)
+                  is_struct(entity, PostgresDatabase)
 
   @subject_prefix "sequin-health"
 
@@ -73,24 +69,12 @@ defmodule Sequin.Health do
 
   Generates one or more `:nats` messages to notify subscribers of the new status and any status changes.
   """
-  @spec update(entity(), Check.t()) :: {:ok, Health.t()} | {:error, Error.t()}
-  def update(entity, %Check{} = check) when is_entity(entity) do
-    old_health =
-      case get_health(entity.id) do
-        {:ok, health} -> health
-        {:error, %NotFoundError{}} -> nil
-      end
-
-    new_health = update_health_with_check(entity, old_health, check)
-
-    with {:ok, new_health} <- set_health(entity.id, new_health) do
-      publish(entity, new_health)
-
-      if is_nil(old_health) or old_health.status != new_health.status do
-        publish_status_change(entity, new_health)
-      end
-
-      {:ok, new_health}
+  @spec update(entity(), atom(), status(), Error.t() | nil) :: {:ok, Health.t()} | {:error, Error.t()}
+  def update(entity, check_id, status, error \\ nil) when is_entity(entity) do
+    with {:ok, old_health} <- get_health(entity) do
+      %Check{} = expected_check = expected_check(entity, check_id, status, error)
+      new_health = update_health_with_check(old_health, expected_check)
+      set_health(entity.id, new_health)
     end
   end
 
@@ -99,184 +83,169 @@ defmodule Sequin.Health do
   """
   @spec get(entity() | String.t()) :: {:ok, Health.t()} | {:error, Error.t()}
   def get(entity) when is_entity(entity) do
-    get_health(entity.id)
+    get_health(entity)
   end
 
-  def get(id) do
-    get_health(id)
+  #####################
+  ## Expected Checks ##
+  #####################
+
+  defp expected_check(entity, check_id, status, error \\ nil)
+
+  @postgres_checks [:reachable, :replication_connected, :replication_messages]
+  defp expected_check(%PostgresDatabase{}, check_id, status, error) when check_id in @postgres_checks do
+    case check_id do
+      :reachable ->
+        %Check{id: :reachable, name: "Database Reachable", status: status, error: error}
+
+      :replication_connected ->
+        %Check{id: :replication_connected, name: "Replication Connected", status: status, error: error}
+
+      :replication_messages ->
+        %Check{id: :replication_messages, name: "Replication Messages", status: status, error: error}
+    end
   end
 
-  @doc """
-  Subscribes to health updates for the given entity.
-
-  Subscribers will receive a message every time a health updates.
-  """
-  @spec sub(entity()) :: {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  @spec sub(String.t()) :: {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  @spec sub(String.t(), Keyword.t()) :: {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  def sub(entity) when is_entity(entity) do
-    Gnat.sub(:nats, self(), health_subject(entity.id))
+  @http_endpoint_checks [:reachable]
+  defp expected_check(%HttpEndpoint{}, check_id, status, error) when check_id in @http_endpoint_checks do
+    case check_id do
+      :reachable -> %Check{id: :reachable, name: "Endpoint Reachable", status: status, error: error}
+    end
   end
 
-  @doc """
-  Subscribes to health updates for the given organization.
-
-  `opts` can optionally filter on other properties of the entity, such as `entity_kind` and `entity_id`.
-  """
-  def sub(org_id, opts \\ []) do
-    Gnat.sub(:nats, self(), org_health_subject(org_id, opts))
+  @http_push_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledgement]
+  defp expected_check(%HttpPushConsumer{}, check_id, status, error) when check_id in @http_push_consumer_checks do
+    case check_id do
+      :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
+      :ingestion -> %Check{id: :ingestion, name: "Ingestion", status: status, error: error}
+      :receive -> %Check{id: :receive, name: "Receive", status: status, error: error}
+      :push -> %Check{id: :push, name: "Push", status: status, error: error}
+      :acknowledgement -> %Check{id: :acknowledgement, name: "Acknowledgement", status: status, error: error}
+    end
   end
 
-  @doc """
-  Subscribes to health status changes for the given entity.
-
-  Subscribers will receive a message every time a health status changes, ie. from `:healthy` to `:error`.
-  """
-  @spec sub_to_status_changes(entity()) :: {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  @spec sub_to_status_changes(String.t()) :: {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  def sub_to_status_changes(entity) when is_entity(entity) do
-    Gnat.sub(:nats, self(), status_change_subject(entity.id))
+  @http_pull_consumer_checks [:filters, :ingestion, :receive, :acknowledgement]
+  defp expected_check(%HttpPullConsumer{}, check_id, status, error) when check_id in @http_pull_consumer_checks do
+    case check_id do
+      :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
+      :ingestion -> %Check{id: :ingestion, name: "Ingestion", status: status, error: error}
+      :receive -> %Check{id: :receive, name: "Receive", status: status, error: error}
+      :acknowledgement -> %Check{id: :acknowledgement, name: "Acknowledgement", status: status, error: error}
+    end
   end
 
-  def sub_to_status_changes(entity_id) do
-    Gnat.sub(:nats, self(), status_change_subject(entity_id))
+  #####################
+  ## Initial Health ##
+  #####################
+  defp initial_health(%HttpPushConsumer{} = entity) do
+    checks = Enum.map(@http_push_consumer_checks, &expected_check(entity, &1, :initializing))
+
+    %Health{
+      name: "Consumer health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
   end
 
-  @doc """
-  Subscribes to health status changes for the given organization.
+  defp initial_health(%HttpPullConsumer{} = entity) do
+    checks = Enum.map(@http_pull_consumer_checks, &expected_check(entity, &1, :initializing))
 
-  `opts` can optionally filter on other properties of the entity, such as `entity_kind` and `entity_id`.
-  """
-  @spec sub_to_org_status_changes(String.t(), Keyword.t()) ::
-          {:ok, non_neg_integer()} | {:ok, String.t()} | {:error, String.t()}
-  def sub_to_org_status_changes(org_id, opts \\ []) do
-    Gnat.sub(:nats, self(), org_status_change_subject(org_id, opts))
+    %Health{
+      name: "Consumer health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
+  end
+
+  defp initial_health(%PostgresDatabase{} = entity) do
+    checks = Enum.map(@postgres_checks, &expected_check(entity, &1, :initializing))
+
+    %Health{
+      name: "Database health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
+  end
+
+  defp initial_health(%HttpEndpoint{} = entity) do
+    checks = Enum.map(@http_endpoint_checks, &expected_check(entity, &1, :initializing))
+
+    %Health{
+      name: "Endpoint health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
+  end
+
+  defp initial_health(entity) when is_entity(entity) do
+    raise "Not implemented for #{entity_kind(entity)}"
   end
 
   ##############
   ## Internal ##
   ##############
 
-  @spec add_check(t(), Check.t()) :: t()
-  def add_check(%Health{} = health, %Check{} = check) do
-    updated_checks = Map.put(health.checks, check.id, check)
-    %Health{health | checks: updated_checks}
-  end
+  defp update_health_with_check(%Health{} = health, %Check{} = check) do
+    new_checks = replace_check_in_list(health.checks, check)
+    new_status = calculate_overall_status(new_checks)
 
-  defp update_health_with_check(entity, nil, %Check{status: :error} = check) do
-    %Health{
-      org_id: entity.org_id,
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :error,
-      checks: %{check.id => check},
-      erroring_since: DateTime.utc_now(),
-      consecutive_errors: 1
-    }
-  end
-
-  defp update_health_with_check(entity, nil, %Check{} = check) do
-    %Health{
-      org_id: entity.org_id,
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: check.status,
-      checks: %{check.id => check},
-      last_healthy_at: DateTime.utc_now(),
-      erroring_since: nil,
-      consecutive_errors: 0
-    }
-  end
-
-  defp update_health_with_check(_entity, %Health{status: :error} = health, %Check{status: :error} = check) do
-    %Health{health | checks: Map.put(health.checks, check.id, check), consecutive_errors: health.consecutive_errors + 1}
-  end
-
-  defp update_health_with_check(_entity, %Health{status: :error} = health, %Check{} = check) do
     %Health{
       health
-      | status: check.status,
-        checks: Map.put(health.checks, check.id, check),
-        last_healthy_at: DateTime.utc_now(),
-        erroring_since: nil,
-        consecutive_errors: 0
+      | status: new_status,
+        checks: new_checks,
+        last_healthy_at: if(new_status == :healthy, do: DateTime.utc_now(), else: health.last_healthy_at),
+        erroring_since: if(new_status == :error, do: DateTime.utc_now(), else: health.erroring_since),
+        consecutive_errors: if(new_status == :error, do: health.consecutive_errors + 1, else: 0)
     }
   end
 
-  defp update_health_with_check(_entity, %Health{} = health, %Check{status: :error} = check) do
-    %Health{
-      health
-      | status: check.status,
-        checks: Map.put(health.checks, check.id, check),
-        erroring_since: DateTime.utc_now(),
-        consecutive_errors: 1
-    }
+  defp calculate_overall_status(checks) do
+    checks
+    |> Enum.map(& &1.status)
+    |> Enum.min_by(&status_priority/1)
   end
 
-  defp update_health_with_check(_entity, %Health{} = health, %Check{} = check) do
-    %Health{
-      health
-      | status: check.status,
-        checks: Map.put(health.checks, check.id, check),
-        last_healthy_at: DateTime.utc_now(),
-        erroring_since: nil,
-        consecutive_errors: 0
-    }
+  defp status_priority(status) do
+    case status do
+      :error -> 0
+      :warning -> 1
+      :initializing -> 2
+      :healthy -> 3
+    end
   end
 
-  defp publish(entity, %Health{} = health) when is_entity(entity) do
-    # Gnat.pub(:nats, health_subject(entity), Jason.encode!(health))
-    # TODO: Implement this
-    :ok
-  end
-
-  defp publish_status_change(entity, %Health{} = health) when is_entity(entity) do
-    # Gnat.pub(:nats, status_change_subject(entity), Jason.encode!(health))
-    # TODO: Implement this
-    :ok
+  defp replace_check_in_list(checks, new_check) do
+    Enum.map(checks, fn check ->
+      if check.id == new_check.id, do: new_check, else: check
+    end)
   end
 
   defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
   defp entity_kind(%HttpPullConsumer{}), do: :http_pull_consumer
   defp entity_kind(%HttpPushConsumer{}), do: :http_push_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
-  defp entity_kind(%PostgresReplicationSlot{}), do: :postgres_replication_slot
 
-  defp health_subject(entity) when is_entity(entity) do
-    "#{@subject_prefix}.#{entity.org_id}.#{entity_kind(entity)}.#{entity.id}.health"
+  defp get_health(%{id: nil} = entity) when is_entity(entity) do
+    raise ArgumentError, "entity_id cannot be nil"
   end
 
-  defp health_subject(entity_id) do
-    "#{@subject_prefix}.*.*.#{entity_id}.health"
-  end
-
-  defp org_health_subject(org_id, opts) do
-    entity_kind = opts[:entity_kind] || "*"
-    entity_id = opts[:entity_id] || "*"
-
-    "#{@subject_prefix}.#{org_id}.#{entity_kind}.#{entity_id}.health"
-  end
-
-  defp status_change_subject(entity) when is_entity(entity) do
-    "#{@subject_prefix}.#{entity.org_id}.#{entity_kind(entity)}.#{entity.id}.status_change"
-  end
-
-  defp status_change_subject(entity_id) do
-    "#{@subject_prefix}.*.*.#{entity_id}.status_change"
-  end
-
-  defp org_status_change_subject(org_id, opts) do
-    entity_kind = opts[:entity_kind] || "*"
-    entity_id = opts[:entity_id] || "*"
-
-    "#{@subject_prefix}.#{org_id}.#{entity_kind}.#{entity_id}.status_change"
-  end
-
-  defp get_health(entity_id) do
+  defp get_health(entity) when is_entity(entity) do
     :redix
-    |> Redix.command(["GET", "ix:health:v0:#{entity_id}"])
+    |> Redix.command(["GET", "ix:health:v0:#{entity.id}"])
     |> case do
-      {:ok, nil} -> {:error, Error.not_found(entity: :health)}
+      {:ok, nil} -> {:ok, initial_health(entity)}
       {:ok, json} -> {:ok, Health.from_json!(json)}
       {:error, error} -> {:error, Error.service(entity: :redis, details: %{error: error})}
     end
@@ -300,14 +269,14 @@ defmodule Sequin.Health do
       entity_kind: health.entity_kind,
       entity_id: health.entity_id,
       status: health.status,
+      name: health.name,
       checks:
-        Map.new(health.checks, fn {id, check} ->
-          {id,
-           %{
-             name: check.name,
-             status: check.status,
-             error: if(check.error, do: %{message: Exception.message(check.error)})
-           }}
+        Enum.map(health.checks, fn check ->
+          %{
+            name: check.name,
+            status: check.status,
+            error: if(check.error, do: %{message: Exception.message(check.error)})
+          }
         end)
     }
   end

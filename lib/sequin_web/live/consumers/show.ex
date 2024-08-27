@@ -5,6 +5,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Health
   alias Sequin.Repo
   alias SequinWeb.ConsumersLive.Form
 
@@ -20,6 +21,15 @@ defmodule SequinWeb.ConsumersLive.Show do
         %HttpPullConsumer{} ->
           Repo.preload(consumer, [:postgres_database])
       end
+
+    # Attempt to get existing health, fallback to initializing
+    {:ok, health} = Health.get(consumer)
+
+    consumer = %{consumer | health: health}
+
+    if connected?(socket) do
+      Process.send_after(self(), :update_health, 1000)
+    end
 
     {:ok, assign(socket, consumer: consumer)}
   end
@@ -95,6 +105,20 @@ defmodule SequinWeb.ConsumersLive.Show do
      |> push_patch(to: ~p"/consumers/#{updated_consumer.id}")}
   end
 
+  @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 1000)
+
+    case Health.get(socket.assigns.consumer) do
+      {:ok, health} ->
+        updated_consumer = Map.put(socket.assigns.consumer, :health, health)
+        {:noreply, assign(socket, consumer: updated_consumer)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   defp encode_consumer(%HttpPushConsumer{} = consumer) do
     %{
       id: consumer.id,
@@ -111,7 +135,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       source_table: encode_source_table(List.first(consumer.source_tables), consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       # FIXME: Implement health calculation
-      health: 98,
+      health: Health.to_external(consumer.health),
       # FIXME: Implement messages processed count
       messages_processed: 1_234_567,
       # FIXME: Implement average latency calculation
@@ -133,8 +157,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       updated_at: consumer.updated_at,
       source_table: encode_source_table(List.first(consumer.source_tables), consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
-      # FIXME: Implement health calculation
-      health: 98,
+      health: Health.to_external(consumer.health),
       # FIXME: Implement messages processed count
       messages_processed: 1_234_567,
       # FIXME: Implement average latency calculation

@@ -24,7 +24,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
              :name,
              :updated_at,
              :http_endpoint_id,
-             :status
+             :status,
+             :health
            ]}
   typed_schema "http_push_consumers" do
     field :name, :string
@@ -43,6 +44,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     belongs_to :http_endpoint, HttpEndpoint
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
+
+    field :health, :map, virtual: true
 
     timestamps()
   end

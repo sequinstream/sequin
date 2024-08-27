@@ -75,11 +75,11 @@ defmodule SequinWeb.ConsumersLive.Show do
       {:ok, _deleted_consumer} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Consumer deleted successfully.")
+         |> push_toast(:success, "Consumer deleted successfully.")
          |> push_navigate(to: ~p"/consumers")}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to delete consumer. Please try again.")}
+        {:noreply, push_toast(socket, :error, "Failed to delete consumer. Please try again.")}
     end
   end
 

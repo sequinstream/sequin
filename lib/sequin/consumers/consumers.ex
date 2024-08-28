@@ -830,6 +830,13 @@ defmodule Sequin.Consumers do
     |> Repo.update()
   end
 
+  def update_http_endpoint_with_lifecycle(%HttpEndpoint{} = http_endpoint, attrs) do
+    with {:ok, http_endpoint} <- update_http_endpoint(http_endpoint, attrs),
+         :ok <- notify_http_endpoint_update(http_endpoint) do
+      {:ok, http_endpoint}
+    end
+  end
+
   def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     http_endpoint
     |> Ecto.Changeset.change()
@@ -1040,6 +1047,11 @@ defmodule Sequin.Consumers do
         ConsumersSupervisor.stop_for_push_consumer(consumer)
       end
     end
+  end
+
+  defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do
+    http_endpoint = Repo.preload(http_endpoint, :http_push_consumers)
+    Enum.each(http_endpoint.http_push_consumers, &ConsumersSupervisor.restart_for_push_consumer(&1))
   end
 
   defp env do

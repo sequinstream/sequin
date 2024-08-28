@@ -129,7 +129,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     with {:ok, valid_changes} <- Ecto.Changeset.apply_action(changeset, :validate),
          {:ok, :reachable} <- Consumers.test_reachability(valid_changes) do
       if socket.assigns.is_edit? do
-        Consumers.update_http_endpoint(socket.assigns.http_endpoint, params)
+        Consumers.update_http_endpoint_with_lifecycle(socket.assigns.http_endpoint, params)
       else
         Consumers.create_http_endpoint_for_account(current_account_id(socket), params)
       end

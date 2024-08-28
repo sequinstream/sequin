@@ -80,6 +80,7 @@ const config = {
           700: "rgb(var(--color-carbon-700))",
           800: "rgb(var(--color-carbon-800))",
           900: "rgb(var(--color-carbon-900))",
+          950: "rgb(var(--color-carbon-950))",
           1000: "rgb(var(--color-carbon-1000))",
         },
         matcha: {

@@ -12,6 +12,8 @@ defmodule Sequin.Application do
     children = children(env)
 
     :ets.new(Sequin.Extensions.Replication.ets_table(), [:set, :public, :named_table])
+    # Add this line to create the new ETS table for health debouncing
+    :ets.new(Sequin.Health.debounce_ets_table(), [:set, :public, :named_table])
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

@@ -61,8 +61,10 @@ defmodule Sequin.Health do
                   is_struct(entity, PostgresDatabase)
 
   @subject_prefix "sequin-health"
+  @debounce_window :timer.seconds(10)
 
   def subject_prefix, do: @subject_prefix
+  def debounce_ets_table, do: :sequin_health_debounce
 
   @doc """
   Updates the `Health` of the given entity using the given `Check`.
@@ -71,6 +73,20 @@ defmodule Sequin.Health do
   """
   @spec update(entity(), atom(), status(), Error.t() | nil) :: {:ok, Health.t()} | {:error, Error.t()}
   def update(entity, check_id, status, error \\ nil) when is_entity(entity) do
+    key = "#{entity.id}:#{check_id}"
+    now = :os.system_time(:millisecond)
+
+    case :ets.lookup(:sequin_health_debounce, key) do
+      [{^key, ^status, last_update}] when now - last_update < @debounce_window ->
+        get_health(entity)
+
+      _ ->
+        :ets.insert(:sequin_health_debounce, {key, status, now})
+        do_update(entity, check_id, status, error)
+    end
+  end
+
+  defp do_update(entity, check_id, status, error) do
     with {:ok, old_health} <- get_health(entity) do
       %Check{} = expected_check = expected_check(entity, check_id, status, error)
       new_health = update_health_with_check(old_health, expected_check)

@@ -53,7 +53,7 @@ defmodule Sequin.HealthTest do
       assert {:ok, %Health{} = health} = Health.update(entity, :push, :warning)
       assert health.status == :warning
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :error)
+      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :error, ErrorFactory.random_error())
       assert health.status == :error
 
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)

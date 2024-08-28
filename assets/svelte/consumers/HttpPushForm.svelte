@@ -27,6 +27,9 @@
   import { Label } from "$lib/components/ui/label";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { cn } from "$lib/utils";
+  import { v4 as uuidv4 } from "uuid";
+  import { toast } from "svelte-sonner";
+  import { Loader2 } from "lucide-svelte";
 
   export let live;
   export let parent;
@@ -54,7 +57,7 @@
     },
   };
 
-  const pushEvent = (event, payload = {}, cb = () => {}) => {
+  const pushEvent = (event, payload = {}, cb = (result?: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
@@ -97,6 +100,7 @@
   let dialogOpen = true;
   let showConfirmDialog = false;
   let showNewHttpEndpointForm = false;
+  let isGeneratingWebhookSite = false;
 
   function handleConsumerSubmit() {
     pushEvent("form_submitted", { form });
@@ -115,6 +119,25 @@
 
   function handleClose() {
     pushEvent("form_closed");
+  }
+
+  function createWebhookSiteEndpoint() {
+    isGeneratingWebhookSite = true;
+    pushEvent("generate_webhook_site_url", {}, (result: any) => {
+      isGeneratingWebhookSite = false;
+      if (result.url && result.name) {
+        form.httpEndpoint = {
+          name: result.name,
+          baseUrl: result.url,
+          headers: {},
+        };
+        showNewHttpEndpointForm = true;
+      } else if (result.error) {
+        toast.error("Failed to generate Webhook.site URL:", result.error);
+      } else {
+        toast.error("Failed to generate Webhook.site URL");
+      }
+    });
   }
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
@@ -351,7 +374,26 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label for="http-endpoint">HTTP Endpoint</Label>
+          {#if !form.httpEndpointId && !showNewHttpEndpointForm}
+            <p class="text-xs mb-2">
+              Just kicking the tires?
+              <button
+                on:click={createWebhookSiteEndpoint}
+                class="hover:underline bg-transparent border-none p-0 cursor-pointer inline-flex items-center"
+                type="button"
+                class:text-carbon-500={isGeneratingWebhookSite}
+                class:text-link={!isGeneratingWebhookSite}
+                disabled={isGeneratingWebhookSite}
+              >
+                {#if isGeneratingWebhookSite}
+                  <Loader2 class="h-3 w-3 mr-1 animate-spin" />
+                  Generating...
+                {:else}
+                  Create and use a new Webhook.site endpoint
+                {/if}
+              </button>
+            </p>
+          {/if}
           {#if isEditMode}
             <Select
               disabled

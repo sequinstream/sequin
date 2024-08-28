@@ -159,6 +159,16 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
+  def handle_event("generate_webhook_site_url", _params, socket) do
+    case generate_webhook_site_url() do
+      {:ok, url, name} ->
+        {:reply, %{url: url, name: name}, socket}
+
+      {:error, reason} ->
+        {:reply, %{error: reason}, socket}
+    end
+  end
+
   defp decode_params(form) do
     message_kind = form["messageKind"]
 
@@ -377,6 +387,32 @@ defmodule SequinWeb.ConsumersLive.Form do
 
       _ ->
         Map.merge(params, %{"replication_slot_id" => nil, "postgres_database_id" => nil})
+    end
+  end
+
+  defp generate_webhook_site_url do
+    url = "https://webhook.site/token"
+    headers = [{"Content-Type", "application/json"}]
+
+    body =
+      Jason.encode!(%{
+        default_status: 200,
+        default_content: Jason.encode!(%{ok: true}),
+        default_content_type: "application/json",
+        cors: true
+      })
+
+    case Req.post(url, headers: headers, body: body) do
+      {:ok, %Req.Response{status: 201, body: %{"uuid" => uuid}}} ->
+        url = "https://webhook.site/#{uuid}"
+        name = "webhook-site-#{String.slice(uuid, 0, 8)}"
+        {:ok, url, name}
+
+      {:error, reason} ->
+        {:error, "Failed to generate Webhook.site URL: #{inspect(reason)}"}
+
+      _ ->
+        {:error, "Unexpected response from Webhook.site"}
     end
   end
 end

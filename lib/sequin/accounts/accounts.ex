@@ -8,6 +8,7 @@ defmodule Sequin.Accounts do
   alias Sequin.Error
   alias Sequin.Replication
   alias Sequin.Repo
+  alias Ueberauth.Auth
 
   def get_account(id) do
     case Repo.get(Account, id) do
@@ -147,5 +148,42 @@ defmodule Sequin.Accounts do
   """
   def change_user(%User{} = user, attrs \\ %{}) do
     User.changeset(user, attrs)
+  end
+
+  @doc """
+  Finds or creates a user based on the Ueberauth auth struct.
+  """
+  def find_or_create_user_from_auth(%Auth{provider: :github} = auth) do
+    case get_user_by_auth_provider_id(:github, auth.uid) do
+      {:ok, user} ->
+        {:ok, user}
+
+      {:error, %Error.NotFoundError{}} ->
+        create_user_from_auth(auth)
+    end
+  end
+
+  @doc """
+  Gets a user by auth provider and provider ID.
+  """
+  def get_user_by_auth_provider_id(provider, provider_id) do
+    case Repo.get_by(User, auth_provider: to_string(provider), auth_provider_id: provider_id) do
+      nil -> {:error, Error.not_found(entity: :user, params: %{auth_provider: provider, auth_provider_id: provider_id})}
+      user -> {:ok, user}
+    end
+  end
+
+  defp create_user_from_auth(%Auth{provider: :github} = auth) do
+    {:ok, account} = create_account(%{})
+
+    user_attrs = %{
+      name: auth.info.name || auth.info.nickname,
+      email: auth.info.email,
+      account_id: account.id,
+      auth_provider: "github",
+      auth_provider_id: auth.uid
+    }
+
+    create_user(user_attrs)
   end
 end

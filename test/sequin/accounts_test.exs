@@ -3,6 +3,7 @@ defmodule Sequin.AccountsTest do
 
   alias Sequin.Accounts
   alias Sequin.Accounts.User
+  alias Sequin.Error.NotFoundError
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -43,7 +44,7 @@ defmodule Sequin.AccountsTest do
 
     test "create_user/1 with valid data creates a user" do
       account = AccountsFactory.insert_account!()
-      valid_attrs = %{name: "John Doe", email: "john@example.com", account_id: account.id}
+      valid_attrs = AccountsFactory.user_attrs(%{name: "John Doe", email: "john@example.com", account_id: account.id})
 
       assert {:ok, %User{} = user} = Accounts.create_user(valid_attrs)
       assert user.name == "John Doe"
@@ -86,7 +87,7 @@ defmodule Sequin.AccountsTest do
     test "create_user/1 with duplicate email returns error changeset" do
       account = AccountsFactory.insert_account!()
       existing_user = AccountsFactory.insert_user!(account_id: account.id)
-      attrs = %{name: "New User", email: existing_user.email, account_id: account.id}
+      attrs = AccountsFactory.user_attrs(%{name: "New User", email: existing_user.email, account_id: account.id})
 
       assert {:error, changeset} = Accounts.create_user(attrs)
       assert {"has already been taken", _} = changeset.errors[:email]
@@ -125,6 +126,46 @@ defmodule Sequin.AccountsTest do
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpPullConsumer))
       refute Enum.any?(Repo.all(PostgresReplicationSlot))
       refute Enum.any?(Repo.all(Sequin.Databases.PostgresDatabase))
+    end
+  end
+
+  describe "authentication" do
+    test "find_or_create_user_from_auth/1 finds existing user" do
+      existing_user = AccountsFactory.insert_user!(auth_provider: :github, auth_provider_id: "12345")
+
+      auth = %Ueberauth.Auth{
+        provider: :github,
+        uid: "12345",
+        info: %{name: "John Doe", email: existing_user.email}
+      }
+
+      assert {:ok, user} = Accounts.find_or_create_user_from_auth(auth)
+      assert user.id == existing_user.id
+    end
+
+    test "find_or_create_user_from_auth/1 creates new user when not found" do
+      auth = %Ueberauth.Auth{
+        provider: :github,
+        uid: "67890",
+        info: %{name: "Jane Doe", email: "jane@example.com"}
+      }
+
+      assert {:ok, user} = Accounts.find_or_create_user_from_auth(auth)
+      assert user.name == "Jane Doe"
+      assert user.email == "jane@example.com"
+      assert user.auth_provider == :github
+      assert user.auth_provider_id == "67890"
+    end
+
+    test "get_user_by_auth_provider_id/2 returns user when found" do
+      user = AccountsFactory.insert_user!(auth_provider: :github, auth_provider_id: "12345")
+
+      assert {:ok, found_user} = Accounts.get_user_by_auth_provider_id(:github, "12345")
+      assert found_user.id == user.id
+    end
+
+    test "get_user_by_auth_provider_id/2 returns error when user not found" do
+      assert {:error, %NotFoundError{}} = Accounts.get_user_by_auth_provider_id(:github, "nonexistent")
     end
   end
 end

@@ -64,6 +64,8 @@ defmodule Sequin.Factory.AccountsFactory do
         name: "User #{:rand.uniform(1000)}",
         email: "user#{Factory.unique_integer()}@example.com",
         account_id: Factory.uuid(),
+        auth_provider: :github,
+        auth_provider_id: "github_#{Factory.unique_integer()}",
         inserted_at: Factory.utc_datetime(),
         updated_at: Factory.utc_datetime()
       },
@@ -84,6 +86,8 @@ defmodule Sequin.Factory.AccountsFactory do
     attrs
     |> user()
     |> Map.put(:account_id, account_id)
+    |> Map.put_new(:auth_provider, :github)
+    |> Map.put_new(:auth_provider_id, "github_#{Factory.unique_integer()}")
     |> Repo.insert!()
   end
 end

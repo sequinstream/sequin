@@ -59,6 +59,7 @@ defmodule Sequin.MixProject do
       {:yesql, "~> 1.0"},
       {:faker, "~> 0.18.0", only: [:dev, :test]},
       {:uuid, "~> 1.1"},
+      {:ueberauth_github, "~> 0.8"},
       {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
       {:uxid, "~> 0.2"},
       {:flow, "~> 1.2"},

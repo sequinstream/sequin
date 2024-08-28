@@ -12,11 +12,19 @@ defmodule SequinWeb.Router do
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
     plug(AssignCurrentPath)
+    plug Ueberauth
   end
 
   pipeline :api do
     plug(:accepts, ["json"])
     plug(FetchUser)
+  end
+
+  scope "/auth", SequinWeb do
+    pipe_through :browser
+
+    get "/:provider", AuthController, :request
+    get "/:provider/callback", AuthController, :callback
   end
 
   scope "/", SequinWeb do

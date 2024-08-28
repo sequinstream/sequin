@@ -102,3 +102,7 @@ config :sequin, dev_routes: true
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+
+if "dev.secret.exs" |> Path.expand(__DIR__) |> File.exists?() do
+  import_config "dev.secret.exs"
+end

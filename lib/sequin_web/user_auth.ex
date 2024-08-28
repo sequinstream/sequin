@@ -84,7 +84,7 @@ defmodule SequinWeb.UserAuth do
     conn
     |> renew_session()
     |> delete_resp_cookie(@remember_me_cookie)
-    |> redirect(to: ~p"/")
+    |> redirect(to: ~p"/login")
   end
 
   @doc """
@@ -158,8 +158,8 @@ defmodule SequinWeb.UserAuth do
     else
       socket =
         socket
-        |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
-        |> Phoenix.LiveView.redirect(to: ~p"/users/log_in")
+        |> Phoenix.LiveView.put_flash(:toast, %{kind: :error, title: "Please log in to continue."})
+        |> Phoenix.LiveView.redirect(to: ~p"/login")
 
       {:halt, socket}
     end
@@ -207,9 +207,9 @@ defmodule SequinWeb.UserAuth do
       conn
     else
       conn
-      |> put_flash(:error, "You must log in to access this page.")
+      |> put_flash(:toast, %{kind: :error, title: "Please log in to continue."})
       |> maybe_store_return_to()
-      |> redirect(to: ~p"/users/log_in")
+      |> redirect(to: ~p"/login")
       |> halt()
     end
   end

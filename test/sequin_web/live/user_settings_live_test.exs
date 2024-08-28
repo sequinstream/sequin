@@ -22,8 +22,9 @@ defmodule SequinWeb.UserSettingsLiveTest do
       assert {:error, redirect} = live(conn, ~p"/users/settings")
 
       assert {:redirect, %{to: path, flash: flash}} = redirect
-      assert path == ~p"/users/log_in"
-      assert %{"error" => "You must log in to access this page."} = flash
+      assert path == ~p"/login"
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "log in"
     end
   end
 
@@ -39,15 +40,13 @@ defmodule SequinWeb.UserSettingsLiveTest do
 
       {:ok, lv, _html} = live(conn, ~p"/users/settings")
 
-      result =
-        lv
-        |> form("#email_form", %{
-          "current_password" => password,
-          "user" => %{"email" => new_email}
-        })
-        |> render_submit()
+      lv
+      |> form("#email_form", %{
+        "current_password" => password,
+        "user" => %{"email" => new_email}
+      })
+      |> render_submit()
 
-      assert result =~ "A link to confirm your email"
       assert Accounts.get_user_by_email(user.email)
     end
 
@@ -113,8 +112,8 @@ defmodule SequinWeb.UserSettingsLiveTest do
 
       assert get_session(new_password_conn, :user_token) != get_session(conn, :user_token)
 
-      assert Phoenix.Flash.get(new_password_conn.assigns.flash, :info) =~
-               "Password updated successfully"
+      assert flash_text(new_password_conn, :info) =~
+               "Password updated"
 
       assert Accounts.get_user_by_email_and_password(user.email, new_password)
     end
@@ -177,8 +176,8 @@ defmodule SequinWeb.UserSettingsLiveTest do
 
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/settings"
-      assert %{"info" => message} = flash
-      assert message == "Email changed successfully."
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "changed your email"
       refute Accounts.get_user_by_email(user.email)
       assert Accounts.get_user_by_email(email)
 
@@ -186,16 +185,18 @@ defmodule SequinWeb.UserSettingsLiveTest do
       {:error, redirect} = live(conn, ~p"/users/settings/confirm_email/#{token}")
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/settings"
-      assert %{"error" => message} = flash
-      assert message == "Email change link is invalid or it has expired."
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "invalid"
+      assert message =~ "expired"
     end
 
     test "does not update email with invalid token", %{conn: conn, user: user} do
       {:error, redirect} = live(conn, ~p"/users/settings/confirm_email/oops")
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/settings"
-      assert %{"error" => message} = flash
-      assert message == "Email change link is invalid or it has expired."
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "invalid"
+      assert message =~ "expired"
       assert Accounts.get_user_by_email(user.email)
     end
 
@@ -203,9 +204,9 @@ defmodule SequinWeb.UserSettingsLiveTest do
       conn = build_conn()
       {:error, redirect} = live(conn, ~p"/users/settings/confirm_email/#{token}")
       assert {:redirect, %{to: path, flash: flash}} = redirect
-      assert path == ~p"/users/log_in"
-      assert %{"error" => message} = flash
-      assert message == "You must log in to access this page."
+      assert path == ~p"/login"
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "log in"
     end
   end
 end

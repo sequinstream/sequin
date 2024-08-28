@@ -1,39 +1,37 @@
 defmodule SequinWeb.UserResetPasswordLive do
+  @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Accounts
 
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-sm">
-      <.header class="text-center">Reset Password</.header>
+    <div class="flex items-center justify-center h-[80vh]">
+      <div class="mx-auto max-w-sm w-full">
+        <.header class="text-center">Reset Password</.header>
 
-      <.simple_form
-        for={@form}
-        id="reset_password_form"
-        phx-submit="reset_password"
-        phx-change="validate"
-      >
-        <.error :if={@form.errors != []}>
-          Oops, something went wrong! Please check the errors below.
-        </.error>
+        <.simple_form
+          for={@form}
+          id="reset_password_form"
+          phx-submit="reset_password"
+          phx-change="validate"
+        >
+          <.input field={@form[:password]} type="password" label="New password" required />
+          <.input
+            field={@form[:password_confirmation]}
+            type="password"
+            label="Confirm new password"
+            required
+          />
+          <:actions>
+            <.button phx-disable-with="Resetting..." class="w-full">Reset Password</.button>
+          </:actions>
+        </.simple_form>
 
-        <.input field={@form[:password]} type="password" label="New password" required />
-        <.input
-          field={@form[:password_confirmation]}
-          type="password"
-          label="Confirm new password"
-          required
-        />
-        <:actions>
-          <.button phx-disable-with="Resetting..." class="w-full">Reset Password</.button>
-        </:actions>
-      </.simple_form>
-
-      <p class="text-center text-sm mt-4">
-        <.link href={~p"/users/register"}>Register</.link>
-        | <.link href={~p"/users/log_in"}>Log in</.link>
-      </p>
+        <p class="text-center text-sm mt-4">
+          <.link href={~p"/register"}>Register</.link> | <.link href={~p"/login"}>Log in</.link>
+        </p>
+      </div>
     </div>
     """
   end
@@ -60,8 +58,8 @@ defmodule SequinWeb.UserResetPasswordLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Password reset successfully.")
-         |> redirect(to: ~p"/users/log_in")}
+         |> put_flash(:toast, %{kind: :info, title: "Password reset successfully. Go ahead and log in."})
+         |> redirect(to: ~p"/login")}
 
       {:error, changeset} ->
         {:noreply, assign_form(socket, Map.put(changeset, :action, :insert))}
@@ -70,7 +68,7 @@ defmodule SequinWeb.UserResetPasswordLive do
 
   def handle_event("validate", %{"user" => user_params}, socket) do
     changeset = Accounts.change_user_password(socket.assigns.user, user_params)
-    {:noreply, assign_form(socket, Map.put(changeset, :action, :validate))}
+    {:noreply, assign_form(socket, changeset)}
   end
 
   defp assign_user_and_token(socket, %{"token" => token}) do
@@ -78,7 +76,7 @@ defmodule SequinWeb.UserResetPasswordLive do
       assign(socket, user: user, token: token)
     else
       socket
-      |> put_flash(:error, "Reset password link is invalid or it has expired.")
+      |> put_flash(:toast, %{kind: :error, title: "Reset password link is invalid or it has expired."})
       |> redirect(to: ~p"/")
     end
   end

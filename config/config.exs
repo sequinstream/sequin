@@ -64,7 +64,8 @@ config :sequin, SequinWeb.Endpoint,
 config :sequin,
   ecto_repos: [Sequin.Repo],
   env: Mix.env(),
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  self_hosted: true
 
 # Configure tailwind (the version is required)
 config :tailwind,

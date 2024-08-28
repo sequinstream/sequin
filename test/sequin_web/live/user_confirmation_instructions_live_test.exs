@@ -26,7 +26,7 @@ defmodule SequinWeb.UserConfirmationInstructionsLiveTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/")
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
+      assert flash_text(conn, :info) =~
                "If your email is in our system"
 
       assert Repo.get_by!(Accounts.UserToken, user_id: user.id).context == "confirm"
@@ -43,7 +43,7 @@ defmodule SequinWeb.UserConfirmationInstructionsLiveTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/")
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
+      assert flash_text(conn, :info) =~
                "If your email is in our system"
 
       refute Repo.get_by(Accounts.UserToken, user_id: user.id)
@@ -58,7 +58,7 @@ defmodule SequinWeb.UserConfirmationInstructionsLiveTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/")
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
+      assert flash_text(conn, :info) =~
                "If your email is in our system"
 
       assert Repo.all(Accounts.UserToken) == []

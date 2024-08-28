@@ -5,6 +5,8 @@ defmodule SequinWeb.Router do
 
   alias SequinWeb.Plugs.AssignCurrentPath
 
+  @self_hosted Application.compile_env!(:sequin, :self_hosted)
+
   pipeline :browser do
     plug(:accepts, ["html"])
     plug(:fetch_session)
@@ -23,17 +25,30 @@ defmodule SequinWeb.Router do
   ## Authentication routes
 
   scope "/", SequinWeb do
+    pipe_through [:browser]
+
+    live_session :home do
+      live "/", HomeLive, :index
+    end
+  end
+
+  scope "/", SequinWeb do
     pipe_through [:browser, :redirect_if_user_is_authenticated]
 
     live_session :redirect_if_user_is_authenticated,
-      on_mount: [{SequinWeb.UserAuth, :redirect_if_user_is_authenticated}] do
-      live "/users/register", UserRegistrationLive, :new
-      live "/users/log_in", UserLoginLive, :new
+      on_mount: [{SequinWeb.UserAuth, :redirect_if_user_is_authenticated}, {SequinWeb.LiveHooks, :global}],
+      layout: {SequinWeb.Layouts, :app_no_sidenav} do
+      live "/register", UserRegistrationLive, :new
+      live "/login", UserLoginLive, :new
       live "/users/reset_password", UserForgotPasswordLive, :new
       live "/users/reset_password/:token", UserResetPasswordLive, :edit
+
+      if @self_hosted do
+        live "/setup", SetupLive, :index
+      end
     end
 
-    post "/users/log_in", UserSessionController, :create
+    post "/login", UserSessionController, :create
   end
 
   scope "/", SequinWeb do
@@ -49,7 +64,7 @@ defmodule SequinWeb.Router do
   scope "/", SequinWeb do
     pipe_through [:browser]
 
-    delete "/users/log_out", UserSessionController, :delete
+    delete "/logout", UserSessionController, :delete
 
     live_session :current_user,
       on_mount: [{SequinWeb.UserAuth, :mount_current_user}] do
@@ -59,11 +74,7 @@ defmodule SequinWeb.Router do
   end
 
   scope "/", SequinWeb do
-    pipe_through :browser
-
-    live_session :setup, on_mount: [{SequinWeb.LiveHooks, :global}] do
-      live "/", HomeLive, :index
-    end
+    pipe_through [:browser, :require_authenticated_user]
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
       live "/consumers", ConsumersLive.Index, :index
@@ -80,6 +91,8 @@ defmodule SequinWeb.Router do
       live "/http-endpoints/new", HttpEndpointsLive.Form, :new
       live "/http-endpoints/:id", HttpEndpointsLive.Show, :show
       live "/http-endpoints/:id/edit", HttpEndpointsLive.Form, :edit
+
+      live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home
       live "/health", HealthLive, :index

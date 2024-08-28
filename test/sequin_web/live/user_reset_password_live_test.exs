@@ -26,12 +26,12 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
     end
 
     test "does not render reset password with invalid token", %{conn: conn} do
-      {:error, {:redirect, to}} = live(conn, ~p"/users/reset_password/invalid")
+      {:error, {:redirect, %{to: path, flash: flash}}} = live(conn, ~p"/users/reset_password/invalid")
 
-      assert to == %{
-               flash: %{"error" => "Reset password link is invalid or it has expired."},
-               to: ~p"/"
-             }
+      assert path == ~p"/"
+      assert %{"toast" => %{title: message}} = flash
+      assert message =~ "invalid"
+      assert message =~ "expired"
     end
 
     test "renders errors for invalid data", %{conn: conn, token: token} do
@@ -39,8 +39,8 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
 
       result =
         lv
-        |> element("#reset_password_form")
-        |> render_change(user: %{"password" => "secret12", "password_confirmation" => "secret123456"})
+        |> form("#reset_password_form", user: %{"password" => "secret12", "password_confirmation" => "secret123456"})
+        |> render_submit()
 
       assert result =~ "should be at least 12 character"
       assert result =~ "does not match password"
@@ -60,10 +60,10 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
           }
         )
         |> render_submit()
-        |> follow_redirect(conn, ~p"/users/log_in")
+        |> follow_redirect(conn, ~p"/login")
 
       refute get_session(conn, :user_token)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Password reset successfully"
+      assert flash_text(conn, :info) =~ "Password reset successfully"
       assert Accounts.get_user_by_email_and_password(user.email, "new valid password")
     end
 
@@ -94,7 +94,7 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
         lv
         |> element(~s|main a:fl-contains("Log in")|)
         |> render_click()
-        |> follow_redirect(conn, ~p"/users/log_in")
+        |> follow_redirect(conn, ~p"/login")
 
       assert conn.resp_body =~ "Log in"
     end
@@ -109,7 +109,7 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
         lv
         |> element(~s|main a:fl-contains("Register")|)
         |> render_click()
-        |> follow_redirect(conn, ~p"/users/register")
+        |> follow_redirect(conn, ~p"/register")
 
       assert conn.resp_body =~ "Register"
     end

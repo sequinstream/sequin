@@ -45,6 +45,7 @@ defmodule SequinWeb do
 
       import Plug.Conn
       import SequinWeb.Gettext
+      import SequinWeb.LiveHelpers, only: [push_toast: 2]
 
       unquote(verified_routes())
     end

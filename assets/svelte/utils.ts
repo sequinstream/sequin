@@ -113,3 +113,10 @@ export const flyAndScale = (
     easing: cubicOut,
   };
 };
+
+export function formatNumberWithCommas(number: number | null): string {
+  if (number === null) {
+    return 'N/A';
+  }
+  return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}

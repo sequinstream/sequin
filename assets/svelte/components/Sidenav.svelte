@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from "./ui/button";
+  import * as DropdownMenu from "./ui/dropdown-menu";
   import {
     Radio,
     Database,
@@ -7,6 +8,7 @@
     FileText,
     LifeBuoy,
     CircleUserRound,
+    LogOut,
   } from "lucide-svelte";
 
   export let currentPath: string;
@@ -88,17 +90,25 @@
         </div>
       </a>
       <div class="border-t border-solid my-2"></div>
-      <Button variant="ghost" class="w-full cursor-pointer ring-0 p-0">
-        <div
-          class="flex w-full flex-row items-center rounded p-1 justify-start hover:bg-canvasSubtle text-muted"
-        >
-          <CircleUserRound class="h-6 w-6" />
-          <div class="ml-2 flex flex-col items-start justify-start">
-            <div class="text-muted leading-1 text-sm">Paul Mu'adib</div>
-            <div class="text-subtle text-xs leading-4">Sequin</div>
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger class="w-full cursor-pointer ring-0 p-0">
+          <div
+            class="flex w-full flex-row items-center rounded p-1 justify-start hover:bg-canvasSubtle text-muted"
+          >
+            <CircleUserRound class="h-4 w-4" />
+            <div class="ml-2 flex flex-col items-start justify-start">
+              <div class="text-muted leading-1 text-sm">Paul Mu'adib</div>
+              <div class="text-subtle text-xs leading-4">Sequin</div>
+            </div>
           </div>
-        </div>
-      </Button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content>
+          <DropdownMenu.Item>
+            <LogOut class="mr-2 h-4 w-4" />
+            <span>Log out</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     </div>
   </div>
 </nav>

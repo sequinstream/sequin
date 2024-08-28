@@ -1,17 +1,19 @@
 <script lang="ts">
   import {
-    ArrowLeft,
     CheckCircle2,
     Clock,
     Database,
-    Globe,
+    Webhook,
     Activity,
     ExternalLink,
-    RefreshCw,
+    ArrowLeftFromLine,
+    ArrowRightToLine,
+    HelpCircle,
+    SquareStack,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import {
     Table,
     TableBody,
@@ -20,8 +22,9 @@
     TableHeader,
     TableRow,
   } from "$lib/components/ui/table";
-  import { formatRelativeTimestamp, getColorFromName } from "../utils";
+  import { getColorFromName, formatNumberWithCommas } from "../utils";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import ShowHeader from "./ShowHeader.svelte";
 
   export let consumer;
   export let live;
@@ -55,52 +58,7 @@
 </script>
 
 <div class="min-h-screen font-sans bg-white">
-  <header class="bg-white border-b sticky top-0 z-10">
-    <div class="container mx-auto px-4 py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center space-x-4">
-          <a href="/consumers">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft class="h-4 w-4" />
-            </Button>
-          </a>
-          <h1 class="text-xl font-semibold">{consumer.name}</h1>
-          <Badge
-            variant={consumer.status === "active" ? "default" : "secondary"}
-          >
-            {consumer.status}
-          </Badge>
-        </div>
-        <div class="flex items-center space-x-4">
-          <div
-            class="hidden lg:flex flex-col items-left gap-1 text-xs text-gray-500"
-          >
-            <div class="flex items-center gap-2">
-              <Clock class="h-4 w-4" />
-              <span
-                >Created {formatRelativeTimestamp(consumer.inserted_at)}</span
-              >
-            </div>
-            <div class="flex items-center gap-2">
-              <RefreshCw class="h-4 w-4" />
-              <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span
-              >
-            </div>
-          </div>
-          <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button
-          >
-          <Button
-            variant="outline"
-            size="sm"
-            class="text-red-600 hover:text-red-700"
-            on:click={handleDelete}
-          >
-            Delete
-          </Button>
-        </div>
-      </div>
-    </div>
-  </header>
+  <ShowHeader {consumer} onEdit={handleEdit} onDelete={handleDelete} />
 
   <div class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
@@ -144,31 +102,82 @@
     <div class="space-y-6">
       <Card>
         <CardContent class="p-6">
-          <h2 class="text-lg font-semibold mb-4">Configuration</h2>
+          <div class="flex items-center space-x-4 mb-4">
+            <h2 class="text-lg font-semibold">Configuration</h2>
+            <div class="flex items-center">
+              <span
+                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+              >
+                <ArrowRightToLine class="h-4 w-4 mr-1 text-black" />
+                Push consumer
+              </span>
+            </div>
+            <div
+              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+            >
+              <SquareStack class="h-4 w-4 mr-1 text-black" />
+              <p class="font-medium">
+                {#if consumer.message_kind === "event"}
+                  Change stream
+                {:else if consumer.message_kind === "record"}
+                  Sync stream
+                {/if}
+              </p>
+            </div>
+          </div>
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <span class="text-sm text-gray-500">ID</span>
-              <p class="font-medium">{consumer.id}</p>
+              <span class="text-sm text-gray-500"> Request Timeout </span>
+              <Tooltip.Root openDelay={300}>
+                <Tooltip.Trigger>
+                  <HelpCircle
+                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
+                  />
+                </Tooltip.Trigger>
+                <Tooltip.Content class="max-w-xs">
+                  <p class="text-xs text-gray-500">
+                    <b>Request Timeout:</b>
+                    <br />
+                    Defines the time limit for a message to be successfully acknowledged
+                    (i.e. return a status 200) by the webhook endpoint. Exceeding
+                    this time period triggers a retry.
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <p class="font-medium">
+                {formatNumberWithCommas(consumer.ack_wait_ms)} ms
+              </p>
             </div>
             <div>
-              <span class="text-sm text-gray-500">Message Kind</span>
-              <p class="font-medium">{consumer.message_kind}</p>
-            </div>
-            <div>
-              <span class="text-sm text-gray-500">Ack Wait</span>
-              <p class="font-medium">{consumer.ack_wait_ms} ms</p>
-            </div>
-            <div>
-              <span class="text-sm text-gray-500">Max Ack Pending</span>
-              <p class="font-medium">{consumer.max_ack_pending}</p>
-            </div>
-            <div>
-              <span class="text-sm text-gray-500">Max Deliver</span>
-              <p class="font-medium">{consumer.max_deliver}</p>
-            </div>
-            <div>
-              <span class="text-sm text-gray-500">Max Waiting</span>
-              <p class="font-medium">{consumer.max_waiting}</p>
+              <span class="text-sm text-gray-500">Max Pending Messages</span>
+              <Tooltip.Root openDelay={300}>
+                <Tooltip.Trigger>
+                  <HelpCircle
+                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
+                  />
+                </Tooltip.Trigger>
+                <Tooltip.Content class="max-w-xs">
+                  <p class="text-xs text-gray-500">
+                    <b>Max Pending Messages:</b>
+                    <br />
+                    The maximum number of messages that can be outstanding (delivered,
+                    not yet acknowledged). Once this limit is reached, delivery of
+                    new messages will be suspended. Your endpoint will only receive
+                    redeliveries once it begins acking messages.
+                    <br />
+                    <br />
+                    This is a helpful mechanism for flow control and back-pressure.
+                    If the target system is having trouble processing messages, it
+                    halts the pipeline until messages start clearing again.
+                    <br />
+                    <br />
+                    A ceiling of 10,000 is very reasonable for most applications.
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <p class="font-medium">
+                {formatNumberWithCommas(consumer.max_ack_pending)}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -186,8 +195,11 @@
             </a>
           </div>
           <div class="flex items-center space-x-2">
-            <Globe class="h-5 w-5 text-gray-400" />
-            <span class="font-medium">{consumer.http_endpoint.url}</span>
+            <Webhook class="h-5 w-5 text-gray-400" />
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+              >{consumer.http_endpoint.url}</span
+            >
           </div>
         </CardContent>
       </Card>

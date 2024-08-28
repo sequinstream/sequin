@@ -1000,4 +1000,22 @@ defmodule Sequin.Consumers do
   defp env do
     Application.get_env(:sequin, :env)
   end
+
+  def enrich_source_tables(source_tables, %PostgresDatabase{} = postgres_database) do
+    table_oids = Enum.map(source_tables, & &1.oid)
+
+    postgres_database.tables
+    |> Enum.filter(&(&1.oid in table_oids))
+    |> Enum.map(fn table ->
+      %Sequin.Consumers.SourceTable{
+        oid: table.oid,
+        schema_name: table.schema,
+        table_name: table.name,
+        # Default empty list for actions
+        actions: [],
+        # Default empty list for column_filters
+        column_filters: []
+      }
+    end)
+  end
 end

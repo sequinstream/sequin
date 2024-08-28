@@ -26,7 +26,7 @@
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create Database</Button>
+        <Button>Connect Database</Button>
       </a>
     {/if}
   </div>
@@ -35,14 +35,14 @@
     <div class="text-center py-12">
       <h2 class="text-xl font-semibold mb-4">No databases found</h2>
       <p class="text-gray-600 mb-6">
-        Get started by creating your first database
+        Get started by connecting your first database
       </p>
       <a
         href="/databases/new"
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create Your First Database</Button>
+        <Button>Connect your first database</Button>
       </a>
     </div>
   {:else}

@@ -5,18 +5,21 @@ defmodule SequinWeb.ConsumersLive.Index do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Databases
   alias SequinWeb.ConsumersLive.Form
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
     consumers = Consumers.list_consumers_for_account(account_id, :postgres_database)
+    has_databases? = account_id |> Databases.list_dbs_for_account() |> Enum.any?()
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
     socket =
       socket
       |> assign(:consumers, encoded_consumers)
       |> assign(:form_errors, %{})
+      |> assign(:has_databases?, has_databases?)
 
     {:ok, socket}
   end
@@ -43,7 +46,8 @@ defmodule SequinWeb.ConsumersLive.Index do
         props={
           %{
             consumers: @consumers,
-            formErrors: @form_errors
+            formErrors: @form_errors,
+            hasDatabases: @has_databases?
           }
         }
         socket={@socket}

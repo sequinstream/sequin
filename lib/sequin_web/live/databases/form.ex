@@ -263,7 +263,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       name: Ecto.Changeset.get_field(changeset, :name),
       database: Ecto.Changeset.get_field(changeset, :database),
       hostname: Ecto.Changeset.get_field(changeset, :hostname),
-      port: Ecto.Changeset.get_field(changeset, :port),
+      port: Ecto.Changeset.get_field(changeset, :port) || 5432,
       username: Ecto.Changeset.get_field(changeset, :username),
       password: Ecto.Changeset.get_field(changeset, :password),
       ssl: Ecto.Changeset.get_field(changeset, :ssl) || false,

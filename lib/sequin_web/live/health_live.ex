@@ -14,89 +14,84 @@ defmodule SequinWeb.HealthLive do
       assign(socket,
         healthy:
           Health.to_external(%Health{
+            name: "Healthy Consumer",
             entity_id: "consumer_1",
             entity_kind: :http_push_consumer,
             status: :healthy,
-            checks: %{
-              "wal_replication" => %Check{
-                id: "wal_replication",
+            checks: [
+              %Check{
+                id: :wal_replication,
                 name: "Database WAL replication",
                 status: :healthy,
                 error: nil
               },
-              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :healthy, error: nil},
-              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :healthy, error: nil},
-              "http_endpoint" => %Check{
-                id: "http_endpoint",
+              %Check{id: :ingestion, name: "Consumer ingestion", status: :healthy, error: nil},
+              %Check{id: :webhooks, name: "Consumer push webhooks", status: :healthy, error: nil},
+              %Check{
+                id: :http_endpoint,
                 name: "HTTP endpoint reachability",
                 status: :healthy,
                 error: nil
               }
-            },
+            ],
             last_healthy_at: DateTime.utc_now(),
             erroring_since: nil,
             consecutive_errors: 0
           }),
         warning:
           Health.to_external(%Health{
+            name: "Consumer with warning",
             entity_id: "consumer_2",
             entity_kind: :http_push_consumer,
             status: :warning,
-            checks: %{
-              "wal_replication" => %Check{
-                id: "wal_replication",
+            checks: [
+              %Check{
+                id: :wal_replication,
                 name: "Database WAL replication",
                 status: :healthy,
                 error: nil
               },
-              "ingestion" => %Check{
-                id: "ingestion",
-                name: "Consumer ingestion",
-                status: :warning,
-                error:
-                  Error.service(
-                    code: "SLOW_INGESTION",
-                    message: "Data ingestion is slower than usual",
-                    service: :push_consumer
-                  )
-              },
-              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :healthy, error: nil},
-              "http_endpoint" => %Check{
-                id: "http_endpoint",
+              %Check{id: :ingestion, name: "Consumer ingestion", status: :warning, error: nil},
+              %Check{id: :webhooks, name: "Consumer push webhooks", status: :healthy, error: nil},
+              %Check{
+                id: :http_endpoint,
                 name: "HTTP endpoint reachability",
                 status: :healthy,
                 error: nil
               }
-            },
+            ],
             last_healthy_at: DateTime.add(DateTime.utc_now(), -1800, :second),
             erroring_since: DateTime.add(DateTime.utc_now(), -900, :second),
             consecutive_errors: 1
           }),
         unhealthy:
           Health.to_external(%Health{
+            name: "Consumer with error",
             entity_id: "consumer_3",
             entity_kind: :http_push_consumer,
             status: :error,
-            checks: %{
-              "wal_replication" => %Check{
-                id: "wal_replication",
+            checks: [
+              %Check{
+                id: :wal_replication,
                 name: "Database WAL replication",
                 status: :healthy,
                 error: nil
               },
-              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :healthy, error: nil},
-              "webhooks" => %Check{
-                id: "webhooks",
-                name: "Consumer push webhooks",
+              %Check{id: :ingestion, name: "Consumer ingestion", status: :healthy, error: nil},
+              %Check{id: :webhooks, name: "Consumer push webhooks", status: :error, error: nil},
+              %Check{
+                id: :http_endpoint,
+                name: "HTTP endpoint reachability",
                 status: :error,
                 error:
                   Error.service(
-                    code: "WEBHOOK_DELAYS",
-                    message: "Webhooks are being pushed with delays",
-                    service: :push_consumer
+                    code: "HTTP_ENDPOINT_UNREACHABLE",
+                    message: "Failed to connect to the HTTP endpoint",
+                    service: :push_consumer,
+                    details: "Connection timed out after 30 seconds"
                   )
               },
-              "http_endpoint" => %Check{
+              %Check{
                 id: "http_endpoint",
                 name: "HTTP endpoint reachability",
                 status: :error,
@@ -108,35 +103,30 @@ defmodule SequinWeb.HealthLive do
                     details: "Connection timed out after 30 seconds"
                   )
               }
-            },
-            last_healthy_at: DateTime.add(DateTime.utc_now(), -3600, :second),
-            erroring_since: DateTime.add(DateTime.utc_now(), -1800, :second),
-            consecutive_errors: 3
+            ]
           }),
         initializing:
           Health.to_external(%Health{
+            name: "Initializing Consumer",
             entity_id: "consumer_4",
             entity_kind: :http_push_consumer,
             status: :initializing,
-            checks: %{
-              "wal_replication" => %Check{
+            checks: [
+              %Check{
                 id: "wal_replication",
                 name: "Database WAL replication",
                 status: :healthy,
                 error: nil
               },
-              "ingestion" => %Check{id: "ingestion", name: "Consumer ingestion", status: :initializing, error: nil},
-              "webhooks" => %Check{id: "webhooks", name: "Consumer push webhooks", status: :initializing, error: nil},
-              "http_endpoint" => %Check{
+              %Check{id: "ingestion", name: "Consumer ingestion", status: :initializing, error: nil},
+              %Check{id: "webhooks", name: "Consumer push webhooks", status: :initializing, error: nil},
+              %Check{
                 id: "http_endpoint",
                 name: "HTTP endpoint reachability",
                 status: :initializing,
                 error: nil
               }
-            },
-            last_healthy_at: nil,
-            erroring_since: nil,
-            consecutive_errors: 0
+            ]
           })
       )
 

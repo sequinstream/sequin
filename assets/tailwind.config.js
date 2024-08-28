@@ -126,6 +126,7 @@ const config = {
         base: "rgb(var(--color-foreground-base))",
         subtle: "rgb(var(--color-foreground-subtle))",
         muted: "rgb(var(--color-foreground-muted))",
+        link: "rgb(var(--color-foreground-link))",
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -18,7 +18,7 @@ defmodule Sequin.Databases do
 
   # PostgresDatabase
 
-  def all_dbs do
+  def list_dbs do
     Repo.all(PostgresDatabase)
   end
 

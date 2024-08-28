@@ -45,6 +45,8 @@ defmodule Sequin.Application do
       {Redix, {Application.get_env(:redix, :url), [name: :redix]}},
       ConnectionCache,
       SequinWeb.Presence,
+      Sequin.Health.HttpEndpointHealthChecker,
+      Sequin.Health.PostgresDatabaseHealthChecker,
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]

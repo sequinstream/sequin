@@ -29,25 +29,25 @@
   "tabs": [],
   "navigation": [
     {
-      "group": "Overall",
-      "pages": ["introduction", "quickstart", "installation", "cli", "sdks"]
+      "group": "Get started",
+      "pages": ["introduction", "compare", "quickstart", "sdks"]
     },
     {
       "group": "Core concepts",
       "pages": [
         "core/overview",
+        "core/database",
         "core/streams",
-        "core/consumers",
-        "core/sources"
+        "core/consumers"
       ]
     },
     {
-      "group": "Guides",
-      "pages": [
-        "guides/deploying",
-        "guides/ingesting-from-postgres",
-        "guides/ingesting-webhooks"
-      ]
+      "group": "Database setup",
+      "pages": ["guides/rds", "guides/supabase", "guides/neon"]
+    },
+    {
+      "group": "Self hosting",
+      "pages": ["self-hosting/installation", "self-hosting/deploying"]
     }
   ],
   "footerSocials": {}

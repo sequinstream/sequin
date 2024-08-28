@@ -1,0 +1,20 @@
+---
+title: Compare Sequin
+description: You can think of Sequin as a material improvement over native Postgres triggers and LISTEN/NOTIFY. But because Sequin comes with a durable, persistent message stream, you can use Sequin to replace other queues and streaming systems like SQS and Kafka.
+---
+
+## Postgres triggers
+
+Sequin sends triggers over HTTP with the added benefits of exactly-once processing, payload transforms, routing, and a superior developer experience. Maintain transactional trigger guarantees with a system that scales and lets you write business logic in the programming language of your choice (no plpgsql!)
+
+## LISTEN/NOTIFY
+
+Sequin adds exactly-once processing, larger data payloads with transformation, routing, and a superior developer experience.
+
+## Amazon SQS
+
+Sequin transactionally enqueues changes from your database into a FIFO queue with exactly-once processing. This is especially valuable if messages pertain to database changes. Instead of adding a new dependency to your infrastructure, use the database you already have to reliably queue messages.
+
+## Debezium / Kafka
+
+Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, except with none of the operational overhead. If your database can handle it, so can Sequin. You don't need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.

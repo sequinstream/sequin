@@ -34,8 +34,7 @@ defmodule SequinWeb.UserConfirmationLiveTest do
 
       assert {:ok, conn} = result
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~
-               "User confirmed successfully"
+      assert flash_text(conn, :info) =~ "been confirmed"
 
       assert Accounts.get_user!(user.id).confirmed_at
       refute get_session(conn, :user_token)
@@ -52,8 +51,8 @@ defmodule SequinWeb.UserConfirmationLiveTest do
 
       assert {:ok, conn} = result
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~
-               "User confirmation link is invalid or it has expired"
+      assert flash_text(conn, :error) =~
+               "confirmation link is invalid or it has expired"
 
       # when logged in
       conn =
@@ -68,7 +67,7 @@ defmodule SequinWeb.UserConfirmationLiveTest do
         |> follow_redirect(conn, "/")
 
       assert {:ok, conn} = result
-      refute Phoenix.Flash.get(conn.assigns.flash, :error)
+      refute flash_text(conn, :error)
     end
 
     test "does not confirm email with invalid token", %{conn: conn, user: user} do
@@ -80,8 +79,8 @@ defmodule SequinWeb.UserConfirmationLiveTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/")
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~
-               "User confirmation link is invalid or it has expired"
+      assert flash_text(conn, :error) =~
+               "confirmation link is invalid or it has expired"
 
       refute Accounts.get_user!(user.id).confirmed_at
     end

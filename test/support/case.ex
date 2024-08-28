@@ -39,4 +39,14 @@ defmodule Sequin.Case do
   def errors_on(changeset) do
     Sequin.Error.errors_on(changeset)
   end
+
+  def flash_text(conn, kind) do
+    if toast = Phoenix.Flash.get(conn.assigns.flash, :toast) do
+      if toast.kind == kind do
+        Enum.join([Map.get(toast, :title), Map.get(toast, :description)], "\n")
+      end
+    else
+      Phoenix.Flash.get(conn.assigns.flash, kind)
+    end
+  end
 end

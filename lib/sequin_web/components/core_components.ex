@@ -318,7 +318,7 @@ defmodule SequinWeb.CoreComponents do
           name={@name}
           value="true"
           checked={@checked}
-          class="rounded border-zinc-300 text-zinc-900 focus:ring-0"
+          class="rounded border-zinc-300 text-zinc-900 focus:ring-0 cursor-pointer"
           {@rest}
         />
         <%= @label %>

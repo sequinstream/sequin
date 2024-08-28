@@ -1,24 +1,26 @@
 defmodule SequinWeb.UserConfirmationLive do
+  @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Accounts
 
   def render(%{live_action: :edit} = assigns) do
     ~H"""
-    <div class="mx-auto max-w-sm">
-      <.header class="text-center">Confirm Account</.header>
+    <div class="flex items-center justify-center h-[80vh]">
+      <div class="mx-auto max-w-sm w-full">
+        <.header class="text-center">Confirm Account</.header>
 
-      <.simple_form for={@form} id="confirmation_form" phx-submit="confirm_account">
-        <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
-        <:actions>
-          <.button phx-disable-with="Confirming..." class="w-full">Confirm my account</.button>
-        </:actions>
-      </.simple_form>
+        <.simple_form for={@form} id="confirmation_form" phx-submit="confirm_account">
+          <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
+          <:actions>
+            <.button phx-disable-with="Confirming..." class="w-full">Confirm my account</.button>
+          </:actions>
+        </.simple_form>
 
-      <p class="text-center mt-4">
-        <.link href={~p"/users/register"}>Register</.link>
-        | <.link href={~p"/users/log_in"}>Log in</.link>
-      </p>
+        <p class="text-center mt-4">
+          <.link href={~p"/register"}>Register</.link> | <.link href={~p"/login"}>Log in</.link>
+        </p>
+      </div>
     </div>
     """
   end
@@ -35,7 +37,7 @@ defmodule SequinWeb.UserConfirmationLive do
       {:ok, _} ->
         {:noreply,
          socket
-         |> put_flash(:info, "User confirmed successfully.")
+         |> put_flash(:toast, %{kind: :info, title: "Your account has been confirmed."})
          |> redirect(to: ~p"/")}
 
       :error ->
@@ -50,7 +52,7 @@ defmodule SequinWeb.UserConfirmationLive do
           %{} ->
             {:noreply,
              socket
-             |> put_flash(:error, "User confirmation link is invalid or it has expired.")
+             |> put_flash(:toast, %{kind: :error, title: "That confirmation link is invalid or it has expired."})
              |> redirect(to: ~p"/")}
         end
     end

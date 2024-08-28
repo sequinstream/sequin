@@ -39,19 +39,20 @@ window.addEventListener("phx:page-loading-start", (_info) => topbar.show(300));
 window.addEventListener("phx:page-loading-stop", (_info) => topbar.hide());
 
 window.addEventListener("phx:toast", (event) => {
+  const attrs = {
+    description: event.detail.description,
+    duration: event.detail.duration,
+  };
+
   switch (event.detail.kind) {
     case "info":
-      toast(event.detail.title, { description: event.detail.description });
+      toast(event.detail.title, attrs);
       break;
     case "success":
-      toast.success(event.detail.title, {
-        description: event.detail.description,
-      });
+      toast.success(event.detail.title, attrs);
       break;
     case "error":
-      toast.error(event.detail.title, {
-        description: event.detail.description,
-      });
+      toast.error(event.detail.title, attrs);
       break;
   }
 });

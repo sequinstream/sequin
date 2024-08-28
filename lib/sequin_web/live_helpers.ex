@@ -16,8 +16,8 @@ defmodule SequinWeb.LiveHelpers do
     current_user(socket).id
   end
 
-  def push_toast(socket, kind, title, description \\ nil) do
-    Phoenix.LiveView.push_event(socket, "toast", %{kind: kind, title: title, description: description})
+  def push_toast(socket, toast) do
+    Phoenix.LiveView.push_event(socket, "toast", toast)
   end
 
   @spec current_account(Socket.t()) :: Account.t()

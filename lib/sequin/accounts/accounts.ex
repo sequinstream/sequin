@@ -9,14 +9,6 @@ defmodule Sequin.Accounts do
   alias Sequin.Replication
   alias Sequin.Repo
 
-  @temp_account_lifespan_hours 48
-
-  def temp_account_lifespan_hours, do: 48
-
-  def account_expires_at(%Account{is_temp: true} = account) do
-    DateTime.add(account.inserted_at, @temp_account_lifespan_hours, :hour)
-  end
-
   def get_account(id) do
     case Repo.get(Account, id) do
       nil -> {:error, Error.not_found(entity: :account)}
@@ -55,47 +47,41 @@ defmodule Sequin.Accounts do
     Repo.delete(api_key)
   end
 
-  def list_expired_temp_accounts do
-    cutoff_time = DateTime.add(DateTime.utc_now(), -@temp_account_lifespan_hours, :hour)
+  def deprovision_account(%Account{} = account, :i_am_responsible_for_my_actions) do
+    Repo.transact(fn ->
+      # Delete associated users
+      account.id
+      |> list_users_for_account()
+      |> Enum.each(&delete_user/1)
 
-    Account.where_temp()
-    |> Account.where_inserted_before(cutoff_time)
-    |> Repo.all()
-  end
+      # Delete associated API keys
+      account.id
+      |> list_api_keys_for_account()
+      |> Enum.each(&delete_api_key/1)
 
-  def deprovision_account(%Account{is_temp: true} = account) do
-    # Delete associated users
-    account.id
-    |> list_users_for_account()
-    |> Enum.each(&delete_user/1)
+      # Delete associated HTTP push and pull consumers
+      account.id
+      |> Consumers.list_consumers_for_account()
+      |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
 
-    # Delete associated API keys
-    account.id
-    |> list_api_keys_for_account()
-    |> Enum.each(&delete_api_key/1)
+      # Delete associated HTTP endpoints
+      account.id
+      |> Consumers.list_http_endpoints_for_account()
+      |> Enum.each(&Consumers.delete_http_endpoint/1)
 
-    # Delete associated HTTP push and pull consumers
-    account.id
-    |> Consumers.list_consumers_for_account()
-    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
+      # Delete associated PostgresDatabases
+      account.id
+      |> Databases.list_dbs_for_account(:replication_slot)
+      |> Enum.each(&Databases.delete_db_with_replication_slot/1)
 
-    # Delete associated HTTP endpoints
-    account.id
-    |> Consumers.list_http_endpoints_for_account()
-    |> Enum.each(&Consumers.delete_http_endpoint/1)
+      # Delete associated PostgresReplicationSlots
+      account.id
+      |> Replication.list_pg_replications_for_account()
+      |> Enum.each(&Replication.delete_pg_replication_with_lifecycle/1)
 
-    # Delete associated PostgresDatabases
-    account.id
-    |> Databases.list_dbs_for_account(:replication_slot)
-    |> Enum.each(&Databases.delete_db_with_replication_slot/1)
-
-    # Delete associated PostgresReplicationSlots
-    account.id
-    |> Replication.list_pg_replications_for_account()
-    |> Enum.each(&Replication.delete_pg_replication_with_lifecycle/1)
-
-    # Finally, delete the account
-    Repo.delete(account)
+      # Finally, delete the account
+      Repo.delete(account)
+    end)
   end
 
   # User functions

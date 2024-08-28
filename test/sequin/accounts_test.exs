@@ -103,37 +103,9 @@ defmodule Sequin.AccountsTest do
     end
   end
 
-  describe "temp accounts" do
-    test "list_expired_temp_accounts/0 returns temp accounts older than 48 hours" do
-      h = Accounts.temp_account_lifespan_hours()
-
-      old_temp_account =
-        AccountsFactory.insert_account!(
-          is_temp: true,
-          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h + 1), :hour)
-        )
-
-      recent_temp_account =
-        AccountsFactory.insert_account!(
-          is_temp: true,
-          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h - 1), :hour)
-        )
-
-      _permanent_account =
-        AccountsFactory.insert_account!(
-          is_temp: false,
-          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h + 1), :hour)
-        )
-
-      expired_accounts = Accounts.list_expired_temp_accounts()
-
-      assert length(expired_accounts) == 1
-      assert hd(expired_accounts).id == old_temp_account.id
-      refute Enum.any?(expired_accounts, fn account -> account.id == recent_temp_account.id end)
-    end
-
+  describe "deprovisioning accounts" do
     test "deprovision_account/1 removes all associated resources" do
-      account = AccountsFactory.insert_account!(is_temp: true)
+      account = AccountsFactory.insert_account!()
       AccountsFactory.insert_user!(account_id: account.id)
       AccountsFactory.insert_api_key!(account_id: account.id)
       db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
@@ -143,7 +115,7 @@ defmodule Sequin.AccountsTest do
 
       ConsumersFactory.insert_http_pull_consumer!(account_id: account.id, replication_slot_id: replication_slot.id)
 
-      assert {:ok, _} = Accounts.deprovision_account(account)
+      assert {:ok, _} = Accounts.deprovision_account(account, :i_am_responsible_for_my_actions)
 
       refute Enum.any?(Repo.all(Accounts.Account))
       refute Enum.any?(Repo.all(Accounts.User))

@@ -6,6 +6,7 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
   def change do
     execute "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";", "select 1;"
+    execute "CREATE EXTENSION IF NOT EXISTS citext", ""
 
     execute "create schema if not exists #{@stream_schema}",
             "drop schema if exists #{@stream_schema}"
@@ -19,16 +20,30 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
     create table(:users) do
       add :name, :string
-      add :email, :string, null: false
+      add :email, :citext, null: false
+      add :hashed_password, :string, null: false
+      add :confirmed_at, :utc_datetime
 
       add :account_id, references(:accounts, on_delete: :delete_all), null: false
 
-      timestamps()
+      timestamps(type: :utc_datetime)
     end
 
     create unique_index(:users, [:email], prefix: @config_schema)
 
     create index(:users, [:account_id], prefix: @config_schema)
+
+    create table(:users_tokens) do
+      add :user_id, references(:users, on_delete: :delete_all), null: false
+      add :token, :binary, null: false
+      add :context, :string, null: false
+      add :sent_to, :string
+
+      timestamps(type: :utc_datetime, updated_at: false)
+    end
+
+    create index(:users_tokens, [:user_id])
+    create unique_index(:users_tokens, [:context, :token])
 
     create table(:postgres_databases, prefix: @config_schema) do
       add :database, :string, null: false

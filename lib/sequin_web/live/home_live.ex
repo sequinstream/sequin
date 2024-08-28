@@ -170,8 +170,7 @@ defmodule SequinWeb.HomeLive do
   end
 
   defp create_account_with_user! do
-    {:ok, account} = Sequin.Accounts.create_account(%{})
-    {:ok, _user} = Sequin.Accounts.create_user(%{account_id: account.id, email: "admin@sequin.com", password: "password"})
+    {:ok, _user} = Sequin.Accounts.register_user(%{email: "admin@sequin.com", password: "password"})
   end
 
   defp schedule_db_check do

@@ -5,7 +5,7 @@
 
 ## What is Sequin?
 
-Sequin sends Postgres changes to your application and services. It’s designed to never miss an insert, update, or delete and provide exactly-once processing of those changes.
+Sequin sends Postgres changes to your applications and services. It’s designed to never miss an insert, update, or delete and provide exactly-once processing of all changes.
 
 You can receive changes via HTTP push (webhooks) or pull (think SQS).
 
@@ -33,10 +33,10 @@ In production, you can configure Sequin as code using Terraform.
 
 ### Compare Sequin
 
-* **Postgres triggers:** Sequin sends triggers over HTTP with the added benefits of exactly-once processing, payload transforms, routing, and a superior developer experience. Maintain transactional trigger guarantees that scales more efficiently and allows you to write business logic in the programming language of your choice.
-* **PG_NOTIFY:**  Sequin adds exactly-once processing, larger data payloads with transformation, routing, and a superior developer experience.
-* **Amazon SQS:** Sequin transactionally enqueues changes from your database into a FIFO queue with exactly once processing. This is especially valuable if messages coincide with database changes. Instead of adding a new dependency to your infrastructure, use the database you already have to reliably queue messages.
-* **Debezium / Kafka:** Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, with none of the operational overhead. If your database can handle it, so can Sequin. You don’t need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.
+* **Postgres triggers:** Sequin sends triggers over HTTP with the added benefits of exactly-once processing, payload transforms, routing, and a superior developer experience. Maintain transactional trigger guarantees with a system that scales and lets you write business logic in the programming language of your choice (no plpgsql!)
+* **LISTEN/NOTIFY:**  Sequin adds exactly-once processing, larger data payloads with transformation, routing, and a superior developer experience.
+* **Amazon SQS:** Sequin transactionally enqueues changes from your database into a FIFO queue with exactly-once processing. This is especially valuable if messages pertain to database changes. Instead of adding a new dependency to your infrastructure, use the database you already have to reliably queue messages.
+* **Debezium / Kafka:** Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, except with none of the operational overhead. If your database can handle it, so can Sequin. You don’t need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.
 
 ## Documentation
 

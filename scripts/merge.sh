@@ -8,6 +8,14 @@ GREEN='\033[0;32m'
 RED='\033[0;31m'
 BLUE='\033[0;34m'
 RESET='\033[0m'
+YELLOW='\033[0;33m'
+
+# Check for force flag
+FORCE=false
+if [ "$1" = "--force" ]; then
+    FORCE=true
+    echo -e "${YELLOW}Force merge option detected. Signoff check will be bypassed.${RESET}"
+fi
 
 # Repository introspection
 OWNER=$(gh repo view --json owner --jq .owner.login)
@@ -35,20 +43,25 @@ elif [ "${PR_COUNT}" -eq 1 ]; then
     echo -e "${BLUE}Mergeable Status: ${MERGEABLE_STATUS}${RESET}"
 
     if [ "${MERGEABLE_STATUS}" = "MERGEABLE" ]; then
-        STATUSES=$(gh api --method GET -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
-            "/repos/${OWNER}/${REPO}/commits/${SHA}/statuses")
+        if [ "$FORCE" = true ]; then
+            echo -e "${YELLOW}Bypassing signoff check due to force option.${RESET}"
+        else
+            STATUSES=$(gh api --method GET -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+                "/repos/${OWNER}/${REPO}/commits/${SHA}/statuses")
 
-        if echo "${STATUSES}" | jq -e '.[] | select(.state == "success" and .context == "signoff")' > /dev/null; then
-            echo -e "${GREEN}Commit was successfully signed off. Proceeding with merge...${RESET}"
-
-            if gh pr merge "${PR_NUMBER}" --repo "${OWNER}/${REPO}" --rebase --admin; then
-                echo -e "${GREEN}Pull request #${PR_NUMBER} merged successfully with rebase.${RESET}"
-            else
-                echo -e "${RED}Failed to merge pull request #${PR_NUMBER}.${RESET}"
+            if ! echo "${STATUSES}" | jq -e '.[] | select(.state == "success" and .context == "signoff")' > /dev/null; then
+                echo -e "${RED}Commit has not been successfully signed off or signoff not found. Merge aborted.${RESET}"
+                echo -e "${YELLOW}Use 'make merge-force' to bypass this check.${RESET}"
                 exit 1
             fi
+        fi
+
+        echo -e "${GREEN}Proceeding with merge...${RESET}"
+
+        if gh pr merge "${PR_NUMBER}" --repo "${OWNER}/${REPO}" --rebase --admin; then
+            echo -e "${GREEN}Pull request #${PR_NUMBER} merged successfully with rebase.${RESET}"
         else
-            echo -e "${RED}Commit has not been successfully signed off or signoff not found. Merge aborted.${RESET}"
+            echo -e "${RED}Failed to merge pull request #${PR_NUMBER}.${RESET}"
             exit 1
         fi
     else

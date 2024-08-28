@@ -10,6 +10,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
+  alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Repo
 
@@ -215,7 +216,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     base = %{
       "id" => consumer.id,
-      "name" => consumer.name,
+      "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
       "max_ack_pending" => consumer.max_ack_pending,
       "max_deliver" => consumer.max_deliver,

@@ -6,6 +6,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Name
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
@@ -15,6 +16,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     is_edit? = Map.has_key?(params, "id")
+    base_params = if is_edit?, do: %{}, else: %{"name" => Name.generate(99)}
 
     case fetch_or_build_database(socket, params) do
       {:ok, database} ->
@@ -27,7 +29,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             database: database
           )
           |> put_changesets(%{
-            "database" => %{},
+            "database" => base_params,
             "replication_slot" => %{"slot_name" => "sequin_slot", "publication_name" => "sequin_pub"}
           })
 

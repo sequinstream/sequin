@@ -46,13 +46,13 @@
 
 <div class="container mx-auto py-10">
   {#if !hasDatabases}
-    <Alert class="bg-carbon-950 border-carbon-800 text-carbon-0 w-full mb-8">
+    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
       <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
-        <AlertCircle class="h-5 w-5" style="color: white" />
-        <AlertTitle class="text-lg font-semibold">
+        <AlertCircle class="h-5 w-5 text-carbon-600" />
+        <AlertTitle class="text-lg font-semibold text-carbon-900">
           First, you need to connect to a database
         </AlertTitle>
-        <AlertDescription class="text-[#A1A1AA] col-start-2">
+        <AlertDescription class="text-carbon-600 col-start-2">
           Sequin must be connected to at least one Postgres database before you
           can create a consumer.
         </AlertDescription>

@@ -3,34 +3,53 @@ defmodule SequinWeb.DatabasesLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Databases
+  alias Sequin.Health
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
     databases = Databases.list_dbs_for_account(account_id, replication_slot: [:http_pull_consumers, :http_push_consumers])
-    encoded_databases = Enum.map(databases, &encode_database/1)
+    databases = load_database_health(databases)
 
-    socket =
-      assign(socket, :databases, encoded_databases)
+    if connected?(socket) do
+      Process.send_after(self(), :update_health, 1000)
+    end
 
-    {:ok, socket}
+    {:ok, assign(socket, :databases, databases)}
   end
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    assigns = assign(assigns, :encoded_databases, Enum.map(assigns.databases, &encode_database/1))
+
     ~H"""
     <div id="databases-index">
       <.svelte
         name="databases/Index"
         props={
           %{
-            databases: @databases
+            databases: @encoded_databases
           }
         }
         socket={@socket}
       />
     </div>
     """
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 1000)
+    {:noreply, assign(socket, :databases, load_database_health(socket.assigns.databases))}
+  end
+
+  defp load_database_health(databases) do
+    Enum.map(databases, fn database ->
+      case Health.get(database) do
+        {:ok, health} -> %{database | health: health}
+        {:error, _} -> database
+      end
+    end)
   end
 
   defp encode_database(database) do
@@ -41,7 +60,8 @@ defmodule SequinWeb.DatabasesLive.Index do
       hostname: database.hostname,
       port: database.port,
       consumers:
-        length(database.replication_slot.http_pull_consumers) + length(database.replication_slot.http_push_consumers)
+        length(database.replication_slot.http_pull_consumers) + length(database.replication_slot.http_push_consumers),
+      health: Health.to_external(database.health)
     }
   end
 end

@@ -13,6 +13,7 @@ defmodule Sequin.PostgresReplicationTest do
   use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -632,7 +633,8 @@ defmodule Sequin.PostgresReplicationTest do
           test_pid: self(),
           id: @server_id,
           message_handler_module: MessageHandlerMock,
-          message_handler_ctx: nil
+          message_handler_ctx: nil,
+          postgres_database: %PostgresDatabase{id: "test_db_id"}
         ],
         opts
       )

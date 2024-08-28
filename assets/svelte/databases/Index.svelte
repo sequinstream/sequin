@@ -3,6 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
   import { Database, Radio } from "lucide-svelte";
+  import HealthPill from "../health/HealthPill.svelte";
 
   export let databases: Array<{
     id: string;
@@ -11,6 +12,9 @@
     hostname: string;
     port: number;
     consumers: number;
+    health: {
+      status: "healthy" | "warning" | "error" | "initializing";
+    };
   }>;
 </script>
 
@@ -50,6 +54,7 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Name</Table.Head>
+          <Table.Head>Health</Table.Head>
           <Table.Head>Hostname</Table.Head>
           <Table.Head>Created at</Table.Head>
           <Table.Head>
@@ -71,6 +76,9 @@
             }}
           >
             <Table.Cell>{database.name}</Table.Cell>
+            <Table.Cell>
+              <HealthPill status={database.health.status} />
+            </Table.Cell>
             <Table.Cell>
               {database.hostname}
             </Table.Cell>

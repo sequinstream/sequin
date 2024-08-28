@@ -14,6 +14,8 @@ defmodule SequinWeb.Layouts do
 
   attr :show_nav, :boolean, default: true
   attr :no_main, :boolean, default: false
+  # Can be nil in test
+  attr :current_path, :string, default: nil
   def app(assigns)
 
   def app_no_sidenav(assigns) do

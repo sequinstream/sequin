@@ -35,4 +35,8 @@ defmodule Sequin.Case do
     Mox.verify_on_exit!()
     :ok
   end
+
+  def errors_on(changeset) do
+    Sequin.Error.errors_on(changeset)
+  end
 end

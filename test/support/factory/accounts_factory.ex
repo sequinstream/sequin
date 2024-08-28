@@ -7,6 +7,10 @@ defmodule Sequin.Factory.AccountsFactory do
   alias Sequin.Factory
   alias Sequin.Repo
 
+  def password, do: 5 |> Faker.Lorem.words() |> Enum.join("-")
+
+  def email, do: "user#{Factory.unique_integer()}@example.com"
+
   def account(attrs \\ []) do
     merge_attributes(
       %Account{
@@ -62,7 +66,8 @@ defmodule Sequin.Factory.AccountsFactory do
     merge_attributes(
       %User{
         name: "User #{:rand.uniform(1000)}",
-        email: "user#{Factory.unique_integer()}@example.com",
+        email: email(),
+        password: password(),
         account_id: Factory.uuid(),
         inserted_at: Factory.utc_datetime(),
         updated_at: Factory.utc_datetime()
@@ -81,9 +86,12 @@ defmodule Sequin.Factory.AccountsFactory do
     attrs = Map.new(attrs)
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> insert_account!().id end)
 
-    attrs
-    |> user()
-    |> Map.put(:account_id, account_id)
+    attrs = user_attrs(attrs)
+
+    %User{account_id: account_id}
+    |> User.registration_changeset(attrs, hash_password: true)
     |> Repo.insert!()
+    # Some tests need to then use the password
+    |> Map.put(:password, attrs.password)
   end
 end

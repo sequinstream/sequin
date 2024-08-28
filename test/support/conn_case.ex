@@ -44,4 +44,30 @@ defmodule SequinWeb.ConnCase do
     conn = Plug.Conn.assign(conn, :account_id, account.id)
     {:ok, conn: conn, account: account}
   end
+
+  @doc """
+  Setup helper that registers and logs in users.
+
+      setup :logged_in_user
+
+  It stores an updated connection and a registered user in the
+  test context.
+  """
+  def logged_in_user(%{conn: conn}) do
+    user = AccountsFactory.insert_user!()
+    %{conn: log_in_user(conn, user), user: user}
+  end
+
+  @doc """
+  Logs the given `user` into the `conn`.
+
+  It returns an updated `conn`.
+  """
+  def log_in_user(conn, user) do
+    token = Sequin.Accounts.generate_user_session_token(user)
+
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.put_session(:user_token, token)
+  end
 end

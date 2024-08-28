@@ -7,6 +7,8 @@ defmodule Sequin.Health do
 
   use TypedStruct
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   alias __MODULE__
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
@@ -72,7 +74,11 @@ defmodule Sequin.Health do
   Generates one or more `:nats` messages to notify subscribers of the new status and any status changes.
   """
   @spec update(entity(), atom(), status(), Error.t() | nil) :: {:ok, Health.t()} | {:error, Error.t()}
-  def update(entity, check_id, status, error \\ nil) when is_entity(entity) do
+  def update(entity, check_id, status, error \\ nil)
+
+  def update(entity, check_id, status, error) when is_entity(entity) do
+    validate_status_and_error!(status, error)
+
     key = "#{entity.id}:#{check_id}"
     now = :os.system_time(:millisecond)
 
@@ -275,6 +281,15 @@ defmodule Sequin.Health do
       {:error, error} -> {:error, Error.service(entity: :redis, details: %{error: error})}
     end
   end
+
+  defp validate_status_and_error!(:healthy, nil), do: :ok
+  defp validate_status_and_error!(:initializing, nil), do: :ok
+  defp validate_status_and_error!(:warning, nil), do: :ok
+  defp validate_status_and_error!(:warning, error) when is_error(error), do: :ok
+  defp validate_status_and_error!(:error, error) when is_error(error), do: :ok
+
+  defp validate_status_and_error!(:error, _), do: raise(ArgumentError, "error must be an Error struct for :error status")
+  defp validate_status_and_error!(status, _), do: raise(ArgumentError, "Unpexected status: #{status}")
 
   @doc """
   Converts a Health struct to a map with only the necessary fields for the frontend.

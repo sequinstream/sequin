@@ -37,6 +37,7 @@ defmodule Sequin.Health.PostgresDatabaseHealthChecker do
       Health.update(database, :reachable, :healthy)
     else
       {:error, error} when is_exception(error) ->
+        error = Error.service(service: :postgres_database, message: Exception.message(error))
         Health.update(database, :reachable, :error, error)
     end
   rescue

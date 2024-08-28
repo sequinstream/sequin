@@ -182,25 +182,16 @@ defmodule Sequin.Error do
     end
   end
 
-  # defmodule Guards do
-  #   @moduledoc false
-  #   # STEP 2: Add a clause for the new error module to this guard:
-  #   defguard is_common_error(error)
-  #            when is_exception(error, BadRequestError) or
-  #                   is_exception(error, BadStatusError) or
-  #                   is_exception(error, ConflictError) or
-  #                   is_exception(error, ForbiddenError) or
-  #                   is_exception(error, InvariantError) or
-  #                   is_exception(error, NotFoundError) or
-  #                   is_exception(error, NotImplementedError) or
-  #                   is_exception(error, QueryError) or
-  #                   is_exception(error, RateLimitError) or
-  #                   is_exception(error, ServiceError) or
-  #                   is_exception(error, TimeoutError) or
-  #                   is_exception(error, UnauthorizedError) or
-  #                   is_exception(error, UnknownError) or
-  #                   is_exception(error, ValidationError)
-  # end
+  defmodule Guards do
+    @moduledoc false
+    defguard is_error(error)
+             when is_exception(error, BadRequestError) or
+                    is_exception(error, NotFoundError) or
+                    is_exception(error, ServiceError) or
+                    is_exception(error, TimeoutError) or
+                    is_exception(error, UnauthorizedError) or
+                    is_exception(error, ValidationError)
+  end
 
   # STEP 3: Add the new error module to this type definition:
   @type t ::

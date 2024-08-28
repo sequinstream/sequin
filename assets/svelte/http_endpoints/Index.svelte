@@ -3,6 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
   import { Webhook, Radio } from "lucide-svelte";
+  import HealthPill from "../health/HealthPill.svelte";
 
   export let httpEndpoints: Array<{
     id: string;
@@ -10,6 +11,9 @@
     baseUrl: string;
     insertedAt: string;
     httpPushConsumersCount: number;
+    health: {
+      status: "healthy" | "warning" | "error" | "initializing";
+    };
   }>;
   export let live: any;
 
@@ -54,6 +58,7 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Name</Table.Head>
+          <Table.Head>Health</Table.Head>
           <Table.Head>Base URL</Table.Head>
           <Table.Head>Created at</Table.Head>
           <Table.Head>
@@ -71,6 +76,9 @@
             class="cursor-pointer"
           >
             <Table.Cell>{endpoint.name}</Table.Cell>
+            <Table.Cell>
+              <HealthPill status={endpoint.health.status} />
+            </Table.Cell>
             <Table.Cell>
               {endpoint.baseUrl}
             </Table.Cell>

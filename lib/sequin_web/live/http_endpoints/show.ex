@@ -3,16 +3,29 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Health
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
     case Consumers.get_http_endpoint_for_account(current_account_id(socket), id) do
       {:ok, http_endpoint} ->
-        {:ok, assign(socket, http_endpoint: http_endpoint)}
+        if connected?(socket) do
+          Process.send_after(self(), :update_health, 1000)
+        end
+
+        {:ok, health} = Health.get(http_endpoint)
+        {:ok, assign(socket, http_endpoint: %{http_endpoint | health: health})}
 
       {:error, _} ->
         {:ok, push_navigate(socket, to: ~p"/http-endpoints")}
     end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 1000)
+    {:ok, health} = Health.get(socket.assigns.http_endpoint)
+    {:noreply, assign(socket, :http_endpoint, %{socket.assigns.http_endpoint | health: health})}
   end
 
   @impl Phoenix.LiveView
@@ -49,6 +62,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
       name: http_endpoint.name,
       baseUrl: http_endpoint.base_url,
       headers: http_endpoint.headers,
+      health: Health.to_external(http_endpoint.health),
       inserted_at: http_endpoint.inserted_at,
       updated_at: http_endpoint.updated_at
     }

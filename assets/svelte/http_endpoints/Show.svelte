@@ -1,5 +1,13 @@
 <script lang="ts">
-  import { ArrowLeft, Webhook, Braces, Clock, RefreshCw } from "lucide-svelte";
+  import {
+    ArrowLeft,
+    Webhook,
+    Braces,
+    Clock,
+    RefreshCw,
+    Activity,
+    CheckCircle2,
+  } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
@@ -12,6 +20,7 @@
     TableRow,
   } from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
+  import HealthComponent from "../health/HealthComponent.svelte";
 
   export let http_endpoint;
   export let live;
@@ -35,6 +44,11 @@
       }
     });
   }
+
+  const metrics = {
+    throughput: 0,
+    avg_latency: 0,
+  };
 </script>
 
 <div class="min-h-screen font-sans bg-white">
@@ -89,6 +103,28 @@
   </header>
 
   <div class="container mx-auto px-4 py-8">
+    <div class="grid gap-6 md:grid-cols-3 mb-8">
+      <HealthComponent health={http_endpoint.health} />
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-sm font-medium text-gray-500">Throughput</span>
+            <Activity class="h-5 w-5 text-blue-500" />
+          </div>
+          <span class="text-2xl font-bold">{metrics.throughput} req/s</span>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
+            <Clock class="h-5 w-5 text-green-500" />
+          </div>
+          <span class="text-2xl font-bold">{metrics.avg_latency} ms</span>
+        </CardContent>
+      </Card>
+    </div>
+
     <div class="space-y-6">
       <Card>
         <CardContent class="p-6">

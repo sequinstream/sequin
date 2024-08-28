@@ -23,7 +23,13 @@ config :phoenix, :json_library, Jason
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [default: 10],
-  repo: Sequin.Repo
+  repo: Sequin.Repo,
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 15 * * *", Sequin.Accounts.DeprovisionTempAccountsWorker}
+     ]}
+  ]
 
 # Configures the mailer
 #

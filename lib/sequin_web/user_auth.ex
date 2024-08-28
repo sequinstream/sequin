@@ -4,21 +4,23 @@ defmodule SequinWeb.UserAuth do
   import Phoenix.LiveView
 
   alias Sequin.Accounts
+  alias Sequin.Repo
 
   def on_mount(:default, _params, _session, socket) do
-    case safe_load_account() do
-      {:ok, account} ->
-        {:cont, assign(socket, :current_account, account)}
+    case safe_load_user() do
+      {:ok, user} ->
+        user = Repo.preload(user, :account)
+        {:cont, assign(socket, :current_user, user)}
 
       :error ->
         {:halt, push_navigate(socket, to: "/")}
     end
   end
 
-  defp safe_load_account do
-    case Accounts.list_accounts() do
+  defp safe_load_user do
+    case Accounts.list_users() do
       [] -> :error
-      [account | _] -> {:ok, account}
+      [user | _] -> {:ok, user}
     end
   rescue
     _ -> :error

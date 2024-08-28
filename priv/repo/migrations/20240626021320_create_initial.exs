@@ -14,6 +14,8 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
             "drop schema if exists #{@config_schema}"
 
     create table(:accounts, prefix: @config_schema) do
+      add :is_temp, :boolean, null: false
+
       timestamps()
     end
 

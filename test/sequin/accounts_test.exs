@@ -4,6 +4,10 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Accounts
   alias Sequin.Accounts.User
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Replication.PostgresReplicationSlot
 
   describe "users" do
     test "list_users/1 returns all users for an account" do
@@ -96,6 +100,48 @@ defmodule Sequin.AccountsTest do
 
       assert {:error, changeset} = Accounts.update_user(user_to_update, update_attrs)
       assert {"has already been taken", _} = changeset.errors[:email]
+    end
+  end
+
+  describe "temp accounts" do
+    test "list_expired_temp_accounts/0 returns temp accounts older than 48 hours" do
+      old_temp_account =
+        AccountsFactory.insert_account!(is_temp: true, inserted_at: DateTime.add(DateTime.utc_now(:second), -49, :hour))
+
+      recent_temp_account =
+        AccountsFactory.insert_account!(is_temp: true, inserted_at: DateTime.add(DateTime.utc_now(:second), -47, :hour))
+
+      _permanent_account =
+        AccountsFactory.insert_account!(is_temp: false, inserted_at: DateTime.add(DateTime.utc_now(:second), -49, :hour))
+
+      expired_accounts = Accounts.list_expired_temp_accounts()
+
+      assert length(expired_accounts) == 1
+      assert hd(expired_accounts).id == old_temp_account.id
+      refute Enum.any?(expired_accounts, fn account -> account.id == recent_temp_account.id end)
+    end
+
+    test "deprovision_account/1 removes all associated resources" do
+      account = AccountsFactory.insert_account!(is_temp: true)
+      AccountsFactory.insert_user!(account_id: account.id)
+      AccountsFactory.insert_api_key!(account_id: account.id)
+      db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      replication_slot =
+        ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
+
+      ConsumersFactory.insert_http_pull_consumer!(account_id: account.id, replication_slot_id: replication_slot.id)
+
+      assert {:ok, _} = Accounts.deprovision_account(account)
+
+      refute Enum.any?(Repo.all(Accounts.Account))
+      refute Enum.any?(Repo.all(Accounts.User))
+      refute Enum.any?(Repo.all(Accounts.ApiKey))
+      refute Enum.any?(Repo.all(Sequin.Consumers.HttpEndpoint))
+      refute Enum.any?(Repo.all(Sequin.Consumers.HttpPushConsumer))
+      refute Enum.any?(Repo.all(Sequin.Consumers.HttpPullConsumer))
+      refute Enum.any?(Repo.all(PostgresReplicationSlot))
+      refute Enum.any?(Repo.all(Sequin.Databases.PostgresDatabase))
     end
   end
 end

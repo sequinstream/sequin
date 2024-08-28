@@ -10,9 +10,9 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    account_id = current_account_id(socket)
-    consumers = Consumers.list_consumers_for_account(account_id, :postgres_database)
-    has_databases? = account_id |> Databases.list_dbs_for_account() |> Enum.any?()
+    account = current_account(socket)
+    consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
+    has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
     socket =
@@ -80,14 +80,14 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   defp render_consumer_form(%{form_kind: "wizard"} = assigns) do
     ~H"""
-    <.live_component current_account={@current_account} module={Form} id="new-consumer" action={:new} />
+    <.live_component current_user={@current_user} module={Form} id="new-consumer" action={:new} />
     """
   end
 
   defp render_consumer_form(%{form_kind: "pull"} = assigns) do
     ~H"""
     <.live_component
-      current_account={@current_account}
+      current_user={@current_user}
       module={Form}
       id="new-consumer"
       action={:new}
@@ -99,7 +99,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   defp render_consumer_form(%{form_kind: "push"} = assigns) do
     ~H"""
     <.live_component
-      current_account={@current_account}
+      current_user={@current_user}
       module={Form}
       id="new-consumer"
       action={:new}

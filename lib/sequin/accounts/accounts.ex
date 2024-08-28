@@ -9,6 +9,14 @@ defmodule Sequin.Accounts do
   alias Sequin.Replication
   alias Sequin.Repo
 
+  @temp_account_lifespan_hours 48
+
+  def temp_account_lifespan_hours, do: 48
+
+  def account_expires_at(%Account{is_temp: true} = account) do
+    DateTime.add(account.inserted_at, @temp_account_lifespan_hours, :hour)
+  end
+
   def get_account(id) do
     case Repo.get(Account, id) do
       nil -> {:error, Error.not_found(entity: :account)}
@@ -48,7 +56,7 @@ defmodule Sequin.Accounts do
   end
 
   def list_expired_temp_accounts do
-    cutoff_time = DateTime.add(DateTime.utc_now(), -48, :hour)
+    cutoff_time = DateTime.add(DateTime.utc_now(), -@temp_account_lifespan_hours, :hour)
 
     Account.where_temp()
     |> Account.where_inserted_before(cutoff_time)

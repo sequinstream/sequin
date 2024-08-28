@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :name, :string
     field :base_url, :string
     field :headers, :map, default: %{}
+    field :health, :map, virtual: true
 
     belongs_to :account, Sequin.Accounts.Account
 

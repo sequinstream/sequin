@@ -837,6 +837,19 @@ defmodule Sequin.Consumers do
     |> Repo.delete()
   end
 
+  def test_reachability(%HttpEndpoint{} = http_endpoint) do
+    case URI.parse(http_endpoint.base_url) do
+      %URI{host: host} when is_binary(host) ->
+        case :inet.gethostbyname(String.to_charlist(host)) do
+          {:ok, _} -> {:ok, :reachable}
+          {:error, reason} -> {:error, reason}
+        end
+
+      _ ->
+        {:error, :invalid_url}
+    end
+  end
+
   # Backfills
 
   def backfill_limit, do: 10_000

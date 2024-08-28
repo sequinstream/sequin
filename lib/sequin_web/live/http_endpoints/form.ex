@@ -5,6 +5,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Error
+  alias Sequin.Health
   alias Sequin.Name
 
   @parent_id "http_endpoints_form"
@@ -85,6 +86,8 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     if socket.assigns.changeset.valid? do
       case create_or_update_http_endpoint(socket, params["http_endpoint"]) do
         {:ok, http_endpoint} ->
+          Health.update(http_endpoint, :reachable, :healthy)
+
           {:noreply, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -116,10 +119,29 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   defp create_or_update_http_endpoint(socket, params) do
-    if socket.assigns.is_edit? do
-      Consumers.update_http_endpoint(socket.assigns.http_endpoint, params)
+    changeset =
+      if socket.assigns.is_edit? do
+        HttpEndpoint.update_changeset(socket.assigns.http_endpoint, params)
+      else
+        HttpEndpoint.create_changeset(%HttpEndpoint{account_id: current_account_id(socket)}, params)
+      end
+
+    with {:ok, valid_changes} <- Ecto.Changeset.apply_action(changeset, :validate),
+         {:ok, :reachable} <- Consumers.test_reachability(valid_changes) do
+      if socket.assigns.is_edit? do
+        Consumers.update_http_endpoint(socket.assigns.http_endpoint, params)
+      else
+        Consumers.create_http_endpoint_for_account(current_account_id(socket), params)
+      end
     else
-      Consumers.create_http_endpoint_for_account(current_account_id(socket), params)
+      {:error, %Ecto.Changeset{} = invalid_changeset} ->
+        {:error, invalid_changeset}
+
+      {:error, reason} ->
+        changeset =
+          Ecto.Changeset.add_error(changeset, :base_url, "Endpoint is not reachable: #{inspect(reason)}")
+
+        {:error, changeset}
     end
   end
 

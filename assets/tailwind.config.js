@@ -85,6 +85,13 @@ const config = {
         matcha: {
           0: "rgb(var(--color-matcha-0))",
           100: "rgb(var(--color-matcha-100))",
+          200: "rgb(var(--color-matcha-200))",
+          300: "rgb(var(--color-matcha-300))",
+          400: "rgb(var(--color-matcha-400))",
+          500: "rgb(var(--color-matcha-500))",
+          600: "rgb(var(--color-matcha-600))",
+          700: "rgb(var(--color-matcha-700))",
+          800: "rgb(var(--color-matcha-800))",
           900: "rgb(var(--color-matcha-900))",
         },
         breeze: {

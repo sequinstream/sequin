@@ -34,7 +34,7 @@ defmodule SequinWeb.HomeLive do
           <% end %>
         </div>
       </div>
-      <div class="fixed bottom-0 left-0 right-0 bg-white dark:bg-zinc-800 shadow-md">
+      <div class="fixed bottom-20 left-0 right-0 bg-white dark:bg-zinc-800">
         <div class="w-full max-w-3xl mx-auto px-4 py-4">
           <div class="flex justify-end">
             <button
@@ -42,7 +42,7 @@ defmodule SequinWeb.HomeLive do
               class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={@step == :disconnected}
             >
-              Get Started
+              Get started
             </button>
           </div>
         </div>
@@ -125,7 +125,7 @@ defmodule SequinWeb.HomeLive do
   end
 
   def handle_event("get_started", _, socket) do
-    create_account!()
+    create_account_with_user!()
     {:noreply, push_navigate(socket, to: "/consumers")}
   end
 
@@ -169,8 +169,9 @@ defmodule SequinWeb.HomeLive do
       {:ok, :disconnected}
   end
 
-  defp create_account! do
-    {:ok, _} = Sequin.Accounts.create_account(%{})
+  defp create_account_with_user! do
+    {:ok, account} = Sequin.Accounts.create_account(%{})
+    {:ok, _user} = Sequin.Accounts.create_user(%{account_id: account.id, email: "admin@sequin.com", password: "password"})
   end
 
   defp schedule_db_check do

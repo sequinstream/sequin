@@ -3,7 +3,10 @@ defmodule Sequin.Accounts do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.ApiKey
   alias Sequin.Accounts.User
+  alias Sequin.Consumers
+  alias Sequin.Databases
   alias Sequin.Error
+  alias Sequin.Replication
   alias Sequin.Repo
 
   def get_account(id) do
@@ -44,6 +47,49 @@ defmodule Sequin.Accounts do
     Repo.delete(api_key)
   end
 
+  def list_expired_temp_accounts do
+    cutoff_time = DateTime.add(DateTime.utc_now(), -48, :hour)
+
+    Account.where_temp()
+    |> Account.where_inserted_before(cutoff_time)
+    |> Repo.all()
+  end
+
+  def deprovision_account(%Account{is_temp: true} = account) do
+    # Delete associated users
+    account.id
+    |> list_users_for_account()
+    |> Enum.each(&delete_user/1)
+
+    # Delete associated API keys
+    account.id
+    |> list_api_keys_for_account()
+    |> Enum.each(&delete_api_key/1)
+
+    # Delete associated HTTP push and pull consumers
+    account.id
+    |> Consumers.list_consumers_for_account()
+    |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
+
+    # Delete associated HTTP endpoints
+    account.id
+    |> Consumers.list_http_endpoints_for_account()
+    |> Enum.each(&Consumers.delete_http_endpoint/1)
+
+    # Delete associated PostgresDatabases
+    account.id
+    |> Databases.list_dbs_for_account(:replication_slot)
+    |> Enum.each(&Databases.delete_db_with_replication_slot/1)
+
+    # Delete associated PostgresReplicationSlots
+    account.id
+    |> Replication.list_pg_replications_for_account()
+    |> Enum.each(&Replication.delete_pg_replication_with_lifecycle/1)
+
+    # Finally, delete the account
+    Repo.delete(account)
+  end
+
   # User functions
 
   @doc """
@@ -51,6 +97,10 @@ defmodule Sequin.Accounts do
   """
   def list_users_for_account(account_id) do
     Repo.all(User.where_account_id(account_id))
+  end
+
+  def list_users do
+    Repo.all(User)
   end
 
   @doc """

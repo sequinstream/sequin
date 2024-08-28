@@ -52,6 +52,15 @@
   function cancelDelete() {
     showDeleteConfirmDialog = false;
   }
+
+  function isWebhookSiteUrl(url: string): boolean {
+    return url.startsWith("https://webhook.site/");
+  }
+
+  function getWebhookSiteViewUrl(url: string): string {
+    const uuid = url.split("/").pop();
+    return `https://webhook.site/#!/view/${uuid}`;
+  }
 </script>
 
 <div class="min-h-screen font-sans bg-white">
@@ -178,12 +187,26 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
-            <a href="/http-endpoints/{consumer.http_endpoint.id}">
-              <Button variant="outline" size="sm">
-                <ExternalLink class="h-4 w-4 mr-2" />
-                View Endpoint
-              </Button>
-            </a>
+            <div class="flex space-x-2">
+              <a href="/http-endpoints/{consumer.http_endpoint.id}">
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  View Endpoint
+                </Button>
+              </a>
+              {#if isWebhookSiteUrl(consumer.http_endpoint.url)}
+                <a
+                  href={getWebhookSiteViewUrl(consumer.http_endpoint.url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" size="sm">
+                    <ExternalLink class="h-4 w-4 mr-2" />
+                    View on Webhook.site
+                  </Button>
+                </a>
+              {/if}
+            </div>
           </div>
           <div class="flex items-center space-x-2">
             <Globe class="h-5 w-5 text-gray-400" />

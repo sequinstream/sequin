@@ -3,6 +3,7 @@
     "@tailwindcss/forms": "^0.5.7",
     "@tailwindcss/typography": "^0.5.14",
     "@types/node": "^22.5.0",
+    "@types/uuid": "^10.0.0",
     "autoprefixer": "^10.4.20",
     "esbuild": "^0.16.17",
     "esbuild-plugin-import-glob": "^0.1.1",
@@ -26,6 +27,7 @@
     "svelte-sonner": "^0.3.27",
     "tailwind-merge": "^2.5.2",
     "tailwind-variants": "^0.2.1",
+    "uuid": "^10.0.0",
     "vaul-svelte": "^0.3.2"
   }
 }

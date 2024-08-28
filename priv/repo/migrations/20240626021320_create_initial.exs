@@ -17,6 +17,19 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       timestamps()
     end
 
+    create table(:users) do
+      add :name, :string
+      add :email, :string, null: false
+
+      add :account_id, references(:accounts, on_delete: :delete_all), null: false
+
+      timestamps()
+    end
+
+    create unique_index(:users, [:email], prefix: @config_schema)
+
+    create index(:users, [:account_id], prefix: @config_schema)
+
     create table(:postgres_databases, prefix: @config_schema) do
       add :database, :string, null: false
       add :hostname, :string, null: false

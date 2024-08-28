@@ -18,6 +18,9 @@ signoff_stack:
 merge:
 	@./scripts/merge.sh
 
+merge-force:
+	@./scripts/merge.sh --force
+
 init:
 	@if [ ! -f .settings.json ]; then \
 		cp .settings.example.json .settings.json; \
@@ -49,6 +52,7 @@ help:
 	@echo "  make signoff-dirty - Run the signoff script with --dirty flag"
 	@echo "  make signoff_stack - Run the signoff_stack script"
 	@echo "  make merge     - Run the merge script"
+	@echo "  make merge-force - Run the merge script, bypassing signoff check"
 	@echo "  make init      - Create .settings.json from .settings.json.example"
 	@echo "  make help      - Show this help message"
 	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"

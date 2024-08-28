@@ -1,28 +1,30 @@
 defmodule SequinWeb.UserForgotPasswordLive do
+  @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Accounts
 
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-sm">
-      <.header class="text-center">
-        Forgot your password?
-        <:subtitle>We'll send a password reset link to your inbox</:subtitle>
-      </.header>
+    <div class="flex items-center justify-center h-[80vh]">
+      <div class="mx-auto max-w-sm w-full">
+        <.header class="text-center">
+          Forgot your password?
+          <:subtitle>We'll send a password reset link to your inbox</:subtitle>
+        </.header>
 
-      <.simple_form for={@form} id="reset_password_form" phx-submit="send_email">
-        <.input field={@form[:email]} type="email" placeholder="Email" required />
-        <:actions>
-          <.button phx-disable-with="Sending..." class="w-full">
-            Send password reset instructions
-          </.button>
-        </:actions>
-      </.simple_form>
-      <p class="text-center text-sm mt-4">
-        <.link href={~p"/users/register"}>Register</.link>
-        | <.link href={~p"/users/log_in"}>Log in</.link>
-      </p>
+        <.simple_form for={@form} id="reset_password_form" phx-submit="send_email">
+          <.input field={@form[:email]} type="email" placeholder="Email" required />
+          <:actions>
+            <.button phx-disable-with="Sending..." class="w-full">
+              Send password reset instructions
+            </.button>
+          </:actions>
+        </.simple_form>
+        <p class="text-center text-sm mt-4">
+          <.link href={~p"/register"}>Register</.link> | <.link href={~p"/login"}>Log in</.link>
+        </p>
+      </div>
     </div>
     """
   end
@@ -44,7 +46,7 @@ defmodule SequinWeb.UserForgotPasswordLive do
 
     {:noreply,
      socket
-     |> put_flash(:info, info)
-     |> redirect(to: ~p"/")}
+     |> put_flash(:toast, %{kind: :info, title: "Submitted", description: info})
+     |> redirect(to: ~p"/login")}
   end
 end

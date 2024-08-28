@@ -65,7 +65,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
       {:ok, http_endpoint} ->
         {:noreply,
          socket
-         |> push_toast(:info, "HTTP Endpoint created successfully")
+         |> put_flash(:toast, %{kind: :info, title: "HTTP Endpoint created successfully"})
          |> push_navigate(to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->

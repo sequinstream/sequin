@@ -1,29 +1,31 @@
 defmodule SequinWeb.UserConfirmationInstructionsLive do
+  @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Accounts
 
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-sm">
-      <.header class="text-center">
-        No confirmation instructions received?
-        <:subtitle>We'll send a new confirmation link to your inbox</:subtitle>
-      </.header>
+    <div class="flex items-center justify-center h-[80vh]">
+      <div class="mx-auto max-w-sm w-full">
+        <.header class="text-center">
+          No confirmation instructions received?
+          <:subtitle>We'll send a new confirmation link to your inbox</:subtitle>
+        </.header>
 
-      <.simple_form for={@form} id="resend_confirmation_form" phx-submit="send_instructions">
-        <.input field={@form[:email]} type="email" placeholder="Email" required />
-        <:actions>
-          <.button phx-disable-with="Sending..." class="w-full">
-            Resend confirmation instructions
-          </.button>
-        </:actions>
-      </.simple_form>
+        <.simple_form for={@form} id="resend_confirmation_form" phx-submit="send_instructions">
+          <.input field={@form[:email]} type="email" placeholder="Email" required />
+          <:actions>
+            <.button phx-disable-with="Sending..." class="w-full">
+              Resend confirmation instructions
+            </.button>
+          </:actions>
+        </.simple_form>
 
-      <p class="text-center mt-4">
-        <.link href={~p"/users/register"}>Register</.link>
-        | <.link href={~p"/users/log_in"}>Log in</.link>
-      </p>
+        <p class="text-center mt-4">
+          <.link href={~p"/register"}>Register</.link> | <.link href={~p"/login"}>Log in</.link>
+        </p>
+      </div>
     </div>
     """
   end
@@ -45,6 +47,7 @@ defmodule SequinWeb.UserConfirmationInstructionsLive do
 
     {:noreply,
      socket
+     |> put_flash(:toast, %{kind: :info, title: info})
      |> put_flash(:info, info)
      |> redirect(to: ~p"/")}
   end

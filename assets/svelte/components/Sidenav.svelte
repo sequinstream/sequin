@@ -102,11 +102,13 @@
             </div>
           </div>
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content>
-          <DropdownMenu.Item>
-            <LogOut class="mr-2 h-4 w-4" />
-            <span>Log out</span>
-          </DropdownMenu.Item>
+        <DropdownMenu.Content class="w-[200px]">
+          <a href="/logout" data-phx-link="redirect" data-phx-link-state="push">
+            <DropdownMenu.Item class="cursor-pointer">
+              <LogOut class="mr-2 h-4 w-4" />
+              Log out
+            </DropdownMenu.Item>
+          </a>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     </div>

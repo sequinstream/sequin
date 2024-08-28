@@ -105,14 +105,25 @@ defmodule Sequin.AccountsTest do
 
   describe "temp accounts" do
     test "list_expired_temp_accounts/0 returns temp accounts older than 48 hours" do
+      h = Accounts.temp_account_lifespan_hours()
+
       old_temp_account =
-        AccountsFactory.insert_account!(is_temp: true, inserted_at: DateTime.add(DateTime.utc_now(:second), -49, :hour))
+        AccountsFactory.insert_account!(
+          is_temp: true,
+          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h + 1), :hour)
+        )
 
       recent_temp_account =
-        AccountsFactory.insert_account!(is_temp: true, inserted_at: DateTime.add(DateTime.utc_now(:second), -47, :hour))
+        AccountsFactory.insert_account!(
+          is_temp: true,
+          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h - 1), :hour)
+        )
 
       _permanent_account =
-        AccountsFactory.insert_account!(is_temp: false, inserted_at: DateTime.add(DateTime.utc_now(:second), -49, :hour))
+        AccountsFactory.insert_account!(
+          is_temp: false,
+          inserted_at: DateTime.add(DateTime.utc_now(:second), -(h + 1), :hour)
+        )
 
       expired_accounts = Accounts.list_expired_temp_accounts()
 

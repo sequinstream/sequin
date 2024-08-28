@@ -53,6 +53,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       end
     end
 
+    field :health, :map, virtual: true
+
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
 

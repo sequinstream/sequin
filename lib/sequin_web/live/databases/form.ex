@@ -6,6 +6,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Health
   alias Sequin.Name
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
@@ -245,6 +246,10 @@ defmodule SequinWeb.DatabasesLive.Form do
       |> Databases.create_db_for_account(db_params)
       |> case do
         {:ok, db} ->
+          # Safe to update health here because we just validated that the database is reachable
+          # TODO: Implement background health updates for reachability
+          Health.update(db, :reachable, :healthy)
+
           case Replication.create_pg_replication_for_account_with_lifecycle(
                  account_id,
                  Map.put(replication_params, "postgres_database_id", db.id)

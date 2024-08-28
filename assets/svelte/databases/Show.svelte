@@ -16,6 +16,8 @@
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
+  import HealthDisplay from "$lib/health/HealthComponent.svelte";
+  import HealthComponent from "$lib/health/HealthComponent.svelte";
 
   interface Table {
     schema_name: string;
@@ -46,6 +48,11 @@
     inserted_at: string;
     updated_at: string;
     consumers: Consumer[];
+    health: {
+      status: string;
+      message: string;
+      last_checked: string;
+    };
   }
 
   export let database: PostgresDatabase;
@@ -124,15 +131,7 @@
 
   <main class="max-w-6xl mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-6">
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Health</span>
-            <Activity class="h-5 w-5 text-green-500" />
-          </div>
-          <div class="text-4xl font-bold text-green-500">98%</div>
-        </CardContent>
-      </Card>
+      <HealthComponent health={database.health} />
 
       <Card>
         <CardContent class="p-6">

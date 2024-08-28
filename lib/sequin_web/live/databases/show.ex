@@ -4,6 +4,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   alias Sequin.Consumers
   alias Sequin.Databases
+  alias Sequin.Health
   alias Sequin.Repo
 
   @impl Phoenix.LiveView
@@ -11,6 +12,15 @@ defmodule SequinWeb.DatabasesLive.Show do
     case Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, database} ->
         database = Repo.preload(database, replication_slot: [:http_pull_consumers, :http_push_consumers])
+
+        # Fetch initial health
+        {:ok, health} = Health.get(database)
+        database = Map.put(database, :health, health)
+
+        if connected?(socket) do
+          Process.send_after(self(), :update_health, 1000)
+        end
+
         {:ok, assign(socket, database: database, refreshing_tables: false)}
 
       {:error, _} ->
@@ -57,6 +67,19 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 1000)
+
+    case Health.get(socket.assigns.database) do
+      {:ok, health} ->
+        updated_database = Map.put(socket.assigns.database, :health, health)
+        {:noreply, assign(socket, database: updated_database)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_info({ref, {:ok, updated_db}}, socket) do
     Process.demonitor(ref, [:flush])
     {:noreply, assign(socket, database: updated_db, refreshing_tables: false)}
@@ -122,7 +145,8 @@ defmodule SequinWeb.DatabasesLive.Show do
       updated_at: database.updated_at,
       consumers:
         encode_consumers(database.replication_slot.http_pull_consumers, database) ++
-          encode_consumers(database.replication_slot.http_push_consumers, database)
+          encode_consumers(database.replication_slot.http_push_consumers, database),
+      health: Health.to_external(database.health)
     }
   end
 

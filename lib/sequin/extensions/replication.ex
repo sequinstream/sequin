@@ -22,6 +22,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.Health
   alias Sequin.Replication.Message
 
   require Logger
@@ -42,6 +43,7 @@ defmodule Sequin.Extensions.Replication do
       field :last_committed_lsn, integer(), default: 0
       field :publication, String.t()
       field :slot_name, String.t()
+      field :postgres_database, PostgresDatabase.t()
       field :step, :disconnected | :streaming
       field :test_pid, pid()
       field :connection, map()
@@ -55,6 +57,7 @@ defmodule Sequin.Extensions.Replication do
     connection = Keyword.fetch!(opts, :connection)
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
+    postgres_database = Keyword.fetch!(opts, :postgres_database)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
@@ -70,6 +73,7 @@ defmodule Sequin.Extensions.Replication do
       id: id,
       publication: publication,
       slot_name: slot_name,
+      postgres_database: postgres_database,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
@@ -122,6 +126,7 @@ defmodule Sequin.Extensions.Replication do
   @impl Postgrex.ReplicationConnection
   def handle_connect(state) do
     Logger.debug("[Replication] Handling connect")
+    Health.update(state.postgres_database, :replication_connected, :initializing)
 
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
@@ -145,17 +150,26 @@ defmodule Sequin.Extensions.Replication do
       |> Decoder.decode_message()
       |> process_message(state)
 
+    Health.update(state.postgres_database, :replication_messages, :healthy)
+
     if next_state.last_committed_lsn == state.last_committed_lsn do
       {:noreply, next_state}
     else
       {:noreply, ack_message(next_state.last_committed_lsn), next_state}
     end
+  rescue
+    e ->
+      Logger.error("Error processing message: #{inspect(e)}")
+      Health.update(state.postgres_database, :replication_messages, :unhealthy)
+      reraise e, __STACKTRACE__
   end
 
   # keepalive
   # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
   # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
+    Health.update(state.postgres_database, :replication_connected, :healthy)
+
     messages =
       case reply do
         1 ->

@@ -2,6 +2,7 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import {
+    AlertCircle,
     ChevronDown,
     Radio,
     ArrowRightToLine,
@@ -17,15 +18,11 @@
     DropdownMenuTrigger,
   } from "$lib/components/ui/dropdown-menu";
   import { formatRelativeTimestamp } from "$lib/utils";
-  // import { Input } from "$lib/components/ui/input";
-  // import { Label } from "$lib/components/ui/label";
-  // import {
-  //   Dialog,
-  //   DialogContent,
-  //   DialogHeader,
-  //   DialogTitle,
-  //   DialogTrigger,
-  // } from "$lib/components/ui/dialog";
+  import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+  } from "$lib/components/ui/alert";
 
   export let consumers: Array<{
     id: string;
@@ -35,74 +32,96 @@
     status: "active" | "disabled";
     database_name: string;
   }>;
-  // export let formErrors;
   export let live: any;
-
-  let newConsumerName = "";
-  let dialogOpen = false;
+  export let hasDatabases: boolean;
 
   function handleConsumerClick(id: string) {
     live.pushEvent("consumer_clicked", { id });
   }
-
-  function handleSubmit() {
-    live.pushEvent("consumer_submitted", { name: newConsumerName });
-    newConsumerName = "";
-    dialogOpen = false;
-  }
 </script>
 
 <div class="container mx-auto py-10">
+  {#if !hasDatabases}
+    <Alert class="bg-[#0A0A0A] border-[#1F1F1F] text-white w-full mb-8">
+      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
+        <AlertCircle class="h-5 w-5" style="color: white" />
+        <AlertTitle class="text-lg font-semibold">
+          First, you need to connect to a database
+        </AlertTitle>
+        <AlertDescription class="text-[#A1A1AA] col-start-2">
+          Sequin must be connected to at least one Postgres database before you
+          can create a consumer.
+        </AlertDescription>
+
+        <a
+          href="/databases/new"
+          data-phx-link="redirect"
+          data-phx-link-state="push"
+          class="col-start-2"
+        >
+          <Button
+            variant="default"
+            class="bg-matcha-600 text-white border-matcha-700 hover:bg-matcha-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+          >
+            Connect database
+          </Button>
+        </a>
+      </div>
+    </Alert>
+  {/if}
+
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Radio class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">Consumers</h1>
     </div>
-    <div class="relative inline-block text-left">
-      <div class="inline-flex rounded-md shadow-sm">
-        <a
-          href="/consumers/new"
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          <Button class="rounded-r-none" variant="default"
-            >Create Consumer</Button
+    {#if hasDatabases}
+      <div class="relative inline-block text-left">
+        <div class="inline-flex rounded-md shadow-sm">
+          <a
+            href="/consumers/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
-        </a>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild let:builder>
-            <Button
-              variant="default"
-              builders={[builder]}
-              class="px-2 rounded-l-none border-l border-primary/20"
+            <Button class="rounded-r-none" variant="default"
+              >Create Consumer</Button
             >
-              <ChevronDown class="h-4 w-4" />
-              <span class="sr-only">Open options</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <a
-              href="/consumers/new?kind=push"
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <DropdownMenuItem class="cursor-pointer">
-                Quick create Push Consumer
-              </DropdownMenuItem>
-            </a>
-            <a
-              href="/consumers/new?kind=pull"
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <DropdownMenuItem class="cursor-pointer">
-                Quick create Pull Consumer
-              </DropdownMenuItem>
-            </a>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </a>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild let:builder>
+              <Button
+                variant="default"
+                builders={[builder]}
+                class="px-2 rounded-l-none border-l border-primary/20"
+              >
+                <ChevronDown class="h-4 w-4" />
+                <span class="sr-only">Open options</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <a
+                href="/consumers/new?kind=push"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Quick create Push Consumer
+                </DropdownMenuItem>
+              </a>
+              <a
+                href="/consumers/new?kind=pull"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Quick create Pull Consumer
+                </DropdownMenuItem>
+              </a>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </div>
+    {/if}
   </div>
 
   <Table.Root>
@@ -163,3 +182,20 @@
     </Table.Body>
   </Table.Root>
 </div>
+
+<style>
+  :global(.alert) {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

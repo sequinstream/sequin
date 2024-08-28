@@ -70,7 +70,7 @@
 </script>
 
 <FullPageModal
-  title="Create Database"
+  title="Connect Database"
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -258,7 +258,7 @@ create publication {database.publication_name ||
           {:else if isEdit}
             Update Database
           {:else}
-            Create Database
+            Connect Database
           {/if}
         </Button>
       </CardContent>

@@ -83,6 +83,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       message: "Database name must be unique",
       error_key: :name
     )
+    |> Sequin.Changeset.validate_name()
   end
 
   def create_changeset(pd, attrs) do

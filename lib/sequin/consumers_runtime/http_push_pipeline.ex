@@ -61,7 +61,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         message
 
       {:error, reason} ->
-        Health.update(consumer, :push, :unhealthy, reason)
+        Health.update(consumer, :push, :error, reason)
 
         Logger.error("Failed to push message: #{inspect(reason)}")
         Broadway.Message.failed(message, reason)
@@ -83,6 +83,15 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         ensure_status(response)
 
       {:error, %Mint.TransportError{reason: reason}} ->
+        {:error,
+         Error.service(
+           service: :http_endpoint,
+           code: "transport_error",
+           message: "POST to webhook endpoint failed",
+           details: reason
+         )}
+
+      {:error, %Req.TransportError{reason: reason}} ->
         {:error,
          Error.service(
            service: :http_endpoint,

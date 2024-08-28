@@ -3,6 +3,7 @@ defmodule Sequin.Factory.AccountsFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Accounts.Account
+  alias Sequin.Accounts.User
   alias Sequin.Factory
   alias Sequin.Repo
 
@@ -54,6 +55,35 @@ defmodule Sequin.Factory.AccountsFactory do
     attrs
     |> Map.put(:account_id, account_id)
     |> api_key()
+    |> Repo.insert!()
+  end
+
+  def user(attrs \\ []) do
+    merge_attributes(
+      %User{
+        name: "User #{:rand.uniform(1000)}",
+        email: "user#{Factory.unique_integer()}@example.com",
+        account_id: Factory.uuid(),
+        inserted_at: Factory.utc_datetime(),
+        updated_at: Factory.utc_datetime()
+      },
+      attrs
+    )
+  end
+
+  def user_attrs(attrs \\ []) do
+    attrs
+    |> user()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_user!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> insert_account!().id end)
+
+    attrs
+    |> user()
+    |> Map.put(:account_id, account_id)
     |> Repo.insert!()
   end
 end

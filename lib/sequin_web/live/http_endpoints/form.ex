@@ -5,12 +5,14 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Error
+  alias Sequin.Name
 
   @parent_id "http_endpoints_form"
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     is_edit? = Map.has_key?(params, "id")
+    base_params = if is_edit?, do: %{}, else: %{"name" => Name.generate(99)}
 
     case fetch_or_build_http_endpoint(socket, params) do
       {:ok, http_endpoint} ->
@@ -22,7 +24,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
             submit_error: nil,
             http_endpoint: http_endpoint
           )
-          |> put_changeset(%{"http_endpoint" => %{}})
+          |> put_changeset(%{"http_endpoint" => base_params})
 
         {:ok, socket}
 

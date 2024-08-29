@@ -84,7 +84,6 @@ if config_env() == :prod do
     ]
 
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-  config :sequin, self_hosted: false
 
   # ## SSL Support
   #

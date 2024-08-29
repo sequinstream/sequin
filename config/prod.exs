@@ -7,6 +7,8 @@ import Config
 # before starting your production server.
 config :logger, level: :info
 
+config :sequin, self_hosted: false
+
 # Configures Swoosh API Client
 config :swoosh, api_client: Swoosh.ApiClient.Finch, finch_name: Sequin.Finch
 

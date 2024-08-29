@@ -49,6 +49,7 @@ defmodule Sequin.MixProject do
       {:phoenix_live_dashboard, "~> 0.8.3"},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},
       {:styler, "~> 1.0.0-rc.1", only: [:dev, :test], runtime: false},
+      {:logger_json, "~> 6.0"},
       {:swoosh, "~> 1.5"},
       {:finch, "~> 0.13"},
       {:telemetry_metrics, "~> 1.0"},

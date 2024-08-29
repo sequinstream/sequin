@@ -13,8 +13,12 @@ defmodule Sequin.Accounts.UserNotifier do
       |> subject(subject)
       |> text_body(body)
 
-    with {:ok, _metadata} <- Mailer.deliver(email) do
-      {:ok, email}
+    if Application.get_env(:sequin, :env) == :prod do
+      {:ok, :not_sent}
+    else
+      with {:ok, _metadata} <- Mailer.deliver(email) do
+        {:ok, email}
+      end
     end
   end
 

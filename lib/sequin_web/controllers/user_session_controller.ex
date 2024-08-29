@@ -53,6 +53,7 @@ defmodule SequinWeb.UserSessionController do
 
   defp handle_oauth_callback(conn, user_data, _token) do
     %{"email" => email, "name" => name, "sub" => github_id} = user_data
+    github_id = to_string(github_id)
 
     case Accounts.get_user_by_auth_provider_id(:github, github_id) do
       nil ->

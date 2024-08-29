@@ -43,7 +43,7 @@ if config_env() == :prod do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST") || "sequin.com"
+  host = System.get_env("PHX_HOST") || "sequinstream.com"
   port = String.to_integer(System.get_env("PORT") || "7376")
 
   repo_config =

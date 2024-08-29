@@ -18,8 +18,16 @@ defmodule Sequin.Metrics do
     Store.get_count("consumer_messages_processed:#{id}")
   end
 
-  def incr_consumer_messages_processed_throughput(%{id: id}) do
+  def incr_consumer_messages_processed_throughput(consumer, count \\ 1)
+
+  def incr_consumer_messages_processed_throughput(_consumer, 0), do: :ok
+
+  def incr_consumer_messages_processed_throughput(%{id: id}, 1) do
     Store.incr_throughput("consumer_messages_processed_throughput:#{id}")
+  end
+
+  def incr_consumer_messages_processed_throughput(consumer, count) when count > 1 do
+    Enum.each(1..count, fn _ -> incr_consumer_messages_processed_throughput(consumer) end)
   end
 
   def get_consumer_messages_processed_throughput(%{id: id}) do

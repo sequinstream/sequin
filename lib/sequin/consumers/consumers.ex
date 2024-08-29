@@ -742,9 +742,7 @@ defmodule Sequin.Consumers do
     Health.update(consumer, :acknowledge, :healthy)
     Metrics.incr_consumer_messages_processed_count(consumer, count)
 
-    Enum.each(0..count, fn _ ->
-      Metrics.incr_consumer_messages_processed_throughput(consumer)
-    end)
+    Metrics.incr_consumer_messages_processed_throughput(consumer, count)
 
     :ok
   end
@@ -767,10 +765,7 @@ defmodule Sequin.Consumers do
     Health.update(consumer, :acknowledge, :healthy)
 
     Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
-
-    Enum.each(0..(count_deleted + count_updated), fn _ ->
-      Metrics.incr_consumer_messages_processed_throughput(consumer)
-    end)
+    Metrics.incr_consumer_messages_processed_throughput(consumer, count_deleted + count_updated)
 
     :ok
   end

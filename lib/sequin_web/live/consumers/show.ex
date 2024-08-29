@@ -32,7 +32,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     consumer = %{consumer | health: health}
     socket = assign(socket, :consumer, consumer)
     socket = assign(socket, :api_token, api_token)
-    socket = assign(socket, :host, "http://localhost:4000")
+    socket = assign(socket, :host, SequinWeb.Endpoint.url())
     socket = assign_metrics(socket)
 
     if connected?(socket) do

@@ -13,7 +13,7 @@ config :sequin, self_hosted: false
 config :swoosh, Sequin.Mailer, adapter: Swoosh.Adapters.Sendgrid
 
 # Disable Swoosh Local Memory Storage
-config :swoosh, local: false
+config :swoosh, local: false, api_client: Swoosh.ApiClient.Req
 
 # Do not print debug messages in production
 

@@ -64,6 +64,7 @@ defmodule Sequin.Factory.AccountsFactory do
   end
 
   def user(attrs \\ []) do
+    attrs = Map.new(attrs)
     {auth_provider, attrs} = Map.pop_lazy(attrs, :auth_provider, fn -> Factory.one_of([:identity, :github]) end)
 
     {auth_provider_id, attrs} =

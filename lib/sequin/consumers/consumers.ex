@@ -976,7 +976,7 @@ defmodule Sequin.Consumers do
       Health.update(
         consumer,
         :filters,
-        :unhealthy,
+        :error,
         Error.service(
           code: :argument_error,
           message: Exception.message(error)

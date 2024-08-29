@@ -48,8 +48,8 @@ defmodule Sequin.Health.HttpEndpointHealthChecker do
         error = Error.service(service: :http_endpoint, message: "Invalid URL")
         Health.update(endpoint, :reachable, :error, error)
 
-      {:error, reason} when is_exception(reason) ->
-        error = Error.service(service: :http_endpoint, message: Exception.message(reason))
+      {:error, reason} when is_atom(reason) ->
+        error = Error.service(service: :http_endpoint, message: Atom.to_string(reason))
         Health.update(endpoint, :reachable, :error, error)
     end
   rescue

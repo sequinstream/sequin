@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     ArrowLeft,
-    Activity,
     CheckCircle,
     Clock,
     RefreshCw,
@@ -16,7 +15,6 @@
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as AlertDialog from "$lib/components/ui/alert-dialog";
   import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
-  import HealthDisplay from "$lib/health/HealthComponent.svelte";
   import HealthComponent from "$lib/health/HealthComponent.svelte";
   import type { Health } from "$lib/health/Types";
 

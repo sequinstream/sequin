@@ -103,7 +103,7 @@ defmodule Sequin.Metrics.Store do
     end
   end
 
-  @spec handle_response(Redix.command_result()) :: {:ok, any()} | {:error, Error.t()}
+  @spec handle_response(any()) :: {:ok, any()} | {:error, Error.t()}
   defp handle_response({:ok, response}), do: {:ok, response}
   defp handle_response({:error, error}), do: {:error, Error.service(entity: :redis, details: %{error: error})}
 end

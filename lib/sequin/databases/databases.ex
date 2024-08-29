@@ -62,9 +62,8 @@ defmodule Sequin.Databases do
 
   def create_db_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
-      with {:ok, db} <- create_db_for_account(account_id, attrs),
-           :ok <- update_tables(db) do
-        db
+      with {:ok, db} <- create_db_for_account(account_id, attrs) do
+        update_tables(db)
       end
     end)
   end
@@ -184,7 +183,7 @@ defmodule Sequin.Databases do
   # This query checks on db $1, if user has grant $2
   @db_privilege_query "select has_database_privilege($1, $2);"
 
-  @spec test_permissions(%PostgresDatabase{}) :: :ok | {:error, Error.Validation.t()} | {:error, Postgrex.Error.t()}
+  @spec test_permissions(%PostgresDatabase{}) :: :ok | {:error, Error.ValidationError.t()} | {:error, Postgrex.Error.t()}
   def test_permissions(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
       with {:ok, %{rows: [[result]]}} <- Postgrex.query(conn, @db_privilege_query, [db.database, "connect"]) do

@@ -58,6 +58,9 @@
   export let database: PostgresDatabase;
   export let live: any;
   export let parent: string;
+  export let metrics: {
+    avg_latency: number;
+  };
 
   function pushEvent(event: string, params = {}, callback: any = () => {}) {
     live.pushEventTo("#" + parent, event, params, callback);
@@ -149,7 +152,7 @@
             <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
             <Clock class="h-5 w-5 text-blue-500" />
           </div>
-          <div class="text-4xl font-bold">{database.queue_target} ms</div>
+          <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
         </CardContent>
       </Card>
     </div>
@@ -196,7 +199,7 @@
         {#if database.consumers && database.consumers.length > 0}
           <div class="flex flex-wrap gap-4">
             {#each database.consumers as consumer}
-              <Card class="w-1/3">
+              <Card class="w-full">
                 <CardContent class="p-4">
                   <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center">

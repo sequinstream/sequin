@@ -5,6 +5,7 @@ defmodule Sequin.Health.HttpEndpointHealthChecker do
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Metrics
 
   require Logger
 
@@ -32,12 +33,23 @@ defmodule Sequin.Health.HttpEndpointHealthChecker do
   end
 
   defp check_endpoint(endpoint) do
-    case Consumers.test_reachability(endpoint) do
-      {:ok, :reachable} ->
-        Health.update(endpoint, :reachable, :healthy)
+    with {:ok, :reachable} <- Consumers.test_reachability(endpoint),
+         before_connect_time = System.monotonic_time(:millisecond),
+         {:ok, :connected} <- Consumers.test_connect(endpoint) do
+      after_connect_time = System.monotonic_time(:millisecond)
+      Health.update(endpoint, :reachable, :healthy)
+      Metrics.incr_http_endpoint_avg_latency(endpoint, after_connect_time - before_connect_time)
+    else
+      {:error, :unreachable} ->
+        error = Error.service(service: :http_endpoint, message: "Endpoint unreachable")
+        Health.update(endpoint, :reachable, :error, error)
 
-      {:error, reason} ->
-        error = Error.service(service: :http_endpoint, message: "Endpoint unreachable", details: %{reason: reason})
+      {:error, :invalid_url} ->
+        error = Error.service(service: :http_endpoint, message: "Invalid URL")
+        Health.update(endpoint, :reachable, :error, error)
+
+      {:error, reason} when is_exception(reason) ->
+        error = Error.service(service: :http_endpoint, message: Exception.message(reason))
         Health.update(endpoint, :reachable, :error, error)
     end
   rescue

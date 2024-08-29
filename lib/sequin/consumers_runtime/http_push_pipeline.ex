@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Metrics
   alias Sequin.Repo
 
   require Logger
@@ -57,6 +58,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     case push_message(http_endpoint, consumer_event.data, req_opts) do
       :ok ->
         Health.update(consumer, :push, :healthy)
+        Metrics.incr_http_endpoint_throughput(http_endpoint)
+        :ok
 
         message
 

@@ -18,6 +18,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Metrics
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
@@ -732,33 +733,44 @@ defmodule Sequin.Consumers do
 
   @spec ack_messages(consumer(), [integer()]) :: :ok
   def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
-    {_, _} =
+    {count, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.delete_all()
 
     Health.update(consumer, :acknowledgement, :healthy)
+    Metrics.incr_consumer_messages_processed_count(consumer, count)
+
+    Enum.each(0..count, fn _ ->
+      Metrics.incr_consumer_messages_processed_throughput(consumer)
+    end)
 
     :ok
   end
 
   @spec ack_messages(consumer(), [String.t()]) :: :ok
   def ack_messages(%{message_kind: :record} = consumer, ack_ids) do
-    {_, _} =
+    {count_deleted, _} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> ConsumerRecord.where_state_not(:pending_redelivery)
       |> Repo.delete_all()
 
-    {_, _} =
+    {count_updated, _} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
     Health.update(consumer, :acknowledgement, :healthy)
+
+    Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
+
+    Enum.each(0..(count_deleted + count_updated), fn _ ->
+      Metrics.incr_consumer_messages_processed_throughput(consumer)
+    end)
 
     :ok
   end
@@ -856,6 +868,30 @@ defmodule Sequin.Consumers do
         case :inet.gethostbyname(String.to_charlist(host)) do
           {:ok, _} -> {:ok, :reachable}
           {:error, reason} -> {:error, reason}
+        end
+
+      _ ->
+        {:error, :invalid_url}
+    end
+  end
+
+  def test_connect(%HttpEndpoint{} = http_endpoint) do
+    case URI.parse(http_endpoint.base_url) do
+      %URI{host: host, port: port} when is_binary(host) ->
+        # Use default HTTP/HTTPS ports if not specified
+        port = port || if http_endpoint.base_url =~ ~r/^https:/, do: 443, else: 80
+
+        # Convert host to charlist as required by :gen_tcp.connect
+        host_charlist = String.to_charlist(host)
+
+        # Attempt to establish a TCP connection
+        case :gen_tcp.connect(host_charlist, port, [], 5000) do
+          {:ok, socket} ->
+            :gen_tcp.close(socket)
+            {:ok, :connected}
+
+          {:error, reason} ->
+            {:error, reason}
         end
 
       _ ->

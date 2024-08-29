@@ -5,7 +5,7 @@
     Database,
     Activity,
     ExternalLink,
-    ArrowRightToLine,
+    ArrowUpRight,
     ArrowLeftFromLine,
     HelpCircle,
     SquareStack,
@@ -27,6 +27,7 @@
   import HealthComponent from "../health/HealthComponent.svelte";
 
   export let consumer;
+  export let metrics;
   export let live;
   export let parent;
 
@@ -72,8 +73,8 @@
             <CheckCircle2 class="h-5 w-5 text-green-500" />
           </div>
           <span class="text-2xl font-bold">
-            {consumer.messages_processed
-              ? consumer.messages_processed.toLocaleString()
+            {metrics.messages_processed_count
+              ? metrics.messages_processed_count.toLocaleString()
               : "N/A"}
           </span>
         </CardContent>
@@ -81,11 +82,11 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
-            <Clock class="h-5 w-5 text-blue-500" />
+            <span class="text-sm font-medium text-gray-500">Throughput</span>
+            <ArrowUpRight class="h-5 w-5 text-blue-500" />
           </div>
           <span class="text-2xl font-bold"
-            >{consumer.avg_latency ?? "N/A"} ms</span
+            >{metrics.messages_processed_throughput ?? "N/A"}/s</span
           >
         </CardContent>
       </Card>

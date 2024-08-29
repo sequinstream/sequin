@@ -5,6 +5,7 @@ defmodule Sequin.Health.PostgresDatabaseHealthChecker do
   alias Sequin.Databases
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Metrics
 
   require Logger
 
@@ -33,8 +34,11 @@ defmodule Sequin.Health.PostgresDatabaseHealthChecker do
 
   defp check_database(database) do
     with :ok <- Databases.test_tcp_reachability(database),
+         before_connect = System.monotonic_time(:millisecond),
          :ok <- Databases.test_connect(database) do
+      after_connect = System.monotonic_time(:millisecond)
       Health.update(database, :reachable, :healthy)
+      Metrics.incr_database_avg_latency(database, after_connect - before_connect)
     else
       {:error, error} when is_exception(error) ->
         error = Error.service(service: :postgres_database, message: Exception.message(error))

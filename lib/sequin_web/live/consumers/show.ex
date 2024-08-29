@@ -6,6 +6,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Health
+  alias Sequin.Metrics
   alias Sequin.Repo
   alias SequinWeb.ConsumersLive.Form
 
@@ -26,12 +27,15 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:ok, health} = Health.get(consumer)
 
     consumer = %{consumer | health: health}
+    socket = assign(socket, :consumer, consumer)
+    socket = assign_metrics(socket)
 
     if connected?(socket) do
       Process.send_after(self(), :update_health, 1000)
+      Process.send_after(self(), :update_metrics, 1000)
     end
 
-    {:ok, assign(socket, consumer: consumer)}
+    {:ok, socket}
   end
 
   @impl Phoenix.LiveView
@@ -63,12 +67,16 @@ defmodule SequinWeb.ConsumersLive.Show do
         <% {:show, %HttpPushConsumer{}} -> %>
           <.svelte
             name="consumers/ShowHttpPush"
-            props={%{consumer: encode_consumer(@consumer), parent: "consumer-show"}}
+            props={
+              %{consumer: encode_consumer(@consumer), parent: "consumer-show", metrics: @metrics}
+            }
           />
         <% {:show, %HttpPullConsumer{}} -> %>
           <.svelte
             name="consumers/ShowHttpPull"
-            props={%{consumer: encode_consumer(@consumer), parent: "consumer-show"}}
+            props={
+              %{consumer: encode_consumer(@consumer), parent: "consumer-show", metrics: @metrics}
+            }
           />
       <% end %>
     </div>
@@ -117,6 +125,25 @@ defmodule SequinWeb.ConsumersLive.Show do
       {:error, _} ->
         {:noreply, socket}
     end
+  end
+
+  def handle_info(:update_metrics, socket) do
+    Process.send_after(self(), :update_metrics, 1000)
+    {:noreply, assign_metrics(socket)}
+  end
+
+  defp assign_metrics(socket) do
+    consumer = socket.assigns.consumer
+
+    {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
+    {:ok, messages_processed_throughput} = Metrics.get_consumer_messages_processed_throughput(consumer)
+
+    metrics = %{
+      messages_processed_count: messages_processed_count,
+      messages_processed_throughput: Float.round(messages_processed_throughput, 2)
+    }
+
+    assign(socket, :metrics, metrics)
   end
 
   defp encode_consumer(%HttpPushConsumer{} = consumer) do

@@ -4,6 +4,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
 
   alias Sequin.Consumers
   alias Sequin.Health
+  alias Sequin.Metrics
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -11,10 +12,12 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
       {:ok, http_endpoint} ->
         if connected?(socket) do
           Process.send_after(self(), :update_health, 1000)
+          Process.send_after(self(), :update_metrics, 1000)
         end
 
         {:ok, health} = Health.get(http_endpoint)
-        {:ok, assign(socket, http_endpoint: %{http_endpoint | health: health})}
+        socket = assign(socket, http_endpoint: %{http_endpoint | health: health})
+        {:ok, assign_metrics(socket)}
 
       {:error, _} ->
         {:ok, push_navigate(socket, to: ~p"/http-endpoints")}
@@ -28,6 +31,11 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     {:noreply, assign(socket, :http_endpoint, %{socket.assigns.http_endpoint | health: health})}
   end
 
+  def handle_info(:update_metrics, socket) do
+    Process.send_after(self(), :update_metrics, 1000)
+    {:noreply, assign_metrics(socket)}
+  end
+
   @impl Phoenix.LiveView
   def render(assigns) do
     assigns = assign(assigns, :parent_id, "http-endpoint-show")
@@ -36,7 +44,13 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     <div id={@parent_id}>
       <.svelte
         name="http_endpoints/Show"
-        props={%{http_endpoint: encode_http_endpoint(@http_endpoint), parent_id: @parent_id}}
+        props={
+          %{
+            http_endpoint: encode_http_endpoint(@http_endpoint),
+            parent_id: @parent_id,
+            metrics: @metrics
+          }
+        }
       />
     </div>
     """
@@ -54,6 +68,20 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     else
       {:reply, %{error: "Cannot delete HTTP endpoint with consumers."}, socket}
     end
+  end
+
+  defp assign_metrics(socket) do
+    http_endpoint = socket.assigns.http_endpoint
+
+    {:ok, throughput} = Metrics.get_http_endpoint_throughput(http_endpoint)
+    {:ok, avg_latency} = Metrics.get_http_endpoint_avg_latency(http_endpoint)
+
+    metrics = %{
+      throughput: Float.round(throughput, 2),
+      avg_latency: round(avg_latency)
+    }
+
+    assign(socket, :metrics, metrics)
   end
 
   defp encode_http_endpoint(http_endpoint) do

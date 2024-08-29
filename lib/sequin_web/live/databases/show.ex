@@ -5,7 +5,10 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Health
+  alias Sequin.Metrics
   alias Sequin.Repo
+
+  # Add this alias
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -17,11 +20,16 @@ defmodule SequinWeb.DatabasesLive.Show do
         {:ok, health} = Health.get(database)
         database = Map.put(database, :health, health)
 
+        socket = assign(socket, database: database, refreshing_tables: false)
+        # Add this line
+        socket = assign_metrics(socket)
+
         if connected?(socket) do
           Process.send_after(self(), :update_health, 1000)
+          Process.send_after(self(), :update_metrics, 1000)
         end
 
-        {:ok, assign(socket, database: database, refreshing_tables: false)}
+        {:ok, socket}
 
       {:error, _} ->
         {:ok, push_navigate(socket, to: ~p"/databases")}
@@ -80,6 +88,12 @@ defmodule SequinWeb.DatabasesLive.Show do
     end
   end
 
+  @impl Phoenix.LiveView
+  def handle_info(:update_metrics, socket) do
+    Process.send_after(self(), :update_metrics, 1000)
+    {:noreply, assign_metrics(socket)}
+  end
+
   def handle_info({ref, {:ok, updated_db}}, socket) do
     Process.demonitor(ref, [:flush])
     {:noreply, assign(socket, database: updated_db, refreshing_tables: false)}
@@ -116,11 +130,23 @@ defmodule SequinWeb.DatabasesLive.Show do
         <% :show -> %>
           <.svelte
             name="databases/Show"
-            props={%{database: encode_database(@database), parent: @parent}}
+            props={%{database: encode_database(@database), parent: @parent, metrics: @metrics}}
           />
       <% end %>
     </div>
     """
+  end
+
+  defp assign_metrics(socket) do
+    database = socket.assigns.database
+
+    {:ok, avg_latency} = Metrics.get_database_avg_latency(database)
+
+    metrics = %{
+      avg_latency: round(avg_latency)
+    }
+
+    assign(socket, :metrics, metrics)
   end
 
   defp handle_edit_finish(updated_database) do

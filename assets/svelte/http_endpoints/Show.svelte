@@ -23,6 +23,7 @@
   import HealthComponent from "../health/HealthComponent.svelte";
 
   export let http_endpoint;
+  export let metrics;
   export let live;
   export let parent_id;
 
@@ -44,11 +45,6 @@
       }
     });
   }
-
-  const metrics = {
-    throughput: 0,
-    avg_latency: 0,
-  };
 </script>
 
 <div class="min-h-screen font-sans bg-white">

@@ -7,7 +7,7 @@
     Activity,
     Globe,
     ExternalLink,
-    ArrowLeftFromLine,
+    ArrowUpRight,
     ArrowRightToLine,
     HelpCircle,
     SquareStack,
@@ -31,6 +31,7 @@
   export let consumer;
   export let live;
   export let parent;
+  export let metrics;
 
   $: healthColor =
     consumer.health > 90
@@ -83,17 +84,19 @@
             <CheckCircle2 class="h-5 w-5 text-green-500" />
           </div>
           <span class="text-2xl font-bold"
-            >{consumer.messages_processed.toLocaleString()}</span
+            >{metrics.messages_processed_count.toLocaleString()}</span
           >
         </CardContent>
       </Card>
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
-            <Clock class="h-5 w-5 text-blue-500" />
+            <span class="text-sm font-medium text-gray-500">Throughput</span>
+            <ArrowUpRight class="h-5 w-5 text-blue-500" />
           </div>
-          <span class="text-2xl font-bold">{consumer.avg_latency} ms</span>
+          <span class="text-2xl font-bold"
+            >{metrics.messages_processed_throughput} /s</span
+          >
         </CardContent>
       </Card>
     </div>

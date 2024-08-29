@@ -87,7 +87,9 @@ defmodule Sequin.Metrics.Store do
         {:ok, 0.0}
 
       {:ok, [[_oldest, oldest_score], count]} ->
-        oldest = String.to_integer(oldest_score)
+        {decimal_oldest, ""} = Decimal.parse(oldest_score)
+        oldest = Decimal.to_integer(decimal_oldest)
+
         time_diff = max(now - oldest, 1)
 
         # Nanoseconds to seconds

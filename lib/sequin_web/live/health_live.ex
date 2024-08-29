@@ -118,7 +118,13 @@ defmodule SequinWeb.HealthLive do
                 status: :healthy,
                 error: nil
               },
-              %Check{id: "ingestion", name: "Consumer ingestion", status: :initializing, error: nil},
+              %Check{
+                id: "ingestion",
+                name: "Consumer ingestion",
+                status: :initializing,
+                error: nil,
+                message: "Waiting for messages to be available"
+              },
               %Check{id: "webhooks", name: "Consumer push webhooks", status: :initializing, error: nil},
               %Check{
                 id: "http_endpoint",

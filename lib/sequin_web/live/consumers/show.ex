@@ -140,7 +140,7 @@ defmodule SequinWeb.ConsumersLive.Show do
 
     metrics = %{
       messages_processed_count: messages_processed_count,
-      messages_processed_throughput: Float.round(messages_processed_throughput, 2)
+      messages_processed_throughput: Float.round(messages_processed_throughput * 60, 1)
     }
 
     assign(socket, :metrics, metrics)

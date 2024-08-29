@@ -86,7 +86,7 @@
             <ArrowUpRight class="h-5 w-5 text-blue-500" />
           </div>
           <span class="text-2xl font-bold"
-            >{metrics.messages_processed_throughput ?? "N/A"}/s</span
+            >{metrics.messages_processed_throughput ?? "N/A"}/min</span
           >
         </CardContent>
       </Card>

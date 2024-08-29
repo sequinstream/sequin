@@ -41,18 +41,18 @@ defmodule Sequin.Metrics.StoreTest do
       assert Store.incr_throughput(ctx.key) == :ok
       assert Store.incr_throughput(ctx.key) == :ok
 
-      Process.sleep(500)
+      # We have a 60 second minimum window so 5 requests in 60 seconds is 0.0833 requests per second
+      assert {:ok, throughput} = Store.get_throughput(ctx.key)
+      assert Float.round(throughput, 3) == 0.083
+
+      assert Store.incr_throughput(ctx.key) == :ok
+      assert Store.incr_throughput(ctx.key) == :ok
+      assert Store.incr_throughput(ctx.key) == :ok
+      assert Store.incr_throughput(ctx.key) == :ok
+      assert Store.incr_throughput(ctx.key) == :ok
 
       assert {:ok, throughput} = Store.get_throughput(ctx.key)
-      assert throughput > 5.0
-      assert throughput < 10.0
-
-      # Sleep for 2 seconds to let the throughput decrease
-      Process.sleep(2000)
-
-      assert {:ok, throughput} = Store.get_throughput(ctx.key)
-      assert throughput < 5.0
-      assert throughput > 0.0
+      assert Float.round(throughput, 3) == 0.167
     end
   end
 end

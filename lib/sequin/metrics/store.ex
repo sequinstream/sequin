@@ -92,6 +92,10 @@ defmodule Sequin.Metrics.Store do
 
         # Nanoseconds to seconds
         time_diff_seconds = time_diff / 1_000_000_000
+
+        # Require at least 60 seconds to avoid spikes
+        time_diff_seconds = max(time_diff_seconds, 60)
+
         {:ok, count / time_diff_seconds}
 
       error ->

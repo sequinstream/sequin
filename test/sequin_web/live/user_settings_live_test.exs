@@ -47,7 +47,7 @@ defmodule SequinWeb.UserSettingsLiveTest do
       })
       |> render_submit()
 
-      assert Accounts.get_identity_user_by_email(user.email)
+      assert Accounts.get_user_by_email(:identity, user.email)
     end
 
     test "renders errors with invalid data (phx-change)", %{conn: conn} do
@@ -178,8 +178,8 @@ defmodule SequinWeb.UserSettingsLiveTest do
       assert path == ~p"/users/settings"
       assert %{"toast" => %{title: message}} = flash
       assert message =~ "changed your email"
-      refute Accounts.get_identity_user_by_email(user.email)
-      assert Accounts.get_identity_user_by_email(email)
+      refute Accounts.get_user_by_email(:identity, user.email)
+      assert Accounts.get_user_by_email(:identity, email)
 
       # use confirm token again
       {:error, redirect} = live(conn, ~p"/users/settings/confirm_email/#{token}")
@@ -197,7 +197,7 @@ defmodule SequinWeb.UserSettingsLiveTest do
       assert %{"toast" => %{title: message}} = flash
       assert message =~ "invalid"
       assert message =~ "expired"
-      assert Accounts.get_identity_user_by_email(user.email)
+      assert Accounts.get_user_by_email(:identity, user.email)
     end
 
     test "redirects if user is not logged in", %{token: token} do

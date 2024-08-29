@@ -35,12 +35,12 @@ defmodule Sequin.AccountsTest do
 
     test "get_user_by_email/1 returns the user with given email" do
       user = AccountsFactory.insert_user!()
-      assert fetched_user = Accounts.get_identity_user_by_email(user.email)
+      assert fetched_user = Accounts.get_user_by_email(:identity, user.email)
       assert fetched_user.id == user.id
     end
 
     test "get_user_by_email/1 returns nil for non-existent email" do
-      assert Accounts.get_identity_user_by_email("nonexistent@example.com") == nil
+      assert Accounts.get_user_by_email(:identity, "nonexistent@example.com") == nil
     end
 
     test "register_user/1 with valid data creates a user" do

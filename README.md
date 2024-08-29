@@ -60,8 +60,8 @@ For full documentation, visit [sequinstream.com/docs](http://sequinstream.com/do
 
 Sequin is available as a cloud version or self-hosted. See the following docs to get up and running quickly:
 
-* [Sequin cloud quickstart](#TBD)
-* [Sequin self-hosted quickstart](#TBD)
+* [Sequin cloud quickstart](https://sequinstream.com/docs/quickstart)
+* [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/installation)
 
 ### SDKs
 
@@ -75,4 +75,4 @@ Pull and acknowledge messages or dynamically create new consumers:
 
 ## Contribute
 
-Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or send us a note: [devs@sequinstream.com](mailto:devs@sequinstream.com)
+Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or send us a note: [support@sequinstream.com](mailto:support@sequinstream.com)

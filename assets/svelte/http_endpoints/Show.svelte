@@ -107,7 +107,7 @@
             <span class="text-sm font-medium text-gray-500">Throughput</span>
             <Activity class="h-5 w-5 text-blue-500" />
           </div>
-          <span class="text-2xl font-bold">{metrics.throughput} req/s</span>
+          <span class="text-2xl font-bold">{metrics.throughput} req/min</span>
         </CardContent>
       </Card>
       <Card>

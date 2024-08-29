@@ -77,7 +77,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     {:ok, avg_latency} = Metrics.get_http_endpoint_avg_latency(http_endpoint)
 
     metrics = %{
-      throughput: Float.round(throughput, 2),
+      throughput: Float.round(throughput * 60, 1),
       avg_latency: round(avg_latency)
     }
 

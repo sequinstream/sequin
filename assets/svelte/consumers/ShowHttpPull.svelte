@@ -25,11 +25,14 @@
   import ShowHeader from "./ShowHeader.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import HealthComponent from "../health/HealthComponent.svelte";
+  import CodeWithSecret from "../components/CodeWithSecret.svelte";
 
   export let consumer;
   export let metrics;
   export let live;
   export let parent;
+  export let host;
+  export let api_token;
 
   $: healthColor =
     consumer.health > 90
@@ -187,6 +190,44 @@
                 {formatNumberWithCommas(consumer.max_waiting)}
               </p>
             </div> -->
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
+          <h2 class="text-lg font-semibold mb-4">
+            Receive and Acknowledge Messages
+          </h2>
+          <div class="space-y-4">
+            <div>
+              <h3 class="text-md font-semibold mb-2">Receive Messages</h3>
+              <CodeWithSecret
+                tabs={[
+                  {
+                    name: "cURL",
+                    value: `curl -X GET "${host}/api/http_pull_consumers/${consumer.name}/receive" \\
+     -H "Authorization: Bearer {{secret}}"`,
+                  },
+                ]}
+                secret={api_token.token}
+              />
+            </div>
+            <div>
+              <h3 class="text-md font-semibold mb-2">Acknowledge Messages</h3>
+              <CodeWithSecret
+                tabs={[
+                  {
+                    name: "cURL",
+                    value: `curl -X POST "${host}/api/http_pull_consumers/${consumer.name}/ack" \\
+     -H "Authorization: Bearer {{secret}}" \\
+     -H "Content-Type: application/json" \\
+     -d '{"ack_ids": ["<ack_id>"]}'`,
+                  },
+                ]}
+                secret={api_token.token}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

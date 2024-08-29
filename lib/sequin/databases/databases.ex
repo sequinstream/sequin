@@ -60,6 +60,15 @@ defmodule Sequin.Databases do
     end
   end
 
+  def create_db_for_account_with_lifecycle(account_id, attrs) do
+    Repo.transact(fn ->
+      with {:ok, db} <- create_db_for_account(account_id, attrs),
+           :ok <- update_tables(db) do
+        db
+      end
+    end)
+  end
+
   def update_db(%PostgresDatabase{} = db, attrs) do
     res =
       db

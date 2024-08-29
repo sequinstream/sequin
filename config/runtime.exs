@@ -85,6 +85,7 @@ if config_env() == :prod do
 
   config :sequin, SequinWeb.UserSessionController,
     github: [
+      redirect_uri: "https://console.sequinstream.com/auth/github/callback",
       client_id: System.fetch_env!("GITHUB_CLIENT_ID"),
       client_secret: System.fetch_env!("GITHUB_CLIENT_SECRET")
     ]

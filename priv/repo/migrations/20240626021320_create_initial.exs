@@ -23,6 +23,8 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
       add :email, :citext, null: false
       add :hashed_password, :string, null: false
       add :confirmed_at, :utc_datetime
+      add :auth_provider, :string, null: false
+      add :auth_provider_id, :string
 
       add :account_id, references(:accounts, on_delete: :delete_all), null: false
 

@@ -61,6 +61,11 @@ config :sequin, SequinWeb.Endpoint,
   pubsub_server: Sequin.PubSub,
   live_view: [signing_salt: "Sm59ovfq"]
 
+config :sequin, SequinWeb.UserSessionController,
+  github: [
+    redirect_uri: "http://localhost:4000/auth/github/callback"
+  ]
+
 config :sequin,
   ecto_repos: [Sequin.Repo],
   env: Mix.env(),

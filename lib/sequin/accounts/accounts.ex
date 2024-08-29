@@ -23,15 +23,15 @@ defmodule Sequin.Accounts do
 
   ## Examples
 
-      iex> get_user_by_email("foo@example.com")
+      iex> get_identity_user_by_email("foo@example.com")
       %User{}
 
-      iex> get_user_by_email("unknown@example.com")
+      iex> get_identity_user_by_email("unknown@example.com")
       nil
 
   """
-  def get_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email)
+  def get_identity_user_by_email(email) when is_binary(email) do
+    Repo.get_by(User, email: email, auth_provider: :identity)
   end
 
   @doc """
@@ -47,7 +47,7 @@ defmodule Sequin.Accounts do
 
   """
   def get_user_by_email_and_password(email, password) when is_binary(email) and is_binary(password) do
-    user = Repo.get_by(User, email: email)
+    user = Repo.get_by(User, email: email, auth_provider: :identity)
     if User.valid_password?(user, password), do: user
   end
 
@@ -74,19 +74,29 @@ defmodule Sequin.Accounts do
 
   ## Examples
 
-      iex> register_user(%{field: value})
+      iex> register_user(:identity, %{field: value})
       {:ok, %User{}}
 
-      iex> register_user(%{field: bad_value})
+      iex> register_user(:identity, %{field: bad_value})
       {:error, %Ecto.Changeset{}}
 
   """
-  def register_user(attrs) do
+  def register_user(:identity, attrs) do
     Repo.transact(fn ->
       {:ok, account} = create_account(%{})
 
       %User{account_id: account.id}
       |> User.registration_changeset(attrs)
+      |> Repo.insert()
+    end)
+  end
+
+  def register_user(auth_provider, attrs) do
+    Repo.transact(fn ->
+      {:ok, account} = create_account(%{})
+
+      %User{account_id: account.id}
+      |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
       |> Repo.insert()
     end)
   end
@@ -115,7 +125,7 @@ defmodule Sequin.Accounts do
       %Ecto.Changeset{data: %User{}}
 
   """
-  def change_user_email(user, attrs \\ %{}) do
+  def change_user_email(%User{auth_provider: :identity} = user, attrs \\ %{}) do
     User.email_changeset(user, attrs, validate_email: false)
   end
 
@@ -132,7 +142,7 @@ defmodule Sequin.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
-  def apply_user_email(user, password, attrs) do
+  def apply_user_email(%User{auth_provider: :identity} = user, password, attrs) do
     user
     |> User.email_changeset(attrs)
     |> User.validate_current_password(password)
@@ -145,7 +155,7 @@ defmodule Sequin.Accounts do
   If the token matches, the user email is updated and the token is deleted.
   The confirmed_at date is also updated to the current time.
   """
-  def update_user_email(user, token) do
+  def update_user_email(%User{auth_provider: :identity} = user, token) do
     context = "change:#{user.email}"
 
     with {:ok, query} <- UserToken.verify_change_email_token_query(token, context),
@@ -157,7 +167,7 @@ defmodule Sequin.Accounts do
     end
   end
 
-  defp user_email_multi(user, email, context) do
+  defp user_email_multi(%User{auth_provider: :identity} = user, email, context) do
     changeset =
       user
       |> User.email_changeset(%{email: email})
@@ -177,7 +187,7 @@ defmodule Sequin.Accounts do
       {:ok, %{to: ..., body: ...}}
 
   """
-  def deliver_user_update_email_instructions(%User{} = user, current_email, update_email_url_fun)
+  def deliver_user_update_email_instructions(%User{auth_provider: :identity} = user, current_email, update_email_url_fun)
       when is_function(update_email_url_fun, 1) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "change:#{current_email}")
 
@@ -194,7 +204,7 @@ defmodule Sequin.Accounts do
       %Ecto.Changeset{data: %User{}}
 
   """
-  def change_user_password(user, attrs \\ %{}) do
+  def change_user_password(%User{auth_provider: :identity} = user, attrs \\ %{}) do
     User.password_changeset(user, attrs, hash_password: false)
   end
 
@@ -210,7 +220,7 @@ defmodule Sequin.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
-  def update_user_password(user, password, attrs) do
+  def update_user_password(%User{auth_provider: :identity} = user, password, attrs) do
     changeset =
       user
       |> User.password_changeset(attrs)
@@ -314,7 +324,7 @@ defmodule Sequin.Accounts do
       {:ok, %{to: ..., body: ...}}
 
   """
-  def deliver_user_reset_password_instructions(%User{} = user, reset_password_url_fun)
+  def deliver_user_reset_password_instructions(%User{auth_provider: :identity} = user, reset_password_url_fun)
       when is_function(reset_password_url_fun, 1) do
     {encoded_token, user_token} = UserToken.build_email_token(user, "reset_password")
     Repo.insert!(user_token)
@@ -354,7 +364,7 @@ defmodule Sequin.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
-  def reset_user_password(user, attrs) do
+  def reset_user_password(%User{auth_provider: :identity} = user, attrs) do
     Ecto.Multi.new()
     |> Ecto.Multi.update(:user, User.password_changeset(user, attrs))
     |> Ecto.Multi.delete_all(:tokens, UserToken.by_user_and_contexts_query(user, :all))

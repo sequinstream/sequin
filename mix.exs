@@ -34,6 +34,7 @@ defmodule Sequin.MixProject do
   defp deps do
     [
       {:argon2_elixir, "~> 3.0"},
+      {:assent, "~> 0.2.9"},
       {:phoenix, "~> 1.7.12"},
       {:phoenix_ecto, "~> 4.4"},
       {:polymorphic_embed, "~> 4.1.1"},

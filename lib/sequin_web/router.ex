@@ -27,6 +27,9 @@ defmodule SequinWeb.Router do
   scope "/", SequinWeb do
     pipe_through [:browser]
 
+    get "/auth/github", UserSessionController, :start_oauth
+    get "/auth/github/callback", UserSessionController, :callback
+
     live_session :home do
       live "/", HomeLive, :index
     end

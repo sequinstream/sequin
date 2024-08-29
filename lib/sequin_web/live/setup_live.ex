@@ -184,7 +184,7 @@ defmodule SequinWeb.SetupLive do
   end
 
   defp create_account_with_user! do
-    {:ok, _user} = Sequin.Accounts.register_user(%{email: @stub_user_email, password: @stub_user_password})
+    {:ok, _user} = Sequin.Accounts.register_user(:identity, %{email: @stub_user_email, password: @stub_user_password})
   end
 
   defp schedule_db_check do

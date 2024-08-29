@@ -35,6 +35,7 @@ defmodule Sequin.MixProject do
     [
       {:argon2_elixir, "~> 3.0"},
       {:assent, "~> 0.2.9"},
+      {:aws_rds_castore, "~> 1.2.0"},
       {:phoenix, "~> 1.7.12"},
       {:phoenix_ecto, "~> 4.4"},
       {:polymorphic_embed, "~> 4.1.1"},

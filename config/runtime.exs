@@ -21,18 +21,7 @@ if System.get_env("PHX_SERVER") do
 end
 
 if config_env() == :prod do
-  database_config =
-    if database_url = System.get_env("PG_URL") do
-      [url: database_url]
-    else
-      [
-        hostname: System.get_env("PG_HOSTNAME", "localhost"),
-        database: System.get_env("PG_DATABASE", "postgres"),
-        port: String.to_integer(System.get_env("PG_PORT", "7377")),
-        username: System.get_env("PG_USERNAME", "postgres"),
-        password: System.get_env("PG_PASSWORD", "postgres")
-      ]
-    end
+  database_url = System.fetch_env!("PG_URL")
 
   maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
 
@@ -47,11 +36,13 @@ if config_env() == :prod do
   port = String.to_integer(System.get_env("PORT") || "7376")
 
   repo_config =
-    Keyword.merge(database_config,
-      ssl: String.to_existing_atom(System.get_env("PG_SSL", "false")),
-      pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "30")),
-      socket_options: maybe_ipv6
-    )
+    [
+      ssl: true,
+      ssl_opts: AwsRdsCAStore.ssl_opts(database_url),
+      pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
+      socket_options: maybe_ipv6,
+      url: database_url
+    ]
 
   vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
 

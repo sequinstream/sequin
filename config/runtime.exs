@@ -83,6 +83,12 @@ if config_env() == :prod do
       client_secret: System.get_env("GITHUB_CLIENT_SECRET")
     ]
 
+  config :sequin, SequinWeb.UserSessionController,
+    github: [
+      client_id: System.fetch_env!("GITHUB_CLIENT_ID"),
+      client_secret: System.fetch_env!("GITHUB_CLIENT_SECRET")
+    ]
+
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   config :swoosh, Sequin.Mailer, api_key: System.fetch_env!("SENDGRID_API_KEY")

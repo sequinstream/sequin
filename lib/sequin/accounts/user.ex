@@ -63,6 +63,13 @@ defmodule Sequin.Accounts.User do
     user
     |> cast(attrs, [:email, :name, :auth_provider, :auth_provider_id])
     |> validate_required([:email, :name, :auth_provider, :auth_provider_id])
+    |> validate_email([])
+    |> unique_constraint([:auth_provider, :auth_provider_id])
+  end
+
+  # Add this function to handle GitHub profile updates
+  def github_update_changeset(user, attrs) do
+    cast(user, attrs, [:name, :email])
   end
 
   def update_changeset(user, attrs) do

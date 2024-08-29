@@ -35,7 +35,7 @@ defmodule SequinWeb.UserConfirmationInstructionsLive do
   end
 
   def handle_event("send_instructions", %{"user" => %{"email" => email}}, socket) do
-    if user = Accounts.get_identity_user_by_email(email) do
+    if user = Accounts.get_user_by_email(:identity, email) do
       Accounts.deliver_user_confirmation_instructions(
         user,
         &url(~p"/users/confirm/#{&1}")
@@ -48,7 +48,6 @@ defmodule SequinWeb.UserConfirmationInstructionsLive do
     {:noreply,
      socket
      |> put_flash(:toast, %{kind: :info, title: info})
-     |> put_flash(:info, info)
      |> redirect(to: ~p"/")}
   end
 end

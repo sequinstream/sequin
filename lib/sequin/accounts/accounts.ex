@@ -16,22 +16,42 @@ defmodule Sequin.Accounts do
   alias Sequin.Replication
   alias Sequin.Repo
 
-  ## Database getters
+  @doc """
+  Checks if any accounts exist in the database. Used to determin if setup is required during self-hosted.
+
+  Returns `true` if at least one account exists, `false` otherwise.
+
+  ## Examples
+
+      iex> any_accounts?()
+      true
+
+      iex> any_accounts?()
+      false
+
+  """
+  def any_accounts? do
+    Repo.exists?(Account)
+  end
 
   @doc """
   Gets a user by email.
 
   ## Examples
 
-      iex> get_identity_user_by_email("foo@example.com")
+      iex> get_user_by_email(:identity, "foo@example.com")
       %User{}
 
-      iex> get_identity_user_by_email("unknown@example.com")
+      iex> get_user_by_email(:identity, "unknown@example.com")
       nil
 
   """
-  def get_identity_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email, auth_provider: :identity)
+  def get_user_by_email(auth_provider, email) when is_binary(email) do
+    Repo.get_by(User, email: email, auth_provider: auth_provider)
+  end
+
+  def get_user_by_auth_provider_id(auth_provider, auth_provider_id) when is_binary(auth_provider_id) do
+    Repo.get_by(User, auth_provider_id: auth_provider_id, auth_provider: auth_provider)
   end
 
   @doc """
@@ -75,6 +95,9 @@ defmodule Sequin.Accounts do
   ## Examples
 
       iex> register_user(:identity, %{field: value})
+      {:ok, %User{}}
+
+      iex> register_user(:github, %{field: value})
       {:ok, %User{}}
 
       iex> register_user(:identity, %{field: bad_value})
@@ -498,5 +521,14 @@ defmodule Sequin.Accounts do
   """
   def change_user(%User{} = user, attrs \\ %{}) do
     User.update_changeset(user, attrs)
+  end
+
+  @doc """
+  Updates a user's GitHub profile information.
+  """
+  def update_user_github_profile(%User{} = user, attrs) do
+    user
+    |> User.github_update_changeset(attrs)
+    |> Repo.update()
   end
 end

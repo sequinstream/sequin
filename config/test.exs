@@ -1,5 +1,7 @@
 import Config
 
+alias Sequin.Test.UnboxedRepo
+
 # Only in tests, remove the complexity from the password hashing algorithm
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
@@ -8,8 +10,6 @@ config :argon2_elixir, t_cost: 1, m_cost: 8
 # The MIX_TEST_PARTITION environment variable can be used
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
-alias Sequin.Test.UnboxedRepo
-
 config :logger, level: :warning
 
 config :phoenix, :plug_init_mode, :runtime

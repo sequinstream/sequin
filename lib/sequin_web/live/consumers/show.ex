@@ -67,7 +67,7 @@ defmodule SequinWeb.ConsumersLive.Show do
             id="edit-consumer"
             consumer={@consumer}
             on_finish={&handle_edit_finish/1}
-            current_account={@current_account}
+            current_user={@current_user}
           />
         <% {:show, %HttpPushConsumer{}} -> %>
           <.svelte

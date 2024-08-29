@@ -1,76 +1,108 @@
 ---
 title: 'Overview'
-description: 'Sequin has three core concepts: streams, messages, and consumers.'
+description: 'Sequin has three core concepts: database change data capture (CDC), streams, and consumers.'
 ---
 
-You send [**messages**](#messages) to [**streams**](#streams). Then, you can use [**consumers**](#consumers) to filter and receive messages. Consumers process messages exactly once.
+1. Sequin detects every change in your database (CDC) using the Write Ahead Log (WAL).
+2. Those changes are then captured into a durable, persistent queue of messages called a [**stream**](#streams).
+3. You then use [**consumers**](#consumers) to filter, transform, and send those messages to your application or another service.
 
-## Messages
+## Database change data capture (CDC)
 
-A **message** is stored as a row in Postgres. Messages consist of a `key` and a `data` payload.
+Sequin uses the Write Ahead Log (WAL) to detect changes in your database. The WAL is a log of all the changes that have been made to your database.
 
-### Key
+When connecting Sequin to your database, you'll configure the WAL by creating a replication slot and a publication. The publication determines which tables are captured by the replication slot.
 
-Sequin uses **key-based routing**. In Sequin, a **key** is a string that serves two purposes:
-
-1. It’s the unique key for the message
-2. It contains attributes that can be used for consumer filtering
-
-In Kafka, you route on write into a topic. But with Sequin, you route on read. Because consumers filter by key, you should choose the format of your keys intentionally.
-
-For example, an e-commerce company might choose a format like:
-
-`orders.[customer_id].[order_id]`
-
-And the keys might look like:
-
-- `orders.cus_a.ord_1`
-- `orders.cus_b.ord_2`
-- `orders.cus_a.ord_3`
+This architecture allows Sequin to provide transactional guarantees and never miss a change, even across long periods of downtime.
 
 ## Streams
 
-A **stream** is a table of messages. When you send a message to Sequin, it is stored in a stream. [Consumers](#consumers) are how you read messages from the stream with delivery guarantees.
+Each change in your database is captured into a durable, persistent sequence of messages called a stream. By storing messages in a stream, Sequin can provide exactly-once processing guarantees.
 
-If you're just starting out, using a single stream for all your data is sufficient. You'll use separate streams when you want to have different policies for a set of messages. They can also be helpful when scaling, as each stream is a separate Postgres table under the hood.
+You'll configure a stream in the process of creating a new consumer (there is a one-to-one relationship between streams and consumers).
 
-[Read more about streams](/core/streams).
+There are three types of streams:
 
-### Consumers
+### Change stream
 
-A **consumer** is how to read messages with delivery guarantees.
+Change streams are useful for applications that need to process every change in your database as a unique event.
 
-#### Key filter
+* **Change types**: A change stream contains every insert, update, and delete and captures both the old and new values of the changed record.
+* **Timeframe**: A change stream only processes new changes. There are no backwards-looking changes.
+* **Retention**: Once a message in a change stream is acknowledged by a consumer, it is removed from the stream. There are no replays or rewinds.
 
-Consumers are configured with a **key filter** which determines which messages are available to that consumer. These filters follow the [NATS standard](https://docs.nats.io/nats-concepts/subjects). The key filter can match on tokens and can include wildcards:
+### Change stream with retention (coming soon)
 
-- The wildcard `*` matches a single token.
-- The wildcard `>` will match one or more tokens and can only appear at the end of the filter.
+As the name suggests, change streams with retention are the same as change streams, but they have a configurable retention period.
 
-For instance, `orders.cus_a.*` will return all orders for `cus_a` while `orders.>` will return every order for all customers.
+This is useful for applications that need to process changes and retain them for a period of time (i.e. audit logs).
 
-#### At-least-once with retries
+* **Change types**: A change stream contains every insert, update, and delete and captures both the old and new values of the changed record.
+* **Timeframe**: A change stream only processes new changes from a point in time forward.
+* **Retention**: Messages are not removed from the stream when acknowledged by a consumer. This means that a change stream can be replayed or rewound.
 
-Your system receives messages from a consumer and then acks them once they have been processed.
+### Sync stream
 
-If your system doesn’t ack a message within a consumer’s `ack-wait-ms` period, the message will become available again to that consumer. (`ack-wait-ms` is configurable.)
+Sync streams are useful for applications that need to know the current state of a record, or for applications that need to replay changes from a point in time.
 
-#### Concurrent
+* **Change types**: A sync stream contains one message that represents the current state of each record in your database. A sync stream only captures inserts and updates. Hard deletes are not captured.
+* **Timeframe**: A sync stream can backfill the full history of your database, or capture changes from a point in time forward.
+* **Retention**: Messages in a sync stream are not removed when acknowledged by a consumer. This means that a sync stream can be replayed or rewound.
 
-Multiple workers can concurrently receive messages from a consumer. Messages are only delivered once during the `ack-wait-ms` period. If the message is not ack’d before the period elapses, the message becomes available again.
+## Consumers
 
-[Read more about consumers](/core/consumers).
+Consumers allow you to filter, transform, and send messages from a stream to your application or another service. A consumer will process messages for one stream (there is a one-to-one relationship between consumers and streams).
+
+### Filtering
+
+ You can filter which messages are processed in two ways:
+ 1. Operation type: You can choose to only process `insert`, `update`, or `delete` messages.
+ 2. Condition: You can choose to only process messages that match a SQL `WHERE` clause.
+
+### Transforming (coming soon)
+
+You can transform messages in a stream using LUA. This is useful for transforming the data into a format that your application needs.
+
+### HTTP interface
+
+Consumers can push messsages to your application via webhooks, or you can pull messages from the consumer using Sequin's HTTP API.
+
+**Push (webhooks)**
+
+When using webhooks, Sequin will send POST requests to the webhook URL you provide.
+
+**Pull**
+
+You can pull messages from the consumer using Sequin's HTTP API or SDKs. This gives your application more control over how messages are processed.
+
+### Acknowledgement
+
+To provide exactly-once processing, Sequin requires that every message is acknowledged by a consumer.
+
+* **Push consumers:** A message is acknowledge by push consumers when Sequin receives a `200 OK` response to a webhook. If any other response is received, the message is not acknowledged (i.e. `nack`) and will be retried. Similarly, if the message is not acknowledged within the consumer's retry limit, the message will be marked as `nack` and retried.
+* **Pull consumers:** A message is explicitly acknowledged by pull consumers by sending a message's `ack_id` in a subsequent `POST /consumers/:consumer_id/ack` request. A message can be explicitly not acknowledged (i.e. `nack`) by sending a messages `ack_id` in a subsequent `POST /consumers/:consumer_id/nack` request. Similarly, if the message is not acknowledged within the pull consumer's visability timeout, the message will be marked as `nack` and retried.
 
 ## Guarantees
 
-### Exactly-once delivery
+### Transactional enqueue
 
-Exactly-once delivery within a visibility timeout (`ack-wait-ms`).
+Sequin guarantees that every insert, update, and delete is captured, respecting the order of operations in any transaction.
 
-### Strict ordering by message key
+### Strict ordering
 
-Messages with the same key will always be delivered to a consumer's workers in order (by insertion time).
+Sequin guarantees that messages with the same primary key are processed in order for a given stream and consumer.
 
-If you've set `one-message-per-key=true` for a stream, then all message key conflicts are upserts. If a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld. When the `ack-wait-ms` expires or the message is ack'd/nack'd, the latest version of the message will be available for delivery.
+This is useful for applications that need to process changes to a single record in order. For example, if you're processing changes to a user's profile, you want to make sure that the changes are applied in order.
 
-If you've set `one-message-per-key=false` for a stream, then messages are appended to a stream. Still, if a message has been delivered but not ack'd (is currently being worked), then delivery of the next message with that key will be withheld until that message has finished processing.
+To achieve this, Sequin will not deliver messages to a consumer until the previous messages for that primary key has been acknowledged.
+
+### Exactly-one processing
+
+Sequin guarantees that messages are delivered at least once and must be acknowledged by a consumer. This means that no messages are lost in transit.
+
+
+
+
+
+
+

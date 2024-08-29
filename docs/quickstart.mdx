@@ -1,154 +1,120 @@
 ---
-title: 'Quickstart'
-description: 'Get a robust, flexible message stream in under 5 minutes.'
+title: 'Sequin Cloud Quickstart'
+sidebarTitle: 'Quickstart'
+description: 'Connect Sequin to your Postgres database and send changes to your application.'
 ---
 
-import InstallationSteps from "/snippets/cli-installation-steps.mdx"
+<Steps titleSize="h2">
+  <Step title="Create a Sequin account" titleSize="h2">
+    If you haven't already, create a [Sequin cloud account](https://console.sequinstream.com/register) and login.
 
-In this guide, you'll:
+    <Note>If you're looking to self-host Sequin, start with our [self-hosting guide](../self-hosting/overview).</Note>
+  </Step>
+  <Step title="Connect your database">
+    In the Sequin Console, click on the **Connect Database** button. Enter the connection details for your Postgres database (i.e. host, port, database name, username, and password).
 
-1. Install and boot Sequin
-2. Send messages to your Sequin instance from the CLI / HTTP
-3. Consume messages from your Sequin instance via a consumer
+    <Frame>
+      <img src="/images/cloud-getting-started/connect-database.png" alt="Connect Database" />
+    </Frame>
 
-## Install and boot Sequin
+    With your database connected, you'll now create a replication slot. This allows Sequin to efficiently capture changes from your database using the WAL (Write-Ahead Log)
 
-Sequin is a stateless executable that sits in front of a Postgres database.
+    In your database, run the following SQL command to create a replication slot:
 
-To work with Sequin, you'll:
+    ```sql Create Replication Slot
+    select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
 
-1. Install the Sequin CLI (for interacting with Sequin)
-2. Boot a Sequin instance (running in Docker)
+    To finish setting up your replication slot, you'll also create a publication to indicate which tables will publish changes to the replication slot.
 
-The Sequin Docker image comes with its own Postgres database for simplicity, but you can use
-Sequin with any Postgres database.
+    In your database, run the following SQL command to create a publication:
 
-### Server
+    <CodeGroup>
+    ```sql Create Publication for all tables
+    create publication sequin_pub for all tables;
+    ```
 
-Run the server with Docker/compose. Clone the repo:
+    ```sql Create Publication for specific tables
+    create publication sequin_pub for table table1, table2, table3;
+    ```
+    </CodeGroup>
 
-```bash
-git clone git@github.com:sequinstream/sequin.git
-```
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
 
-After cloning the repo, `cd` into it and boot the server:
+    Your database is now connected to Sequin!
 
-```bash
-cd docker && docker compose up -d
-```
+    <Note>
+    You may see that the database status is `waiting` until Sequin sees a change come through the replication slot. This is completely normal.
+    </Note>
 
-The server runs on `localhost:7376`. The CLI is configured to point to `localhost:7376` by default.
+    <Frame>
+      <img src="/images/cloud-getting-started/successful-database-connection.png" alt="Database connected page" />
+    </Frame>
 
-### CLI
+    <Note>You may see that the database status is `waiting` until Sequin sees a change come through the replication slot.</Note>
+  </Step>
+  <Step title="Create a consumer">
+    On the database page, click the **Add a consumer** button. Alternatively, you can navigate to the **Consumers** page and click **CreateConsumer**.
 
-Install the Sequin CLI to work with Sequin.
+     As a first step, you'll select a stream type to determine which record changes you want to capture in your consumer and how those changes are retained. You can choose between a change stream or a sync stream:
 
-<InstallationSteps />
+    <Frame>
+      <img src="/images/cloud-getting-started/stream-kind.png" alt="Select stream kind" />
+    </Frame>
 
-See the [installation guide](/installation.mdx) for more details.
+    * **Change stream**: A change stream will capture every `insert`, `update`, and `delete`. Learn more about change streams [here](../concepts/change-streams).
+    * **Sync stream**: A sync stream will capture `insert` and `updates` to records. It's intended for "syncing" data to another database or service. Learn more about sync streams [here](../concepts/sync-streams).
 
-## Send messages
+    Next, select whether you want to recieve changes via HTTP Push (i.e. Webhooks) or HTTP Pull (i.e. SQS). For this quickstart, we'll select HTTP Push:
 
-**Messages** in Sequin consist of a **key** and a **data** payload. Messages are unique by key.
+    <Frame>
+      <img src="/images/cloud-getting-started/consumer-type.png" alt="Select consumer type" />
+    </Frame>
 
-Keys in Sequin allow for powerful message routing and filtering. For example, you can organize messages from different sources using a hierarchical key structure.
+    You'll now select the database and the tables you want to capture changes from and define any filters for the changes you want to capture:
 
-To get a feel for this, let’s simulate an order for an e-commerce use case. Send your first message:
+    <Frame>
+      <img src="/images/cloud-getting-started/set-filters.png" alt="Select consumer filters" />
+    </Frame>
 
-```
-sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}'
-```
+    Here, we've selected the `public.users` table and applied a filter to only capture changes to records where the `age` value is greater than `25`. Click **Continue**.
 
-All CLI commands use HTTP to communicate with the Sequin backend. You can see what the requests look like by passing the `--as-curl` flag:
+    On the next screen, enter a name for your consumer and then select **+ Add new** under the **HTTP Endpoint** field. Enter a name for your endpoint, the base URL you want to send the changes to, and define any headers you want to send with the changes:
 
-```
-sequin stream send default orders.us.cus_a.order_1 '{"product": "Shoes"}' --as-curl
-```
+    <Frame>
+      <img src="/images/cloud-getting-started/set_http_endpoint.png" alt="Set endpoint" />
+    </Frame>
 
-<Note>You can use `--as-curl` with any CLI command to see the equivalent HTTP request.</Note>
+    <Tip>To easily test your consumer, you can use a tool like [webhook.site](https://webhook.site/) to view the incoming requests.</Tip>
 
-Send more messages to Sequin:
+    Finally, click on **Create Consumer** to finish creating your consumer:
 
-```
-sequin stream send default orders.eu.cus_b.order_2 '{"product": "Pants"}'
-sequin stream send default orders.us.cus_c.order_3 '{"product": "Shoes"}'
-sequin stream send default orders.us.cus_a.order_4 '{"product": "Shirts"}'
-```
+    <Frame>
+      <img src="/images/cloud-getting-started/consumer-created.png" alt="Consumer created" />
+    </Frame>
+  </Step>
+  <Step title="Capture changes">
+    You've now connected your database to Sequin, setup a consumer to capture changes, and defined where to send the changes. The last step is to trigger a message to see this in action.
 
-Now, take a look at how many messages you have in Sequin. Open a second terminal window or split pane so you can **observe your stream** as you enter more Sequin CLI commands:
+    To trigger a message, insert a new row on your table - and you'll see a new message arrive at your endpoint:
 
-```
-sequin observe
-```
+    ![End to end quickstart example](https://i.imgur.com/oT5qh1O.gif)
 
-The observe tool shows the live state of Sequin. You can read and filter these messages using the `f` command to enter a key filter like:
+    After the record is inserted, it appears as a JSON object in the message payload sent to your endpoint.
 
-```
-orders.us.>
-orders.*.cus_a.*
->
-```
+    <Note>Keep in mind, that Sequin will automatically retry sending messages on failure to provide an exactly-once processing guarantee.</Note>
+  </Step>
+</Steps>
 
-By default, Sequin is configured so that messages are always upserted. So, when cus_b adds another product to their order:
+## Next steps
 
-```
-sequin stream send default orders.eu.cus_b.order_2 '{"product": ["Socks", "Shoes"]}'
-```
+You've now walked through the basics of connecting your database, creating a consumer, and capturing changes. Now, you can write the business logic for your application to react to the changes.
 
-The message is updated in the stream. (You can change this setting per consumer by setting `one-message-per-key=false`.)
+From here, you might want to:
 
-But upserting and listing messages is something we can already do in Postgres. The real power of Sequin comes from consumers.
+* Learn more about [change streams](/concepts/change-streams) and [sync streams](/concepts/sync-streams).
+* Explore the advanced configurations for push consumers and pull consumers.
+* Install and configure the [Sequin SDK](https://github.com/sequin-io/sequin-go) to pull changes into your application.
+* Star the repository to follow the latest updates.
 
-## Consuming messages
 
-In Sequin, a **consumer** is how you receive messages with delivery guarantees.
-
-The best way to understand consumers is to see how they work. Add a consumer:
-
-```
-sequin consumer add default us_orders --filter="orders.us.>" --defaults
-```
-
-<Note>The --defaults flag creates the consumers using reasonable defaults. Learn more about consumers [here](/core/consumers).</Note>
-
-This consumer will receive all orders in the US. A set of workers might then route these orders to different fulfillment systems or trigger updates to customers.
-
-Take a look at your terminal running `sequin observe`. Switch to the Consumers tab with the c command and press `enter` to view consumer details.
-
-You receive messages from a consumer using `receive`. When a consumer receives a message, the message is not delivered to other workers for that consumer. Notice how if you receive for a consumer multiple times in a row, you chew through the available messages until no more are available:
-
-```
-sequin consumer receive default us_orders
-sequin consumer receive default us_orders
-sequin consumer receive default us_orders
-sequin consumer receive default us_orders
-```
-
-You will have received the three US based orders. The last `receive` should have returned "No messages available."
-
-The three messages are now pending for the consumer. While they are pending, they are not visible to other consumer receive calls. If the messages are not acked, they will be available for re-delivery in 30 seconds (ack-wait-ms).
-
-These critical feature of consumers ensures that:
-
-1. You can have multiple workers pulling messages for a single consumer
-2. Messages are not lost; if a consumer doesn't ack a message, it's redelivered
-
-<Tip>You can configure the `ack-wait-ms` setting for a consumer with `sequin consumer edit <consumer> --ack-wait-ms=ACK-WAIT-MS`. This setting controls how long messages remain invisible, waiting to be ack'd, after they are delivered.</Tip>
-
-## Next Steps
-
-### Ingesting messages
-
-Sequin ships with three powerful way to ingest messages:
-
-1. HTTP (which the CLI uses)
-2. [Postgres Replication](/guides/ingesting-from-postgres)
-3. [Webhook Ingestion](/guides/ingesting-webhooks)
-
-### Official Clients
-
-When you are ready to integrate Sequin consumers in your application, we have a language specific libraries and example projects:
-
-| Language | Client                                                                   | Example                                                                                           |
-| -------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| Elixir   | [OffBroadwaySequin](https://github.com/sequinstream/off_broadway_sequin) | [Sequin with Broadway](https://github.com/sequinstream/sequin/tree/main/examples/elixir_broadway) |

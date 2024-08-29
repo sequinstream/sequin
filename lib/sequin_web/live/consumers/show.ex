@@ -2,6 +2,8 @@ defmodule SequinWeb.ConsumersLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Sequin.ApiTokens
+  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
@@ -13,6 +15,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
     consumer = Consumers.get_consumer_for_account(current_account_id(socket), id)
+    {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
 
     consumer =
       case consumer do
@@ -28,6 +31,8 @@ defmodule SequinWeb.ConsumersLive.Show do
 
     consumer = %{consumer | health: health}
     socket = assign(socket, :consumer, consumer)
+    socket = assign(socket, :api_token, api_token)
+    socket = assign(socket, :host, "http://localhost:4000")
     socket = assign_metrics(socket)
 
     if connected?(socket) do
@@ -68,14 +73,24 @@ defmodule SequinWeb.ConsumersLive.Show do
           <.svelte
             name="consumers/ShowHttpPush"
             props={
-              %{consumer: encode_consumer(@consumer), parent: "consumer-show", metrics: @metrics}
+              %{
+                consumer: encode_consumer(@consumer),
+                parent: "consumer-show",
+                metrics: @metrics
+              }
             }
           />
         <% {:show, %HttpPullConsumer{}} -> %>
           <.svelte
             name="consumers/ShowHttpPull"
             props={
-              %{consumer: encode_consumer(@consumer), parent: "consumer-show", metrics: @metrics}
+              %{
+                consumer: encode_consumer(@consumer),
+                parent: "consumer-show",
+                metrics: @metrics,
+                host: @host,
+                api_token: encode_api_token(@api_token)
+              }
             }
           />
       <% end %>
@@ -227,6 +242,13 @@ defmodule SequinWeb.ConsumersLive.Show do
     %{
       id: postgres_database.id,
       name: postgres_database.name
+    }
+  end
+
+  defp encode_api_token(%ApiToken{} = api_token) do
+    %{
+      name: api_token.name,
+      token: api_token.token
     }
   end
 end

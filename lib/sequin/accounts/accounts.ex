@@ -10,6 +10,7 @@ defmodule Sequin.Accounts do
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserNotifier
   alias Sequin.Accounts.UserToken
+  alias Sequin.ApiTokens
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Error
@@ -107,6 +108,7 @@ defmodule Sequin.Accounts do
   def register_user(:identity, attrs) do
     Repo.transact(fn ->
       {:ok, account} = create_account(%{})
+      {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
 
       %User{account_id: account.id}
       |> User.registration_changeset(attrs)

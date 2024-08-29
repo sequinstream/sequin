@@ -41,7 +41,12 @@ defmodule Sequin.ApiTokens do
   end
 
   def get_token_by(params) do
-    Repo.get_by(ApiToken, params)
+    ApiToken
+    |> Repo.get_by(params)
+    |> case do
+      nil -> {:error, Error.not_found(entity: :api_token)}
+      token -> {:ok, token}
+    end
   end
 
   def delete_token_for_account(token_id, account_id) do

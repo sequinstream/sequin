@@ -98,8 +98,11 @@ defmodule SequinWeb.Router do
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home
-      live "/health", HealthLive, :index
     end
+  end
+
+  scope "/health", SequinWeb do
+    get "/", HealthCheckController, :check
   end
 
   scope "/api", SequinWeb do

@@ -64,14 +64,21 @@ defmodule Sequin.Factory.AccountsFactory do
   end
 
   def user(attrs \\ []) do
+    {auth_provider, attrs} = Map.pop_lazy(attrs, :auth_provider, fn -> Factory.one_of([:identity, :github]) end)
+
+    {auth_provider_id, attrs} =
+      Map.pop_lazy(attrs, :auth_provider_id, fn ->
+        if auth_provider == :identity, do: nil, else: Factory.uuid()
+      end)
+
     merge_attributes(
       %User{
         name: "User #{:rand.uniform(1000)}",
         email: email(),
         password: password(),
         account_id: Factory.uuid(),
-        auth_provider: Factory.one_of([:identity, :github]),
-        auth_provider_id: Factory.one_of([Factory.uuid(), nil]),
+        auth_provider: auth_provider,
+        auth_provider_id: auth_provider_id,
         inserted_at: Factory.utc_datetime(),
         updated_at: Factory.utc_datetime()
       },
@@ -86,18 +93,22 @@ defmodule Sequin.Factory.AccountsFactory do
   end
 
   def insert_user!(attrs \\ []) do
-    attrs = Map.new(attrs)
+    attrs =
+      attrs
+      |> Map.new()
+      |> Map.put_new(:auth_provider, :identity)
+
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> insert_account!().id end)
-    {auth_provider, attrs} = Map.pop(attrs, :auth_provider, :identity)
+
     attrs = user_attrs(attrs)
 
     changeset =
-      if auth_provider == :identity do
+      if attrs.auth_provider in [:identity, "identity"] do
         User.registration_changeset(%User{account_id: account_id}, attrs, hash_password: true)
       else
         User.provider_registration_changeset(
           %User{account_id: account_id},
-          Map.put_new(attrs, :auth_provider_id, Factory.uuid())
+          attrs
         )
       end
 

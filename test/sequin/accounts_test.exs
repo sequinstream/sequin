@@ -43,15 +43,28 @@ defmodule Sequin.AccountsTest do
       assert Accounts.get_user_by_email(:identity, "nonexistent@example.com") == nil
     end
 
-    test "register_user/1 with valid data creates a user" do
+    test "registers a user with identity provider" do
       valid_attrs = AccountsFactory.user_attrs(%{name: "John Doe", email: "john@example.com"})
 
       assert {:ok, %User{} = user} = Accounts.register_user(:identity, valid_attrs)
       assert user.name == "John Doe"
       assert user.email == "john@example.com"
+      assert user.auth_provider == :identity
+      assert user.hashed_password != nil
     end
 
-    test "create_user/1 with invalid data returns error changeset" do
+    test "registers a user with GitHub provider" do
+      valid_attrs = %{name: "Jane Doe", email: "jane@example.com", auth_provider_id: "github123"}
+
+      assert {:ok, %User{} = user} = Accounts.register_user(:github, valid_attrs)
+      assert user.name == "Jane Doe"
+      assert user.email == "jane@example.com"
+      assert user.auth_provider == :github
+      assert user.auth_provider_id == "github123"
+      assert user.hashed_password == nil
+    end
+
+    test "returns error changeset with invalid data" do
       invalid_attrs = %{name: nil, email: nil, password: nil, account_id: nil}
       assert {:error, %Ecto.Changeset{}} = Accounts.register_user(:identity, invalid_attrs)
     end
@@ -587,6 +600,32 @@ defmodule Sequin.AccountsTest do
   describe "inspect/2 for the User module" do
     test "does not include password" do
       refute inspect(%User{password: "123456"}) =~ "password: \"123456\""
+    end
+  end
+
+  describe "provider_registration_changeset/2" do
+    test "validates required fields" do
+      attrs = %{}
+      changeset = User.provider_registration_changeset(%User{}, attrs)
+
+      assert %{
+               email: ["can't be blank"],
+               name: ["can't be blank"],
+               auth_provider: ["can't be blank"],
+               auth_provider_id: ["can't be blank"]
+             } = errors_on(changeset)
+    end
+
+    test "validates email format" do
+      attrs = AccountsFactory.user_attrs(%{email: "invalid"})
+      changeset = User.provider_registration_changeset(%User{}, attrs)
+      assert %{email: ["must have the @ sign and no spaces"]} = errors_on(changeset)
+    end
+
+    test "creates a valid changeset" do
+      attrs = AccountsFactory.user_attrs(%{auth_provider: :github, auth_provider_id: "123"})
+      changeset = User.provider_registration_changeset(%User{}, attrs)
+      assert changeset.valid?
     end
   end
 end

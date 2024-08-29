@@ -57,6 +57,7 @@ defmodule Sequin.Accounts.User do
     |> validate_email(opts)
     |> validate_password(opts)
     |> put_change(:auth_provider, :identity)
+    |> check_constraint(:auth_provider, name: :auth_provider_constraint, message: "Invalid authentication provider setup")
   end
 
   def provider_registration_changeset(user, attrs) do
@@ -65,6 +66,7 @@ defmodule Sequin.Accounts.User do
     |> validate_required([:email, :name, :auth_provider, :auth_provider_id])
     |> validate_email([])
     |> unique_constraint([:auth_provider, :auth_provider_id])
+    |> check_constraint(:auth_provider, name: :auth_provider_constraint, message: "Invalid authentication provider setup")
   end
 
   # Add this function to handle GitHub profile updates

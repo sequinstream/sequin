@@ -10,6 +10,7 @@
     error?: {
       message: string;
     };
+    message?: string;
   };
 
   type Health = {
@@ -57,14 +58,16 @@
     const totalChecks = Object.keys(health.checks).length;
 
     if (health.status === "healthy" && count === totalChecks) {
-      return `All ${totalChecks} health checks are passing`;
+      return totalChecks === 1
+        ? "The health check is passing"
+        : `All ${totalChecks} health checks are passing`;
     } else if (health.status === "error") {
       return `${count} health check${count > 1 ? "s are" : " is"} failing`;
     } else if (health.status === "warning") {
       return `${count} health check${count > 1 ? "s are" : " is"} warning`;
     } else if (health.status === "initializing") {
       const healthyCount = checkCounts.healthy;
-      return `${healthyCount} of ${totalChecks} checks healthy, ${count} waiting`;
+      return `${healthyCount} of ${totalChecks} check${totalChecks > 1 ? "s" : ""} healthy, ${count} waiting`;
     } else {
       return `${count} health check${count > 1 ? "s are" : " is"} ${health.status}`;
     }
@@ -182,6 +185,9 @@
             <HealthIcon status={check.status} />
             <span class="font-medium ml-2 text-sm">{check.name}</span>
           </div>
+          {#if check.message}
+            <p class="text-xs text-gray-400 mt-1 ml-7">{check.message}</p>
+          {/if}
           {#if check.error}
             <p class="text-xs text-red-600 mt-2 ml-1">
               Error: {check.error.message}

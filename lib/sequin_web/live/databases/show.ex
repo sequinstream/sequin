@@ -76,7 +76,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
-    Process.send_after(self(), :update_health, 1000)
+    Process.send_after(self(), :update_health, 10_000)
 
     case Health.get(socket.assigns.database) do
       {:ok, health} ->

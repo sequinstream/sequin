@@ -739,7 +739,7 @@ defmodule Sequin.Consumers do
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.delete_all()
 
-    Health.update(consumer, :acknowledgement, :healthy)
+    Health.update(consumer, :acknowledge, :healthy)
     Metrics.incr_consumer_messages_processed_count(consumer, count)
 
     Enum.each(0..count, fn _ ->
@@ -764,7 +764,7 @@ defmodule Sequin.Consumers do
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
-    Health.update(consumer, :acknowledgement, :healthy)
+    Health.update(consumer, :acknowledge, :healthy)
 
     Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
 

@@ -135,24 +135,24 @@ defmodule Sequin.Health do
     end
   end
 
-  @http_push_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledgement]
+  @http_push_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
   defp expected_check(%HttpPushConsumer{}, check_id, status, error) when check_id in @http_push_consumer_checks do
     case check_id do
       :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
-      :ingestion -> %Check{id: :ingestion, name: "Ingestion", status: status, error: error}
-      :receive -> %Check{id: :receive, name: "Receive", status: status, error: error}
+      :ingestion -> %Check{id: :ingestion, name: "Ingest", status: status, error: error}
+      :receive -> %Check{id: :receive, name: "Produce", status: status, error: error}
       :push -> %Check{id: :push, name: "Push", status: status, error: error}
-      :acknowledgement -> %Check{id: :acknowledgement, name: "Acknowledgement", status: status, error: error}
+      :acknowledge -> %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error}
     end
   end
 
-  @http_pull_consumer_checks [:filters, :ingestion, :receive, :acknowledgement]
+  @http_pull_consumer_checks [:filters, :ingestion, :receive, :acknowledge]
   defp expected_check(%HttpPullConsumer{}, check_id, status, error) when check_id in @http_pull_consumer_checks do
     case check_id do
       :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
-      :ingestion -> %Check{id: :ingestion, name: "Ingestion", status: status, error: error}
-      :receive -> %Check{id: :receive, name: "Receive", status: status, error: error}
-      :acknowledgement -> %Check{id: :acknowledgement, name: "Acknowledgement", status: status, error: error}
+      :ingestion -> %Check{id: :ingestion, name: "Ingest", status: status, error: error}
+      :receive -> %Check{id: :receive, name: "Pull", status: status, error: error}
+      :acknowledge -> %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error}
     end
   end
 
@@ -160,7 +160,19 @@ defmodule Sequin.Health do
   ## Initial Health ##
   #####################
   defp initial_health(%HttpPushConsumer{} = entity) do
-    checks = Enum.map(@http_push_consumer_checks, &expected_check(entity, &1, :initializing))
+    checks =
+      @http_push_consumer_checks
+      |> Enum.map(&expected_check(entity, &1, :initializing))
+      |> Enum.map(fn
+        %Check{id: :receive} = check ->
+          %{check | message: "Whether the consumer is producing messages."}
+
+        %Check{id: :push} = check ->
+          %{check | message: "Pushing messages to your endpoint via HTTP."}
+
+        %Check{} = check ->
+          check
+      end)
 
     %Health{
       name: "Consumer health",
@@ -173,7 +185,19 @@ defmodule Sequin.Health do
   end
 
   defp initial_health(%HttpPullConsumer{} = entity) do
-    checks = Enum.map(@http_pull_consumer_checks, &expected_check(entity, &1, :initializing))
+    checks =
+      @http_pull_consumer_checks
+      |> Enum.map(&expected_check(entity, &1, :initializing))
+      |> Enum.map(fn
+        %Check{id: :receive} = check ->
+          %{check | message: "Pull messages from the consumer via HTTP."}
+
+        %Check{id: :acknowledge} = check ->
+          %{check | message: "Acknowledge messages via HTTP."}
+
+        %Check{} = check ->
+          check
+      end)
 
     %Health{
       name: "Consumer health",
@@ -186,7 +210,16 @@ defmodule Sequin.Health do
   end
 
   defp initial_health(%PostgresDatabase{} = entity) do
-    checks = Enum.map(@postgres_checks, &expected_check(entity, &1, :initializing))
+    checks =
+      @postgres_checks
+      |> Enum.map(&expected_check(entity, &1, :initializing))
+      |> Enum.map(fn
+        %Check{id: :replication_messages} = check ->
+          %{check | message: "Messages will replicate when there is a change in your database."}
+
+        %Check{} = check ->
+          check
+      end)
 
     %Health{
       name: "Database health",
@@ -306,7 +339,8 @@ defmodule Sequin.Health do
           %{
             name: check.name,
             status: check.status,
-            error: if(check.error, do: %{message: Exception.message(check.error)})
+            error: if(check.error, do: %{message: Exception.message(check.error)}),
+            message: check.message
           }
         end)
     }

@@ -12,6 +12,7 @@ defmodule Sequin.Health.Check do
     field :name, String.t(), enforce: true
     field :status, Sequin.Health.status(), enforce: true
     field :error, Error.t() | nil
+    field :message, String.t() | nil
   end
 
   @spec from_json!(String.t()) :: t()

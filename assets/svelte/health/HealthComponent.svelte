@@ -2,6 +2,7 @@
   import HealthIcon from "./HealthIcon.svelte";
   import { slide } from "svelte/transition";
   import { ChevronDown } from "lucide-svelte";
+  import { onMount } from "svelte";
 
   type Check = {
     name: string;
@@ -91,6 +92,24 @@
       expandedContentElement.style.zIndex = "1000";
     }
   }
+
+  // Add this function to handle clickaway
+  function handleClickOutside(event: MouseEvent) {
+    if (
+      expanded &&
+      containerElement &&
+      !containerElement.contains(event.target as Node)
+    ) {
+      expanded = false;
+    }
+  }
+
+  onMount(() => {
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  });
 
   $: if (expanded && hasChecks) {
     // Use setTimeout to ensure the DOM has updated

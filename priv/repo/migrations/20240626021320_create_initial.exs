@@ -15,13 +15,15 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
             "drop schema if exists #{@config_schema}"
 
     create table(:accounts, prefix: @config_schema) do
+      add :name, :string, null: false
+
       timestamps()
     end
 
     create table(:users) do
       add :name, :string
       add :email, :citext, null: false
-      add :hashed_password, :string, null: false
+      add :hashed_password, :string
       add :confirmed_at, :utc_datetime
       add :auth_provider, :string, null: false
       add :auth_provider_id, :string
@@ -33,7 +35,20 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
 
     create unique_index(:users, [:email], prefix: @config_schema)
 
+    create unique_index(:users, [:auth_provider, :auth_provider_id],
+             prefix: @config_schema,
+             where: "auth_provider_id is not null"
+           )
+
     create index(:users, [:account_id], prefix: @config_schema)
+
+    # Add custom constraint
+    create constraint(:users, :auth_provider_constraint,
+             check: """
+             (auth_provider = 'identity' AND hashed_password IS NOT NULL AND auth_provider_id IS NULL) OR
+             (auth_provider != 'identity' AND hashed_password IS NULL AND auth_provider_id IS NOT NULL)
+             """
+           )
 
     create table(:users_tokens) do
       add :user_id, references(:users, on_delete: :delete_all), null: false

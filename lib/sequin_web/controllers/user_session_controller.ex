@@ -39,11 +39,8 @@ defmodule SequinWeb.UserSessionController do
     |> Config.put(:session_params, session_params)
     |> Github.callback(params)
     |> case do
-      {:ok, %{user: user, token: token}} ->
-        # CLAUDE TODO
-        :ok
-
-      # Authorization succesful
+      {:ok, %{user: user_data, token: token}} ->
+        handle_oauth_callback(conn, user_data, token)
 
       {:error, %Assent.UnexpectedResponseError{} = error} ->
         Logger.error("Failed to login with Github: #{inspect(error)}")
@@ -51,6 +48,32 @@ defmodule SequinWeb.UserSessionController do
         conn
         |> put_flash(:toast, %{kind: :error, title: "Failed to login with Github."})
         |> redirect(to: ~p"/login")
+    end
+  end
+
+  defp handle_oauth_callback(conn, user_data, _token) do
+    %{"email" => email, "name" => name, "sub" => github_id} = user_data
+
+    case Accounts.get_user_by_auth_provider_id(:github, github_id) do
+      nil ->
+        {:ok, user} =
+          Accounts.register_user(:github, %{
+            email: email,
+            name: name,
+            auth_provider_id: to_string(github_id)
+          })
+
+        conn
+        |> put_flash(:toast, %{kind: :info, title: "Account created successfully!"})
+        |> UserAuth.log_in_user(user)
+
+      user ->
+        {:ok, updated_user} =
+          Accounts.update_user_github_profile(user, %{name: name, email: email})
+
+        conn
+        |> put_flash(:toast, %{kind: :info, title: "Logged in successfully!"})
+        |> UserAuth.log_in_user(updated_user)
     end
   end
 

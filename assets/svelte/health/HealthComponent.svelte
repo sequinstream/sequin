@@ -3,23 +3,7 @@
   import { slide } from "svelte/transition";
   import { ChevronDown } from "lucide-svelte";
   import { onMount } from "svelte";
-
-  type Check = {
-    name: string;
-    status: "healthy" | "error" | "warning" | "initializing";
-    error?: {
-      message: string;
-    };
-    message?: string;
-  };
-
-  type Health = {
-    entity_kind: string;
-    entity_id: string;
-    name: string; // Add this line
-    status: "healthy" | "error" | "warning" | "initializing";
-    checks: Record<string, Check>;
-  };
+  import type { Health, Check } from "./Types";
 
   export let health: Health;
   export let expanded = false;

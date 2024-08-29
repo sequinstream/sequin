@@ -1,7 +1,8 @@
 <script lang="ts">
   import HealthIcon from "./HealthIcon.svelte";
+  import type { status } from "./Types";
 
-  export let status: "healthy" | "warning" | "error" | "initializing";
+  export let status: status;
 
   const pillStyle = {
     healthy: "bg-green-100 text-green-800",

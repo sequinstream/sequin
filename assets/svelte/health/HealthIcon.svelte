@@ -1,7 +1,8 @@
 <script lang="ts">
+  import type { status } from "./Types";
   import { Check, AlertTriangle, X, Loader } from "lucide-svelte";
 
-  export let status: "healthy" | "error" | "warning" | "initializing";
+  export let status: status;
 
   const iconMap = {
     healthy: Check,

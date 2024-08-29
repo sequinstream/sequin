@@ -18,6 +18,7 @@
   import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
   import HealthDisplay from "$lib/health/HealthComponent.svelte";
   import HealthComponent from "$lib/health/HealthComponent.svelte";
+  import type { Health } from "$lib/health/Types";
 
   interface Table {
     schema_name: string;
@@ -48,11 +49,7 @@
     inserted_at: string;
     updated_at: string;
     consumers: Consumer[];
-    health: {
-      status: string;
-      message: string;
-      last_checked: string;
-    };
+    health: Health;
   }
 
   export let database: PostgresDatabase;

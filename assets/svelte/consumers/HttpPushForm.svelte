@@ -27,7 +27,6 @@
   import { Label } from "$lib/components/ui/label";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { cn } from "$lib/utils";
-  import { v4 as uuidv4 } from "uuid";
   import { toast } from "svelte-sonner";
   import { Loader2 } from "lucide-svelte";
 

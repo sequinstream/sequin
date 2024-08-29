@@ -46,6 +46,8 @@ if config_env() == :prod do
 
   vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
 
+  config :redix, url: System.fetch_env!("REDIS_URL")
+
   config :sequin, Sequin.Repo, repo_config
 
   config :sequin, Sequin.Vault,

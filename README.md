@@ -28,11 +28,11 @@ In production, you can configure Sequin as code using Terraform.
 ### Use cases
 
 * **Trigger side-effects:** Never miss a change in your database for processing by other systems.
-  ![Queue email](https://i.imgur.com/SwrEHEs.png)
+  ![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_1.svg)
 * **Fan out:** Add queue capabilities to your database to broadcast events, distribute workloads, and decouple services.
-  ![Fan out order](https://i.imgur.com/oz6ov48.png)
+  ![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_2.svg)
 * **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
-  ![Sync](https://i.imgur.com/B3uWnx1.png)
+  ![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_3.svg)
 
 ### Compare Sequin
 

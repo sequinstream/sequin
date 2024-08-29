@@ -3,7 +3,7 @@
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import { InfoIcon, RefreshCwIcon, CheckIcon } from "lucide-svelte";
+  import { InfoIcon, RefreshCwIcon, CheckIcon, Loader2 } from "lucide-svelte";
   import {
     Card,
     CardContent,
@@ -32,6 +32,7 @@
   import { getColorFromName } from "../utils";
   import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
   import { Switch } from "$lib/components/ui/switch";
+  import { toast } from "svelte-sonner";
 
   let step = "select_stream";
   export let live;
@@ -450,6 +451,27 @@
 
   function clearFormStorage() {
     localStorage.removeItem(STORAGE_KEY);
+  }
+
+  let isGeneratingWebhookSite = false;
+
+  function createWebhookSiteEndpoint() {
+    isGeneratingWebhookSite = true;
+    pushEvent("generate_webhook_site_url", {}, (result: any) => {
+      isGeneratingWebhookSite = false;
+      if (result.url && result.name) {
+        form.httpEndpoint = {
+          name: result.name,
+          baseUrl: result.url,
+          headers: {},
+        };
+        showNewHttpEndpointForm = true;
+      } else if (result.error) {
+        toast.error("Failed to generate Webhook.site URL:", result.error);
+      } else {
+        toast.error("Failed to generate Webhook.site URL");
+      }
+    });
   }
 </script>
 
@@ -879,6 +901,26 @@
                 {#if form.consumerKind === "http_push"}
                   <div class="space-y-2">
                     <Label for="http-endpoint">HTTP Endpoint</Label>
+                    {#if !form.httpEndpointId && !showNewHttpEndpointForm}
+                      <p class="text-xs mb-2">
+                        Just kicking the tires?
+                        <button
+                          on:click={createWebhookSiteEndpoint}
+                          class="hover:underline bg-transparent border-none p-0 cursor-pointer inline-flex items-center"
+                          type="button"
+                          class:text-carbon-500={isGeneratingWebhookSite}
+                          class:text-link={!isGeneratingWebhookSite}
+                          disabled={isGeneratingWebhookSite}
+                        >
+                          {#if isGeneratingWebhookSite}
+                            <Loader2 class="h-3 w-3 mr-1 animate-spin" />
+                            Generating...
+                          {:else}
+                            Create and use a new Webhook.site endpoint
+                          {/if}
+                        </button>
+                      </p>
+                    {/if}
                     <Select
                       selected={{
                         value: form.httpEndpointId,

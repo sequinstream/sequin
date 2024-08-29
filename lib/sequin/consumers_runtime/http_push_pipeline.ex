@@ -117,7 +117,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
        Error.service(
          service: :http_endpoint,
          code: "bad_status",
-         message: "Unexpected status code",
+         message: "Unexpected status code: #{response.status}",
          details: %{status: response.status, body: response.body}
        )}
     end

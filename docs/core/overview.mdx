@@ -3,15 +3,15 @@ title: 'Overview'
 description: 'Sequin has three core concepts: database change data capture (CDC), streams, and consumers.'
 ---
 
-1. Sequin detects every change in your database (CDC) using the Write Ahead Log (WAL).
+1. Sequin detects every change in your [**database**](#database-change-data-capture-cdc) (CDC) using the Write Ahead Log (WAL).
 2. Those changes are then captured into a durable, persistent queue of messages called a [**stream**](#streams).
 3. You then use [**consumers**](#consumers) to filter, transform, and send those messages to your application or another service.
 
 ## Database change data capture (CDC)
 
-Sequin uses the Write Ahead Log (WAL) to detect changes in your database. The WAL is a log of all the changes that have been made to your database.
+Sequin uses the [Write Ahead Log (WAL)](https://www.postgresql.org/docs/current/logicaldecoding-explanation.html) to detect changes in your database. The WAL is a log of all the changes that have been made to your database.
 
-When connecting Sequin to your database, you'll configure the WAL by creating a replication slot and a publication. The publication determines which tables are captured by the replication slot.
+When connecting Sequin to your database, you'll configure the WAL by creating a [replication slot](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) and a [publication](https://www.postgresql.org/docs/current/logical-replication-publication.html). The publication determines which tables are captured by the replication slot.
 
 This architecture allows Sequin to provide transactional guarantees and never miss a change, even across long periods of downtime.
 
@@ -65,15 +65,15 @@ You can transform messages in a stream using LUA. This is useful for transformin
 
 ### HTTP interface
 
-Consumers can push messsages to your application via webhooks, or you can pull messages from the consumer using Sequin's HTTP API.
+Consumers can push messsages to your application via webhooks (a.k.a. **push consumers**), or you can pull messages from the consumer using Sequin's HTTP API (a.k.a. **pull consumers**).
 
-**Push (webhooks)**
+**Push consumers**
 
-When using webhooks, Sequin will send POST requests to the webhook URL you provide.
+When using push consumers (i.e. webhooks), Sequin will send POST requests to the endpoint you provide.
 
-**Pull**
+**Pull consumers**
 
-You can pull messages from the consumer using Sequin's HTTP API or SDKs. This gives your application more control over how messages are processed.
+You can pull messages from the consumer using Sequin's HTTP API or SDKs. This gives your application more control over messages are processed.
 
 ### Acknowledgement
 
@@ -99,10 +99,3 @@ To achieve this, Sequin will not deliver messages to a consumer until the previo
 ### Exactly-one processing
 
 Sequin guarantees that messages are delivered at least once and must be acknowledged by a consumer. This means that no messages are lost in transit.
-
-
-
-
-
-
-

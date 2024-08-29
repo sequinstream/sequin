@@ -74,7 +74,7 @@ defmodule SequinWeb.UserRegistrationLiveTest do
         |> render_click()
         |> follow_redirect(conn, ~p"/login")
 
-      assert login_html =~ "Log in"
+      assert login_html =~ "Welcome back"
     end
   end
 end

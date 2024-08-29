@@ -96,7 +96,7 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
         |> render_click()
         |> follow_redirect(conn, ~p"/login")
 
-      assert conn.resp_body =~ "Log in"
+      assert conn.resp_body =~ "Welcome back"
     end
 
     test "redirects to registration page when the Register button is clicked", %{

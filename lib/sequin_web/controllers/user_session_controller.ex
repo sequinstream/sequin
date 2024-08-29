@@ -1,8 +1,58 @@
 defmodule SequinWeb.UserSessionController do
   use SequinWeb, :controller
 
+  alias Assent.Config
+  alias Assent.Strategy.Github
   alias Sequin.Accounts
   alias SequinWeb.UserAuth
+
+  require Logger
+
+  def start_oauth(conn, _params) do
+    {:ok, %{url: url, session_params: session_params}} =
+      Github.authorize_url(oauth_provider_config(:github))
+
+    # Session params (used for OAuth 2.0 and OIDC strategies) will be
+    # retrieved when user returns for the callback phase
+    conn = put_session(conn, :session_params, session_params)
+
+    # Redirect end-user to Github to authorize access to their account
+    conn
+    |> put_resp_header("location", url)
+    |> send_resp(302, "")
+  end
+
+  def callback(conn, _params) do
+    # End-user will return to the callback URL with params attached to the
+    # request. These must be passed on to the strategy. In this example we only
+    # expect GET query params, but the provider could also return the user with
+    # a POST request where the params is in the POST body.
+    %{params: params} = fetch_query_params(conn)
+
+    # The session params (used for OAuth 2.0 and OIDC strategies) stored in the
+    # request phase will be used in the callback phase
+    session_params = get_session(conn, :session_params)
+
+    :github
+    |> oauth_provider_config()
+    # Session params should be added to the config so the strategy can use them
+    |> Config.put(:session_params, session_params)
+    |> Github.callback(params)
+    |> case do
+      {:ok, %{user: user, token: token}} ->
+        # CLAUDE TODO
+        :ok
+
+      # Authorization succesful
+
+      {:error, %Assent.UnexpectedResponseError{} = error} ->
+        Logger.error("Failed to login with Github: #{inspect(error)}")
+
+        conn
+        |> put_flash(:toast, %{kind: :error, title: "Failed to login with Github."})
+        |> redirect(to: ~p"/login")
+    end
+  end
 
   def create(conn, %{"_action" => "registered"} = params) do
     create(conn, params, "Account created successfully!")
@@ -38,5 +88,9 @@ defmodule SequinWeb.UserSessionController do
     conn
     |> put_flash(:toast, %{kind: :info, title: "Logged out successfully."})
     |> UserAuth.log_out_user()
+  end
+
+  defp oauth_provider_config(provider) do
+    Application.get_env(:sequin, SequinWeb.UserSessionController)[provider]
   end
 end

@@ -12,6 +12,8 @@ defmodule Sequin.Accounts.User do
     field :hashed_password, :string, redact: true
     field :current_password, :string, virtual: true, redact: true
     field :confirmed_at, :utc_datetime
+    field :auth_provider, Ecto.Enum, values: [:identity, :github]
+    field :auth_provider_id, :string
 
     belongs_to :account, Sequin.Accounts.Account
 
@@ -54,6 +56,13 @@ defmodule Sequin.Accounts.User do
     |> cast(attrs, [:email, :password, :name])
     |> validate_email(opts)
     |> validate_password(opts)
+    |> put_change(:auth_provider, :identity)
+  end
+
+  def provider_registration_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:email, :name, :auth_provider, :auth_provider_id])
+    |> validate_required([:email, :name, :auth_provider, :auth_provider_id])
   end
 
   def update_changeset(user, attrs) do

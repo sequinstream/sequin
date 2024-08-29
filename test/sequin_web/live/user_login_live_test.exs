@@ -9,7 +9,7 @@ defmodule SequinWeb.UserLoginLiveTest do
     test "renders log in page", %{conn: conn} do
       {:ok, _lv, html} = live(conn, ~p"/login")
 
-      assert html =~ "Log in"
+      assert html =~ "Welcome back"
       assert html =~ "Sign up"
       assert html =~ "Forgot your password?"
     end

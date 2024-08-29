@@ -320,18 +320,5 @@ defmodule Sequin.Repo.Migrations.CreateInitial do
              ],
              prefix: @stream_schema
            )
-
-    create table(:api_keys, prefix: @config_schema) do
-      add :account_id, references(:accounts, on_delete: :delete_all, prefix: @config_schema),
-        null: false
-
-      add :value, :binary, null: false
-      add :name, :string
-
-      timestamps()
-    end
-
-    create index(:api_keys, [:account_id], prefix: @config_schema)
-    create unique_index(:api_keys, [:value], prefix: @config_schema)
   end
 end

@@ -17,7 +17,11 @@ defmodule SequinWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  import Plug.Conn
+
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ApiTokensFactory
+  alias SequinWeb.Plugs.VerifyApiToken
 
   using opts do
     quote do
@@ -41,7 +45,9 @@ defmodule SequinWeb.ConnCase do
   def authenticated_conn(%{conn: conn}) do
     # TODO: Right now, FetchUser just uses this - in future, we'll need to add to conn here
     account = AccountsFactory.insert_account!()
-    conn = Plug.Conn.assign(conn, :account_id, account.id)
+    token = ApiTokensFactory.insert_token!(account_id: account.id)
+    conn = put_req_header(conn, VerifyApiToken.header(), "Bearer #{token.token}")
+    conn = put_req_header(conn, "content-type", "application/json")
     {:ok, conn: conn, account: account}
   end
 

@@ -10,7 +10,7 @@ defmodule SequinWeb.SetupLive do
 
     case check_user_setup() do
       {:ok, :complete} ->
-        {:ok, push_navigate(socket, to: "/consumers")}
+        {:ok, push_navigate(socket, to: ~p"/consumers")}
 
       {:ok, :incomplete, account} ->
         {:ok,

@@ -14,6 +14,7 @@ defmodule Sequin.Factory.AccountsFactory do
   def account(attrs \\ []) do
     merge_attributes(
       %Account{
+        name: "Account #{Factory.unique_integer()}",
         inserted_at: Factory.utc_datetime(),
         updated_at: Factory.utc_datetime()
       },

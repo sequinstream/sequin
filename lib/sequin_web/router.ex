@@ -4,6 +4,7 @@ defmodule SequinWeb.Router do
   import SequinWeb.UserAuth
 
   alias SequinWeb.Plugs.AssignCurrentPath
+  alias SequinWeb.Plugs.VerifyApiToken
 
   @self_hosted Application.compile_env!(:sequin, :self_hosted)
 
@@ -19,7 +20,8 @@ defmodule SequinWeb.Router do
   end
 
   pipeline :api do
-    plug(:accepts, ["json"])
+    plug :accepts, ["json"]
+    plug VerifyApiToken
   end
 
   ## Authentication routes

@@ -85,6 +85,8 @@ if config_env() == :prod do
 
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
+  config :swoosh, Sequin.Mailer, api_key: System.fetch_env!("SENDGRID_API_KEY")
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

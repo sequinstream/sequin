@@ -243,7 +243,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   defp create_database(account_id, db_params, replication_params) do
     Repo.transact(fn ->
       account_id
-      |> Databases.create_db_for_account(db_params)
+      |> Databases.create_db_for_account_with_lifecycle(db_params)
       |> case do
         {:ok, db} ->
           # Safe to update health here because we just validated that the database is reachable

@@ -69,6 +69,8 @@ defmodule Sequin.Factory.AccountsFactory do
         email: email(),
         password: password(),
         account_id: Factory.uuid(),
+        auth_provider: Factory.one_of([:identity, :github]),
+        auth_provider_id: Factory.one_of([Factory.uuid(), nil]),
         inserted_at: Factory.utc_datetime(),
         updated_at: Factory.utc_datetime()
       },
@@ -85,11 +87,20 @@ defmodule Sequin.Factory.AccountsFactory do
   def insert_user!(attrs \\ []) do
     attrs = Map.new(attrs)
     {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> insert_account!().id end)
-
+    {auth_provider, attrs} = Map.pop(attrs, :auth_provider, :identity)
     attrs = user_attrs(attrs)
 
-    %User{account_id: account_id}
-    |> User.registration_changeset(attrs, hash_password: true)
+    changeset =
+      if auth_provider == :identity do
+        User.registration_changeset(%User{account_id: account_id}, attrs, hash_password: true)
+      else
+        User.provider_registration_changeset(
+          %User{account_id: account_id},
+          Map.put_new(attrs, :auth_provider_id, Factory.uuid())
+        )
+      end
+
+    changeset
     |> Repo.insert!()
     # Some tests need to then use the password
     |> Map.put(:password, attrs.password)

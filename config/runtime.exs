@@ -84,6 +84,12 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  config :sequin, SequinWeb.ProviderAuth,
+    github: [
+      client_id: System.get_env("GITHUB_CLIENT_ID"),
+      client_secret: System.get_env("GITHUB_CLIENT_SECRET")
+    ]
+
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
 
   # ## SSL Support

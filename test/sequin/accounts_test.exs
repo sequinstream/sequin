@@ -35,25 +35,25 @@ defmodule Sequin.AccountsTest do
 
     test "get_user_by_email/1 returns the user with given email" do
       user = AccountsFactory.insert_user!()
-      assert fetched_user = Accounts.get_user_by_email(user.email)
+      assert fetched_user = Accounts.get_identity_user_by_email(user.email)
       assert fetched_user.id == user.id
     end
 
     test "get_user_by_email/1 returns nil for non-existent email" do
-      assert Accounts.get_user_by_email("nonexistent@example.com") == nil
+      assert Accounts.get_identity_user_by_email("nonexistent@example.com") == nil
     end
 
     test "register_user/1 with valid data creates a user" do
       valid_attrs = AccountsFactory.user_attrs(%{name: "John Doe", email: "john@example.com"})
 
-      assert {:ok, %User{} = user} = Accounts.register_user(valid_attrs)
+      assert {:ok, %User{} = user} = Accounts.register_user(:identity, valid_attrs)
       assert user.name == "John Doe"
       assert user.email == "john@example.com"
     end
 
     test "create_user/1 with invalid data returns error changeset" do
       invalid_attrs = %{name: nil, email: nil, password: nil, account_id: nil}
-      assert {:error, %Ecto.Changeset{}} = Accounts.register_user(invalid_attrs)
+      assert {:error, %Ecto.Changeset{}} = Accounts.register_user(:identity, invalid_attrs)
     end
 
     test "update_user/2 with valid data updates the user" do
@@ -79,7 +79,7 @@ defmodule Sequin.AccountsTest do
       existing_user = AccountsFactory.insert_user!()
       attrs = AccountsFactory.user_attrs(%{email: existing_user.email})
 
-      assert {:error, changeset} = Accounts.register_user(attrs)
+      assert {:error, changeset} = Accounts.register_user(:identity, attrs)
       assert {"has already been taken", _} = changeset.errors[:email]
     end
   end
@@ -129,7 +129,7 @@ defmodule Sequin.AccountsTest do
 
   describe "register_user/1" do
     test "requires email and password to be set" do
-      {:error, changeset} = Accounts.register_user(%{})
+      {:error, changeset} = Accounts.register_user(:identity, %{})
 
       assert %{
                password: ["can't be blank"],
@@ -138,7 +138,7 @@ defmodule Sequin.AccountsTest do
     end
 
     test "validates email and password when given" do
-      {:error, changeset} = Accounts.register_user(%{email: "not valid", password: "not valid"})
+      {:error, changeset} = Accounts.register_user(:identity, %{email: "not valid", password: "not valid"})
 
       assert %{
                email: ["must have the @ sign and no spaces"],
@@ -148,24 +148,24 @@ defmodule Sequin.AccountsTest do
 
     test "validates maximum values for email and password for security" do
       too_long = String.duplicate("db", 100)
-      {:error, changeset} = Accounts.register_user(%{email: too_long, password: too_long})
+      {:error, changeset} = Accounts.register_user(:identity, %{email: too_long, password: too_long})
       assert "should be at most 160 character(s)" in errors_on(changeset).email
       assert "should be at most 72 character(s)" in errors_on(changeset).password
     end
 
     test "validates email uniqueness" do
       %{email: email} = AccountsFactory.insert_user!()
-      {:error, changeset} = Accounts.register_user(%{email: email})
+      {:error, changeset} = Accounts.register_user(:identity, %{email: email})
       assert "has already been taken" in errors_on(changeset).email
 
       # Now try with the upper cased email too, to check that email case is ignored.
-      {:error, changeset} = Accounts.register_user(%{email: String.upcase(email)})
+      {:error, changeset} = Accounts.register_user(:identity, %{email: String.upcase(email)})
       assert "has already been taken" in errors_on(changeset).email
     end
 
     test "registers users with a hashed password" do
       email = "user#{System.unique_integer()}@example.com"
-      {:ok, user} = Accounts.register_user(%{email: email, password: "valid_password12"})
+      {:ok, user} = Accounts.register_user(:identity, %{email: email, password: "valid_password12"})
       assert user.email == email
       assert is_binary(user.hashed_password)
       assert is_nil(user.confirmed_at)
@@ -198,7 +198,7 @@ defmodule Sequin.AccountsTest do
 
   describe "change_user_email/2" do
     test "returns a user changeset" do
-      assert %Ecto.Changeset{} = changeset = Accounts.change_user_email(%User{})
+      assert %Ecto.Changeset{} = changeset = Accounts.change_user_email(%User{auth_provider: :identity})
       assert changeset.required == [:email]
     end
   end
@@ -317,13 +317,13 @@ defmodule Sequin.AccountsTest do
 
   describe "change_user_password/2" do
     test "returns a user changeset" do
-      assert %Ecto.Changeset{} = changeset = Accounts.change_user_password(%User{})
+      assert %Ecto.Changeset{} = changeset = Accounts.change_user_password(%User{auth_provider: :identity})
       assert changeset.required == [:password]
     end
 
     test "allows fields to be set" do
       changeset =
-        Accounts.change_user_password(%User{}, %{
+        Accounts.change_user_password(%User{auth_provider: :identity}, %{
           "password" => "new valid password"
         })
 

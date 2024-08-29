@@ -27,9 +27,12 @@ In production, you can configure Sequin as code using Terraform.
 
 ### Use cases
 
-* **Transactional queueing:** Guarantee that any change to your database is committed to a durable stream for processing by other systems.
-* **Fan in / out:** Add queue capabilities to your database to broadcast events, distribute workloads, and decouple services.
+* **Trigger side-effects:** Never miss a change in your database for processing by other systems.
+  ![Queue email](https://i.imgur.com/SwrEHEs.png)
+* **Fan out:** Add queue capabilities to your database to broadcast events, distribute workloads, and decouple services.
+  ![Fan out order](https://i.imgur.com/oz6ov48.png)
 * **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
+  ![Sync](https://i.imgur.com/B3uWnx1.png)
 
 ### Compare Sequin
 

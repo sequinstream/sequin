@@ -119,6 +119,7 @@ defmodule Sequin.Accounts do
   def register_user(auth_provider, attrs) do
     Repo.transact(fn ->
       {:ok, account} = create_account(%{})
+      {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
 
       %User{account_id: account.id}
       |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))

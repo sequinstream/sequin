@@ -51,11 +51,11 @@ defmodule Sequin.ApiTokens do
 
   def delete_token_for_account(token_id, account_id) do
     case get_token_by(id: token_id, account_id: account_id) do
-      nil ->
-        {:error, Error.not_found(entity: :api_token)}
-
-      token ->
+      {:ok, token} ->
         Repo.delete(token)
+
+      {:error, _} = error ->
+        error
     end
   end
 end

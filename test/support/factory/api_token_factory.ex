@@ -7,6 +7,12 @@ defmodule Sequin.Factory.ApiTokensFactory do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Repo
 
+  def token_attrs(attrs \\ []) do
+    attrs
+    |> token()
+    |> Sequin.Map.from_ecto()
+  end
+
   def token(attrs \\ []) do
     attrs = Map.new(attrs)
 

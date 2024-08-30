@@ -6,7 +6,6 @@ defmodule Sequin.Accounts do
   import Ecto.Query, warn: false
 
   alias Sequin.Accounts.Account
-  alias Sequin.Accounts.ApiKey
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserNotifier
   alias Sequin.Accounts.UserToken
@@ -418,31 +417,6 @@ defmodule Sequin.Accounts do
     |> Repo.insert()
   end
 
-  # API Key functions
-
-  def list_api_keys_for_account(account_id) do
-    account_id
-    |> ApiKey.where_account()
-    |> Repo.all()
-  end
-
-  def create_api_key(account_id, attrs) do
-    %ApiKey{account_id: account_id}
-    |> ApiKey.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def get_api_key_for_account(account_id, id) do
-    case Repo.get_by(ApiKey, id: id, account_id: account_id) do
-      nil -> {:error, Error.not_found(entity: :api_key)}
-      api_key -> {:ok, api_key}
-    end
-  end
-
-  def delete_api_key(%ApiKey{} = api_key) do
-    Repo.delete(api_key)
-  end
-
   def deprovision_account(%Account{} = account, :i_am_responsible_for_my_actions) do
     Repo.transact(fn ->
       # Delete associated users
@@ -452,8 +426,8 @@ defmodule Sequin.Accounts do
 
       # Delete associated API keys
       account.id
-      |> list_api_keys_for_account()
-      |> Enum.each(&delete_api_key/1)
+      |> ApiTokens.list_tokens_for_account()
+      |> Enum.each(&ApiTokens.delete_token_for_account(&1.id, account.id))
 
       # Delete associated HTTP push and pull consumers
       account.id

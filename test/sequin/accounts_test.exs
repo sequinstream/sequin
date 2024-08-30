@@ -54,7 +54,12 @@ defmodule Sequin.AccountsTest do
     end
 
     test "registers a user with GitHub provider" do
-      valid_attrs = %{name: "Jane Doe", email: "jane@example.com", auth_provider_id: "github123"}
+      valid_attrs = %{
+        name: "Jane Doe",
+        email: "jane@example.com",
+        auth_provider_id: "github123",
+        extra: %{"avatar_url" => "https://example.com/avatar.jpg"}
+      }
 
       assert {:ok, %User{} = user} = Accounts.register_user(:github, valid_attrs)
       assert user.name == "Jane Doe"
@@ -62,6 +67,7 @@ defmodule Sequin.AccountsTest do
       assert user.auth_provider == :github
       assert user.auth_provider_id == "github123"
       assert user.hashed_password == nil
+      assert user.extra == %{"avatar_url" => "https://example.com/avatar.jpg"}
     end
 
     test "returns error changeset with invalid data" do

@@ -14,6 +14,7 @@ defmodule Sequin.Accounts.User do
     field :confirmed_at, :utc_datetime
     field :auth_provider, Ecto.Enum, values: [:identity, :github]
     field :auth_provider_id, :string
+    field :extra, :map
 
     belongs_to :account, Sequin.Accounts.Account
 
@@ -62,7 +63,7 @@ defmodule Sequin.Accounts.User do
 
   def provider_registration_changeset(user, attrs) do
     user
-    |> cast(attrs, [:email, :name, :auth_provider, :auth_provider_id])
+    |> cast(attrs, [:email, :name, :auth_provider, :auth_provider_id, :extra])
     |> validate_required([:email, :name, :auth_provider, :auth_provider_id])
     |> validate_email([])
     |> unique_constraint([:auth_provider, :auth_provider_id])
@@ -71,7 +72,7 @@ defmodule Sequin.Accounts.User do
 
   # Add this function to handle GitHub profile updates
   def github_update_changeset(user, attrs) do
-    cast(user, attrs, [:name, :email])
+    cast(user, attrs, [:name, :email, :extra])
   end
 
   def update_changeset(user, attrs) do

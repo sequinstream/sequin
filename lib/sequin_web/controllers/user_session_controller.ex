@@ -51,8 +51,14 @@ defmodule SequinWeb.UserSessionController do
     end
   end
 
+  # Not all these fields are always present
+  # %{"email" => "user@example.com", "email_verified" => true,
+  #   "picture" => "https://avatars.githubusercontent.com/u/12345678?v=4",
+  #   "preferred_username" => "exampleuser",
+  #   "profile" => "https://github.com/exampleuser", "sub" => 12345678,
+  #   "name" => "Example User"}
   defp handle_oauth_callback(conn, user_data, _token) do
-    %{"email" => email, "name" => name, "sub" => github_id} = user_data
+    %{"email" => email, "sub" => github_id} = user_data
     github_id = to_string(github_id)
 
     case Accounts.get_user_by_auth_provider_id(:github, github_id) do
@@ -60,8 +66,9 @@ defmodule SequinWeb.UserSessionController do
         {:ok, user} =
           Accounts.register_user(:github, %{
             email: email,
-            name: name,
-            auth_provider_id: to_string(github_id)
+            name: Map.get(user_data, "name"),
+            auth_provider_id: to_string(github_id),
+            extra: user_data
           })
 
         conn
@@ -70,7 +77,11 @@ defmodule SequinWeb.UserSessionController do
 
       user ->
         {:ok, updated_user} =
-          Accounts.update_user_github_profile(user, %{name: name, email: email})
+          Accounts.update_user_github_profile(user, %{
+            name: Map.get(user_data, "name"),
+            email: email,
+            extra: user_data
+          })
 
         conn
         |> put_flash(:toast, %{kind: :info, title: "Logged in successfully!"})

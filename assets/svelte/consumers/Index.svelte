@@ -39,6 +39,8 @@
   export let live: any;
   export let hasDatabases: boolean;
 
+  const hasConsumers = consumers.length > 0;
+
   function handleConsumerClick(id: string) {
     live.pushEvent("consumer_clicked", { id });
   }
@@ -80,51 +82,61 @@
       <h1 class="text-2xl font-bold">Consumers</h1>
     </div>
     {#if hasDatabases}
-      <div class="relative inline-block text-left">
-        <div class="inline-flex rounded-md shadow-sm">
-          <a
-            href="/consumers/new"
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button class="rounded-r-none" variant="default"
-              >Create Consumer</Button
+      {#if hasConsumers}
+        <div class="relative inline-block text-left">
+          <div class="inline-flex rounded-md shadow-sm">
+            <a
+              href="/consumers/new"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
             >
-          </a>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild let:builder>
-              <Button
-                variant="default"
-                builders={[builder]}
-                class="px-2 rounded-l-none border-l border-primary/20"
+              <Button class="rounded-r-none" variant="default"
+                >Create Consumer</Button
               >
-                <ChevronDown class="h-4 w-4" />
-                <span class="sr-only">Open options</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <a
-                href="/consumers/new?kind=push"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Quick create Push Consumer
-                </DropdownMenuItem>
-              </a>
-              <a
-                href="/consumers/new?kind=pull"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Quick create Pull Consumer
-                </DropdownMenuItem>
-              </a>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </a>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild let:builder>
+                <Button
+                  variant="default"
+                  builders={[builder]}
+                  class="px-2 rounded-l-none border-l border-primary/20"
+                >
+                  <ChevronDown class="h-4 w-4" />
+                  <span class="sr-only">Open options</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <a
+                  href="/consumers/new?kind=push"
+                  data-phx-link="redirect"
+                  data-phx-link-state="push"
+                >
+                  <DropdownMenuItem class="cursor-pointer">
+                    Quick create Push Consumer
+                  </DropdownMenuItem>
+                </a>
+                <a
+                  href="/consumers/new?kind=pull"
+                  data-phx-link="redirect"
+                  data-phx-link-state="push"
+                >
+                  <DropdownMenuItem class="cursor-pointer">
+                    Quick create Pull Consumer
+                  </DropdownMenuItem>
+                </a>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
+      {:else}
+        <a
+          href="/consumers/new"
+          data-phx-link="redirect"
+          data-phx-link-state="push"
+        >
+          <Button variant="default">Create Consumer</Button>
+        </a>
+      {/if}
     {/if}
   </div>
 

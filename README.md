@@ -29,7 +29,7 @@ You can receive changes via HTTP push (webhooks) or pull (think SQS).
 
 [**Try Sequin Cloud now →**](https://console.sequinstream.com/register)
 
-### How Sequin works
+## How Sequin works
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
@@ -45,13 +45,13 @@ Sequin comes with a web console/UI for configuration:
 
 In production, you can configure Sequin as code using Terraform.
 
-### Benchmarks
+## Benchmarks
 
 Sequin efficiently captures changes using the Write Ahead Log. This adds virtually no overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
 
 We'll be reporting benchmarks for different database configurations soon.
 
-### Use cases
+## Use cases
 
 **Trigger side-effects:** Never miss a change in your database for processing by other systems.
   ![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_1.svg)
@@ -62,7 +62,7 @@ We'll be reporting benchmarks for different database configurations soon.
 **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
   ![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_3.svg)
 
-### Compare Sequin
+## Compare Sequin
 
 | Feature             | Sequin                 | PG triggers   | LISTEN / NOTIFY | Supabase Webhooks | Amazon SQS   |
 |---------------------|------------------------|---------------|-----------------|-------------------|--------------|
@@ -93,7 +93,7 @@ Sequin is available as a cloud version or self-hosted. See the following docs to
 * [Sequin cloud quickstart](https://sequinstream.com/docs/quickstart)
 * [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/installation)
 
-## SDKs
+### SDKs
 
 Use Sequin's SDKs to dynamically create new consumers and work with messages:
 

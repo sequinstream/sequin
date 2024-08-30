@@ -26,6 +26,7 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import HealthComponent from "../health/HealthComponent.svelte";
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
+  import { Badge } from "$lib/components/ui/badge";
 
   export let consumer;
   export let metrics;
@@ -100,26 +101,21 @@
         <CardContent class="p-6">
           <div class="flex items-center space-x-4 mb-4">
             <h2 class="text-lg font-semibold">Configuration</h2>
-            <div class="flex items-center">
-              <span
-                class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
-              >
-                <ArrowLeftFromLine class="h-4 w-4 mr-1 text-black" />
-                Pull consumer
-              </span>
-            </div>
-            <div
-              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
-            >
-              <SquareStack class="h-4 w-4 mr-1 text-black" />
-              <p class="font-medium">
-                {#if consumer.message_kind === "event"}
-                  Change stream
-                {:else if consumer.message_kind === "record"}
-                  Sync stream
-                {/if}
-              </p>
-            </div>
+            <Badge variant="default">
+              <ArrowLeftFromLine class="h-4 w-4 mr-1" />
+              Pull consumer
+            </Badge>
+            {#if consumer.message_kind === "event"}
+              <Badge variant="default">
+                <SquareStack class="h-4 w-4 mr-1" />
+                Change stream
+              </Badge>
+            {:else if consumer.message_kind === "record"}
+              <Badge variant="default">
+                <SquareStack class="h-4 w-4 mr-1" />
+                Sync stream
+              </Badge>
+            {/if}
           </div>
           <div class="grid md:grid-cols-2 gap-4">
             <div>

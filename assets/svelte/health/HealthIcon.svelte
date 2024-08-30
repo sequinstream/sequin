@@ -25,6 +25,6 @@
 {#if Icon}
   <svelte:component
     this={Icon}
-    class={`w-4 h-4 ml-1 ${color} ${status === "initializing" ? "animate-spin" : ""}`}
+    class={`w-4 h-4 mr-1 ${color} ${status === "initializing" ? "animate-spin" : ""}`}
   />
 {/if}

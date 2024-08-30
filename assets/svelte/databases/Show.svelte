@@ -17,6 +17,7 @@
   import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
   import HealthComponent from "$lib/health/HealthComponent.svelte";
   import type { Health } from "$lib/health/Types";
+  import { Badge } from "$lib/components/ui/badge";
 
   interface Table {
     schema_name: string;
@@ -211,20 +212,18 @@
                     </Button>
                   </div>
                   <div
-                    class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-3 mb-2 auto-rows-fr"
+                    class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-3 mb-2 auto-rows-fr items-center"
                   >
-                    <p
-                      class="text-sm text-gray-500 justify-self-end self-center"
-                    >
+                    <p class="text-sm text-gray-500 justify-self-end">
                       Tables:
                     </p>
-                    <div>
+                    <div class="flex flex-wrap align-center">
                       {#each consumer.source_tables as table}
                         <div
-                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
+                          class="inline-flex items-center text-sm font-medium text-black"
                         >
                           <icon
-                            class="hero-table-cells w-4 h-4 mr-1 rounded {getColorFromName(
+                            class="hero-table-cells w-5 h-5 mr-1 rounded {getColorFromName(
                               `${table.schema_name}.${table.table_name}`
                             )}"
                           ></icon>
@@ -234,40 +233,37 @@
                         </div>
                       {/each}
                     </div>
-                    <p
-                      class="text-sm text-gray-500 justify-self-end self-center"
-                    >
+                    <p class="text-sm text-gray-500 justify-self-end">
                       Stream type:
                     </p>
-                    <div
-                      class="w-fit inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
-                    >
-                      <SquareStack class="h-4 w-4 mr-1 text-black" />
-                      <p class="font-medium">
-                        {#if consumer.message_kind === "event"}
+                    <div class="flex flex-wrap align-center">
+                      {#if consumer.message_kind === "event"}
+                        <Badge variant="default">
+                          <SquareStack class="h-4 w-4 mr-1" />
                           Change stream
-                        {:else if consumer.message_kind === "record"}
+                        </Badge>
+                      {:else if consumer.message_kind === "record"}
+                        <Badge variant="default">
+                          <SquareStack class="h-4 w-4 mr-1" />
                           Sync stream
-                        {/if}
-                      </p>
+                        </Badge>
+                      {/if}
                     </div>
-                    <p
-                      class="text-sm text-gray-500 justify-self-end self-center"
-                    >
+                    <p class="text-sm text-gray-500 justify-self-end">
                       Consumer type:
                     </p>
-                    <div class="flex items-center">
-                      <span
-                        class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-black text-black"
-                      >
-                        {#if consumer.consumer_kind === "http_push"}
-                          <ArrowRightToLine class="h-4 w-4 mr-1 text-black" />
+                    <div class="flex flex-wrap align-center">
+                      {#if consumer.consumer_kind === "http_push"}
+                        <Badge variant="default">
+                          <ArrowRightToLine class="h-4 w-4 mr-1" />
                           Push consumer
-                        {:else if consumer.consumer_kind === "http_pull"}
-                          <ArrowLeftFromLine class="h-4 w-4 mr-1 text-black" />
+                        </Badge>
+                      {:else if consumer.consumer_kind === "http_pull"}
+                        <Badge variant="default">
+                          <ArrowLeftFromLine class="h-4 w-4 mr-1" />
                           Pull consumer
-                        {/if}
-                      </span>
+                        </Badge>
+                      {/if}
                     </div>
                   </div>
                 </CardContent>

@@ -398,7 +398,11 @@
               disabled
               selected={{
                 value: form.httpEndpointId,
-                label: selectedHttpEndpoint?.name || "Selected HTTP endpoint",
+                label:
+                  selectedHttpEndpoint?.name ||
+                  (showNewHttpEndpointForm
+                    ? "+ Add new"
+                    : "Select an endpoint"),
               }}
             >
               <SelectTrigger

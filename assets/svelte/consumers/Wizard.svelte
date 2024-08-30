@@ -925,7 +925,10 @@
                       selected={{
                         value: form.httpEndpointId,
                         label:
-                          selectedHttpEndpoint?.name || "Select an endpoint",
+                          selectedHttpEndpoint?.name ||
+                          (showNewHttpEndpointForm
+                            ? "+ Add new"
+                            : "Select an endpoint"),
                       }}
                       onSelectedChange={(event) => {
                         if (event.value === "new") {

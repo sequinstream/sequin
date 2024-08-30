@@ -11,6 +11,7 @@ defmodule Sequin.ApiTokens.ApiToken do
   @rand_bytes 48
   @hash_algo :sha256
 
+  @derive {Jason.Encoder, only: [:id, :name]}
   schema "api_tokens" do
     belongs_to :account, Account
     field :name, :string

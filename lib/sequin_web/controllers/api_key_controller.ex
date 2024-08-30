@@ -1,21 +1,21 @@
 defmodule SequinWeb.ApiKeyController do
   use SequinWeb, :controller
 
-  alias Sequin.Accounts
+  alias Sequin.ApiTokens
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
 
   def index(conn, _params) do
     account_id = conn.assigns.account_id
-    api_keys = Accounts.list_api_keys_for_account(account_id)
+    api_keys = ApiTokens.list_tokens_for_account(account_id)
     render(conn, "index.json", api_keys: api_keys)
   end
 
   def create(conn, params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, api_key} <- Accounts.create_api_key(account_id, params) do
+    with {:ok, api_key} <- ApiTokens.create_for_account(account_id, params) do
       render(conn, "show.json", api_key: api_key)
     end
   end
@@ -23,8 +23,7 @@ defmodule SequinWeb.ApiKeyController do
   def delete(conn, %{"id" => id}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, api_key} <- Accounts.get_api_key_for_account(account_id, id),
-         {:ok, _api_key} <- Accounts.delete_api_key(api_key) do
+    with {:ok, _} <- ApiTokens.delete_token_for_account(id, account_id) do
       json(conn, %{success: true})
     end
   end

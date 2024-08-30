@@ -5,6 +5,7 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserToken
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ApiTokensFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
@@ -107,7 +108,7 @@ defmodule Sequin.AccountsTest do
     test "deprovision_account/1 removes all associated resources" do
       account = AccountsFactory.insert_account!()
       AccountsFactory.insert_user!(account_id: account.id)
-      AccountsFactory.insert_api_key!(account_id: account.id)
+      ApiTokensFactory.insert_token!(account_id: account.id)
       db = DatabasesFactory.insert_postgres_database!(account_id: account.id)
 
       replication_slot =
@@ -119,7 +120,7 @@ defmodule Sequin.AccountsTest do
 
       refute Enum.any?(Repo.all(Accounts.Account))
       refute Enum.any?(Repo.all(Accounts.User))
-      refute Enum.any?(Repo.all(Accounts.ApiKey))
+      refute Enum.any?(Repo.all(Sequin.ApiTokens.ApiToken))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpEndpoint))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpPushConsumer))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpPullConsumer))

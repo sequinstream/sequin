@@ -24,6 +24,12 @@ import topbar from "../vendor/topbar";
 import { getHooks } from "live_svelte";
 import * as Components from "../svelte/**/*.svelte";
 import { toast } from "svelte-sonner";
+import posthog from "posthog-js";
+
+posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
+  api_host: "https://d2qm7p9dngzyqg.cloudfront.net",
+  ui_host: "https://us.posthog.com",
+});
 
 let csrfToken = document
   .querySelector("meta[name='csrf-token']")

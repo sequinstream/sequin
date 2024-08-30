@@ -32,10 +32,11 @@ defmodule Sequin.Postgres do
   @spec pg_simple_type_to_filter_type(String.t()) :: SourceTable.filter_type()
   def pg_simple_type_to_filter_type(pg_type) do
     case pg_type do
+      "smallint" -> :number
+      "integer" -> :number
       "bigint" -> :number
       "boolean" -> :boolean
       "character varying" -> :string
-      "integer" -> :number
       "text" -> :string
       "timestamp" <> _ -> :datetime
       "uuid" -> :string

@@ -24,9 +24,8 @@ defmodule Sequin.ConsumersRuntime.Starter do
 
   @impl GenServer
   def handle_info(:start, :ignore) do
-    logger_info("[ConsumersRuntimeStarter] Starting consumer-related workers...")
-
     start()
+    logger_info("[ConsumersRuntimeStarter] Booted consumer-related workers")
 
     schedule_start()
 

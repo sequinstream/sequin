@@ -24,9 +24,8 @@ defmodule Sequin.ReplicationRuntime.Starter do
 
   @impl GenServer
   def handle_info(:start, :ignore) do
-    logger_info("[ReplicationRuntimeStarter] Starting source-related workers...")
-
     start()
+    logger_info("[ReplicationRuntimeStarter] Booted source-related workers.")
 
     schedule_start()
 

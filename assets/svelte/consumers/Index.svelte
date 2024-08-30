@@ -24,6 +24,7 @@
     AlertTitle,
   } from "$lib/components/ui/alert";
   import HealthPill from "../health/HealthPill.svelte";
+  import { Badge } from "$lib/components/ui/badge";
 
   export let consumers: Array<{
     id: string;
@@ -168,32 +169,28 @@
           </Table.Cell>
           <Table.Cell>{consumer.database_name}</Table.Cell>
           <Table.Cell>
-            <div class="flex items-center">
-              <span
-                class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border border-black"
-              >
-                {#if consumer.type === "pull"}
-                  <ArrowLeftFromLine class="h-4 w-4 mr-1 text-black" />
-                {:else if consumer.type === "push"}
-                  <ArrowRightToLine class="h-4 w-4 mr-1 text-black" />
-                {/if}
-                {consumer.type[0].toUpperCase() + consumer.type.slice(1)} consumer
-              </span>
-            </div>
+            {#if consumer.type === "pull"}
+              <Badge variant="default">
+                <ArrowLeftFromLine class="h-4 w-4 mr-1" />
+                Pull consumer
+              </Badge>
+            {:else if consumer.type === "push"}
+              <Badge variant="default">
+                <ArrowRightToLine class="h-4 w-4 mr-1" />
+                Push consumer
+              </Badge>
+            {/if}
           </Table.Cell>
           <Table.Cell>
-            <span
-              class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-              class:text-purple-500={consumer.status === "active"}
-              class:text-gray-400={consumer.status === "disabled"}
-            >
-              {#if consumer.status === "active"}
-                <CirclePlay class="h-4 w-4 mr-1" />
-              {:else if consumer.status === "disabled"}
-                <CircleStop class="h-4 w-4 mr-1" />
-              {/if}
-              {consumer.status[0].toUpperCase() + consumer.status.slice(1)}
-            </span>
+            {#if consumer.status === "active"}
+              <Badge variant="default"
+                ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
+              >
+            {:else}
+              <Badge variant="disabled"
+                ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
+              >
+            {/if}
           </Table.Cell>
           <Table.Cell>{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
           >

@@ -10,6 +10,7 @@
     ArrowLeftFromLine,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Badge } from "$lib/components/ui/badge";
   import { formatRelativeTimestamp } from "../utils";
 
   export let consumer;
@@ -30,20 +31,15 @@
           <Radio class="h-6 w-6 mr-2" />
           <h1 class="text-xl font-semibold">{consumer.name}</h1>
         </div>
-        <div
-          class={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border ${
-            consumer.status === "active"
-              ? "text-purple-500 border-purple-500"
-              : "text-gray-500 border-gray-500"
-          }`}
-        >
-          {#if consumer.status === "active"}
-            <CirclePlay class="h-4 w-4 mr-1 text-purple-500" />
-          {:else}
-            <CircleStop class="h-4 w-4 mr-1 text-gray-500" />
-          {/if}
-          {consumer.status[0].toUpperCase() + consumer.status.slice(1)}
-        </div>
+        {#if consumer.status === "active"}
+          <Badge variant="default"
+            ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
+          >
+        {:else}
+          <Badge variant="disabled"
+            ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
+          >
+        {/if}
       </div>
       <div class="flex items-center space-x-4">
         <div

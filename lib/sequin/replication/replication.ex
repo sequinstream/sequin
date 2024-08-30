@@ -58,6 +58,10 @@ defmodule Sequin.Replication do
             enqueue_backfill_jobs(pg_replication)
           end
 
+          unless Application.get_env(:sequin, :env) == :test do
+            ReplicationRuntime.Supervisor.start_replication(pg_replication)
+          end
+
           {:ok, pg_replication}
 
         error ->

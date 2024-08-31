@@ -31,11 +31,26 @@ posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
   ui_host: "https://us.posthog.com",
 });
 
+let Hooks = {};
+
+Hooks.PostHogIdentify = {
+  mounted() {
+    const userId = this.el.dataset.userId;
+    const userEmail = this.el.dataset.userEmail;
+    const userName = this.el.dataset.userName;
+
+    posthog.identify(userId, {
+      email: userEmail,
+      name: userName,
+    });
+  },
+};
+
 let csrfToken = document
   .querySelector("meta[name='csrf-token']")
   .getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
-  hooks: getHooks(Components),
+  hooks: { ...getHooks(Components), ...Hooks },
   params: { _csrf_token: csrfToken },
 });
 

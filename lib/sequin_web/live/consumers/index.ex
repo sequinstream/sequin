@@ -10,7 +10,8 @@ defmodule SequinWeb.ConsumersLive.Index do
   alias SequinWeb.ConsumersLive.Form
 
   @impl Phoenix.LiveView
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
+    user = Sequin.Accounts.get_user_by_session_token(session["user_token"])
     account = current_account(socket)
     consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
@@ -25,6 +26,12 @@ defmodule SequinWeb.ConsumersLive.Index do
       |> assign(:consumers, consumers)
       |> assign(:form_errors, %{})
       |> assign(:has_databases?, has_databases?)
+      |> assign(:user, user)
+      |> push_event("posthog-identify", %{
+        user_id: user.id,
+        user_email: user.email,
+        user_name: user.name
+      })
 
     {:ok, socket}
   end
@@ -48,6 +55,14 @@ defmodule SequinWeb.ConsumersLive.Index do
     assigns = assign(assigns, :encoded_consumers, encoded_consumers)
 
     ~H"""
+    <div
+      id="posthog-identify"
+      phx-hook="PostHogIdentify"
+      data-user-id={@user.id}
+      data-user-email={@user.email}
+      data-user-name={@user.name}
+    >
+    </div>
     <div id="consumers-index">
       <.svelte
         name="consumers/Index"

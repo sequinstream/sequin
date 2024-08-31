@@ -13,6 +13,7 @@
     ChevronLeft,
     ChevronRight,
   } from "lucide-svelte";
+  import posthog from "posthog-js";
 
   export let currentPath: string;
 
@@ -30,6 +31,11 @@
 
   function toggleCollapse() {
     $isNavCollapsed = !$isNavCollapsed;
+  }
+
+  function handleLogout() {
+    posthog.reset();
+    window.location.href = "/logout";
   }
 </script>
 
@@ -141,12 +147,10 @@
           </div>
         </DropdownMenu.Trigger>
         <DropdownMenu.Content class="w-[200px]">
-          <a href="/logout" data-phx-link="redirect" data-phx-link-state="push">
-            <DropdownMenu.Item class="cursor-pointer">
-              <LogOut class="mr-2 h-4 w-4" />
-              Log out
-            </DropdownMenu.Item>
-          </a>
+          <DropdownMenu.Item class="cursor-pointer" on:click={handleLogout}>
+            <LogOut class="mr-2 h-4 w-4" />
+            Log out
+          </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     </div>

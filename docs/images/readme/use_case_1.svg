@@ -1,32 +1,43 @@
-<svg width="800" height="140" viewBox="0 0 800 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="use_case_1">
-<g id="insert">
-<rect x="249.5" y="20" width="100" height="100" rx="10" fill="#16181F"/>
-<rect x="248.5" y="19" width="102" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
-<path id="Vector" d="M278.5 41.2308C278.5 43.5672 274.694 45.4615 270 45.4615C265.306 45.4615 261.5 43.5672 261.5 41.2308M278.5 41.2308C278.5 38.8944 274.694 37 270 37C265.306 37 261.5 38.8944 261.5 41.2308M278.5 41.2308V52.7692C278.5 55.1056 274.694 57 270 57C265.306 57 261.5 55.1056 261.5 52.7692V41.2308M278.5 41.2308V45.0769M261.5 41.2308V45.0769M278.5 45.0769V48.9231C278.5 51.2595 274.694 53.1538 270 53.1538C265.306 53.1538 261.5 51.2595 261.5 48.9231V45.0769M278.5 45.0769C278.5 47.4133 274.694 49.3077 270 49.3077C265.306 49.3077 261.5 47.4133 261.5 45.0769" stroke="#919CF9" stroke-linecap="round" stroke-linejoin="round"/>
-<g id="Code snippet">
-<text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="DM Mono" font-size="15" letter-spacing="0em"><tspan x="261.5" y="83.615">INSERT&#10;</tspan></text>
-<text fill="#F8F8F2" xml:space="preserve" style="white-space: pre" font-family="DM Mono" font-size="10" letter-spacing="0em"><tspan x="285.484" y="98.615"> users</tspan></text>
-<text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="DM Mono" font-size="10" letter-spacing="0em"><tspan x="261.5" y="98.615">INTO</tspan></text>
-</g>
-</g>
-<g id="arrow">
-<path d="M416.207 70.7071C416.598 70.3166 416.598 69.6834 416.207 69.2929L409.843 62.9289C409.453 62.5384 408.819 62.5384 408.429 62.9289C408.038 63.3195 408.038 63.9526 408.429 64.3431L414.086 70L408.429 75.6569C408.038 76.0474 408.038 76.6805 408.429 77.0711C408.819 77.4616 409.453 77.4616 409.843 77.0711L416.207 70.7071ZM359.5 71H415.5V69H359.5V71Z" class="arrow-path"/>
-</g>
-<style>
+<svg width="800" height="140" viewBox="0 0 800 140" fill="none"
+  xmlns="http://www.w3.org/2000/svg">
+  <g id="use_case_1">
+    <g id="insert">
+      <rect x="249.5" y="20" width="100" height="100" rx="10" fill="#16181F"/>
+      <rect x="248.5" y="19" width="102" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
+      <path id="Vector" d="M278.5 41.2308C278.5 43.5672 274.694 45.4615 270 45.4615C265.306 45.4615 261.5 43.5672 261.5 41.2308M278.5 41.2308C278.5 38.8944 274.694 37 270 37C265.306 37 261.5 38.8944 261.5 41.2308M278.5 41.2308V52.7692C278.5 55.1056 274.694 57 270 57C265.306 57 261.5 55.1056 261.5 52.7692V41.2308M278.5 41.2308V45.0769M261.5 41.2308V45.0769M278.5 45.0769V48.9231C278.5 51.2595 274.694 53.1538 270 53.1538C265.306 53.1538 261.5 51.2595 261.5 48.9231V45.0769M278.5 45.0769C278.5 47.4133 274.694 49.3077 270 49.3077C265.306 49.3077 261.5 47.4133 261.5 45.0769" stroke="#919CF9" stroke-linecap="round" stroke-linejoin="round"/>
+      <g id="Code snippet">
+        <text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="15" letter-spacing="0em">
+          <tspan x="261.5" y="83.615">INSERT&#10;</tspan>
+        </text>
+        <text fill="#F8F8F2" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+          <tspan x="285.484" y="98.615"> users</tspan>
+        </text>
+        <text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+          <tspan x="261.5" y="98.615">INTO</tspan>
+        </text>
+      </g>
+    </g>
+    <g id="arrow">
+      <path d="M416.207 70.7071C416.598 70.3166 416.598 69.6834 416.207 69.2929L409.843 62.9289C409.453 62.5384 408.819 62.5384 408.429 62.9289C408.038 63.3195 408.038 63.9526 408.429 64.3431L414.086 70L408.429 75.6569C408.038 76.0474 408.038 76.6805 408.429 77.0711C408.819 77.4616 409.453 77.4616 409.843 77.0711L416.207 70.7071ZM359.5 71H415.5V69H359.5V71Z" class="arrow-path"/>
+    </g>
+    <style>
   .arrow-path { fill: black; }
   @media (prefers-color-scheme: dark) {
     .arrow-path { fill: white; }
   }
-</style>
-<g id="event">
-<rect x="425.5" y="20" width="125" height="100" rx="10" fill="#16181F"/>
-<rect x="424.5" y="19" width="127" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
-<path id="Vector_2" d="M457 41.75V52.25C457 52.8467 456.763 53.419 456.341 53.841C455.919 54.2629 455.347 54.5 454.75 54.5H439.75C439.153 54.5 438.581 54.2629 438.159 53.841C437.737 53.419 437.5 52.8467 437.5 52.25V41.75M457 41.75C457 41.1533 456.763 40.581 456.341 40.159C455.919 39.7371 455.347 39.5 454.75 39.5H439.75C439.153 39.5 438.581 39.7371 438.159 40.159C437.737 40.581 437.5 41.1533 437.5 41.75M457 41.75V41.993C457 42.3771 456.902 42.7549 456.714 43.0903C456.527 43.4257 456.257 43.7075 455.93 43.909L448.43 48.524C448.075 48.7425 447.667 48.8582 447.25 48.8582C446.833 48.8582 446.425 48.7425 446.07 48.524L438.57 43.91C438.243 43.7085 437.973 43.4267 437.786 43.0913C437.598 42.7559 437.5 42.3781 437.5 41.994V41.75" stroke="#8BE9FD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<g id="Code snippet_2">
-<text fill="#8BE9FD" xml:space="preserve" style="white-space: pre" font-family="DM Mono" font-size="10" letter-spacing="0em"><tspan x="437.5" y="96.115">welcome email</tspan></text>
-<text fill="#8BE9FD" xml:space="preserve" style="white-space: pre" font-family="DM Mono" font-size="15" letter-spacing="0em"><tspan x="437.5" y="81.115">SEND&#10;</tspan></text>
-</g>
-</g>
-</g>
+    </style>
+    <g id="event">
+      <rect x="425.5" y="20" width="125" height="100" rx="10" fill="#16181F"/>
+      <rect x="424.5" y="19" width="127" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
+      <path id="Vector_2" d="M457 41.75V52.25C457 52.8467 456.763 53.419 456.341 53.841C455.919 54.2629 455.347 54.5 454.75 54.5H439.75C439.153 54.5 438.581 54.2629 438.159 53.841C437.737 53.419 437.5 52.8467 437.5 52.25V41.75M457 41.75C457 41.1533 456.763 40.581 456.341 40.159C455.919 39.7371 455.347 39.5 454.75 39.5H439.75C439.153 39.5 438.581 39.7371 438.159 40.159C437.737 40.581 437.5 41.1533 437.5 41.75M457 41.75V41.993C457 42.3771 456.902 42.7549 456.714 43.0903C456.527 43.4257 456.257 43.7075 455.93 43.909L448.43 48.524C448.075 48.7425 447.667 48.8582 447.25 48.8582C446.833 48.8582 446.425 48.7425 446.07 48.524L438.57 43.91C438.243 43.7085 437.973 43.4267 437.786 43.0913C437.598 42.7559 437.5 42.3781 437.5 41.994V41.75" stroke="#8BE9FD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <g id="Code snippet_2">
+        <text fill="#8BE9FD" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+          <tspan x="437.5" y="96.115">welcome email</tspan>
+        </text>
+        <text fill="#8BE9FD" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="15" letter-spacing="0em">
+          <tspan x="437.5" y="81.115">SEND&#10;</tspan>
+        </text>
+      </g>
+    </g>
+  </g>
 </svg>

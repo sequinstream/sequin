@@ -4,6 +4,7 @@ defmodule SequinWeb.UserLogoutLive do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
+    socket = if connected?(socket), do: push_event(socket, "phx:ph-reset", %{}), else: socket
     {:ok, socket, layout: {SequinWeb.Layouts, :app_no_sidenav}}
   end
 

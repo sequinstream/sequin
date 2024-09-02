@@ -63,6 +63,19 @@ window.addEventListener("phx:toast", (event) => {
   }
 });
 
+window.addEventListener("phx:ph-identify", (event) => {
+  const { userId, userEmail, userName } = event.detail;
+
+  posthog.identify(userId, {
+    email: userEmail,
+    name: userName,
+  });
+});
+
+window.addEventListener("phx:ph-reset", () => {
+  posthog.reset();
+});
+
 // connect if there are any LiveViews on the page
 liveSocket.connect();
 

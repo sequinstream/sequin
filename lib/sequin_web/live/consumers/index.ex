@@ -11,14 +11,24 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
+    user = current_user(socket)
     account = current_account(socket)
     consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     consumers = load_consumer_health(consumers)
 
-    if connected?(socket) do
-      Process.send_after(self(), :update_health, 1000)
-    end
+    socket =
+      if connected?(socket) do
+        Process.send_after(self(), :update_health, 1000)
+
+        push_event(socket, "phx:ph-identify", %{
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name
+        })
+      else
+        socket
+      end
 
     socket =
       socket

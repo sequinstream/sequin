@@ -55,13 +55,13 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 ## Use cases
 
 **Trigger side-effects:** Never miss a change in your database for processing by other systems.
-![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_1.svg)
+![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_1.svg?)
 
 **Fan out:** Add queue capabilities to your database to broadcast events, distribute workloads, and decouple services.
-![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_2.svg)
+![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_2.svg?)
 
 **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
-![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_3.svg)
+![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_3.svg?)
 
 ## Compare Sequin
 

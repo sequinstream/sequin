@@ -15,6 +15,7 @@
   } from "lucide-svelte";
 
   export let currentPath: string;
+  export let accountName: string;
 
   const navItems = [
     { path: "/consumers", text: "Consumers", icon: Radio },
@@ -130,11 +131,8 @@
               <div
                 class="ml-2 flex flex-col items-start justify-start overflow-hidden"
               >
-                <div class="text-muted leading-1 text-sm truncate w-full">
-                  Paul Mu'adib
-                </div>
                 <div class="text-subtle text-xs leading-4 truncate w-full">
-                  Sequin
+                  {accountName}
                 </div>
               </div>
             {/if}

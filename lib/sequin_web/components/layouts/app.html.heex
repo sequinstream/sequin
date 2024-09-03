@@ -1,5 +1,9 @@
 <div class="flex min-h-screen">
-  <SequinWeb.Components.Sidenav.render :if={@show_nav} current_path={@current_path} />
+  <SequinWeb.Components.Sidenav.render
+    :if={@show_nav}
+    current_path={@current_path}
+    account_name={@account_name}
+  />
   <%= if @no_main do %>
     <.flash_group flash={@flash} />
     <%= @inner_content %>

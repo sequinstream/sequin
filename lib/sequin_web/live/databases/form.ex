@@ -2,6 +2,8 @@ defmodule SequinWeb.DatabasesLive.Form do
   @moduledoc false
   use SequinWeb, :live_view
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -114,7 +116,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, :changeset, changeset)}
 
-        {:error, error} when is_exception(error) ->
+        {:error, error} when is_error(error) ->
           {:noreply, assign(socket, :submit_error, Exception.message(error))}
 
         {:error, error} ->
@@ -173,7 +175,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         "Unable to resolve the hostname. Please check if the hostname is correct."
 
       %Postgrex.Error{postgres: %{code: :invalid_authorization_specification}} ->
-        "Invalid username or password. Please check your credentials."
+        "Authorization failed. This means either the username/password is invalid or the database requires SSL, which you can enable above."
 
       %Postgrex.Error{postgres: %{code: :invalid_catalog_name}} ->
         "Database does not exist. Please verify the database name."

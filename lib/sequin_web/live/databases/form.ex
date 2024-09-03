@@ -31,6 +31,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             database: database
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
+          |> assign(:is_supabase_pooled, false)
 
         {:ok, socket}
 
@@ -77,7 +78,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             database: @encoded_database,
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
-            submitError: @submit_error
+            submitError: @submit_error,
+            isSupabasePooled: @is_supabase_pooled
           }
         }
       />
@@ -88,10 +90,23 @@ defmodule SequinWeb.DatabasesLive.Form do
   @impl Phoenix.LiveView
   def handle_event("form_updated", %{"form" => form}, socket) do
     params = decode_params(form)
-
     socket = put_changesets(socket, params)
 
+    # Add Supabase pooled connection detection
+    is_supabase_pooled = detect_supabase_pooled(params["database"])
+    socket = assign(socket, :is_supabase_pooled, is_supabase_pooled)
+
     {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("convert_supabase_connection", %{"form" => form}, socket) do
+    params = decode_params(form)
+    converted_params = convert_supabase_connection(params["database"])
+
+    socket = assign(socket, :is_supabase_pooled, false)
+
+    {:reply, %{converted: converted_params}, socket}
   end
 
   @impl Phoenix.LiveView
@@ -305,5 +320,21 @@ defmodule SequinWeb.DatabasesLive.Form do
         "slot_name" => form["slot_name"]
       }
     }
+  end
+
+  # Add these helper functions
+  defp detect_supabase_pooled(%{"username" => username, "hostname" => hostname}) do
+    username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase.com")
+  end
+
+  defp detect_supabase_pooled(_), do: false
+
+  defp convert_supabase_connection(%{"username" => username} = params) do
+    [_, project_name] = String.split(username, ".")
+
+    params
+    |> Map.put("username", "postgres")
+    |> Map.put("hostname", "db.#{project_name}.supabase.co")
+    |> Map.put("port", 5432)
   end
 end

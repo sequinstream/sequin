@@ -13,7 +13,6 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     is_edit? = Map.has_key?(params, "id")
-    base_params = if is_edit?, do: %{}, else: %{"name" => Name.generate(99)}
 
     case fetch_or_build_http_endpoint(socket, params) do
       {:ok, http_endpoint} ->
@@ -25,7 +24,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
             submit_error: nil,
             http_endpoint: http_endpoint
           )
-          |> put_changeset(%{"http_endpoint" => base_params})
+          |> put_changeset(%{"http_endpoint" => %{}})
 
         {:ok, socket}
 
@@ -46,7 +45,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   def render(assigns) do
     assigns =
       assigns
-      |> assign(:form_data, changeset_to_form_data(assigns.changeset))
+      |> assign(:encoded_http_endpoint, encode_http_endpoint(assigns.http_endpoint))
       |> assign(:parent_id, @parent_id)
       |> assign(:form_errors, Error.errors_on(assigns.changeset))
 
@@ -57,7 +56,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
         ssr={false}
         props={
           %{
-            httpEndpoint: @form_data,
+            httpEndpoint: @encoded_http_endpoint,
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id
           }
@@ -68,15 +67,15 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("http_endpoint_updated", %{"http_endpoint" => http_endpoint}, socket) do
-    params = decode_params(http_endpoint)
+  def handle_event("form_updated", %{"form" => form}, socket) do
+    params = decode_params(form)
     socket = put_changeset(socket, params)
     {:noreply, socket}
   end
 
   @impl Phoenix.LiveView
-  def handle_event("http_endpoint_submitted", %{"http_endpoint" => http_endpoint}, socket) do
-    params = decode_params(http_endpoint)
+  def handle_event("form_submitted", %{"form" => form}, socket) do
+    params = decode_params(form)
 
     socket =
       socket
@@ -87,7 +86,6 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       case create_or_update_http_endpoint(socket, params["http_endpoint"]) do
         {:ok, http_endpoint} ->
           Health.update(http_endpoint, :reachable, :healthy)
-
           {:noreply, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
@@ -145,12 +143,12 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     end
   end
 
-  defp changeset_to_form_data(changeset) do
+  defp encode_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     %{
-      id: Ecto.Changeset.get_field(changeset, :id),
-      name: Ecto.Changeset.get_field(changeset, :name),
-      baseUrl: Ecto.Changeset.get_field(changeset, :base_url),
-      headers: Ecto.Changeset.get_field(changeset, :headers) || %{}
+      "id" => http_endpoint.id,
+      "name" => http_endpoint.name || Name.generate(99),
+      "baseUrl" => http_endpoint.base_url,
+      "headers" => http_endpoint.headers || %{}
     }
   end
 

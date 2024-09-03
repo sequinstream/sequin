@@ -19,8 +19,8 @@
   export let parent: string;
   export let live;
 
-  let isEdit = !!httpEndpoint.id;
-  let userInput = false;
+  let form = { ...httpEndpoint };
+  let isEdit = !!form.id;
   let dialogOpen = true;
   let showConfirmDialog = false;
   let validating = false;
@@ -29,26 +29,15 @@
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
-  function handleInput() {
-    userInput = true;
-  }
-
   function handleSubmit(event: Event) {
     event.preventDefault();
     validating = true;
-    pushEvent(
-      "http_endpoint_submitted",
-      { http_endpoint: httpEndpoint },
-      () => {
-        validating = false;
-      }
-    );
+    pushEvent("form_submitted", { form }, () => {
+      validating = false;
+    });
   }
 
-  $: if (userInput) {
-    pushEvent("http_endpoint_updated", { http_endpoint: httpEndpoint });
-    userInput = false;
-  }
+  $: pushEvent("form_updated", { form });
 
   function handleClose() {
     pushEvent("form_closed");
@@ -67,7 +56,7 @@
         <CardTitle>HTTP Endpoint Configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <FormBody {httpEndpoint} {errors} on:input={handleInput} />
+        <FormBody bind:form {errors} />
       </CardContent>
     </Card>
 
@@ -76,9 +65,8 @@
         <CardTitle>HTTP Endpoint</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <Button type="submit" disabled={validating} variant="default">
+        <Button type="submit" loading={validating} variant="default">
           {#if validating}
-            <span class="loading loading-spinner" />
             Validating...
           {:else if isEdit}
             Update HTTP Endpoint

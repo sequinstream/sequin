@@ -444,7 +444,7 @@
 
         {#if showNewHttpEndpointForm}
           <HttpEndpointForm
-            bind:httpEndpoint={form.httpEndpoint}
+            bind:form={form.httpEndpoint}
             errors={errors.http_endpoint || {}}
           />
         {:else if errors.http_endpoint_id || errors.http_endpoint}

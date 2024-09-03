@@ -4,7 +4,7 @@
   import { Label } from "$lib/components/ui/label";
   import { PlusCircle } from "lucide-svelte";
 
-  export let httpEndpoint: {
+  export let form: {
     name: string;
     baseUrl: string;
     headers: Record<string, string>;
@@ -13,21 +13,21 @@
   export let errors: Record<string, any> = {};
 
   function addHeader() {
-    httpEndpoint.headers = { ...httpEndpoint.headers, "": "" };
+    form.headers = { ...form.headers, "": "" };
   }
 
   function updateHeaderKey(oldKey: string, newKey: string) {
-    const { [oldKey]: value, ...rest } = httpEndpoint.headers;
-    httpEndpoint.headers = { ...rest, [newKey]: value };
+    const { [oldKey]: value, ...rest } = form.headers;
+    form.headers = { ...rest, [newKey]: value };
   }
 
   function updateHeaderValue(key: string, value: string) {
-    httpEndpoint.headers = { ...httpEndpoint.headers, [key]: value };
+    form.headers = { ...form.headers, [key]: value };
   }
 
   function removeHeader(key: string) {
-    const { [key]: _, ...rest } = httpEndpoint.headers;
-    httpEndpoint.headers = rest;
+    const { [key]: _, ...rest } = form.headers;
+    form.headers = rest;
   }
 </script>
 
@@ -36,8 +36,7 @@
     <Label for="name">Name</Label>
     <Input
       id="http-endpoint-name"
-      bind:value={httpEndpoint.name}
-      on:input
+      bind:value={form.name}
       autocomplete="off"
       data-1p-ignore
       placeholder="Enter a unique name for your HTTP endpoint"
@@ -51,8 +50,7 @@
     <Label for="baseUrl">Base URL</Label>
     <Input
       id="http-endpoint-baseUrl"
-      bind:value={httpEndpoint.baseUrl}
-      on:input
+      bind:value={form.baseUrl}
       placeholder="https://api.example.com"
     />
     {#if errors.base_url}
@@ -62,7 +60,7 @@
 
   <div class="space-y-2">
     <Label>Headers</Label>
-    {#each Object.entries(httpEndpoint.headers) as [key, value], index}
+    {#each Object.entries(form.headers) as [key, value], index}
       <div class="grid grid-cols-[1fr_1fr_15px] gap-4 mb-2">
         <Input
           id="http-endpoint-header-key-{index}"

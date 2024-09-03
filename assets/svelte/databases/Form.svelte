@@ -157,7 +157,7 @@
         {/if}
         {#if isSupabasePooled}
           <div transition:slide>
-            <Alert variant="destructive">
+            <Alert variant="default">
               <AlertCircle class="h-4 w-4" />
               <AlertTitle>Supabase Pooled Connection Detected</AlertTitle>
               <AlertDescription>

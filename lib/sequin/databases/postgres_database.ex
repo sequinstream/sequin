@@ -81,6 +81,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     ])
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
+    |> validate_not_supabase_pooled()
     |> Sequin.Changeset.validate_name()
     |> cast_embed(:tables, with: &tables_changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
@@ -97,6 +98,22 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   def update_changeset(pd, attrs) do
     changeset(pd, attrs)
+  end
+
+  defp validate_not_supabase_pooled(%Ecto.Changeset{valid?: false} = changeset), do: changeset
+
+  defp validate_not_supabase_pooled(%Ecto.Changeset{valid?: true} = changeset) do
+    hostname = get_field(changeset, :hostname)
+
+    if not is_nil(hostname) and String.contains?(hostname, "pooler.supabase.com") do
+      add_error(
+        changeset,
+        :hostname,
+        "Supabase pooled connections are not supported. Please use a direct connection."
+      )
+    else
+      changeset
+    end
   end
 
   def tables_changeset(table, attrs) do

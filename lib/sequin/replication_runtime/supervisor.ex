@@ -32,7 +32,8 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
       postgres_database: pg_replication.postgres_database,
       message_handler_ctx: MessageHandler.context(pg_replication),
       message_handler_module: MessageHandler,
-      connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database)
+      connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
+      ipv6: pg_replication.postgres_database.ipv6
     ]
 
     opts = Keyword.merge(default_opts, opts)

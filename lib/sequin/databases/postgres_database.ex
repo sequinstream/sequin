@@ -177,7 +177,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
     opts =
       if pd.ipv6 do
-        Keyword.put(opts, :socket_opts, [:inet6])
+        Keyword.put(opts, :socket_options, [:inet6])
       else
         opts
       end

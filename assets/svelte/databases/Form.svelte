@@ -10,6 +10,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import CodeWithCopy from "../components/CodeWithCopy.svelte";
 
   export let database: {
     id?: string;
@@ -148,9 +149,11 @@
           Run the following SQL command on your database to create a replication
           slot:
         </p>
-        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-select pg_create_logical_replication_slot('{form.slot_name ||
-            "my_slot"}', 'pgoutput');</pre>
+        <CodeWithCopy language="sql">
+          <code>
+            {`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
+          </code>
+        </CodeWithCopy>
 
         <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
         <p class="text-sm text-muted-foreground">
@@ -159,20 +162,27 @@ select pg_create_logical_replication_slot('{form.slot_name ||
         <p class="text-sm font-medium">
           • Create a publication for all tables:
         </p>
-        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {form.publication_name || "my_pub"} for all tables;</pre>
+        <CodeWithCopy language="sql">
+          <code>
+            {`create publication ${form.publication_name || "my_pub"} for all tables;`}
+          </code>
+        </CodeWithCopy>
         <p class="text-sm font-medium">
           • Create a publication for certain tables:
         </p>
-        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {form.publication_name ||
-            "my_pub"} for table table1, table2, table3;</pre>
+        <CodeWithCopy language="sql">
+          <code>
+            {`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
+          </code>
+        </CodeWithCopy>
         <p class="text-sm font-medium">
           • Create a publication for all tables in a schema:
         </p>
-        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {form.publication_name ||
-            "my_pub"} for tables in schema myschema;</pre>
+        <CodeWithCopy language="sql">
+          <code>
+            {`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+          </code>
+        </CodeWithCopy>
 
         <h3 class="text-md font-semibold mb-2">
           Step 3: (Optional) Enable Full Replica Identity
@@ -181,8 +191,11 @@ create publication {form.publication_name ||
           If you want Sequin to capture `old` values for updates and deletes,
           run this command for each table in the publication:
         </p>
-        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-alter table {"{mytable}"} replica identity full;</pre>
+        <CodeWithCopy language="sql">
+          <code>
+            alter table {"{mytable}"} replica identity full;
+          </code>
+        </CodeWithCopy>
 
         <div class="space-y-2">
           <Label for="slot_name">Slot Name</Label>

@@ -21,7 +21,7 @@
 </script>
 
 <button
-  on:click={handleCopy}
+  on:click|preventDefault={handleCopy}
   class="relative flex items-center justify-center w-8 h-8"
 >
   {#if showCheck}

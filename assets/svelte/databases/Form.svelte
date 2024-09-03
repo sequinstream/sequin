@@ -10,6 +10,7 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import { LoaderCircle } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -251,9 +252,8 @@ create publication {database.publication_name ||
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
 
-        <Button type="submit" disabled={validating} variant="default">
+        <Button type="submit" loading={validating} variant="default">
           {#if validating}
-            <span class="loading loading-spinner" />
             Validating...
           {:else if isEdit}
             Update Database

@@ -136,7 +136,7 @@
                 </Tooltip.Trigger>
                 <Tooltip.Content class="max-w-xs">
                   <p class="text-xs text-gray-500">
-                    <b>Request Timeout:</b>
+                    <b>Request Timeout</b>
                     <br />
                     Defines the time limit for a message to be successfully acknowledged
                     (i.e. return a status 200) by the webhook endpoint. Exceeding
@@ -158,12 +158,12 @@
                 </Tooltip.Trigger>
                 <Tooltip.Content class="max-w-xs">
                   <p class="text-xs text-gray-500">
-                    <b>Max Pending Messages:</b>
+                    <b>Max Pending Messages</b>
                     <br />
                     The maximum number of messages that can be outstanding (delivered,
                     not yet acknowledged). Once this limit is reached, delivery of
                     new messages will be suspended. Your endpoint will only receive
-                    redeliveries once it begins acking messages.
+                    new messages once it begins acking outstanding messages.
                     <br />
                     <br />
                     This is a helpful mechanism for flow control and back-pressure.

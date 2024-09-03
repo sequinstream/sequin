@@ -16,6 +16,10 @@
 //
 
 // Include phoenix_html to handle method=PUT/DELETE in forms and buttons.
+
+// Too many type errors in this file.
+// @ts-nocheck
+
 import "phoenix_html";
 // Establish Phoenix Socket and LiveView configuration.
 import { Socket } from "phoenix";

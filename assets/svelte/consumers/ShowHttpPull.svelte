@@ -176,7 +176,7 @@
                 </Tooltip.Trigger>
                 <Tooltip.Content class="max-w-xs">
                   <p class="text-xs text-gray-500">
-                    <b>Max waiting:</b> The maximum number of messages that can be
+                    <b>Max waiting</b> The maximum number of messages that can be
                     waiting to be processed before the consumer stops processing
                     new messages.
                   </p>

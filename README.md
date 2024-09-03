@@ -6,7 +6,9 @@
 
 </div>
 
-> [!IMPORTANT] > _08/30/2024_: We've almost completed a major upgrade to Sequin. `main` should be stable next week. In the meantime:
+> [!IMPORTANT]
+> 
+> _09/03/2024_: We've almost completed a major upgrade to Sequin. `main` should be stable later this week. In the meantime:
 >
 > - You can [Try Sequin cloud](https://console.sequinstream.com/register) now.
 > - Join the [release list](https://sequinstream.com/alpha) to get notified when we hit alpha.

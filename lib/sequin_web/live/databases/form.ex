@@ -207,7 +207,10 @@ defmodule SequinWeb.DatabasesLive.Form do
     temp_db = struct(PostgresDatabase, Sequin.Map.atomize_keys(db_params))
     temp_slot = struct(PostgresReplicationSlot, Sequin.Map.atomize_keys(replication_params))
 
-    with :ok <- Databases.test_tcp_reachability(temp_db),
+    with {:ok, ipv6?} <- Sequin.NetworkUtils.check_ipv6(temp_db.hostname),
+         temp_db = %PostgresDatabase{temp_db | ipv6: ipv6?},
+         db_params = Map.put(db_params, "ipv6", ipv6?),
+         :ok <- Databases.test_tcp_reachability(temp_db),
          :ok <- Databases.test_connect(temp_db, 10_000),
          :ok <- Databases.test_permissions(temp_db),
          :ok <- Databases.test_slot_permissions(temp_db, temp_slot) do

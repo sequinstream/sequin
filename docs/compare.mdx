@@ -5,16 +5,37 @@ description: You can think of Sequin as a material improvement over native Postg
 
 ## Postgres triggers
 
-Sequin sends triggers over HTTP with the added benefits of exactly-once processing, payload transforms, routing, and a superior developer experience. Maintain transactional trigger guarantees with a system that scales and lets you write business logic in the programming language of your choice (no plpgsql!)
+Postgres triggers are database functions that automatically execute in response to certain database events. Postgres triggers must be written in PL/pgSQL, a special procedural language for Postgres. And they are limited to simple operations like inserting, updating, and deleting rows.
+
+Sequin sends changes over HTTP. Like Postgres triggers, Sequin guarantees exactly-once processing. But the HTTP interface means you can you can handle changes in your application code. Just like other advanced queuing systems, Sequin lets you fan out changes to multiple services or applications. And you can write business logic in the programming language of your choice (no PL/pgSQL!)
 
 ## LISTEN/NOTIFY
 
-Sequin adds exactly-once processing, larger data payloads with transformation, routing, and a superior developer experience.
+Postgres' LISTEN/NOTIFY is a pub/sub system. When changes happen in your database, you can send notifications to a channel in Postgres. Other processes can listen for notifications on that channel and react to the changes.
+
+LISTEN/NOTIFY offers _at-most-once_ delivery. If a consumer is not subscribed when a notification is sent, or a consumer fails to process a notification, the notification is lost. So LISTEN/NOTIFY is limited to simple use cases.
+
+Sequin sends changes over HTTP with exactly-once processing. This gives you a much more robust system to build on top of.
 
 ## Amazon SQS
 
-Sequin transactionally enqueues changes from your database into a FIFO queue with exactly-once processing. This is especially valuable if messages pertain to database changes. Instead of adding a new dependency to your infrastructure, use the database you already have to reliably queue messages.
+Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
 
-## Debezium / Kafka
+Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, the messages you're processing pertain to changes and records in your database. Like SQS, Sequin offers FIFO (first-in, first-out) processing. Unlike SQS, Sequin also has an HTTP push interface so you can receive messages via webhooks.
 
-Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, except with none of the operational overhead. If your database can handle it, so can Sequin. You don't need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.
+## Debezium
+
+Debezium is an open-source platform for change data capture (CDC), often used with Apache Kafka, a distributed event streaming platform.
+
+Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, except with fewer moving parts and none of the operational overhead. You don't need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.
+
+## Kafka
+
+Apache Kafka is a distributed event streaming platform. Kafka is designed for very high throughput and horizontal scalability.
+
+You can use Sequin to turn a Postgres table into something that behaves like a Kafka topic. You can create new consumers that process messages in order, starting at any offset in the table you specify. Because all your data lives at rest in Postgres, the data model is easy to understand and work with.
+
+Sequin's consumer pattern is simpler than Kafka's. Kafka uses partitions and offsets for concurrency, whereas Sequin uses a message queue pattern similar to SQS. This means concurrency is flexible and you can scale workers up and down without making any configuration changes.
+
+While Kafka may be necessary for very high throughput use cases (logs or metrics, millions of messages per second), Postgres and Sequin are able to handle a lot of use cases with a lot less complexity (even modest Postgres instances can handle tens of thousands of messages per second).
+

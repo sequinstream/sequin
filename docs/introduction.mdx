@@ -5,34 +5,32 @@ description: Sequin sends Postgres changes to your applications and services. It
 
 You can think of Sequin as a material improvement over native Postgres triggers and LISTEN/NOTIFY with the following features:
 
-* **Transactional guarantees:** Sequin delivers messages from your database to consumers and will never miss an insert, update, or delete.
-* **Exactly-once processing:** Sequin delivers messages from your database to consumers exactly once within a visibility timeout.
-* **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
-* **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
-* **Backfills:** Consumers can queue up records from this moment forward or for the entire table.
-* **Dynamic concurrency:** Scale workers for a consumer up or down as needed. No need to plan out partition counts ahead of time.
-* **Transforms** (coming soon\!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
+- **Never miss a message:** Sequin delivers messages from your database to consumers until they are acknowledged (i.e. exactly-once processing guarantees).
+- **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
+- **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
+- **Backfills:** Consumers can queue up records from this moment forward or for the entire table.
+- **Simple HTTP API:** Messages are delivered via a simple HTTP push or pull interface for easy integration.
+- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12+.
+- **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
+- **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-Changes are sent as messages via HTTP push (webhooks) or pull (SQS-like, with Sequin SDKs), so you can easily integrate Sequin into your application or another service (like Lambdas, inngest, vercel, etc).
+Changes are sent as messages via HTTP push (webhooks) or pull (SQS-like, with Sequin SDKs). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
 
-Sequin comes with a durable, persistent message stream, so you can also use Sequin to replace other queues and streaming systems like SQS and Kafka.
+Messages in Sequin are durable and persistent, so you can also use Sequin to replace other queues and streaming systems like SQS and Kafka.
 
 ## How Sequin works
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
-Sequin connects to your Postgres database (via the WAL). It captures changes to your Postgres tables, turning them into a stream of messages. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks. You can even turn historical data in Postgres into a stream of messages.
+Sequin connects to your Postgres database. It captures changes to your Postgres tables, turning them into a stream of messages. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks. You can even turn historical data in Postgres into a stream of messages.
 
 Sequin is open source. You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
 Sequin comes with a web console/UI for configuration:
 
-1. Connect any Postgres database to Sequin (Sequin uses logical replication).
+1. Connect any Postgres database to Sequin (Sequin uses logical replication to detect changes).
 2. Select the tables, actions, and SQL filters that publish messages to your consumers.
 3. Consume messages using HTTP pull and push interfaces. (You can use our SDKs.)
-
-In production, you can configure Sequin as code using Terraform.
-
 
 ## Getting started
 
@@ -51,7 +49,7 @@ Sequin is available as a cloud version or self-hosted. See the following docs to
 ## Getting help
 <CardGroup>
   <Card title="Open an issue" icon="github" href="https://github.com/sequinstream/sequin">
-    Report bugs or request features on our Github repository.
+    Report bugs or request features on our GitHub repository.
   </Card>
   <Card title="Email support" icon="envelope" href="mailto:support@sequinstream.com">
     Send an email to support@sequinstream.com for assistance.
@@ -60,6 +58,6 @@ Sequin is available as a cloud version or self-hosted. See the following docs to
     Book a call with one of the founders to discuss your needs.
   </Card>
   <Card title="Stay updated" icon="star" href="https://sequinstream.com/alpha">
-    Give us a star on Github and join our alpha mailing list for updates.
+    Give us a star on GitHub and join our alpha mailing list for updates.
   </Card>
 </CardGroup>

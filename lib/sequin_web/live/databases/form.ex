@@ -194,7 +194,8 @@ defmodule SequinWeb.DatabasesLive.Form do
       {:error, :unknown_privileges} ->
         "Unable to determine user privileges. Please ensure the user has necessary permissions."
 
-      _ ->
+      unexpected ->
+        Logger.error("Unexpected error in databases/form.ex:error_msg/1: #{inspect(unexpected)}")
         "An unexpected error occurred. Please try again or contact us."
     end
   end

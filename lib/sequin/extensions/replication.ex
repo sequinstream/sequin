@@ -160,7 +160,7 @@ defmodule Sequin.Extensions.Replication do
   rescue
     e ->
       Logger.error("Error processing message: #{inspect(e)}")
-      Health.update(state.postgres_database, :replication_messages, :unhealthy)
+      Health.update(state.postgres_database, :replication_messages, :error)
       reraise e, __STACKTRACE__
   end
 
@@ -514,7 +514,8 @@ defmodule Sequin.Extensions.Replication do
       port: state.connection[:port],
       username: state.connection[:username],
       password: state.connection[:password],
-      ssl: state.connection[:ssl] || false
+      ssl: state.connection[:ssl] || false,
+      ipv6: state.connection[:ipv6] || false
     }
 
     {:ok, conn} = ConnectionCache.connection(postgres_database)

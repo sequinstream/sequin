@@ -322,7 +322,7 @@ defmodule Sequin.Health do
   defp validate_status_and_error!(:error, error) when is_error(error), do: :ok
 
   defp validate_status_and_error!(:error, _), do: raise(ArgumentError, "error must be an Error struct for :error status")
-  defp validate_status_and_error!(status, _), do: raise(ArgumentError, "Unpexected status: #{status}")
+  defp validate_status_and_error!(status, _), do: raise(ArgumentError, "Unexpected status: #{status}")
 
   @doc """
   Converts a Health struct to a map with only the necessary fields for the frontend.

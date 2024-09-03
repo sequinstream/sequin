@@ -10,7 +10,6 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
-  import { LoaderCircle } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -43,14 +42,9 @@
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
-  let userInput = false;
   let dialogOpen = true;
   let showConfirmDialog = false;
   let validating = false;
-
-  function handleInput() {
-    userInput = true;
-  }
 
   function handleSubmit(event: Event) {
     event.preventDefault();
@@ -60,10 +54,7 @@
     });
   }
 
-  $: if (userInput) {
-    pushEvent("form_updated", { form: database });
-    userInput = false;
-  }
+  $: pushEvent("form_updated", { form: database });
 
   function handleClose() {
     pushEvent("form_closed");
@@ -76,7 +67,7 @@
   bind:showConfirmDialog
   on:close={handleClose}
 >
-  <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">
+  <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto mt-6">
     <Card>
       <CardHeader>
         <CardTitle>Database Configuration</CardTitle>
@@ -84,12 +75,7 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="database">Database</Label>
-          <Input
-            type="text"
-            id="database"
-            bind:value={database.database}
-            on:input={handleInput}
-          />
+          <Input type="text" id="database" bind:value={database.database} />
           {#if databaseErrors.database}
             <p class="text-destructive text-sm">{databaseErrors.database}</p>
           {/if}
@@ -97,12 +83,7 @@
 
         <div class="space-y-2">
           <Label for="hostname">Hostname</Label>
-          <Input
-            type="text"
-            id="hostname"
-            bind:value={database.hostname}
-            on:input={handleInput}
-          />
+          <Input type="text" id="hostname" bind:value={database.hostname} />
           {#if databaseErrors.hostname}
             <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
           {/if}
@@ -114,7 +95,6 @@
             type="number"
             id="port"
             bind:value={database.port}
-            on:input={handleInput}
             placeholder="5432"
           />
           {#if databaseErrors.port}
@@ -124,12 +104,7 @@
 
         <div class="space-y-2">
           <Label for="username">Username</Label>
-          <Input
-            type="text"
-            id="username"
-            bind:value={database.username}
-            on:input={handleInput}
-          />
+          <Input type="text" id="username" bind:value={database.username} />
           {#if databaseErrors.username}
             <p class="text-destructive text-sm">{databaseErrors.username}</p>
           {/if}
@@ -137,12 +112,7 @@
 
         <div class="space-y-2">
           <Label for="password">Password</Label>
-          <Input
-            type="password"
-            id="password"
-            bind:value={database.password}
-            on:input={handleInput}
-          />
+          <Input type="password" id="password" bind:value={database.password} />
           {#if databaseErrors.password}
             <p class="text-destructive text-sm">{databaseErrors.password}</p>
           {/if}
@@ -154,7 +124,6 @@
             checked={database.ssl}
             onCheckedChange={(checked) => {
               database.ssl = checked;
-              handleInput();
             }}
           />
           <Label for="ssl">SSL</Label>
@@ -170,36 +139,52 @@
         <CardTitle>Replication Configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
+        <h3 class="text-md font-semibold mb-2">
+          Step 1: Create a Replication Slot
+        </h3>
         <p class="text-sm text-muted-foreground">
-          To set up replication, you need to create a replication slot. Run the
-          following SQL command on your database:
+          Run the following SQL command on your database to create a replication
+          slot:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
 select pg_create_logical_replication_slot('{database.slot_name ||
             "my_slot"}', 'pgoutput');</pre>
+
+        <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
         <p class="text-sm text-muted-foreground">
-          Next, you need to create a publication. You have two options:
+          Choose from one of the following examples to create a publication:
         </p>
         <p class="text-sm font-medium">
-          1. Create a publication for all tables:
+          • Create a publication for all tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
 create publication {database.publication_name || "my_pub"} for all tables;</pre>
         <p class="text-sm font-medium">
-          2. Create a publication for specific tables:
+          • Create a publication for certain tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
 create publication {database.publication_name ||
             "my_pub"} for table table1, table2, table3;</pre>
+        <p class="text-sm font-medium">
+          • Create a publication for all tables in a schema:
+        </p>
+        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
+create publication {database.publication_name ||
+            "my_pub"} for tables in schema myschema;</pre>
+
+        <h3 class="text-md font-semibold mb-2">
+          Step 3: (Optional) Enable Full Replica Identity
+        </h3>
+        <p class="text-sm text-muted-foreground">
+          If you want Sequin to capture `old` values for updates and deletes,
+          run this command for each table in the publication:
+        </p>
+        <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
+alter table {"{mytable}"} replica identity full;</pre>
 
         <div class="space-y-2">
           <Label for="slot_name">Slot Name</Label>
-          <Input
-            type="text"
-            id="slot_name"
-            bind:value={database.slot_name}
-            on:input={handleInput}
-          />
+          <Input type="text" id="slot_name" bind:value={database.slot_name} />
           {#if replicationErrors.slot_name}
             <p class="text-destructive text-sm">
               {replicationErrors.slot_name}
@@ -213,7 +198,6 @@ create publication {database.publication_name ||
             type="text"
             id="publication_name"
             bind:value={database.publication_name}
-            on:input={handleInput}
           />
           {#if replicationErrors.publication_name}
             <p class="text-destructive text-sm">
@@ -235,7 +219,6 @@ create publication {database.publication_name ||
             type="text"
             id="name"
             bind:value={database.name}
-            on:input={handleInput}
             placeholder="Enter a unique name for your database"
             data-1p-ignore
             data-lpignore="true"

@@ -23,7 +23,7 @@ defmodule Sequin.Factory.ApiTokensFactory do
     merge_attributes(
       %ApiToken{
         account_id: account_id,
-        name: Factory.word(),
+        name: Factory.unique_word(),
         token: token.token,
         hashed_token: token.hashed_token
       },

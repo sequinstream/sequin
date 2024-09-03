@@ -507,6 +507,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp get_cached_conn(%State{} = state) do
+    socket_options = state.connection[:socket_options] || []
     # Create a PostgresDatabase struct so we can use ConnectionCache. Doesn't matter
     # that the ID is for the replication_slot. Using ConnectionCache ensures we
     # do not create a bunch of connections to the database, regardless of the lifecycle
@@ -519,7 +520,7 @@ defmodule Sequin.Extensions.Replication do
       username: state.connection[:username],
       password: state.connection[:password],
       ssl: state.connection[:ssl] || false,
-      ipv6: state.connection[:ipv6] || false
+      ipv6: :inet6 in socket_options
     }
 
     {:ok, conn} = ConnectionCache.connection(postgres_database)

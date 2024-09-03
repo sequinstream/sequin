@@ -28,7 +28,9 @@
   export let parent: string;
   export let live;
 
-  const isEdit = !!database.id;
+  let form = { ...database };
+
+  const isEdit = !!form.id;
 
   let databaseErrors: any = {};
   let replicationErrors: any = {};
@@ -49,12 +51,12 @@
   function handleSubmit(event: Event) {
     event.preventDefault();
     validating = true;
-    pushEvent("form_submitted", { form: database }, () => {
+    pushEvent("form_submitted", { form }, () => {
       validating = false;
     });
   }
 
-  $: pushEvent("form_updated", { form: database });
+  $: pushEvent("form_updated", { form });
 
   function handleClose() {
     pushEvent("form_closed");
@@ -75,7 +77,7 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="database">Database</Label>
-          <Input type="text" id="database" bind:value={database.database} />
+          <Input type="text" id="database" bind:value={form.database} />
           {#if databaseErrors.database}
             <p class="text-destructive text-sm">{databaseErrors.database}</p>
           {/if}
@@ -83,7 +85,7 @@
 
         <div class="space-y-2">
           <Label for="hostname">Hostname</Label>
-          <Input type="text" id="hostname" bind:value={database.hostname} />
+          <Input type="text" id="hostname" bind:value={form.hostname} />
           {#if databaseErrors.hostname}
             <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
           {/if}
@@ -94,7 +96,7 @@
           <Input
             type="number"
             id="port"
-            bind:value={database.port}
+            bind:value={form.port}
             placeholder="5432"
           />
           {#if databaseErrors.port}
@@ -104,7 +106,7 @@
 
         <div class="space-y-2">
           <Label for="username">Username</Label>
-          <Input type="text" id="username" bind:value={database.username} />
+          <Input type="text" id="username" bind:value={form.username} />
           {#if databaseErrors.username}
             <p class="text-destructive text-sm">{databaseErrors.username}</p>
           {/if}
@@ -112,7 +114,7 @@
 
         <div class="space-y-2">
           <Label for="password">Password</Label>
-          <Input type="password" id="password" bind:value={database.password} />
+          <Input type="password" id="password" bind:value={form.password} />
           {#if databaseErrors.password}
             <p class="text-destructive text-sm">{databaseErrors.password}</p>
           {/if}
@@ -121,9 +123,9 @@
         <div class="flex items-center space-x-2">
           <Switch
             id="ssl"
-            checked={database.ssl}
+            checked={form.ssl}
             onCheckedChange={(checked) => {
-              database.ssl = checked;
+              form.ssl = checked;
             }}
           />
           <Label for="ssl">SSL</Label>
@@ -147,7 +149,7 @@
           slot:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-select pg_create_logical_replication_slot('{database.slot_name ||
+select pg_create_logical_replication_slot('{form.slot_name ||
             "my_slot"}', 'pgoutput');</pre>
 
         <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
@@ -158,18 +160,18 @@ select pg_create_logical_replication_slot('{database.slot_name ||
           • Create a publication for all tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {database.publication_name || "my_pub"} for all tables;</pre>
+create publication {form.publication_name || "my_pub"} for all tables;</pre>
         <p class="text-sm font-medium">
           • Create a publication for certain tables:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {database.publication_name ||
+create publication {form.publication_name ||
             "my_pub"} for table table1, table2, table3;</pre>
         <p class="text-sm font-medium">
           • Create a publication for all tables in a schema:
         </p>
         <pre class="bg-muted p-4 rounded-md mb-4 text-sm">
-create publication {database.publication_name ||
+create publication {form.publication_name ||
             "my_pub"} for tables in schema myschema;</pre>
 
         <h3 class="text-md font-semibold mb-2">
@@ -184,7 +186,7 @@ alter table {"{mytable}"} replica identity full;</pre>
 
         <div class="space-y-2">
           <Label for="slot_name">Slot Name</Label>
-          <Input type="text" id="slot_name" bind:value={database.slot_name} />
+          <Input type="text" id="slot_name" bind:value={form.slot_name} />
           {#if replicationErrors.slot_name}
             <p class="text-destructive text-sm">
               {replicationErrors.slot_name}
@@ -197,7 +199,7 @@ alter table {"{mytable}"} replica identity full;</pre>
           <Input
             type="text"
             id="publication_name"
-            bind:value={database.publication_name}
+            bind:value={form.publication_name}
           />
           {#if replicationErrors.publication_name}
             <p class="text-destructive text-sm">
@@ -218,7 +220,7 @@ alter table {"{mytable}"} replica identity full;</pre>
           <Input
             type="text"
             id="name"
-            bind:value={database.name}
+            bind:value={form.name}
             placeholder="Enter a unique name for your database"
             data-1p-ignore
             data-lpignore="true"

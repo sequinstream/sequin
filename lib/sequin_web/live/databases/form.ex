@@ -19,7 +19,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
     is_edit? = Map.has_key?(params, "id")
-    base_params = if is_edit?, do: %{}, else: %{"name" => Name.generate(99)}
 
     case fetch_or_build_database(socket, params) do
       {:ok, database} ->
@@ -31,10 +30,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             submit_error: nil,
             database: database
           )
-          |> put_changesets(%{
-            "database" => base_params,
-            "replication_slot" => %{"slot_name" => "sequin_slot", "publication_name" => "sequin_pub"}
-          })
+          |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
 
         {:ok, socket}
 
@@ -51,7 +47,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   defp fetch_or_build_database(_socket, _) do
-    {:ok, %PostgresDatabase{}}
+    {:ok, %PostgresDatabase{replication_slot: %PostgresReplicationSlot{}}}
   end
 
   @parent_id "databases_form"
@@ -61,7 +57,7 @@ defmodule SequinWeb.DatabasesLive.Form do
 
     assigns =
       assigns
-      |> assign(:form_data, changeset_to_form_data(changeset, replication_changeset))
+      |> assign(:encoded_database, encode_database(assigns.database))
       |> assign(:parent_id, @parent_id)
       |> assign(
         :form_errors,
@@ -78,7 +74,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         ssr={false}
         props={
           %{
-            database: @form_data,
+            database: @encoded_database,
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
             submitError: @submit_error
@@ -266,18 +262,18 @@ defmodule SequinWeb.DatabasesLive.Form do
     end)
   end
 
-  defp changeset_to_form_data(changeset, replication_changeset) do
+  defp encode_database(%PostgresDatabase{} = database) do
     %{
-      id: Ecto.Changeset.get_field(changeset, :id),
-      name: Ecto.Changeset.get_field(changeset, :name),
-      database: Ecto.Changeset.get_field(changeset, :database),
-      hostname: Ecto.Changeset.get_field(changeset, :hostname),
-      port: Ecto.Changeset.get_field(changeset, :port) || 5432,
-      username: Ecto.Changeset.get_field(changeset, :username),
-      password: Ecto.Changeset.get_field(changeset, :password),
-      ssl: Ecto.Changeset.get_field(changeset, :ssl) || false,
-      publication_name: Ecto.Changeset.get_field(replication_changeset, :publication_name),
-      slot_name: Ecto.Changeset.get_field(replication_changeset, :slot_name)
+      "id" => database.id,
+      "name" => database.name || Name.generate(99),
+      "database" => database.database,
+      "hostname" => database.hostname,
+      "port" => database.port || 5432,
+      "username" => database.username,
+      "password" => database.password,
+      "ssl" => database.ssl || false,
+      "publication_name" => database.replication_slot.publication_name || "sequin_pub",
+      "slot_name" => database.replication_slot.slot_name || "sequin_slot"
     }
   end
 

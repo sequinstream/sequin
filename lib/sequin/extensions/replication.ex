@@ -15,6 +15,7 @@ defmodule Sequin.Extensions.Replication do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Error
   alias Sequin.Extensions.PostgresAdapter.Decoder
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Begin
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Commit
@@ -160,7 +161,10 @@ defmodule Sequin.Extensions.Replication do
   rescue
     e ->
       Logger.error("Error processing message: #{inspect(e)}")
-      Health.update(state.postgres_database, :replication_messages, :error)
+
+      error = Error.service(service: :replication, message: Exception.message(e))
+      Health.update(state.postgres_database, :replication_messages, :error, error)
+
       reraise e, __STACKTRACE__
   end
 

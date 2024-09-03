@@ -8,11 +8,11 @@ defmodule Sequin.Databases do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ValidationError
+  alias Sequin.NetworkUtils
   alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
-  alias Sequin.TcpUtils
 
   require Logger
 
@@ -144,7 +144,7 @@ defmodule Sequin.Databases do
 
   @spec test_tcp_reachability(%PostgresDatabase{}, integer()) :: :ok | {:error, Error.t()}
   def test_tcp_reachability(%PostgresDatabase{} = db, timeout \\ 10_000) do
-    TcpUtils.test_reachability(db.hostname, db.port, timeout)
+    NetworkUtils.test_tcp_reachability(db.hostname, db.port, db.ipv6, timeout)
   end
 
   @spec test_connect(%PostgresDatabase{}, integer()) :: :ok | {:error, term()}

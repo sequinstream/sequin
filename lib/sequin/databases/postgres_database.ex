@@ -24,7 +24,8 @@ defmodule Sequin.Databases.PostgresDatabase do
              :name,
              :ssl,
              :username,
-             :password
+             :password,
+             :ipv6
            ]}
   @derive {Inspect, except: [:tables, :password]}
   typed_schema "postgres_databases" do
@@ -39,6 +40,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
     field :tables_refreshed_at, :utc_datetime
+    field :ipv6, :boolean, default: false
 
     embeds_many :tables, Table, on_replace: :delete, primary_key: false do
       field :oid, :integer, primary_key: true
@@ -74,7 +76,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       :queue_target,
       :ssl,
       :tables_refreshed_at,
-      :username
+      :username,
+      :ipv6
     ])
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
@@ -171,6 +174,13 @@ defmodule Sequin.Databases.PostgresDatabase do
         :max_restarts
       ])
       |> Enum.to_list()
+
+    opts =
+      if pd.ipv6 do
+        Keyword.put(opts, :socket_opts, [:inet6])
+      else
+        opts
+      end
 
     if opts[:ssl] do
       # To change this to verify_full in the future, we'll need to add CA certs for the cloud vendors

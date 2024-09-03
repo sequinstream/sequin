@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { slide } from "svelte/transition";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -11,6 +12,12 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import CodeWithCopy from "../components/CodeWithCopy.svelte";
+  import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+  } from "$lib/components/ui/alert";
+  import { AlertCircle } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -28,6 +35,7 @@
   export let submitError: string | null = null;
   export let parent: string;
   export let live;
+  export let isSupabasePooled: boolean = false;
 
   let form = { ...database };
 
@@ -41,7 +49,11 @@
     replicationErrors = errors.replication || {};
   }
 
-  function pushEvent(event: string, payload = {}, callback = () => {}) {
+  function pushEvent(
+    event: string,
+    payload = {},
+    callback: (reply?: any) => void = () => {}
+  ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
@@ -61,6 +73,15 @@
 
   function handleClose() {
     pushEvent("form_closed");
+  }
+
+  function handleConvertSupabase() {
+    pushEvent("convert_supabase_connection", { form }, (reply) => {
+      if (reply && reply.converted) {
+        form = { ...form, ...reply.converted };
+        isSupabasePooled = false;
+      }
+    });
   }
 </script>
 
@@ -133,6 +154,22 @@
         </div>
         {#if databaseErrors.ssl}
           <p class="text-destructive text-sm">{databaseErrors.ssl}</p>
+        {/if}
+        {#if isSupabasePooled}
+          <div transition:slide>
+            <Alert variant="destructive">
+              <AlertCircle class="h-4 w-4" />
+              <AlertTitle>Supabase Pooled Connection Detected</AlertTitle>
+              <AlertDescription>
+                We've detected a Supabase pooled connection. Sequin requires a
+                direct connection. Click the button below to convert to a direct
+                connection.
+              </AlertDescription>
+              <Button class="mt-2" on:click={handleConvertSupabase}>
+                Convert to Direct Connection
+              </Button>
+            </Alert>
+          </div>
         {/if}
       </CardContent>
     </Card>

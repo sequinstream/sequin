@@ -1,49 +1,89 @@
+ARG ELIXIR_VERSION=1.17.2
+ARG OTP_VERSION=27.0.1
+ARG DEBIAN_VERSION=buster-20240612-slim
+
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
+
 # ---- Build Stage ----
-FROM hexpm/elixir:1.17.2-erlang-27.0.1-debian-buster-20240612-slim as build
+FROM ${BUILDER_IMAGE} as builder
 
 # install build dependencies
-# telnet for debugging purposes
-RUN apt-get update && apt-get install build-essential git curl -y
+RUN apt-get update -y && apt-get install -y build-essential git curl \
+    && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Clean up
-RUN rm -rf /var/lib/apt/lists/*
+# install nodejs for build stage
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
 
-# Set environment variables for building the application
-ENV MIX_ENV=prod
-ENV LANG=C.UTF-8
-ENV ERL_FLAGS="+JPperf true"
+# prepare build dir
+RUN mkdir /app
+WORKDIR /app
 
 # Install hex and rebar
 RUN mix local.hex --force && \
     mix local.rebar --force
 
-# Create the application build directory
-RUN mkdir /app
-WORKDIR /app
+# Set environment variables for building the application
+ENV MIX_ENV="prod"
+ENV LANG=C.UTF-8
+ENV ERL_FLAGS="+JPperf true"
 
 # install mix dependencies
-COPY mix.exs mix.lock config/ ./
+COPY mix.exs mix.lock ./
+RUN mix deps.get --only $MIX_ENV
+RUN mkdir config
 
-RUN mix deps.get --only prod && \
-    mix deps.compile
+# copy compile-time config files before we compile dependencies
+# to ensure any relevant config change will trigger the dependencies
+# to be re-compiled.
+COPY config/config.exs config/${MIX_ENV}.exs config/
+RUN mix deps.compile
 
-COPY . .
+COPY priv priv
 
-RUN MIX_ENV=prod mix release
+COPY lib lib
 
+COPY assets assets
+
+# install all npm packages in assets directory
+WORKDIR /app/assets
+RUN npm install
+
+# change back to build dir
+WORKDIR /app
+
+# compile assets
+RUN mix assets.deploy
+
+# Compile the release
+RUN mix compile
+
+# Changes to config/runtime.exs don't require recompiling the code
+COPY config/runtime.exs config/
+
+COPY rel rel
+RUN mix release
+
+# start a new build stage so that the final image will only contain
+# the compiled release and other runtime necessities
 # ---- App Stage ----
-FROM hexpm/elixir:1.17.2-erlang-27.0.1-debian-buster-20240612-slim as app
+FROM ${RUNNER_IMAGE} as app
 
-ENV LANG=C.UTF-8
+RUN apt-get update -y && \
+    apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \
+    && apt-get clean && rm -f /var/lib/apt/lists/*_*
 
-# Install openssl
-RUN apt-get update && apt-get install -y openssl curl ssh jq telnet netcat htop && \
-    rm -rf /var/lib/apt/lists/*
+# Set the locale
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
+
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
 
 # Copy over the build artifact from the previous step and create a non root user
 RUN useradd --create-home app
 WORKDIR /home/app
-COPY --from=build --chown=app /app/_build .
+COPY --from=builder --chown=app /app/_build .
 
 COPY .iex.exs .
 COPY scripts/start_commands.sh /scripts/start_commands.sh

@@ -95,7 +95,7 @@ defmodule Sequin.MixProject do
       "assets.build": ["tailwind sequin", "esbuild sequin"],
       "assets.deploy": [
         "tailwind sequin --minify",
-        "node build.js --deploy --prefix assets",
+        "cmd --cd assets node build.js --deploy",
         "phx.digest"
       ]
     ]

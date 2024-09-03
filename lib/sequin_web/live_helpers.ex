@@ -6,28 +6,31 @@ defmodule SequinWeb.LiveHelpers do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
 
-  @spec current_user(Socket.t()) :: User.t()
+  @spec current_user(Socket.t()) :: User.t() | nil
   def current_user(socket) do
     socket.assigns.current_user
   end
 
-  @spec current_user_id(Socket.t()) :: User.id()
+  @spec current_user_id(Socket.t()) :: User.id() | nil
   def current_user_id(socket) do
-    current_user(socket).id
+    user = current_user(socket)
+    user && user.id
   end
 
   def push_toast(socket, toast) do
     Phoenix.LiveView.push_event(socket, "toast", toast)
   end
 
-  @spec current_account(Socket.t()) :: Account.t()
+  @spec current_account(Socket.t()) :: Account.t() | nil
   def current_account(socket) do
-    current_user(socket).account
+    user = current_user(socket)
+    user && user.account
   end
 
-  @spec current_account_id(Socket.t()) :: Account.id()
+  @spec current_account_id(Socket.t()) :: Account.id() | nil
   def current_account_id(socket) do
-    current_account(socket).id
+    account = current_account(socket)
+    account && account.id
   end
 
   def blank?(value) when is_list(value) do

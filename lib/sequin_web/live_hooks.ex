@@ -22,7 +22,7 @@ defmodule SequinWeb.LiveHooks do
 
   defp assign_account_name(_params, _uri, socket) do
     account = LiveHelpers.current_account(socket)
-    {:cont, assign(socket, :account_name, account.name)}
+    {:cont, assign(socket, :account_name, account && account.name)}
   end
 
   defp push_toast(socket) do

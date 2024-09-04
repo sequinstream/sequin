@@ -1,0 +1,77 @@
+---
+title: 'Docker compose'
+---
+
+As an alternative to Sequin's [cloud offering](https://sequinstream.com/docs/quickstart), you can run Sequin locally or self-host Sequin using Docker compose.
+
+Sequin requires:
+
+- A Postgres database (for storing Sequin runtime configuration and message data)
+- A Redis instance (for caching and assistance with message delivery)
+
+## Docker compose
+
+The easiest way to get started is to use the `docker/docker-compose.yaml` file in the repository to start a Postgres instance, Redis instance, and Sequin server. This file uses a prod-ready version of Sequin.
+
+Git clone the repository and run `docker compose up -d` in the `docker` directory:
+
+```bash
+git clone git@github.com:sequinstream/sequin.git
+cd sequin/docker
+docker compose up -d
+```
+
+The Docker compose file contains a Postgres service that is configured to run on port 5432. It also contains a Redis service that is configured to run on port 6379. If you want to use your own existing Postgres database with Sequin instead of the bundled Postgres container, you can modify the `docker-compose.yaml` file as follows:
+
+1. Remove the `postgres` service from the `docker-compose.yaml` file.
+2. Update the `sequin` service environment variables to point to your Postgres database:
+
+```yaml
+services:
+  sequin:
+    environment:
+      - PG_PORT=<port>
+      - PG_HOSTNAME=<hostname>
+      - PG_DATABASE=<database>
+      - PG_USERNAME=<username>
+      - PG_PASSWORD=<password>
+```
+
+If you want to use your own existing Redis instance instead of the bundled Redis container, you can modify the `docker-compose.yaml` file as follows:
+
+1. Remove the `redis` service from the `docker-compose.yaml` file.
+2. Update the `sequin` service environment variables to point to your Redis instance:
+
+```yaml
+services:
+  sequin:
+    environment:
+      - REDIS_URL=<url>
+```
+
+### Docker compose with existing project
+
+If you are adding Sequin to an existing `docker-compose.yaml` file in your project, you can add the following to the `services` section:
+
+```yaml
+services:
+  ...
+  sequin:
+    image: sequin/sequin:latest
+    ports:
+      - "7376:7376"
+    environment:
+      - PG_PORT=<port>
+      - PG_HOSTNAME=postgres
+      - PG_DATABASE=sequin
+      - PG_USERNAME=postgres
+      - PG_PASSWORD=postgres
+      - REDIS_URL=<url>
+      - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
+      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
+    depends_on:
+      - postgres
+      - redis
+```
+
+Make sure to configure the `PG_PORT` environment variable to match the port of your Postgres instance, usually `5432`.

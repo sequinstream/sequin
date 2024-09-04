@@ -98,7 +98,7 @@ For full documentation, visit [sequinstream.com/docs](http://sequinstream.com/do
 Sequin is available as a cloud version or self-hosted. See the following docs to get up and running quickly:
 
 - [Sequin cloud quickstart](https://sequinstream.com/docs/quickstart)
-- [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/installation)
+- [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/docker-compose)
 
 ### SDKs
 

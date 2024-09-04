@@ -35,16 +35,13 @@
         "compare",
         "quickstart",
         "core-concepts",
-        "sdks"
+        "sdks",
+        "self-hosting/docker-compose"
       ]
     },
     {
       "group": "Database setup",
       "pages": ["guides/rds", "guides/supabase", "guides/neon"]
-    },
-    {
-      "group": "Self hosting",
-      "pages": ["self-hosting/installation", "self-hosting/deploying"]
     }
   ],
   "footerSocials": {}

@@ -18,14 +18,14 @@ services:
       - postgres
 
   postgres:
-    image: postgres:13
+    image: postgres:16
     ports:
       - "7377:7377"
     environment:
       - POSTGRES_DB=sequin
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-    command: [ "postgres", "-c", "wal_level=logical", "-p", "7377" ]
+    command: ["postgres", "-c", "wal_level=logical", "-p", "7377"]
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

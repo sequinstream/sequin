@@ -72,12 +72,12 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   end
 
   defp push_message(%HttpEndpoint{} = http_endpoint, message_data, req_opts) do
+    headers = http_endpoint.headers
+    encrypted_headers = http_endpoint.encrypted_headers || %{}
+    headers = Map.merge(headers, encrypted_headers)
+
     req =
-      [
-        base_url: http_endpoint.base_url,
-        headers: http_endpoint.headers,
-        json: message_data
-      ]
+      [base_url: http_endpoint.base_url, headers: headers, json: message_data]
       |> Keyword.merge(req_opts)
       |> Req.new()
 

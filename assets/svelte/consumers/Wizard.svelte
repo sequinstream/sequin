@@ -70,6 +70,7 @@
       name: string;
       baseUrl: string;
       headers: Record<string, string>;
+      encryptedHeaders: Record<string, string>;
     };
   } = {
     postgresDatabaseId: null,
@@ -87,6 +88,7 @@
       name: "",
       baseUrl: "",
       headers: {},
+      encryptedHeaders: {},
     },
   };
 
@@ -465,6 +467,7 @@
           name: result.name,
           baseUrl: result.url,
           headers: {},
+          encryptedHeaders: {},
         };
         showNewHttpEndpointForm = true;
       } else if (result.error) {

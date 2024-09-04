@@ -65,7 +65,7 @@
 
   let containerElement: HTMLElement;
   let expandedContentElement: HTMLElement;
-  let containerRect: DOMRect; // Add this line
+  let containerRect: DOMRect;
 
   function updateExpandedContentPosition() {
     if (containerElement && expandedContentElement) {

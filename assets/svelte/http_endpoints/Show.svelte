@@ -7,6 +7,8 @@
     RefreshCw,
     Activity,
     CheckCircle2,
+    Eye,
+    EyeOff,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
@@ -30,6 +32,7 @@
   let showDeleteConfirmDialog = false;
   let showDeleteErrorDialog = false;
   let deleteErrorDialogMessage: string | null = null;
+  let showEncryptedValues = {};
 
   function handleEdit() {
     live.pushEventTo(`#${parent_id}`, "edit", {});
@@ -44,6 +47,11 @@
         deleteErrorDialogMessage = res.error;
       }
     });
+  }
+
+  function toggleEncryptedValue(key) {
+    showEncryptedValues[key] = !showEncryptedValues[key];
+    showEncryptedValues = showEncryptedValues;
   }
 </script>
 
@@ -161,6 +169,60 @@
               </h3>
               <p class="text-sm text-gray-500">
                 This HTTP endpoint doesn't have any custom headers set.
+              </p>
+            </div>
+          {/if}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
+          <h2 class="text-lg font-semibold mb-4">Encrypted Headers</h2>
+          {#if Object.keys(http_endpoint.encryptedHeaders).length > 0}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Key</TableHead>
+                  <TableHead>Value</TableHead>
+                  <TableHead class="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {#each Object.entries(http_endpoint.encryptedHeaders) as [key, value]}
+                  <TableRow>
+                    <TableCell class="font-medium">{key}</TableCell>
+                    <TableCell>
+                      {#if showEncryptedValues[key]}
+                        {value}
+                      {:else}
+                        ••••••••
+                      {/if}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        on:click={() => toggleEncryptedValue(key)}
+                      >
+                        {#if showEncryptedValues[key]}
+                          <EyeOff class="h-4 w-4" />
+                        {:else}
+                          <Eye class="h-4 w-4" />
+                        {/if}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                {/each}
+              </TableBody>
+            </Table>
+          {:else}
+            <div class="text-center py-6 bg-gray-50 rounded-lg">
+              <Braces class="h-12 w-12 text-gray-300 mx-auto mb-3" />
+              <h3 class="text-sm font-medium text-gray-900 mb-1">
+                No encrypted headers configured
+              </h3>
+              <p class="text-sm text-gray-500">
+                This HTTP endpoint doesn't have any encrypted headers set.
               </p>
             </div>
           {/if}

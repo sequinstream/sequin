@@ -90,6 +90,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
       name: http_endpoint.name,
       baseUrl: http_endpoint.base_url,
       headers: http_endpoint.headers,
+      encryptedHeaders: http_endpoint.encrypted_headers || %{},
       health: Health.to_external(http_endpoint.health),
       inserted_at: http_endpoint.inserted_at,
       updated_at: http_endpoint.updated_at

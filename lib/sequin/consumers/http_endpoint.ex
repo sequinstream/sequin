@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :name, :string
     field :base_url, :string
     field :headers, :map, default: %{}
+    field :encrypted_headers, Sequin.Encrypted.Map
     field :health, :map, virtual: true
 
     belongs_to :account, Sequin.Accounts.Account
@@ -22,7 +23,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   def create_changeset(http_endpoint, attrs) do
     http_endpoint
-    |> cast(attrs, [:name, :base_url, :headers])
+    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers])
     |> validate_required([:name, :base_url])
     |> validate_base_url()
     |> foreign_key_constraint(:account_id)
@@ -30,7 +31,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   def update_changeset(http_endpoint, attrs) do
     http_endpoint
-    |> cast(attrs, [:name, :base_url, :headers])
+    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers])
     |> validate_base_url()
   end
 

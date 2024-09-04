@@ -53,6 +53,7 @@
       name: "",
       baseUrl: "",
       headers: {},
+      encryptedHeaders: {},
     },
   };
 
@@ -129,6 +130,7 @@
           name: result.name,
           baseUrl: result.url,
           headers: {},
+          encryptedHeaders: {},
         };
         showNewHttpEndpointForm = true;
       } else if (result.error) {

@@ -20,8 +20,10 @@
     SearchIcon,
     RefreshCwIcon,
     CheckIcon,
+    DatabaseIcon,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
+  import { onMount } from "svelte";
 
   export let databases: Array<{
     id: string;
@@ -78,6 +80,7 @@
 
   function handleDbChange(event: any) {
     selectedDatabaseId = event.value;
+    onSelect({ databaseId: event.value, tableOid: null });
   }
 
   function refreshDatabases() {
@@ -112,11 +115,20 @@
       tableOid: table.oid,
     });
   }
+
+  onMount(() => {
+    if (databases.length === 1 && !selectedDatabaseId) {
+      handleDbChange({ value: databases[0].id });
+    }
+  });
 </script>
 
 <div class="w-full mx-auto space-y-4">
   <div class="flex items-center space-x-2">
-    <Select onSelectedChange={handleDbChange}>
+    <Select
+      onSelectedChange={handleDbChange}
+      selected={{ value: selectedDatabaseId, label: selectedDatabase?.name }}
+    >
       <SelectTrigger>
         <SelectValue placeholder="Select a database" />
       </SelectTrigger>
@@ -146,9 +158,12 @@
   {#if selectedDatabaseId}
     <div class="border rounded-lg p-4 space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">
-          {selectedDatabase.name}
-        </h2>
+        <div class="flex items-center space-x-2">
+          <DatabaseIcon class="h-5 w-5 text-gray-400" />
+          <h2 class="text-lg font-semibold">
+            {selectedDatabase.name}
+          </h2>
+        </div>
         <div class="flex items-center space-x-2">
           <div class="relative">
             <SearchIcon

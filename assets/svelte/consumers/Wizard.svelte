@@ -3,12 +3,21 @@
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import { InfoIcon, RefreshCwIcon, CheckIcon, Loader2 } from "lucide-svelte";
+  import {
+    InfoIcon,
+    RefreshCwIcon,
+    CheckIcon,
+    Loader2,
+    XIcon,
+    CircleIcon,
+    ExternalLinkIcon,
+  } from "lucide-svelte";
   import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
+    CardDescription,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import {
@@ -24,6 +33,7 @@
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
+  import { Badge } from "$lib/components/ui/badge";
 
   import HttpPushVisual from "./HttpPushVisual.svelte";
   import HttpPullVisual from "./HttpPullVisual.svelte";
@@ -33,13 +43,13 @@
   import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
   import { Switch } from "$lib/components/ui/switch";
   import { toast } from "svelte-sonner";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import * as Tabs from "$lib/components/ui/tabs";
 
-  let step = "select_stream";
+  let step = "select_table";
   export let live;
   export let parent;
   let form: {
-    messageKind: string;
-    consumerKind: string;
     postgresDatabaseId: string;
     tableOid: number | null;
     sourceTableFilters: {
@@ -49,6 +59,8 @@
       valueType: string;
     }[];
     sourceTableActions: string[];
+    messageKind: string;
+    consumerKind: string;
     name: string;
     ackWaitMs: number;
     maxAckPending: number;
@@ -60,12 +72,12 @@
       headers: Record<string, string>;
     };
   } = {
-    messageKind: "event",
-    consumerKind: null,
     postgresDatabaseId: null,
     tableOid: null,
     sourceTableFilters: [],
     sourceTableActions: ["insert", "update", "delete"],
+    messageKind: null,
+    consumerKind: null,
     name: "",
     ackWaitMs: 30000,
     maxAckPending: 100,
@@ -101,6 +113,7 @@
   export let errors: any = {};
 
   let showConfirmOnExit = false;
+  let formLoadedFromLocalStorage = false;
 
   $: {
     // Set to true when form is touched
@@ -139,29 +152,42 @@
 
   $: pushEvent("form_updated", { form });
 
-  const streamTypes = [
+  const messageTypes = [
     {
       id: "event",
-      title: "Change stream",
+      title: "Changes",
       description:
         "Receive every create, update, and delete that happens to rows.",
       comingSoon: false,
+      source: "Source: WAL",
       replacements: ["Postgres triggers", "SQS", "ORM hooks", "WAL events"],
-    },
-    {
-      id: "change_retention",
-      title: "Change stream with retention",
-      description:
-        "Receive every create, update, and delete that happens to rows.",
-      comingSoon: true,
-      replacements: ["Kafka", "Debezium", { text: "pg_audit", style: "code" }],
+      features: [
+        { text: "Exactly-once processing", attribute: "positive" },
+        {
+          text: "Creates, updates, deletes with both new and old values",
+          attribute: "positive",
+        },
+        { text: "No replays or rewinds", attribute: "negative" },
+        { text: "Events deleted after processing", attribute: "neutral" },
+      ],
     },
     {
       id: "record",
-      title: "Sync stream",
+      title: "Rows",
       description: "Receive the latest version of rows whenever they change.",
       comingSoon: false,
+      source: "Source: Table",
       replacements: ["Kafka", { text: "COPY", style: "code" }, "Manual syncs"],
+      features: [
+        { text: "Exactly-once processing", attribute: "positive" },
+        {
+          text: "Receive new on every record create or update",
+          attribute: "positive",
+        },
+        { text: "Backfill historical data", attribute: "positive" },
+        { text: "Rewind and replay data", attribute: "positive" },
+        { text: "No deletes or old values", attribute: "negative" },
+      ],
     },
   ];
 
@@ -180,46 +206,9 @@
     },
   ];
 
-  const streamFeatures = [
-    {
-      features: [
-        { text: "Exactly-once processing", attribute: "positive" },
-        {
-          text: "Creates, updates, deletes with both new and old values",
-          attribute: "positive",
-        },
-        { text: "No replays or rewinds", attribute: "negative" },
-        { text: "Events deleted after processing", attribute: "neutral" },
-      ],
-    },
-    {
-      features: [
-        { text: "Exactly-once processing", attribute: "positive" },
-        {
-          text: "Creates, updates, deletes with both new and old values",
-          attribute: "positive",
-        },
-        { text: "Replays and rewinds", attribute: "positive" },
-        { text: "Audit table of changes", attribute: "positive" },
-      ],
-    },
-    {
-      features: [
-        { text: "Exactly-once processing", attribute: "positive" },
-        {
-          text: "Receive new on every record create or update",
-          attribute: "positive",
-        },
-        { text: "Backfill historical data", attribute: "positive" },
-        { text: "Rewind and replay data", attribute: "positive" },
-        { text: "No deletes or old values", attribute: "negative" },
-      ],
-    },
-  ];
-
-  function handleStreamClick(stream) {
-    if (!stream.comingSoon) {
-      handleFormUpdate({ messageKind: stream.id });
+  function handleStreamClick(messageKind) {
+    if (!messageKind.comingSoon) {
+      handleFormUpdate({ messageKind: messageKind.id });
       pushEvent("form_updated", { form });
       step = "select_consumer";
       saveFormToStorage();
@@ -230,13 +219,9 @@
     if (!consumer.comingSoon) {
       handleFormUpdate({ consumerKind: consumer.id });
       pushEvent("form_updated", { form });
-      step = "select_table";
+      step = "configure_consumer";
       saveFormToStorage();
     }
-  }
-
-  function isComingSoon(index) {
-    return streamTypes[index].comingSoon;
   }
 
   let selectedDatabase: any;
@@ -340,17 +325,17 @@
 
   function goBack() {
     switch (step) {
-      case "select_consumer":
-        step = "select_stream";
-        break;
-      case "select_table":
-        step = "select_consumer";
-        break;
       case "configure_filters":
         step = "select_table";
         break;
-      case "configure_consumer":
+      case "select_message_kind":
         step = "configure_filters";
+        break;
+      case "select_consumer":
+        step = "select_message_kind";
+        break;
+      case "configure_consumer":
+        step = "select_consumer";
         break;
     }
     saveFormToStorage();
@@ -362,7 +347,7 @@
         step = "configure_filters";
         break;
       case "configure_filters":
-        step = "configure_consumer";
+        step = "select_message_kind";
         break;
     }
     saveFormToStorage();
@@ -375,14 +360,14 @@
 
   $: navSteps = [
     {
-      id: "selectStream",
-      label: "Select stream",
-      active: step === "select_stream" || step === "select_consumer",
-    },
-    {
       id: "selectTable",
       label: "Select table",
       active: step === "select_table" || step === "configure_filters",
+    },
+    {
+      id: "selectConsumer",
+      label: "Select consumer",
+      active: step === "select_message_kind" || step === "select_consumer",
     },
     {
       id: "configure",
@@ -418,6 +403,8 @@
         const parsedForm = JSON.parse(storedForm);
         const storedTimestamp = parsedForm._timestamp;
         const storedStep = parsedForm._step;
+        console.log("parsedForm", parsedForm);
+
         delete parsedForm._timestamp;
         delete parsedForm._step;
 
@@ -429,7 +416,7 @@
 
         if (!isExpired && hasSameKeys) {
           form = parsedForm;
-          step = storedStep || "select_stream"; // Use stored step or default to "select_stream"
+          step = storedStep || "select_table"; // Use stored step or default to "select_table"
         } else {
           localStorage.removeItem(STORAGE_KEY);
         }
@@ -438,14 +425,22 @@
         localStorage.removeItem(STORAGE_KEY);
       }
     }
+
+    formLoadedFromLocalStorage = true;
   });
 
   function saveFormToStorage() {
+    // There's a race on mount. Don't start saving the form until we've loaded it from local storage.
+    if (!formLoadedFromLocalStorage) {
+      return;
+    }
+
     const formToSave = {
       ...form,
       _timestamp: new Date().getTime(),
       _step: step,
     };
+    console.log("formToSave", formToSave);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(formToSave));
   }
 
@@ -472,6 +467,101 @@
         toast.error("Failed to generate Webhook.site URL");
       }
     });
+  }
+
+  let showRowExample = false;
+  let showChangeExample = false;
+
+  const rowExample = {
+    record: {
+      id: 1,
+      name: "Paul Atreides",
+      title: "Duke of Arrakis",
+      spice_allocation: 1000,
+      is_kwisatz_haderach: true,
+    },
+    metadata: {
+      table_schema: "public",
+      table_name: "house_atreides_members",
+      consumer: {
+        id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+        name: "dune_characters_consumer",
+      },
+    },
+  };
+
+  const changeExamples = {
+    insert: {
+      record: {
+        id: 2,
+        name: "Chani",
+        title: "Fremen Warrior",
+        spice_allocation: 500,
+        is_sayyadina: true,
+      },
+      changes: null,
+      action: "insert",
+      metadata: {
+        table_schema: "public",
+        table_name: "fremen_members",
+        commit_timestamp: "2023-10-15T14:30:00Z",
+        consumer: {
+          id: "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+          name: "arrakis_population_consumer",
+        },
+      },
+    },
+    update: {
+      record: {
+        id: 1,
+        name: "Paul Atreides",
+        title: "Emperor of the Known Universe",
+        spice_allocation: 10000,
+        is_kwisatz_haderach: true,
+      },
+      changes: {
+        title: "Duke of Arrakis",
+        spice_allocation: 1000,
+      },
+      action: "update",
+      metadata: {
+        table_schema: "public",
+        table_name: "house_atreides_members",
+        commit_timestamp: "2023-10-16T09:45:00Z",
+        consumer: {
+          id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          name: "dune_characters_consumer",
+        },
+      },
+    },
+    delete: {
+      record: {
+        id: 3,
+        name: "Baron Vladimir Harkonnen",
+        title: "Baron of House Harkonnen",
+        spice_allocation: 5000,
+        is_mentat: false,
+      },
+      changes: null,
+      action: "delete",
+      metadata: {
+        table_schema: "public",
+        table_name: "house_harkonnen_members",
+        commit_timestamp: "2023-10-17T18:20:00Z",
+        consumer: {
+          id: "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
+          name: "landsraad_members_consumer",
+        },
+      },
+    },
+  };
+
+  function showExample(type: string) {
+    if (type === "event") {
+      showChangeExample = true;
+    } else if (type === "record") {
+      showRowExample = true;
+    }
   }
 </script>
 
@@ -506,79 +596,219 @@
 
   <div class="flex flex-col">
     <div class="flex-grow" style="min-width: 750px;">
-      {#if step === "select_stream"}
+      {#if step === "select_table"}
         <div
           class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
         >
           <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Select a stream type</h2>
+            <h2 class="text-xl font-semibold">Select a table</h2>
           </div>
         </div>
-
         <div class="p-8 max-w-5xl mx-auto">
-          <div class="grid grid-cols-3 gap-6">
-            {#each streamTypes as stream}
-              <div class="stream-container">
-                <div
-                  class="stream-box relative {stream.comingSoon
-                    ? 'disabled'
-                    : ''}"
-                  on:click={() => handleStreamClick(stream)}
-                  on:keydown={(e) =>
-                    e.key === "Enter" && handleStreamClick(stream)}
-                  tabindex={stream.comingSoon ? -1 : 0}
-                  role="button"
-                  aria-disabled={stream.comingSoon}
-                >
-                  {#if stream.comingSoon}
-                    <div class="coming-soon-badge">Coming Soon</div>
-                  {/if}
-                  <h3 class="title">{stream.title}</h3>
-                  <p class="description">{stream.description}</p>
-                </div>
-              </div>
-            {/each}
-          </div>
+          <div class="flex justify-end mb-4"></div>
+          <TableSelector
+            {databases}
+            onSelect={handleTableSelect}
+            {pushEvent}
+            selectedDatabaseId={form.postgresDatabaseId}
+            selectedTableOid={form.tableOid}
+          />
+        </div>
+      {/if}
 
-          <div class="grid grid-cols-3 gap-6 mt-6">
-            {#each streamTypes as stream, i}
-              <div class="replacement-box" class:coming-soon={isComingSoon(i)}>
-                <p class="replacement-title">Replacement for:</p>
-                <ul class="replacement-list">
-                  {#each stream.replacements as replacement}
-                    <li>
-                      {#if typeof replacement === "string"}
-                        {replacement}
-                      {:else if replacement.style === "code"}
-                        <code>{replacement.text}</code>
-                      {:else}
-                        {replacement.text}
-                      {/if}
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/each}
+      {#if step === "configure_filters"}
+        <div
+          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
+        >
+          <div class="flex items-center container">
+            <h2 class="text-xl font-semibold">Define filters</h2>
           </div>
-
-          <div class="grid grid-cols-3 gap-6 mt-6">
-            {#each streamFeatures as { features }, i}
-              <div class="feature-box" class:coming-soon={isComingSoon(i)}>
-                <ul class="feature-list">
-                  {#each features as feature}
-                    <li class="feature-item">
-                      {#if feature.attribute === "positive"}
-                        <span class="text-green-500">✓</span>
-                      {:else if feature.attribute === "negative"}
-                        <span class="text-red-500">✗</span>
-                      {:else}
-                        <span class="text-gray-400">•</span>
-                      {/if}
-                      {feature.text}
-                    </li>
-                  {/each}
-                </ul>
+        </div>
+        <div class="p-8 max-w-5xl mx-auto">
+          <Card>
+            <CardHeader>
+              <CardTitle>Filters</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div class="mb-6">
+                <p class="text-muted-foreground">
+                  Optionally filter rows from the table based on the SQL <code
+                    >where</code
+                  > conditions below.
+                </p>
               </div>
+              {#if form.postgresDatabaseId && form.tableOid}
+                {#if selectedDatabase && selectedTable}
+                  <div class="mb-6">
+                    <div
+                      class="grid grid-cols-[auto_1fr_1fr_15px] gap-4 mb-2 items-center"
+                    >
+                      <icon
+                        class="hero-table-cells w-6 h-6 rounded {getColorFromName(
+                          `${selectedTable.schema}.${selectedTable.name}`
+                        )}"
+                      ></icon>
+                      <span class="font-medium"
+                        >{selectedTable.schema}.{selectedTable.name}</span
+                      >
+                      {#if form.sourceTableFilters.length > 0}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          on:click={() =>
+                            refreshTables(form.postgresDatabaseId)}
+                          disabled={tableRefreshState === "refreshing"}
+                          class="justify-self-end"
+                        >
+                          {#if tableRefreshState === "refreshing"}
+                            <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
+                          {:else if tableRefreshState === "done"}
+                            <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
+                          {:else}
+                            <RefreshCwIcon class="h-4 w-4 mr-2" />
+                          {/if}
+                          Refresh
+                        </Button>
+                      {/if}
+                    </div>
+                    <TableFilters
+                      filters={form.sourceTableFilters}
+                      columns={selectedTable.columns}
+                      onFilterChange={handleFilterChange}
+                    />
+                    {#if form.messageKind === "event"}
+                      <div class="mt-6 space-y-2">
+                        <Label>Operations to capture</Label>
+                        <div class="flex items-center space-x-4">
+                          {#each ["insert", "update", "delete"] as action}
+                            <div class="flex items-center space-x-2">
+                              <Label for={action} class="cursor-pointer">
+                                {action.charAt(0).toUpperCase() +
+                                  action.slice(1)}
+                              </Label>
+                              <Switch
+                                id={action}
+                                checked={form.sourceTableActions.includes(
+                                  action
+                                )}
+                                onCheckedChange={(checked) => {
+                                  const newActions = checked
+                                    ? [...form.sourceTableActions, action]
+                                    : form.sourceTableActions.filter(
+                                        (a) => a !== action
+                                      );
+                                  handleFormUpdate({
+                                    sourceTableActions: newActions,
+                                  });
+                                }}
+                              />
+                            </div>
+                          {/each}
+                        </div>
+                        {#if errors.source_tables?.[0]?.actions}
+                          <p class="text-destructive text-sm">
+                            {errors.source_tables[0].actions}
+                          </p>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
+                {:else}
+                  <p>Loading table information...</p>
+                {/if}
+              {:else}
+                <p>Please select a database and table first.</p>
+              {/if}
+            </CardContent>
+          </Card>
+        </div>
+      {/if}
+      {#if step === "select_message_kind"}
+        <div
+          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
+        >
+          <div class="flex items-center justify-between container">
+            <h2 class="text-xl font-semibold">
+              What should the consumer process?
+            </h2>
+            <Button
+              variant="outline"
+              href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
+              target="_blank"
+              class="flex items-center"
+            >
+              <span class="mr-1">Read docs</span>
+              <ExternalLinkIcon class="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+        <div class="p-8 max-w-5xl mx-auto">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {#each messageTypes as type}
+              <Card class="w-full grid grid-rows-[auto_1fr_auto] h-full">
+                <CardHeader class="h-[8.125em]">
+                  <div class="flex justify-between items-center mb-2">
+                    <CardTitle>{type.title}</CardTitle>
+                    <Badge variant="secondary">{type.source}</Badge>
+                  </div>
+                  <p class="text-muted-foreground">{type.description}</p>
+                </CardHeader>
+                <CardContent class="grid grid-rows-[8.75em_1fr] gap-4">
+                  <div>
+                    <h4 class="font-semibold mb-2">Replacement for:</h4>
+                    <ul class="list-disc pl-5 space-y-1">
+                      {#each type.replacements as replacement}
+                        <li>
+                          {#if typeof replacement === "string"}
+                            {replacement}
+                          {:else if replacement.style === "code"}
+                            <code class="bg-muted px-1 py-0.5 rounded"
+                              >{replacement.text}</code
+                            >
+                          {:else}
+                            {replacement.text}
+                          {/if}
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 class="font-semibold mb-2">Features:</h4>
+                    <ul class="space-y-2">
+                      {#each type.features as feature}
+                        <li class="flex items-center">
+                          {#if feature.attribute === "positive"}
+                            <CheckIcon class="w-4 h-4 mr-2 text-green-500" />
+                          {:else if feature.attribute === "negative"}
+                            <XIcon class="w-4 h-4 mr-2 text-red-500" />
+                          {:else}
+                            <CircleIcon class="w-4 h-4 mr-2 text-gray-400" />
+                          {/if}
+                          <span>{feature.text}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                </CardContent>
+                <CardContent>
+                  <div class="flex flex-col gap-2 justify-between items-center">
+                    <Button
+                      class="w-full"
+                      on:click={() => handleStreamClick(type)}
+                      disabled={type.comingSoon}
+                    >
+                      {type.comingSoon ? "Coming Soon" : `Select ${type.title}`}
+                    </Button>
+                    <Button
+                      class="w-full"
+                      variant="outline"
+                      on:click={() => showExample(type.id)}
+                    >
+                      See example
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             {/each}
           </div>
         </div>
@@ -640,123 +870,6 @@
               </div>
             {/each}
           </div>
-        </div>
-      {/if}
-
-      {#if step === "select_table"}
-        <div
-          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
-        >
-          <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Select a table</h2>
-          </div>
-        </div>
-        <div class="p-8 max-w-5xl mx-auto">
-          <div class="flex justify-end mb-4"></div>
-          <TableSelector
-            {databases}
-            onSelect={handleTableSelect}
-            {pushEvent}
-            selectedDatabaseId={form.postgresDatabaseId}
-            selectedTableOid={form.tableOid}
-          />
-        </div>
-      {/if}
-
-      {#if step === "configure_filters"}
-        <div
-          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
-        >
-          <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Define filters</h2>
-          </div>
-        </div>
-        <div class="p-8 max-w-5xl mx-auto">
-          <div class="mb-6">
-            <p class="text-muted-foreground">
-              Optionally filter rows from the table based on the SQL <code
-                >where</code
-              > conditions below.
-            </p>
-          </div>
-          {#if form.postgresDatabaseId && form.tableOid}
-            {#if selectedDatabase && selectedTable}
-              <div class="mb-6">
-                <div
-                  class="grid grid-cols-[auto_1fr_1fr_15px] gap-4 mb-2 items-center"
-                >
-                  <icon
-                    class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-                      `${selectedTable.schema}.${selectedTable.name}`
-                    )}"
-                  ></icon>
-                  <span class="font-medium"
-                    >{selectedTable.schema}.{selectedTable.name}</span
-                  >
-                  {#if form.sourceTableFilters.length > 0}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      on:click={() => refreshTables(form.postgresDatabaseId)}
-                      disabled={tableRefreshState === "refreshing"}
-                      class="justify-self-end"
-                    >
-                      {#if tableRefreshState === "refreshing"}
-                        <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
-                      {:else if tableRefreshState === "done"}
-                        <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
-                      {:else}
-                        <RefreshCwIcon class="h-4 w-4 mr-2" />
-                      {/if}
-                      Refresh
-                    </Button>
-                  {/if}
-                </div>
-                <TableFilters
-                  filters={form.sourceTableFilters}
-                  columns={selectedTable.columns}
-                  onFilterChange={handleFilterChange}
-                />
-                {#if form.messageKind === "event"}
-                  <div class="mt-6 space-y-2">
-                    <Label>Operations to capture</Label>
-                    <div class="flex items-center space-x-4">
-                      {#each ["insert", "update", "delete"] as action}
-                        <div class="flex items-center space-x-2">
-                          <Label for={action} class="cursor-pointer">
-                            {action.charAt(0).toUpperCase() + action.slice(1)}
-                          </Label>
-                          <Switch
-                            id={action}
-                            checked={form.sourceTableActions.includes(action)}
-                            onCheckedChange={(checked) => {
-                              const newActions = checked
-                                ? [...form.sourceTableActions, action]
-                                : form.sourceTableActions.filter(
-                                    (a) => a !== action
-                                  );
-                              handleFormUpdate({
-                                sourceTableActions: newActions,
-                              });
-                            }}
-                          />
-                        </div>
-                      {/each}
-                    </div>
-                    {#if errors.source_tables?.[0]?.actions}
-                      <p class="text-destructive text-sm">
-                        {errors.source_tables[0].actions}
-                      </p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-            {:else}
-              <p>Loading table information...</p>
-            {/if}
-          {:else}
-            <p>Please select a database and table first.</p>
-          {/if}
         </div>
       {/if}
 
@@ -1000,7 +1113,7 @@
     <div class="flex flex-shrink-0 h-16 justify-center w-full">
       <div class="flex items-center justify-between w-full px-8 max-w-[1288px]">
         <div>
-          {#if step !== "select_stream"}
+          {#if step !== "select_message_kind"}
             <Button variant="outline" on:click={goBack}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -1023,9 +1136,9 @@
           {/if}
         </div>
         <div>
-          {#if step === "select_stream"}
+          {#if step === "select_message_kind"}
             <p class="text-sm leading-4 text-carbon-200 font-semibold">
-              Select a stream type to continue
+              Select changes or rows to continue
             </p>
           {:else if step === "select_consumer"}
             <p class="text-sm leading-4 text-carbon-200 font-semibold">
@@ -1047,19 +1160,74 @@
   </svelte:fragment>
 </FullPageModal>
 
+<Dialog.Root bind:open={showRowExample}>
+  <Dialog.Portal>
+    <Dialog.Overlay />
+    <Dialog.Content class="max-w-3xl">
+      <Dialog.Header class="mb-4">
+        <Dialog.Title>Row Example</Dialog.Title>
+      </Dialog.Header>
+      <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
+          >{JSON.stringify(rowExample, null, 2).trim()}</code
+        ></pre>
+      <Dialog.Footer>
+        <Button on:click={() => (showRowExample = false)}>Close</Button>
+      </Dialog.Footer>
+      <Dialog.Close />
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showChangeExample}>
+  <Dialog.Portal>
+    <Dialog.Overlay />
+    <Dialog.Content class="max-w-3xl">
+      <Dialog.Header class="mb-4">
+        <Dialog.Title>Change Example</Dialog.Title>
+      </Dialog.Header>
+      <Tabs.Root value="insert" class="w-full mb-4">
+        <Tabs.List class="grid grid-cols-3 mb-4">
+          <Tabs.Trigger value="insert" class="w-full">Insert</Tabs.Trigger>
+          <Tabs.Trigger value="update" class="w-full">Update</Tabs.Trigger>
+          <Tabs.Trigger value="delete" class="w-full">Delete</Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content value="insert">
+          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
+              >{JSON.stringify(changeExamples.insert, null, 2).trim()}</code
+            ></pre>
+        </Tabs.Content>
+        <Tabs.Content value="update">
+          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
+              >{JSON.stringify(changeExamples.update, null, 2).trim()}</code
+            ></pre>
+        </Tabs.Content>
+        <Tabs.Content value="delete">
+          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
+              >{JSON.stringify(changeExamples.delete, null, 2).trim()}</code
+            ></pre>
+        </Tabs.Content>
+      </Tabs.Root>
+      <Dialog.Footer>
+        <Button on:click={() => (showChangeExample = false)}>Close</Button>
+      </Dialog.Footer>
+      <Dialog.Close />
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
 <style lang="postcss">
   .container {
     max-width: 1288px;
   }
 
-  .stream-box {
+  .message-kind-box {
     @apply bg-white border border-border rounded-lg p-6 hover:shadow-md transition-shadow cursor-pointer;
     height: 180px;
     display: flex;
     flex-direction: column;
   }
 
-  .stream-box.disabled {
+  .message-kind-box.disabled {
     @apply opacity-50 cursor-not-allowed hover:shadow-none;
   }
 

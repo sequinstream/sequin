@@ -5,7 +5,7 @@
   import { cn, flyAndScale } from "$lib/utils.js";
 
   type $$Props = DialogPrimitive.ContentProps & {
-    closeButton: boolean;
+    closeButton?: boolean;
   };
   export let closeButton = true;
 

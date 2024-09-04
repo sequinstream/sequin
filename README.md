@@ -4,14 +4,17 @@
 
 ### Send Postgres changes anywhere
 
-</div>
+[![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
-> [!IMPORTANT]
-> 
-> _09/03/2024_: We've almost completed a major upgrade to Sequin. `main` should be stable later this week. In the meantime:
->
-> - You can [Try Sequin cloud](https://console.sequinstream.com/register) now.
-> - Join the [release list](https://sequinstream.com/alpha) to get notified when we hit alpha.
+<p align="center">
+  <a href="https://console.sequinstream.com">Sequin Cloud</a>
+  ·
+  <a href="https://sequinstream.com/docs">Documentation</a>
+  ·
+  <a href="https://sequinstream.com">Website</a>
+</p>
+
+</div>
 
 ## What is Sequin?
 
@@ -29,6 +32,8 @@ You can receive changes via HTTP push (webhooks) or pull (think SQS).
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12+.
 - **No plpgsql:** Define business logic in the language of your choice and in your application.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
+
+## Cloud
 
 [**Try Sequin Cloud now →**](https://console.sequinstream.com/register)
 

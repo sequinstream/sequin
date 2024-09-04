@@ -18,6 +18,8 @@
     AlertTitle,
   } from "$lib/components/ui/alert";
   import { AlertCircle } from "lucide-svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import { HelpCircle } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -98,7 +100,25 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label for="database">Database</Label>
+          <Label for="database" class="flex items-center">
+            Database
+            <Tooltip.Root openDelay={300}>
+              <Tooltip.Trigger>
+                <HelpCircle
+                  class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help"
+                />
+              </Tooltip.Trigger>
+              <Tooltip.Content class="max-w-xs">
+                <p class="text-xs text-gray-500">
+                  <b>Database</b>
+                  <br />
+                  The name of the specific database within your PostgreSQL server
+                  that you want to connect to. This is typically the logical database
+                  name you created or were given access to.
+                </p>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          </Label>
           <Input type="text" id="database" bind:value={form.database} />
           {#if databaseErrors.database}
             <p class="text-destructive text-sm">{databaseErrors.database}</p>
@@ -106,7 +126,7 @@
         </div>
 
         <div class="space-y-2">
-          <Label for="hostname">Hostname</Label>
+          <Label for="hostname">Host</Label>
           <Input type="text" id="hostname" bind:value={form.hostname} />
           {#if databaseErrors.hostname}
             <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
@@ -179,61 +199,6 @@
         <CardTitle>Replication Configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <h3 class="text-md font-semibold mb-2">
-          Step 1: Create a Replication Slot
-        </h3>
-        <p class="text-sm text-muted-foreground">
-          Run the following SQL command on your database to create a replication
-          slot:
-        </p>
-        <CodeWithCopy language="sql">
-          <code>
-            {`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
-          </code>
-        </CodeWithCopy>
-
-        <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
-        <p class="text-sm text-muted-foreground">
-          Choose from one of the following examples to create a publication:
-        </p>
-        <p class="text-sm font-medium">
-          • Create a publication for all tables:
-        </p>
-        <CodeWithCopy language="sql">
-          <code>
-            {`create publication ${form.publication_name || "my_pub"} for all tables;`}
-          </code>
-        </CodeWithCopy>
-        <p class="text-sm font-medium">
-          • Create a publication for certain tables:
-        </p>
-        <CodeWithCopy language="sql">
-          <code>
-            {`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
-          </code>
-        </CodeWithCopy>
-        <p class="text-sm font-medium">
-          • Create a publication for all tables in a schema:
-        </p>
-        <CodeWithCopy language="sql">
-          <code>
-            {`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
-          </code>
-        </CodeWithCopy>
-
-        <h3 class="text-md font-semibold mb-2">
-          Step 3: (Optional) Enable Full Replica Identity
-        </h3>
-        <p class="text-sm text-muted-foreground">
-          If you want Sequin to capture `old` values for updates and deletes,
-          run this command for each table in the publication:
-        </p>
-        <CodeWithCopy language="sql">
-          <code>
-            alter table {"{mytable}"} replica identity full;
-          </code>
-        </CodeWithCopy>
-
         <div class="space-y-2">
           <Label for="slot_name">Slot Name</Label>
           <Input type="text" id="slot_name" bind:value={form.slot_name} />
@@ -257,6 +222,45 @@
             </p>
           {/if}
         </div>
+        <h3 class="text-md font-semibold mb-2">
+          Step 1: Create a Replication Slot
+        </h3>
+        <p class="text-sm text-muted-foreground">
+          Run the following SQL command on your database to create a replication
+          slot:
+        </p>
+        <CodeWithCopy
+          language="sql"
+          code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
+        />
+
+        <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
+        <p class="text-sm text-muted-foreground">
+          Choose from one of the following examples to create a publication:
+        </p>
+        <p class="text-sm font-medium">
+          • Create a publication for all tables:
+        </p>
+        <CodeWithCopy
+          language="sql"
+          code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
+        />
+
+        <p class="text-sm font-medium">
+          • Create a publication for certain tables:
+        </p>
+        <CodeWithCopy
+          language="sql"
+          code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
+        />
+
+        <p class="text-sm font-medium">
+          • Create a publication for all tables in a schema:
+        </p>
+        <CodeWithCopy
+          language="sql"
+          code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+        />
       </CardContent>
     </Card>
 

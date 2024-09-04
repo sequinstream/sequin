@@ -180,37 +180,47 @@ defmodule SequinWeb.DatabasesLive.Form do
 
   def error_msg(error) do
     case error do
-      {:error, :econnrefused} ->
+      {:error, error} ->
+        error_msg(error)
+
+      :econnrefused ->
         "Connection refused. Please check if the database server is running and accessible."
 
-      {:error, :timeout} ->
+      :timeout ->
         "Connection timed out. Please verify the hostname and port are correct."
 
-      {:error, :nxdomain} ->
+      :nxdomain ->
         "Unable to resolve the hostname. Please check if the hostname is correct."
 
       %Postgrex.Error{postgres: %{code: :invalid_authorization_specification}} ->
         "Authorization failed. This means either the username/password is invalid or the database requires SSL, which you can enable above."
 
+      %Postgrex.Error{postgres: %{code: :invalid_password}} ->
+        "Authorization failed. This means either the username/password is invalid or the database requires SSL, which you can enable above."
+
       %Postgrex.Error{postgres: %{code: :invalid_catalog_name}} ->
         "Database does not exist. Please verify the database name."
 
-      {:error, :database_connect_forbidden} ->
+      %Postgrex.Error{} = error ->
+        Logger.warning("Unhandled Postgrex error in databases/form.ex:error_msg/1: #{inspect(error)}")
+        Exception.message(error)
+
+      :database_connect_forbidden ->
         "The provided user does not have permission to connect to the database."
 
-      {:error, :database_create_forbidden} ->
+      :database_create_forbidden ->
         "The provided user does not have permission to create objects in the database."
 
-      {:error, :transaction_read_only} ->
+      :transaction_read_only ->
         "The database is in read-only mode. Please ensure the user has write permissions."
 
-      {:error, :namespace_usage_forbidden} ->
+      :namespace_usage_forbidden ->
         "The provided user does not have usage permission on the specified schema."
 
-      {:error, :namespace_create_forbidden} ->
+      :namespace_create_forbidden ->
         "The provided user does not have permission to create objects in the specified schema."
 
-      {:error, :unknown_privileges} ->
+      :unknown_privileges ->
         "Unable to determine user privileges. Please ensure the user has necessary permissions."
 
       unexpected ->

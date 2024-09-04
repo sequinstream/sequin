@@ -3,7 +3,7 @@ defmodule SequinWeb.SetupLive do
   use SequinWeb, :live_view
 
   @stub_user_email "admin@sequinstream.com"
-  @stub_user_password "password!"
+  @stub_user_password "sequinpassword!"
 
   def mount(_params, _session, socket) do
     db_info = get_db_info()

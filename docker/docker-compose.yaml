@@ -12,10 +12,13 @@ services:
       - PG_PORT=7377
       - PG_USERNAME=postgres
       - PG_PASSWORD=postgres
+      - PG_POOL_SIZE=20
       - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
       - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
+      - REDIS_URL=redis://redis:7378
     depends_on:
       - postgres
+      - redis
 
   postgres:
     image: postgres:16
@@ -27,12 +30,13 @@ services:
       - POSTGRES_PASSWORD=postgres
     command: ["postgres", "-c", "wal_level=logical", "-p", "7377"]
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - sequin_postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:7
     ports:
       - "7378:7378"
+    command: ["redis-server", "--port", "7378"]
 
 volumes:
-  postgres_data:
+  sequin_postgres_data:

@@ -75,6 +75,7 @@ fi
 echo "Building and pushing Docker image..."
 docker buildx build \
     --platform linux/amd64,linux/arm64 \
+    --build-arg SELF_HOSTED=1 \
     -t sequin/sequin:latest \
     -t sequin/sequin:"$new_version" \
     . \

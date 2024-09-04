@@ -137,6 +137,10 @@ defmodule SequinWeb.DatabasesLive.Form do
       _ ->
         {:noreply, socket}
     end
+  rescue
+    error ->
+      Logger.error("Crashed in databases/form.ex:handle_event/2: #{inspect(error)}")
+      {:noreply, assign(socket, :submit_error, error_msg(error))}
   end
 
   @impl Phoenix.LiveView

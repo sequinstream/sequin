@@ -6,9 +6,11 @@ description: "How to connect Sequin to your Supabase project to replace webhooks
 
 ## Connect to Supabase with a direct connection
 
-Sequin uses the Write Ahead Log (WAL) to capture changes from your Supabase database. Supabase's connection pooling does not support the WAL, so you need to connect to your Supabase database using a direct connection. Here is how to set up a direct connection in Supabase:
+Sequin uses the Write Ahead Log (WAL) to capture changes from your Supabase database. Supabase's connection pooling does not support the WAL, so you need to connect to your Supabase database using a direct connection.
 
-<Steps>
+Here is how to set up a direct connection in Supabase:
+
+<Steps titleSize="h3">
   <Step title="Navigate to your database settings">
     Login to Supabase and navigate to the database settings page (**Settings > Configurations > Database**).
   </Step>
@@ -17,7 +19,7 @@ Sequin uses the Write Ahead Log (WAL) to capture changes from your Supabase data
     <Frame>
         <img src="../images/guides/supabase/disable-connection-pooler.png" alt="Direct connection credentials" />
     </Frame>
-    <Note>Sequin is fully compatible with Supabase's IPv6 network.</Note>
+    <Check>Sequin is fully compatible with Supabase's IPv6 network.</Check>
   </Step>
   <Step title="Enter the connection details in Sequin">
     In Sequin, enter the direct connection details in the **Database connection** page including the **Host**, **Port**, **Database**, **User**, and **Password**.
@@ -26,21 +28,23 @@ Sequin uses the Write Ahead Log (WAL) to capture changes from your Supabase data
   </Step>
 </Steps>
 
+Sequin will automatically detect that you're using a Supabase database and will check that your connection is configured correctly.
+
 <Check>Sequin is now connected to your Supabase database.</Check>
 
-## Creating a replication slot in Supabase
+## Create a replication slot in Supabase
 
-With your database connected, you'll now create the replication slot that Sequin will use to capture changes from your database.
+With your database connected, you'll now create the replication slot that Sequin will use to detect changes in your database.
 
-<Steps>
+<Steps titleSize="h3">
   <Step title="Create a replication slot">
-    In the SQL editor, run the following SQL command to create a replication slot:
+    In the Supabase SQL editor, run the following SQL command to create a replication slot:
 
     ```sql
     select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
     ```
 
-    This creates a replication slot named `sequin_slot` that Sequin will use to capture changes from your database.
+    This creates a replication slot named `sequin_slot`.
   </Step>
   <Step title="Create a publication">
     Next, you'll create a publication to indicate which tables will publish changes to the replication slot.
@@ -48,13 +52,19 @@ With your database connected, you'll now create the replication slot that Sequin
     In the SQL editor, run the following SQL command to create a publication:
 
     ```sql
+    create publication sequin_pub for table table1, table2, table3;
+    ```
+
+    If you want to publish changes from all the tables in your database, you can also use the `for all tables` option:
+
+    ```sql
     create publication sequin_pub for all tables;
     ```
 
-    If you want to publish changes from specific tables, you can specify them in the publication.
+    Finally, to ensure Sequin can capture the `old` values for `update` and `delete` operations, you'll set the replica identity to `full`:
 
     ```sql
-    create publication sequin_pub for table table1, table2, table3;
+   alter table {mytable} replica identity full;
     ```
   </Step>
   <Step title="Enter the replication slot details in Sequin">
@@ -62,24 +72,23 @@ With your database connected, you'll now create the replication slot that Sequin
   </Step>
 </Steps>
 
-<Check>Sequin will now capture changes from your Supabase database.</Check>
+<Check>Sequin will now capture rows and changes from your Supabase database.</Check>
 
 ## Moving Supabase webhooks to Sequin
 
-Sequin adds some helpful features to Supabase webhooks:
+Sequin has some helpful features that Supabase webhooks lack:
+
 * Exactly-once processing guarantees ensuring every event is processed once and only once.
 * Automatic retries and backoff for failed events.
-* Filtering of events with no plpgsql.
+* Filtering of events with no PL/pgSQL.
 * Backfill support to sync historical data.
 * Helpful observability and debugging tools.
 
-You can easily move your existing Supabase webhooks to Sequin by creating Sequin HTTP push consumers. Here is a quick example of how to do this using a hypothetical `orders` table:
+You can easily move your existing Supabase webhooks to Sequin by creating Sequin HTTP push consumers.
 
-### Supabase webhook
+### Example Supabase webhook to migrate
 
-Everytime an new order is created, a postgres trigger fires a webhook to send the data to the `orders` endpoint:
-
-Here is the configuration for the webhook in the Supabase:
+As an example, here's a webhook trigger in Supabase for a hypothetical `orders` table:
 
 <Tabs>
   <Tab title="SQL">
@@ -97,7 +106,10 @@ Here is the configuration for the webhook in the Supabase:
   </Tab>
 </Tabs>
 
-When this trigger fires, the data is sent to the `orders` endpoint with the following payload:
+
+In this example, a postgres trigger fires anytime a new record is added to the `orders` table. The trigger then fires a webhook (via `pg_net`) to send the data to an HTTP endpoint.
+
+When the trigger fires, Supabase sends the data to the endpoint with the following payload:
 
 ```json
 {
@@ -118,7 +130,7 @@ When this trigger fires, the data is sent to the `orders` endpoint with the foll
 
 To create this exact webhook in Sequin, you'll create an HTTP push consumer on the `orders` table with no filters. Here's how to do it:
 
-<Steps>
+<Steps titleSize="h3" >
   <Step title="Create a new push consumer">
     In the Sequin Console, navigate to the Consumers page, click **Create Consumer**.
 
@@ -128,7 +140,7 @@ To create this exact webhook in Sequin, you'll create an HTTP push consumer on t
     Select your Supabase database and the `public.orders` table.
   </Step>
   <Step title="Set filters and operations">
-    Don't configure any filters and set the consumer to capture just the `INSERT` operations:
+    Don't configure any filters and set the consumer to capture just `INSERT` operations:
     <Frame>
         <img src="../images/guides/supabase/sequin-consumer-filters.png" alt="Sequin consumer settings" />
     </Frame>
@@ -139,7 +151,7 @@ To create this exact webhook in Sequin, you'll create an HTTP push consumer on t
         <img src="../images/guides/supabase/sequin-consumer-endpoint.png" alt="Sequin consumer settings" />
     </Frame>
 
-    <Note>Sequin gives you more control over webhook delivery and retries including a higher request timeout, automatic retries, and the ability to configure max ack pending (e.g. the consumer will stop sending new events to the endpoint if a certain number of events are not acknowledged). For even more control over event consumption, you can use Sequin's HTTP pull consumer.</Note>
+    <Note>Sequin gives you more control over webhook delivery and retries including a higher request timeout, automatic retries, and the ability to configure max ack pending (e.g. the consumer will stop sending new events to the endpoint if a certain number of events are not acknowledged).</Note>
   </Step>
 </Steps>
 
@@ -168,22 +180,24 @@ Now, when you create a new order in Supabase, Sequin will capture the change and
 ```
 
 <Note>
-  Sequin's data payload is slightly different to Supabase's webhook payload:
+  Sequin's data payload is slightly different than Supabase's webhook payload:
   * Sequin's `metadata` field includes additional metadata about the consumer and the table.
   * Sequin captures the operation type (e.g. `insert`, `update`, `delete`) in the `action` field not the `type` field.
-  * Sequin captures changes for `update` operations in the `changes` field not the `old_record` field.
+  * Sequin captures changes for `update` and `delete` operations in the `changes` field not the `old_record` field.
+    * **Updates:** Sequin's `changes` object only contains the changed columns and their old values, while Supabase's `old_record` field contains the prior state of the entire record before it was updated.
+    * **Deletes:** Sequin's `record` field contains the prior state of the record before it was deleted and the `changes` field is `null`, while Supabase's `old_record` contains the the prior state of the record before it was deleted and the `record` field is `null`.
 </Note>
 
 ## Triggering a Supabase edge function with Sequin
 
-Sequin can also trigger Supabase edge functions by calling the function's endpoint URL. This is an alternative to triggering Supabase edge functions with a Supabase webhooks, but with some nice guarantees and observability. Notably, Sequin can retry failed events.
+Sequin can trigger Supabase edge functions by calling the function's endpoint URL. This is an alternative to triggering Supabase edge functions with Supabase webhooks. Sequin improves on the Supabase workflow by offering more features, like retries for failed events.
 
-<Steps>
+<Steps titleSize="h3">
   <Step title="Update the edge function to process Sequin's payload">
-    Update the edge function to process Sequin's event payload. Note that while Sequin's record payload is the same, the changes, actions, and metadata are different:
+    Update the edge function to process Sequin's event payload. Note that while Sequin's `record` payload is the same, the keys `changes`, `actions`, and `metadata` are different:
 
     <CodeGroup>
-        ```json Supabase
+        ```json Supabase insert
         {
         "type": "INSERT",
         "table": "orders",
@@ -198,7 +212,7 @@ Sequin can also trigger Supabase edge functions by calling the function's endpoi
         }
         ```
 
-        ```json Sequin
+        ```json Sequin insert
         {
         "record": {
             "id": 5,
@@ -225,10 +239,8 @@ Sequin can also trigger Supabase edge functions by calling the function's endpoi
     Using the Supabase CLI, deploy your edge function:
 
     ```bash
-    supabase functions deploy {your-function-name} --no-verify-jwt
+    supabase functions deploy {your-function-name}
     ```
-
-    <Note>As with Supabase webhooks, you'll need to deploy your edge function with the `--no-verify-jwt` flag to allow Sequin to call the function.</Note>
 
     Once deployed, you can retrieve the URL of the edge function by logging into the Supabase Dashboard and navigating to the Edge Functions page:
 
@@ -238,11 +250,19 @@ Sequin can also trigger Supabase edge functions by calling the function's endpoi
 
   </Step>
   <Step title="Create a Sequin push consumer">
-    With your edge function URL in hand, you 'll create a Sequin push consumer and set the endpoint to the edge function URL:
+    With your edge function URL in hand, you 'll create a Sequin push consumer:
+    * Set the endpoint to the edge function URL.
+    * Add an authentication to your POST request with the key `Authorization` and the value `Bearer YOUR_SUPABASE_ANON_KEY`.
 
     <Frame>
         <img src="../images/guides/supabase/sequin-supabase-edge-function.png" alt="Sequin consumer settings" />
     </Frame>
+
+    <Note>
+      The `Authorization` header is required to authenticate the request with the edge function. You can find your `SUPABASE_ANON_KEY` in the **Settings > API** page in the Supabase Dashboard. If you don't want to authenticate your request (i.e. make the edge function public), you can deploy the edge function with the `--no-verify-jwt` flag.
+    </Note>
+
+
   </Step>
 </Steps>
 
@@ -253,6 +273,6 @@ Sequin can also trigger Supabase edge functions by calling the function's endpoi
 Sequin is a great complement to Supabase. This guide showed you how to connect Supabase to Sequin and start moving your webhooks and edge function triggers to Sequin. From here, you may want to:
 
 * Refine your webhooks / triggers by using more specific filters. Perhaps you can move logic out of your edge function and into your consumer filters.
-* Use Sequin's HTTP pull consumer to gain more control over event consumption.
+* Use Sequin's [HTTP pull consumer](/core-concepts#pull-consumers) to gain more control over event consumption.
 * Use Sequin's replay and backfill features to run historical data through your edge function.
 * Use Sequin's observability features to monitor and debug your webhooks and triggers.

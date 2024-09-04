@@ -39,6 +39,8 @@ You can receive changes via HTTP push (webhooks) or pull (think SQS).
 
 ## How Sequin works
 
+![Sequin architecture](./docs/images/readme/arch-diagram.png)
+
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
 Sequin connects to any Postgres database via the Write Ahead Log (WAL). It captures changes to your Postgres tables, turning them into a stream of messages. Sequin buffers messages to ensure they are delivered and allow for replays and rewinds. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.

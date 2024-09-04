@@ -184,14 +184,14 @@
           <div transition:slide>
             <Alert variant="default">
               <AlertCircle class="h-4 w-4" />
-              <AlertTitle>Supabase Pooled Connection Detected</AlertTitle>
+              <AlertTitle>Supabase pooled connection detected</AlertTitle>
               <AlertDescription>
                 We've detected a Supabase pooled connection. Sequin requires a
                 direct connection. Click the button below to convert to a direct
                 connection.
               </AlertDescription>
               <Button class="mt-2" on:click={handleConvertSupabase}>
-                Convert to Direct Connection
+                Convert to direct connection
               </Button>
             </Alert>
           </div>
@@ -201,11 +201,11 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Replication Configuration</CardTitle>
+        <CardTitle>Replication configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label for="slot_name">Slot Name</Label>
+          <Label for="slot_name">Slot name</Label>
           <Input type="text" id="slot_name" bind:value={form.slot_name} />
           {#if replicationErrors.slot_name}
             <p class="text-destructive text-sm">
@@ -215,7 +215,7 @@
         </div>
 
         <div class="space-y-2">
-          <Label for="publication_name">Publication Name</Label>
+          <Label for="publication_name">Publication name</Label>
           <Input
             type="text"
             id="publication_name"
@@ -228,7 +228,7 @@
           {/if}
         </div>
         <h3 class="text-md font-semibold mb-2">
-          Step 1: Create a Replication Slot
+          Step 1: Create a replication slot
         </h3>
         <p class="text-sm text-muted-foreground">
           Run the following SQL command on your database to create a replication
@@ -239,7 +239,7 @@
           code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
         />
 
-        <h3 class="text-md font-semibold mb-2">Step 2: Create a Publication</h3>
+        <h3 class="text-md font-semibold mb-2">Step 2: Create a publication</h3>
         <p class="text-sm text-muted-foreground">
           Choose from one of the following examples to create a publication:
         </p>

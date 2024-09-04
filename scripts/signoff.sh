@@ -79,6 +79,9 @@ run_step "mix test"
 # Run cspell check
 run_step "make spellcheck"
 
+# Run mintlify broken-links check
+run_step "make check-links"
+
 # Report successful sign off to GitHub
 description="Signed off by ${USER} (${SECONDS} seconds)"
 if gh api --method POST --silent \

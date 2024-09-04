@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -44,6 +44,9 @@ addword:
 		echo "Added '$(word)' to project-words.txt"; \
 	fi
 
+check-links:
+	@cd docs && mintlify broken-links
+
 help:
 	@echo "Available commands:"
 	@echo "  make dev       - Run the app locally"
@@ -57,6 +60,7 @@ help:
 	@echo "  make help      - Show this help message"
 	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"
 	@echo "  make addword word=<word> - Add a word to project-words.txt"
+	@echo "  make check-links - Run mintlify broken-links in the docs directory"
 
 %:
 	@:

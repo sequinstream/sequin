@@ -192,6 +192,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
       http_endpoint: encode_http_endpoint(consumer.http_endpoint),
+      http_endpoint_path: consumer.http_endpoint_path,
       source_table: encode_source_table(List.first(consumer.source_tables), consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       # FIXME: Implement health calculation

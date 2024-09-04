@@ -41,9 +41,11 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     embeds_many :source_tables, SourceTable, on_replace: :delete
 
     belongs_to :account, Account
-    belongs_to :http_endpoint, HttpEndpoint
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
+
+    belongs_to :http_endpoint, HttpEndpoint
+    field :http_endpoint_path, :string
 
     field :health, :map, virtual: true
 
@@ -62,10 +64,12 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :replication_slot_id,
+      :http_endpoint_path,
       :status
     ])
     |> validate_required([:name, :status, :replication_slot_id])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> validate_http_endpoint_path()
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
@@ -86,9 +90,11 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :max_waiting,
       :backfill_completed_at,
       :http_endpoint_id,
-      :status
+      :status,
+      :http_endpoint_path
     ])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> validate_http_endpoint_path()
     |> cast_embed(:source_tables)
   end
 
@@ -141,5 +147,15 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     backfill_completed_at
     |> DateTime.add(@backfill_completed_at_threshold, :millisecond)
     |> DateTime.compare(now) == :lt
+  end
+
+  defp validate_http_endpoint_path(changeset) do
+    changeset
+    |> validate_format(
+      :http_endpoint_path,
+      ~r/^\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*$/,
+      message: "must be a valid URL path"
+    )
+    |> validate_length(:http_endpoint_path, max: 2000)
   end
 end

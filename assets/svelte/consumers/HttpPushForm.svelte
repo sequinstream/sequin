@@ -49,6 +49,7 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting,
     httpEndpointId: consumer.http_endpoint_id,
+    httpEndpointPath: consumer.http_endpoint_path || "",
     httpEndpoint: {
       name: "",
       baseUrl: "",
@@ -357,6 +358,21 @@
           {/if}
         </div>
 
+        <div class="space-y-2">
+          <Label for="http-endpoint-path">Endpoint Path</Label>
+          <Input
+            id="http-endpoint-path"
+            bind:value={form.httpEndpointPath}
+            placeholder="/webhook"
+          />
+          <p class="text-sm text-muted-foreground">
+            The path to append to the base URL for this consumer's requests.
+          </p>
+          {#if errors.http_endpoint_path}
+            <p class="text-destructive text-sm">{errors.http_endpoint_path}</p>
+          {/if}
+        </div>
+
         <Accordion class="w-full">
           <AccordionItem value="advanced">
             <AccordionTrigger>Advanced configuration</AccordionTrigger>
@@ -392,75 +408,68 @@
         <CardTitle>HTTP Endpoint</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <div class="space-y-2">
-          {#if !form.httpEndpointId && !showNewHttpEndpointForm}
-            <p class="text-xs mb-2">
-              Just kicking the tires?
-              <button
-                on:click={createWebhookSiteEndpoint}
-                class="hover:underline bg-transparent border-none p-0 cursor-pointer inline-flex items-center"
-                type="button"
-                class:text-carbon-500={isGeneratingWebhookSite}
-                class:text-link={!isGeneratingWebhookSite}
-                disabled={isGeneratingWebhookSite}
-              >
-                {#if isGeneratingWebhookSite}
-                  <Loader2 class="h-3 w-3 mr-1 animate-spin" />
-                  Generating...
-                {:else}
-                  Create and use a new Webhook.site endpoint
-                {/if}
-              </button>
-            </p>
-          {/if}
-          {#if isEditMode}
-            <Select
-              disabled
-              selected={{
-                value: form.httpEndpointId,
-                label:
-                  selectedHttpEndpoint?.name ||
-                  (showNewHttpEndpointForm
-                    ? "+ Add new"
-                    : "Select an endpoint"),
-              }}
+        {#if !form.httpEndpointId && !showNewHttpEndpointForm}
+          <p class="text-xs mb-2">
+            Just kicking the tires?
+            <button
+              on:click={createWebhookSiteEndpoint}
+              class="hover:underline bg-transparent border-none p-0 cursor-pointer inline-flex items-center"
+              type="button"
+              class:text-carbon-500={isGeneratingWebhookSite}
+              class:text-link={!isGeneratingWebhookSite}
+              disabled={isGeneratingWebhookSite}
             >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
-                )}
-              >
-                <SelectValue placeholder="Selected HTTP endpoint" />
-              </SelectTrigger>
-            </Select>
-          {:else}
-            <Select
-              selected={{
-                value: form.httpEndpointId,
-                label: selectedHttpEndpoint?.name || "Select an endpoint",
-              }}
-              onSelectedChange={(event) => {
-                if (event.value === "new") {
-                  form.httpEndpointId = null;
-                  showNewHttpEndpointForm = true;
-                } else {
-                  form.httpEndpointId = event.value;
-                }
-              }}
+              {#if isGeneratingWebhookSite}
+                <Loader2 class="h-3 w-3 mr-1 animate-spin" />
+                Generating...
+              {:else}
+                Create and use a new Webhook.site endpoint
+              {/if}
+            </button>
+          </p>
+        {/if}
+        {#if isEditMode}
+          <Select
+            disabled
+            selected={{
+              value: form.httpEndpointId,
+              label:
+                selectedHttpEndpoint?.name ||
+                (showNewHttpEndpointForm ? "+ Add new" : "Select an endpoint"),
+            }}
+          >
+            <SelectTrigger
+              class={cn("w-full", "bg-muted text-muted-foreground opacity-100")}
             >
-              <SelectTrigger class="w-full">
-                <SelectValue placeholder="Select an endpoint" />
-              </SelectTrigger>
-              <SelectContent>
-                {#each httpEndpoints as endpoint}
-                  <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
-                {/each}
-                <SelectItem value="new">+ Add new</SelectItem>
-              </SelectContent>
-            </Select>
-          {/if}
-        </div>
+              <SelectValue placeholder="Selected HTTP endpoint" />
+            </SelectTrigger>
+          </Select>
+        {:else}
+          <Select
+            selected={{
+              value: form.httpEndpointId,
+              label: selectedHttpEndpoint?.name || "Select an endpoint",
+            }}
+            onSelectedChange={(event) => {
+              if (event.value === "new") {
+                form.httpEndpointId = null;
+                showNewHttpEndpointForm = true;
+              } else {
+                form.httpEndpointId = event.value;
+              }
+            }}
+          >
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select an endpoint" />
+            </SelectTrigger>
+            <SelectContent>
+              {#each httpEndpoints as endpoint}
+                <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
+              {/each}
+              <SelectItem value="new">+ Add new</SelectItem>
+            </SelectContent>
+          </Select>
+        {/if}
 
         {#if showNewHttpEndpointForm}
           <HttpEndpointForm

@@ -55,7 +55,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       }) do
     Logger.metadata(consumer_id: consumer.id, http_endpoint_id: http_endpoint.id)
 
-    case push_message(http_endpoint, consumer_event.data, req_opts) do
+    case push_message(http_endpoint, consumer.http_endpoint_path, consumer_event.data, req_opts) do
       :ok ->
         Health.update(consumer, :push, :healthy)
         Metrics.incr_http_endpoint_throughput(http_endpoint)
@@ -71,13 +71,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     end
   end
 
-  defp push_message(%HttpEndpoint{} = http_endpoint, message_data, req_opts) do
+  defp push_message(%HttpEndpoint{} = http_endpoint, http_endpoint_path, message_data, req_opts) do
     headers = http_endpoint.headers
     encrypted_headers = http_endpoint.encrypted_headers || %{}
     headers = Map.merge(headers, encrypted_headers)
 
     req =
-      [base_url: http_endpoint.base_url, headers: headers, json: message_data]
+      [base_url: http_endpoint.base_url, url: http_endpoint_path || "", headers: headers, json: message_data]
       |> Keyword.merge(req_opts)
       |> Req.new()
 

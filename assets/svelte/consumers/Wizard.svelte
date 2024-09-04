@@ -143,6 +143,9 @@
           continueDisabled = !form.name;
         }
         break;
+      case "select_message_kind":
+        continueDisabled = !form.messageKind;
+        break;
     }
   }
 
@@ -206,12 +209,12 @@
     },
   ];
 
-  function handleStreamClick(messageKind) {
+  function handleMessageKindSelect(messageKind) {
     if (!messageKind.comingSoon) {
-      handleFormUpdate({ messageKind: messageKind.id });
-      pushEvent("form_updated", { form });
-      step = "select_consumer";
-      saveFormToStorage();
+      handleFormUpdate({
+        messageKind:
+          form.messageKind === messageKind.id ? null : messageKind.id,
+      });
     }
   }
 
@@ -348,6 +351,9 @@
         break;
       case "configure_filters":
         step = "select_message_kind";
+        break;
+      case "select_message_kind":
+        step = "select_consumer";
         break;
     }
     saveFormToStorage();
@@ -794,10 +800,18 @@
                   <div class="flex flex-col gap-2 justify-between items-center">
                     <Button
                       class="w-full"
-                      on:click={() => handleStreamClick(type)}
+                      variant={form.messageKind === type.id
+                        ? "outline"
+                        : "default"}
+                      on:click={() => handleMessageKindSelect(type)}
                       disabled={type.comingSoon}
                     >
-                      {type.comingSoon ? "Coming Soon" : `Select`}
+                      {#if form.messageKind === type.id}
+                        <CheckIcon class="w-4 h-4 mr-2" />
+                        Selected
+                      {:else}
+                        {type.comingSoon ? "Coming Soon" : `Select`}
+                      {/if}
                     </Button>
                     <Button
                       class="w-full"
@@ -1113,7 +1127,7 @@
     <div class="flex flex-shrink-0 h-16 justify-center w-full">
       <div class="flex items-center justify-between w-full px-8 max-w-[1288px]">
         <div>
-          {#if step !== "select_message_kind"}
+          {#if step !== "select_table"}
             <Button variant="outline" on:click={goBack}>
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -1136,11 +1150,7 @@
           {/if}
         </div>
         <div>
-          {#if step === "select_message_kind"}
-            <p class="text-sm leading-4 text-carbon-200 font-semibold">
-              Select changes or rows to continue
-            </p>
-          {:else if step === "select_consumer"}
+          {#if step === "select_consumer"}
             <p class="text-sm leading-4 text-carbon-200 font-semibold">
               Select a consumer type to continue
             </p>

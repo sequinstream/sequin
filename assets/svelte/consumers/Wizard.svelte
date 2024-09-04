@@ -134,7 +134,11 @@
         break;
       case "configure_filters":
         continueDisabled = form.sourceTableFilters.some(
-          (filter) => !filter.columnAttnum || !filter.operator || !filter.value
+          (filter) =>
+            !filter.columnAttnum ||
+            !filter.operator ||
+            (!filter.value &&
+              !["IS NULL", "IS NOT NULL"].includes(filter.operator))
         );
         break;
       case "configure_consumer":

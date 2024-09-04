@@ -189,6 +189,22 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def check_replica_identity(conn, schema, table) when is_binary(schema) and is_binary(table) do
+    query = """
+    SELECT relreplident
+    FROM pg_class
+    WHERE oid = '#{schema}.#{table}'::regclass;
+    """
+
+    case Postgrex.query(conn, query, []) do
+      {:ok, %{rows: [["f"]]}} -> {:ok, :full}
+      {:ok, %{rows: [["d"]]}} -> {:ok, :default}
+      {:ok, %{rows: [["n"]]}} -> {:ok, :nothing}
+      {:ok, %{rows: [["i"]]}} -> {:ok, :index}
+      {:error, _} = error -> error
+    end
+  end
+
   def sequence_nextval(sequence_name) do
     # Reason for casting explicitly: https://github.com/elixir-ecto/postgrex#oid-type-encoding
     with %{rows: [[val]]} <- Repo.query!("SELECT nextval($1::text::regclass)", [sequence_name]) do

@@ -7,6 +7,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
@@ -28,19 +29,20 @@ defmodule SequinWeb.ConsumersLive.Show do
 
     # Attempt to get existing health, fallback to initializing
     {:ok, health} = Health.get(consumer)
-
     consumer = %{consumer | health: health}
-    socket = assign(socket, :consumer, consumer)
-    socket = assign(socket, :api_token, api_token)
-    socket = assign(socket, :host, SequinWeb.Endpoint.url())
-    socket = assign_metrics(socket)
 
     if connected?(socket) do
       Process.send_after(self(), :update_health, 1000)
       Process.send_after(self(), :update_metrics, 1000)
     end
 
-    {:ok, socket}
+    {:ok,
+     socket
+     |> assign(:consumer, consumer)
+     |> assign(:api_token, api_token)
+     |> assign(:host, SequinWeb.Endpoint.url())
+     |> assign_replica_identity()
+     |> assign_metrics()}
   end
 
   @impl Phoenix.LiveView
@@ -75,6 +77,7 @@ defmodule SequinWeb.ConsumersLive.Show do
             props={
               %{
                 consumer: encode_consumer(@consumer),
+                replica_identity: @replica_identity,
                 parent: "consumer-show",
                 metrics: @metrics
               }
@@ -86,6 +89,7 @@ defmodule SequinWeb.ConsumersLive.Show do
             props={
               %{
                 consumer: encode_consumer(@consumer),
+                replica_identity: @replica_identity,
                 parent: "consumer-show",
                 metrics: @metrics,
                 host: @host,
@@ -145,6 +149,20 @@ defmodule SequinWeb.ConsumersLive.Show do
   def handle_info(:update_metrics, socket) do
     Process.send_after(self(), :update_metrics, 1000)
     {:noreply, assign_metrics(socket)}
+  end
+
+  defp assign_replica_identity(socket) do
+    consumer = socket.assigns.consumer
+    [source_table] = consumer.source_tables
+    source_table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == source_table.oid))
+
+    case Databases.check_replica_identity(consumer.postgres_database, source_table.schema, source_table.name) do
+      {:ok, replica_identity} ->
+        assign(socket, :replica_identity, replica_identity)
+
+      {:error, _} ->
+        assign(socket, :replica_identity, nil)
+    end
   end
 
   defp assign_metrics(socket) do

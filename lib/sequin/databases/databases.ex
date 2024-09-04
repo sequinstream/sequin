@@ -325,6 +325,12 @@ defmodule Sequin.Databases do
     end
   end
 
+  def check_replica_identity(%PostgresDatabase{} = db, schema, table) do
+    with_connection(db, fn conn ->
+      Postgres.check_replica_identity(conn, schema, table)
+    end)
+  end
+
   @spec tables(%PostgresDatabase{}) :: {:ok, [PostgresDatabase.Table.t()]} | {:error, term()}
   def tables(%PostgresDatabase{tables: []} = db) do
     with {:ok, updated_db} <- update_tables(db) do

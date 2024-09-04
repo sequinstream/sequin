@@ -34,6 +34,7 @@
   export let parent;
   export let host;
   export let api_token;
+  export let replica_identity;
 
   $: healthColor =
     consumer.health > 90
@@ -189,6 +190,27 @@
           </div>
         </CardContent>
       </Card>
+
+      {#if consumer.message_kind === "event" && replica_identity !== "full"}
+        <Card>
+          <CardContent
+            class="p-4 bg-yellow-100 border border-yellow-400 rounded-md"
+          >
+            <h3 class="text-sm font-semibold text-yellow-800 mb-2">Warning</h3>
+            <p class="text-sm text-yellow-700 mb-2">
+              The replica identity is not set to 'full'. This may result in
+              incomplete change data.
+            </p>
+            <p class="text-sm text-yellow-700">
+              To ensure the 'changes' appear in the message payload, run the
+              following SQL command:
+            </p>
+            <pre class="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded">
+alter table {consumer.source_table.schema}.{consumer.source_table
+                .name} replica identity full;</pre>
+          </CardContent>
+        </Card>
+      {/if}
 
       <Card>
         <CardContent class="p-6">

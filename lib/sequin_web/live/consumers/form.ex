@@ -184,6 +184,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       "ack_wait_ms" => form["ackWaitMs"],
       "http_endpoint" => decode_http_endpoint(form["httpEndpoint"]),
       "http_endpoint_id" => form["httpEndpointId"],
+      "http_endpoint_path" => form["httpEndpointPath"],
       "max_ack_pending" => form["maxAckPending"],
       "max_waiting" => form["maxWaiting"],
       "message_kind" => message_kind,
@@ -240,8 +241,14 @@ defmodule SequinWeb.ConsumersLive.Form do
     }
 
     case consumer_type do
-      HttpPushConsumer -> Map.put(base, "http_endpoint_id", consumer.http_endpoint_id)
-      HttpPullConsumer -> base
+      HttpPushConsumer ->
+        Map.merge(base, %{
+          "http_endpoint_id" => consumer.http_endpoint_id,
+          "http_endpoint_path" => consumer.http_endpoint_path
+        })
+
+      HttpPullConsumer ->
+        base
     end
   end
 

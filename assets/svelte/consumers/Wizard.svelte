@@ -72,6 +72,7 @@
       headers: Record<string, string>;
       encryptedHeaders: Record<string, string>;
     };
+    httpEndpointPath: string;
   } = {
     postgresDatabaseId: null,
     tableOid: null,
@@ -90,6 +91,7 @@
       headers: {},
       encryptedHeaders: {},
     },
+    httpEndpointPath: "",
   };
 
   export let databases: Array<{
@@ -964,6 +966,28 @@
                       handleFormUpdate({ ackWaitMs: form.ackWaitMs })}
                     on:focus={() => (activeInfo = "ackWaitMs")}
                   />
+                </div>
+
+                <div class="space-y-2">
+                  <Label for="http-endpoint-path">Endpoint Path</Label>
+                  <Input
+                    id="http-endpoint-path"
+                    bind:value={form.httpEndpointPath}
+                    placeholder="/webhook"
+                    on:input={() =>
+                      handleFormUpdate({
+                        httpEndpointPath: form.httpEndpointPath,
+                      })}
+                  />
+                  <p class="text-sm text-muted-foreground">
+                    The path to append to the base URL for this consumer's
+                    requests.
+                  </p>
+                  {#if errors.http_endpoint_path}
+                    <p class="text-destructive text-sm">
+                      {errors.http_endpoint_path}
+                    </p>
+                  {/if}
                 </div>
 
                 <Accordion class="w-full">

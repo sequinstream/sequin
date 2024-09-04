@@ -86,7 +86,7 @@
           </div>
           <span class="text-2xl font-bold"
             >{metrics.messages_processed_count
-              ? metrics.messages_processed_count.toLocaleString()
+              ? formatNumberWithCommas(metrics.messages_processed_count)
               : "N/A"}</span
           >
         </CardContent>
@@ -125,7 +125,7 @@
               </Badge>
             {/if}
           </div>
-          <div class="grid md:grid-cols-2 gap-4">
+          <div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-4">
             <div>
               <span class="text-sm text-gray-500"> Request Timeout </span>
               <Tooltip.Root openDelay={300}>
@@ -178,6 +178,40 @@
               <p class="font-medium">
                 {formatNumberWithCommas(consumer.max_ack_pending)}
               </p>
+            </div>
+            <div>
+              <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
+              <Tooltip.Root openDelay={300}>
+                <Tooltip.Trigger>
+                  <HelpCircle
+                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
+                  />
+                </Tooltip.Trigger>
+                <Tooltip.Content class="max-w-xs">
+                  <p class="text-xs text-gray-500">
+                    <b>HTTP Endpoint Path</b>
+                    <br />
+                    The path to use when pushing messages to the HTTP endpoint.
+                    <br />
+                    <br />
+                    This path is relative to the base URL of the HTTP endpoint.
+                    <br />
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <div class="mt-2">
+                {#if consumer.http_endpoint_path === "" || consumer.http_endpoint_path === "/"}
+                  <span
+                    class="bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+                    >No path configured</span
+                  >
+                {:else}
+                  <span
+                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+                    >{consumer.http_endpoint_path}</span
+                  >
+                {/if}
+              </div>
             </div>
           </div>
         </CardContent>

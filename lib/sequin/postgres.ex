@@ -3,6 +3,7 @@ defmodule Sequin.Postgres do
   import Ecto.Query, only: [from: 2]
 
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Repo
 
@@ -68,6 +69,60 @@ defmodule Sequin.Postgres do
 
       {:ok, filtered_schemas}
     end
+  end
+
+  def fetch_tables_with_columns(conn, schemas) do
+    schemas_list = Enum.map_join(schemas, ",", &"'#{&1}'")
+
+    query = """
+    SELECT DISTINCT ON (n.nspname, c.relname, a.attnum)
+      n.nspname AS schema,
+      c.relname AS table_name,
+      c.oid AS table_oid,
+      a.attnum,
+      a.attname AS column_name,
+      pg_catalog.format_type(a.atttypid, -1) AS column_type,
+      COALESCE(i.indisprimary, false) AS is_pk
+    FROM pg_class c
+    JOIN pg_namespace n ON c.relnamespace = n.oid
+    JOIN pg_attribute a ON c.oid = a.attrelid
+    LEFT JOIN pg_index i ON c.oid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE n.nspname IN (#{schemas_list})
+      AND c.relkind = 'r'
+      AND a.attnum > 0
+      AND NOT a.attisdropped
+    ORDER BY n.nspname, c.relname, a.attnum, i.indisprimary DESC NULLS LAST
+    """
+
+    case Postgrex.query(conn, query, []) do
+      {:ok, %{rows: rows}} ->
+        tables = process_table_rows(rows)
+        {:ok, tables}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  defp process_table_rows(rows) do
+    rows
+    |> Enum.group_by(fn [schema, table_name, table_oid | _] -> {schema, table_name, table_oid} end)
+    |> Enum.map(fn {{schema, table_name, table_oid}, columns} ->
+      %PostgresDatabase.Table{
+        oid: table_oid,
+        schema: schema,
+        name: table_name,
+        columns:
+          Enum.map(columns, fn [_, _, _, attnum, column_name, column_type, is_pk] ->
+            %PostgresDatabase.Table.Column{
+              attnum: attnum,
+              name: column_name,
+              type: column_type,
+              is_pk?: is_pk
+            }
+          end)
+      }
+    end)
   end
 
   def list_tables(conn, schema) do

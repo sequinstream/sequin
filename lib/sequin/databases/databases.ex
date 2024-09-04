@@ -345,42 +345,12 @@ defmodule Sequin.Databases do
 
   defp update_tables(conn, %PostgresDatabase{} = db) do
     with {:ok, schemas} <- list_schemas(conn),
-         {:ok, tables} <- list_tables_for_schemas(conn, schemas) do
+         {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
       tables = PostgresDatabase.tables_to_map(tables)
 
       db
       |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
       |> Repo.update()
-    end
-  end
-
-  defp list_tables_for_schemas(conn, schemas) do
-    Enum.reduce_while(schemas, {:ok, []}, fn schema, {:ok, acc} ->
-      case list_tables(conn, schema) do
-        {:ok, tables} ->
-          schema_tables =
-            Enum.map(tables, fn table ->
-              %PostgresDatabase.Table{
-                oid: Postgres.fetch_table_oid(conn, schema, table),
-                schema: schema,
-                name: table,
-                columns: list_columns(conn, schema, table)
-              }
-            end)
-
-          {:cont, {:ok, acc ++ schema_tables}}
-
-        error ->
-          {:halt, error}
-      end
-    end)
-  end
-
-  defp list_columns(conn, schema, table) do
-    with {:ok, rows} <- Postgres.list_columns(conn, schema, table) do
-      Enum.map(rows, fn [attnum, name, type, is_pk] ->
-        %PostgresDatabase.Table.Column{attnum: attnum, name: name, type: type, is_pk?: is_pk}
-      end)
     end
   end
 

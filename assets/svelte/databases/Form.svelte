@@ -49,6 +49,11 @@
   $: {
     databaseErrors = errors.database || {};
     replicationErrors = errors.replication || {};
+
+    // Automatically enable SSL for Supabase databases
+    if (form.hostname && form.hostname.endsWith("supabase.co")) {
+      form.ssl = true;
+    }
   }
 
   function pushEvent(
@@ -80,7 +85,7 @@
   function handleConvertSupabase() {
     pushEvent("convert_supabase_connection", { form }, (reply) => {
       if (reply && reply.converted) {
-        form = { ...form, ...reply.converted };
+        form = { ...form, ...reply.converted, ssl: true };
         isSupabasePooled = false;
       }
     });

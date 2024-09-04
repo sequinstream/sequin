@@ -198,12 +198,12 @@
           >
             <h3 class="text-sm font-semibold text-yellow-800 mb-2">Warning</h3>
             <p class="text-sm text-yellow-700 mb-2">
-              The replica identity is not set to 'full'. This may result in
-              incomplete change data.
+              The replica identity for your table is not set to 'full'. This
+              means the <code>changes</code> field in message payloads will be empty.
             </p>
             <p class="text-sm text-yellow-700">
-              To ensure the 'changes' appear in the message payload, run the
-              following SQL command:
+              If you want the <code>changes</code> field to appear in message payloads,
+              run the following SQL command:
             </p>
             <pre class="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded">
 alter table {consumer.source_table.schema}.{consumer.source_table

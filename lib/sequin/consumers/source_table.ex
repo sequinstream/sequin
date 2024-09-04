@@ -220,7 +220,9 @@ defmodule Sequin.Consumers.SourceTable do
         "is null" -> :is_null
         "is_null" -> :is_null
         "not null" -> :not_null
+        "is not null" -> :not_null
         "not_null" -> :not_null
+        "is_not_null" -> :not_null
         _ -> raise "Invalid operator: #{external_operator}"
       end
     end

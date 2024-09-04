@@ -108,12 +108,12 @@
             {#if consumer.message_kind === "event"}
               <Badge variant="default">
                 <SquareStack class="h-4 w-4 mr-1" />
-                Change stream
+                Changes
               </Badge>
             {:else if consumer.message_kind === "record"}
               <Badge variant="default">
                 <SquareStack class="h-4 w-4 mr-1" />
-                Sync stream
+                Rows
               </Badge>
             {/if}
           </div>

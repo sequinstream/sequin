@@ -108,12 +108,21 @@
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <a
+                  href="/consumers/new"
+                  data-phx-link="redirect"
+                  data-phx-link-state="push"
+                >
+                  <DropdownMenuItem class="cursor-pointer">
+                    Create Consumer wizard
+                  </DropdownMenuItem>
+                </a>
+                <a
                   href="/consumers/new?kind=push"
                   data-phx-link="redirect"
                   data-phx-link-state="push"
                 >
                   <DropdownMenuItem class="cursor-pointer">
-                    Quick create Push Consumer
+                    Create Push Consumer
                   </DropdownMenuItem>
                 </a>
                 <a
@@ -122,7 +131,7 @@
                   data-phx-link-state="push"
                 >
                   <DropdownMenuItem class="cursor-pointer">
-                    Quick create Pull Consumer
+                    Create Pull Consumer
                   </DropdownMenuItem>
                 </a>
               </DropdownMenuContent>

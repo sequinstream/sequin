@@ -28,7 +28,7 @@
   import FullPageModal from "../components/FullPageModal.svelte";
   import { cn } from "$lib/utils";
   import { toast } from "svelte-sonner";
-  import { Loader2 } from "lucide-svelte";
+  import { ExternalLinkIcon, Loader2 } from "lucide-svelte";
 
   export let live;
   export let parent;
@@ -152,7 +152,7 @@
 >
   <form
     on:submit|preventDefault={handleConsumerSubmit}
-    class="space-y-6 max-w-3xl mx-auto"
+    class="space-y-6 max-w-3xl mx-auto mt-6"
   >
     <Card>
       <CardHeader>
@@ -160,53 +160,7 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label for="message-kind">Stream type</Label>
-          <Select
-            selected={{
-              value: form.messageKind,
-              label:
-                form.messageKind === "event" ? "Change stream" : "Sync stream",
-            }}
-            onSelectedChange={(event) => {
-              form.messageKind = event.value;
-            }}
-            disabled={isEditMode}
-          >
-            <SelectTrigger
-              class={cn(
-                "w-full",
-                isEditMode && "bg-muted text-muted-foreground opacity-100"
-              )}
-            >
-              <SelectValue placeholder="Select stream type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem class="cursor-pointer" value="event"
-                >Change stream</SelectItem
-              >
-              <SelectItem class="cursor-pointer" value="record"
-                >Sync stream</SelectItem
-              >
-            </SelectContent>
-          </Select>
-          <p class="text-sm text-muted-foreground">
-            {#if form.messageKind === "event"}
-              A change stream will send you every create, update, and delete
-              that happens to rows and includes both new and old values.
-            {:else if form.messageKind === "record"}
-              A sync stream will send you the latest version of rows whenever
-              they change and only includes new values, no deletes.
-            {/if}
-          </p>
-          {#if errors.message_kind}
-            <p class="text-destructive text-sm">
-              {errors.message_kind}
-            </p>
-          {/if}
-        </div>
-
-        <div class="space-y-2">
-          <Label>Source table</Label>
+          <Label>Table</Label>
           {#if isEditMode}
             <Select
               disabled
@@ -252,6 +206,70 @@
           {#if errors.postgres_database_id || errors.table_oid}
             <p class="text-destructive text-sm">
               {errors.postgres_database_id || errors.table_oid}
+            </p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
+          <Label for="message-kind">Source</Label>
+          <Select
+            selected={{
+              value: form.messageKind,
+              label:
+                form.messageKind === "event" ? "WAL (Changes)" : "Table (Rows)",
+            }}
+            onSelectedChange={(event) => {
+              form.messageKind = event.value;
+            }}
+            disabled={isEditMode}
+          >
+            <SelectTrigger
+              class={cn(
+                "w-full",
+                isEditMode && "bg-muted text-muted-foreground opacity-100"
+              )}
+            >
+              <SelectValue placeholder="Select source type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem class="cursor-pointer" value="event"
+                >WAL (Changes)</SelectItem
+              >
+              <SelectItem class="cursor-pointer" value="record"
+                >Table (Rows)</SelectItem
+              >
+            </SelectContent>
+          </Select>
+          <p class="text-sm text-muted-foreground">
+            {#if form.messageKind === "event"}
+              By consuming from the table's WAL, this consumer will receive
+              every create, update, and delete that happens to rows and includes
+              both new and old values. Replays and backfills are limited. <a
+                href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center text-link hover:underline"
+              >
+                Learn more
+                <ExternalLinkIcon class="w-3 h-3 ml-1" />
+              </a>
+            {:else if form.messageKind === "record"}
+              By consuming directly from the table, this consumer will receive
+              the latest version of rows whenever they change. Messages will not
+              include old values and the consumer will not receive deletes. <a
+                href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center text-link hover:underline"
+              >
+                Learn more
+                <ExternalLinkIcon class="w-3 h-3 ml-1" />
+              </a>
+            {/if}
+          </p>
+          {#if errors.message_kind}
+            <p class="text-destructive text-sm">
+              {errors.message_kind}
             </p>
           {/if}
         </div>

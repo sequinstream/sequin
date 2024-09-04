@@ -797,7 +797,7 @@
                       on:click={() => handleStreamClick(type)}
                       disabled={type.comingSoon}
                     >
-                      {type.comingSoon ? "Coming Soon" : `Select ${type.title}`}
+                      {type.comingSoon ? "Coming Soon" : `Select`}
                     </Button>
                     <Button
                       class="w-full"

@@ -21,7 +21,7 @@ defmodule SequinWeb.ConsumersLive.Index do
       if connected?(socket) do
         Process.send_after(self(), :update_health, 1000)
 
-        push_event(socket, "phx:ph-identify", %{
+        push_event(socket, "ph-identify", %{
           userId: user.id,
           userEmail: user.email,
           userName: user.name

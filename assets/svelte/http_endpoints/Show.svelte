@@ -9,6 +9,7 @@
     CheckCircle2,
     Eye,
     EyeOff,
+    ExternalLink,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
@@ -52,6 +53,15 @@
   function toggleEncryptedValue(key) {
     showEncryptedValues[key] = !showEncryptedValues[key];
     showEncryptedValues = showEncryptedValues;
+  }
+
+  function isWebhookSiteUrl(url: string): boolean {
+    return url.startsWith("https://webhook.site/");
+  }
+
+  function getWebhookSiteViewUrl(url: string): string {
+    const uuid = url.split("/").pop();
+    return `https://webhook.site/#!/view/${uuid}`;
   }
 </script>
 
@@ -132,9 +142,23 @@
     <div class="space-y-6">
       <Card>
         <CardContent class="p-6">
-          <h2 class="text-lg font-semibold mb-4">Base URL</h2>
+          <div class="flex justify-between">
+            <h2 class="text-lg font-semibold mb-4">Base URL</h2>
+            {#if isWebhookSiteUrl(http_endpoint.baseUrl)}
+              <a
+                href={getWebhookSiteViewUrl(http_endpoint.baseUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  View on Webhook.site
+                </Button>
+              </a>
+            {/if}
+          </div>
           <p
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-mdm"
+            class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
           >
             {http_endpoint.baseUrl}
           </p>

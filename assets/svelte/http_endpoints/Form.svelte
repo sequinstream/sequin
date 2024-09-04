@@ -14,6 +14,7 @@
     name: string;
     baseUrl: string;
     headers: Record<string, string>;
+    encryptedHeaders: Record<string, string>;
   };
   export let errors: Record<string, any> = {};
   export let parent: string;

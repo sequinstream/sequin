@@ -53,6 +53,7 @@
       name: "",
       baseUrl: "",
       headers: {},
+      encryptedHeaders: {},
     },
   };
 

@@ -2,15 +2,18 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import { PlusCircle } from "lucide-svelte";
+  import { PlusCircle, Eye, EyeOff } from "lucide-svelte";
 
   export let form: {
     name: string;
     baseUrl: string;
     headers: Record<string, string>;
+    encryptedHeaders: Record<string, string>;
   };
 
   export let errors: Record<string, any> = {};
+
+  let showEncryptedValues: Record<string, boolean> = {};
 
   function addHeader() {
     form.headers = { ...form.headers, "": "" };
@@ -28,6 +31,28 @@
   function removeHeader(key: string) {
     const { [key]: _, ...rest } = form.headers;
     form.headers = rest;
+  }
+
+  function addEncryptedHeader() {
+    form.encryptedHeaders = { ...form.encryptedHeaders, "": "" };
+  }
+
+  function updateEncryptedHeaderKey(oldKey: string, newKey: string) {
+    const { [oldKey]: value, ...rest } = form.encryptedHeaders;
+    form.encryptedHeaders = { ...rest, [newKey]: value };
+  }
+
+  function updateEncryptedHeaderValue(key: string, value: string) {
+    form.encryptedHeaders = { ...form.encryptedHeaders, [key]: value };
+  }
+
+  function removeEncryptedHeader(key: string) {
+    const { [key]: _, ...rest } = form.encryptedHeaders;
+    form.encryptedHeaders = rest;
+  }
+
+  function toggleEncryptedValue(key: string) {
+    showEncryptedValues[key] = !showEncryptedValues[key];
   }
 </script>
 
@@ -93,6 +118,58 @@
       >
         <PlusCircle class="w-4 h-4 mr-2" />
         Add Header
+      </Button>
+    </div>
+  </div>
+
+  <div class="space-y-2">
+    <Label>Encrypted Headers</Label>
+    {#each Object.entries(form.encryptedHeaders) as [key, value], index}
+      <div class="grid grid-cols-[1fr_1fr_auto_15px] gap-4 mb-2">
+        <Input
+          id="http-endpoint-encrypted-header-key-{index}"
+          value={key}
+          on:input={(e) => updateEncryptedHeaderKey(key, e.currentTarget.value)}
+          placeholder="Key"
+        />
+        <Input
+          id="http-endpoint-encrypted-header-value-{index}"
+          {value}
+          on:input={(e) =>
+            updateEncryptedHeaderValue(key, e.currentTarget.value)}
+          placeholder="Value"
+          type={showEncryptedValues[key] ? "text" : "password"}
+        />
+        <button
+          type="button"
+          on:click={() => toggleEncryptedValue(key)}
+          class="text-muted-foreground hover:text-foreground"
+        >
+          {#if showEncryptedValues[key]}
+            <EyeOff class="w-4 h-4" />
+          {:else}
+            <Eye class="w-4 h-4" />
+          {/if}
+        </button>
+        <button
+          type="button"
+          on:click={() => removeEncryptedHeader(key)}
+          class="text-muted-foreground hover:text-foreground justify-self-end"
+        >
+          <icon class="hero-x-mark w-4 h-4" />
+        </button>
+      </div>
+    {/each}
+    <div class="grid grid-cols-1 gap-4 max-w-fit">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        on:click={addEncryptedHeader}
+        class="mt-2"
+      >
+        <PlusCircle class="w-4 h-4 mr-2" />
+        Add Encrypted Header
       </Button>
     </div>
   </div>

@@ -148,7 +148,9 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       "id" => http_endpoint.id,
       "name" => http_endpoint.name || Name.generate(99),
       "baseUrl" => http_endpoint.base_url,
-      "headers" => http_endpoint.headers || %{}
+      "headers" => http_endpoint.headers || %{},
+      # Add this line
+      "encryptedHeaders" => http_endpoint.encrypted_headers || %{}
     }
   end
 
@@ -157,7 +159,9 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       "http_endpoint" => %{
         "name" => form["name"],
         "base_url" => form["baseUrl"],
-        "headers" => form["headers"] || %{}
+        "headers" => form["headers"] || %{},
+        # Add this line
+        "encrypted_headers" => form["encryptedHeaders"] || %{}
       }
     }
   end

@@ -5,8 +5,14 @@ ARG DEBIAN_VERSION=buster-20240612-slim
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 
+ARG SELF_HOSTED=0
+
 # ---- Build Stage ----
 FROM ${BUILDER_IMAGE} as builder
+
+# Pass the SELF_HOSTED arg as an environment variable
+ARG SELF_HOSTED
+ENV SELF_HOSTED=${SELF_HOSTED}
 
 # install build dependencies
 RUN apt-get update -y && apt-get install -y build-essential git curl \
@@ -68,6 +74,10 @@ RUN mix release
 # the compiled release and other runtime necessities
 # ---- App Stage ----
 FROM ${RUNNER_IMAGE} as app
+
+# Pass the SELF_HOSTED arg again in this stage
+ARG SELF_HOSTED
+ENV SELF_HOSTED=${SELF_HOSTED}
 
 RUN apt-get update -y && \
     apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \

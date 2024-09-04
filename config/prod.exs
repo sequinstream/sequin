@@ -6,11 +6,13 @@ import Config
 # which you should run after static files are built and
 # before starting your production server.
 
+self_hosted = System.get_env("SELF_HOSTED", "0") == "1"
+
 config :logger,
   level: :info,
   default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
 
-config :sequin, self_hosted: false
+config :sequin, self_hosted: self_hosted
 
 # Configures Swoosh API Client
 config :swoosh, Sequin.Mailer, adapter: Swoosh.Adapters.Sendgrid

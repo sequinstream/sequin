@@ -51,19 +51,19 @@ description: 'Connect Sequin to your Postgres database and send changes to your 
       <img src="/images/cloud-getting-started/successful-database-connection.png" alt="Database connected page" />
     </Frame>
 
-    <Note>You may see that the database status is `waiting` until Sequin sees a change come through the replication slot.</Note>
   </Step>
   <Step title="Create a consumer">
     On the database page, click the **Add a consumer** button. Alternatively, you can navigate to the **Consumers** page and click **CreateConsumer**.
 
-     As a first step, you'll select a stream type to determine which record changes you want to capture in your consumer and how those changes are retained. You can choose between a change stream or a sync stream:
+     As a first step, you'll select whether you want your consumer to process rows or changes:
 
     <Frame>
       <img src="/images/cloud-getting-started/stream-kind.png" alt="Select stream kind" />
     </Frame>
 
-    * **Change stream**: A change stream will capture every `insert`, `update`, and `delete`. Learn more about change streams [here](../concepts/change-streams).
-    * **Sync stream**: A sync stream will capture `insert` and `updates` to records. It's intended for "syncing" data to another database or service. Learn more about sync streams [here](../concepts/sync-streams).
+    * **Rows**: Process rows to capture the latest state of records. Sequin delivers messages to the consumer whenever a row is inserted or updated. Learn more about rows [here](/core-concepts#rows-and-changes).
+    * **Changes**: Process changes to capture every `insert`, `update`, and `delete`. This includes `OLD` values for updates and deletes. Learn more about changes [here](/core-concepts#rows-and-changes).
+
 
     Next, select whether you want to recieve changes via HTTP Push (i.e. Webhooks) or HTTP Pull (i.e. SQS). For this quickstart, we'll select HTTP Push:
 
@@ -77,15 +77,13 @@ description: 'Connect Sequin to your Postgres database and send changes to your 
       <img src="/images/cloud-getting-started/set-filters.png" alt="Select consumer filters" />
     </Frame>
 
-    Here, we've selected the `public.users` table and applied a filter to only capture changes to records where the `age` value is greater than `25`. Click **Continue**.
+    Here, we've selected the `public.users` table and applied a filter to only capture changes to records where the `age` value is less than `25`. Click **Continue**.
 
-    On the next screen, enter a name for your consumer and then select **+ Add new** under the **HTTP Endpoint** field. Enter a name for your endpoint, the base URL you want to send the changes to, and define any headers you want to send with the changes:
+    On the next screen, enter a name for your consumer. Under "HTTP Endpoint", you can click the link " Create and use a new Webhook.site endpoint." This will generate a new HTTP endpoint on Webhook.site that you can use for test purposes:
 
     <Frame>
       <img src="/images/cloud-getting-started/set_http_endpoint.png" alt="Set endpoint" />
     </Frame>
-
-    <Tip>To easily test your consumer, you can use a tool like [webhook.site](https://webhook.site/) to view the incoming requests.</Tip>
 
     Finally, click on **Create Consumer** to finish creating your consumer:
 
@@ -96,7 +94,7 @@ description: 'Connect Sequin to your Postgres database and send changes to your 
   <Step title="Capture changes">
     You've now connected your database to Sequin, setup a consumer to capture changes, and defined where to send the changes. The last step is to trigger a message to see this in action.
 
-    To trigger a message, insert a new row on your table - and you'll see a new message arrive at your endpoint:
+    To trigger a message, insert a new row on your table. You'll see a new message arrive at your endpoint:
 
     ![End to end quickstart example](https://i.imgur.com/oT5qh1O.gif)
 
@@ -112,7 +110,7 @@ You've now walked through the basics of connecting your database, creating a con
 
 From here, you might want to:
 
-* Learn more about [change streams](/concepts/change-streams) and [sync streams](/concepts/sync-streams).
+* Learn more about [rows](/core-concepts#rows-and-changes) and [changes](/core-concepts#rows-and-changes).
 * Explore the advanced configurations for push consumers and pull consumers.
 * Install and configure the [Sequin SDK](https://github.com/sequin-io/sequin-go) to pull changes into your application.
 * Star the repository to follow the latest updates.

@@ -30,15 +30,12 @@
   "navigation": [
     {
       "group": "Get started",
-      "pages": ["introduction", "compare", "quickstart", "sdks"]
-    },
-    {
-      "group": "Core concepts",
       "pages": [
-        "core/overview",
-        "core/database",
-        "core/streams",
-        "core/consumers"
+        "introduction",
+        "compare",
+        "quickstart",
+        "core-concepts",
+        "sdks"
       ]
     },
     {

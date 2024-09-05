@@ -113,7 +113,7 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
-    Logger.metadata(replication_id: state.id)
+    Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
     Logger.info("[Replication] Initialized")
 
     if state.test_pid do

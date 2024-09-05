@@ -53,7 +53,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         http_endpoint: http_endpoint,
         req_opts: req_opts
       }) do
-    Logger.metadata(consumer_id: consumer.id, http_endpoint_id: http_endpoint.id)
+    Logger.metadata(
+      account_id: consumer.account_id,
+      consumer_id: consumer.id,
+      http_endpoint_id: http_endpoint.id
+    )
 
     case push_message(http_endpoint, consumer.http_endpoint_path, consumer_event.data, req_opts) do
       :ok ->

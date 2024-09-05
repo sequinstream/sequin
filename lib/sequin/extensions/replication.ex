@@ -25,6 +25,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Health
   alias Sequin.Replication.Message
+  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -310,6 +311,8 @@ defmodule Sequin.Extensions.Replication do
       fields: data_tuple_to_fields(columns, msg.tuple_data)
     }
 
+    TracerServer.message_replicated(state.postgres_database, record)
+
     %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
 
@@ -332,6 +335,8 @@ defmodule Sequin.Extensions.Replication do
       old_fields: old_fields,
       fields: data_tuple_to_fields(columns, msg.tuple_data)
     }
+
+    TracerServer.message_replicated(state.postgres_database, record)
 
     %{state | accumulated_messages: [record | state.accumulated_messages]}
   end
@@ -356,6 +361,8 @@ defmodule Sequin.Extensions.Replication do
       table_oid: msg.relation_id,
       old_fields: data_tuple_to_fields(columns, prev_tuple_data)
     }
+
+    TracerServer.message_replicated(state.postgres_database, record)
 
     %{state | accumulated_messages: [record | state.accumulated_messages]}
   end

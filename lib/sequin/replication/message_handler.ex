@@ -10,6 +10,7 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -48,6 +49,9 @@ defmodule Sequin.Replication.MessageHandler do
               consumer.message_kind == :record ->
                 {{:insert, consumer_record(consumer, message)}, consumer}
             end
+          else
+            TracerServer.message_filtered(consumer, message)
+            nil
           end
         end)
         |> Enum.reject(&is_nil/1)
@@ -57,10 +61,22 @@ defmodule Sequin.Replication.MessageHandler do
 
     case insert_or_delete_consumer_messages(messages) do
       {:ok, count} ->
+        # Update Consumer Health
         consumers
         |> Enum.uniq_by(& &1.id)
         |> Enum.each(fn consumer ->
           Health.update(consumer, :ingestion, :healthy)
+        end)
+
+        # Trace Messages
+        messages_by_consumer
+        |> Enum.group_by(
+          fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
+          fn {{_action, event_or_record}, _consumer} -> event_or_record end
+        )
+        |> Enum.each(fn
+          {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
+          {{:delete, _consumer}, _messages} -> :ok
         end)
 
         {:ok, count}

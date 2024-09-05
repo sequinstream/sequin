@@ -20,6 +20,13 @@
   import { AlertCircle } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { HelpCircle } from "lucide-svelte";
+  import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+  } from "$lib/components/ui/popover";
+  import { isValidPostgresURL, parsePostgresURL } from "./utils"; // Assume this function exists in a utils file
+  import { getContext } from "svelte";
 
   export let database: {
     id?: string;
@@ -90,6 +97,30 @@
       }
     });
   }
+
+  let urlInput = "";
+  let isValidURL = false;
+  let popoverOpen = false;
+
+  function handleURLInput() {
+    isValidURL = isValidPostgresURL(urlInput);
+  }
+
+  function autofillFromURL() {
+    if (isValidURL) {
+      const { database, hostname, port, username, password, ssl } =
+        parsePostgresURL(urlInput);
+      form.database = database;
+      form.hostname = hostname;
+      form.port = port || 5432;
+      form.username = username;
+      form.password = password;
+      form.ssl = ssl !== "disable";
+
+      // Close the popover
+      popoverOpen = false;
+    }
+  }
 </script>
 
 <FullPageModal
@@ -104,6 +135,27 @@
         <CardTitle>Database Configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
+        <Popover bind:open={popoverOpen}>
+          <PopoverTrigger>
+            <Button variant="outline">Autofill with URL</Button>
+          </PopoverTrigger>
+          <PopoverContent class="min-w-96">
+            <div class="space-y-2">
+              <Label for="url-input">PostgreSQL URL</Label>
+              <Input
+                id="url-input"
+                type="text"
+                bind:value={urlInput}
+                on:input={handleURLInput}
+                placeholder="postgres://user:pass@host:port/db"
+              />
+              <Button on:click={autofillFromURL} disabled={!isValidURL}>
+                Autofill
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
         <div class="space-y-2">
           <Label for="database" class="flex items-center">
             Database

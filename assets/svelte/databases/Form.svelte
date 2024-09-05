@@ -28,6 +28,7 @@
   import { isValidPostgresURL, parsePostgresURL } from "./utils"; // Assume this function exists in a utils file
   import { getContext } from "svelte";
   import { Eye, EyeOff } from "lucide-svelte";
+  import { Wand } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -138,13 +139,13 @@
 >
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto mt-6">
     <Card>
-      <CardHeader>
-        <CardTitle>Database Configuration</CardTitle>
-      </CardHeader>
-      <CardContent class="space-y-4">
+      <CardHeader class="flex flex-row justify-between items-center">
+        <CardTitle>Database connection details</CardTitle>
         <Popover bind:open={popoverOpen}>
           <PopoverTrigger>
-            <Button variant="outline">Autofill with URL</Button>
+            <Button variant="outline">
+              <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with URL
+            </Button>
           </PopoverTrigger>
           <PopoverContent class="min-w-96">
             <div class="space-y-2">
@@ -162,7 +163,8 @@
             </div>
           </PopoverContent>
         </Popover>
-
+      </CardHeader>
+      <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="database" class="flex items-center">
             Database
@@ -347,7 +349,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Database</CardTitle>
+        <CardTitle>Database configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">

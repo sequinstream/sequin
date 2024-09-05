@@ -53,17 +53,30 @@ description: 'Connect Sequin to your Postgres database and send changes to your 
 
   </Step>
   <Step title="Create a consumer">
-    On the database page, click the **Add a consumer** button. Alternatively, you can navigate to the **Consumers** page and click **CreateConsumer**.
+    On the database page, click the **Add a consumer** button. Alternatively, you can navigate to the **Consumers** page and click **Create Consumer**.
 
-     As a first step, you'll select whether you want your consumer to process rows or changes:
+     As a first step, select the database and the table that contains the data you want to process in the consumer:
 
     <Frame>
-      <img src="/images/cloud-getting-started/stream-kind.png" alt="Select stream kind" />
+      <img src="/images/cloud-getting-started/select-table.png" alt="Select table" />
+    </Frame>
+
+    Click **Continue**. On the next screen, you'll define any filters for the changes you want to capture:
+
+    <Frame>
+      <img src="/images/cloud-getting-started/set-filters.png" alt="Select filters" />
+    </Frame>
+
+    Here, we've selected the `public.orders` table and applied a filter to only capture orders where the `value` is greater than `100`. Click **Continue**.
+
+    With your table and filters selected, you'll now select whether you want your consumer to process rows or changes:
+
+    <Frame>
+      <img src="/images/cloud-getting-started/rows-or-changes.png" alt="Select consumer type" />
     </Frame>
 
     * **Rows**: Process rows to capture the latest state of records. Sequin delivers messages to the consumer whenever a row is inserted or updated. Learn more about rows [here](/core-concepts#rows-and-changes).
     * **Changes**: Process changes to capture every `insert`, `update`, and `delete`. This includes `OLD` values for updates and deletes. Learn more about changes [here](/core-concepts#rows-and-changes).
-
 
     Next, select whether you want to recieve changes via HTTP Push (i.e. Webhooks) or HTTP Pull (i.e. SQS). For this quickstart, we'll select HTTP Push:
 
@@ -71,25 +84,23 @@ description: 'Connect Sequin to your Postgres database and send changes to your 
       <img src="/images/cloud-getting-started/consumer-type.png" alt="Select consumer type" />
     </Frame>
 
-    You'll now select the database and the tables you want to capture changes from and define any filters for the changes you want to capture:
+    On the next screen, you'll enter the final details for your consumer. To get up and running, give the consumer a simple name (i.e. `sequin-quickstart`). No need to adjust the default timeout or add an endpoint path.
+
+    Under "HTTP Endpoint", you can click the link **Create and use a new Webhook.site endpoint**. This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for test purposes:
 
     <Frame>
-      <img src="/images/cloud-getting-started/set-filters.png" alt="Select consumer filters" />
+      <img src="/images/cloud-getting-started/set-endpoint.png" alt="Set endpoint" />
     </Frame>
 
-    Here, we've selected the `public.users` table and applied a filter to only capture changes to records where the `age` value is less than `25`. Click **Continue**.
-
-    On the next screen, enter a name for your consumer. Under "HTTP Endpoint", you can click the link " Create and use a new Webhook.site endpoint." This will generate a new HTTP endpoint on Webhook.site that you can use for test purposes:
-
-    <Frame>
-      <img src="/images/cloud-getting-started/set_http_endpoint.png" alt="Set endpoint" />
-    </Frame>
+    <Note>You can use encrypted headers to authenticate messages deliverd by your consumer.</Note>
 
     Finally, click on **Create Consumer** to finish creating your consumer:
 
     <Frame>
       <img src="/images/cloud-getting-started/consumer-created.png" alt="Consumer created" />
     </Frame>
+
+    <Note>If you created a **changes** consumer, Sequin will now verify that the replica identity for the table is properly configured. If its not, you'll see a message prompting you to run a SQL command to set the replica identity to `full`.</Note>
   </Step>
   <Step title="Capture changes">
     You've now connected your database to Sequin, setup a consumer to capture changes, and defined where to send the changes. The last step is to trigger a message to see this in action.

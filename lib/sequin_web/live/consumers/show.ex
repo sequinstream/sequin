@@ -40,7 +40,7 @@ defmodule SequinWeb.ConsumersLive.Show do
      socket
      |> assign(:consumer, consumer)
      |> assign(:api_token, api_token)
-     |> assign(:host, SequinWeb.Endpoint.url())
+     |> assign(:host, Application.get_env(:sequin, :api_host, SequinWeb.Endpoint.url()))
      |> assign_replica_identity()
      |> assign_metrics()}
   end

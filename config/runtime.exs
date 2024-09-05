@@ -128,6 +128,8 @@ if config_env() == :prod and not self_hosted do
       port: port
     ],
     secret_key_base: secret_key_base
+
+  config :sequin, api_host: "api.sequinstream.com"
 end
 
 if config_env() == :prod do

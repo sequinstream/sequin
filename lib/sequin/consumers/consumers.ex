@@ -22,6 +22,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Postgres
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
+  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -301,7 +302,7 @@ defmodule Sequin.Consumers do
   def insert_consumer_events(consumer_events) do
     now = DateTime.utc_now()
 
-    entries =
+    events =
       Enum.map(consumer_events, fn event ->
         event
         |> Map.merge(%{
@@ -313,7 +314,8 @@ defmodule Sequin.Consumers do
         |> Sequin.Map.from_ecto()
       end)
 
-    {count, _} = Repo.insert_all(ConsumerEvent, entries)
+    {count, _} = Repo.insert_all(ConsumerEvent, events)
+
     {:ok, count}
   end
 
@@ -519,6 +521,7 @@ defmodule Sequin.Consumers do
 
         if length(events) > 0 do
           Health.update(consumer, :receive, :healthy)
+          TracerServer.messages_received(consumer, events)
         end
 
         {:ok, events}
@@ -569,6 +572,7 @@ defmodule Sequin.Consumers do
              {:ok, fetched_records} <- filter_and_delete_records(consumer.id, fetched_records) do
           if length(fetched_records) > 0 do
             Health.update(consumer, :receive, :healthy)
+            TracerServer.messages_received(consumer, fetched_records)
           end
 
           {:ok, fetched_records}
@@ -743,6 +747,8 @@ defmodule Sequin.Consumers do
     Metrics.incr_consumer_messages_processed_count(consumer, count)
 
     Metrics.incr_consumer_messages_processed_throughput(consumer, count)
+
+    TracerServer.messages_acked(consumer, ack_ids)
 
     :ok
   end

@@ -29,6 +29,7 @@
   import { getContext } from "svelte";
   import { Eye, EyeOff } from "lucide-svelte";
   import { Wand } from "lucide-svelte";
+  import { ChevronDown, ChevronUp } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -128,6 +129,12 @@
 
   function togglePasswordVisibility() {
     showPassword = !showPassword;
+  }
+
+  let testDatabaseCardExpanded = false;
+
+  function toggleTestDatabaseCard() {
+    testDatabaseCardExpanded = !testDatabaseCardExpanded;
   }
 </script>
 
@@ -275,6 +282,39 @@
           </div>
         {/if}
       </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <button
+          type="button"
+          class="flex justify-between items-center w-full"
+          on:click={toggleTestDatabaseCard}
+        >
+          <CardTitle>Need a test database?</CardTitle>
+          {#if testDatabaseCardExpanded}
+            <ChevronUp class="h-4 w-4" />
+          {:else}
+            <ChevronDown class="h-4 w-4" />
+          {/if}
+        </button>
+      </CardHeader>
+      {#if testDatabaseCardExpanded}
+        <CardContent class="space-y-4">
+          <p class="text-sm text-muted-foreground">
+            We recommend setting up a free database with Supabase to get
+            started.
+          </p>
+          <Button
+            variant="outline"
+            href="https://supabase.com/dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Go to Supabase Dashboard
+          </Button>
+        </CardContent>
+      {/if}
     </Card>
 
     <Card>

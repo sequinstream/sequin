@@ -18,37 +18,37 @@ defmodule SequinWeb.DatabasesLive.Form do
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
-    is_edit? = Map.has_key?(params, "id")
+    id = Map.get(params, "id")
 
-    case fetch_or_build_database(socket, params) do
+    case fetch_or_build_database(socket, id) do
       {:ok, database} ->
         socket =
           socket
           |> assign(
-            is_edit?: is_edit?,
+            is_edit?: not is_nil(id),
             show_errors?: false,
             submit_error: nil,
             database: database
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
-          |> assign(:is_supabase_pooled, false)
+          |> assign(:show_supabase_pooler_prompt, false)
 
         {:ok, socket}
 
       {:error, %NotFoundError{}} ->
-        Logger.error("Database not found (id=#{params["id"]})")
+        Logger.error("Database not found (id=#{id})")
         {:ok, push_navigate(socket, to: ~p"/databases")}
     end
   end
 
-  defp fetch_or_build_database(socket, %{"id" => id}) do
+  defp fetch_or_build_database(socket, nil) do
+    {:ok, %PostgresDatabase{account_id: current_account_id(socket), replication_slot: %PostgresReplicationSlot{}}}
+  end
+
+  defp fetch_or_build_database(socket, id) do
     with {:ok, database} <- Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, Repo.preload(database, :replication_slot)}
     end
-  end
-
-  defp fetch_or_build_database(_socket, _) do
-    {:ok, %PostgresDatabase{replication_slot: %PostgresReplicationSlot{}}}
   end
 
   @parent_id "databases_form"
@@ -79,7 +79,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
             submitError: @submit_error,
-            isSupabasePooled: @is_supabase_pooled
+            showSupabasePoolerPrompt: @show_supabase_pooler_prompt
           }
         }
       />
@@ -92,9 +92,8 @@ defmodule SequinWeb.DatabasesLive.Form do
     params = decode_params(form)
     socket = put_changesets(socket, params)
 
-    # Add Supabase pooled connection detection
-    is_supabase_pooled = detect_supabase_pooled(params["database"])
-    socket = assign(socket, :is_supabase_pooled, is_supabase_pooled)
+    show_supabase_pooler_prompt = detect_supabase_pooled(params["database"])
+    socket = assign(socket, :show_supabase_pooler_prompt, show_supabase_pooler_prompt)
 
     {:noreply, socket}
   end
@@ -104,7 +103,7 @@ defmodule SequinWeb.DatabasesLive.Form do
     params = decode_params(form)
     converted_params = convert_supabase_connection(params["database"])
 
-    socket = assign(socket, :is_supabase_pooled, false)
+    socket = assign(socket, :show_supabase_pooler_prompt, false)
 
     {:reply, %{converted: converted_params}, socket}
   end
@@ -147,7 +146,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   def handle_event("form_closed", _params, socket) do
     socket =
       if socket.assigns.is_edit? do
-        push_navigate(socket, to: ~p"/databases/#{socket.assigns.changeset.data.id}")
+        push_navigate(socket, to: ~p"/databases/#{socket.assigns.database.id}")
       else
         push_navigate(socket, to: ~p"/databases")
       end
@@ -163,7 +162,7 @@ defmodule SequinWeb.DatabasesLive.Form do
       if is_edit? do
         PostgresDatabase.update_changeset(database, params["database"])
       else
-        PostgresDatabase.create_changeset(%PostgresDatabase{account_id: current_account_id(socket)}, params["database"])
+        PostgresDatabase.create_changeset(database, params["database"])
       end
 
     replication_changeset =

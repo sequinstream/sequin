@@ -25,8 +25,7 @@
     PopoverContent,
     PopoverTrigger,
   } from "$lib/components/ui/popover";
-  import { isValidPostgresURL, parsePostgresURL } from "./utils"; // Assume this function exists in a utils file
-  import { getContext } from "svelte";
+  import { isValidPostgresURL, parsePostgresURL } from "./utils";
   import { Eye, EyeOff } from "lucide-svelte";
   import { Wand } from "lucide-svelte";
   import { ChevronDown, ChevronUp } from "lucide-svelte";
@@ -47,7 +46,7 @@
   export let submitError: string | null = null;
   export let parent: string;
   export let live;
-  export let isSupabasePooled: boolean = false;
+  export let showSupabasePoolerPrompt: boolean = false;
 
   let form = { ...database };
 
@@ -96,7 +95,7 @@
     pushEvent("convert_supabase_connection", { form }, (reply) => {
       if (reply && reply.converted) {
         form = { ...form, ...reply.converted, ssl: true };
-        isSupabasePooled = false;
+        showSupabasePoolerPrompt = false;
       }
     });
   }
@@ -265,7 +264,7 @@
         {#if databaseErrors.ssl}
           <p class="text-destructive text-sm">{databaseErrors.ssl}</p>
         {/if}
-        {#if isSupabasePooled}
+        {#if showSupabasePoolerPrompt}
           <div transition:slide>
             <Alert variant="default">
               <AlertCircle class="h-4 w-4" />

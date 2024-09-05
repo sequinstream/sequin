@@ -185,23 +185,28 @@ defmodule Sequin.Databases.PostgresDatabase do
         :queue_interval,
         :queue_target,
         :password,
-        :ssl,
         :username,
         :connect_timeout,
         :max_restarts
       ])
       |> Enum.to_list()
 
-    opts =
-      if pd.ipv6 do
-        Keyword.put(opts, :socket_options, [:inet6])
+    # TODO: Remove this when we have CA certs for the cloud providers
+    # We likely need a bundle that covers many different database providers
+    # PLUS a path for users to provide their own certs if needed
+    ssl =
+      if pd.ssl do
+        [
+          verify: :verify_none
+        ]
       else
-        opts
+        false
       end
 
-    if opts[:ssl] do
-      # To change this to verify_full in the future, we'll need to add CA certs for the cloud vendors
-      Keyword.put(opts, :ssl_opts, verify: :verify_none)
+    opts = Keyword.put(opts, :ssl, ssl)
+
+    if pd.ipv6 do
+      Keyword.put(opts, :socket_options, [:inet6])
     else
       opts
     end

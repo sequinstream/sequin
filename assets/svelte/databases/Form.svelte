@@ -27,6 +27,7 @@
   } from "$lib/components/ui/popover";
   import { isValidPostgresURL, parsePostgresURL } from "./utils"; // Assume this function exists in a utils file
   import { getContext } from "svelte";
+  import { Eye, EyeOff } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -121,6 +122,12 @@
       popoverOpen = false;
     }
   }
+
+  let showPassword = false;
+
+  function togglePasswordVisibility() {
+    showPassword = !showPassword;
+  }
 </script>
 
 <FullPageModal
@@ -213,7 +220,24 @@
 
         <div class="space-y-2">
           <Label for="password">Password</Label>
-          <Input type="password" id="password" bind:value={form.password} />
+          <div class="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              id="password"
+              bind:value={form.password}
+            />
+            <button
+              type="button"
+              class="absolute inset-y-0 right-0 flex items-center pr-3"
+              on:click={togglePasswordVisibility}
+            >
+              {#if showPassword}
+                <EyeOff class="h-4 w-4 text-gray-400" />
+              {:else}
+                <Eye class="h-4 w-4 text-gray-400" />
+              {/if}
+            </button>
+          </div>
           {#if databaseErrors.password}
             <p class="text-destructive text-sm">{databaseErrors.password}</p>
           {/if}

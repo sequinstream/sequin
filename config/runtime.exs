@@ -107,8 +107,7 @@ if config_env() == :prod and not self_hosted do
   port = String.to_integer(System.get_env("PORT") || "7376")
 
   config :sequin, Sequin.Repo,
-    ssl: true,
-    ssl_opts: AwsRdsCAStore.ssl_opts(database_url),
+    ssl: AwsRdsCAStore.ssl_opts(database_url),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
     socket_options: maybe_ipv6,
     url: database_url

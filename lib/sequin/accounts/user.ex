@@ -5,7 +5,9 @@ defmodule Sequin.Accounts.User do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  schema "users" do
+  @type id :: String.t()
+
+  typed_schema "users" do
     field :name, :string
     field :email, :string
     field :password, :string, virtual: true, redact: true

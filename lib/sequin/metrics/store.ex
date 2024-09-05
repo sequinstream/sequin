@@ -107,5 +107,12 @@ defmodule Sequin.Metrics.Store do
 
   @spec handle_response(any()) :: {:ok, any()} | {:error, Error.t()}
   defp handle_response({:ok, response}), do: {:ok, response}
-  defp handle_response({:error, error}), do: {:error, Error.service(entity: :redis, details: %{error: error})}
+
+  defp handle_response({:error, error}) when is_exception(error) do
+    {:error, Error.service(service: :redis, message: Exception.message(error))}
+  end
+
+  defp handle_response({:error, error}) do
+    {:error, Error.service(service: :redis, message: "Redis error: #{inspect(error)}")}
+  end
 end

@@ -3,10 +3,11 @@ defmodule Sequin.Accounts.Account do
   use Sequin.ConfigSchema
 
   import Ecto.Changeset
-  # import Ecto.Query, only: [from: 2]
 
   alias Sequin.Accounts.Account
   alias Sequin.Name
+
+  @type id :: String.t()
 
   typed_schema "accounts" do
     field :name, :string

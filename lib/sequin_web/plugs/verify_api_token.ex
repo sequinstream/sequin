@@ -71,18 +71,6 @@ defmodule SequinWeb.Plugs.VerifyApiToken do
           )
 
         ApiFallbackPlug.call(conn, {:error, error})
-
-      :error ->
-        error =
-          Error.unauthorized(
-            message: """
-            Please provide a valid API token in the Authorization header. The provided token is not a valid Base64 encoded string.
-
-            #{@token_instructions}
-            """
-          )
-
-        ApiFallbackPlug.call(conn, {:error, error})
     end
   end
 end

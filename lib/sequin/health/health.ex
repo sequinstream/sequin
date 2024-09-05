@@ -302,7 +302,7 @@ defmodule Sequin.Health do
     |> case do
       {:ok, nil} -> {:ok, initial_health(entity)}
       {:ok, json} -> {:ok, Health.from_json!(json)}
-      {:error, error} -> {:error, Error.service(entity: :redis, details: %{error: error})}
+      {:error, error} -> {:error, to_service_error(error)}
     end
   end
 
@@ -311,8 +311,16 @@ defmodule Sequin.Health do
     |> Redix.command(["SET", "ix:health:v0:#{entity_id}", Jason.encode!(health)])
     |> case do
       {:ok, "OK"} -> {:ok, health}
-      {:error, error} -> {:error, Error.service(entity: :redis, details: %{error: error})}
+      {:error, error} -> {:error, to_service_error(error)}
     end
+  end
+
+  defp to_service_error(error) when is_exception(error) do
+    Error.service(service: :redis, message: Exception.message(error))
+  end
+
+  defp to_service_error(error) do
+    Error.service(service: :redis, message: "Redis error: #{inspect(error)}")
   end
 
   defp validate_status_and_error!(:healthy, nil), do: :ok

@@ -4,4 +4,98 @@ sidebarTitle: "Neon"
 description: "How to connect Sequin to your Neon database."
 ---
 
-<Warning>This page is a work in progress.</Warning>
+This guide provides step-by-step instructions to connect your [Neon](https://neon.tech/) database to Sequin.
+
+## Enable logical replication on Neon
+
+To enable logical replication on Neon, follow these steps:
+
+<Steps titleSize="h3">
+  <Step title="Navigate to Neon console">
+    Go to your project in the [Neon console](https://console.neon.tech/).
+  </Step>
+  <Step title="Access Project settings">
+    From the Neon Dashboard, navigate to the **Project settings** section.
+  </Step>
+  <Step title="Find Beta section">
+    Within **Project Settings**, locate the **Beta** section.
+  </Step>
+  <Step title="Enable logical replication">
+    Click on the **Enable** button to activate logical replication.
+
+    <Frame>
+      <img src="/images/guides/neon/neon-replication-beta.png" alt="Enable logical replication" />
+    </Frame>
+  </Step>
+</Steps>
+
+<Note>
+Learn more about enabling logical replication in Neon [here](https://neon.tech/docs/guides/logical-replication-neon#enabling-logical-replication-in-neon).
+</Note>
+
+## Connect Sequin to your Neon database
+
+After enabling logical replication on Neon, you'll now connect to your Neon database in Sequin.
+
+<Steps titleSize="h3">
+  <Step title="Enter connection details in Sequin">
+    In the Sequin Console, click on the **Connect Database** button and enter the following details for your Neon database:
+
+    <Note>
+      You can find these connection details in your Neon project dashboard under the "Connection details" section:
+      <Frame>
+        <img src="/images/guides/neon/neon-connection-details.png" alt="Neon connection details" />
+      </Frame>
+    </Note>
+
+    - **Host**: Your Neon host (e.g., `ep-cool-snow-123456.us-east-2.aws.neon.tech`)
+    - **Port**: 5432 (default Postgres port)
+    - **Database**: Your database name
+    - **Username**: Your Neon username
+    - **Password**: Your Neon password
+
+    Make sure to enable the **SSL** option for secure connection.
+
+  </Step>
+  <Step title="Create a replication slot">
+    Use the **SQL Editor** in your Neon project to execute the following SQL query to create a replication slot:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+
+    This creates a replication slot named `sequin_slot`.
+  </Step>
+  <Step title="Create a publication">
+    Next, create a publication to indicate which tables will publish changes to the replication slot. Run the following SQL command:
+
+        ```sql
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    ```
+
+    If you want to publish changes from all tables, you can use:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    ```
+  </Step>
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+  </Step>
+</Steps>
+
+## Create a consumer
+
+With your Neon database connected to Sequin via a replication slot and publication, Sequin is now detecting changes to your tables. Now create a consumer to process your data changes and send them to your application.
+
+Click the **Add a consumer** button and select your Neon database as the source. Follow the instructions in our [quickstart guide](/quickstart) to complete the process.
+
+## Next steps
+
+With your Neon database connected to Sequin, you can now:
+
+* Set up filters to capture specific changes.
+* Use Sequin's observability features to monitor and debug your data flows.
+* Explore Sequin's replay and backfill features for historical data processing.
+
+For more information on these features, check out our [core concepts](/core-concepts) documentation.

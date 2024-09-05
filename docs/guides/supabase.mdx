@@ -70,12 +70,6 @@ With your database connected, you'll now create the replication slot that Sequin
     ```sql
     create publication sequin_pub for all tables;
     ```
-
-    Finally, to ensure Sequin can capture the `old` values for `update` and `delete` operations, you'll set the replica identity to `full`:
-
-    ```sql
-   alter table {mytable} replica identity full;
-    ```
   </Step>
   <Step title="Enter the replication slot details in Sequin">
     Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
@@ -141,12 +135,9 @@ When the trigger fires, Supabase sends the data to the endpoint with the followi
 To create this exact webhook in Sequin, you'll create an HTTP push consumer on the `orders` table with no filters. Here's how to do it:
 
 <Steps titleSize="h3" >
-  <Step title="Create a new push consumer">
+  <Step title="Select your database and table">
     In the Sequin Console, navigate to the Consumers page, click **Create Consumer**.
 
-    In the setup wizard, select **Change stream** as the stream type and then **HTTP Push** as the consumer type.
-  </Step>
-  <Step title="Select your database and table">
     Select your Supabase database and the `public.orders` table.
   </Step>
   <Step title="Set filters and operations">
@@ -155,13 +146,25 @@ To create this exact webhook in Sequin, you'll create an HTTP push consumer on t
         <img src="../images/guides/supabase/sequin-consumer-filters.png" alt="Sequin consumer settings" />
     </Frame>
   </Step>
+  <Step title="Select Change stream to HTTP Push">
+    To mimic the behavior of the Supabase webhook, select **Change stream** as the stream type and then **HTTP Push** as the consumer type.
+  </Step>
   <Step title="Add your webhook URL">
     Finally, give your consumer a name, set a timeout, and add your webhook URL:
+
     <Frame>
         <img src="../images/guides/supabase/sequin-consumer-endpoint.png" alt="Sequin consumer settings" />
     </Frame>
 
-    <Note>Sequin gives you more control over webhook delivery and retries including a higher request timeout, automatic retries, and the ability to configure max ack pending (e.g. the consumer will stop sending new events to the endpoint if a certain number of events are not acknowledged).</Note>
+    <Note>Sequin gives you more control over webhook delivery and retries including a higher request timeout, automatic retries, and the ability to configure max ack pending (e.g. the consumer will stop sending new events to the endpoint if a certain number of events are not acknowledged). Additionally, you can authenticate the messages delivered to your endpoint with encrypted headers.</Note>
+
+  </Step>
+  <Step title="Set the replica identity to `full`">
+    Once you create your Consumer, Sequin will verify your configuration. To ensure Sequin can capture the `old` values for `update` and `delete` operations, you'll be prompted to set the replica identity to `full` by running the following SQL command:
+
+    ```sql
+   alter table orders replica identity full;
+    ```
   </Step>
 </Steps>
 

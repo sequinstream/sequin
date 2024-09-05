@@ -47,6 +47,7 @@ defmodule Sequin.Application do
       SequinWeb.Presence,
       Sequin.Health.HttpEndpointHealthChecker,
       Sequin.Health.PostgresDatabaseHealthChecker,
+      Sequin.Tracer.Supervisor,
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]

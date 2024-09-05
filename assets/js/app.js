@@ -33,6 +33,9 @@ import posthog from "posthog-js";
 posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",
   ui_host: "https://us.posthog.com",
+  session_recording: {
+    maskAllInputs: false,
+  },
 });
 
 let csrfToken = document

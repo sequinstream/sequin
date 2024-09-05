@@ -89,9 +89,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       Consumers.ack_messages(consumer, successful_ids)
     end
 
-    if length(failed_ids) > 0 do
-      Consumers.nack_messages(consumer, failed_ids)
-    end
+    # TODO: Implement nack with backoff
+    # if length(failed_ids) > 0 do
+    #   Consumers.nack_messages(consumer, failed_ids)
+    # end
 
     if test_pid do
       send(test_pid, {:ack, successful_ids, failed_ids})

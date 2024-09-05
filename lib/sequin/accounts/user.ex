@@ -64,7 +64,7 @@ defmodule Sequin.Accounts.User do
   def provider_registration_changeset(user, attrs) do
     user
     |> cast(attrs, [:email, :name, :auth_provider, :auth_provider_id, :extra])
-    |> validate_required([:email, :name, :auth_provider, :auth_provider_id])
+    |> validate_required([:email, :auth_provider, :auth_provider_id])
     |> validate_email([])
     |> unique_constraint([:auth_provider, :auth_provider_id])
     |> check_constraint(:auth_provider, name: :auth_provider_constraint, message: "Invalid authentication provider setup")

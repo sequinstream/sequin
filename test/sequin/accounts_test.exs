@@ -617,7 +617,6 @@ defmodule Sequin.AccountsTest do
 
       assert %{
                email: ["can't be blank"],
-               name: ["can't be blank"],
                auth_provider: ["can't be blank"],
                auth_provider_id: ["can't be blank"]
              } = errors_on(changeset)

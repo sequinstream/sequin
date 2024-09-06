@@ -6,18 +6,9 @@ defmodule Sequin.Tracer.Server do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.Message
+  alias Sequin.Tracer.State
 
   require Logger
-
-  defmodule State do
-    @moduledoc false
-    use TypedStruct
-
-    typedstruct do
-      field :account_id, String.t()
-      field :events, list(), default: []
-    end
-  end
 
   # Client API
 
@@ -77,32 +68,32 @@ defmodule Sequin.Tracer.Server do
   # Server Callbacks
 
   def init(account_id) do
-    {:ok, %State{account_id: account_id, events: []}}
+    {:ok, State.new(account_id)}
   end
 
-  def handle_cast({:replicated, %Message{} = message}, %State{events: events} = state) do
+  def handle_cast({:replicated, %Message{} = message}, state) do
     Logger.info("Replicated message: #{inspect(message)}")
-    {:noreply, %{state | events: [{:replicated, message} | events]}}
+    {:noreply, State.message_replicated(state, message)}
   end
 
-  def handle_cast({:filtered, _consumer, %Message{} = message}, %State{events: events} = state) do
+  def handle_cast({:filtered, consumer, %Message{} = message}, state) do
     Logger.info("Filtered message: #{inspect(message)}")
-    {:noreply, %{state | events: [{:filtered, message} | events]}}
+    {:noreply, State.message_filtered(state, consumer, message)}
   end
 
-  def handle_cast({:ingested, _consumer, event_or_records}, %State{events: events} = state) do
+  def handle_cast({:ingested, consumer, event_or_records}, state) do
     Logger.info("Ingested messages: #{inspect(event_or_records)}")
-    {:noreply, %{state | events: [{:ingested, event_or_records} | events]}}
+    {:noreply, State.messages_ingested(state, consumer.id, event_or_records)}
   end
 
-  def handle_cast({:received, _consumer, event_or_records}, %State{events: events} = state) do
+  def handle_cast({:received, consumer, event_or_records}, state) do
     Logger.info("Received messages: #{inspect(event_or_records)}")
-    {:noreply, %{state | events: [{:received, event_or_records} | events]}}
+    {:noreply, State.messages_received(state, consumer.id, event_or_records)}
   end
 
-  def handle_cast({:acked, _consumer, ack_ids}, %State{events: events} = state) do
+  def handle_cast({:acked, consumer, ack_ids}, state) do
     Logger.info("Acked messages: #{inspect(ack_ids)}")
-    {:noreply, %{state | events: [{:acked, ack_ids} | events]}}
+    {:noreply, State.messages_acked(state, consumer.id, ack_ids)}
   end
 
   def handle_call(:get_state, _from, state) do
@@ -111,7 +102,7 @@ defmodule Sequin.Tracer.Server do
 
   if Mix.env() == :dev do
     def handle_call(:reset_state, _from, state) do
-      {:reply, :ok, %State{state | events: []}}
+      {:reply, :ok, State.reset(state)}
     end
   end
 

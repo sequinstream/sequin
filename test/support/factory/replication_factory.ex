@@ -90,6 +90,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         table_schema: "__postgres_replication_test_schema__",
         table_name: "__postgres_replication_test_table__",
         table_oid: Factory.unique_integer(),
+        trace_id: Factory.uuid(),
         fields: [
           field(column_name: "id", value: Factory.unique_integer()),
           field(column_name: "name", value: Factory.name()),
@@ -113,6 +114,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         table_schema: Factory.postgres_object(),
         table_name: Factory.postgres_object(),
         table_oid: Factory.unique_integer(),
+        trace_id: Factory.uuid(),
         old_fields: [
           field(column_name: "name", value: "old_name")
         ],
@@ -139,6 +141,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         table_schema: Factory.postgres_object(),
         table_name: Factory.postgres_object(),
         table_oid: Factory.unique_integer(),
+        trace_id: Factory.uuid(),
         old_fields: [
           field(column_name: "id", value: Factory.unique_integer()),
           field(column_name: "name", value: nil),

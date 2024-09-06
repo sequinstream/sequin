@@ -16,6 +16,12 @@
     "type": "github",
     "url": "https://github.com/sequinstream/sequin"
   },
+  "topbarLinks": [
+    {
+      "name": "Try now",
+      "url": "https://console.sequinstream.com/register"
+    }
+  ],
   "feedback": {
     "thumbsRating": true,
     "suggestEdit": true,
@@ -41,7 +47,13 @@
     },
     {
       "group": "Database setup",
-      "pages": ["guides/rds", "guides/supabase", "guides/neon"]
+      "pages": [
+        "guides/gcp",
+        "guides/rds",
+        "guides/azure",
+        "guides/neon",
+        "guides/supabase"
+      ]
     }
   ],
   "footerSocials": {}

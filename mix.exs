@@ -68,6 +68,7 @@ defmodule Sequin.MixProject do
       {:flow, "~> 1.2"},
       {:con_cache, "~> 1.1"},
       {:cloak_ecto, "~> 1.3.0"},
+      {:gen_state_machine, "~> 3.0"},
       {:mox, "~> 1.0"},
       {:oban, "~> 2.17"},
       {:hammox, "~> 0.7", only: :test},

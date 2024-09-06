@@ -621,6 +621,25 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character2.id
     end
+
+    @tag capture_log: true
+    test "fails to start when replication slot does not exist" do
+      # Use a non-existent slot name
+      non_existent_slot = "non_existent_slot"
+
+      # Attempt to start replication with the non-existent slot
+      start_replication!(slot_name: non_existent_slot)
+
+      assert_receive {:stop_replication, _id}, 2000
+
+      # Verify that the Health status was updated
+      {:ok, health} = Sequin.Health.get(%PostgresDatabase{id: "test_db_id"})
+      assert health.status == :error
+
+      check = Enum.find(health.checks, &(&1.id == :replication_connected))
+      assert check.status == :error
+      assert check.error.message =~ "Replication slot '#{non_existent_slot}' does not exist"
+    end
   end
 
   defp start_replication!(opts) do

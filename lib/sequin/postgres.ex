@@ -5,6 +5,7 @@ defmodule Sequin.Postgres do
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
+  alias Sequin.Error.ValidationError
   alias Sequin.Repo
 
   def pg_type_to_ecto_type(pg_type) do
@@ -123,6 +124,61 @@ defmodule Sequin.Postgres do
           end)
       }
     end)
+  end
+
+  def check_replication_slot_exists(conn, slot_name) do
+    query = "select 1 from pg_replication_slots where slot_name = $1"
+
+    case Postgrex.query(conn, query, [slot_name]) do
+      {:ok, %{num_rows: 1}} ->
+        :ok
+
+      {:ok, %{num_rows: 0}} ->
+        {:error, Error.validation(summary: "Replication slot '#{slot_name}' does not exist")}
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check replication slot: ", error)}
+    end
+  rescue
+    error in [DBConnection.ConnectionError] ->
+      {:error, Error.validation(summary: "Failed to check replication slot: #{error.message}")}
+  end
+
+  def check_publication_exists(conn, publication_name) do
+    query = "select 1 from pg_publication where pubname = $1"
+
+    case Postgrex.query(conn, query, [publication_name]) do
+      {:ok, %{num_rows: 1}} ->
+        :ok
+
+      {:ok, %{num_rows: 0}} ->
+        {:error, Error.validation(summary: "Publication '#{publication_name}' does not exist")}
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check publication: ", error)}
+    end
+  end
+
+  def check_replication_permissions(conn) do
+    query =
+      "select pg_is_in_recovery(), current_setting('max_replication_slots')::int > 0"
+
+    case Postgrex.query(conn, query, []) do
+      {:ok, %{rows: [[is_in_recovery, has_replication_slots]]}} ->
+        cond do
+          is_in_recovery ->
+            {:error, Error.validation(summary: "Database is in recovery mode and cannot be used for replication")}
+
+          not has_replication_slots ->
+            {:error, Error.validation(summary: "Database does not have replication slots enabled")}
+
+          true ->
+            :ok
+        end
+
+      {:error, %Postgrex.Error{} = error} ->
+        {:error, ValidationError.from_postgrex("Failed to check replication permissions: ", error)}
+    end
   end
 
   def list_tables(conn, schema) do

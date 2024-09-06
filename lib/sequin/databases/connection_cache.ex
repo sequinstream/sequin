@@ -169,6 +169,7 @@ defmodule Sequin.Databases.ConnectionCache do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
+  @spec connection(database()) :: start_result()
   @spec connection(GenServer.server(), database()) :: start_result()
   def connection(server \\ __MODULE__, %PostgresDatabase{} = db) do
     GenServer.call(server, {:connection, db, true})

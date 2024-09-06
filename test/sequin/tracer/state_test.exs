@@ -152,6 +152,7 @@ defmodule Sequin.Tracer.StateTest do
       assert ingested_event.type == :ingested
     end
 
+    @tag capture_log: true
     test "handles non-existent ack_ids gracefully for a specific consumer" do
       state = State.new("account123")
       message = ReplicationFactory.postgres_message()

@@ -24,7 +24,9 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Health
+  alias Sequin.Postgres
   alias Sequin.Replication.Message
+  alias Sequin.ReplicationRuntime
   alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
@@ -51,6 +53,7 @@ defmodule Sequin.Extensions.Replication do
       field :connection, map()
       field :schemas, %{}, default: %{}
       field :accumulated_messages, [Message.t()], default: []
+      field :connect_attempts, non_neg_integer(), default: 0
     end
   end
 
@@ -81,8 +84,6 @@ defmodule Sequin.Extensions.Replication do
       message_handler_module: message_handler_module,
       connection: connection
     }
-
-    Logger.debug("[Replication] Starting link with opts: #{inspect(rep_conn_opts, pretty: true)}")
 
     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
   end
@@ -115,7 +116,7 @@ defmodule Sequin.Extensions.Replication do
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
-    Logger.info("[Replication] Initialized")
+    Logger.info("[Replication] Initialized with opts: #{inspect(state.connection, pretty: true)}")
 
     if state.test_pid do
       Mox.allow(Sequin.Mocks.Extensions.MessageHandlerMock, state.test_pid, self())
@@ -126,19 +127,49 @@ defmodule Sequin.Extensions.Replication do
   end
 
   @impl Postgrex.ReplicationConnection
+  def handle_connect(%State{connect_attempts: attempts} = state) when attempts >= 5 do
+    Logger.error("[Replication] Failed to connect to replication slot after 5 attempts")
+
+    conn = get_cached_conn(state)
+
+    error_msg =
+      case Postgres.check_replication_slot_exists(conn, state.slot_name) do
+        :ok -> "Failed to connect to replication slot after 5 attempts"
+        {:error, error} -> Exception.message(error)
+      end
+
+    Health.update(
+      state.postgres_database,
+      :replication_connected,
+      :error,
+      Error.service(service: :replication, message: error_msg)
+    )
+
+    # No way to stop by returning a {:stop, reason} tuple from handle_connect
+    Task.async(fn ->
+      if env() == :test and not is_nil(state.test_pid) do
+        send(state.test_pid, {:stop_replication, state.id})
+      else
+        ReplicationRuntime.Supervisor.stop_replication(state.id)
+      end
+    end)
+
+    {:noreply, state}
+  end
+
   def handle_connect(state) do
-    Logger.debug("[Replication] Handling connect")
+    Logger.debug("[Replication] Handling connect (attempt #{state.connect_attempts + 1})")
     Health.update(state.postgres_database, :replication_connected, :initializing)
 
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 
-    {:stream, query, [], %{state | step: :streaming}}
+    {:stream, query, [], %{state | step: :streaming, connect_attempts: state.connect_attempts + 1}}
   end
 
   @impl Postgrex.ReplicationConnection
   def handle_result(result, state) do
-    Logger.debug("Unknown result: #{inspect(result)}")
+    Logger.error("Unknown result: #{inspect(result)}")
     {:noreply, state}
   end
 
@@ -535,5 +566,9 @@ defmodule Sequin.Extensions.Replication do
 
     {:ok, conn} = ConnectionCache.connection(postgres_database)
     conn
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

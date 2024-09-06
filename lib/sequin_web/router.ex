@@ -100,6 +100,8 @@ defmodule SequinWeb.Router do
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home
+
+      live "/trace", TracerLive, :index
     end
   end
 
@@ -166,6 +168,12 @@ defmodule SequinWeb.Router do
 
       live_dashboard("/dashboard", metrics: SequinWeb.Telemetry)
       forward("/mailbox", Plug.Swoosh.MailboxPreview)
+    end
+
+    scope "/push-webhook" do
+      post "/ack", SequinWeb.PushWebhookController, :ack
+      post "/maybe-ack", SequinWeb.PushWebhookController, :maybe_ack
+      post "/timeout", SequinWeb.PushWebhookController, :timeout
     end
   end
 end

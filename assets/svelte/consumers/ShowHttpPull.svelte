@@ -1,10 +1,7 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    Clock,
     Database,
-    Activity,
-    ExternalLink,
     ArrowUpRight,
     ArrowLeftFromLine,
     HelpCircle,
@@ -255,9 +252,13 @@ alter table {consumer.source_table.schema}.{consumer.source_table
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">Source table</h2>
             <a href="/databases/{consumer.postgres_database.id}">
-              <Button variant="outline" size="sm">
-                <ExternalLink class="h-4 w-4 mr-2" />
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-blue-500 hover:text-blue-600"
+              >
                 View Database
+                <ArrowUpRight class="h-4 w-4 ml-2" />
               </Button>
             </a>
           </div>

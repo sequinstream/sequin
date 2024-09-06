@@ -26,8 +26,12 @@ defmodule Sequin.Tracer.Server do
     GenServer.start_link(__MODULE__, account_id, name: via_tuple(account_id))
   end
 
-  def message_replicated(%PostgresDatabase{account_id: account_id}, %Message{} = message) do
-    GenServer.cast(via_tuple(account_id), {:replicated, message})
+  def update_heartbeat(account_id) do
+    GenServer.cast(via_tuple(account_id), :update_heartbeat)
+  end
+
+  def message_replicated(%PostgresDatabase{account_id: account_id} = db, %Message{} = message) do
+    GenServer.cast(via_tuple(account_id), {:replicated, db, message})
   end
 
   def message_filtered(consumer, %Message{} = message) do
@@ -67,43 +71,68 @@ defmodule Sequin.Tracer.Server do
 
   # Server Callbacks
 
+  @heartbeat_interval :timer.seconds(5)
+  @max_idle_time :timer.minutes(1)
+
   def init(account_id) do
-    {:ok, State.new(account_id)}
+    Logger.metadata(account_id: account_id)
+    Logger.info("Starting Tracer.Server for account #{account_id}")
+    schedule_heartbeat_check()
+    {:ok, {State.new(account_id), DateTime.utc_now()}}
   end
 
-  def handle_cast({:replicated, %Message{} = message}, state) do
+  def handle_cast({:replicated, %PostgresDatabase{} = db, %Message{} = message}, {state, last_heartbeat}) do
     Logger.info("Replicated message: #{inspect(message)}")
-    {:noreply, State.message_replicated(state, message)}
+    {:noreply, {State.message_replicated(state, db, message), last_heartbeat}}
   end
 
-  def handle_cast({:filtered, consumer, %Message{} = message}, state) do
+  def handle_cast({:filtered, consumer, %Message{} = message}, {state, last_heartbeat}) do
     Logger.info("Filtered message: #{inspect(message)}")
-    {:noreply, State.message_filtered(state, consumer, message)}
+    {:noreply, {State.message_filtered(state, consumer, message), last_heartbeat}}
   end
 
-  def handle_cast({:ingested, consumer, event_or_records}, state) do
+  def handle_cast({:ingested, consumer, event_or_records}, {state, last_heartbeat}) do
     Logger.info("Ingested messages: #{inspect(event_or_records)}")
-    {:noreply, State.messages_ingested(state, consumer.id, event_or_records)}
+    {:noreply, {State.messages_ingested(state, consumer.id, event_or_records), last_heartbeat}}
   end
 
-  def handle_cast({:received, consumer, event_or_records}, state) do
+  def handle_cast({:received, consumer, event_or_records}, {state, last_heartbeat}) do
     Logger.info("Received messages: #{inspect(event_or_records)}")
-    {:noreply, State.messages_received(state, consumer.id, event_or_records)}
+    {:noreply, {State.messages_received(state, consumer.id, event_or_records), last_heartbeat}}
   end
 
-  def handle_cast({:acked, consumer, ack_ids}, state) do
+  def handle_cast({:acked, consumer, ack_ids}, {state, last_heartbeat}) do
     Logger.info("Acked messages: #{inspect(ack_ids)}")
-    {:noreply, State.messages_acked(state, consumer.id, ack_ids)}
+    {:noreply, {State.messages_acked(state, consumer.id, ack_ids), last_heartbeat}}
   end
 
-  def handle_call(:get_state, _from, state) do
-    {:reply, state, state}
+  def handle_cast(:update_heartbeat, {state, _last_heartbeat}) do
+    {:noreply, {state, DateTime.utc_now()}}
+  end
+
+  def handle_call(:get_state, _from, {state, last_heartbeat}) do
+    {:reply, state, {state, last_heartbeat}}
   end
 
   if Mix.env() == :dev do
-    def handle_call(:reset_state, _from, state) do
-      {:reply, :ok, State.reset(state)}
+    def handle_call(:reset_state, _from, {state, _last_heartbeat}) do
+      {:reply, :ok, {State.reset(state), DateTime.utc_now()}}
     end
+  end
+
+  def handle_info(:check_heartbeat, {state, last_heartbeat}) do
+    if should_terminate?(last_heartbeat) do
+      Logger.info("Tracer.Server stopping due to idle timeout")
+      {:stop, :normal, {state, last_heartbeat}}
+    else
+      schedule_heartbeat_check()
+      {:noreply, {state, last_heartbeat}}
+    end
+  end
+
+  def handle_info({:EXIT, _pid, reason}, state) do
+    Logger.error("Tracer.Server exited: #{inspect(reason)}")
+    {:stop, reason, state}
   end
 
   # Helper Functions
@@ -112,10 +141,11 @@ defmodule Sequin.Tracer.Server do
     Sequin.Registry.via_tuple({__MODULE__, account_id})
   end
 
-  # Error Handling
+  defp schedule_heartbeat_check do
+    Process.send_after(self(), :check_heartbeat, @heartbeat_interval)
+  end
 
-  def handle_info({:EXIT, _pid, reason}, state) do
-    Logger.error("Tracer.Server exited: #{inspect(reason)}")
-    {:stop, reason, state}
+  defp should_terminate?(last_heartbeat) do
+    DateTime.diff(DateTime.utc_now(), last_heartbeat, :millisecond) > @max_idle_time
   end
 end

@@ -28,7 +28,7 @@
   import { isValidPostgresURL, parsePostgresURL } from "./utils";
   import { Eye, EyeOff } from "lucide-svelte";
   import { Wand } from "lucide-svelte";
-  import { ChevronDown, ChevronUp } from "lucide-svelte";
+  import { ChevronDown, ChevronUp, Zap } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -48,7 +48,7 @@
   export let live;
   export let showSupabasePoolerPrompt: boolean = false;
 
-  let form = { ...database };
+  let form = { ...database, ssl: true }; // Set default SSL to true
 
   const isEdit = !!form.id;
 
@@ -145,30 +145,56 @@
 >
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto mt-6">
     <Card>
-      <CardHeader class="flex flex-row justify-between items-center">
-        <CardTitle>Database connection details</CardTitle>
-        <Popover bind:open={popoverOpen}>
-          <PopoverTrigger>
-            <Button variant="outline">
-              <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with URL
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="min-w-96">
-            <div class="space-y-2">
-              <Label for="url-input">PostgreSQL URL</Label>
-              <Input
-                id="url-input"
-                type="text"
-                bind:value={urlInput}
-                on:input={handleURLInput}
-                placeholder="postgres://user:pass@host:port/db"
-              />
-              <Button on:click={autofillFromURL} disabled={!isValidURL}>
-                Autofill
+      <CardHeader class="flex flex-row items-center">
+        <CardTitle class="flex-grow">Database connection details</CardTitle>
+        <div class="flex items-center space-x-2">
+          <Popover>
+            <PopoverTrigger>
+              <Button variant="secondary">
+                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database?
               </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
+            </PopoverTrigger>
+            <PopoverContent class="w-80">
+              <div class="space-y-2">
+                <h4 class="font-medium">Need a test database?</h4>
+                <p class="text-sm text-muted-foreground">
+                  We recommend setting up a free database with Supabase to get
+                  started.
+                </p>
+                <Button
+                  variant="outline"
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Go to Supabase Dashboard
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <Popover bind:open={popoverOpen}>
+            <PopoverTrigger>
+              <Button variant="outline">
+                <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with URL
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="min-w-96">
+              <div class="space-y-2">
+                <Label for="url-input">PostgreSQL URL</Label>
+                <Input
+                  id="url-input"
+                  type="text"
+                  bind:value={urlInput}
+                  on:input={handleURLInput}
+                  placeholder="postgres://user:pass@host:port/db"
+                />
+                <Button on:click={autofillFromURL} disabled={!isValidURL}>
+                  Autofill
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -281,39 +307,6 @@
           </div>
         {/if}
       </CardContent>
-    </Card>
-
-    <Card>
-      <CardHeader>
-        <button
-          type="button"
-          class="flex justify-between items-center w-full"
-          on:click={toggleTestDatabaseCard}
-        >
-          <CardTitle>Need a test database?</CardTitle>
-          {#if testDatabaseCardExpanded}
-            <ChevronUp class="h-4 w-4" />
-          {:else}
-            <ChevronDown class="h-4 w-4" />
-          {/if}
-        </button>
-      </CardHeader>
-      {#if testDatabaseCardExpanded}
-        <CardContent class="space-y-4">
-          <p class="text-sm text-muted-foreground">
-            We recommend setting up a free database with Supabase to get
-            started.
-          </p>
-          <Button
-            variant="outline"
-            href="https://supabase.com/dashboard"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Go to Supabase Dashboard
-          </Button>
-        </CardContent>
-      {/if}
     </Card>
 
     <Card>

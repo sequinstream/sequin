@@ -972,27 +972,29 @@
                   />
                 </div>
 
-                <div class="space-y-2">
-                  <Label for="http-endpoint-path">Endpoint Path</Label>
-                  <Input
-                    id="http-endpoint-path"
-                    bind:value={form.httpEndpointPath}
-                    placeholder="/webhook"
-                    on:input={() =>
-                      handleFormUpdate({
-                        httpEndpointPath: form.httpEndpointPath,
-                      })}
-                  />
-                  <p class="text-sm text-muted-foreground">
-                    The path to append to the base URL for this consumer's
-                    requests.
-                  </p>
-                  {#if errors.http_endpoint_path}
-                    <p class="text-destructive text-sm">
-                      {errors.http_endpoint_path}
+                {#if form.consumerKind === "http_push"}
+                  <div class="space-y-2">
+                    <Label for="http-endpoint-path">Endpoint Path</Label>
+                    <Input
+                      id="http-endpoint-path"
+                      bind:value={form.httpEndpointPath}
+                      placeholder="/webhook"
+                      on:input={() =>
+                        handleFormUpdate({
+                          httpEndpointPath: form.httpEndpointPath,
+                        })}
+                    />
+                    <p class="text-sm text-muted-foreground">
+                      The path to append to the base URL for this consumer's
+                      requests.
                     </p>
-                  {/if}
-                </div>
+                    {#if errors.http_endpoint_path}
+                      <p class="text-destructive text-sm">
+                        {errors.http_endpoint_path}
+                      </p>
+                    {/if}
+                  </div>
+                {/if}
 
                 <Accordion class="w-full">
                   <AccordionItem value="advanced">

@@ -93,7 +93,8 @@ defmodule Sequin.Replication.MessageHandler do
       record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0,
-      data: event_data_from_message(message, consumer)
+      data: event_data_from_message(message, consumer),
+      replication_message_trace_id: message.trace_id
     }
   end
 
@@ -103,7 +104,8 @@ defmodule Sequin.Replication.MessageHandler do
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
-      deliver_count: 0
+      deliver_count: 0,
+      replication_message_trace_id: message.trace_id
     }
   end
 

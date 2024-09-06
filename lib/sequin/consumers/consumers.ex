@@ -312,6 +312,7 @@ defmodule Sequin.Consumers do
         |> ConsumerEvent.from_map()
         # insert_all expects a plain outer-map, but struct embeds
         |> Sequin.Map.from_ecto()
+        |> Map.delete(:replication_message_trace_id)
       end)
 
     {count, _} = Repo.insert_all(ConsumerEvent, events)
@@ -383,6 +384,7 @@ defmodule Sequin.Consumers do
         |> ConsumerRecord.from_map()
         # insert_all expects a plain outer-map, but struct embeds
         |> Sequin.Map.from_ecto()
+        |> Map.delete(:replication_message_trace_id)
       end)
 
     conflict_target = [:consumer_id, :record_pks, :table_oid]

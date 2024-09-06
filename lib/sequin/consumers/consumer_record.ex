@@ -32,6 +32,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :not_visible_until, :utc_datetime_usec
 
     field :data, :map, virtual: true
+    field :replication_message_trace_id, Ecto.UUID, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end

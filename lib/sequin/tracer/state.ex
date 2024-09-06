@@ -124,17 +124,8 @@ defmodule Sequin.Tracer.State do
 
   defp find_trace_message_index(%State{} = state, event_or_record) do
     Enum.find_index(state.trace_messages, fn tm ->
-      matches_by_trace?(tm, event_or_record.replication_message_trace_id) or
-        matches_by_id?(tm, event_or_record.id)
+      tm.message.trace_id == event_or_record.replication_message_trace_id
     end)
-  end
-
-  defp matches_by_trace?(%TraceMessage{message: message}, trace_id) do
-    message.trace_id == trace_id
-  end
-
-  defp matches_by_id?(%TraceMessage{message: message}, id) do
-    message.ids && id in message.ids
   end
 
   defp matches_by_ack_id?(%TraceMessage{consumer_traces: consumer_traces}, ack_id) do

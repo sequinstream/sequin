@@ -33,6 +33,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
 
+    field :replication_message_trace_id, Ecto.UUID, virtual: true
+
     embeds_one :data, ConsumerEventData
 
     timestamps(type: :utc_datetime_usec)

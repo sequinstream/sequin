@@ -30,6 +30,7 @@ defmodule Sequin.Replication.Message do
     field :table_schema, String.t()
     field :table_name, String.t()
     field :table_oid, integer()
+    field :trace_id, String.t()
     field :old_fields, list(Field.t())
     field :fields, list(Field.t())
     field :subscription_ids, list(String.t())

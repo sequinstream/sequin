@@ -308,7 +308,8 @@ defmodule Sequin.Extensions.Replication do
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      fields: data_tuple_to_fields(columns, msg.tuple_data)
+      fields: data_tuple_to_fields(columns, msg.tuple_data),
+      trace_id: UUID.uuid4()
     }
 
     TracerServer.message_replicated(state.postgres_database, record)
@@ -333,7 +334,8 @@ defmodule Sequin.Extensions.Replication do
       table_name: table,
       table_oid: msg.relation_id,
       old_fields: old_fields,
-      fields: data_tuple_to_fields(columns, msg.tuple_data)
+      fields: data_tuple_to_fields(columns, msg.tuple_data),
+      trace_id: UUID.uuid4()
     }
 
     TracerServer.message_replicated(state.postgres_database, record)
@@ -359,7 +361,8 @@ defmodule Sequin.Extensions.Replication do
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      old_fields: data_tuple_to_fields(columns, prev_tuple_data)
+      old_fields: data_tuple_to_fields(columns, prev_tuple_data),
+      trace_id: UUID.uuid4()
     }
 
     TracerServer.message_replicated(state.postgres_database, record)

@@ -137,6 +137,8 @@ if config_env() == :prod do
 
   config :redix, url: System.fetch_env!("REDIS_URL")
 
+  config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
+
   config :sequin, Sequin.Vault,
     ciphers: [
       # In AES.GCM, it is important to specify 12-byte IV length for
@@ -155,8 +157,6 @@ if config_env() == :prod do
     ]
 
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
-
-  config :swoosh, Sequin.Mailer, api_key: get_env.("SENDGRID_API_KEY")
 
   # ## SSL Support
   #

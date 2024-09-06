@@ -60,4 +60,23 @@ defmodule Sequin.Map do
     end)
     |> Map.new()
   end
+
+  @doc """
+  Converts all keys in a map from snake_case to camelCase.
+  """
+  def camelize_keys(map) when is_map(map) do
+    Map.new(map, fn {k, v} -> {camelize_key(k), v} end)
+  end
+
+  defp camelize_key(key) when is_atom(key) do
+    key
+    |> Atom.to_string()
+    |> camelize_key()
+    |> String.to_atom()
+  end
+
+  defp camelize_key(key) when is_binary(key) do
+    [first | rest] = String.split(key, "_")
+    first <> Enum.map_join(rest, &String.capitalize/1)
+  end
 end

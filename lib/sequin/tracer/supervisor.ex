@@ -18,6 +18,11 @@ defmodule Sequin.Tracer.Supervisor do
   """
   def start_for_account(account_id) do
     child_spec = Server.child_spec(account_id)
-    DynamicSupervisor.start_child(__MODULE__, child_spec)
+
+    case DynamicSupervisor.start_child(__MODULE__, child_spec) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      {:error, reason} -> {:error, reason}
+    end
   end
 end

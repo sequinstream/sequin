@@ -241,6 +241,27 @@ alter table {consumer.source_table.schema}.{consumer.source_table
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">View Live Trace</h2>
+            <a href="/trace?consumer={consumer.id}" class="inline-block">
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-black hover:text-gray-700"
+              >
+                View Live Trace
+                <ArrowUpRight class="h-4 w-4 ml-2" />
+              </Button>
+            </a>
+          </div>
+          <p class="text-sm text-gray-500">
+            Monitor real-time consumer activity and message flow.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
             <div class="flex space-x-2">
               <a href="/http-endpoints/{consumer.http_endpoint.id}">

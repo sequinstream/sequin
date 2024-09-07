@@ -1,7 +1,8 @@
 defmodule Sequin.Tracer.StateTest do
-  use ExUnit.Case, async: true
+  use Sequin.DataCase, async: true
 
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Tracer.State
 
@@ -16,9 +17,10 @@ defmodule Sequin.Tracer.StateTest do
   describe "message_replicated/2" do
     test "adds a new trace message with empty consumer_traces" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message = ReplicationFactory.postgres_message()
 
-      updated_state = State.message_replicated(state, message)
+      updated_state = State.message_replicated(state, database, message)
 
       assert length(updated_state.message_traces) == 1
       [message_trace] = updated_state.message_traces
@@ -30,10 +32,12 @@ defmodule Sequin.Tracer.StateTest do
   describe "message_filtered/3" do
     test "adds a filtered event to an existing trace message for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
+      consumer = ConsumersFactory.consumer(id: "consumer1")
       message = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message)
 
-      updated_state = State.message_filtered(state, "consumer1", message)
+      state = State.message_replicated(state, database, message)
+      updated_state = State.message_filtered(state, consumer.id, message)
 
       [message_trace] = updated_state.message_traces
       assert length(message_trace.consumer_traces) == 1
@@ -48,10 +52,11 @@ defmodule Sequin.Tracer.StateTest do
   describe "messages_ingested/3" do
     test "adds ingested spans to existing trace messages for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message1 = ReplicationFactory.postgres_message()
       message2 = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message1)
-      state = State.message_replicated(state, message2)
+      state = State.message_replicated(state, database, message1)
+      state = State.message_replicated(state, database, message2)
 
       spans = [
         ConsumersFactory.consumer_event(replication_message_trace_id: message1.trace_id),
@@ -76,10 +81,12 @@ defmodule Sequin.Tracer.StateTest do
   describe "messages_received/3" do
     test "adds received spans to existing trace messages for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message1 = ReplicationFactory.postgres_message()
       message2 = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message1)
-      state = State.message_replicated(state, message2)
+
+      state = State.message_replicated(state, database, message1)
+      state = State.message_replicated(state, database, message2)
 
       spans = [
         ConsumersFactory.consumer_event(replication_message_trace_id: message1.trace_id),
@@ -102,8 +109,9 @@ defmodule Sequin.Tracer.StateTest do
 
     test "adds multiple received spans to an existing trace message for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message)
+      state = State.message_replicated(state, database, message)
 
       event1 = ConsumersFactory.consumer_event(replication_message_trace_id: message.trace_id)
       event2 = ConsumersFactory.consumer_event(replication_message_trace_id: message.trace_id)
@@ -126,8 +134,9 @@ defmodule Sequin.Tracer.StateTest do
   describe "messages_acked/3" do
     test "adds acked spans to existing trace messages for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message)
+      state = State.message_replicated(state, database, message)
 
       event =
         ConsumersFactory.consumer_event(
@@ -155,8 +164,9 @@ defmodule Sequin.Tracer.StateTest do
     @tag capture_log: true
     test "handles non-existent ack_ids gracefully for a specific consumer" do
       state = State.new("account123")
+      database = DatabasesFactory.postgres_database()
       message = ReplicationFactory.postgres_message()
-      state = State.message_replicated(state, message)
+      state = State.message_replicated(state, database, message)
 
       event = ConsumersFactory.consumer_event(replication_message_trace_id: message.trace_id)
       state = State.messages_ingested(state, "consumer1", [event])
@@ -169,8 +179,9 @@ defmodule Sequin.Tracer.StateTest do
 
   test "handles multiple consumers for a single message" do
     state = State.new("account123")
+    database = DatabasesFactory.postgres_database()
     message = ReplicationFactory.postgres_message()
-    state = State.message_replicated(state, message)
+    state = State.message_replicated(state, database, message)
 
     event = ConsumersFactory.consumer_event(replication_message_trace_id: message.trace_id)
 

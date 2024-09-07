@@ -50,7 +50,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :table_oid,
       :not_visible_until,
       :deliver_count,
-      :last_delivered_at
+      :last_delivered_at,
+      :replication_message_trace_id
     ])
     |> cast_embed(:data, required: true)
     |> validate_required([
@@ -59,7 +60,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :record_pks,
       :table_oid,
       :deliver_count,
-      :data
+      :data,
+      :replication_message_trace_id
     ])
   end
 

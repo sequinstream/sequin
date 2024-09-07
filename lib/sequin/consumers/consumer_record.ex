@@ -49,13 +49,15 @@ defmodule Sequin.Consumers.ConsumerRecord do
       :table_oid,
       :not_visible_until,
       :deliver_count,
-      :last_delivered_at
+      :last_delivered_at,
+      :replication_message_trace_id
     ])
     |> validate_required([
       :consumer_id,
       :record_pks,
       :table_oid,
-      :deliver_count
+      :deliver_count,
+      :replication_message_trace_id
     ])
   end
 

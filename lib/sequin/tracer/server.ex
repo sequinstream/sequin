@@ -88,7 +88,7 @@ defmodule Sequin.Tracer.Server do
 
   def handle_cast({:filtered, consumer, %Message{} = message}, {state, last_heartbeat}) do
     Logger.info("Filtered message: #{inspect(message)}")
-    {:noreply, {State.message_filtered(state, consumer, message), last_heartbeat}}
+    {:noreply, {State.message_filtered(state, consumer.id, message), last_heartbeat}}
   end
 
   def handle_cast({:ingested, consumer, event_or_records}, {state, last_heartbeat}) do

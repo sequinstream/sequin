@@ -275,7 +275,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
         not_visible_until: Enum.random([nil, Factory.timestamp()]),
-        data: consumer_event_data(action: action)
+        data: consumer_event_data(action: action),
+        replication_message_trace_id: Factory.uuid()
       },
       attrs
     )
@@ -354,7 +355,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
-        not_visible_until: not_visible_until
+        not_visible_until: not_visible_until,
+        replication_message_trace_id: Factory.uuid()
       },
       attrs
     )

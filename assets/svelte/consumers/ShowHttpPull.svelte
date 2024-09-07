@@ -211,6 +211,27 @@ alter table {consumer.source_table.schema}.{consumer.source_table
 
       <Card>
         <CardContent class="p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold">View Live Trace</h2>
+            <a href="/trace?consumer={consumer.id}" class="inline-block">
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-black hover:text-gray-700"
+              >
+                View Live Trace
+                <ArrowUpRight class="h-4 w-4 ml-2" />
+              </Button>
+            </a>
+          </div>
+          <p class="text-sm text-gray-500">
+            Monitor real-time consumer activity and message flow.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-6">
           <h2 class="text-lg font-semibold mb-4">
             Receive and Acknowledge Messages
           </h2>
@@ -252,11 +273,7 @@ alter table {consumer.source_table.schema}.{consumer.source_table
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">Source table</h2>
             <a href="/databases/{consumer.postgres_database.id}">
-              <Button
-                variant="outline"
-                size="sm"
-                class="text-blue-500 hover:text-blue-600"
-              >
+              <Button variant="outline" size="sm">
                 View Database
                 <ArrowUpRight class="h-4 w-4 ml-2" />
               </Button>

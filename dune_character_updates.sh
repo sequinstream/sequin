@@ -67,5 +67,5 @@ while true; do
         3) update_dead $character_id ;;
     esac
     
-    sleep 2
+    sleep 1
 done

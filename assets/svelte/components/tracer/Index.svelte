@@ -8,6 +8,7 @@
     ChevronRight,
     X,
     ArrowUpRight,
+    Activity,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -25,17 +26,39 @@
   let selectedTable = "";
   let selectedState = "";
 
-  const states = ["Received", "Filtered", "Ingested", "Acked"];
+  const spanTypeMapping = {
+    received: { frontend: "Delivered", backend: "received" },
+    filtered: { frontend: "Excluded by filters", backend: "filtered" },
+    replicated: { frontend: "Replicated", backend: "replicated" },
+    ingested: { frontend: "Ingested", backend: "ingested" },
+    acked: { frontend: "Acked", backend: "acked" },
+  };
+
+  const states = Object.entries(spanTypeMapping).map(([key, value]) => ({
+    frontend: value.frontend,
+    backend: value.backend,
+  }));
+
+  function getFrontendSpanType(backendType: string): string {
+    return spanTypeMapping[backendType.toLowerCase()]?.frontend || backendType;
+  }
+
+  function getBackendSpanType(frontendType: string): string {
+    return (
+      Object.values(spanTypeMapping).find((v) => v.frontend === frontendType)
+        ?.backend || frontendType
+    );
+  }
 
   const getStateColor = (state: string) => {
     switch (state.toLowerCase()) {
       case "replicated":
         return "bg-purple-100 text-purple-800";
-      case "filtered":
-        return "bg-red-100 text-red-800";
+      case "excluded by filters":
+        return "bg-gray-200 text-gray-800";
       case "ingested":
         return "bg-blue-100 text-blue-800";
-      case "received":
+      case "delivered":
         return "bg-blue-100 text-blue-800";
       case "acked":
         return "bg-green-100 text-green-800";
@@ -45,13 +68,16 @@
   };
 
   const getVerticalLineColor = (spanTypes: string[]) => {
-    if (spanTypes.includes("acked")) return "bg-green-500";
-    if (spanTypes.includes("filtered")) return "bg-gray-400";
-    if (spanTypes.filter((type) => type === "received").length > 1)
+    const mappedTypes = spanTypes.map((type) =>
+      getFrontendSpanType(type).toLowerCase()
+    );
+    if (mappedTypes.includes("acked")) return "bg-green-500";
+    if (mappedTypes.includes("excluded by filters")) return "bg-gray-400";
+    if (mappedTypes.filter((type) => type === "delivered").length > 1)
       return "bg-red-500";
     if (
-      spanTypes.some((type) =>
-        ["replicated", "received", "ingested"].includes(type)
+      mappedTypes.some((type) =>
+        ["replicated", "delivered", "ingested"].includes(type)
       )
     )
       return "bg-blue-500";
@@ -59,14 +85,14 @@
   };
 
   function getSpanColor(spanType: string) {
-    switch (spanType.toLowerCase()) {
+    switch (getFrontendSpanType(spanType).toLowerCase()) {
       case "replicated":
         return "bg-purple-500";
-      case "filtered":
-        return "bg-red-500";
+      case "excluded by filters":
+        return "bg-gray-400";
       case "ingested":
         return "bg-blue-500";
-      case "received":
+      case "delivered":
         return "bg-blue-500";
       case "acked":
         return "bg-green-500";
@@ -76,35 +102,46 @@
   }
 
   const getErrorMessage = (spanTypes: string[]) => {
-    const receivedCount = spanTypes.filter(
-      (type) => type === "received"
+    const deliveredCount = spanTypes.filter(
+      (type) => getFrontendSpanType(type).toLowerCase() === "delivered"
     ).length;
-    return receivedCount > 1 ? `Redelivered x${receivedCount}` : "";
+    const isAcked = spanTypes.some(
+      (type) => getFrontendSpanType(type).toLowerCase() === "acked"
+    );
+    if (deliveredCount > 1) {
+      return {
+        message: `Redelivered x${deliveredCount}`,
+        color: isAcked ? "text-gray-500" : "text-red-500",
+      };
+    }
+    return { message: "", color: "" };
   };
 
   let currentPage = 1;
   let itemsPerPage = 50;
 
-  $: paginatedTraces =
-    trace_state?.message_traces.slice(
-      (currentPage - 1) * itemsPerPage,
-      currentPage * itemsPerPage
-    ) || [];
-
-  $: totalPages = Math.ceil(
-    (trace_state?.message_traces.length || 0) / itemsPerPage
-  );
+  $: totalPages = Math.ceil((trace_state?.total_count || 0) / itemsPerPage);
 
   function nextPage() {
     if (currentPage < totalPages) {
       currentPage++;
+      updatePage();
     }
   }
 
   function prevPage() {
     if (currentPage > 1) {
       currentPage--;
+      updatePage();
     }
+  }
+
+  function updatePage() {
+    const searchParams = new URLSearchParams(window.location.search);
+    searchParams.set("page", currentPage.toString());
+    const newUrl = `?${searchParams.toString()}`;
+    window.history.pushState(null, "", newUrl);
+    window.dispatchEvent(new Event("popstate"));
   }
 
   function updateFilters() {
@@ -164,6 +201,7 @@
     selectedTable = searchParams.get("table") || "";
     selectedState = searchParams.get("state") || "";
     paused = searchParams.get("paused") === "true";
+    currentPage = parseInt(searchParams.get("page") || "1");
   });
 
   let selectedTrace = null;
@@ -199,7 +237,7 @@
 <div class="container mx-auto p-4">
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-3xl font-bold flex items-center gap-2">
-      <icon class="hero-signal text-gray-500 animate-pulse" />
+      <Activity class="text-gray-800 animate-pulse" />
       Trace
     </h1>
     <div class="flex items-center gap-4">
@@ -280,7 +318,7 @@
     >
       <option value="">All States</option>
       {#each states as state}
-        <option value={state}>{state}</option>
+        <option value={state.backend}>{state.frontend}</option>
       {/each}
     </select>
   </div>
@@ -322,7 +360,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
-          {#each paginatedTraces as trace}
+          {#each trace_state.message_traces as trace}
             <tr
               class="relative hover:bg-gray-50 cursor-pointer"
               on:click={() => openDrawer(trace)}
@@ -336,7 +374,7 @@
                 >{new Date(trace.date).toLocaleString()}</td
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{consumers.find((c) => c.id === trace.consumer_id).name}</td
+                >{trace.consumer.name}</td
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{trace.database.name}</td
@@ -349,15 +387,19 @@
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
                 <span
-                  class={`px-1 py-0.5 inline-flex text-2xs leading-3 font-semibold rounded-full ${getStateColor(trace.state)}`}
+                  class={`px-1 py-0.5 inline-flex text-2xs leading-3 font-semibold rounded-full ${getStateColor(getFrontendSpanType(trace.state))}`}
                 >
-                  {trace.state}
+                  {getFrontendSpanType(trace.state)}
                 </span>
               </td>
               <td
-                class="px-2 py-1 whitespace-nowrap text-2xs text-red-500 font-semibold"
+                class="px-2 py-1 whitespace-nowrap text-2xs font-semibold"
+                class:text-red-500={getErrorMessage(trace.span_types).color ===
+                  "text-red-500"}
+                class:text-gray-500={getErrorMessage(trace.span_types).color ===
+                  "text-gray-500"}
               >
-                {getErrorMessage(trace.span_types)}
+                {getErrorMessage(trace.span_types).message}
               </td>
             </tr>
           {/each}
@@ -370,8 +412,8 @@
       <div>
         Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(
           currentPage * itemsPerPage,
-          trace_state.message_traces.length
-        )} of {trace_state.message_traces.length} entries
+          trace_state?.total_count || 0
+        )} of {trace_state?.total_count || 0} entries
       </div>
       <div class="flex items-center space-x-2">
         <Button
@@ -477,9 +519,9 @@
                         >State:</span
                       >
                       <span
-                        class={`text-sm px-2 py-1 rounded-full ${getStateColor(selectedTrace.state)}`}
+                        class={`text-sm px-2 py-1 rounded-full ${getStateColor(getFrontendSpanType(selectedTrace.state))}`}
                       >
-                        {selectedTrace.state}
+                        {getFrontendSpanType(selectedTrace.state)}
                       </span>
                     </div>
                   </div>
@@ -516,7 +558,7 @@
                               </td>
                               <td
                                 class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                                >{span.type}</td
+                                >{getFrontendSpanType(span.type)}</td
                               >
                               <td
                                 class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"

@@ -22,29 +22,36 @@ defmodule SequinWeb.TracerLive do
     tables = Enum.flat_map(databases, & &1.tables)
 
     paused = params["paused"] == "true"
+    page = String.to_integer(params["page"] || "1")
+    per_page = 50
+
+    trace_state = get_trace_state(account_id)
 
     {:ok,
      assign(socket,
        account_id: account_id,
-       trace_state: get_trace_state(account_id),
+       trace_state: trace_state,
        consumers: consumers,
        databases: databases,
        tables: tables,
        params: params,
-       paused: paused
+       paused: paused,
+       page: page,
+       per_page: per_page
      )}
   end
 
   @impl true
   def handle_params(params, _uri, socket) do
     paused = params["paused"] == "true"
-    {:noreply, assign(socket, params: params, paused: paused)}
+    page = String.to_integer(params["page"] || "1")
+
+    {:noreply, assign(socket, params: params, paused: paused, page: page)}
   end
 
   @impl true
   def handle_info(:update, %{assigns: %{paused: true}} = socket) do
     schedule_update()
-
     {:noreply, socket}
   end
 
@@ -58,7 +65,7 @@ defmodule SequinWeb.TracerLive do
 
     schedule_update()
 
-    {:noreply, assign(socket, trace_state: trace_state, consumers: consumers)}
+    {:noreply, assign(socket, consumers: consumers, trace_state: trace_state)}
   end
 
   @impl true
@@ -111,9 +118,13 @@ defmodule SequinWeb.TracerLive do
       |> Enum.flat_map(&encode_message_trace(assigns.consumers, &1))
       |> Enum.filter(&filter_trace?(&1, assigns.params))
 
+    total_count = length(message_traces)
+    message_traces = Enum.slice(message_traces, (assigns.page - 1) * assigns.per_page, assigns.per_page)
+
     %{
       message_traces: message_traces,
-      started_at: assigns.trace_state.started_at
+      started_at: assigns.trace_state.started_at,
+      total_count: total_count
     }
   end
 
@@ -121,51 +132,43 @@ defmodule SequinWeb.TracerLive do
     table = find_table(message_trace.database, message_trace.message.table_oid)
     primary_keys = get_primary_keys(table)
 
-    Enum.flat_map(message_trace.consumer_traces, fn consumer_trace ->
-      if Enum.any?(consumers, &(&1.id == consumer_trace.consumer_id)) do
-        consumer = Enum.find(consumers, &(&1.id == consumer_trace.consumer_id))
+    Enum.map(message_trace.consumer_traces, fn consumer_trace ->
+      consumer = Enum.find(consumers, &(&1.id == consumer_trace.consumer_id))
 
-        [
+      %{
+        date: message_trace.message.commit_timestamp,
+        consumer_id: consumer_trace.consumer_id,
+        consumer: %{
+          id: consumer.id,
+          name: consumer.name
+        },
+        database: %{
+          id: message_trace.database.id,
+          name: message_trace.database.name
+        },
+        table: table.name,
+        primary_keys: encode_primary_keys(message_trace.message.ids, primary_keys),
+        state: get_message_state([consumer_trace]),
+        spans: [
           %{
-            date: message_trace.message.commit_timestamp,
-            consumer_id: consumer_trace.consumer_id,
-            consumer: %{
-              id: consumer.id,
-              name: consumer.name
-              # Add more consumer details as needed
-            },
-            database: %{
-              id: message_trace.database.id,
-              name: message_trace.database.name
-              # Add more database details as needed
-            },
-            table: table.name,
-            primary_keys: encode_primary_keys(message_trace.message.ids, primary_keys),
-            state: get_message_state([consumer_trace]),
-            spans: [
-              %{
-                type: "replicated",
-                timestamp: message_trace.replicated_at,
-                duration: DateTime.diff(message_trace.replicated_at, message_trace.message.commit_timestamp, :millisecond)
-              }
-              | consumer_trace.spans
-                |> Enum.map(fn span ->
-                  %{
-                    type: span.type,
-                    timestamp: span.timestamp,
-                    duration: span.duration
-                    # Add more span details as needed
-                  }
-                end)
-                |> Enum.reverse()
-            ],
-            trace_id: message_trace.message.trace_id,
-            span_types: Enum.map(consumer_trace.spans, & &1.type)
+            type: "replicated",
+            timestamp: message_trace.replicated_at,
+            duration: DateTime.diff(message_trace.replicated_at, message_trace.message.commit_timestamp, :millisecond)
           }
-        ]
-      else
-        []
-      end
+          | consumer_trace.spans
+            |> Enum.map(fn span ->
+              %{
+                type: span.type,
+                timestamp: span.timestamp,
+                duration: span.duration
+                # Add more span details as needed
+              }
+            end)
+            |> Enum.reverse()
+        ],
+        trace_id: message_trace.message.trace_id,
+        span_types: Enum.map(consumer_trace.spans, & &1.type)
+      }
     end)
   end
 

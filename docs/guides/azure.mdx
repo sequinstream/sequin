@@ -1,9 +1,117 @@
 ---
-title: "Connecting to an Azure database"
+title: "Connecting to an Azure Database for PostgreSQL"
 sidebarTitle: "Azure Postgres"
 description: "How to connect Sequin to an Azure Database for PostgreSQL"
 icon: "microsoft"
 iconType: "solid"
 ---
 
-<Warning>This guide is a work in progress.</Warning>
+This guide provides step-by-step instructions to connect your [Azure Database for PostgreSQL](https://azure.microsoft.com/en-us/services/postgresql/) to Sequin.
+
+## Enable logical replication on Azure Database for PostgreSQL
+
+By default, logical replication is not enabled on Azure Database for PostgreSQL. To enable it, follow these steps:
+
+<Warning>Enabling replication requires a restart of your database server.</Warning>
+
+<Steps titleSize="h3">
+  <Step title="Configure server parameters">
+    In the Azure Portal, navigate to your Azure Database for PostgreSQL server and follow these steps:
+
+    1. Go to the **Server parameters** page
+    2. Set the following parameters:
+       - `wal_level`: Set to `logical`
+       - `shared_preload_libraries`: Add `pglogical` to the list (if not already present)
+       - `azure.extensions`: Add `pglogical` to the list (if not already present)
+       - `max_worker_processes`: Set to at least `16`
+    3. Click **Save** to apply the changes
+  </Step>
+  <Step title="Restart the server">
+    After changing the server parameters, you need to restart your server for the changes to take effect. In the Azure Portal:
+
+    1. Go to the **Overview** page of your PostgreSQL server
+    2. Click the **Restart** button at the top of the page
+    3. Confirm the restart when prompted
+  </Step>
+  <Step title="Grant replication permissions">
+    Connect to your database using a SQL client and run the following SQL command to grant replication permissions to your user:
+
+    ```sql
+    ALTER ROLE <username> WITH REPLICATION;
+    ```
+
+    Replace `<username>` with your admin username.
+
+    <Note>
+      It's recommended to create a separate user for replication instead of using the admin account. Ensure this user has the necessary privileges on the schema you're replicating.
+    </Note>
+  </Step>
+  <Step title="Configure network access">
+    Ensure that your Azure Database for PostgreSQL server allows network traffic from your connecting resource. You may need to add firewall rules or configure virtual network settings in the Azure Portal.
+
+    Read more about how to setup logical replication in Azure Database for PostgreSQL [here](https://learn.microsoft.com/en-us/azure/postgresql/flexible-server/concepts-logical#prerequisites-for-logical-replication-and-logical-decoding).
+  </Step>
+</Steps>
+
+## Connect Sequin to your Azure Database for PostgreSQL
+
+After enabling logical replication on Azure Database for PostgreSQL, you'll now connect to your database in Sequin.
+
+<Steps titleSize="h3">
+  <Step title="Enter connection details in Sequin">
+    In the Sequin Console, click on the **Connect Database** button and enter the credentials for your Azure Database for PostgreSQL:
+
+    <Note>
+      You can find these connection details in your Azure Portal under the PostgreSQL server's **Connection strings** section.
+    </Note>
+
+    - **Host**: Your Azure PostgreSQL server hostname
+    - **Port**: 5432 (default Postgres port)
+    - **Database**: Your database name
+    - **Username**: Your database username (with replication permissions)
+    - **Password**: The password for your database user
+
+    Make sure to enable the **SSL** option for secure connection.
+  </Step>
+  <Step title="Create a replication slot">
+    Connect to your database using the SQL client of your choice and execute the following SQL query to create a replication slot:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+
+    This creates a replication slot named `sequin_slot`.
+  </Step>
+  <Step title="Create a publication">
+    Next, create a publication to indicate which tables will publish changes to the replication slot. Run the following SQL command:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    ```
+
+    If you want to publish changes from all tables, you can use:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    ```
+  </Step>
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+  </Step>
+</Steps>
+
+## Create a consumer
+
+With your Azure Database for PostgreSQL connected to Sequin via a replication slot and publication, Sequin is now detecting changes to your tables. Now create a consumer to process your data changes and send them to your application.
+
+Click the **Add a consumer** button and select your Azure Database for PostgreSQL as the source. Follow the instructions in our [quickstart guide](/quickstart) to complete the process.
+
+## Next steps
+
+With your Azure Database for PostgreSQL connected to Sequin, you can now:
+
+* Set up filters to capture specific changes.
+* Use Sequin's observability features to monitor and debug your data flows.
+* Explore Sequin's replay and backfill features for historical data processing.
+
+For more information on these features, check out our [core concepts](/core-concepts) documentation.

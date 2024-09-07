@@ -12,6 +12,8 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   require Logger
 
+  @default_connect_timeout :timer.seconds(20)
+
   @derive {Jason.Encoder,
            only: [
              :id,
@@ -190,6 +192,7 @@ defmodule Sequin.Databases.PostgresDatabase do
         :max_restarts
       ])
       |> Enum.to_list()
+      |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
 
     # TODO: Remove this when we have CA certs for the cloud providers
     # We likely need a bundle that covers many different database providers

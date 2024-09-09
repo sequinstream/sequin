@@ -48,7 +48,7 @@ defmodule Sequin.Postgres do
     end
   end
 
-  def result_to_map(%Postgrex.Result{} = result) do
+  def result_to_maps(%Postgrex.Result{} = result) do
     %{columns: columns, rows: rows} = result
 
     Enum.map(rows, fn row ->

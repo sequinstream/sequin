@@ -49,9 +49,7 @@ defmodule Sequin.MutexedSupervisor do
     [
       {ChildrenSupervisor, name: child_supervisor},
       {MutexOwner,
-       on_acquired: fn -> start_supervisors(child_specs, child_supervisor) end,
-       mutex_key: mutex_key(name),
-       name: mutex_owner}
+       on_acquired: fn -> start_children(child_specs, child_supervisor) end, mutex_key: mutex_key(name), name: mutex_owner}
     ]
   end
 
@@ -59,7 +57,7 @@ defmodule Sequin.MutexedSupervisor do
     Supervisor.child_spec({Ix.MutexedSupervisor, name: id, child_specs: children}, id: id)
   end
 
-  defp start_supervisors(child_specs, child_supervisor) do
+  defp start_children(child_specs, child_supervisor) do
     Enum.each(child_specs, fn child_spec -> DynamicSupervisor.start_child(child_supervisor, child_spec) end)
   end
 

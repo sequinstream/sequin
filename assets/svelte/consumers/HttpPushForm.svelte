@@ -358,21 +358,6 @@
           {/if}
         </div>
 
-        <div class="space-y-2">
-          <Label for="http-endpoint-path">Endpoint Path</Label>
-          <Input
-            id="http-endpoint-path"
-            bind:value={form.httpEndpointPath}
-            placeholder="/webhook"
-          />
-          <p class="text-sm text-muted-foreground">
-            The path to append to the base URL for this consumer's requests.
-          </p>
-          {#if errors.http_endpoint_path}
-            <p class="text-destructive text-sm">{errors.http_endpoint_path}</p>
-          {/if}
-        </div>
-
         <Accordion class="w-full">
           <AccordionItem value="advanced">
             <AccordionTrigger>Advanced configuration</AccordionTrigger>
@@ -480,6 +465,35 @@
           <p class="text-destructive text-sm">
             Please select or create an HTTP endpoint
           </p>
+        {/if}
+
+        <div class="space-y-2">
+          <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
+          <Input
+            id="http-endpoint-path"
+            bind:value={form.httpEndpointPath}
+            placeholder="/webhook"
+          />
+          <p class="text-sm text-muted-foreground">
+            The path to append to the base URL for this consumer's requests.
+          </p>
+          {#if errors.http_endpoint_path}
+            <p class="text-destructive text-sm">{errors.http_endpoint_path}</p>
+          {/if}
+        </div>
+
+        {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
+          <div class="mt-4">
+            <Label>Fully Qualified URL</Label>
+            <p
+              class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+            >
+              {(form.httpEndpointId
+                ? selectedHttpEndpoint?.baseUrl
+                : form.httpEndpoint.baseUrl
+              ).replace(/\/$/, "")}/{form.httpEndpointPath.replace(/^\//, "")}
+            </p>
+          </div>
         {/if}
       </CardContent>
     </Card>

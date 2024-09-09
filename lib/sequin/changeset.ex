@@ -7,7 +7,7 @@ defmodule Sequin.Changeset do
       is_nil(name) ->
         changeset
 
-      String.match?(name, ~r/^[a-zA-Z0-9_\-]+$/) ->
+      String.match?(name, ~r/^[a-zA-Z0-9_\-.]+$/) ->
         changeset
 
       true ->

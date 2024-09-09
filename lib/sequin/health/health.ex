@@ -18,7 +18,7 @@ defmodule Sequin.Health do
   alias Sequin.Health.Check
   alias Sequin.JSON
 
-  @type status :: :healthy | :warning | :error | :initializing
+  @type status :: :healthy | :warning | :error | :initializing | :waiting
   @type entity ::
           HttpEndpoint.t()
           | HttpPullConsumer.t()
@@ -215,7 +215,7 @@ defmodule Sequin.Health do
       |> Enum.map(&expected_check(entity, &1, :initializing))
       |> Enum.map(fn
         %Check{id: :replication_messages} = check ->
-          %{check | message: "Messages will replicate when there is a change in your database."}
+          %{check | status: :waiting, message: "Messages will replicate when there is a change in your database."}
 
         %Check{} = check ->
           check
@@ -278,6 +278,7 @@ defmodule Sequin.Health do
       :warning -> 1
       :initializing -> 2
       :healthy -> 3
+      :waiting -> 4
     end
   end
 
@@ -343,7 +344,9 @@ defmodule Sequin.Health do
       status: health.status,
       name: health.name,
       checks:
-        Enum.map(health.checks, fn check ->
+        health.checks
+        |> Enum.reject(&(&1.status == :waiting))
+        |> Enum.map(fn check ->
           %{
             name: check.name,
             status: check.status,

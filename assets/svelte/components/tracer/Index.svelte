@@ -324,8 +324,8 @@
   </div>
 
   {#if trace_state && trace_state.message_traces.length > 0}
-    <div class="overflow-x-auto">
-      <table class="min-w-full bg-white border border-gray-300">
+    <div class="overflow-x-auto max-w-full">
+      <table class="w-full bg-white border border-gray-300">
         <thead>
           <tr class="bg-gray-100">
             <th class="w-1"></th>
@@ -350,11 +350,11 @@
               >Primary Keys</th
             >
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]"
               >State</th
             >
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]"
               >Errors</th
             >
           </tr>
@@ -385,7 +385,7 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{trace.primary_keys}</td
               >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs">
+              <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[100px]">
                 <span
                   class={`px-1 py-0.5 inline-flex text-2xs leading-3 font-semibold rounded-full ${getStateColor(getFrontendSpanType(trace.state))}`}
                 >
@@ -393,7 +393,7 @@
                 </span>
               </td>
               <td
-                class="px-2 py-1 whitespace-nowrap text-2xs font-semibold"
+                class="px-2 py-1 whitespace-nowrap text-2xs font-semibold min-w-[120px]"
                 class:text-red-500={getErrorMessage(trace.span_types).color ===
                   "text-red-500"}
                 class:text-gray-500={getErrorMessage(trace.span_types).color ===
@@ -436,13 +436,22 @@
       </div>
     </div>
   {:else}
-    <div class="flex items-center justify-center h-64">
-      <div class="bg-white p-8 rounded-lg text-center">
+    <div class="w-full flex items-center justify-center min-h-[400px]">
+      <div class="w-full max-w-4xl bg-white p-8 rounded-lg text-center">
         {#if databases.length === 0}
           <h2 class="text-2xl font-bold mb-4">No Databases Found</h2>
           <p class="text-gray-600 mb-4">
             You need to create a database before tracing can occur.
           </p>
+          <div class="mb-6 video-container">
+            <iframe
+              src="https://www.youtube.com/embed/pi5g3Tzagxk"
+              title="YouTube video player"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            ></iframe>
+          </div>
           <a href="/databases" class="inline-block">
             <Button variant="default">
               Create Database
@@ -700,5 +709,21 @@
   /* If you need to adjust the table width in the drawer */
   .min-w-full {
     min-width: 100%;
+  }
+
+  .video-container {
+    position: relative;
+    padding-bottom: 56.25%; /* 16:9 aspect ratio */
+    height: 0;
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  .video-container iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
   }
 </style>

@@ -23,7 +23,7 @@ defmodule SequinWeb.TracerLive do
 
     paused = params["paused"] == "true"
     page = String.to_integer(params["page"] || "1")
-    per_page = 50
+    per_page = 10
 
     trace_state = get_trace_state(account_id)
 

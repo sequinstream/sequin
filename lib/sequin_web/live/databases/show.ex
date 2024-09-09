@@ -53,9 +53,13 @@ defmodule SequinWeb.DatabasesLive.Show do
   def handle_event("refresh_tables", _, socket) do
     %{database: database} = socket.assigns
 
-    Task.async(fn -> Databases.update_tables(database) end)
+    case Databases.update_tables(database) do
+      {:ok, updated_database} ->
+        {:reply, %{}, assign(socket, database: updated_database)}
 
-    {:noreply, assign(socket, refreshing_tables: true)}
+      {:error, _reason} ->
+        {:reply, %{}, socket}
+    end
   end
 
   def handle_event("delete_database", _, socket) do

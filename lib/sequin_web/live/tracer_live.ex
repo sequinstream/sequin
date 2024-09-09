@@ -105,9 +105,22 @@ defmodule SequinWeb.TracerLive do
 
   defp get_trace_state(account_id) do
     case Server.get_state(account_id) do
-      %State{} = state -> state
+      %State{} = state -> enrich_trace_state(account_id, state)
       {:error, _reason} -> nil
     end
+  end
+
+  defp enrich_trace_state(account_id, state) do
+    databases = Databases.list_dbs_for_account(account_id)
+
+    update_in(state.message_traces, fn message_traces ->
+      message_traces
+      |> Enum.map(fn message_trace ->
+        database = Enum.find(databases, &(&1.id == message_trace.database_id))
+        Map.put(message_trace, :database, database)
+      end)
+      |> Enum.filter(& &1.database)
+    end)
   end
 
   defp encode_trace_state(%{trace_state: nil}), do: %{}

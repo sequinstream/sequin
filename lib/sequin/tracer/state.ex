@@ -20,13 +20,12 @@ defmodule Sequin.Tracer.State do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Databases.PostgresDatabase
     alias Sequin.Tracer.State.ConsumerTrace
 
     typedstruct do
       field :message, Message.t()
       field :replicated_at, DateTime.t()
-      field :database, PostgresDatabase.t()
+      field :database_id, String.t()
       field :consumer_traces, list(ConsumerTrace.t()), default: []
     end
   end
@@ -68,7 +67,7 @@ defmodule Sequin.Tracer.State do
   def message_replicated(%State{} = state, %PostgresDatabase{} = db, %Message{} = message) do
     new_message_trace = %MessageTrace{
       message: message,
-      database: db,
+      database_id: db.id,
       consumer_traces: [],
       replicated_at: DateTime.utc_now()
     }

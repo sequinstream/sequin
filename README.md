@@ -22,7 +22,7 @@ Sequin sends Postgres records and changes to your applications and services. Itâ
 
 You can receive changes via HTTP push (webhooks) or pull (think SQS).
 
-Use Sequin to add [async triggers](#use-cases) to your existing Postgres tables to reliably activate side effects (e.g. welcome a new users or fan out order processing). Or, use Sequin to add streaming mechanics to Postgres to avoid adding dependencies like SQS or Kafka.
+Use Sequin to add [async triggers](#use-cases) to your existing Postgres tables to reliably trigger side effects. Or, Sequin can add streaming mechanics to Postgres to do the work of SQS / Kafka without the operational overhead.
 
 ## Killer features
 

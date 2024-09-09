@@ -1303,10 +1303,6 @@
     @apply list-disc pl-5 text-sm;
   }
 
-  .replacement-list code {
-    @apply bg-gray-100 px-1 py-0.5 rounded text-sm font-mono;
-  }
-
   .feature-box {
     @apply bg-white border border-border rounded-lg p-4;
   }
@@ -1317,10 +1313,6 @@
 
   .feature-item {
     @apply flex items-start mb-2 text-sm;
-  }
-
-  .feature-item span {
-    @apply mr-2 font-bold;
   }
 
   .consumer-box {

@@ -468,6 +468,9 @@
         class="absolute inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
         on:click={closeDrawer}
         transition:fade={{ duration: 200 }}
+        role="button"
+        tabindex="0"
+        on:keydown={(e) => e.key === "Enter" && closeDrawer()}
       ></div>
       <section
         class="absolute inset-y-0 right-0 pl-10 max-w-full flex sm:pl-16"

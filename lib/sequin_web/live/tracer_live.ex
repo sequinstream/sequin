@@ -146,7 +146,7 @@ defmodule SequinWeb.TracerLive do
           id: message_trace.database.id,
           name: message_trace.database.name
         },
-        table: table.name,
+        table: encode_table(table),
         primary_keys: encode_primary_keys(message_trace.message.ids, primary_keys),
         state: get_message_state([consumer_trace]),
         spans: [
@@ -187,6 +187,11 @@ defmodule SequinWeb.TracerLive do
   defp find_table(database, table_oid) do
     Enum.find(database.tables, &(&1.oid == table_oid))
   end
+
+  defp encode_table(nil), do: nil
+  defp encode_table(%{name: name}), do: name
+
+  defp get_primary_keys(nil), do: []
 
   defp get_primary_keys(table) do
     Enum.filter(table.columns, & &1.is_pk?)

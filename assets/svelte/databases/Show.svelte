@@ -18,6 +18,8 @@
   import HealthComponent from "$lib/health/HealthComponent.svelte";
   import type { Health } from "$lib/health/Types";
   import { Badge } from "$lib/components/ui/badge";
+  import { Loader2 } from "lucide-svelte";
+  import { writable } from "svelte/store";
 
   interface Table {
     schema_name: string;
@@ -58,8 +60,17 @@
     avg_latency: number;
   };
 
+  let refreshingTables = writable(false);
+
   function pushEvent(event: string, params = {}, callback: any = () => {}) {
     live.pushEventTo("#" + parent, event, params, callback);
+  }
+
+  function handleRefreshTables() {
+    $refreshingTables = true;
+    pushEvent("refresh_tables", {}, (res) => {
+      $refreshingTables = false;
+    });
   }
 
   let showDeleteConfirmDialog = false;
@@ -136,7 +147,20 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <span class="text-sm font-medium text-gray-500">Tables</span>
-            <CheckCircle class="h-5 w-5 text-green-500" />
+            <Button
+              variant="ghost"
+              size="sm"
+              on:click={handleRefreshTables}
+              disabled={$refreshingTables}
+            >
+              {#if $refreshingTables}
+                <span class="sr-only">Refreshing tables</span>
+                <Loader2 class="h-4 w-4 animate-spin" />
+              {:else}
+                <span class="sr-only">Refresh tables</span>
+                <RefreshCw class="h-4 w-4 text-gray-500" />
+              {/if}
+            </Button>
           </div>
           <div class="text-4xl font-bold">{database.tables.length}</div>
         </CardContent>

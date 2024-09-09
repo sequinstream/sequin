@@ -198,6 +198,27 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
+          <Label for="hostname">Host</Label>
+          <Input type="text" id="hostname" bind:value={form.hostname} />
+          {#if databaseErrors.hostname}
+            <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
+          <Label for="port">Port</Label>
+          <Input
+            type="number"
+            id="port"
+            bind:value={form.port}
+            placeholder="5432"
+          />
+          {#if databaseErrors.port}
+            <p class="text-destructive text-sm">{databaseErrors.port}</p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
           <Label for="database" class="flex items-center">
             Database
             <Tooltip.Root openDelay={300}>
@@ -217,30 +238,14 @@
               </Tooltip.Content>
             </Tooltip.Root>
           </Label>
-          <Input type="text" id="database" bind:value={form.database} />
+          <Input
+            type="text"
+            id="database"
+            placeholder="postgres"
+            bind:value={form.database}
+          />
           {#if databaseErrors.database}
             <p class="text-destructive text-sm">{databaseErrors.database}</p>
-          {/if}
-        </div>
-
-        <div class="space-y-2">
-          <Label for="hostname">Host</Label>
-          <Input type="text" id="hostname" bind:value={form.hostname} />
-          {#if databaseErrors.hostname}
-            <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
-          {/if}
-        </div>
-
-        <div class="space-y-2">
-          <Label for="port">Port</Label>
-          <Input
-            type="number"
-            id="port"
-            bind:value={form.port}
-            placeholder="5432"
-          />
-          {#if databaseErrors.port}
-            <p class="text-destructive text-sm">{databaseErrors.port}</p>
           {/if}
         </div>
 

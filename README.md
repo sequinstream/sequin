@@ -22,6 +22,8 @@ Sequin sends Postgres records and changes to your applications and services. Itâ
 
 You can receive changes via HTTP push (webhooks) or pull (think SQS).
 
+Use Sequin to add [async triggers](#use-cases) to your existing Postgres tables to reliably activate side effects (e.g. welcome a new users or fan out order processing). Or, use Sequin to add streaming mechanics to Postgres to avoid adding dependencies like SQS or Kafka.
+
 ## Killer features
 
 - **Never miss a message:** Sequin delivers messages from your database to consumers until they are acknowledged (i.e. exactly-once processing guarantees).
@@ -74,7 +76,7 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ## Compare Sequin
 
-| Feature             | Sequin                   | PG triggers       | LISTEN / NOTIFY  | Supabase Webhooks  | Amazon SQS   |
+| Feature             | Sequin                   | [PG triggers](#pg-triggers)       | [LISTEN / NOTIFY](#listen--notify)  | [Supabase Webhooks](#supabase-webhooks)  | [Amazon SQS](#amazon-sqs)   |
 | ------------------- | ------------------------ | ----------------- | ---------------- | ------------------ | ------------ |
 | Trigger guarantees  | Transactional            | Transactional     | Transactional    | Transactional      | N/A          |
 | Delivery guarantees | Exactly-once             | Exactly-once      | At-most-once     | At-least-once      | Exactly-once |
@@ -90,6 +92,53 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 <sub>\* **PG logging:** You can configure logging in your database, but nothing is built in. Generally hard to see the state of any given side-effect.</sub>
 
 <sub>^ **Serial ops / row:** Postgres triggers (which power Supabase Webhooks) run serially within each transaction (and block) and can add significant overhead.</sub>
+
+<details>
+
+<summary>PG Triggers v Sequin</summary>
+
+### PG Triggers
+
+[PG Triggers](https://www.postgresql.org/docs/current/sql-createtrigger.html) provide exactly-once processing guarantees within the context of your database. For instance, you can ensure that when a record is inserted in one table, it is appended to another.
+
+Sequin extends this guarantee outside of your database with a simple HTTP interface. Notably, Sequin is much more efficient at processing changes - as the trigger is captured via the WAL while Postgres triggers execute per row, inside transactions.
+
+</details>
+
+<details>
+
+<summary>LISTEN / NOTIFY v Sequin</summary>
+
+### LISTEN / NOTIFY
+
+[`NOTIFY`](https://www.postgresql.org/docs/current/sql-notify.html) delivers a message to any channel listening for changes. It's a simple pub/sub model with at-most once delivery guarantees. If a change happens and no channel is available to hear it - it's gone forever.
+
+Sequin adds a HTTP interface and persistent, durable messaging to provide exactly-once processing guarantees to the NOTIFY implementation. Paired with filtering, transforms, and observability - Sequin is easier to use and monitor.
+</details>
+
+<details>
+
+<summary>Supabase Webhooks v Sequin</summary>
+
+### Supabase Webhooks
+
+Supabase Webhooks use pg_net to allow you to trigger a HTTP POST or GET from a Postgres Trigger. If a webhook fails, the response is logged (for a period of time).
+
+Sequin adds retries and message persistence to provide exactly-once processing guarantees. Paired with more queue configuration options, Sequin acts as a sort of outbox stream for Supabase.
+
+</details>
+
+<details>
+
+<summary>Amazon SQS v Sequin</summary>
+
+### Amazon SQS
+
+Amazon SQS is a simple queue with an HTTP interface. It can be configured to provide a highly durable, redundant FIFO queue with exactly one processing.
+
+Sequin provides this same functionality with a transactional enqueue guarantee. Sequin also provide an HTTP push interface to enable easy integration with other services.
+
+</details>
 
 ## Documentation
 

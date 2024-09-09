@@ -665,7 +665,7 @@ defmodule Sequin.Consumers do
     # Execute the query
     with {:ok, result} <- Postgrex.query(conn, query, casted_pks) do
       # Convert result to map
-      rows = Postgres.result_to_map(result)
+      rows = Postgres.result_to_maps(result)
 
       rows = PostgresDatabase.cast_rows(table, rows)
 

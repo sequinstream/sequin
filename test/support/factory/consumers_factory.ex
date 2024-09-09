@@ -10,6 +10,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.RecordConsumerConfig
   alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -71,7 +72,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
-        status: :active
+        status: :active,
+        record_consumer_config: record_consumer_config_attrs()
       },
       attrs
     )
@@ -135,7 +137,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         account_id: account_id,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
-        status: :active
+        status: :active,
+        record_consumer_config: record_consumer_config_attrs()
       },
       attrs
     )
@@ -403,5 +406,20 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.new()
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  def record_consumer_config(attrs \\ []) do
+    merge_attributes(
+      %RecordConsumerConfig{
+        sort_column_oid: Factory.unique_integer()
+      },
+      attrs
+    )
+  end
+
+  def record_consumer_config_attrs(attrs \\ []) do
+    attrs
+    |> record_consumer_config()
+    |> Sequin.Map.from_ecto()
   end
 end

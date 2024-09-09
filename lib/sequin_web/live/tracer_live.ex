@@ -112,12 +112,23 @@ defmodule SequinWeb.TracerLive do
 
   defp enrich_trace_state(account_id, state) do
     databases = Databases.list_dbs_for_account(account_id)
+    consumers = Consumers.list_consumers_for_account(account_id)
 
     update_in(state.message_traces, fn message_traces ->
       message_traces
       |> Enum.map(fn message_trace ->
         database = Enum.find(databases, &(&1.id == message_trace.database_id))
-        Map.put(message_trace, :database, database)
+
+        message_trace
+        |> Map.put(:database, database)
+        |> Map.update!(:consumer_traces, fn consumer_traces ->
+          consumer_traces
+          |> Enum.map(fn consumer_trace ->
+            consumer = Enum.find(consumers, &(&1.id == consumer_trace.consumer_id))
+            Map.put(consumer_trace, :consumer, consumer)
+          end)
+          |> Enum.filter(& &1.consumer)
+        end)
       end)
       |> Enum.filter(& &1.database)
     end)
@@ -128,7 +139,7 @@ defmodule SequinWeb.TracerLive do
   defp encode_trace_state(assigns) do
     message_traces =
       assigns.trace_state.message_traces
-      |> Enum.flat_map(&encode_message_trace(assigns.consumers, &1))
+      |> Enum.flat_map(&encode_message_trace/1)
       |> Enum.filter(&filter_trace?(&1, assigns.params))
 
     total_count = length(message_traces)
@@ -141,19 +152,17 @@ defmodule SequinWeb.TracerLive do
     }
   end
 
-  defp encode_message_trace(consumers, message_trace) do
+  defp encode_message_trace(message_trace) do
     table = find_table(message_trace.database, message_trace.message.table_oid)
     primary_keys = get_primary_keys(table)
 
     Enum.map(message_trace.consumer_traces, fn consumer_trace ->
-      consumer = Enum.find(consumers, &(&1.id == consumer_trace.consumer_id))
-
       %{
         date: message_trace.message.commit_timestamp,
         consumer_id: consumer_trace.consumer_id,
         consumer: %{
-          id: consumer.id,
-          name: consumer.name
+          id: consumer_trace.consumer.id,
+          name: consumer_trace.consumer.name
         },
         database: %{
           id: message_trace.database.id,

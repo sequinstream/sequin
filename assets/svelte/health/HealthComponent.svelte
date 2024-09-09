@@ -65,18 +65,24 @@
 
   let containerElement: HTMLElement;
   let expandedContentElement: HTMLElement;
-  let containerRect: DOMRect;
 
   function updateExpandedContentPosition() {
     if (containerElement && expandedContentElement) {
-      const rect = containerElement.getBoundingClientRect();
-      const scrollY = window.scrollY || window.pageYOffset;
+      const computedStyle = window.getComputedStyle(containerElement);
+      const borderLeftWidth = parseFloat(computedStyle.borderLeftWidth);
+      const borderRightWidth = parseFloat(computedStyle.borderRightWidth);
 
-      expandedContentElement.style.position = "fixed";
-      expandedContentElement.style.top = `${rect.bottom + scrollY}px`;
-      expandedContentElement.style.left = `${rect.left}px`;
-      expandedContentElement.style.width = `${rect.width}px`;
-      expandedContentElement.style.zIndex = "1000";
+      expandedContentElement.style.position = "absolute";
+      expandedContentElement.style.top = "100%";
+      expandedContentElement.style.left = `-${borderLeftWidth}px`;
+      expandedContentElement.style.width = `calc(100% + ${borderLeftWidth + borderRightWidth}px)`;
+      expandedContentElement.style.marginTop = "-2px"; // Adjust this value if needed
+    }
+  }
+
+  function handleScroll() {
+    if (expanded && hasChecks) {
+      updateExpandedContentPosition();
     }
   }
 
@@ -93,8 +99,13 @@
 
   onMount(() => {
     document.addEventListener("click", handleClickOutside);
+    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("resize", updateExpandedContentPosition);
+
     return () => {
       document.removeEventListener("click", handleClickOutside);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateExpandedContentPosition);
     };
   });
 
@@ -105,12 +116,8 @@
 
   // Update position on scroll and resize
   if (typeof window !== "undefined") {
-    window.addEventListener("scroll", updateExpandedContentPosition);
+    window.addEventListener("scroll", handleScroll);
     window.addEventListener("resize", updateExpandedContentPosition);
-  }
-
-  $: if (containerElement) {
-    containerRect = containerElement.getBoundingClientRect();
   }
 
   $: initializingProgress =
@@ -160,8 +167,8 @@
     <div
       bind:this={expandedContentElement}
       transition:slide={{ duration: 300 }}
-      class="space-y-2 bg-white border-2 border-t-0 rounded-b-lg shadow-lg p-4"
-      style="border-color: inherit;"
+      class="absolute space-y-2 bg-white border-2 border-t-0 rounded-b-lg shadow-lg p-4"
+      style="border-color: inherit; z-index: 10;"
     >
       {#each Object.entries(health.checks) as [checkId, check]}
         <div class="py-3 border-b last:border-b-0">

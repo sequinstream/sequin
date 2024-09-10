@@ -285,7 +285,7 @@
     >
       <option value="">All Databases</option>
       {#each databases as database}
-        <option value={database.name}>{database.name}</option>
+        <option value={database.id}>{database.name}</option>
       {/each}
     </select>
 

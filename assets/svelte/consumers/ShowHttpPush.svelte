@@ -217,23 +217,39 @@
         </CardContent>
       </Card>
 
-      {#if consumer.message_kind === "event" && replica_identity !== "full"}
+      {#if consumer.message_kind === "event" && replica_identity !== "full" && !consumer.replica_warning_dismissed}
         <Card>
           <CardContent
             class="p-4 bg-yellow-100 border border-yellow-400 rounded-md"
           >
-            <h3 class="text-sm font-semibold text-yellow-800 mb-2">Warning</h3>
-            <p class="text-sm text-yellow-700 mb-2">
-              The replica identity for your table is not set to 'full'. This
-              means the <code>changes</code> field in message payloads will be empty.
-            </p>
-            <p class="text-sm text-yellow-700">
-              If you want the <code>changes</code> field to appear in message payloads,
-              run the following SQL command:
-            </p>
-            <pre class="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded">
+            <div class="flex justify-between items-start">
+              <div>
+                <h3 class="text-sm font-semibold text-yellow-800 mb-2">
+                  Warning
+                </h3>
+                <p class="text-sm text-yellow-700 mb-2">
+                  The replica identity for your table is not set to 'full'. This
+                  means the <code>changes</code> field in message payloads will be
+                  empty.
+                </p>
+                <p class="text-sm text-yellow-700">
+                  If you want the <code>changes</code> field to appear in message
+                  payloads, run the following SQL command:
+                </p>
+                <pre class="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded">
 alter table {consumer.source_table.schema}.{consumer.source_table
-                .name} replica identity full;</pre>
+                    .name} replica identity full;</pre>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                class="text-yellow-800 hover:text-yellow-900 border-yellow-400 hover:bg-yellow-200"
+                on:click={() =>
+                  live.pushEventTo("#" + parent, "dismiss_replica_warning", {})}
+              >
+                Dismiss
+              </Button>
+            </div>
           </CardContent>
         </Card>
       {/if}

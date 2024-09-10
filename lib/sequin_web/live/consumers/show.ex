@@ -120,6 +120,19 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("dismiss_replica_warning", _params, socket) do
+    case Consumers.update_consumer(socket.assigns.consumer, %{replica_warning_dismissed: true}) do
+      {:ok, updated_consumer} ->
+        {:noreply,
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Warning dismissed successfully."})}
+
+      {:error, _changeset} ->
+        {:noreply, push_toast(socket, %{kind: :error, title: "Failed to dismiss warning. Please try again."})}
+    end
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end
@@ -200,7 +213,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       # FIXME: Implement messages processed count
       messages_processed: 1_234_567,
       # FIXME: Implement average latency calculation
-      avg_latency: 45
+      avg_latency: 45,
+      replica_warning_dismissed: consumer.replica_warning_dismissed
     }
   end
 

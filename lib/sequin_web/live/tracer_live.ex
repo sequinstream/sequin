@@ -261,7 +261,7 @@ defmodule SequinWeb.TracerLive do
   end
 
   defp database_match?(_trace, nil), do: true
-  defp database_match?(trace, database), do: trace.database == database
+  defp database_match?(trace, database_id), do: trace.database.id == database_id
 
   defp consumer_match?(_trace, nil), do: true
   defp consumer_match?(trace, consumer_id), do: trace.consumer_id == consumer_id

@@ -6,7 +6,6 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Factory.StreamsFactory
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
@@ -44,16 +43,6 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> Map.put(:account_id, account_id)
     |> Map.put(:postgres_database_id, postgres_database_id)
     |> postgres_replication()
-    |> Repo.insert!()
-  end
-
-  def insert_stream!(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    attrs
-    |> Map.put(:account_id, account_id)
-    |> StreamsFactory.stream()
     |> Repo.insert!()
   end
 

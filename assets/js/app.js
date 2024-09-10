@@ -29,6 +29,7 @@ import { getHooks } from "live_svelte";
 import * as Components from "../svelte/**/*.svelte";
 import { toast } from "svelte-sonner";
 import posthog from "posthog-js";
+import Intercom from "@intercom/messenger-js-sdk";
 
 posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",
@@ -36,6 +37,11 @@ posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
   session_recording: {
     maskAllInputs: false,
   },
+});
+
+Intercom({
+  app_id: "btt358pc",
+  custom_launcher_selector: "#launch-intercom",
 });
 
 let csrfToken = document
@@ -71,7 +77,8 @@ window.addEventListener("phx:toast", (event) => {
 });
 
 window.addEventListener("phx:ph-identify", (event) => {
-  const { userId, userEmail, userName, accountId, accountName } = event.detail;
+  const { userId, userEmail, userName, accountId, accountName, createdAt } =
+    event.detail;
 
   posthog.identify(userId, {
     email: userEmail,
@@ -82,10 +89,26 @@ window.addEventListener("phx:ph-identify", (event) => {
   posthog.group("account", accountId, {
     name: accountName,
   });
+
+  Intercom({
+    app_id: "btt358pc",
+    user_id: userId,
+    name: userName,
+    email: userEmail,
+    created_at: createdAt,
+    company: {
+      id: accountId,
+      name: accountName,
+    },
+  });
 });
 
 window.addEventListener("phx:ph-reset", () => {
   posthog.reset();
+  if (window.Intercom) {
+    window.Intercom("shutdown");
+    window.Intercom("boot", { app_id: "YOUR_APP_ID" });
+  }
 });
 
 // connect if there are any LiveViews on the page

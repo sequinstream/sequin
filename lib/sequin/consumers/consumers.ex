@@ -508,17 +508,7 @@ defmodule Sequin.Consumers do
             now: now
           )
 
-        events =
-          Enum.map(events, fn event ->
-            event
-            |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:replication_message_trace_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> ConsumerEvent.from_map()
-          end)
+        events = Enum.map(events, fn event -> Ecto.embedded_load(ConsumerEvent, event, :json) end)
 
         if length(events) > 0 do
           Health.update(consumer, :receive, :healthy)
@@ -556,17 +546,7 @@ defmodule Sequin.Consumers do
             now: now
           )
 
-        records =
-          Enum.map(records, fn record ->
-            record
-            |> Map.update!(:consumer_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:ack_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:replication_message_trace_id, &UUID.binary_to_string!/1)
-            |> Map.update!(:inserted_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> Map.update!(:updated_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> Map.update!(:last_delivered_at, &DateTime.from_naive!(&1, "Etc/UTC"))
-            |> ConsumerRecord.from_map()
-          end)
+        records = Enum.map(records, fn record -> Ecto.embedded_load(ConsumerRecord, record, :json) end)
 
         # Fetch source data for the records
         with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database),

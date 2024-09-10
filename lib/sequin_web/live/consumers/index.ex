@@ -26,7 +26,8 @@ defmodule SequinWeb.ConsumersLive.Index do
           userEmail: user.email,
           userName: user.name,
           accountId: user.account_id,
-          accountName: account.name
+          accountName: account.name,
+          createdAt: user.inserted_at
         })
       else
         socket

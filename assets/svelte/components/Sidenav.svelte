@@ -108,7 +108,7 @@
           {/if}
         </div>
       </a>
-      <a href="mailto:support@sequinstream.com">
+      <a id="launch-intercom" href="mailto:support@sequinstream.com">
         <div
           class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
             'mailto:support@sequinstream.com'

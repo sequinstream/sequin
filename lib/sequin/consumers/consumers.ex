@@ -806,8 +806,6 @@ defmodule Sequin.Consumers do
   end
 
   defp do_send_posthog_event(consumer) do
-    IO.inspect("EVENT SENT FOR CONSUMER #{consumer.id}")
-
     Posthog.capture("Consumer Messages Acked", %{
       distinct_id: "00000000-0000-0000-0000-000000000000",
       properties: %{

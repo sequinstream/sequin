@@ -32,6 +32,10 @@ defmodule Sequin.Consumers do
 
   @type consumer :: HttpPullConsumer.t() | HttpPushConsumer.t()
 
+  def posthog_ets_table do
+    :consumer_ack_events
+  end
+
   def stream_schema, do: @stream_schema
   def config_schema, do: @config_schema
 
@@ -745,6 +749,8 @@ defmodule Sequin.Consumers do
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.delete_all()
 
+    send_posthog_ack_event(consumer)
+
     Health.update(consumer, :acknowledge, :healthy)
     Metrics.incr_consumer_messages_processed_count(consumer, count)
 
@@ -770,12 +776,45 @@ defmodule Sequin.Consumers do
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
+    send_posthog_ack_event(consumer)
+
     Health.update(consumer, :acknowledge, :healthy)
 
     Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
     Metrics.incr_consumer_messages_processed_throughput(consumer, count_deleted + count_updated)
 
     :ok
+  end
+
+  defp send_posthog_ack_event(consumer) do
+    now = :os.system_time(:second)
+    key = consumer.id
+
+    case :ets.lookup(posthog_ets_table(), key) do
+      [] ->
+        # No previous event, send it and store the timestamp
+        do_send_posthog_event(consumer)
+        :ets.insert(posthog_ets_table(), {key, now})
+
+      [{^key, last_sent}] ->
+        # Check if an hour has passed since the last event
+        if now - last_sent >= 3600 do
+          do_send_posthog_event(consumer)
+          :ets.insert(posthog_ets_table(), {key, now})
+        end
+    end
+  end
+
+  defp do_send_posthog_event(consumer) do
+    IO.inspect("EVENT SENT FOR CONSUMER #{consumer.id}")
+
+    Posthog.capture("Consumer Messages Acked", %{
+      distinct_id: "00000000-0000-0000-0000-000000000000",
+      properties: %{
+        consumer_id: consumer.id,
+        "$groups": %{account: consumer.account_id}
+      }
+    })
   end
 
   @spec nack_messages(consumer(), [integer()]) :: :ok

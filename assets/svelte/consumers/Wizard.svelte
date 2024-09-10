@@ -834,6 +834,19 @@
               </Card>
             {/each}
           </div>
+
+          <div class="mt-4 text-center">
+            <span class="text-muted-foreground text-sm"
+              >Read more about rows and changes</span
+            >
+            <a
+              href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
+              target="_blank"
+              class="text-sm text-link hover:underline"
+            >
+              in our docs
+            </a>
+          </div>
         </div>
       {/if}
 

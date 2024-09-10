@@ -15,6 +15,8 @@ defmodule Sequin.Application do
     # Add this line to create the new ETS table for health debouncing
     :ets.new(Sequin.Health.debounce_ets_table(), [:set, :public, :named_table])
 
+    :ets.new(Sequin.Consumers.posthog_ets_table(), [:set, :public, :named_table])
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sequin.Supervisor]

@@ -330,6 +330,17 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case case_result do
       {:ok, consumer} ->
+        Posthog.capture("Consumer Created", %{
+          distinct_id: socket.assigns.current_user.id,
+          properties: %{
+            consumer_type: consumer.__struct__ |> to_string() |> String.split(".") |> List.last(),
+            stream_type: consumer.message_kind,
+            consumer_id: consumer.id,
+            consumer_name: consumer.name,
+            "$groups": %{account: consumer.account_id}
+          }
+        })
+
         {:ok, push_navigate(socket, to: ~p"/consumers/#{consumer.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->

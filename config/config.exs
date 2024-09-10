@@ -20,6 +20,10 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
+config :posthog,
+  api_url: "https://us.i.posthog.com",
+  api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
+
 config :redix,
   url: "redis://localhost:6379"
 

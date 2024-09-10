@@ -76,7 +76,8 @@ defmodule Sequin.MixProject do
       {:req, "~> 0.5"},
       {:redix, "~> 1.0"},
       {:observer_cli, "~> 1.7"},
-      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev}
+      {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
+      {:posthog, "~> 0.1"}
     ]
   end
 

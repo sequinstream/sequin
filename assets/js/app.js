@@ -71,11 +71,16 @@ window.addEventListener("phx:toast", (event) => {
 });
 
 window.addEventListener("phx:ph-identify", (event) => {
-  const { userId, userEmail, userName } = event.detail;
+  const { userId, userEmail, userName, accountId, accountName } = event.detail;
 
   posthog.identify(userId, {
     email: userEmail,
     name: userName,
+    $groups: { account: accountId },
+  });
+
+  posthog.group("account", accountId, {
+    name: accountName,
   });
 });
 

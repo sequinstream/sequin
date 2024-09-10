@@ -121,6 +121,15 @@ defmodule SequinWeb.DatabasesLive.Form do
          true <- socket.assigns.replication_changeset.valid? do
       case validate_and_create_or_update(socket, params) do
         {:ok, database} ->
+          Posthog.capture("Database Created", %{
+            distinct_id: socket.assigns.current_user.id,
+            properties: %{
+              database_id: database.id,
+              database_name: database.name,
+              "$groups": %{account: database.account_id}
+            }
+          })
+
           {:noreply, push_navigate(socket, to: ~p"/databases/#{database.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->

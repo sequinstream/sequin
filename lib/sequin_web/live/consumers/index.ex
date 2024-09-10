@@ -24,7 +24,9 @@ defmodule SequinWeb.ConsumersLive.Index do
         push_event(socket, "ph-identify", %{
           userId: user.id,
           userEmail: user.email,
-          userName: user.name
+          userName: user.name,
+          accountId: user.account_id,
+          accountName: account.name
         })
       else
         socket

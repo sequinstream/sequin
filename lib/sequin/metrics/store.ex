@@ -58,7 +58,9 @@ defmodule Sequin.Metrics.Store do
   # Throughput functions
   def incr_throughput(key) do
     now = :os.system_time(:nanosecond)
-    one_hour_ago = now - :timer.seconds(3600) * 1_000_000_000
+
+    # ms to nano
+    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
 
     :redix
     |> Redix.pipeline([
@@ -76,17 +78,21 @@ defmodule Sequin.Metrics.Store do
   def get_throughput(key) do
     now = :os.system_time(:nanosecond)
 
+    # ms to nano
+    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
+
     :redix
     |> Redix.pipeline([
+      ["ZREVRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
       ["ZRANGE", "metrics:throughput:#{key}", 0, 0, "WITHSCORES"],
       ["ZCARD", "metrics:throughput:#{key}"]
     ])
     |> handle_response()
     |> case do
-      {:ok, [[], _]} ->
+      {:ok, [_, [], _]} ->
         {:ok, 0.0}
 
-      {:ok, [[_oldest, oldest_score], count]} ->
+      {:ok, [_, [_oldest, oldest_score], count]} ->
         {decimal_oldest, ""} = Decimal.parse(oldest_score)
         oldest = Decimal.to_integer(decimal_oldest)
 

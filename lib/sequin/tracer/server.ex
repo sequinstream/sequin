@@ -26,10 +26,6 @@ defmodule Sequin.Tracer.Server do
     GenServer.start_link(__MODULE__, account_id, name: via_tuple(account_id))
   end
 
-  def update_heartbeat(account_id) do
-    GenServer.cast(via_tuple(account_id), :update_heartbeat)
-  end
-
   def message_replicated(%PostgresDatabase{account_id: account_id} = db, %Message{} = message) do
     GenServer.cast(via_tuple(account_id), {:replicated, db, message})
   end
@@ -71,64 +67,48 @@ defmodule Sequin.Tracer.Server do
 
   # Server Callbacks
 
-  @heartbeat_interval :timer.seconds(5)
-  @max_idle_time :timer.minutes(1)
-
   def init(account_id) do
     Logger.metadata(account_id: account_id)
     Logger.info("Starting Tracer.Server for account #{account_id}")
-    schedule_heartbeat_check()
-    {:ok, {State.new(account_id), DateTime.utc_now()}}
+    {:ok, State.new(account_id)}
   end
 
-  def handle_cast({:replicated, %PostgresDatabase{} = db, %Message{} = message}, {state, last_heartbeat}) do
+  def handle_cast({:replicated, %PostgresDatabase{} = db, %Message{} = message}, state) do
     Logger.info("Replicated message: #{inspect(message)}")
-    {:noreply, {State.message_replicated(state, db, message), last_heartbeat}}
+    {:noreply, State.message_replicated(state, db, message)}
   end
 
-  def handle_cast({:filtered, consumer, %Message{} = message}, {state, last_heartbeat}) do
+  def handle_cast({:filtered, consumer, %Message{} = message}, state) do
     Logger.info("Filtered message: #{inspect(message)}")
-    {:noreply, {State.message_filtered(state, consumer.id, message), last_heartbeat}}
+    {:noreply, State.message_filtered(state, consumer.id, message)}
   end
 
-  def handle_cast({:ingested, consumer, event_or_records}, {state, last_heartbeat}) do
+  def handle_cast({:ingested, consumer, event_or_records}, state) do
     Logger.info("Ingested messages: #{inspect(event_or_records)}")
-    {:noreply, {State.messages_ingested(state, consumer.id, event_or_records), last_heartbeat}}
+    {:noreply, State.messages_ingested(state, consumer.id, event_or_records)}
   end
 
-  def handle_cast({:received, consumer, event_or_records}, {state, last_heartbeat}) do
+  def handle_cast({:received, consumer, event_or_records}, state) do
     Logger.info("Received messages: #{inspect(event_or_records)}")
-    {:noreply, {State.messages_received(state, consumer.id, event_or_records), last_heartbeat}}
+    {:noreply, State.messages_received(state, consumer.id, event_or_records)}
   end
 
-  def handle_cast({:acked, consumer, ack_ids}, {state, last_heartbeat}) do
+  def handle_cast({:acked, consumer, ack_ids}, state) do
     Logger.info("Acked messages: #{inspect(ack_ids)}")
-    {:noreply, {State.messages_acked(state, consumer.id, ack_ids), last_heartbeat}}
+    {:noreply, State.messages_acked(state, consumer.id, ack_ids)}
   end
 
-  def handle_cast(:update_heartbeat, {state, _last_heartbeat}) do
-    {:noreply, {state, DateTime.utc_now()}}
-  end
-
-  def handle_call(:get_state, _from, {state, last_heartbeat}) do
-    {:reply, state, {state, last_heartbeat}}
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
   end
 
   if Mix.env() == :dev do
-    def handle_call(:reset_state, _from, {state, _last_heartbeat}) do
-      {:reply, :ok, {State.reset(state), DateTime.utc_now()}}
+    def handle_call(:reset_state, _from, state) do
+      {:reply, :ok, State.reset(state)}
     end
   end
 
-  def handle_info(:check_heartbeat, {state, last_heartbeat}) do
-    if should_terminate?(last_heartbeat) do
-      Logger.info("Tracer.Server stopping due to idle timeout")
-      {:stop, :normal, {state, last_heartbeat}}
-    else
-      schedule_heartbeat_check()
-      {:noreply, {state, last_heartbeat}}
-    end
-  end
+  # Remove handle_info(:check_heartbeat, ...)
 
   def handle_info({:EXIT, _pid, reason}, state) do
     Logger.error("Tracer.Server exited: #{inspect(reason)}")
@@ -139,13 +119,5 @@ defmodule Sequin.Tracer.Server do
 
   defp via_tuple(account_id) do
     Sequin.Registry.via_tuple({__MODULE__, account_id})
-  end
-
-  defp schedule_heartbeat_check do
-    Process.send_after(self(), :check_heartbeat, @heartbeat_interval)
-  end
-
-  defp should_terminate?(last_heartbeat) do
-    DateTime.diff(DateTime.utc_now(), last_heartbeat, :millisecond) > @max_idle_time
   end
 end

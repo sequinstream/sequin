@@ -1,4 +1,4 @@
-defmodule Sequin.Tracer.Supervisor do
+defmodule Sequin.Tracer.DynamicSupervisor do
   @moduledoc false
   use DynamicSupervisor
 

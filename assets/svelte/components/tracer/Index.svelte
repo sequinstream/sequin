@@ -11,8 +11,6 @@
     Activity,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
-  import * as Tooltip from "$lib/components/ui/tooltip";
-  import { HelpCircle } from "lucide-svelte";
 
   export let live: any;
   export let trace_state: any;
@@ -228,10 +226,6 @@
   function closeDrawer() {
     isDrawerOpen = false;
   }
-
-  $: traceStartedAt = trace_state?.started_at
-    ? new Date(trace_state.started_at)
-    : null;
 </script>
 
 <div class="container mx-auto p-4">
@@ -241,32 +235,6 @@
       Trace
     </h1>
     <div class="flex items-center gap-4">
-      {#if traceStartedAt}
-        <div class="flex flex-col items-end">
-          <span
-            class="text-2xs text-gray-700 py-0.5 rounded mr-auto flex items-center"
-          >
-            Trace started at
-            <Tooltip.Root openDelay={300}>
-              <Tooltip.Trigger>
-                <HelpCircle
-                  class="inline-block h-3 w-3 text-gray-400 ml-1 cursor-help"
-                />
-              </Tooltip.Trigger>
-              <Tooltip.Content class="max-w-xs">
-                <p class="text-xs text-gray-500">
-                  The trace process began at this time. Only messages replicated
-                  after this timestamp are included. Earlier messages, even if
-                  processed by consumers later, are not traced.
-                </p>
-              </Tooltip.Content>
-            </Tooltip.Root>
-          </span>
-          <span class="text-sm text-gray-500"
-            >{traceStartedAt.toLocaleString()}</span
-          >
-        </div>
-      {/if}
       <Button variant="outline" on:click={togglePause}>
         {#if paused}
           <Play class="h-4 w-4" />

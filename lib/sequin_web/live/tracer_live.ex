@@ -13,7 +13,7 @@ defmodule SequinWeb.TracerLive do
     account_id = current_account_id(socket)
 
     if connected?(socket) do
-      Tracer.Supervisor.start_for_account(account_id)
+      Tracer.DynamicSupervisor.start_for_account(account_id)
       schedule_update()
     end
 
@@ -58,7 +58,6 @@ defmodule SequinWeb.TracerLive do
   @impl true
   def handle_info(:update, %{assigns: %{paused: false}} = socket) do
     account_id = current_account_id(socket)
-    Server.update_heartbeat(account_id)
 
     consumers = Consumers.list_consumers_for_account(account_id)
     trace_state = get_trace_state(account_id)
@@ -87,7 +86,6 @@ defmodule SequinWeb.TracerLive do
         props={
           %{
             trace_state: encode_trace_state(assigns),
-            account_id: assigns.account_id,
             consumers: encode_consumers(assigns.consumers),
             databases: encode_databases(assigns.databases),
             tables: encode_tables(assigns.tables),

@@ -22,7 +22,8 @@
 
 <button
   on:click|preventDefault={handleCopy}
-  class="relative flex items-center justify-center w-8 h-8"
+  class="relative flex items-center justify-center w-6 h-6 {$$props.class ||
+    ''}"
 >
   {#if showCheck}
     <div class="absolute" in:send out:receive>

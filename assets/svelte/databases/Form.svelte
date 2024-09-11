@@ -12,6 +12,7 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import CodeWithCopy from "../components/CodeWithCopy.svelte";
+  import CopyIcon from "../components/CopyIcon.svelte";
   import {
     Alert,
     AlertDescription,
@@ -28,7 +29,7 @@
   import { isValidPostgresURL, parsePostgresURL } from "./utils";
   import { Eye, EyeOff } from "lucide-svelte";
   import { Wand } from "lucide-svelte";
-  import { ChevronDown, ChevronUp, Zap } from "lucide-svelte";
+  import { Zap } from "lucide-svelte";
 
   export let database: {
     id?: string;
@@ -381,6 +382,32 @@
           language="sql"
           code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
         />
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle>IP addresses</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p class="text-sm text-muted-foreground mb-2">
+          Ensure your database and/or firewall allows connections from the
+          following IPs:
+        </p>
+        <ul class="list-disc list-inside space-y-2 text-sm">
+          <li>
+            <div class="inline-flex items-center">
+              <span class="mr-2">18.215.20.217</span>
+              <CopyIcon class="h-4 w-4" content="18.215.20.217" />
+            </div>
+          </li>
+          <li>
+            <div class="inline-flex items-center">
+              <span class="mr-2">54.210.150.114</span>
+              <CopyIcon class="h-4 w-4" content="54.210.150.114" />
+            </div>
+          </li>
+        </ul>
       </CardContent>
     </Card>
 

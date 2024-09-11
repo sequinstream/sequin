@@ -7,7 +7,7 @@ services:
     ports:
       - "7376:7376"
     environment:
-      - PG_HOSTNAME=sequin-postgres
+      - PG_HOSTNAME=sequin_postgres
       - PG_DATABASE=sequin
       - PG_PORT=5432
       - PG_USERNAME=postgres
@@ -15,12 +15,12 @@ services:
       - PG_POOL_SIZE=20
       - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
       - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
-      - REDIS_URL=redis://sequin-redis:6379
+      - REDIS_URL=redis://sequin_redis:6379
     depends_on:
-      - sequin-postgres
-      - sequin-redis
+      - sequin_postgres
+      - sequin_redis
 
-  sequin-postgres:
+  sequin_postgres:
     image: postgres:16
     ports:
       - "7377:5432"
@@ -32,11 +32,14 @@ services:
     volumes:
       - sequin_postgres_data:/var/lib/postgresql/data
 
-  sequin-redis:
+  sequin_redis:
     image: redis:7
     ports:
       - "7378:6379"
     command: ["redis-server", "--port", "6379"]
+    volumes:
+      - sequin_redis_data:/data
 
 volumes:
   sequin_postgres_data:
+  sequin_redis_data:

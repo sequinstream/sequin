@@ -5,6 +5,9 @@ defmodule Sequin.Accounts.User do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
+  @derive {Jason.Encoder,
+           only: [:id, :name, :email, :auth_provider, :account_id, :auth_provider_id, :inserted_at, :updated_at]}
+
   @type id :: String.t()
 
   typed_schema "users" do

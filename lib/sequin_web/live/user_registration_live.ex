@@ -98,15 +98,6 @@ defmodule SequinWeb.UserRegistrationLive do
 
         changeset = Accounts.change_user_registration(user)
 
-        Posthog.capture("User Signed Up", %{
-          distinct_id: user.id,
-          properties: %{
-            email: user.email,
-            auth_provider: :identity,
-            "$groups": %{account: user.account_id}
-          }
-        })
-
         {:noreply, socket |> assign(trigger_submit: true) |> assign_form(changeset)}
 
       {:error, %Ecto.Changeset{} = changeset} ->

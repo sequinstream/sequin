@@ -155,6 +155,7 @@ if config_env() == :prod do
     ]
 
   config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
+  config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
 
   config :swoosh, Sequin.Mailer, api_key: get_env.("SENDGRID_API_KEY")
 

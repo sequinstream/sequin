@@ -31,7 +31,7 @@ import { toast } from "svelte-sonner";
 import posthog from "posthog-js";
 import Intercom from "@intercom/messenger-js-sdk";
 
-posthog.init("phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY", {
+posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",
   ui_host: "https://us.posthog.com",
   session_recording: {

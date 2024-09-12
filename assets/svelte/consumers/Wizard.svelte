@@ -1142,10 +1142,10 @@
                   </div>
 
                   {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
-                    <div class="mt-4">
+                    <div class="mt-4 overflow-x-auto">
                       <Label>Fully Qualified URL</Label>
                       <p
-                        class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+                        class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
                       >
                         {(form.httpEndpointId
                           ? selectedHttpEndpoint?.baseUrl

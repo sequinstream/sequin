@@ -306,10 +306,10 @@ alter table {consumer.source_table.schema}.{consumer.source_table
               {/if}
             </div>
           </div>
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-2 overflow-x-auto">
             <Webhook class="h-5 w-5 text-gray-400" />
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
               >{fullEndpointUrl}</span
             >
           </div>

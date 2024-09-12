@@ -28,7 +28,14 @@ defmodule Sequin.Application do
   end
 
   defp children(_) do
-    base_children() ++ [Sequin.ReplicationRuntime.Supervisor, Sequin.ConsumersRuntime.Supervisor]
+    base_children() ++
+      [
+        Sequin.ReplicationRuntime.Supervisor,
+        Sequin.ConsumersRuntime.Supervisor,
+        Sequin.Tracer.Starter,
+        Sequin.Health.HttpEndpointHealthChecker,
+        Sequin.Health.PostgresDatabaseHealthChecker
+      ]
   end
 
   defp base_children do
@@ -47,10 +54,7 @@ defmodule Sequin.Application do
       {Redix, {Application.get_env(:redix, :url), [name: :redix]}},
       ConnectionCache,
       SequinWeb.Presence,
-      Sequin.Health.HttpEndpointHealthChecker,
-      Sequin.Health.PostgresDatabaseHealthChecker,
       Sequin.Tracer.DynamicSupervisor,
-      Sequin.Tracer.Starter,
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]

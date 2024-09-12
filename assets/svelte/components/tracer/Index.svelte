@@ -411,16 +411,32 @@
           <p class="text-gray-600 mb-4">
             You need to create a database before tracing can occur.
           </p>
-          <div class="mb-6 video-container">
-            <iframe
-              src="https://www.youtube.com/embed/pi5g3Tzagxk"
-              title="YouTube video player"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            ></iframe>
+          <div class="mb-6 drop-shadow-lg video-container">
+            <script
+              src="https://fast.wistia.com/embed/medias/hw5rdi12ss.jsonp"
+              async
+            ></script><script
+              src="https://fast.wistia.com/assets/external/E-v1.js"
+              async
+            ></script>
+            <div
+              class="wistia_responsive_padding"
+              style="padding:59.38% 0 0 0;position:relative;"
+            >
+              <div
+                class="wistia_responsive_wrapper"
+                style="height:100%;left:0;position:absolute;top:0;width:100%;"
+              >
+                <div
+                  class="wistia_embed wistia_async_hw5rdi12ss seo=false videoFoam=true"
+                  style="height:100%;position:relative;width:100%"
+                >
+                  &nbsp;
+                </div>
+              </div>
+            </div>
           </div>
-          <a href="/databases" class="inline-block">
+          <a href="/databases/new" class="inline-block">
             <Button variant="default">
               Create Database
               <ArrowUpRight class="h-4 w-4 ml-2" />

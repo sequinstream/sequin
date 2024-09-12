@@ -118,7 +118,7 @@
           <div class="grid md:grid-cols-2 gap-4">
             <div>
               <span class="text-sm text-gray-500">Visibility Timeout</span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
@@ -141,7 +141,7 @@
             </div>
             <div>
               <span class="text-sm text-gray-500">Max Ack Pending</span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
@@ -166,7 +166,7 @@
             </div>
             <!-- <div>
               <span class="text-sm text-gray-500">Max Waiting</span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"

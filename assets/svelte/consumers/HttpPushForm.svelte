@@ -493,11 +493,13 @@
         {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
           <div class="mt-4">
             <Label>Fully Qualified URL</Label>
-            <p
-              class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
-            >
-              {fullUrl}
-            </p>
+            <div class="flex items-center space-x-2 overflow-x-auto">
+              <p
+                class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+              >
+                {fullUrl}
+              </p>
+            </div>
           </div>
         {/if}
       </CardContent>

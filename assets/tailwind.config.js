@@ -205,6 +205,30 @@ const config = {
         { values }
       );
     },
+    // Disable dark mode for scroll bars
+    function ({ addBase, theme }) {
+      addBase({
+        ":root": {
+          "--scrollbar-track": "#f1f1f1",
+          "--scrollbar-thumb": "#888",
+        },
+        ".dark": {
+          "--scrollbar-track": "#f1f1f1",
+          "--scrollbar-thumb": "#888",
+        },
+        "*::-webkit-scrollbar": {
+          width: "12px",
+        },
+        "*::-webkit-scrollbar-track": {
+          background: "var(--scrollbar-track)",
+        },
+        "*::-webkit-scrollbar-thumb": {
+          backgroundColor: "var(--scrollbar-thumb)",
+          borderRadius: "6px",
+          border: "3px solid var(--scrollbar-track)",
+        },
+      });
+    },
   ],
 };
 

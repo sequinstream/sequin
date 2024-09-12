@@ -10,6 +10,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -58,6 +59,13 @@ defmodule Sequin.Factory.ConsumersFactory do
     {source_tables, attrs} =
       Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
 
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
+
+    {record_consumer_state, attrs} =
+      Map.pop_lazy(attrs, :record_consumer_state, fn ->
+        if message_kind == :record, do: record_consumer_state_attrs()
+      end)
+
     merge_attributes(
       %HttpPushConsumer{
         account_id: account_id,
@@ -67,8 +75,9 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
-        message_kind: Factory.one_of([:event, :record]),
+        message_kind: message_kind,
         name: Factory.unique_word(),
+        record_consumer_state: record_consumer_state,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
         status: :active
@@ -123,16 +132,24 @@ defmodule Sequin.Factory.ConsumersFactory do
     {source_tables, attrs} =
       Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
 
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
+
+    {record_consumer_state, attrs} =
+      Map.pop_lazy(attrs, :record_consumer_state, fn ->
+        if message_kind == :record, do: record_consumer_state_attrs()
+      end)
+
     merge_attributes(
       %HttpPullConsumer{
         name: Factory.unique_word(),
-        message_kind: Factory.one_of([:event, :record]),
+        message_kind: message_kind,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
         ack_wait_ms: 30_000,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
         account_id: account_id,
+        record_consumer_state: record_consumer_state,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
         status: :active
@@ -171,6 +188,16 @@ defmodule Sequin.Factory.ConsumersFactory do
       Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
 
     consumer
+  end
+
+  def record_consumer_state_attrs(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    %RecordConsumerState{
+      sort_column_attnum: Enum.random(1..100)
+    }
+    |> merge_attributes(attrs)
+    |> Sequin.Map.from_ecto()
   end
 
   def source_table(attrs \\ []) do

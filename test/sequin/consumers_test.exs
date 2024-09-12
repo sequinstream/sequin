@@ -279,14 +279,12 @@ defmodule Sequin.ConsumersTest do
       assert length(fetched_records) == 3
 
       for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert record.data.record == %{
-                 "id" => character.id,
-                 "name" => character.name,
-                 "house" => character.house,
-                 "planet" => character.planet,
-                 "is_active" => character.is_active,
-                 "tags" => character.tags
-               }
+        assert_maps_equal(
+          record.data.record,
+          Map.from_struct(character),
+          ["id", "name", "house", "planet", "is_active", "tags"],
+          indifferent_keys: true
+        )
 
         assert record.data.metadata.table_name == "characters"
         assert record.data.metadata.table_schema == "public"
@@ -304,12 +302,9 @@ defmodule Sequin.ConsumersTest do
       assert length(fetched_records) == 3
 
       for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert record.data.record == %{
-                 "id_integer" => character.id_integer,
-                 "id_string" => character.id_string,
-                 "id_uuid" => character.id_uuid,
-                 "name" => character.name
-               }
+        assert_maps_equal(record.data.record, Map.from_struct(character), ["id_integer", "id_string", "id_uuid", "name"],
+          indifferent_keys: true
+        )
 
         assert record.data.metadata.table_name == "characters_multi_pk"
         assert record.data.metadata.table_schema == "public"
@@ -341,8 +336,8 @@ defmodule Sequin.ConsumersTest do
       assert Time.truncate(fetched_record.data.record["last_seen"], :second) ==
                character.last_seen
 
-      assert NaiveDateTime.truncate(fetched_record.data.record["created_at"], :second) ==
-               NaiveDateTime.truncate(character.created_at, :second)
+      assert NaiveDateTime.truncate(fetched_record.data.record["inserted_at"], :second) ==
+               NaiveDateTime.truncate(character.inserted_at, :second)
 
       assert NaiveDateTime.truncate(fetched_record.data.record["updated_at"], :second) ==
                NaiveDateTime.truncate(character.updated_at, :second)

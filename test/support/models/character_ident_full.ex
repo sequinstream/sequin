@@ -12,6 +12,8 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
     field :planet, :string
     field :is_active, :boolean
     field :tags, {:array, :string}
+
+    timestamps()
   end
 
   def table_oid do

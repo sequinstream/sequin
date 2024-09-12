@@ -12,6 +12,8 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
     field :id_string, :string, primary_key: true
     field :id_uuid, Ecto.UUID, primary_key: true
     field :name, :string
+
+    timestamps()
   end
 
   def table_oid do

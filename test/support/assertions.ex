@@ -247,12 +247,24 @@ defmodule Sequin.Test.Assertions do
       true
 
   """
-  @spec assert_maps_equal(map, map, [any]) :: true | no_return
-  @spec assert_maps_equal(map, map, comparison) :: true | no_return
-  def assert_maps_equal(left, right, keys_or_comparison) do
+  @spec assert_maps_equal(map, map, [any] | comparison, keyword) :: true | no_return
+  def assert_maps_equal(left, right, keys_or_comparison, opts \\ []) do
+    {left, right} =
+      if Keyword.get(opts, :indifferent_keys, false) do
+        {Sequin.Map.stringify_keys(left), Sequin.Map.stringify_keys(right)}
+      else
+        {left, right}
+      end
+
     {left_diff, right_diff, equal?, message} =
       if is_list(keys_or_comparison) do
-        keys = keys_or_comparison
+        keys =
+          if Keyword.get(opts, :indifferent_keys) do
+            Enum.map(keys_or_comparison, &to_string/1)
+          else
+            keys_or_comparison
+          end
+
         left = Map.take(left, keys)
         right = Map.take(right, keys)
         {left_diff, right_diff, equal?} = Comparisons.compare_maps(left, right)
@@ -260,7 +272,7 @@ defmodule Sequin.Test.Assertions do
         {left_diff, right_diff, equal?, message}
       else
         comparison = keys_or_comparison
-        {left, right, comparison.(left, right), "Maps not equal using given comprison"}
+        {left, right, comparison.(left, right), "Maps not equal using given comparison"}
       end
 
     if equal? do

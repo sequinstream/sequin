@@ -34,7 +34,7 @@ defmodule Sequin.Factory do
   def iso_timestamp, do: DateTime.to_iso8601(timestamp())
   def last_name, do: Faker.Person.last_name()
   def milliseconds, do: Faker.random_between(1, 300_000)
-  def naive_timestamp, do: Faker.NaiveDateTime.backward(365)
+  def naive_timestamp, do: NaiveDateTime.truncate(Faker.NaiveDateTime.backward(365), :second)
   def one_of(module) when is_atom(module), do: one_of(module.__valid_values__())
   def one_of(opts), do: Enum.random(opts)
   def password, do: Faker.String.base64(12)
@@ -50,7 +50,9 @@ defmodule Sequin.Factory do
   def port, do: Faker.random_between(5000, 9999)
   def postgres_object, do: Faker.Internet.domain_word()
   def name, do: to_string(Faker.Lorem.characters(10))
+  def time, do: Time.utc_now()
   def timestamp, do: Faker.DateTime.backward(365)
+
   def timestamp_between(min, max), do: Faker.DateTime.between(min, max)
   def timestamp_future, do: Faker.DateTime.forward(365)
   def timestamp_past, do: Faker.DateTime.backward(365)

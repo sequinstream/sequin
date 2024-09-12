@@ -8,6 +8,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
   alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.PostgresReplicationSlot
 
@@ -24,6 +25,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
              :name,
              :updated_at,
              :http_endpoint_id,
+             :record_consumer_state,
              :status,
              :replica_warning_dismissed,
              :health
@@ -41,6 +43,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :seq, :integer, read_after_writes: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
+    embeds_one :record_consumer_state, RecordConsumerState
 
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
@@ -78,6 +81,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       end
     )
     |> cast_embed(:source_tables)
+    |> cast_embed(:record_consumer_state)
     |> foreign_key_constraint(:http_endpoint_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> Sequin.Changeset.validate_name()

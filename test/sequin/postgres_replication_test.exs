@@ -133,14 +133,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_event.record_pks == [to_string(character.id)]
       %{data: data} = consumer_event
 
-      assert data.record == %{
-               "id" => character.id,
-               "name" => character.name,
-               "house" => character.house,
-               "planet" => character.planet,
-               "is_active" => character.is_active,
-               "tags" => character.tags
-             }
+      assert_maps_equal(data.record, Map.from_struct(character), ["id", "name", "house", "planet", "is_active", "tags"],
+        indifferent_keys: true
+      )
 
       assert is_nil(data.changes)
       assert data.action == :insert
@@ -187,13 +182,17 @@ defmodule Sequin.PostgresReplicationTest do
       assert update_event.record_pks == [to_string(character.id)]
       %{data: data} = update_event
 
+      character = Repo.reload(character)
+
       assert data.record == %{
                "id" => character.id,
                "name" => character.name,
                "house" => character.house,
                "planet" => "Arrakis",
                "is_active" => character.is_active,
-               "tags" => character.tags
+               "tags" => character.tags,
+               "inserted_at" => NaiveDateTime.to_iso8601(character.inserted_at),
+               "updated_at" => NaiveDateTime.to_iso8601(character.updated_at)
              }
 
       assert data.changes == %{}
@@ -262,12 +261,16 @@ defmodule Sequin.PostgresReplicationTest do
       # Assert the consumer event details
       %{data: data} = update_event
 
-      assert data.changes == %{
-               "house" => "Atreides",
-               "planet" => "Caladan",
-               "is_active" => true,
-               "tags" => ["heir", "kwisatz haderach"]
-             }
+      assert_maps_equal(
+        data.changes,
+        %{
+          "house" => "Atreides",
+          "planet" => "Caladan",
+          "is_active" => true,
+          "tags" => ["heir", "kwisatz haderach"]
+        },
+        ["house", "planet", "is_active", "tags"]
+      )
 
       assert data.action == :update
     end
@@ -290,7 +293,9 @@ defmodule Sequin.PostgresReplicationTest do
                "is_active" => nil,
                "name" => nil,
                "planet" => nil,
-               "tags" => nil
+               "tags" => nil,
+               "inserted_at" => nil,
+               "updated_at" => nil
              }
 
       assert data.changes == nil
@@ -325,14 +330,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       %{data: data} = delete_event
 
-      assert data.record == %{
-               "id" => character.id,
-               "name" => character.name,
-               "house" => character.house,
-               "planet" => character.planet,
-               "is_active" => character.is_active,
-               "tags" => character.tags
-             }
+      assert_maps_equal(data.record, Map.from_struct(character), ["id", "name", "house", "planet", "is_active", "tags"],
+        indifferent_keys: true
+      )
 
       assert data.changes == nil
       assert data.action == :delete

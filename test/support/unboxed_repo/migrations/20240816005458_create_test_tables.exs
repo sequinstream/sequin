@@ -9,6 +9,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :planet, :text
       add :is_active, :boolean
       add :tags, {:array, :text}
+
+      timestamps()
     end
 
     create table(:characters_ident_full) do
@@ -17,6 +19,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :planet, :text
       add :is_active, :boolean
       add :tags, {:array, :text}
+
+      timestamps()
     end
 
     execute "alter table characters_ident_full replica identity full"
@@ -27,6 +31,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :id_string, :string, primary_key: true
       add :id_uuid, :uuid, primary_key: true
       add :name, :text
+
+      timestamps()
     end
 
     # New table with all possible column types
@@ -38,12 +44,12 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :biography, :text
       add :birth_date, :date
       add :last_seen, :time
-      add :created_at, :naive_datetime
-      add :updated_at, :utc_datetime
       add :powers, {:array, :string}
       add :metadata, :map
       add :rating, :decimal
       add :avatar, :binary
+
+      timestamps()
     end
 
     execute "create publication characters_publication for table characters, characters_ident_full, characters_multi_pk, characters_detailed",

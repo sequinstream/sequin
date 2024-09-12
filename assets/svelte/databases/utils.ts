@@ -58,3 +58,19 @@ export function parsePostgresURL(url: string): {
           ssl: ssl
   };
 }
+
+/**
+ * Concatenates a base URL and a path, ensuring proper formatting.
+ * @param baseUrl The base URL
+ * @param path The path to append
+ * @returns The concatenated URL
+ */
+export function concatenateUrl(baseUrl: string, path: string): string {
+  const trimmedBase = baseUrl.replace(/\/$/, '');
+  
+  if (path) {
+    return `${trimmedBase}${path}`;
+  } else {
+    return trimmedBase;
+  }
+}

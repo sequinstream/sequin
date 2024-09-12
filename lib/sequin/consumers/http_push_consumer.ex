@@ -66,9 +66,9 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :replication_slot_id,
-      :http_endpoint_path,
       :status
     ])
+    |> cast(attrs, [:http_endpoint_path], empty_values: [])
     |> validate_required([:name, :status, :replication_slot_id])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
@@ -93,9 +93,9 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :status,
-      :http_endpoint_path,
       :replica_warning_dismissed
     ])
+    |> cast(attrs, [:http_endpoint_path], empty_values: [])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
     |> cast_embed(:source_tables)
@@ -156,8 +156,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     changeset
     |> validate_format(
       :http_endpoint_path,
-      ~r/^\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*$/,
-      message: "must be a valid URL path"
+      ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*)?$/,
+      message: "must be a valid URL path or empty"
     )
     |> validate_length(:http_endpoint_path, max: 2000)
   end

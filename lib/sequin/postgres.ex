@@ -100,6 +100,21 @@ defmodule Sequin.Postgres do
     "(#{params})"
   end
 
+  @doc """
+  Accepts a SQL string with ? placeholders. Returns a SQL string with $1, $2, etc. placeholders.
+  """
+  def parameterize_sql(sql) do
+    sql
+    |> String.split("?")
+    |> Enum.with_index()
+    |> Enum.reduce([], fn {part, index}, acc ->
+      ["$#{index + 1}", part | acc]
+    end)
+    |> List.delete_at(0)
+    |> Enum.reverse()
+    |> Enum.join("")
+  end
+
   def list_schemas(conn) do
     with {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
       filtered_schemas =
@@ -353,6 +368,6 @@ defmodule Sequin.Postgres do
       {:error, "bad literal/field/index/table name #{inspect(name)} (\" is not permitted)"}
     end
 
-    [?", name, ?"]
+    to_string([?", name, ?"])
   end
 end

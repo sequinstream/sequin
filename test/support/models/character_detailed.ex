@@ -14,12 +14,12 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
     field :biography, :string
     field :birth_date, :date
     field :last_seen, :time
-    field :created_at, :naive_datetime
-    field :updated_at, :utc_datetime
     field :powers, {:array, :string}
     field :metadata, :map
     field :rating, :decimal
     field :avatar, :binary
+
+    timestamps()
   end
 
   def table_oid do
@@ -43,8 +43,6 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
       :biography,
       :birth_date,
       :last_seen,
-      :created_at,
-      :updated_at,
       :powers,
       :metadata,
       :rating,

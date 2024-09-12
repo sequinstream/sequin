@@ -36,7 +36,7 @@ defmodule Sequin.DataCase do
   end
 
   setup tags do
-    if tags[:unboxed] do
+    if tags[:unboxed] || tags[:uses_characters] do
       UnboxedRepo.delete_all(Character)
       UnboxedRepo.delete_all(CharacterDetailed)
       UnboxedRepo.delete_all(CharacterMultiPK)

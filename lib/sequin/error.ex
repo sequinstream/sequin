@@ -182,6 +182,19 @@ defmodule Sequin.Error do
     end
   end
 
+  defmodule InvariantError do
+    @moduledoc false
+    @derive Jason.Encoder
+    @enforce_keys [:message]
+    defexception [:message]
+
+    @type t :: %__MODULE__{
+            message: String.t()
+          }
+
+    def from_json(json), do: JSON.struct(json, __MODULE__)
+  end
+
   defmodule Guards do
     @moduledoc false
     defguard is_error(error)
@@ -190,7 +203,8 @@ defmodule Sequin.Error do
                     is_exception(error, ServiceError) or
                     is_exception(error, TimeoutError) or
                     is_exception(error, UnauthorizedError) or
-                    is_exception(error, ValidationError)
+                    is_exception(error, ValidationError) or
+                    is_exception(error, InvariantError)
   end
 
   # STEP 3: Add the new error module to this type definition:
@@ -201,7 +215,7 @@ defmodule Sequin.Error do
           | TimeoutError.t()
           | UnauthorizedError.t()
           | ValidationError.t()
-
+          | InvariantError.t()
   # STEP 4: Add a constructor function for the new module in alphabetical order.
 
   # STEP 5: Add a factory function in Sequin.Factory.ErrorFactory for creating
@@ -239,6 +253,10 @@ defmodule Sequin.Error do
                | {:summary, String.t()}
                | {:code, atom()}
   def validation(opts), do: ValidationError.exception(opts)
+
+  @spec invariant([opt]) :: InvariantError.t()
+        when opt: {:message, String.t()}
+  def invariant(opts), do: InvariantError.exception(opts)
 
   @doc """
   Traverse a changeset to extract errors into a map.

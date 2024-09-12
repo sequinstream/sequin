@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
 
   alias __MODULE__
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SourceTable
   alias Sequin.Replication.PostgresReplicationSlot
 
@@ -21,6 +22,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
              :max_waiting,
              :message_kind,
              :name,
+             :record_consumer_state,
              :updated_at,
              :status
            ]}
@@ -36,6 +38,8 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     field :seq, :integer, read_after_writes: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
+    embeds_one :record_consumer_state, RecordConsumerState
+
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
 
@@ -60,6 +64,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :status
     ])
     |> cast_embed(:source_tables)
+    |> cast_embed(:record_consumer_state)
     |> validate_required([:name, :status])
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> Sequin.Changeset.validate_name()

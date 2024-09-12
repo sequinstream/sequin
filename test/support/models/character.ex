@@ -12,6 +12,8 @@ defmodule Sequin.Test.Support.Models.Character do
     field :planet, :string
     field :is_active, :boolean
     field :tags, {:array, :string}
+
+    timestamps()
   end
 
   def where_id(query \\ base_query(), id) do

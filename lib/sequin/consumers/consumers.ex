@@ -783,6 +783,8 @@ defmodule Sequin.Consumers do
     Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
     Metrics.incr_consumer_messages_processed_throughput(consumer, count_deleted + count_updated)
 
+    TracerServer.messages_acked(consumer, ack_ids)
+
     :ok
   end
 

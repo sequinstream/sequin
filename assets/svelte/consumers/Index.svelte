@@ -10,6 +10,7 @@
     CirclePlay,
     CircleStop,
     Database,
+    Zap,
   } from "lucide-svelte";
   import {
     DropdownMenu,
@@ -24,6 +25,11 @@
     AlertTitle,
   } from "$lib/components/ui/alert";
   import HealthPill from "../health/HealthPill.svelte";
+  import {
+    Popover,
+    PopoverTrigger,
+    PopoverContent,
+  } from "$lib/components/ui/popover";
   import { Badge } from "$lib/components/ui/badge";
 
   export let consumers: Array<{
@@ -60,19 +66,44 @@
           can create a consumer.
         </AlertDescription>
 
-        <a
-          href="/databases/new"
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-          class="col-start-2"
-        >
-          <Button
-            variant="default"
-            class="bg-matcha-600 text-white border-matcha-700 hover:bg-matcha-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+        <div class="flex mt-2 gap-4 col-start-2">
+          <a
+            href="/databases/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
-            Connect database
-          </Button>
-        </a>
+            <Button
+              variant="default"
+              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+              ><Database class="inline-block h-4 w-4 mr-2" />
+              Connect database
+            </Button>
+          </a>
+          <Popover>
+            <PopoverTrigger>
+              <Button variant="magic">
+                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-80">
+              <div class="space-y-2">
+                <h4 class="font-medium">Need a test database?</h4>
+                <p class="text-sm text-muted-foreground">
+                  We recommend setting up a free database with Supabase to get
+                  started.
+                </p>
+                <Button
+                  variant="outline"
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Go to Supabase Dashboard
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </Alert>
   {/if}

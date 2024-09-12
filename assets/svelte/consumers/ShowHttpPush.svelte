@@ -128,7 +128,7 @@
           <div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-4">
             <div>
               <span class="text-sm text-gray-500"> Request Timeout </span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
@@ -150,7 +150,7 @@
             </div>
             <div>
               <span class="text-sm text-gray-500">Max Pending Messages</span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
@@ -181,7 +181,7 @@
             </div>
             <div>
               <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
-              <Tooltip.Root openDelay={300}>
+              <Tooltip.Root openDelay={200}>
                 <Tooltip.Trigger>
                   <HelpCircle
                     class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"

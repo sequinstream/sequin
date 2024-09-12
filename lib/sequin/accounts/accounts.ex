@@ -16,6 +16,8 @@ defmodule Sequin.Accounts do
   alias Sequin.Replication
   alias Sequin.Repo
 
+  require Logger
+
   @doc """
   Checks if any accounts exist in the database. Used to determin if setup is required during self-hosted.
 
@@ -109,9 +111,19 @@ defmodule Sequin.Accounts do
       {:ok, account} = create_account(%{})
       {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
 
-      %User{account_id: account.id}
-      |> User.registration_changeset(attrs)
-      |> Repo.insert()
+      result =
+        %User{account_id: account.id}
+        |> User.registration_changeset(attrs)
+        |> Repo.insert()
+
+      case result do
+        {:ok, user} ->
+          broadcast_signup(user)
+          {:ok, user}
+
+        error ->
+          error
+      end
     end)
   end
 
@@ -120,10 +132,50 @@ defmodule Sequin.Accounts do
       {:ok, account} = create_account(%{})
       {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
 
-      %User{account_id: account.id}
-      |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
-      |> Repo.insert()
+      result =
+        %User{account_id: account.id}
+        |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
+        |> Repo.insert()
+
+      case result do
+        {:ok, user} ->
+          broadcast_signup(user)
+          {:ok, user}
+
+        error ->
+          error
+      end
     end)
+  end
+
+  defp broadcast_signup(user) do
+    # Record "User Signed Up" event in PostHog
+    Posthog.capture("User Signed Up", %{
+      distinct_id: user.id,
+      properties: %{
+        email: user.email,
+        auth_provider: user.auth_provider,
+        "$groups": %{account: user.account_id}
+      }
+    })
+
+    # Trigger Retool workflow to trigger ops tasks
+    Req.post(
+      "https://api.tryretool.com/v1/workflows/45a5dd7c-6517-4c0b-8c42-1a9388959e8c/startTrigger",
+      json: %{
+        type: "user_registration",
+        data: user
+      },
+      headers: [
+        {"X-Workflow-Api-Key", Application.fetch_env!(:sequin, :retool_workflow_key)},
+        {"Content-Type", "application/json"}
+      ]
+    )
+
+    # Ensure broadcase NEVER stalls a new user registration
+  rescue
+    err ->
+      Logger.error("Failed to broadcast signup for user #{user.id}. Error: #{inspect(err)}")
   end
 
   @doc """

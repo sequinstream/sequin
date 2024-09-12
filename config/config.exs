@@ -74,7 +74,8 @@ config :sequin,
   ecto_repos: [Sequin.Repo],
   env: Mix.env(),
   generators: [timestamp_type: :utc_datetime],
-  self_hosted: true
+  self_hosted: true,
+  retool_workflow_key: "dummy_retool_workflow_key"
 
 # Configure tailwind (the version is required)
 config :tailwind,

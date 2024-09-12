@@ -28,6 +28,7 @@
   import ShowHeader from "./ShowHeader.svelte";
   import HealthComponent from "../health/HealthComponent.svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import { concatenateUrl } from "../databases/utils";
 
   export let consumer;
   export let live;
@@ -68,6 +69,11 @@
     const uuid = url.split("/").pop();
     return `https://webhook.site/#!/view/${uuid}`;
   }
+
+  $: fullEndpointUrl = concatenateUrl(
+    consumer.http_endpoint.url,
+    consumer.http_endpoint_path
+  );
 </script>
 
 <div class="min-h-screen font-sans bg-white">
@@ -200,7 +206,7 @@
                 </Tooltip.Content>
               </Tooltip.Root>
               <div class="mt-2">
-                {#if consumer.http_endpoint_path === "" || consumer.http_endpoint_path === "/"}
+                {#if consumer.http_endpoint_path === ""}
                   <span
                     class="bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
                     >No path configured</span
@@ -304,7 +310,7 @@ alter table {consumer.source_table.schema}.{consumer.source_table
             <Webhook class="h-5 w-5 text-gray-400" />
             <span
               class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
-              >{consumer.http_endpoint.url}</span
+              >{fullEndpointUrl}</span
             >
           </div>
         </CardContent>

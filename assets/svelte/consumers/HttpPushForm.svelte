@@ -29,6 +29,7 @@
   import { cn } from "$lib/utils";
   import { toast } from "svelte-sonner";
   import { ExternalLinkIcon, Loader2 } from "lucide-svelte";
+  import { concatenateUrl } from "../databases/utils";
 
   export let live;
   export let parent;
@@ -143,6 +144,13 @@
   }
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+
+  $: fullUrl = concatenateUrl(
+    form.httpEndpointId
+      ? selectedHttpEndpoint?.baseUrl
+      : form.httpEndpoint.baseUrl,
+    form.httpEndpointPath
+  );
 </script>
 
 <FullPageModal
@@ -488,10 +496,7 @@
             <p
               class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
             >
-              {(form.httpEndpointId
-                ? selectedHttpEndpoint?.baseUrl
-                : form.httpEndpoint.baseUrl
-              ).replace(/\/$/, "")}/{form.httpEndpointPath.replace(/^\//, "")}
+              {fullUrl}
             </p>
           </div>
         {/if}

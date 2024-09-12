@@ -84,6 +84,22 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
+    @tag capture_log: true
+    test "request fails with a short receive_timeout", %{consumer: consumer} do
+      ack_wait_ms = consumer.ack_wait_ms
+
+      adapter = fn %Req.Request{} = req ->
+        assert req.options.receive_timeout == ack_wait_ms
+        {req, %Mint.TransportError{reason: :timeout}}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_event(consumer)
+
+      assert_receive {:ack, ^ref, [], [_failed]}, 2000
+    end
+
     defp start_pipeline!(consumer, adapter) do
       start_supervised!(
         {HttpPushPipeline,

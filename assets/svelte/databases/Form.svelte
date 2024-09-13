@@ -148,7 +148,32 @@
     <Card>
       <CardHeader class="flex flex-row items-center">
         <CardTitle class="flex-grow">Database connection details</CardTitle>
-        <div class="flex items-center space-x-2">
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <div class="flex items-center space-x-2 mb-2">
+          <Popover bind:open={popoverOpen}>
+            <PopoverTrigger>
+              <Button variant="magic">
+                <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with Connection
+                String
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="min-w-96 -mt-4">
+              <div class="space-y-2">
+                <Label for="url-input">PostgreSQL URL</Label>
+                <Input
+                  id="url-input"
+                  type="text"
+                  bind:value={urlInput}
+                  on:input={handleURLInput}
+                  placeholder="postgres://user:pass@host:port/db"
+                />
+                <Button on:click={autofillFromURL} disabled={!isValidURL}>
+                  Autofill
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
           <Popover>
             <PopoverTrigger>
               <Button variant="secondary">
@@ -174,31 +199,6 @@
             </PopoverContent>
           </Popover>
         </div>
-      </CardHeader>
-      <CardContent class="space-y-4">
-        <Popover bind:open={popoverOpen}>
-          <PopoverTrigger class="mb-2">
-            <Button variant="magic">
-              <Wand class="inline-block h-4 w-4 mr-2" /> Autofill with Connection
-              String
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent class="min-w-96 -mt-4">
-            <div class="space-y-2">
-              <Label for="url-input">PostgreSQL URL</Label>
-              <Input
-                id="url-input"
-                type="text"
-                bind:value={urlInput}
-                on:input={handleURLInput}
-                placeholder="postgres://user:pass@host:port/db"
-              />
-              <Button on:click={autofillFromURL} disabled={!isValidURL}>
-                Autofill
-              </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
         <div class="space-y-2">
           <Label for="hostname">Host</Label>
           <Input type="text" id="hostname" bind:value={form.hostname} />

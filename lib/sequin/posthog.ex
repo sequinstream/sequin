@@ -36,9 +36,12 @@ defmodule Sequin.Posthog do
   end
 
   defp build_event(event, properties, timestamp) do
+    {distinct_id, other_properties} = Map.pop(properties, :distinct_id)
+
     %{
       event: to_string(event),
-      properties: Map.new(properties),
+      distinct_id: distinct_id,
+      properties: other_properties.properties,
       timestamp: timestamp
     }
   end

@@ -1054,7 +1054,7 @@ defmodule Sequin.Consumers do
 
   defp column_filters_match_record?(column_filters, record) do
     Enum.all?(column_filters, fn filter ->
-      field = Enum.find(record, &(&1.column_attnum == filter.column_attnum))
+      field = Enum.find(record, fn {key, _value} -> key == filter.column_name end)
       field && apply_filter(filter.operator, elem(field, 1), filter.value)
     end)
   end

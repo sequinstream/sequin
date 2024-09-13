@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -47,6 +47,9 @@ addword:
 check-links:
 	@cd docs && mintlify broken-links
 
+buildpush:
+	mix buildpush
+
 help:
 	@echo "Available commands:"
 	@echo "  make dev       - Run the app locally"
@@ -62,6 +65,7 @@ help:
 	@echo "  make addword word=<word> - Add a word to project-words.txt"
 	@echo "  make check-links - Run mintlify broken-links in the docs directory"
 	@echo "  make deploy [sha=<commit-sha>] - Deploy the specified or latest commit"
+	@echo "  make buildpush - Run mix buildpush (build and push docker image)"
 
 deploy:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \

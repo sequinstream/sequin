@@ -1,9 +1,10 @@
-defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
+defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
-  alias Sequin.ConsumersRuntime.TableProducerServer
   alias Sequin.Databases
+  alias Sequin.DatabasesRuntime.TableProducer
+  alias Sequin.DatabasesRuntime.TableProducerServer
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -29,7 +30,7 @@ defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
     {:ok, database} = Databases.update_tables(database)
 
     consumer =
-      ConsumersFactory.insert_http_pull_consumer!(
+      ConsumersFactory.insert_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
         record_consumer_state: ConsumersFactory.record_consumer_state_attrs(),
@@ -82,6 +83,10 @@ defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
       end
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}
+
+      # Assert is cleaned up
+      assert Repo.reload(consumer).record_consumer_state.producer == :wal
+      assert :error = TableProducer.fetch_cursors(consumer.id)
     end
   end
 

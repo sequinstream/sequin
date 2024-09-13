@@ -1,17 +1,23 @@
-defmodule Sequin.ConsumersRuntime.TableProducer do
+defmodule Sequin.DatabasesRuntime.TableProducer do
   @moduledoc false
-  alias Sequin.Consumers.KeysetCursor
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Postgres
 
-  # Cursor
-  def cursors(consumer_id) do
-    case Redix.command(:redix, ["HGETALL", cursor_key(consumer_id)]) do
-      {:ok, result} ->
-        result |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, Jason.decode!(v)} end)
+  require Logger
 
-      _ ->
-        %{}
+  # Cursor
+  def fetch_cursors(consumer_id) do
+    case Redix.command(:redix, ["HGETALL", cursor_key(consumer_id)]) do
+      {:ok, []} ->
+        :error
+
+      {:ok, result} ->
+        r = result |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, Jason.decode!(v)} end)
+        {:ok, r}
+
+      error ->
+        error
     end
   end
 
@@ -25,6 +31,17 @@ defmodule Sequin.ConsumersRuntime.TableProducer do
   def update_cursor(consumer_id, type, cursor) when type in [:min, :max] do
     with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(consumer_id), type, Jason.encode!(cursor)]) do
       :ok
+    end
+  end
+
+  def delete_cursor(consumer_id) do
+    case fetch_cursors(consumer_id) do
+      {:ok, cursors} ->
+        Logger.info("[TableProducer] Deleting cursors for consumer #{consumer_id}", cursors)
+        Redix.command(:redix, ["DEL", cursor_key(consumer_id)])
+
+      :error ->
+        :ok
     end
   end
 

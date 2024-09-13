@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.KeysetCursor do
+defmodule Sequin.DatabasesRuntime.KeysetCursor do
   @moduledoc false
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Postgres

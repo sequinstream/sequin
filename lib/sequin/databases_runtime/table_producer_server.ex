@@ -1,10 +1,11 @@
-defmodule Sequin.ConsumersRuntime.TableProducerServer do
+defmodule Sequin.DatabasesRuntime.TableProducerServer do
   @moduledoc false
   use GenStateMachine, callback_mode: [:handle_event_function, :state_enter], restart: :transient
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.ConsumersRuntime.TableProducer
+  alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Repo
 
   require Logger
@@ -94,10 +95,11 @@ defmodule Sequin.ConsumersRuntime.TableProducerServer do
     {:keep_state, %{state | task_ref: task.ref}}
   end
 
-  def handle_event(:info, {ref, {:ok, nil}}, :query_max_cursor, %State{task_ref: ref}) do
+  def handle_event(:info, {ref, {:ok, nil}}, :query_max_cursor, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
     Logger.info("[TableProducerServer] Max cursor query returned nil. Table pagination complete.")
-    # TODO: Clean-up and shut down
+    Consumers.table_producer_finished(state.consumer.id)
+    TableProducer.delete_cursor(state.consumer.id)
 
     {:stop, :normal}
   end

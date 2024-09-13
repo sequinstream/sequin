@@ -120,6 +120,19 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_consumers_where_table_producer do
+    pull = Repo.all(preload(HttpPullConsumer.where_table_producer(), replication_slot: :postgres_database))
+    push = Repo.all(preload(HttpPushConsumer.where_table_producer(), replication_slot: :postgres_database))
+
+    pull ++ push
+  end
+
+  def table_producer_finished(consumer_id) do
+    consumer = get_consumer!(consumer_id)
+    state = Map.from_struct(consumer.record_consumer_state)
+    update_consumer(consumer, %{record_consumer_state: %{state | producer: :wal}})
+  end
+
   def update_consumer(%HttpPullConsumer{} = consumer, attrs) do
     consumer
     |> HttpPullConsumer.update_changeset(attrs)

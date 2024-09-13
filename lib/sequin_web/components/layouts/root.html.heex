@@ -10,6 +10,12 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
     </script>
+    <!-- LOADS THE WISTIA EMBED -->
+    <script src="https://fast.wistia.com/embed/medias/hw5rdi12ss.jsonp" async>
+    </script>
+    <script src="https://fast.wistia.com/assets/external/E-v1.js" async>
+    </script>
+    <!-- END WISTIA EMBED SCRIPTS-->
   </head>
   <body class="bg-white antialiased" data-ph-token={Application.get_env(:sequin, :posthog_token)}>
     <.svelte name="components/Toaster" />

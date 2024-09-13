@@ -9,7 +9,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.ConsumersRuntime.RecordHandlerMock
+  alias Sequin.Mocks.DatabasesRuntime.RecordHandlerMock
   alias Sequin.Test.Support.Models.Character
 
   @moduletag :uses_characters
@@ -51,7 +51,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       # Mock the RecordHandlerMock to send messages back to the test process
       expect(RecordHandlerMock, :handle_records, 3, fn _ctx, messages ->
         send(test_pid, {:records_handled, messages})
-        :ok
+        {:ok, length(messages)}
       end)
 
       # Insert initial 8 records

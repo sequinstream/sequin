@@ -24,13 +24,20 @@ defmodule SequinWeb.LiveHelpers do
   @spec current_account(Socket.t()) :: Account.t() | nil
   def current_account(socket) do
     user = current_user(socket)
-    user && user.account
+
+    if user && user.impersonating_account do
+      user.impersonating_account
+    else
+      user && user.account
+    end
   end
 
   @spec current_account_id(Socket.t()) :: Account.id() | nil
   def current_account_id(socket) do
-    account = current_account(socket)
-    account && account.id
+    user = current_user(socket)
+    impersonating_account_id = user && user.impersonating_account && user.impersonating_account.id
+
+    impersonating_account_id || user.account.id
   end
 
   def blank?(value) when is_list(value) do

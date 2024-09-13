@@ -5,6 +5,8 @@ defmodule Sequin.Accounts.User do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
+  alias Sequin.Accounts.Account
+
   @derive {Jason.Encoder,
            only: [:id, :name, :email, :auth_provider, :account_id, :auth_provider_id, :inserted_at, :updated_at]}
 
@@ -21,7 +23,8 @@ defmodule Sequin.Accounts.User do
     field :auth_provider_id, :string
     field :extra, :map
 
-    belongs_to :account, Sequin.Accounts.Account
+    belongs_to :account, Account
+    field :impersonating_account, :map, virtual: true
 
     timestamps(type: :utc_datetime)
   end

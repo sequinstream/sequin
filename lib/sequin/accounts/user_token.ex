@@ -15,6 +15,7 @@ defmodule Sequin.Accounts.UserToken do
   @confirm_validity_in_days 7
   @change_email_validity_in_days 7
   @session_validity_in_days 60
+  @impersonate_validity_in_days 1
 
   schema "users_tokens" do
     field :token, :binary
@@ -44,9 +45,9 @@ defmodule Sequin.Accounts.UserToken do
   and devices in the UI and allow users to explicitly expire any
   session they deem invalid.
   """
-  def build_session_token(user) do
+  def build_session_token(user, context \\ "session") do
     token = :crypto.strong_rand_bytes(@rand_size)
-    {token, %UserToken{token: token, context: "session", user_id: user.id}}
+    {token, %UserToken{token: token, context: context, user_id: user.id}}
   end
 
   @doc """
@@ -55,14 +56,21 @@ defmodule Sequin.Accounts.UserToken do
   The query returns the user found by the token, if any.
 
   The token is valid if it matches the value in the database and it has
-  not expired (after @session_validity_in_days).
+  not expired (after @session_validity_in_days for "session" context,
+  or @impersonate_validity_in_days for "impersonate" context).
   """
-  def verify_session_token_query(token) do
+  def verify_session_token_query(token, context \\ "session") do
+    validity_days =
+      case context do
+        "session" -> @session_validity_in_days
+        "impersonate" -> @impersonate_validity_in_days
+      end
+
     query =
-      from token in by_token_and_context_query(token, "session"),
+      from token in by_token_and_context_query(token, context),
         join: user in assoc(token, :user),
-        where: token.inserted_at > ago(@session_validity_in_days, "day"),
-        select: user
+        where: token.inserted_at > ago(^validity_days, "day"),
+        select: {user, token.sent_to}
 
     {:ok, query}
   end
@@ -178,5 +186,10 @@ defmodule Sequin.Accounts.UserToken do
 
   def by_user_and_contexts_query(user, [_ | _] = contexts) do
     from t in UserToken, where: t.user_id == ^user.id and t.context in ^contexts
+  end
+
+  def build_impersonation_token(user, account_id) do
+    token = :crypto.strong_rand_bytes(@rand_size)
+    {token, %UserToken{token: token, context: "impersonate", user_id: user.id, sent_to: account_id}}
   end
 end

@@ -4,7 +4,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Repo
 
@@ -29,12 +31,11 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       field :consumer, String.t()
       field :cursor_max, map()
       field :cursor_min, map()
-      field :record_handler_ctx, any()
-      field :record_handler_module, module()
       field :page_size, integer()
       field :task_ref, reference()
       field :test_pid, pid()
       field :table_oid, integer()
+      field :successive_failure_count, integer(), default: 0
     end
   end
 
@@ -48,8 +49,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
     state = %State{
       consumer: consumer,
-      record_handler_ctx: Keyword.fetch!(opts, :record_handler_ctx),
-      record_handler_module: Keyword.fetch!(opts, :record_handler_module),
       page_size: Keyword.get(opts, :page_size, 1000),
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid)
@@ -107,7 +106,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   def handle_event(:info, {ref, {:ok, result}}, :query_max_cursor, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
     :ok = TableProducer.update_cursor(state.consumer.id, :max, result)
-    state = %{state | cursor_max: result, task_ref: nil}
+    state = %{state | cursor_max: result, task_ref: nil, successive_failure_count: 0}
 
     {:next_state, :query_fetch_records, state}
   end
@@ -138,7 +137,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   def handle_event(:info, {ref, {:ok, result}}, :query_fetch_records, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    state = %{state | task_ref: nil}
+    # Reset failure count on success
+    state = %{state | task_ref: nil, successive_failure_count: 0}
 
     if length(result) == state.page_size * @page_size_multiplier do
       if state.test_pid do
@@ -150,16 +150,31 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       Logger.info("[TableProducerServer] Fetch records result size equals the limit. Resetting process.")
       {:next_state, :query_max_cursor, state}
     else
-      apply(state.record_handler_module, :handle_records, [state.record_handler_ctx, result])
+      # Call handle_records inline
+      {:ok, _count} = handle_records(state.consumer, table(state), result)
       :ok = TableProducer.update_cursor(state.consumer.id, :min, state.cursor_max)
       state = %State{state | cursor_min: state.cursor_max, cursor_max: nil}
       {:next_state, :query_max_cursor, state}
     end
   end
 
+  # Implement retry logic in case of task failure
   def handle_event(:info, {:DOWN, ref, _, _, reason}, state_name, %State{task_ref: ref} = state) do
     Logger.error("[TableProducerServer] Task for #{state_name} failed with reason #{inspect(reason)}")
-    {:next_state, state_name, %{state | task_ref: nil}}
+
+    state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
+    backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
+
+    actions = [
+      {:state_timeout, backoff, :retry}
+    ]
+
+    {:next_state, {:awaiting_retry, state_name}, state, actions}
+  end
+
+  # Handle the retry after backoff
+  def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
+    {:next_state, state_name, state}
   end
 
   defp conn(database) do
@@ -176,10 +191,36 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     %{table | sort_column_attnum: Map.fetch!(database.tables_sort_column_attnums, state.table_oid)}
   end
 
+  # Message handling
+  defp handle_records(consumer, table, records) do
+    Logger.info("[TableProducerServer] Handling #{length(records)} record(s)")
+
+    consumer_records =
+      records
+      |> Enum.filter(&Consumers.matches_record?(consumer, table.oid, &1))
+      |> Enum.map(fn record ->
+        Sequin.Map.from_ecto(%ConsumerRecord{
+          consumer_id: consumer.id,
+          table_oid: table.oid,
+          record_pks: record_pks(table, record)
+        })
+      end)
+
+    # TODO
+    # TracerServer.records_ingested(consumer, consumer_records)
+    Consumers.insert_consumer_records(consumer_records)
+  end
+
+  defp record_pks(%Table{} = table, map) do
+    table.columns
+    |> Enum.filter(& &1.is_pk?)
+    |> Enum.sort_by(& &1.attnum)
+    |> Enum.map(&Map.fetch!(map, &1.name))
+  end
+
   defp maybe_setup_allowances(nil), do: :ok
 
   defp maybe_setup_allowances(test_pid) do
-    Mox.allow(Sequin.Mocks.DatabasesRuntime.RecordHandlerMock, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
   end
 end

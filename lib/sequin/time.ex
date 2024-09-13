@@ -56,4 +56,26 @@ defmodule Sequin.Time do
       {:error, error} -> raise error
     end
   end
+
+  @doc """
+  Calculates exponential backoff time in milliseconds.
+
+  ## Parameters
+    - base: The base retry time in milliseconds (default: 1000)
+    - count: The number of failed attempts (default: 0)
+    - max: The maximum backoff time in milliseconds (default: 5 minutes)
+
+  ## Examples
+      iex> Sequin.Time.exponential_backoff(1000, 0)
+      1000
+      iex> Sequin.Time.exponential_backoff(1000, 3)
+      8000
+      iex> Sequin.Time.exponential_backoff(1000, 10, 60_000)
+      60000
+  """
+  @spec exponential_backoff(non_neg_integer(), non_neg_integer(), non_neg_integer()) :: non_neg_integer()
+  def exponential_backoff(base \\ 1000, count \\ 0, max \\ :timer.minutes(5)) do
+    backoff = if count <= 1, do: base, else: base * :math.pow(2, count - 1)
+    trunc(min(backoff, max))
+  end
 end

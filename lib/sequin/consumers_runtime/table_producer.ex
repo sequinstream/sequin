@@ -33,22 +33,22 @@ defmodule Sequin.ConsumersRuntime.TableProducer do
   end
 
   # Queries
-  def fetch_records_in_range(_conn, _table, _sort_column_attnum, _min, max_cursor, _limit)
+  def fetch_records_in_range(_conn, _table, _min, max_cursor, _limit)
       when map_size(max_cursor) == 0 or is_nil(max_cursor),
       do: raise(ArgumentError, "max cursor cannot be empty")
 
-  def fetch_records_in_range(conn, %Table{} = table, sort_column_attnum, min_cursor, max_cursor, limit) do
-    order_by_clause = KeysetCursor.order_by_sql(table, sort_column_attnum)
+  def fetch_records_in_range(conn, %Table{} = table, min_cursor, max_cursor, limit) do
+    order_by_clause = KeysetCursor.order_by_sql(table)
 
-    max_where_clause = KeysetCursor.where_sql(table, sort_column_attnum, "<=")
-    max_cursor_values = KeysetCursor.casted_cursor_values(table, sort_column_attnum, max_cursor)
+    max_where_clause = KeysetCursor.where_sql(table, "<=")
+    max_cursor_values = KeysetCursor.casted_cursor_values(table, max_cursor)
 
     {min_where_clause, min_cursor_values} =
       if is_nil(min_cursor) do
         {"", []}
       else
-        values = KeysetCursor.casted_cursor_values(table, sort_column_attnum, min_cursor)
-        {" and " <> KeysetCursor.where_sql(table, sort_column_attnum, ">"), values}
+        values = KeysetCursor.casted_cursor_values(table, min_cursor)
+        {" and " <> KeysetCursor.where_sql(table, ">"), values}
       end
 
     sql =
@@ -70,13 +70,13 @@ defmodule Sequin.ConsumersRuntime.TableProducer do
     end
   end
 
-  def fetch_max_cursor(conn, %Table{} = table, sort_column_attnum, min_cursor, limit) do
+  def fetch_max_cursor(conn, %Table{} = table, min_cursor, limit) do
     select_columns =
       table
-      |> KeysetCursor.cursor_columns(sort_column_attnum)
+      |> KeysetCursor.cursor_columns()
       |> Enum.map_join(", ", fn %Table.Column{} = col -> Postgres.quote_name(col.name) end)
 
-    {inner_sql, params} = fetch_window_query(table, select_columns, sort_column_attnum, min_cursor, limit)
+    {inner_sql, params} = fetch_window_query(table, select_columns, min_cursor, limit)
 
     sql = """
     with window_data as (
@@ -92,13 +92,13 @@ defmodule Sequin.ConsumersRuntime.TableProducer do
     with {:ok, %Postgrex.Result{} = result} <- Postgrex.query(conn, sql, params) do
       case result.num_rows do
         0 -> {:ok, nil}
-        _ -> {:ok, KeysetCursor.cursor_from_result(table, sort_column_attnum, result)}
+        _ -> {:ok, KeysetCursor.cursor_from_result(table, result)}
       end
     end
   end
 
-  defp fetch_window_query(%Table{} = table, select_columns, sort_column_attnum, nil, limit) do
-    order_by = KeysetCursor.order_by_sql(table, sort_column_attnum)
+  defp fetch_window_query(%Table{} = table, select_columns, nil, limit) do
+    order_by = KeysetCursor.order_by_sql(table)
 
     sql = """
     select #{select_columns}, row_number() over (order by #{order_by}) as row_num
@@ -110,10 +110,10 @@ defmodule Sequin.ConsumersRuntime.TableProducer do
     {sql, [limit]}
   end
 
-  defp fetch_window_query(%Table{} = table, select_columns, sort_column_attnum, min_cursor, limit) do
-    order_by = KeysetCursor.order_by_sql(table, sort_column_attnum)
-    min_where_clause = KeysetCursor.where_sql(table, sort_column_attnum, ">")
-    cursor_values = KeysetCursor.casted_cursor_values(table, sort_column_attnum, min_cursor)
+  defp fetch_window_query(%Table{} = table, select_columns, min_cursor, limit) do
+    order_by = KeysetCursor.order_by_sql(table)
+    min_where_clause = KeysetCursor.where_sql(table, ">")
+    cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
 
     sql = """
     select #{select_columns}, row_number() over (order by #{order_by}) as row_num

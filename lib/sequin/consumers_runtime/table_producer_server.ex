@@ -83,7 +83,6 @@ defmodule Sequin.ConsumersRuntime.TableProducerServer do
             TableProducer.fetch_max_cursor(
               conn,
               table(state),
-              state.consumer.record_consumer_state.sort_column_attnum,
               state.cursor_min,
               state.page_size
             )
@@ -123,7 +122,6 @@ defmodule Sequin.ConsumersRuntime.TableProducerServer do
             TableProducer.fetch_records_in_range(
               conn,
               table(state),
-              state.consumer.record_consumer_state.sort_column_attnum,
               state.cursor_min,
               state.cursor_max,
               state.page_size * @page_size_multiplier
@@ -172,7 +170,8 @@ defmodule Sequin.ConsumersRuntime.TableProducerServer do
 
   defp table(%State{} = state) do
     database = database(state)
-    Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
+    table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
+    %{table | sort_column_attnum: Map.fetch!(database.tables_sort_column_attnums, state.table_oid)}
   end
 
   defp maybe_setup_allowances(nil), do: :ok

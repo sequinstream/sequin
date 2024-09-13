@@ -194,7 +194,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs = Map.new(attrs)
 
     %RecordConsumerState{
-      sort_column_attnum: Enum.random(1..100)
+      producer: Enum.random([:table_and_wal, :wal])
     }
     |> merge_attributes(attrs)
     |> Sequin.Map.from_ecto()

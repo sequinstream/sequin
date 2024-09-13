@@ -20,10 +20,6 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :posthog,
-  api_url: "https://us.i.posthog.com",
-  api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
-
 config :redix,
   url: "redis://localhost:6379"
 
@@ -32,6 +28,8 @@ config :sequin, Oban,
   queues: [default: 10],
   repo: Sequin.Repo
 
+config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
+
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails
@@ -39,8 +37,6 @@ config :sequin, Oban,
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
-config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
-
 config :sequin, Sequin.Repo,
   config_schema_prefix: sequin_config_schema,
   stream_schema_prefix: sequin_stream_schema,

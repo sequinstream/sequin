@@ -12,6 +12,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Error
   alias Sequin.Name
   alias Sequin.Postgres
+  alias Sequin.Posthog
   alias Sequin.Repo
 
   require Logger

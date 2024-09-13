@@ -13,6 +13,7 @@ defmodule Sequin.Accounts do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Error
+  alias Sequin.Posthog
   alias Sequin.Replication
   alias Sequin.Repo
 

@@ -106,6 +106,10 @@ if config_env() == :prod and not self_hosted do
   host = System.get_env("PHX_HOST") || "console.sequinstream.com"
   port = String.to_integer(System.get_env("PORT") || "7376")
 
+  config :sequin, Sequin.Posthog,
+    api_url: "https://us.i.posthog.com",
+    api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
+
   config :sequin, Sequin.Repo,
     ssl: AwsRdsCAStore.ssl_opts(database_url),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),

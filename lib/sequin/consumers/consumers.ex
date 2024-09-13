@@ -20,6 +20,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Postgres
+  alias Sequin.Posthog
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer

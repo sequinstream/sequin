@@ -10,6 +10,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Name
+  alias Sequin.Posthog
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo

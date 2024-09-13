@@ -36,6 +36,17 @@ export function formatRelativeTimestamp(timestamp: string): string {
   }
 }
 
+export function truncateMiddle(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  const startChars = Math.ceil((maxLength - 3) / 2);
+  const endChars = Math.floor((maxLength - 3) / 2);
+  return (
+    text.substring(0, startChars) +
+    "..." +
+    text.substring(text.length - endChars)
+  );
+}
+
 export function getColorFromName(name: string): string {
   const colors = [
     "bg-red-100",
@@ -116,7 +127,7 @@ export const flyAndScale = (
 
 export function formatNumberWithCommas(number: number | null): string {
   if (number === null) {
-    return 'N/A';
+    return "N/A";
   }
   return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }

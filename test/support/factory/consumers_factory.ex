@@ -68,6 +68,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     merge_attributes(
       %HttpPushConsumer{
+        id: Factory.uuid(),
         account_id: account_id,
         ack_wait_ms: 30_000,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
@@ -141,6 +142,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     merge_attributes(
       %HttpPullConsumer{
+        id: Factory.uuid(),
         name: Factory.unique_word(),
         message_kind: message_kind,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),

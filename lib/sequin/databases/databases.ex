@@ -292,6 +292,13 @@ defmodule Sequin.Databases do
     {:ok, tables}
   end
 
+  def fetch_table(%PostgresDatabase{tables: tables}, oid) do
+    case Enum.find(tables, fn t -> t.oid == oid end) do
+      nil -> {:error, Error.not_found(entity: :table, params: [oid: oid])}
+      table -> {:ok, table}
+    end
+  end
+
   @spec update_tables(%PostgresDatabase{}) :: {:ok, %PostgresDatabase{}} | {:error, term()}
   def update_tables(%PostgresDatabase{} = db) do
     with_connection(db, fn conn ->

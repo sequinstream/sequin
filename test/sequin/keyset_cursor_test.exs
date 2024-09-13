@@ -4,11 +4,12 @@ defmodule Sequin.Consumers.KeysetCursorTest do
   alias Sequin.Consumers.KeysetCursor
   alias Sequin.Factory.DatabasesFactory
 
-  describe "where/3" do
+  @sort_column_attnum 1
+
+  describe "where_sql/2" do
     test "generates correct string with sort column and two PKs" do
       table = create_test_table()
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "updated_at")).attnum
-      result = KeysetCursor.where_sql(table, sort_column_attnum, ">")
+      result = KeysetCursor.where_sql(table, ">")
 
       assert result == ~s{("updated_at", "id1", "id2") > (?, ?, ?)}
     end
@@ -16,13 +17,12 @@ defmodule Sequin.Consumers.KeysetCursorTest do
     test "handles different column names and attnums" do
       table =
         create_test_table([
-          {"modified_at", "timestamp", 3, false},
-          {"uuid_col", "uuid", 1, true},
-          {"big_id", "bigint", 2, true}
+          {"modified_at", "timestamp", @sort_column_attnum, false},
+          {"uuid_col", "uuid", 2, true},
+          {"big_id", "bigint", 3, true}
         ])
 
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "modified_at")).attnum
-      result = KeysetCursor.where_sql(table, sort_column_attnum, "<")
+      result = KeysetCursor.where_sql(table, "<")
 
       assert result == ~s{("modified_at", "uuid_col", "big_id") < (?, ?, ?)}
     end
@@ -30,31 +30,28 @@ defmodule Sequin.Consumers.KeysetCursorTest do
     test "handles sort column as primary key" do
       table =
         create_test_table([
-          {"id1", "bigint", 1, true},
+          {"id1", "bigint", @sort_column_attnum, true},
           {"id2", "uuid", 2, true},
           {"updated_at", "timestamp", 3, false}
         ])
 
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "id1")).attnum
-      result = KeysetCursor.where_sql(table, sort_column_attnum, ">")
+      result = KeysetCursor.where_sql(table, ">")
 
       assert result == ~s{("id1", "id2") > (?, ?)}
     end
   end
 
-  describe "order_by/3" do
+  describe "order_by_sql/2" do
     test "generates correct string with default ascending order" do
       table = create_test_table()
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "updated_at")).attnum
-      result = KeysetCursor.order_by_sql(table, sort_column_attnum)
+      result = KeysetCursor.order_by_sql(table)
 
       assert result == ~s("updated_at" asc, "id1" asc, "id2" asc)
     end
 
     test "generates correct string with descending order" do
       table = create_test_table()
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "updated_at")).attnum
-      result = KeysetCursor.order_by_sql(table, sort_column_attnum, "desc")
+      result = KeysetCursor.order_by_sql(table, "desc")
 
       assert result == ~s("updated_at" desc, "id1" desc, "id2" desc)
     end
@@ -62,37 +59,35 @@ defmodule Sequin.Consumers.KeysetCursorTest do
     test "handles sort column as primary key" do
       table =
         create_test_table([
-          {"id1", "bigint", 1, true},
-          {"id2", "uuid", 2, true},
-          {"updated_at", "timestamp", 3, false}
+          {"id1", "bigint", @sort_column_attnum, true},
+          {"id2", "uuid", 2, true}
         ])
 
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "id1")).attnum
-      result = KeysetCursor.order_by_sql(table, sort_column_attnum)
+      result = KeysetCursor.order_by_sql(table)
 
       assert result == ~s("id1" asc, "id2" asc)
     end
   end
 
-  describe "attnums_to_names/2" do
-    test "converts cursor keyed by attnums to column names" do
+  describe "casted_cursor_values/2" do
+    test "converts cursor keyed by attnum to ordered list of values" do
       table = create_test_table()
-      cursor = %{1 => "2023-01-01", 2 => 123, 3 => "550e8400-e29b-41d4-a716-446655440000"}
 
-      result = KeysetCursor.attnums_to_names(table, cursor)
+      cursor = %{
+        1 => "2023-01-01",
+        2 => 123,
+        3 => "550e8400-e29b-41d4-a716-446655440000"
+      }
 
-      assert result == %{
-               "updated_at" => "2023-01-01",
-               "id1" => 123,
-               "id2" => "550e8400-e29b-41d4-a716-446655440000"
-             }
+      result = KeysetCursor.casted_cursor_values(table, cursor)
+
+      assert result == ["2023-01-01", 123, UUID.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]
     end
   end
 
-  describe "cursor_from_result/3" do
-    test "converts Postgrex.Result to cursor keyed by attnums" do
+  describe "cursor_from_result/2" do
+    test "converts Postgrex.Result to cursor keyed by attnum" do
       table = create_test_table()
-      sort_column_attnum = Enum.find(table.columns, &(&1.name == "updated_at")).attnum
 
       result = %Postgrex.Result{
         columns: ["updated_at", "id1", "id2"],
@@ -100,7 +95,7 @@ defmodule Sequin.Consumers.KeysetCursorTest do
         num_rows: 1
       }
 
-      cursor = KeysetCursor.cursor_from_result(table, sort_column_attnum, result)
+      cursor = KeysetCursor.cursor_from_result(table, result)
 
       assert cursor == %{
                1 => "2023-01-01",
@@ -111,7 +106,11 @@ defmodule Sequin.Consumers.KeysetCursorTest do
   end
 
   defp create_test_table(
-         columns \\ [{"updated_at", "timestamp", 1, false}, {"id1", "bigint", 2, true}, {"id2", "uuid", 3, true}]
+         columns \\ [
+           {"updated_at", "timestamp", @sort_column_attnum, false},
+           {"id1", "bigint", 2, true},
+           {"id2", "uuid", 3, true}
+         ]
        ) do
     columns =
       Enum.map(columns, fn {name, type, attnum, is_pk?} ->
@@ -123,6 +122,6 @@ defmodule Sequin.Consumers.KeysetCursorTest do
         })
       end)
 
-    DatabasesFactory.table(%{columns: columns})
+    DatabasesFactory.table(%{columns: columns, sort_column_attnum: @sort_column_attnum})
   end
 end

@@ -15,8 +15,8 @@ defmodule Sequin.Consumers.KeysetCursor do
     end)
   end
 
-  @spec cursor_columns(Table.t(), integer()) :: [Table.Column.t()]
-  def cursor_columns(table, sort_column_attnum) do
+  @spec cursor_columns(Table.t()) :: [Table.Column.t()]
+  def cursor_columns(%Table{sort_column_attnum: sort_column_attnum} = table) when not is_nil(sort_column_attnum) do
     sort_column = Sequin.Enum.find!(table.columns, fn column -> column.attnum == sort_column_attnum end)
     sorted_pks = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.sort_by(& &1.attnum)
 
@@ -27,9 +27,9 @@ defmodule Sequin.Consumers.KeysetCursor do
     end
   end
 
-  @spec where_sql(Table.t(), integer(), String.t()) :: String.t()
-  def where_sql(%Table{} = table, sort_column_attnum, operator) do
-    columns = cursor_columns(table, sort_column_attnum)
+  @spec where_sql(Table.t(), String.t()) :: String.t()
+  def where_sql(%Table{} = table, operator) do
+    columns = cursor_columns(table)
 
     quoted_columns =
       columns
@@ -41,17 +41,17 @@ defmodule Sequin.Consumers.KeysetCursor do
     "#{lhs} #{operator} #{rhs}"
   end
 
-  @spec order_by_sql(Table.t(), integer(), String.t()) :: String.t()
-  def order_by_sql(%Table{} = table, sort_column_attnum, direction \\ "asc") do
+  @spec order_by_sql(Table.t(), String.t()) :: String.t()
+  def order_by_sql(%Table{} = table, direction \\ "asc") do
     table
-    |> cursor_columns(sort_column_attnum)
+    |> cursor_columns()
     |> quoted_column_names()
     |> Enum.map_join(", ", &"#{&1} #{direction}")
   end
 
-  @spec casted_cursor_values(Table.t(), integer(), map()) :: [any()]
-  def casted_cursor_values(%Table{} = table, sort_column_attnum, cursor) do
-    columns = cursor_columns(table, sort_column_attnum)
+  @spec casted_cursor_values(Table.t(), map()) :: [any()]
+  def casted_cursor_values(%Table{} = table, cursor) do
+    columns = cursor_columns(table)
 
     Enum.map(columns, fn %Table.Column{} = column ->
       val = Map.fetch!(cursor, column.attnum)
@@ -67,9 +67,9 @@ defmodule Sequin.Consumers.KeysetCursor do
   @doc """
   Result is the result of fetching the cursor column values of a single row from the database
   """
-  @spec cursor_from_result(Table.t(), integer(), Postgrex.Result.t()) :: map()
-  def cursor_from_result(%Table{} = table, sort_column_attnum, %Postgrex.Result{num_rows: 1} = result) do
-    cursor_columns = cursor_columns(table, sort_column_attnum)
+  @spec cursor_from_result(Table.t(), Postgrex.Result.t()) :: map()
+  def cursor_from_result(%Table{} = table, %Postgrex.Result{num_rows: 1} = result) do
+    cursor_columns = cursor_columns(table)
     result = result |> Postgres.result_to_maps() |> List.first()
 
     Map.new(cursor_columns, fn %Table.Column{} = column ->

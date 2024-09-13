@@ -31,7 +31,8 @@ defmodule Sequin.Factory.DatabasesFactory do
         username: Factory.username(),
         password: Factory.password(),
         tables: tables,
-        tables_refreshed_at: tables_refreshed_at
+        tables_refreshed_at: tables_refreshed_at,
+        tables_sort_column_attnums: %{Factory.unique_integer() => Factory.unique_integer()}
       },
       attrs
     )

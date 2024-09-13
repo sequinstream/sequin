@@ -990,7 +990,7 @@ defmodule Sequin.Consumers do
       Enum.any?(consumer.source_tables, fn source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
-        column_filters_match = column_filters_match?(source_table.column_filters, message)
+        column_filters_match = column_filters_match_message?(source_table.column_filters, message)
 
         Logger.debug("""
         [Consumers]
@@ -1027,17 +1027,35 @@ defmodule Sequin.Consumers do
       reraise error, __STACKTRACE__
   end
 
+  def matches_record?(consumer, table_oid, record) do
+    source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table_oid))
+    matches? = column_filters_match_record?(source_table.column_filters, record)
+
+    Health.update(consumer, :filters, :healthy)
+
+    matches?
+  end
+
   defp action_matches?(source_table_actions, message_action) do
     message_action in source_table_actions
   end
 
-  defp column_filters_match?([], _message), do: true
+  defp column_filters_match_message?([], _message), do: true
 
-  defp column_filters_match?(column_filters, message) do
+  defp column_filters_match_message?(column_filters, message) do
     Enum.all?(column_filters, fn filter ->
       fields = if message.action == :delete, do: message.old_fields, else: message.fields
       field = Enum.find(fields, &(&1.column_attnum == filter.column_attnum))
       field && apply_filter(filter.operator, field.value, filter.value)
+    end)
+  end
+
+  defp column_filters_match_record?([], _message), do: true
+
+  defp column_filters_match_record?(column_filters, record) do
+    Enum.all?(column_filters, fn filter ->
+      field = Enum.find(record, &(&1.column_attnum == filter.column_attnum))
+      field && apply_filter(filter.operator, elem(field, 1), filter.value)
     end)
   end
 

@@ -179,7 +179,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   defp maybe_setup_allowances(nil), do: :ok
 
   defp maybe_setup_allowances(test_pid) do
-    Mox.allow(Sequin.Mocks.ConsumersRuntime.RecordHandlerMock, test_pid, self())
+    Mox.allow(Sequin.Mocks.DatabasesRuntime.RecordHandlerMock, test_pid, self())
     Sandbox.allow(Sequin.Repo, test_pid, self())
   end
 end

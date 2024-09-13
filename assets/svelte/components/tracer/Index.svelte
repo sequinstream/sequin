@@ -411,14 +411,15 @@
           <p class="text-gray-600 mb-4">
             You need to create a database before tracing can occur.
           </p>
-          <div class="mb-6 drop-shadow-lg video-container">
-            <script
-              src="https://fast.wistia.com/embed/medias/hw5rdi12ss.jsonp"
-              async
-            ></script><script
-              src="https://fast.wistia.com/assets/external/E-v1.js"
-              async
-            ></script>
+          <a href="/databases/new" class="inline-block">
+            <Button variant="default" class="mb-4">
+              Create Database
+              <ArrowUpRight class="h-4 w-4 ml-2" />
+            </Button>
+          </a>
+          <div
+            class="mb-6 drop-shadow-lg relative pb-[56.25%] overflow-hidden max-w-full"
+          >
             <div
               class="wistia_responsive_padding"
               style="padding:59.38% 0 0 0;position:relative;"
@@ -436,12 +437,6 @@
               </div>
             </div>
           </div>
-          <a href="/databases/new" class="inline-block">
-            <Button variant="default">
-              Create Database
-              <ArrowUpRight class="h-4 w-4 ml-2" />
-            </Button>
-          </a>
         {:else}
           <h2 class="text-2xl font-bold mb-4">Trace started</h2>
           <p class="text-gray-600">
@@ -693,21 +688,5 @@
   /* If you need to adjust the table width in the drawer */
   .min-w-full {
     min-width: 100%;
-  }
-
-  .video-container {
-    position: relative;
-    padding-bottom: 56.25%; /* 16:9 aspect ratio */
-    height: 0;
-    overflow: hidden;
-    max-width: 100%;
-  }
-
-  .video-container iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
   }
 </style>

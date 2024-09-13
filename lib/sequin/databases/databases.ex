@@ -100,7 +100,10 @@ defmodule Sequin.Databases do
     http_push_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
 
     if http_pull_consumers != [] or http_push_consumers != [] do
-      {:error, Error.validation(summary: "Cannot delete database with associated consumers.")}
+      {:error,
+       Error.validation(
+         summary: "Cannot delete database that's used by consumers. Please delete associated consumers first."
+       )}
     else
       :ok
     end

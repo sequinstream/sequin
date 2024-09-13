@@ -1,11 +1,8 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    Clock,
     Database,
     Webhook,
-    Activity,
-    Globe,
     ExternalLink,
     ArrowUpRight,
     ArrowRightToLine,
@@ -24,7 +21,7 @@
     TableRow,
   } from "$lib/components/ui/table";
   import { getColorFromName, formatNumberWithCommas } from "../utils";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import * as Dialog from "$lib/components/ui/dialog";
   import ShowHeader from "./ShowHeader.svelte";
   import HealthComponent from "../health/HealthComponent.svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -35,26 +32,24 @@
   export let parent;
   export let metrics;
   export let replica_identity;
-  $: healthColor =
-    consumer.health > 90
-      ? "text-green-500"
-      : consumer.health > 70
-        ? "text-yellow-500"
-        : "text-red-500";
 
   function handleEdit() {
     live.pushEventTo("#" + parent, "edit", {});
   }
 
   let showDeleteConfirmDialog = false;
+  let deleteConfirmDialogLoading = false;
 
   function handleDelete() {
     showDeleteConfirmDialog = true;
   }
 
   function confirmDelete() {
-    showDeleteConfirmDialog = false;
-    live.pushEventTo("#" + parent, "delete", {});
+    deleteConfirmDialogLoading = true;
+    live.pushEventTo("#" + parent, "delete", {}, () => {
+      showDeleteConfirmDialog = false;
+      deleteConfirmDialogLoading = false;
+    });
   }
 
   function cancelDelete() {
@@ -381,19 +376,26 @@ alter table {consumer.source_table.schema}.{consumer.source_table
   </div>
 </div>
 
-<AlertDialog.Root bind:open={showDeleteConfirmDialog}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title
-        >Are you sure you want to delete this consumer?</AlertDialog.Title
+<Dialog.Root bind:open={showDeleteConfirmDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Are you sure you want to delete this consumer?</Dialog.Title
       >
-      <AlertDialog.Description>
-        This action cannot be undone.
-      </AlertDialog.Description>
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel on:click={cancelDelete}>Cancel</AlertDialog.Cancel>
-      <AlertDialog.Action on:click={confirmDelete}>Delete</AlertDialog.Action>
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+      <Dialog.Description>This action cannot be undone.</Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button variant="outline" on:click={cancelDelete}>Cancel</Button>
+      <Button
+        variant="destructive"
+        on:click={confirmDelete}
+        disabled={deleteConfirmDialogLoading}
+      >
+        {#if deleteConfirmDialogLoading}
+          Deleting...
+        {:else}
+          Delete
+        {/if}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

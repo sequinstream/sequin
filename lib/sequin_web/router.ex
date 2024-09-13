@@ -103,6 +103,9 @@ defmodule SequinWeb.Router do
 
       live "/trace", TracerLive, :index
     end
+
+    get "/admin/impersonate/:secret", UserSessionController, :impersonate
+    get "/admin/unimpersonate", UserSessionController, :unimpersonate
   end
 
   scope "/health", SequinWeb do

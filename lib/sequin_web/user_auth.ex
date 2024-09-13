@@ -87,14 +87,41 @@ defmodule SequinWeb.UserAuth do
     |> redirect(to: ~p"/login")
   end
 
+  def log_in_user_with_impersonation(conn, user, impersonated_account_id) do
+    user_token = Accounts.generate_user_session_token(user)
+    impersonation_token = Accounts.generate_impersonation_token(user, impersonated_account_id)
+
+    conn
+    |> renew_session()
+    |> put_session(:user_token, user_token)
+    |> put_session(:impersonation_token, impersonation_token)
+    |> put_session(:live_socket_id, "users_sessions:#{Base.url_encode64(user_token)}")
+    |> redirect(to: signed_in_path(conn))
+  end
+
   @doc """
   Authenticates the user by looking into the session
   and remember me token.
   """
   def fetch_current_user(conn, _opts) do
     {user_token, conn} = ensure_user_token(conn)
-    user = user_token && Accounts.get_user_by_session_token(user_token)
-    assign(conn, :current_user, user)
+    {impersonation_token, conn} = ensure_impersonation_token(conn)
+
+    if user = user_token && Accounts.get_user_by_session_token(user_token) do
+      if impersonation_token do
+        case Accounts.get_impersonated_account_id(user, impersonation_token) do
+          {:ok, account_id} ->
+            assign(conn, :current_user, %{user | impersonating_account: Accounts.get_account!(account_id)})
+
+          _ ->
+            assign(conn, :current_user, user)
+        end
+      else
+        assign(conn, :current_user, user)
+      end
+    else
+      assign(conn, :current_user, nil)
+    end
   end
 
   defp ensure_user_token(conn) do
@@ -109,6 +136,23 @@ defmodule SequinWeb.UserAuth do
         {nil, conn}
       end
     end
+  end
+
+  defp ensure_impersonation_token(conn) do
+    if token = get_session(conn, :impersonation_token) do
+      {token, conn}
+    else
+      {nil, conn}
+    end
+  end
+
+  @doc """
+  Clears the impersonation session data.
+  """
+  def clear_impersonation(conn) do
+    conn
+    |> delete_session(:impersonation_token)
+    |> fetch_current_user([])
   end
 
   @doc """
@@ -178,7 +222,19 @@ defmodule SequinWeb.UserAuth do
   defp mount_current_user(socket, session) do
     Phoenix.Component.assign_new(socket, :current_user, fn ->
       if user_token = session["user_token"] do
-        Accounts.get_user_by_session_token(user_token)
+        user = Accounts.get_user_by_session_token(user_token)
+
+        if impersonation_token = session["impersonation_token"] do
+          case Accounts.get_impersonated_account_id(user, impersonation_token) do
+            {:ok, account_id} ->
+              %{user | impersonating_account: Accounts.get_account!(account_id)}
+
+            _ ->
+              user
+          end
+        else
+          user
+        end
       end
     end)
   end

@@ -333,7 +333,10 @@ defmodule Sequin.Accounts do
 
     query
     |> Repo.one()
-    |> Repo.preload(:account)
+    |> case do
+      {user, _} -> Repo.preload(user, :account)
+      nil -> nil
+    end
   end
 
   @doc """
@@ -342,6 +345,41 @@ defmodule Sequin.Accounts do
   def delete_user_session_token(token) do
     Repo.delete_all(UserToken.by_token_and_context_query(token, "session"))
     :ok
+  end
+
+  @doc """
+  Generates an impersonation token for a user.
+  """
+  def generate_impersonation_token(user, account_id) do
+    {token, user_token} = UserToken.build_impersonation_token(user, account_id)
+    Repo.insert!(user_token)
+    token
+  end
+
+  @doc """
+  Gets the user with the given impersonation token.
+  """
+  def get_user_by_impersonation_token(token) do
+    {:ok, query} = UserToken.verify_session_token_query(token, "impersonate")
+
+    query
+    |> Repo.one()
+    |> Repo.preload(:account)
+  end
+
+  def get_impersonated_account_id(user, token) do
+    user_id = user.id
+
+    case UserToken.verify_session_token_query(token, "impersonate") do
+      {:ok, query} ->
+        case Repo.one(query) do
+          {%User{id: ^user_id}, account_id} -> {:ok, account_id}
+          _ -> :error
+        end
+
+      :error ->
+        :error
+    end
   end
 
   ## Confirmation
@@ -461,6 +499,8 @@ defmodule Sequin.Accounts do
       account -> {:ok, account}
     end
   end
+
+  def get_account!(id), do: Repo.get!(Account, id)
 
   def list_accounts, do: Repo.all(Account)
 

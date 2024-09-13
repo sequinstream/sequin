@@ -4,6 +4,7 @@ defmodule SequinWeb.UserSessionController do
   alias Assent.Config
   alias Assent.Strategy.Github
   alias Sequin.Accounts
+  alias Sequin.Accounts.Impersonate
   alias SequinWeb.UserAuth
 
   require Logger
@@ -123,6 +124,37 @@ defmodule SequinWeb.UserSessionController do
     conn
     |> put_flash(:toast, %{kind: :info, title: "Logged out successfully."})
     |> UserAuth.log_out_user()
+  end
+
+  def impersonate(conn, %{"secret" => secret}) do
+    case Impersonate.getdel_secret(secret) do
+      {:ok, %{admin_user_id: admin_user_id, account_id: account_id}} ->
+        admin_user = Accounts.get_user!(admin_user_id)
+
+        conn
+        |> UserAuth.log_in_user_with_impersonation(admin_user, account_id)
+        |> put_flash(:toast, %{kind: :info, title: "Impersonating account #{admin_user.impersonating_account.name}"})
+
+      {:error, _} ->
+        conn
+        |> put_flash(:toast, %{kind: :error, title: "Invalid or expired impersonation link"})
+        |> redirect(to: ~p"/")
+    end
+  end
+
+  def unimpersonate(conn, _params) do
+    case conn.assigns.current_user do
+      %{impersonating_account: nil} ->
+        conn
+        |> put_flash(:toast, %{kind: :error, title: "You are not currently impersonating any account"})
+        |> redirect(to: ~p"/")
+
+      _ ->
+        conn
+        |> UserAuth.clear_impersonation()
+        |> put_flash(:toast, %{kind: :info, title: "Impersonation ended"})
+        |> redirect(to: ~p"/")
+    end
   end
 
   defp oauth_provider_config(provider) do

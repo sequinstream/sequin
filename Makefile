@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -61,6 +61,11 @@ help:
 	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"
 	@echo "  make addword word=<word> - Add a word to project-words.txt"
 	@echo "  make check-links - Run mintlify broken-links in the docs directory"
+	@echo "  make deploy [sha=<commit-sha>] - Deploy the specified or latest commit"
+
+deploy:
+	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
+	cd "$$INFRA_DIR" && ./scripts/deploy.sh $(sha)
 
 %:
 	@:

@@ -1,6 +1,9 @@
 defmodule Sequin.Repo.Migrations.AddRecordConsumerStateToConsumers do
   use Ecto.Migration
 
+  @config_schema_prefix Application.compile_env!(:sequin, Sequin.Repo)
+                        |> Keyword.fetch!(:config_schema_prefix)
+
   def change do
     alter table(:http_push_consumers) do
       add :record_consumer_state, :map
@@ -11,13 +14,13 @@ defmodule Sequin.Repo.Migrations.AddRecordConsumerStateToConsumers do
     end
 
     execute """
-    update http_push_consumers
+    update #{@config_schema_prefix}.http_push_consumers
     set record_consumer_state = '{"producer": "wal"}'
     where message_kind = 'record'
     """
 
     execute """
-    update http_pull_consumers
+    update #{@config_schema_prefix}.http_pull_consumers
     set record_consumer_state = '{"producer": "wal"}'
     where message_kind = 'record'
     """

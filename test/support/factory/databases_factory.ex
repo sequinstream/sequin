@@ -12,7 +12,16 @@ defmodule Sequin.Factory.DatabasesFactory do
   def postgres_database(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {tables, attrs} = Map.pop_lazy(attrs, :tables, fn -> Enum.random([[table()], []]) end)
+    {table_count, attrs} = Map.pop(attrs, :table_count)
+
+    {tables, attrs} =
+      Map.pop_lazy(attrs, :tables, fn ->
+        if table_count && table_count > 0 do
+          for _ <- 1..table_count, do: table()
+        else
+          Enum.random([[table()], []])
+        end
+      end)
 
     {tables_refreshed_at, attrs} =
       Map.pop_lazy(attrs, :tables_refreshed_at, fn -> unless tables == [], do: Factory.timestamp() end)
@@ -88,12 +97,22 @@ defmodule Sequin.Factory.DatabasesFactory do
   end
 
   def table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {columns, attrs} =
+      Map.pop_lazy(attrs, :columns, fn ->
+        # Ensure at least one PK column
+        pk = column_attrs(is_pk?: true, type: Enum.random(["integer", "uuid"]))
+        cols = for _ <- 2..Enum.random(1..5), do: column_attrs()
+        Enum.shuffle([pk | cols])
+      end)
+
     merge_attributes(
       %PostgresDatabase.Table{
         schema: Factory.postgres_object(),
         name: Factory.postgres_object(),
         oid: Factory.unique_integer(),
-        columns: [column()]
+        columns: columns
       },
       attrs
     )

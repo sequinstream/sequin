@@ -440,6 +440,77 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "matches_record?/3" do
+    @table_oid 12_345
+    setup do
+      consumer =
+        ConsumersFactory.consumer(
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: @table_oid,
+              column_filters: [
+                ConsumersFactory.column_filter(
+                  column_name: "column_1",
+                  operator: :==,
+                  value: %StringValue{value: "test_value"}
+                ),
+                ConsumersFactory.column_filter(
+                  column_name: "column_2",
+                  operator: :>,
+                  value: %NumberValue{value: 10}
+                )
+              ]
+            )
+          ]
+        )
+
+      {:ok, consumer: consumer}
+    end
+
+    test "matches when all column filters match", %{consumer: consumer} do
+      record = %{
+        "column_1" => "test_value",
+        "column_2" => 15
+      }
+
+      assert Consumers.matches_record?(consumer, @table_oid, record)
+    end
+
+    test "does not match when any column filter doesn't match", %{consumer: consumer} do
+      record1 = %{
+        "column_1" => "wrong_value",
+        "column_2" => 15
+      }
+
+      record2 = %{
+        "column_1" => "test_value",
+        "column_2" => 5
+      }
+
+      refute Consumers.matches_record?(consumer, @table_oid, record1)
+      refute Consumers.matches_record?(consumer, @table_oid, record2)
+    end
+
+    test "matches when no column filters are present" do
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: @table_oid,
+              column_filters: []
+            )
+          ]
+        )
+
+      record = %{
+        "column_1" => "any_value",
+        "column_2" => 100
+      }
+
+      assert Consumers.matches_record?(consumer, @table_oid, record)
+    end
+  end
+
   describe "matches_message/2" do
     test "matches when action is in allowed actions" do
       table_oid = Sequin.Factory.unique_integer()

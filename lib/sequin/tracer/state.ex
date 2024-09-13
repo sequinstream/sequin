@@ -2,6 +2,8 @@ defmodule Sequin.Tracer.State do
   @moduledoc false
   use TypedStruct
 
+  alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.Message
   alias Sequin.Tracer.State
@@ -83,9 +85,9 @@ defmodule Sequin.Tracer.State do
     end)
   end
 
-  def messages_ingested(%State{} = state, consumer_id, spans_or_records) do
+  def messages_ingested(%State{} = state, consumer_id, events_or_records) do
     Enum.reduce(
-      spans_or_records,
+      events_or_records,
       state,
       &update_message_trace(&2, &1, fn tm ->
         add_consumer_event(tm, consumer_id, create_trace_event(:ingested, %{id: &1.id}))
@@ -93,9 +95,9 @@ defmodule Sequin.Tracer.State do
     )
   end
 
-  def messages_received(%State{} = state, consumer_id, spans_or_records) do
+  def messages_received(%State{} = state, consumer_id, events_or_records) do
     Enum.reduce(
-      spans_or_records,
+      events_or_records,
       state,
       &update_message_trace(&2, &1, fn tm ->
         add_consumer_event(tm, consumer_id, create_trace_event(:received, %{ack_id: &1.ack_id}))
@@ -137,9 +139,15 @@ defmodule Sequin.Tracer.State do
     Enum.find_index(state.message_traces, fn tm -> matches_by_ack_id?(tm, ack_id) end)
   end
 
-  defp find_message_trace_index(%State{} = state, event_or_record) do
+  defp find_message_trace_index(%State{} = state, %ConsumerEvent{} = event) do
     Enum.find_index(state.message_traces, fn tm ->
-      tm.message.trace_id == event_or_record.replication_message_trace_id
+      tm.message.trace_id == event.replication_message_trace_id
+    end)
+  end
+
+  defp find_message_trace_index(%State{} = state, %ConsumerRecord{} = record) do
+    Enum.find_index(state.message_traces, fn tm ->
+      tm.message.trace_id == record.replication_message_trace_id
     end)
   end
 

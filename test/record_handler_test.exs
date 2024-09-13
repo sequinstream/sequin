@@ -50,28 +50,6 @@ defmodule Sequin.DatabasesRuntime.RecordHandlerTest do
 
       assert_records(inserted_records, consumer, table, pk_cols)
     end
-
-    # test "filters records based on consumer's source tables", %{consumer: consumer, table: table} do
-    #   other_table = DatabasesFactory.table(oid: 67_890)
-
-    #   records = [
-    #     build_consumer_record(consumer, table),
-    #     build_consumer_record(consumer, other_table)
-    #   ]
-
-    #   context = %{consumer: consumer, table: table}
-    #   assert :ok = RecordHandler.handle_records(context, records)
-
-    #   inserted_records = Repo.all(ConsumerRecord)
-    #   assert length(inserted_records) == 1
-    #   assert hd(inserted_records).table_oid == table.oid
-    # end
-
-    # test "handles empty record list", %{consumer: consumer, table: table} do
-    #   context = %{consumer: consumer, table: table}
-    #   assert :ok = RecordHandler.handle_records(context, [])
-    #   assert Repo.aggregate(ConsumerRecord, :count) == 0
-    # end
   end
 
   # Helper function to create a consumer record

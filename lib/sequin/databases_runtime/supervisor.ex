@@ -21,13 +21,12 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
   def start_table_producer(supervisor, consumer, opts) do
     consumer = Repo.preload(consumer, replication_slot: :postgres_database)
+    table_oid = Keyword.fetch!(opts, :table_oid)
 
     default_opts = [
       consumer: consumer,
-      record_handler_ctx: nil,
-      record_handler_module: nil,
       page_size: 1000,
-      table_oid: Keyword.fetch!(opts, :table_oid)
+      table_oid: table_oid
     ]
 
     opts = Keyword.merge(default_opts, opts)

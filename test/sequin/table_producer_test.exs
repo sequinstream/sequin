@@ -1,8 +1,8 @@
 defmodule Sequin.TableProducerTest do
   use Sequin.DataCase, async: false
 
-  alias Sequin.ConsumersRuntime.TableProducer
   alias Sequin.Databases
+  alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Test.UnboxedRepo

@@ -38,7 +38,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     field :seq, :integer, read_after_writes: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
-    embeds_one :record_consumer_state, RecordConsumerState
+    embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
 
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
@@ -81,6 +81,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :status
     ])
     |> cast_embed(:source_tables)
+    |> cast_embed(:record_consumer_state)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
@@ -109,6 +110,14 @@ defmodule Sequin.Consumers.HttpPullConsumer do
 
   def where_status(query \\ base_query(), status) do
     from([consumer: c] in query, where: c.status == ^status)
+  end
+
+  def where_table_producer(query \\ base_query()) do
+    from([consumer: c] in query,
+      where:
+        fragment("?->>'producer' = ?", c.record_consumer_state, :table_and_wal) and
+          c.message_kind == :record
+    )
   end
 
   defp base_query(query \\ __MODULE__) do

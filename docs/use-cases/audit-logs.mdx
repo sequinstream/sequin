@@ -1,11 +1,25 @@
 ---
-title: "Using Sequin to trigger side effects"
+title: "Using Sequin to track changes to your database"
 sidebarTitle: "Audit logs"
 description: "How to log changes to your database."
 icon: "bars-staggered"
 iconType: "solid"
 ---
 
-<Warning>
-  We're writing this doc right now. It should be ready in the next day or two. Please send us an email at <a href="mailto:support@sequinstream.com">support@sequinstream.com</a> if you need this sooner.
-</Warning>
+When any setting is changed on a users account, you want to log the change. You might do this for compliance, for troubleshooting, auditing, or to enable an account history/timeline feature.
+
+<Frame>
+  <img src="/images/use-cases/audit-log/audit-log.svg" alt="Audit logs with Sequin" />
+</Frame>
+
+1. Sequin captures every `insert`, `update`, and `delete` on the `users` table.
+2. It then allows you to combine this change with data from other tables to create a complete, full context audit log.
+3. Then writes the change to the destination table of your choice.
+
+This is a common "audit log" pattern.
+
+<Card icon="flask-round-potion" iconType="solid">
+  We're adding the ability to connect Sequin consumers to other databases and tables.
+
+  <br/>Please send us an email at <a href="mailto:foudners@sequinstream.com">sounders@sequinstream.com</a> if you are interested in working with us as we develop the feature, or want early access.
+</Card>

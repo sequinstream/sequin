@@ -56,12 +56,11 @@
       ]
     },
     {
-      "group": "Common use cases",
+      "group": "Common patterns",
       "pages": [
         "use-cases/side-effects",
         "use-cases/fan-out",
-        "use-cases/decoupling-services",
-        "use-cases/cache-invalidation",
+        "use-cases/replication",
         "use-cases/audit-logs"
       ]
     }

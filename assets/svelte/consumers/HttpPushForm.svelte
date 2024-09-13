@@ -26,7 +26,7 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import FullPageModal from "../components/FullPageModal.svelte";
-  import { cn } from "$lib/utils";
+  import { cn, truncateMiddle } from "$lib/utils";
   import { toast } from "svelte-sonner";
   import { ExternalLinkIcon, Loader2 } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
@@ -477,11 +477,24 @@
 
         <div class="space-y-2">
           <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
-          <Input
-            id="http-endpoint-path"
-            bind:value={form.httpEndpointPath}
-            placeholder="/webhook"
-          />
+          <div class="flex flex-row bg-white">
+            <div
+              class="font-medium rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+            >
+              {#if selectedHttpEndpoint}
+                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+              {:else}
+                {truncateMiddle(form.httpEndpoint.baseUrl, 50)}
+              {/if}
+            </div>
+            <Input
+              id="http-endpoint-path"
+              bind:value={form.httpEndpointPath}
+              placeholder="/webhook"
+              class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              style="border-left: none;"
+            />
+          </div>
           <p class="text-sm text-muted-foreground">
             The path to append to the base URL for this consumer's requests.
           </p>
@@ -491,11 +504,11 @@
         </div>
 
         {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
-          <div class="mt-4">
+          <div class="mt-4 space-y-2">
             <Label>Fully Qualified URL</Label>
             <div class="flex items-center space-x-2 overflow-x-auto">
               <p
-                class="w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
               >
                 {fullUrl}
               </p>

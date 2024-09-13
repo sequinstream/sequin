@@ -11,7 +11,7 @@ defmodule Sequin.Posthog do
   def capture(event, properties, opts) when is_list(opts) do
     with {:ok, config} <- config() do
       body = build_event(event, properties, Keyword.get(opts, :timestamp))
-      post("/capture", body, config)
+      async_post("/capture", body, config)
     end
   end
 
@@ -31,7 +31,7 @@ defmodule Sequin.Posthog do
           end)
       }
 
-      post("/capture", body, config)
+      async_post("/capture", body, config)
     end
   end
 
@@ -43,11 +43,13 @@ defmodule Sequin.Posthog do
     }
   end
 
-  defp post(path, body, config) do
+  defp async_post(path, body, config) do
     url = config |> Keyword.get(:api_url) |> URI.merge(path) |> URI.to_string()
     body = Map.put(body, :api_key, Keyword.get(config, :api_key))
 
-    Req.post(url, json: body)
+    Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
+      Req.post(url, json: body)
+    end)
   end
 
   defp config do

@@ -1,0 +1,127 @@
+---
+title: "Using Sequin to replicate changes in your database"
+sidebarTitle: "Replication"
+description: "Use Sequin to update search indexes, invalidate caches, or generate normalized views."
+icon: "copy"
+iconType: "solid"
+---
+
+When you update a product description, you want to update your search index.
+
+<Frame>
+  <img src="/images/use-cases/replicate/replicate.svg" alt="Replicate changes with Sequin" />
+</Frame>
+
+1. Sequin captures every row on your `products` table using a durable replication slot.
+2. It then delivers the changes to your search index.
+3. With a simple HTTP interface, replays, and observability built in you can ensure the search index is always up to date.
+
+This is a common replication pattern. This guide shows you how to implement replication with Sequin.
+
+## Implementation
+
+<Steps titleSize="h3">
+  <Step title="Connect your database to Sequin" icon="database">
+    1. Login to your Sequin account and click the **Connect Database** button on the dashboard.
+    2. Paste the connection string for your database (or enter your connection credentials).
+    3. Create a replication slot and publication for Sequin using the SQL commands in the console.
+    4. Name your database and click **Connect Database** to finish.
+
+    <Check>
+      Your database is now connected to Sequin. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+    </Check>
+
+  </Step>
+  <Step title="Create a consumer to capture row changes" icon="signal-stream">
+       Create a [consumers](/core-concepts#consumers) that captures every [row](/core-concepts#rows-and-changes) in your `products` table:
+
+    1. Click the **Create Consumer** button and then select the `users` table.
+    2. Because you want to capture every row change you can leave the **Filter** field blank.
+    3. Select the **Rows** option and then choose **Push** for the consumer type.
+
+    <Note>
+      By configuring the consumer to capture **Rows** Sequin will send a message for every row change in the table. You can also replay and backfill the entire table to ensure your search index is up to date.
+    </Note>
+
+    4. Enter the the HTTP endpoint where Sequin will send the changes. Add any headers you need to authenticate the request.
+    5. Click **Create Consumer** to finish.
+
+    <Check>
+      Your consumer is now created. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+    </Check>
+
+  </Step>
+  <Step title="Invalidate and update your search index" icon="file-magnifying-glass">
+    Every time a row in your `products` table is updated Sequin will send a message to your webhook endpoint:
+
+    ```json
+    {
+      "record": {
+        "id": 1,
+        "name": "NVIDIA H-100 GPU",
+        "description": "High-performance AI and HPC accelerator",
+        "price": 30000.00,
+        "in_stock": true,
+        "compute_capability": "9.0",
+        "memory_size_gb": 80
+      },
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "house_atreides_members",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "dune_characters_consumer"
+        }
+      }
+    }
+```
+
+    You can handle this message in your application and update your search index:
+
+    ```js
+    // Webhook handler for updating search index
+    app.post('/webhook/update-search-index', async (req, res) => {
+      const { record } = req.body;
+
+      try {
+        // Assuming you're using a hypothetical searchIndex object
+        await searchIndex.upsert({
+          id: record.id,
+          name: record.name,
+          description: record.description,
+          price: record.price,
+          in_stock: record.in_stock,
+          compute_capability: record.compute_capability,
+          memory_size_gb: record.memory_size_gb
+        });
+
+        res.status(200).send('Search index updated successfully');
+      } catch (error) {
+        console.error('Error updating search index:', error);
+        res.status(500).send('Error updating search index');
+      }
+    });
+    ```
+
+    Importantly, to ensure that every product update is reflected in your search index, Sequin will retry the message until the HTTP request is acknowledged with a 200 status.
+
+  </Step>
+</Steps>
+
+## Benefits
+
+Sequin captures every change in your `products` table via the WAL and then ensure that each change is processed to update your search index. Sequin handles the hard parts for you:
+
+* **Transactional guarantees**: Sequin ensures that every new order is processed by each service.
+* **Reliable retries**: Sequin will retry failed HTTP requests until they are acknowledged.
+* **No custom infrastructure**: You don't need to run any custom infrastructure to send emails.
+* **Backfill**: Sequin can replay the entire table to ensure your search index is up to date.
+* **Replays**: Sequin can replay data from a specific point in time.
+* **Observability**: Sequin provides observability into the replication process and the HTTP requests being sent.
+
+## Next steps
+
+To add a fan out pattern to your application, you might want to:
+
+* Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
+* Learn more about how Sequin works under the hood in the [Core Concepts](/core-concepts) section.

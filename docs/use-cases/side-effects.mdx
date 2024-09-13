@@ -1,0 +1,122 @@
+---
+title: "Using Sequin to trigger side effects"
+sidebarTitle: "Side effects"
+description: "How to use Sequin to trigger side effects in your application, like sending a welcome email to a new user."
+icon: "sparkles"
+iconType: "solid"
+---
+
+When you insert a new user into your database, you might want to send them a welcome email:
+
+<Frame>
+  <img src="/images/use-cases/side-effects/send-with-sequin.svg" alt="Send welcome email with Sequin" />
+</Frame>
+
+1. Sequin captures every `insert` on your `users` table using a durable replication slot.
+2. It then asynchronously queues and delivers messages to the `sendWelcomeEmail` function. Messages are retried until they are acknowledged by the function.
+3. With a simple HTTP interface, replays, and observability built in you can easily scale this implementation.
+
+This is a common "side effect" pattern. This guide shows you how to implement side effects with Sequin.
+
+## Example
+
+<Steps titleSize="h3">
+  <Step title="Connect your database to Sequin" icon="database">
+    1. Login to your Sequin account and click the **Connect Database** button on the dashboard.
+    2.  Paste the connection string for your database (or enter your connection credentials).
+    3. Create a replication slot and publication for Sequin using the SQL commands in the console.
+    4.  Name your database and click **Connect Database** to finish.
+
+    <Check>
+      Your database is now connected to Sequin. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+    </Check>
+
+  </Step>
+  <Step title="Create a consumer to captures `inserts` on the `users` table" icon="signal-stream">
+       Create a [push consumer](/core-concepts#consumers) that captures [changes](/core-concepts#rows-and-changes) from the `users` table. It'll then send an HTTP request to your application with the new user's information (which you'll handle in the next step).
+
+    1. Click the **Create Consumer** button and then select the `users` table.
+    2. Because you want to capture every `insert` you can leave the **Filter** field blank.
+    3. Select the **Changes** option and then choose **Push** for the consumer type.
+    4. Enter the the HTTP endpoint where Sequin will send the changes. Add any headers you need to authenticate the request.
+    5. Click **Create Consumer** to finish.
+
+    <Check>
+      Your consumer is now created. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+    </Check>
+
+  </Step>
+  <Step title="Handle messages in your application" icon="code">
+    Sequin is now capturing every `insert` on the `users` table and sending it to your HTTP endpoint. When a new user is inserted:
+
+    ```sql
+    insert into users (name, email) values ('John Doe', 'john.doe@example.com');
+    ```
+
+    Sequin will send the new user's information to your webhook endpoint:
+
+    ```json
+    {
+      "record": {
+        "id": 1,
+        "name": "Chani",
+        "title": "Fremen Warrior",
+        "email": "chani@arrakis.gov",
+        "spice_allocation": 500,
+        "is_sayyadina": true
+      },
+      "changes": null,
+      "action": "insert",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "users",
+        "commit_timestamp": "2023-10-15T14:30:00Z",
+        "consumer": {
+          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+          "name": "send_welcome_email_consumer"
+        }
+      }
+    }
+    ```
+
+    You can handle this message in your application and send a welcome email:
+
+    ```js
+    // Webhook handler for new user registration
+    app.post('/webhook/new-user', async (req, res) => {
+      const { name, email } = req.body;
+
+      try {
+        // Send welcome email
+        await sendWelcomeEmail(name, email);
+        res.status(200).send('Welcome email sent successfully');
+      } catch (error) {
+        res.status(500).send('Error sending welcome email');
+      }
+    });
+    ```
+
+    Importantly, to ensuer every new user receives an email - Sequin will retry message until the HTTP request is acknowledged with a 200 status.
+  </Step>
+</Steps>
+
+## Benefits
+
+Implementing welcome emails as a side effect has several benefits:
+
+* **Asynchronous**: Sending the email should not halt your application or the user.
+* **Scalable**: You can easily scale this implementation with a simple HTTP endpoint.
+
+Sequin handles the hard parts for you:
+
+* **Transactional guarantees**: Sequin ensures that the email is sent for every new user. Even if a users is added to your database via a trigger or other means, Sequin will ensure the email is sent.
+* **Reliable retries**: Sequin will retry failed HTTP requests until they are acknowledged.
+* **No custom infrastructure**: You don't need to run any custom infrastructure to send emails.
+* **Observability**: You can easily see the status of your messages and re-send failed messages.
+
+## Next steps
+
+To add a side effect to your application, you might want to:
+
+* Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
+* Learn more about how Sequin works under the hood in the [Core Concepts](/core-concepts) section.

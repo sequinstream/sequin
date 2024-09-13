@@ -42,12 +42,14 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
     field :tables_refreshed_at, :utc_datetime
+    field :tables_sort_column_attnums, Sequin.Ecto.IntegerKeyMap, default: %{}
     field :ipv6, :boolean, default: false
 
     embeds_many :tables, Table, on_replace: :delete, primary_key: false do
       field :oid, :integer, primary_key: true
       field :schema, :string
       field :name, :string
+      field :sort_column_attnum, :integer, virtual: true
 
       embeds_many :columns, Column, on_replace: :delete, primary_key: false do
         field :attnum, :integer, primary_key: true
@@ -78,6 +80,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       :queue_target,
       :ssl,
       :tables_refreshed_at,
+      :tables_sort_column_attnums,
       :username,
       :ipv6
     ])
@@ -121,11 +124,14 @@ defmodule Sequin.Databases.PostgresDatabase do
   def tables_changeset(table, attrs) do
     table
     |> cast(attrs, [:oid, :schema, :name])
+    |> validate_required([:oid, :schema, :name])
     |> cast_embed(:columns, with: &columns_changeset/2, required: true)
   end
 
   def columns_changeset(column, attrs) do
-    cast(column, attrs, [:attnum, :name, :type, :is_pk?])
+    column
+    |> cast(attrs, [:attnum, :name, :type, :is_pk?])
+    |> validate_required([:attnum, :name, :type, :is_pk?])
   end
 
   def tables_to_map(tables) do

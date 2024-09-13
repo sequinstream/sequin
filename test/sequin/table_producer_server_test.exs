@@ -15,7 +15,10 @@ defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
 
   setup do
     # Set up the database and consumer
-    database = DatabasesFactory.insert_configured_postgres_database!()
+    database =
+      DatabasesFactory.insert_configured_postgres_database!(
+        tables_sort_column_attnums: %{Character.table_oid() => Character.column_attnum("updated_at")}
+      )
 
     replication =
       ReplicationFactory.insert_postgres_replication!(
@@ -25,24 +28,21 @@ defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
 
     {:ok, database} = Databases.update_tables(database)
 
-    table = Sequin.Enum.find!(database.tables, &(&1.oid == Character.table_oid()))
-    column = Sequin.Enum.find!(table.columns, &(&1.name == "updated_at"))
-
     consumer =
       ConsumersFactory.insert_http_pull_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
-        record_consumer_state: ConsumersFactory.record_consumer_state_attrs(sort_column_attnum: column.attnum),
+        record_consumer_state: ConsumersFactory.record_consumer_state_attrs(),
         account_id: database.account_id
       )
 
-    {:ok, consumer: consumer, table: table}
+    {:ok, consumer: consumer, table_oid: Character.table_oid()}
   end
 
   describe "TableProducerServer" do
     test "initializes, fetches, and paginates records correctly", %{
       consumer: consumer,
-      table: table
+      table_oid: table_oid
     } do
       test_pid = self()
       page_size = 3
@@ -65,7 +65,7 @@ defmodule Sequin.ConsumersRuntime.TableProducerServerTest do
              record_handler_ctx: nil,
              record_handler_module: RecordHandlerMock,
              page_size: page_size,
-             table_oid: table.oid,
+             table_oid: table_oid,
              test_pid: self()
            ]}
         )

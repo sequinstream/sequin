@@ -20,6 +20,14 @@ defmodule Sequin.TableProducerTest do
     character_col_attnums = map_column_attnums(characters_table)
     character_multi_pk_attnums = map_column_attnums(characters_multi_pk_table)
 
+    # Set sort_column_attnum for both tables
+    characters_table = %{characters_table | sort_column_attnum: character_col_attnums["updated_at"]}
+
+    characters_multi_pk_table = %{
+      characters_multi_pk_table
+      | sort_column_attnum: character_multi_pk_attnums["updated_at"]
+    }
+
     %{
       conn: conn,
       db: db,
@@ -43,13 +51,12 @@ defmodule Sequin.TableProducerTest do
       char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
       _char4 = CharacterFactory.insert_character!(updated_at: now)
 
-      sort_column_attnum = attnums["updated_at"]
       cursor = nil
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, sort_column_attnum, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
 
-      assert char3.updated_at == NaiveDateTime.truncate(cursor[sort_column_attnum], :second)
+      assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
       assert char3.id == cursor[attnums["id"]]
     end
 
@@ -64,11 +71,10 @@ defmodule Sequin.TableProducerTest do
       char3 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      sort_column_attnum = attnums["updated_at"]
       cursor = nil
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, sort_column_attnum, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
 
       assert_maps_equal(
         cursor,
@@ -80,12 +86,12 @@ defmodule Sequin.TableProducerTest do
         ["id_integer", "id_string", "id_uuid"]
       )
 
-      assert char3.updated_at == NaiveDateTime.truncate(cursor[sort_column_attnum], :second)
+      assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
 
       # Test with a cursor to ensure we can move past records with the same updated_at
       cursor = create_cursor(char2, attnums)
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, sort_column_attnum, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
 
       assert_maps_equal(
         cursor,
@@ -97,11 +103,11 @@ defmodule Sequin.TableProducerTest do
         ["id_integer", "id_string", "id_uuid"]
       )
 
-      assert char4.updated_at == NaiveDateTime.truncate(cursor[sort_column_attnum], :second)
+      assert char4.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
     end
   end
 
-  describe "fetch_records_in_range/6" do
+  describe "fetch_records_in_range/5" do
     test "fetches records in range with compound primary key", %{
       conn: conn,
       characters_multi_pk_table: table,
@@ -114,15 +120,13 @@ defmodule Sequin.TableProducerTest do
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      sort_column_attnum = attnums["updated_at"]
-
       min_cursor = create_cursor(char1, attnums)
       max_cursor = create_cursor(char4, attnums)
 
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(conn, table, sort_column_attnum, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(conn, table, min_cursor, max_cursor, limit)
 
       assert length(results) == 3
 
@@ -143,15 +147,13 @@ defmodule Sequin.TableProducerTest do
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      sort_column_attnum = attnums["updated_at"]
-
       min_cursor = create_cursor(char2, attnums)
       max_cursor = create_cursor(char4, attnums)
 
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(conn, table, sort_column_attnum, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(conn, table, min_cursor, max_cursor, limit)
 
       assert length(results) == 2
 
@@ -163,11 +165,8 @@ defmodule Sequin.TableProducerTest do
   describe "fetch_max_cursor and fetch_records_in_range combined" do
     test "processes all characters with same updated_at using small page size", %{
       conn: conn,
-      characters_multi_pk_table: table,
-      character_multi_pk_attnums: attnums
+      characters_multi_pk_table: table
     } do
-      sort_column_attnum = attnums["updated_at"]
-
       # Insert 6 characters with the same updated_at
       now = NaiveDateTime.utc_now()
 
@@ -184,7 +183,7 @@ defmodule Sequin.TableProducerTest do
       # arbitrary number of iterations until we get a nil max_cursor
       {processed_characters, _} =
         Enum.reduce_while(1..10, {processed_characters, cursor}, fn _, {acc, current_cursor} ->
-          case TableProducer.fetch_max_cursor(conn, table, sort_column_attnum, current_cursor, page_size) do
+          case TableProducer.fetch_max_cursor(conn, table, current_cursor, page_size) do
             {:ok, nil} ->
               {:halt, {acc, current_cursor}}
 
@@ -193,7 +192,6 @@ defmodule Sequin.TableProducerTest do
                 TableProducer.fetch_records_in_range(
                   conn,
                   table,
-                  sort_column_attnum,
                   current_cursor,
                   max_cursor,
                   page_size

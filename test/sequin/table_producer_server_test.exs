@@ -1,7 +1,9 @@
 defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
-  use Sequin.DataCase, async: true
+  # Needs to be false until we figure out how to work with Ecto sandbox + characters
+  use Sequin.DataCase, async: false
   use ExUnit.Case
 
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.DatabasesRuntime.TableProducerServer
@@ -9,7 +11,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.DatabasesRuntime.RecordHandlerMock
+  alias Sequin.Repo
   alias Sequin.Test.Support.Models.Character
 
   @moduletag :uses_characters
@@ -29,15 +31,24 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
     {:ok, database} = Databases.update_tables(database)
 
+    table_oid = Character.table_oid()
+
+    source_table =
+      ConsumersFactory.source_table(
+        oid: table_oid,
+        column_filters: []
+      )
+
     consumer =
       ConsumersFactory.insert_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
         record_consumer_state: ConsumersFactory.record_consumer_state_attrs(),
+        source_tables: [source_table],
         account_id: database.account_id
       )
 
-    {:ok, consumer: consumer, table_oid: Character.table_oid()}
+    {:ok, consumer: consumer, table_oid: table_oid}
   end
 
   describe "TableProducerServer" do
@@ -45,26 +56,19 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       consumer: consumer,
       table_oid: table_oid
     } do
-      test_pid = self()
       page_size = 3
-
-      # Mock the RecordHandlerMock to send messages back to the test process
-      expect(RecordHandlerMock, :handle_records, 3, fn _ctx, messages ->
-        send(test_pid, {:records_handled, messages})
-        {:ok, length(messages)}
-      end)
 
       # Insert initial 8 records
       characters =
-        1..8 |> Enum.map(fn _ -> CharacterFactory.insert_character!() end) |> Enum.sort_by(& &1.updated_at, NaiveDateTime)
+        1..8
+        |> Enum.map(fn _ -> CharacterFactory.insert_character!() end)
+        |> Enum.sort_by(& &1.updated_at, NaiveDateTime)
 
       pid =
         start_supervised!(
           {TableProducerServer,
            [
              consumer: consumer,
-             record_handler_ctx: nil,
-             record_handler_module: RecordHandlerMock,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -73,26 +77,32 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       Process.monitor(pid)
 
-      # Check if the mock was called with the correct data for the first 3 pages
-      for i <- 0..2 do
-        assert_receive {:records_handled, messages}, 1000
-        assert length(messages) == min(page_size, 8 - i * page_size)
+      # Wait for the TableProducerServer to finish processing
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
 
-        expected_characters = Enum.slice(characters, i * page_size, page_size)
-        assert_records_match(messages, expected_characters)
+      # Fetch ConsumerRecords from the database
+      consumer_records =
+        consumer.id
+        |> ConsumerRecord.where_consumer_id()
+        |> Repo.all()
+        |> Enum.sort_by(& &1.id)
+
+      assert length(consumer_records) == 8
+
+      # Verify that the records match the inserted characters
+      for {consumer_record, character} <- Enum.zip(consumer_records, characters) do
+        assert consumer_record.table_oid == table_oid
+        assert consumer_record.record_pks == [to_string(character.id)]
       end
 
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}
+      # Assert that the consumer's cursor has been updated
+      cursor = TableProducer.fetch_cursors(consumer.id)
+      # Cursor should be nil after completion
+      assert cursor == :error
 
-      # Assert is cleaned up
-      assert Repo.reload(consumer).record_consumer_state.producer == :wal
-      assert :error = TableProducer.fetch_cursors(consumer.id)
+      # Verify that the consumer's producer state has been updated
+      consumer = Repo.reload(consumer)
+      assert consumer.record_consumer_state.producer == :wal
     end
-  end
-
-  defp assert_records_match(messages, characters) do
-    assert_lists_equal(messages, characters, fn msg, character ->
-      assert_maps_equal(msg, Map.from_struct(character), ["id", "name"], indifferent_keys: true)
-    end)
   end
 end

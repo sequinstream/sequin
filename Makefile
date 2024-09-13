@@ -67,6 +67,10 @@ help:
 	@echo "  make deploy [sha=<commit-sha>] - Deploy the specified or latest commit"
 	@echo "  make buildpush - Run mix buildpush (build and push docker image)"
 
+impersonate:
+	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
+	cd "$$INFRA_DIR" && ./scripts/prod_rpc.sh "Sequin.Accounts.Impersonate.generate_link\(~s{$(user)}\,~s{$(account)}\)"
+
 deploy:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/deploy.sh $(sha)

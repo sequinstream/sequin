@@ -10,15 +10,15 @@
     SquareStack,
     ArrowRightToLine,
     ArrowLeftFromLine,
+    Loader2,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import * as AlertDialog from "$lib/components/ui/alert-dialog";
+  import * as Dialog from "$lib/components/ui/dialog";
   import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
   import HealthComponent from "$lib/health/HealthComponent.svelte";
   import type { Health } from "$lib/health/Types";
   import { Badge } from "$lib/components/ui/badge";
-  import { Loader2 } from "lucide-svelte";
   import { writable } from "svelte/store";
 
   interface Table {
@@ -74,22 +74,29 @@
   }
 
   let showDeleteConfirmDialog = false;
-  let showDeleteErrorDialog = false;
-  let deleteErrorDialogMessage: string | null = null;
+  let deleteConfirmDialogLoading = false;
+  let deleteErrorMessage: string | null = null;
 
   function handleEdit() {
     pushEvent("edit");
   }
 
   function confirmDelete() {
-    deleteErrorDialogMessage = null;
-    showDeleteConfirmDialog = false;
+    deleteConfirmDialogLoading = true;
+    deleteErrorMessage = null;
     pushEvent("delete_database", {}, (res: any) => {
+      deleteConfirmDialogLoading = false;
       if (res.error) {
-        showDeleteErrorDialog = true;
-        deleteErrorDialogMessage = res.error;
+        deleteErrorMessage = res.error;
+      } else {
+        showDeleteConfirmDialog = false;
       }
     });
+  }
+
+  function cancelDelete() {
+    showDeleteConfirmDialog = false;
+    deleteErrorMessage = null;
   }
 </script>
 
@@ -312,37 +319,30 @@
   </main>
 </div>
 
-<AlertDialog.Root bind:open={showDeleteConfirmDialog}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title
-        >Are you sure you want to delete this database?</AlertDialog.Title
+<Dialog.Root bind:open={showDeleteConfirmDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Are you sure you want to delete this database?</Dialog.Title
       >
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel on:click={() => (showDeleteConfirmDialog = false)}
-        >Cancel</AlertDialog.Cancel
+      <Dialog.Description>This action cannot be undone.</Dialog.Description>
+    </Dialog.Header>
+    {#if deleteErrorMessage}
+      <p class="text-destructive text-sm mt-2 mb-4">{deleteErrorMessage}</p>
+    {/if}
+    <Dialog.Footer>
+      <Button variant="outline" on:click={cancelDelete}>Cancel</Button>
+      <Button
+        variant="destructive"
+        on:click={confirmDelete}
+        disabled={deleteConfirmDialogLoading}
       >
-      <AlertDialog.Action on:click={confirmDelete}>Delete</AlertDialog.Action>
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
-
-<AlertDialog.Root bind:open={showDeleteErrorDialog}>
-  <AlertDialog.Content>
-    <AlertDialog.Header>
-      <AlertDialog.Title>Error deleting the database</AlertDialog.Title>
-      <AlertDialog.Description
-        >{deleteErrorDialogMessage}</AlertDialog.Description
-      >
-    </AlertDialog.Header>
-    <AlertDialog.Footer>
-      <AlertDialog.Cancel
-        on:click={() => {
-          showDeleteErrorDialog = false;
-          deleteErrorDialogMessage = null;
-        }}>Close</AlertDialog.Cancel
-      >
-    </AlertDialog.Footer>
-  </AlertDialog.Content>
-</AlertDialog.Root>
+        {#if deleteConfirmDialogLoading}
+          <Loader2 class="mr-2 h-4 w-4 animate-spin" />
+          Deleting...
+        {:else}
+          Delete
+        {/if}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

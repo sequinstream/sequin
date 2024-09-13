@@ -1121,17 +1121,28 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_delete(%HttpPullConsumer{} = consumer) do
-    ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+    async_refresh_message_handler_ctx(consumer.replication_slot_id)
   end
 
   defp notify_consumer_delete(%HttpPushConsumer{} = consumer) do
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
-      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      with :ok <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
         ConsumersSupervisor.stop_for_push_consumer(consumer)
       end
     end
+  end
+
+  defp async_refresh_message_handler_ctx(replication_slot_id) do
+    Task.Supervisor.async_nolink(
+      Sequin.TaskSupervisor,
+      fn ->
+        ReplicationSupervisor.refresh_message_handler_ctx(replication_slot_id)
+      end,
+      # Until we make Replication more responsive, this can take a while
+      timeout: :timer.minutes(2)
+    )
   end
 
   defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do

@@ -387,7 +387,7 @@ defmodule Sequin.ConsumersTest do
       record = build_consumer_record(consumer, character)
 
       # Add a non-existent column to the table definition
-      fake_column = DatabasesFactory.column(%{name: "non_existent_column", type: "text"})
+      fake_column = DatabasesFactory.column(%{name: "non_existent_column", type: "text", is_pk?: false})
 
       consumer =
         update_in(consumer.postgres_database.tables, fn tables ->

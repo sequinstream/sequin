@@ -3,10 +3,49 @@ defmodule Sequin.Postgres do
   import Ecto.Query, only: [from: 2]
 
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
+
+  @doc """
+  Executes a SQL query against a database connection.
+
+  This function provides a unified interface for querying databases, supporting:
+  - Direct Postgrex connections (when given a PID)
+  - Module-based connections (when given a module name)
+  - PostgresDatabase structs (using ConnectionCache)
+
+  In test environments, this allows routing queries through Ecto's sandbox
+  by caching Repo as the connection for test databases.
+
+  ## Examples
+
+      Postgres.query(conn_pid, "SELECT * FROM users")
+      Postgres.query(Repo, "SELECT * FROM users")
+      Postgres.query({:db, postgres_database}, "SELECT * FROM users")
+
+  """
+  def query(pid, query, params \\ [], opts \\ [])
+
+  def query(pid, query, params, opts) when is_pid(pid) do
+    Postgrex.query(pid, query, params, opts)
+  end
+
+  def query(mod, query, params, opts) when is_atom(mod) do
+    mod.query(query, params, opts)
+  end
+
+  def query({:db, %PostgresDatabase{} = db}, query, params, opts) do
+    case ConnectionCache.connection(db) do
+      {:ok, conn_or_mod} ->
+        query(conn_or_mod, query, params, opts)
+
+      {:error, _} = error ->
+        error
+    end
+  end
 
   def pg_type_to_ecto_type(pg_type) do
     case pg_type do

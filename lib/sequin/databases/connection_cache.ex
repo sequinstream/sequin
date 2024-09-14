@@ -185,6 +185,12 @@ defmodule Sequin.Databases.ConnectionCache do
     GenServer.cast(server, {:invalidate_connection, db})
   end
 
+  # This function is intended for test purposes only
+  @spec cache_connection(GenServer.server(), database(), pid()) :: :ok
+  def cache_connection(server \\ __MODULE__, %PostgresDatabase{} = db, conn) do
+    GenServer.call(server, {:cache_connection, db, conn})
+  end
+
   @impl GenServer
   def init(opts) do
     Process.flag(:trap_exit, true)
@@ -204,6 +210,14 @@ defmodule Sequin.Databases.ConnectionCache do
       error ->
         {:reply, error, state}
     end
+  end
+
+  # This function is intended for test purposes only
+  @impl GenServer
+  def handle_call({:cache_connection, %PostgresDatabase{} = db, conn}, _from, %State{} = state) do
+    new_cache = Cache.store(state.cache, db, conn)
+    new_state = %{state | cache: new_cache}
+    {:reply, :ok, new_state}
   end
 
   @impl GenServer

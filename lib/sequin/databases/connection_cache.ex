@@ -29,7 +29,7 @@ defmodule Sequin.Databases.ConnectionCache do
 
     @type database :: PostgresDatabase.t()
     @type entry :: %{
-            conn: pid(),
+            conn: pid() | atom(),
             options_hash: binary()
           }
     @type t :: %{binary() => entry()}
@@ -51,7 +51,7 @@ defmodule Sequin.Databases.ConnectionCache do
         is_nil(entry) ->
           {:error, :not_found}
 
-        !Process.alive?(entry.conn) ->
+        is_pid(entry.conn) and !Process.alive?(entry.conn) ->
           Logger.warning("Cached db connection was dead upon lookup", database_id: db.id)
           {:error, :not_found}
 

@@ -14,7 +14,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SourceTable.NullValue
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
-  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
@@ -567,8 +566,7 @@ defmodule Sequin.Consumers do
         records = Enum.map(records, fn record -> Ecto.embedded_load(ConsumerRecord, record, :json) end)
 
         # Fetch source data for the records
-        with {:ok, conn} <- ConnectionCache.connection(consumer.postgres_database),
-             {:ok, fetched_records} <- put_source_data(conn, consumer, records),
+        with {:ok, fetched_records} <- put_source_data(consumer, records),
              {:ok, fetched_records} <- filter_and_delete_records(consumer.id, fetched_records) do
           if length(fetched_records) > 0 do
             Health.update(consumer, :receive, :healthy)
@@ -580,7 +578,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def put_source_data(conn, consumer, records) do
+  def put_source_data(consumer, records) do
     # I can't reproduce this behaviour outside of the test suite. But it appears that without assoc_loaded?,
     # Ecto preloads the association regardless of whether it's loaded or not.
     # This messes up tests, which modify the postgres_database directly before passing in.
@@ -602,7 +600,7 @@ defmodule Sequin.Consumers do
       table = Enum.find(tables, &(&1.oid == table_oid))
 
       if table do
-        case fetch_records_data(conn, table, oid_records) do
+        case fetch_records_data(postgres_db, table, oid_records) do
           {:ok, fetched_records} -> {:cont, {:ok, acc ++ fetched_records}}
           {:error, _} = error -> {:halt, error}
         end
@@ -620,7 +618,7 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp fetch_records_data(conn, %PostgresDatabase.Table{} = table, records) do
+  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabase.Table{} = table, records) do
     record_count = length(records)
     # Get the primary key columns and their types
     pk_columns = Enum.filter(table.columns, & &1.is_pk?)
@@ -661,7 +659,7 @@ defmodule Sequin.Consumers do
     query = "select * from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
 
     # Execute the query
-    with {:ok, result} <- Postgrex.query(conn, query, casted_pks) do
+    with {:ok, result} <- Postgres.query(postgres_db, query, casted_pks) do
       # Convert result to map
       rows = Postgres.result_to_maps(result)
 

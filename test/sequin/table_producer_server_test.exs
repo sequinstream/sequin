@@ -1,10 +1,11 @@
 defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
-  # Needs to be false until we figure out how to work with Ecto sandbox + characters
-  use Sequin.DataCase, async: false
+  use Sequin.DataCase, async: true
   use ExUnit.Case
 
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases
+  # Needs to be false until we figure out how to work with Ecto sandbox + characters
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.DatabasesRuntime.TableProducerServer
   alias Sequin.Factory.CharacterFactory
@@ -47,6 +48,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         source_tables: [source_table],
         account_id: database.account_id
       )
+
+    ConnectionCache.cache_connection(database, Repo)
 
     {:ok, consumer: consumer, table_oid: table_oid}
   end

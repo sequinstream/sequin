@@ -24,7 +24,7 @@ defmodule Sequin.Postgres do
 
       Postgres.query(conn_pid, "SELECT * FROM users")
       Postgres.query(Repo, "SELECT * FROM users")
-      Postgres.query({:db, postgres_database}, "SELECT * FROM users")
+      Postgres.query( postgres_database, "SELECT * FROM users")
 
   """
   def query(pid, query, params \\ [], opts \\ [])
@@ -37,13 +37,20 @@ defmodule Sequin.Postgres do
     mod.query(query, params, opts)
   end
 
-  def query({:db, %PostgresDatabase{} = db}, query, params, opts) do
+  def query(%PostgresDatabase{} = db, query, params, opts) do
     case ConnectionCache.connection(db) do
       {:ok, conn_or_mod} ->
         query(conn_or_mod, query, params, opts)
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  def query!(pid, query, params \\ [], opts \\ []) do
+    case query(pid, query, params, opts) do
+      {:ok, %Postgrex.Result{} = result} -> result
+      {:error, _} = error -> raise error
     end
   end
 
@@ -116,7 +123,7 @@ defmodule Sequin.Postgres do
   end
 
   def list_schemas(conn) do
-    with {:ok, %{rows: rows}} <- Postgrex.query(conn, "SELECT schema_name FROM information_schema.schemata", []) do
+    with {:ok, %{rows: rows}} <- query(conn, "SELECT schema_name FROM information_schema.schemata") do
       filtered_schemas =
         rows
         |> List.flatten()
@@ -149,7 +156,7 @@ defmodule Sequin.Postgres do
     ORDER BY n.nspname, c.relname, a.attnum, i.indisprimary DESC NULLS LAST
     """
 
-    case Postgrex.query(conn, query, []) do
+    case query(conn, query) do
       {:ok, %{rows: rows}} ->
         tables = process_table_rows(rows)
         {:ok, tables}
@@ -183,7 +190,7 @@ defmodule Sequin.Postgres do
   def check_replication_slot_exists(conn, slot_name) do
     query = "select 1 from pg_replication_slots where slot_name = $1"
 
-    case Postgrex.query(conn, query, [slot_name]) do
+    case query(conn, query, [slot_name]) do
       {:ok, %{num_rows: 1}} ->
         :ok
 
@@ -201,7 +208,7 @@ defmodule Sequin.Postgres do
   def check_publication_exists(conn, publication_name) do
     query = "select 1 from pg_publication where pubname = $1"
 
-    case Postgrex.query(conn, query, [publication_name]) do
+    case query(conn, query, [publication_name]) do
       {:ok, %{num_rows: 1}} ->
         :ok
 
@@ -217,7 +224,7 @@ defmodule Sequin.Postgres do
     query =
       "select pg_is_in_recovery(), current_setting('max_replication_slots')::int > 0"
 
-    case Postgrex.query(conn, query, []) do
+    case query(conn, query) do
       {:ok, %{rows: [[is_in_recovery, has_replication_slots]]}} ->
         cond do
           is_in_recovery ->
@@ -237,7 +244,7 @@ defmodule Sequin.Postgres do
 
   def list_tables(conn, schema) do
     with {:ok, %{rows: rows}} <-
-           Postgrex.query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
+           query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do
       {:ok, List.flatten(rows)}
     end
   end
@@ -254,7 +261,7 @@ defmodule Sequin.Postgres do
   end
 
   def fetch_table_oid(conn, schema, table) do
-    case Postgrex.query(conn, "SELECT '#{schema}.#{table}'::regclass::oid", []) do
+    case query(conn, "SELECT '#{schema}.#{table}'::regclass::oid") do
       {:ok, %{rows: [[oid]]}} -> oid
       _ -> nil
     end
@@ -262,7 +269,7 @@ defmodule Sequin.Postgres do
 
   def list_columns(conn, schema, table) do
     res =
-      Postgrex.query(
+      query(
         conn,
         """
         select distinct on (a.attnum)
@@ -306,7 +313,7 @@ defmodule Sequin.Postgres do
     WHERE oid = '#{schema}.#{table}'::regclass;
     """
 
-    case Postgrex.query(conn, query, []) do
+    case query(conn, query) do
       {:ok, %{rows: [["f"]]}} -> {:ok, :full}
       {:ok, %{rows: [["d"]]}} -> {:ok, :default}
       {:ok, %{rows: [["n"]]}} -> {:ok, :nothing}

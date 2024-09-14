@@ -5,7 +5,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Repo
@@ -79,14 +78,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          with {:ok, conn} <- conn(database(state)) do
-            TableProducer.fetch_max_cursor(
-              conn,
-              table(state),
-              state.cursor_min,
-              state.page_size
-            )
-          end
+          TableProducer.fetch_max_cursor(
+            database(state),
+            table(state),
+            state.cursor_min,
+            state.page_size
+          )
         end,
         timeout: 60_000
       )
@@ -119,15 +116,13 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          with {:ok, conn} <- conn(database(state)) do
-            TableProducer.fetch_records_in_range(
-              conn,
-              table(state),
-              state.cursor_min,
-              state.cursor_max,
-              state.page_size * @page_size_multiplier
-            )
-          end
+          TableProducer.fetch_records_in_range(
+            database(state),
+            table(state),
+            state.cursor_min,
+            state.cursor_max,
+            state.page_size * @page_size_multiplier
+          )
         end,
         timeout: 60_000
       )
@@ -175,10 +170,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   # Handle the retry after backoff
   def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
     {:next_state, state_name, state}
-  end
-
-  defp conn(database) do
-    ConnectionCache.connection(database)
   end
 
   defp database(%State{consumer: consumer}) do

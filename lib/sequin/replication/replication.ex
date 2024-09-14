@@ -1,12 +1,11 @@
 defmodule Sequin.Replication do
   @moduledoc false
   alias Sequin.Databases
-  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Extensions.Replication, as: ReplicationExt
-  alias Sequin.Replication.BackfillPostgresTableWorker
+  alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Repo
@@ -41,9 +40,7 @@ defmodule Sequin.Replication do
 
   def create_pg_replication_for_account_with_lifecycle(account_id, attrs) do
     attrs = Sequin.Map.atomize_keys(attrs)
-    backfill? = attrs[:backfill_existing_rows] != false
-    status = if backfill?, do: :backfilling, else: :active
-    attrs = Map.put(attrs, :status, status)
+    attrs = Map.put(attrs, :status, :active)
 
     with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
          :ok <- validate_replication_config(postgres_database, attrs) do
@@ -54,10 +51,6 @@ defmodule Sequin.Replication do
 
       case pg_replication do
         {:ok, pg_replication} ->
-          if backfill? do
-            enqueue_backfill_jobs(pg_replication)
-          end
-
           unless Application.get_env(:sequin, :env) == :test do
             ReplicationRuntime.Supervisor.start_replication(pg_replication)
           end
@@ -134,7 +127,7 @@ defmodule Sequin.Replication do
   defp validate_slot(conn, slot_name) do
     query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
 
-    case Postgrex.query(conn, query, [slot_name]) do
+    case Postgres.query(conn, query, [slot_name]) do
       {:ok, %{num_rows: 1}} ->
         :ok
 
@@ -150,7 +143,7 @@ defmodule Sequin.Replication do
   defp validate_publication(conn, publication_name) do
     query = "SELECT 1 FROM pg_publication WHERE pubname = $1"
 
-    case Postgrex.query(conn, query, [publication_name]) do
+    case Postgres.query(conn, query, [publication_name]) do
       {:ok, %{num_rows: 1}} ->
         :ok
 
@@ -161,50 +154,5 @@ defmodule Sequin.Replication do
         {:error,
          Error.validation(summary: "Error connecting to the database to verify the existence of the publication.")}
     end
-  end
-
-  defp enqueue_backfill_jobs(%PostgresReplicationSlot{} = pg_replication) do
-    pg_replication = Repo.preload(pg_replication, :postgres_database)
-    {:ok, conn} = ConnectionCache.connection(pg_replication.postgres_database)
-
-    tables = get_publication_tables(conn, pg_replication.publication_name)
-
-    Enum.each(tables, fn {schema, table} ->
-      BackfillPostgresTableWorker.create(
-        pg_replication.postgres_database_id,
-        schema,
-        table,
-        pg_replication.id
-      )
-    end)
-  end
-
-  @doc """
-  Creates backfill jobs for the specified tables in a PostgresReplicationSlot.
-  """
-  def create_backfill_jobs(postgres_replication, tables) do
-    jobs =
-      Enum.map(tables, fn %{"schema" => schema, "table" => table} ->
-        BackfillPostgresTableWorker.create(
-          postgres_replication.postgres_database_id,
-          schema,
-          table,
-          postgres_replication.id
-        )
-      end)
-
-    job_ids = Enum.map(jobs, fn {:ok, job} -> job.id end)
-    {:ok, job_ids}
-  end
-
-  defp get_publication_tables(conn, publication_name) do
-    query = """
-    SELECT schemaname, tablename
-    FROM pg_publication_tables
-    WHERE pubname = $1
-    """
-
-    {:ok, %{rows: rows}} = Postgrex.query(conn, query, [publication_name])
-    Enum.map(rows, fn [schemaname, tablename] -> {schemaname, tablename} end)
   end
 end

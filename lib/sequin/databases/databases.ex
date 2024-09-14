@@ -188,7 +188,7 @@ defmodule Sequin.Databases do
   @spec test_permissions(%PostgresDatabase{}) :: :ok | {:error, Error.ValidationError.t()} | {:error, Postgrex.Error.t()}
   def test_permissions(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
-      with {:ok, %{rows: [[result]]}} <- Postgrex.query(conn, @db_privilege_query, [db.database, "connect"]) do
+      with {:ok, %{rows: [[result]]}} <- Postgres.query(conn, @db_privilege_query, [db.database, "connect"]) do
         if result do
           :ok
         else
@@ -231,13 +231,13 @@ defmodule Sequin.Databases do
     # First, check if the slot already exists
     check_query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
 
-    case Postgrex.query(conn, check_query, [slot_name]) do
+    case Postgres.query(conn, check_query, [slot_name]) do
       {:ok, %{num_rows: 0}} ->
         # Slot doesn't exist, create it
         # ::text is important, as Postgrex can't handle return type pg_lsn
         create_query = "SELECT pg_create_logical_replication_slot($1, 'pgoutput')::text"
 
-        case Postgrex.query(conn, create_query, [slot_name]) do
+        case Postgres.query(conn, create_query, [slot_name]) do
           {:ok, _} -> :ok
           {:error, error} -> {:error, error}
         end
@@ -255,13 +255,13 @@ defmodule Sequin.Databases do
     # Check if publication exists
     check_query = "SELECT 1 FROM pg_publication WHERE pubname = $1"
 
-    case Postgrex.query(conn, check_query, [publication_name]) do
+    case Postgres.query(conn, check_query, [publication_name]) do
       {:ok, %{num_rows: 0}} ->
         # Publication doesn't exist, create it
         table_list = Enum.map_join(tables, ", ", fn [schema, table] -> ~s{"#{schema}"."#{table}"} end)
         create_query = "CREATE PUBLICATION #{publication_name} FOR TABLE #{table_list}"
 
-        case Postgrex.query(conn, create_query, []) do
+        case Postgres.query(conn, create_query, []) do
           {:ok, _} -> :ok
           {:error, error} -> {:error, "Failed to create publication: #{inspect(error)}"}
         end

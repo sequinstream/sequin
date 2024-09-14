@@ -9,6 +9,8 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SourceTable.NullValue
   alias Sequin.Consumers.SourceTable.NumberValue
   alias Sequin.Consumers.SourceTable.StringValue
+  alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
@@ -232,6 +234,8 @@ defmodule Sequin.ConsumersTest do
   describe "put_source_data/3" do
     setup do
       database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
+      # Load tables from actual database
+      {:ok, _tables} = Databases.tables(database)
 
       slot =
         ReplicationFactory.insert_postgres_replication!(
@@ -264,16 +268,17 @@ defmodule Sequin.ConsumersTest do
 
       consumer = Repo.preload(consumer, :postgres_database)
 
-      {:ok, conn} = Postgrex.start_link(UnboxedRepo.config())
-      {:ok, consumer: consumer, conn: conn}
+      ConnectionCache.cache_connection(consumer.postgres_database, Repo)
+
+      {:ok, consumer: consumer}
     end
 
-    test "fetches multiple records from the same table with single PK", %{consumer: consumer, conn: conn} do
+    test "fetches multiple records from the same table with single PK", %{consumer: consumer} do
       characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
       _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
       records = Enum.map(characters, &build_consumer_record(consumer, &1))
 
-      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
       fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id"])
 
       assert length(fetched_records) == 3
@@ -291,12 +296,12 @@ defmodule Sequin.ConsumersTest do
       end
     end
 
-    test "fetches multiple records from the same table with compound PK", %{consumer: consumer, conn: conn} do
+    test "fetches multiple records from the same table with compound PK", %{consumer: consumer} do
       characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
       _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
       records = Enum.map(characters, &build_consumer_record(consumer, &1, :multi_pk))
 
-      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
       fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id_integer"])
 
       assert length(fetched_records) == 3
@@ -311,22 +316,22 @@ defmodule Sequin.ConsumersTest do
       end
     end
 
-    test "handles different primary key data types", %{consumer: consumer, conn: conn} do
+    test "handles different primary key data types", %{consumer: consumer} do
       character = CharacterFactory.insert_character_multi_pk!()
       record = build_consumer_record(consumer, character, :multi_pk)
 
-      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
 
       assert fetched_record.data.record["id_integer"] == character.id_integer
       assert fetched_record.data.record["id_string"] == character.id_string
       assert fetched_record.data.record["id_uuid"] == character.id_uuid
     end
 
-    test "casts different column types appropriately", %{consumer: consumer, conn: conn} do
+    test "casts different column types appropriately", %{consumer: consumer} do
       character = CharacterFactory.insert_character_detailed!()
       record = build_consumer_record(consumer, character, :detailed)
 
-      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
 
       assert fetched_record.data.record["age"] == character.age
       assert fetched_record.data.record["height"] == character.height
@@ -349,17 +354,16 @@ defmodule Sequin.ConsumersTest do
     end
 
     @tag capture_log: true
-    test "errors when the source table is not in PostgresDatabase", %{consumer: consumer, conn: conn} do
+    test "errors when the source table is not in PostgresDatabase", %{consumer: consumer} do
       character = CharacterFactory.insert_character!()
       record = build_consumer_record(consumer, character)
       record = %{record | table_oid: 999_999}
 
-      assert {:error, %NotFoundError{}} = Consumers.put_source_data(conn, consumer, [record])
+      assert {:error, %NotFoundError{}} = Consumers.put_source_data(consumer, [record])
     end
 
     test "errors when the source table is listed in PostgresDatabase but not in the database", %{
-      consumer: consumer,
-      conn: conn
+      consumer: consumer
     } do
       character = CharacterFactory.insert_character!()
       record = build_consumer_record(consumer, character)
@@ -374,10 +378,10 @@ defmodule Sequin.ConsumersTest do
       consumer = %{consumer | postgres_database: %{consumer.postgres_database | tables: [fake_table]}}
 
       assert {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} =
-               Consumers.put_source_data(conn, consumer, [record])
+               Consumers.put_source_data(consumer, [record])
     end
 
-    test "handles when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer, conn: conn} do
+    test "handles when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer} do
       character = CharacterFactory.insert_character!()
       record = build_consumer_record(consumer, character)
 
@@ -391,7 +395,7 @@ defmodule Sequin.ConsumersTest do
           end)
         end)
 
-      {:ok, [fetched_record]} = Consumers.put_source_data(conn, consumer, [record])
+      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
 
       assert fetched_record.data.record["non_existent_column"] == nil
     end
@@ -402,11 +406,12 @@ defmodule Sequin.ConsumersTest do
       record = build_consumer_record(consumer, character)
       config = Keyword.merge(UnboxedRepo.config(), hostname: "unreachable_host", queue_target: 25, queue_interval: 25)
       {:ok, conn} = Postgrex.start_link(config)
+      ConnectionCache.cache_connection(consumer.postgres_database, conn)
 
-      assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(conn, consumer, [record])
+      assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(consumer, [record])
     end
 
-    test "deletes consumer records when they are missing from the source table", %{consumer: consumer, conn: conn} do
+    test "deletes consumer records when they are missing from the source table", %{consumer: consumer} do
       # Insert characters into the database
       existing_character = CharacterFactory.insert_character!()
       deleted_record_id = Factory.unique_integer()
@@ -429,7 +434,7 @@ defmodule Sequin.ConsumersTest do
       # Call put_source_data with both records
       records = [deleted_record, existing_record]
 
-      {:ok, fetched_records} = Consumers.put_source_data(conn, consumer, records)
+      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
 
       # Assert that only the existing record is returned
       assert length(fetched_records) == 2

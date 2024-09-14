@@ -119,7 +119,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "inserts are replicated to consumer events", %{event_consumer: consumer} do
       # Insert a character
-      character = CharacterFactory.insert_character!()
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -145,7 +145,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "inserts are replicated to consumer records", %{record_consumer: consumer} do
       # Insert a character
-      character = CharacterFactory.insert_character!()
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -161,7 +161,10 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       # Insert a character
-      character = CharacterFactory.insert_character!(%{name: "Leto Atreides", house: "Atreides", planet: "Caladan"})
+      character =
+        CharacterFactory.insert_character!([name: "Leto Atreides", house: "Atreides", planet: "Caladan"],
+          repo: UnboxedRepo
+        )
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -203,7 +206,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     test "updates are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
       # Insert a character
-      character = CharacterFactory.insert_character!()
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -230,13 +233,16 @@ defmodule Sequin.PostgresReplicationTest do
     test "updates are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
       # Insert a character with full replica identity
       character =
-        CharacterFactory.insert_character_ident_full!(%{
-          name: "Paul Atreides",
-          house: "Atreides",
-          planet: "Caladan",
-          is_active: true,
-          tags: ["heir", "kwisatz haderach"]
-        })
+        CharacterFactory.insert_character_ident_full!(
+          [
+            name: "Paul Atreides",
+            house: "Atreides",
+            planet: "Caladan",
+            is_active: true,
+            tags: ["heir", "kwisatz haderach"]
+          ],
+          repo: UnboxedRepo
+        )
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -276,7 +282,7 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
-      character = CharacterFactory.insert_character!()
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       assert_receive {ReplicationExt, :flush_messages}, 500
 
@@ -306,7 +312,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     @tag skip: true
     test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
-      character = CharacterFactory.insert_character!()
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       assert_receive {ReplicationExt, :flush_messages}, 500
 
@@ -319,7 +325,7 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "deletes are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
-      character = CharacterFactory.insert_character_ident_full!()
+      character = CharacterFactory.insert_character_ident_full!([], repo: UnboxedRepo)
 
       assert_receive {ReplicationExt, :flush_messages}, 500
 
@@ -353,7 +359,7 @@ defmodule Sequin.PostgresReplicationTest do
       consumer = Enum.random([event_consumer, record_consumer])
 
       # Insert
-      character = CharacterFactory.insert_character_multi_pk!()
+      character = CharacterFactory.insert_character_multi_pk!([], repo: UnboxedRepo)
 
       assert_receive {ReplicationExt, :flush_messages}, 1000
 
@@ -397,7 +403,7 @@ defmodule Sequin.PostgresReplicationTest do
       Consumers.update_consumer_with_lifecycle(consumer, %{source_tables: source_tables})
 
       # Insert a character that doesn't match the filter
-      CharacterFactory.insert_character!(is_active: false)
+      CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -406,7 +412,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert list_messages(consumer) == []
 
       # Insert a character that matches the filter
-      matching_character = CharacterFactory.insert_character!(is_active: true)
+      matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -432,7 +438,7 @@ defmodule Sequin.PostgresReplicationTest do
       record_consumer: record_consumer
     } do
       # Insert a character
-      CharacterFactory.insert_character!()
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {ReplicationExt, :flush_messages}, 500
@@ -458,7 +464,11 @@ defmodule Sequin.PostgresReplicationTest do
 
   describe "replication in isolation" do
     test "changes are buffered in the WAL, even if the listener is not up" do
-      record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
+      record =
+        []
+        |> CharacterFactory.insert_character!(repo: UnboxedRepo)
+        |> Sequin.Map.from_ecto()
+        |> Sequin.Map.stringify_keys()
 
       test_pid = self()
 
@@ -488,9 +498,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create three characters in sequence
       UnboxedRepo.transaction(fn ->
-        CharacterFactory.insert_character!(name: "Paul Atreides")
-        CharacterFactory.insert_character!(name: "Leto Atreides")
-        CharacterFactory.insert_character!(name: "Chani")
+        CharacterFactory.insert_character!([name: "Paul Atreides"], repo: UnboxedRepo)
+        CharacterFactory.insert_character!([name: "Leto Atreides"], repo: UnboxedRepo)
+        CharacterFactory.insert_character!([name: "Chani"], repo: UnboxedRepo)
       end)
 
       assert_receive {:changes, changes}, :timer.seconds(1)
@@ -520,7 +530,11 @@ defmodule Sequin.PostgresReplicationTest do
 
       start_replication!(message_handler_module: MessageHandlerMock)
 
-      record = CharacterFactory.insert_character!() |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
+      record =
+        []
+        |> CharacterFactory.insert_character!(repo: UnboxedRepo)
+        |> Sequin.Map.from_ecto()
+        |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, _}, :timer.seconds(1)
 
@@ -549,7 +563,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: MessageHandlerMock)
 
       # Test create
-      character = CharacterFactory.insert_character_ident_full!(planet: "Caladan")
+      character = CharacterFactory.insert_character_ident_full!([planet: "Caladan"], repo: UnboxedRepo)
       record = character |> Sequin.Map.from_ecto() |> Sequin.Map.stringify_keys()
 
       assert_receive {:change, [create_change]}, :timer.seconds(1)
@@ -595,7 +609,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert a record
-      character1 = CharacterFactory.insert_character!()
+      character1 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)
@@ -612,7 +626,7 @@ defmodule Sequin.PostgresReplicationTest do
       start_replication!(message_handler_module: MessageHandlerMock)
 
       # Insert another record to verify replication is working
-      character2 = CharacterFactory.insert_character!()
+      character2 = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the new message to be handled
       assert_receive {:changes, [change]}, :timer.seconds(1)

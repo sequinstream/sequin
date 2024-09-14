@@ -264,7 +264,7 @@ defmodule Sequin.Extensions.Replication do
     AND i.indisprimary;
     """
 
-    {:ok, %{rows: pk_rows}} = Postgrex.query(conn, pk_query, [schema, table])
+    {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [schema, table])
     primary_keys = List.flatten(pk_rows)
 
     # Query to get attnums
@@ -278,7 +278,7 @@ defmodule Sequin.Extensions.Replication do
     AND NOT attisdropped;
     """
 
-    {:ok, %{rows: attnum_rows}} = Postgrex.query(conn, attnum_query, [schema, table])
+    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [schema, table])
     attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
 
     # Enrich columns with primary key information and attnums

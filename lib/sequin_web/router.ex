@@ -124,7 +124,6 @@ defmodule SequinWeb.Router do
     resources("/api_keys", ApiKeyController, only: [:index, :create, :delete])
 
     resources("/postgres_replications", PostgresReplicationController, except: [:new, :edit])
-    post("/postgres_replications/:id/backfills", PostgresReplicationController, :create_backfills)
 
     post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)
     post("/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication)

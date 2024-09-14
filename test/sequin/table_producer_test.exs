@@ -1,16 +1,13 @@
 defmodule Sequin.TableProducerTest do
-  use Sequin.DataCase, async: false
+  use Sequin.DataCase, async: true
 
   alias Sequin.Databases
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Test.UnboxedRepo
-
-  @moduletag :unboxed
 
   setup do
-    {:ok, conn} = Postgrex.start_link(UnboxedRepo.config())
     db = DatabasesFactory.insert_configured_postgres_database!(tables: [])
     {:ok, tables} = Databases.tables(db)
 
@@ -28,8 +25,9 @@ defmodule Sequin.TableProducerTest do
       | sort_column_attnum: character_multi_pk_attnums["updated_at"]
     }
 
+    ConnectionCache.cache_connection(db, Repo)
+
     %{
-      conn: conn,
       db: db,
       tables: tables,
       characters_table: characters_table,
@@ -41,7 +39,7 @@ defmodule Sequin.TableProducerTest do
 
   describe "fetch_max_cursor/3" do
     test "fetches max cursor with timestamp sort_column", %{
-      conn: conn,
+      db: db,
       characters_table: table,
       character_col_attnums: attnums
     } do
@@ -54,14 +52,14 @@ defmodule Sequin.TableProducerTest do
       cursor = nil
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
 
       assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
       assert char3.id == cursor[attnums["id"]]
     end
 
     test "fetches max cursor with compound primary key", %{
-      conn: conn,
+      db: db,
       characters_multi_pk_table: table,
       character_multi_pk_attnums: attnums
     } do
@@ -74,7 +72,7 @@ defmodule Sequin.TableProducerTest do
       cursor = nil
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
 
       assert_maps_equal(
         cursor,
@@ -91,7 +89,7 @@ defmodule Sequin.TableProducerTest do
       # Test with a cursor to ensure we can move past records with the same updated_at
       cursor = create_cursor(char2, attnums)
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(conn, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
 
       assert_maps_equal(
         cursor,
@@ -109,7 +107,7 @@ defmodule Sequin.TableProducerTest do
 
   describe "fetch_records_in_range/5" do
     test "fetches records in range with compound primary key", %{
-      conn: conn,
+      db: db,
       characters_multi_pk_table: table,
       character_multi_pk_attnums: attnums
     } do
@@ -126,7 +124,7 @@ defmodule Sequin.TableProducerTest do
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(conn, table, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit)
 
       assert length(results) == 3
 
@@ -136,7 +134,7 @@ defmodule Sequin.TableProducerTest do
     end
 
     test "fetches records in range with compound primary key and same timestamp", %{
-      conn: conn,
+      db: db,
       characters_multi_pk_table: table,
       character_multi_pk_attnums: attnums
     } do
@@ -153,7 +151,7 @@ defmodule Sequin.TableProducerTest do
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(conn, table, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit)
 
       assert length(results) == 2
 
@@ -164,7 +162,7 @@ defmodule Sequin.TableProducerTest do
 
   describe "fetch_max_cursor and fetch_records_in_range combined" do
     test "processes all characters with same updated_at using small page size", %{
-      conn: conn,
+      db: db,
       characters_multi_pk_table: table
     } do
       # Insert 6 characters with the same updated_at
@@ -183,14 +181,14 @@ defmodule Sequin.TableProducerTest do
       # arbitrary number of iterations until we get a nil max_cursor
       {processed_characters, _} =
         Enum.reduce_while(1..10, {processed_characters, cursor}, fn _, {acc, current_cursor} ->
-          case TableProducer.fetch_max_cursor(conn, table, current_cursor, page_size) do
+          case TableProducer.fetch_max_cursor(db, table, current_cursor, page_size) do
             {:ok, nil} ->
               {:halt, {acc, current_cursor}}
 
             {:ok, max_cursor} ->
               {:ok, records} =
                 TableProducer.fetch_records_in_range(
-                  conn,
+                  db,
                   table,
                   current_cursor,
                   max_cursor,

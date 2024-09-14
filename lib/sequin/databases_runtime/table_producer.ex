@@ -1,5 +1,6 @@
 defmodule Sequin.DatabasesRuntime.TableProducer do
   @moduledoc false
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Postgres
@@ -50,11 +51,10 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   end
 
   # Queries
-  def fetch_records_in_range(_conn, _table, _min, max_cursor, _limit)
-      when map_size(max_cursor) == 0 or is_nil(max_cursor),
-      do: raise(ArgumentError, "max cursor cannot be empty")
+  def fetch_records_in_range(_db, _table, _min, max_cursor, _limit) when map_size(max_cursor) == 0 or is_nil(max_cursor),
+    do: raise(ArgumentError, "max cursor cannot be empty")
 
-  def fetch_records_in_range(conn, %Table{} = table, min_cursor, max_cursor, limit) do
+  def fetch_records_in_range(%PostgresDatabase{} = db, %Table{} = table, min_cursor, max_cursor, limit) do
     order_by_clause = KeysetCursor.order_by_sql(table)
 
     max_where_clause = KeysetCursor.where_sql(table, "<=")
@@ -81,13 +81,13 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     # Careful about ordering! Note order of `?` above
     params = max_cursor_values ++ min_cursor_values ++ [limit]
 
-    with {:ok, %Postgrex.Result{} = result} <- Postgrex.query(conn, sql, params) do
+    with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
       result = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
       {:ok, result}
     end
   end
 
-  def fetch_max_cursor(conn, %Table{} = table, min_cursor, limit) do
+  def fetch_max_cursor(%PostgresDatabase{} = db, %Table{} = table, min_cursor, limit) do
     select_columns =
       table
       |> KeysetCursor.cursor_columns()
@@ -106,7 +106,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
 
     sql = Postgres.parameterize_sql(sql)
 
-    with {:ok, %Postgrex.Result{} = result} <- Postgrex.query(conn, sql, params) do
+    with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
       case result.num_rows do
         0 -> {:ok, nil}
         _ -> {:ok, KeysetCursor.cursor_from_result(table, result)}

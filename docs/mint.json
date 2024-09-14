@@ -32,7 +32,15 @@
       "apiKey": "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
     }
   },
-  "tabs": [],
+  "primaryTab": {
+    "name": "Documentation"
+  },
+  "tabs": [
+    {
+      "name": "API",
+      "url": "api"
+    }
+  ],
   "navigation": [
     {
       "group": "Get started",
@@ -62,6 +70,19 @@
         "use-cases/fan-out",
         "use-cases/replication",
         "use-cases/audit-logs"
+      ]
+    },
+    {
+      "group": "API",
+      "pages": ["api/introduction", "api/authentication", "api/errors"]
+    },
+    {
+      "group": "HTTP Pull Consumers",
+      "pages": [
+        "api/http-pull-consumers/overview",
+        "api/http-pull-consumers/receive",
+        "api/http-pull-consumers/ack",
+        "api/http-pull-consumers/nack"
       ]
     }
   ],

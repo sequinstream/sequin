@@ -16,7 +16,7 @@ You can think of Sequin as a material improvement over native Postgres triggers 
 - **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-Changes are sent as messages via HTTP push (webhooks) or pull (SQS-like, with Sequin SDKs). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
+Changes are sent as messages via HTTP [push](/core-concepts#push-consumers) (webhooks) or [pull](/core-concepts#pull-consumers) (SQS-like, with Sequin SDKs). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
 
 Messages in Sequin are durable and persistent, so you can also use Sequin to replace other queues and streaming systems like SQS and Kafka.
 

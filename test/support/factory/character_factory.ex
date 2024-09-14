@@ -4,11 +4,11 @@ if Mix.env() == :test do
     import Sequin.Factory.Support
 
     alias Sequin.Factory
+    alias Sequin.Repo
     alias Sequin.Test.Support.Models.Character
     alias Sequin.Test.Support.Models.CharacterDetailed
     alias Sequin.Test.Support.Models.CharacterIdentFull
     alias Sequin.Test.Support.Models.CharacterMultiPK
-    alias Sequin.Test.UnboxedRepo
 
     def character(attrs \\ []) do
       attrs = Map.new(attrs)
@@ -33,12 +33,13 @@ if Mix.env() == :test do
       |> Sequin.Map.from_ecto()
     end
 
-    def insert_character!(attrs \\ []) do
+    def insert_character!(attrs \\ [], opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
       attrs = character_attrs(attrs)
 
       %Character{}
       |> Character.changeset(attrs)
-      |> UnboxedRepo.insert!()
+      |> repo.insert!()
     end
 
     def character_ident_full(attrs \\ []) do
@@ -62,12 +63,13 @@ if Mix.env() == :test do
       |> Sequin.Map.from_ecto()
     end
 
-    def insert_character_ident_full!(attrs \\ []) do
+    def insert_character_ident_full!(attrs \\ [], opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
       attrs = character_ident_full_attrs(attrs)
 
       %CharacterIdentFull{}
       |> CharacterIdentFull.changeset(attrs)
-      |> UnboxedRepo.insert!()
+      |> repo.insert!()
     end
 
     def character_multi_pk(attrs \\ []) do
@@ -89,12 +91,13 @@ if Mix.env() == :test do
       |> Sequin.Map.from_ecto()
     end
 
-    def insert_character_multi_pk!(attrs \\ []) do
+    def insert_character_multi_pk!(attrs \\ [], opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
       attrs = character_multi_pk_attrs(attrs)
 
       %CharacterMultiPK{}
       |> CharacterMultiPK.changeset(attrs)
-      |> UnboxedRepo.insert!()
+      |> repo.insert!()
     end
 
     def character_detailed(attrs \\ []) do
@@ -127,12 +130,13 @@ if Mix.env() == :test do
       |> Sequin.Map.from_ecto()
     end
 
-    def insert_character_detailed!(attrs \\ []) do
+    def insert_character_detailed!(attrs \\ [], opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
       attrs = character_detailed_attrs(attrs)
 
       %CharacterDetailed{}
       |> CharacterDetailed.changeset(attrs)
-      |> UnboxedRepo.insert!()
+      |> repo.insert!()
     end
   end
 end

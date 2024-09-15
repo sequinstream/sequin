@@ -1,6 +1,6 @@
 defmodule Sequin.DatabasesRuntime.TableProducerServer do
   @moduledoc false
-  use GenStateMachine, callback_mode: [:handle_event_function, :state_enter], restart: :transient
+  use GenStateMachine, callback_mode: [:handle_event_function, :state_enter]
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
@@ -8,6 +8,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Repo
+  # alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -15,11 +16,31 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   def start_link(opts \\ []) do
     consumer = Keyword.fetch!(opts, :consumer)
-    GenStateMachine.start_link(__MODULE__, opts, name: via_tuple(consumer.id))
+    table_oid = Keyword.fetch!(opts, :table_oid)
+    GenStateMachine.start_link(__MODULE__, opts, name: via_tuple({consumer.id, table_oid}))
   end
 
+  def via_tuple({consumer_id, table_oid}) do
+    Sequin.Registry.via_tuple({__MODULE__, {consumer_id, table_oid}})
+  end
+
+  # Convenience function
   def via_tuple(consumer_id) do
-    Sequin.Registry.via_tuple({__MODULE__, consumer_id})
+    consumer = Consumers.get_consumer!(consumer_id)
+    via_tuple({consumer.id, consumer.source_tables |> List.first() |> Map.fetch!(:oid)})
+  end
+
+  def child_spec(opts) do
+    consumer = Keyword.fetch!(opts, :consumer)
+    table_oid = Keyword.fetch!(opts, :table_oid)
+
+    %{
+      id: {__MODULE__, {consumer.id, table_oid}},
+      start: {__MODULE__, :start_link, [opts]},
+      # Will get restarted by Starter in event of crash
+      restart: :temporary,
+      type: :worker
+    }
   end
 
   defmodule State do
@@ -178,8 +199,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   defp table(%State{} = state) do
     database = database(state)
-    table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
-    %{table | sort_column_attnum: Map.fetch!(database.tables_sort_column_attnums, state.table_oid)}
+    db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
+    source_table = Sequin.Enum.find!(state.consumer.source_tables, &(&1.oid == state.table_oid))
+    %{db_table | sort_column_attnum: source_table.sort_column_attnum}
   end
 
   # Message handling
@@ -198,7 +220,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       end)
 
     # TODO
-    # TracerServer.records_ingested(consumer, consumer_records)
+    # TracerServer.messages_ingested(consumer, consumer_records)
     Consumers.insert_consumer_records(consumer_records)
   end
 

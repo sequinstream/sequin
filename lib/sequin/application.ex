@@ -32,6 +32,7 @@ defmodule Sequin.Application do
       [
         Sequin.ReplicationRuntime.Supervisor,
         Sequin.ConsumersRuntime.Supervisor,
+        Sequin.DatabasesRuntime.Supervisor,
         Sequin.Tracer.Starter,
         Sequin.Health.HttpEndpointHealthChecker,
         Sequin.Health.PostgresDatabaseHealthChecker

@@ -145,7 +145,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
   def where_table_producer(query \\ base_query()) do
     from([consumer: c] in query,
       where:
-        fragment("?->>'producer' = ?", c.record_consumer_state, :table_and_wal) and
+        fragment("?->>'producer' = ?", c.record_consumer_state, "table_and_wal") and
           c.message_kind == :record
     )
   end

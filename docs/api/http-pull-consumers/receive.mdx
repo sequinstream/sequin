@@ -2,7 +2,7 @@
 title: 'Receive next messages'
 sidebarTitle: "Receive"
 description: "Use the `/receive` endpoint to get one or more messages from a pull consumer"
-api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
+api: 'POST /http_pull_consumers/{consumer_name_or_id}/receive'
 ---
 
 <Note>You can use either `POST` or `GET` to receive messages for a pull consumer.</Note>
@@ -41,20 +41,7 @@ The response is an object with a `data` property that contains a list of message
     If the consumer is processing changes, a [changes](/core-concepts#changes) object will be returned.
     </ResponseField>
     <ResponseField name="action" type="string">
-    The action that was performed on the record.
-    </ResponseField>
-    <ResponseField name="metadata" type="object">
-    Metadata about the message.
-    </ResponseField>
-  </Expandable>
-</ResponseField>
-<ResponseField name="info" type="object">
-  <Expandable title="properties">
-    <ResponseField name="num_pending" type="integer">
-      The number of messages available for the consumer.
-    </ResponseField>
-    <ResponseField name="num_ack_pending" type="integer">
-      The number of messages that are delivered but not yet acknowledged for this consumer.
+    If the consumer is processing [changes](/core-concepts#changes), the action that was performed on the record as `insert`, `update`, or `delete`.
     </ResponseField>
   </Expandable>
 </ResponseField>
@@ -70,7 +57,7 @@ curl --request POST \
 
 ```shell Using GET
 curl --request GET \
-  --url https://api.sequin.io/v1/http-consumers/c906b4a4-0cda-4f46-bd80-255f570c195d/next?batch_size=10 \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/receive?batch_size=10 \
   --header 'Authorization: Bearer YOUR_API_TOKEN'
 ```
 </ RequestExample>
@@ -90,22 +77,9 @@ curl --request GET \
       },
       "changes": null,
       "action": "insert",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "fremen_members",
-        "commit_timestamp": "2023-10-15T14:30:00Z",
-        "consumer": {
-          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-          "name": "arrakis_population_consumer"
-        }
-      }
     },
     // more messages...
-  ],
-  "info": {
-    "num_pending": 100,
-    "num_ack_pending": 10
-  }
+  ]
 }
 ```
 
@@ -121,21 +95,9 @@ curl --request GET \
         "spice_allocation": 1000,
         "is_kwisatz_haderach": true
       },
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "house_atreides_members",
-        "consumer": {
-          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "dune_characters_consumer"
-        }
-      }
     },
     // more messages...
-  ],
-  "info": {
-    "num_pending": 100,
-    "num_ack_pending": 10
-  }
+  ]
 }
 ```
 </ResponseExample>

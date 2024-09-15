@@ -35,7 +35,7 @@ The response is an object with a `data` property that contains a list of message
     A [record](/core-concepts#records) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="ack_token" type="string">
-    You'll use the `ack_token` in follow-up requests to either [ack](/streams/consume/ack) or [nack](/streams/consume/ack) this specific message.
+    You'll use the `ack_token` in follow-up requests to either [ack](/api/http-pull-consumers/ack) or [nack](/api/http-pull-consumers/nack) this specific message.
     </ResponseField>
     <ResponseField name="changes" type="object">
     If the consumer is processing changes, a [changes](/core-concepts#changes) object will be returned.

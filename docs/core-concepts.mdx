@@ -242,6 +242,89 @@ When your consumer is processing changes, it can also specify the specific opera
   <img src="/images/core/filters-config-with-operations.png" alt="The Sequin UI, prompting you to specify the filters for a consumer. Above the filters, there are three switches for each of the three operations: insert, update, and delete." style={{ maxWidth: '500px' }} />
 </Frame>
 
+### Sorting (row consumers only)
+
+When a consumer is processing a table's rows, it must specify a **sort column**. Sequin will use this sort column to order rows and detect changes.
+
+It's important you choose the right sort column. The right sort column is either:
+
+- A **timestamp** like `updated_at` that your system updates whenever a row is inserted or updated.
+- A **sequence** like `seq` or `index` that your system increments whenever a row is inserted or updated.
+
+If your table does not have a timestamp or integer column that is updated on insert/update, you can add one:
+
+<AccordionGroup>
+  <Accordion icon="clock" title="Adding an updated_at column">
+    Here's how you can add an `updated_at` column to your table and create a trigger that updates it on changes:
+
+    ```sql
+    -- Add the updated_at column
+    alter table your_table add column updated_at timestamp default now();
+
+    -- Update existing rows (if needed)
+    -- This will add *some* sort to existing rows, which may be desirable.
+    -- (Note if your table has millions of rows, this could take a while)
+    update your_table set updated_at = inserted_at;
+
+    -- Create a function to update the timestamp
+    create or replace function update_timestamp()
+    returns trigger as $$
+    begin
+      new.updated_at = now();
+      return new;
+    end;
+    $$ language plpgsql;
+
+    -- Create a trigger to call the function
+    create trigger set_timestamp
+    before update on your_table
+    for each row
+    execute function update_timestamp();
+    ```
+
+    This will ensure that the `updated_at` column is set to the current time on insert and updated whenever a row is modified.
+  </Accordion>
+
+  <Accordion icon="list-ol" title="Adding a sequence column">
+    Here's how you can add an auto-incrementing `seq` column to your table:
+
+    ```sql
+    -- Create a sequence
+    create sequence your_table_seq;
+
+    -- Add the seq column
+    alter table your_table add column seq integer default nextval('your_table_seq');
+
+    -- Update existing rows (if needed)
+    -- (Note if your table has millions of rows, this could take a while)
+    update your_table set seq = nextval('your_table_seq');
+    ```
+
+    This will ensure that the `seq` column is automatically incremented for new rows. For updates, you'll add this trigger:
+
+    ```sql
+    create or replace function update_seq()
+    returns trigger as $$
+    begin
+      new.seq = nextval('your_table_seq');
+      return new;
+    end;
+    $$ language plpgsql;
+
+    create trigger set_seq
+    before update on your_table
+    for each row
+    execute function update_seq();
+    ```
+
+    This trigger will ensure the `seq` is updated on row updates.
+  </Accordion>
+</AccordionGroup>
+
+<Note>If your table is append-only, you can use `inserted_at` or an auto-incrementing `id` column as the sort column. `uuid` columns will not work as they are not sequential.</Note>
+
+<Note>We're well aware that [Postgres sequences and timestamps can commit out-of-order](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). Sequin uses the sort column along with other strategies (namely, the WAL) to detect changes and ensure no data is missed.</Note>
+
 ### Transforming (coming soon)
 
 You can **transform** messages in a stream using a Lua function. This is useful for transforming data into a format more suitable for your application.

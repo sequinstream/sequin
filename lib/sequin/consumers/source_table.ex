@@ -174,14 +174,15 @@ defmodule Sequin.Consumers.SourceTable do
   alias Sequin.Consumers.SourceTable.NumberValue
   alias Sequin.Consumers.SourceTable.StringValue
 
-  @derive {Jason.Encoder, only: [:oid, :schema_name, :table_name, :actions, :column_filters]}
+  @derive {Jason.Encoder, only: [:oid, :schema_name, :table_name, :actions, :column_filters, :sort_column_attnum]}
 
   @type t :: %__MODULE__{
           oid: integer,
           schema_name: String.t(),
           table_name: String.t(),
           actions: [atom()],
-          column_filters: [ColumnFilter.t()]
+          column_filters: [ColumnFilter.t()],
+          sort_column_attnum: integer() | nil
         }
 
   @type filter_type :: :string | :number | :boolean | :datetime
@@ -368,13 +369,14 @@ defmodule Sequin.Consumers.SourceTable do
     field :oid, :integer
     field :schema_name, :string, virtual: true
     field :table_name, :string, virtual: true
+    field :sort_column_attnum, :integer
     field :actions, {:array, Ecto.Enum}, values: [:insert, :update, :delete]
     embeds_many :column_filters, ColumnFilter
   end
 
   def changeset(source_table, attrs) do
     source_table
-    |> cast(attrs, [:oid, :schema_name, :table_name, :actions])
+    |> cast(attrs, [:oid, :schema_name, :table_name, :actions, :sort_column_attnum])
     |> validate_required([:oid, :actions])
     |> cast_embed(:column_filters, with: &ColumnFilter.changeset/2)
     |> validate_length(:actions, min: 1)

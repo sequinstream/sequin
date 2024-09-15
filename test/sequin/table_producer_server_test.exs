@@ -20,9 +20,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   setup do
     # Set up the database and consumer
     database =
-      DatabasesFactory.insert_configured_postgres_database!(
-        tables_sort_column_attnums: %{Character.table_oid() => Character.column_attnum("updated_at")}
-      )
+      DatabasesFactory.insert_configured_postgres_database!()
 
     replication =
       ReplicationFactory.insert_postgres_replication!(
@@ -37,6 +35,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
     source_table =
       ConsumersFactory.source_table(
         oid: table_oid,
+        sort_column_attnum: Character.column_attnum("updated_at"),
         column_filters: []
       )
 

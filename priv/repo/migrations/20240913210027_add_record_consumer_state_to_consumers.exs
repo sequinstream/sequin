@@ -14,16 +14,18 @@ defmodule Sequin.Repo.Migrations.AddRecordConsumerStateToConsumers do
     end
 
     execute """
-    update #{@config_schema_prefix}.http_push_consumers
-    set record_consumer_state = '{"producer": "wal"}'
-    where message_kind = 'record'
-    """
+            update #{@config_schema_prefix}.http_push_consumers
+            set record_consumer_state = '{"producer": "wal"}'
+            where message_kind = 'record'
+            """,
+            "select 1"
 
     execute """
-    update #{@config_schema_prefix}.http_pull_consumers
-    set record_consumer_state = '{"producer": "wal"}'
-    where message_kind = 'record'
-    """
+            update #{@config_schema_prefix}.http_pull_consumers
+            set record_consumer_state = '{"producer": "wal"}'
+            where message_kind = 'record'
+            """,
+            "select 1"
 
     create constraint(:http_push_consumers, :record_consumer_state_required,
              check: "(message_kind != 'record') or (record_consumer_state is not null)"

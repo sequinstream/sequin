@@ -180,7 +180,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         form["sourceTableActions"] || []
       end
 
-    params = %{
+    %{
       "consumer_kind" => form["consumerKind"],
       "ack_wait_ms" => form["ackWaitMs"],
       "http_endpoint" => decode_http_endpoint(form["httpEndpoint"]),
@@ -195,13 +195,26 @@ defmodule SequinWeb.ConsumersLive.Form do
         %{
           "oid" => form["tableOid"],
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => source_table_actions
+          "actions" => source_table_actions,
+          "sort_column_attnum" => form["sortColumnAttnum"]
         }
       ]
     }
+    |> maybe_delete_http_endpoint()
+    |> maybe_put_record_consumer_state()
+  end
 
+  defp maybe_delete_http_endpoint(params) do
     if params["http_endpoint_id"] do
       Map.delete(params, "http_endpoint")
+    else
+      params
+    end
+  end
+
+  defp maybe_put_record_consumer_state(params) do
+    if params["message_kind"] == "record" do
+      Map.put(params, "record_consumer_state", %{"producer" => "table_and_wal"})
     else
       params
     end
@@ -238,7 +251,8 @@ defmodule SequinWeb.ConsumersLive.Form do
       "postgres_database_id" => postgres_database_id,
       "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
-      "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1)
+      "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
+      "sort_column_attnum" => source_table && source_table.sort_column_attnum
     }
 
     case consumer_type do
@@ -331,10 +345,12 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case case_result do
       {:ok, consumer} ->
+        consumer_type = if is_struct(consumer, HttpPullConsumer), do: "HttpPullConsumer", else: "HttpPushConsumer"
+
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
           properties: %{
-            consumer_type: consumer.__struct__ |> to_string() |> String.split(".") |> List.last(),
+            consumer_type: consumer_type,
             stream_type: consumer.message_kind,
             consumer_id: consumer.id,
             consumer_name: consumer.name,

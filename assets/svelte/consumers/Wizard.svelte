@@ -5,19 +5,16 @@
   import { Input } from "$lib/components/ui/input";
   import {
     InfoIcon,
-    RefreshCwIcon,
     CheckIcon,
     Loader2,
     XIcon,
     CircleIcon,
-    ExternalLinkIcon,
   } from "lucide-svelte";
   import {
     Card,
     CardContent,
     CardHeader,
     CardTitle,
-    CardDescription,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import {
@@ -38,14 +35,12 @@
   import HttpPushVisual from "./HttpPushVisual.svelte";
   import HttpPullVisual from "./HttpPullVisual.svelte";
   import TableSelector from "../components/TableSelector.svelte";
-  import TableFilters from "../components/TableFilters.svelte";
-  import { getColorFromName } from "../utils";
   import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
-  import { Switch } from "$lib/components/ui/switch";
   import { toast } from "svelte-sonner";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tabs from "$lib/components/ui/tabs";
   import { truncateMiddle } from "$lib/utils";
+  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
 
   let step = "select_table";
   export let live;
@@ -74,6 +69,7 @@
       encryptedHeaders: Record<string, string>;
     };
     httpEndpointPath: string;
+    sortColumnAttnum: number | null;
   } = {
     postgresDatabaseId: null,
     tableOid: null,
@@ -93,6 +89,7 @@
       encryptedHeaders: {},
     },
     httpEndpointPath: "",
+    sortColumnAttnum: null,
   };
 
   export let databases: Array<{
@@ -133,6 +130,9 @@
       case "select_table":
         continueDisabled = !form.postgresDatabaseId || !form.tableOid;
         break;
+      case "select_message_kind":
+        continueDisabled = !form.messageKind;
+        break;
       case "configure_filters":
         continueDisabled = form.sourceTableFilters.some(
           (filter) =>
@@ -141,7 +141,11 @@
             (!filter.value &&
               !["IS NULL", "IS NOT NULL"].includes(filter.operator))
         );
+        if (form.messageKind === "record") {
+          continueDisabled = continueDisabled || !form.sortColumnAttnum;
+        }
         break;
+
       case "configure_consumer":
         if (form.consumerKind === "http_push" && form.httpEndpointId) {
           continueDisabled = !form.name;
@@ -151,9 +155,6 @@
         } else if (form.consumerKind === "http_pull") {
           continueDisabled = !form.name;
         }
-        break;
-      case "select_message_kind":
-        continueDisabled = !form.messageKind;
         break;
     }
   }
@@ -337,14 +338,14 @@
 
   function goBack() {
     switch (step) {
-      case "configure_filters":
+      case "select_message_kind":
         step = "select_table";
         break;
-      case "select_message_kind":
-        step = "configure_filters";
+      case "configure_filters":
+        step = "select_message_kind";
         break;
       case "select_consumer":
-        step = "select_message_kind";
+        step = "configure_filters";
         break;
       case "configure_consumer":
         step = "select_consumer";
@@ -356,13 +357,16 @@
   function goForward() {
     switch (step) {
       case "select_table":
-        step = "configure_filters";
-        break;
-      case "configure_filters":
         step = "select_message_kind";
         break;
       case "select_message_kind":
+        step = "configure_filters";
+        break;
+      case "configure_filters":
         step = "select_consumer";
+        break;
+      case "select_consumer":
+        step = "configure_consumer";
         break;
     }
     saveFormToStorage();
@@ -418,7 +422,6 @@
         const parsedForm = JSON.parse(storedForm);
         const storedTimestamp = parsedForm._timestamp;
         const storedStep = parsedForm._step;
-        console.log("parsedForm", parsedForm);
 
         delete parsedForm._timestamp;
         delete parsedForm._step;
@@ -455,7 +458,6 @@
       _timestamp: new Date().getTime(),
       _step: step,
     };
-    console.log("formToSave", formToSave);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(formToSave));
   }
 
@@ -632,130 +634,14 @@
         </div>
       {/if}
 
-      {#if step === "configure_filters"}
-        <div
-          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
-        >
-          <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Define filters</h2>
-          </div>
-        </div>
-        <div class="p-8 max-w-5xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle>Filters</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div class="mb-6">
-                <p class="text-muted-foreground">
-                  Optionally filter rows from the table based on the SQL <code
-                    >where</code
-                  > conditions below.
-                </p>
-              </div>
-              {#if form.postgresDatabaseId && form.tableOid}
-                {#if selectedDatabase && selectedTable}
-                  <div class="mb-6">
-                    <div
-                      class="grid grid-cols-[auto_1fr_1fr_15px] gap-4 mb-2 items-center"
-                    >
-                      <icon
-                        class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-                          `${selectedTable.schema}.${selectedTable.name}`
-                        )}"
-                      ></icon>
-                      <span class="font-medium"
-                        >{selectedTable.schema}.{selectedTable.name}</span
-                      >
-                      {#if form.sourceTableFilters.length > 0}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          on:click={() =>
-                            refreshTables(form.postgresDatabaseId)}
-                          disabled={tableRefreshState === "refreshing"}
-                          class="justify-self-end"
-                        >
-                          {#if tableRefreshState === "refreshing"}
-                            <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
-                          {:else if tableRefreshState === "done"}
-                            <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
-                          {:else}
-                            <RefreshCwIcon class="h-4 w-4 mr-2" />
-                          {/if}
-                          Refresh
-                        </Button>
-                      {/if}
-                    </div>
-                    <TableFilters
-                      filters={form.sourceTableFilters}
-                      columns={selectedTable.columns}
-                      onFilterChange={handleFilterChange}
-                    />
-                    {#if form.messageKind === "event"}
-                      <div class="mt-6 space-y-2">
-                        <Label>Operations to capture</Label>
-                        <div class="flex items-center space-x-4">
-                          {#each ["insert", "update", "delete"] as action}
-                            <div class="flex items-center space-x-2">
-                              <Label for={action} class="cursor-pointer">
-                                {action.charAt(0).toUpperCase() +
-                                  action.slice(1)}
-                              </Label>
-                              <Switch
-                                id={action}
-                                checked={form.sourceTableActions.includes(
-                                  action
-                                )}
-                                onCheckedChange={(checked) => {
-                                  const newActions = checked
-                                    ? [...form.sourceTableActions, action]
-                                    : form.sourceTableActions.filter(
-                                        (a) => a !== action
-                                      );
-                                  handleFormUpdate({
-                                    sourceTableActions: newActions,
-                                  });
-                                }}
-                              />
-                            </div>
-                          {/each}
-                        </div>
-                        {#if errors.source_tables?.[0]?.actions}
-                          <p class="text-destructive text-sm">
-                            {errors.source_tables[0].actions}
-                          </p>
-                        {/if}
-                      </div>
-                    {/if}
-                  </div>
-                {:else}
-                  <p>Loading table information...</p>
-                {/if}
-              {:else}
-                <p>Please select a database and table first.</p>
-              {/if}
-            </CardContent>
-          </Card>
-        </div>
-      {/if}
       {#if step === "select_message_kind"}
         <div
           class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
         >
-          <div class="flex items-center justify-between container">
+          <div class="flex items-center container">
             <h2 class="text-xl font-semibold">
               What should the consumer process?
             </h2>
-            <Button
-              variant="outline"
-              href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
-              target="_blank"
-              class="flex items-center"
-            >
-              <span class="mr-1">Read docs</span>
-              <ExternalLinkIcon class="w-4 h-4" />
-            </Button>
           </div>
         </div>
         <div class="p-8 max-w-5xl mx-auto">
@@ -848,6 +734,27 @@
               in our docs
             </a>
           </div>
+        </div>
+      {/if}
+
+      {#if step === "configure_filters"}
+        <div
+          class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
+        >
+          <div class="flex items-center container">
+            <h2 class="text-xl font-semibold">Configure filters and sorting</h2>
+          </div>
+        </div>
+        <div class="p-8 max-w-5xl mx-auto">
+          <SortAndFilterCard
+            showTableInfo
+            messageKind={form.messageKind}
+            {selectedTable}
+            bind:form
+            {errors}
+            isEditMode={false}
+            onFilterChange={handleFilterChange}
+          />
         </div>
       {/if}
 
@@ -1124,7 +1031,7 @@
                     >
                     <div class="flex flex-row bg-white">
                       <div
-                        class="font-medium rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                        class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
                       >
                         {#if selectedHttpEndpoint}
                           {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}

@@ -114,7 +114,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> http_push_consumer_attrs()
 
     {:ok, consumer} =
-      Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+      Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs)
 
     consumer
   end
@@ -187,7 +187,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> http_pull_consumer_attrs()
 
     {:ok, consumer} =
-      Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs, no_backfill: true)
+      Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs)
 
     consumer
   end
@@ -209,7 +209,8 @@ defmodule Sequin.Factory.ConsumersFactory do
       %Sequin.Consumers.SourceTable{
         oid: Factory.unique_integer(),
         actions: [:insert, :update, :delete],
-        column_filters: [column_filter()]
+        column_filters: [column_filter()],
+        sort_column_attnum: Factory.unique_integer()
       },
       attrs
     )

@@ -38,7 +38,7 @@
   "tabs": [
     {
       "name": "API",
-      "url": "api"
+      "url": "management-api"
     }
   ],
   "navigation": [
@@ -75,16 +75,16 @@
     {
       "group": "API",
       "pages": [
-        "api/introduction",
-        "api/authentication",
-        "api/errors",
+        "management-api/introduction",
+        "management-api/authentication",
+        "management-api/errors",
         {
           "group": "HTTP Pull Consumers",
           "pages": [
-            "api/http-pull-consumers/overview",
-            "api/http-pull-consumers/receive",
-            "api/http-pull-consumers/ack",
-            "api/http-pull-consumers/nack"
+            "management-api/http-pull-consumers/overview",
+            "management-api/http-pull-consumers/receive",
+            "management-api/http-pull-consumers/ack",
+            "management-api/http-pull-consumers/nack"
           ]
         }
       ]

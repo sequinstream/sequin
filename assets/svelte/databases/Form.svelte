@@ -344,19 +344,7 @@
             </p>
           {/if}
         </div>
-        <h3 class="text-md font-semibold mb-2">
-          Step 1: Create a replication slot
-        </h3>
-        <p class="text-sm text-muted-foreground">
-          Run the following SQL command on your database to create a replication
-          slot:
-        </p>
-        <CodeWithCopy
-          language="sql"
-          code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
-        />
-
-        <h3 class="text-md font-semibold mb-2">Step 2: Create a publication</h3>
+        <h3 class="text-md font-semibold mb-2">Step 1: Create a publication</h3>
         <p class="text-sm text-muted-foreground">
           Choose from one of the following examples to create a publication:
         </p>
@@ -382,6 +370,18 @@
         <CodeWithCopy
           language="sql"
           code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+        />
+
+        <h3 class="text-md font-semibold mb-2">
+          Step 2: Create a replication slot
+        </h3>
+        <p class="text-sm text-muted-foreground">
+          Run the following command on your database to create a replication
+          slot:
+        </p>
+        <CodeWithCopy
+          language="sql"
+          code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
         />
       </CardContent>
     </Card>

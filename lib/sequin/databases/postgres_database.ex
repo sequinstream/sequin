@@ -42,7 +42,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :username, :string
     field(:password, Sequin.Encrypted.Binary) :: String.t()
     field :tables_refreshed_at, :utc_datetime
-    field :tables_sort_column_attnums, Sequin.Ecto.IntegerKeyMap, default: %{}
     field :ipv6, :boolean, default: false
 
     embeds_many :tables, Table, on_replace: :delete, primary_key: false do
@@ -80,7 +79,6 @@ defmodule Sequin.Databases.PostgresDatabase do
       :queue_target,
       :ssl,
       :tables_refreshed_at,
-      :tables_sort_column_attnums,
       :username,
       :ipv6
     ])

@@ -1,0 +1,34 @@
+---
+title: 'Ack messages'
+description: "Ack messages for a pullconsumer"
+api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/ack'
+---
+
+## Request parameters
+
+<ParamField path="consumer_name_or_id" type="string" required>
+  The ID or name of the consumer.
+</ParamField>
+<ParamField body="ack_tokens" type="string[]" required>
+  An array of `ack_token` values to acknowledge.
+
+  Each message returned by the [`/receive` endpoint](/api/http-pull-consumers/receive) contains an `ack_token` that you can use to acknowledge the message.
+</ParamField>
+
+<RequestExample>
+```shell
+curl --request POST \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/ack \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'\
+  --header 'Content-Type: application/json' \
+  --data '{
+    "ack_tokens": ["MTYyeJ7abUjl1pO", "MTYyeJ7abUjl1pP"]
+  }'
+```
+</ RequestExample>
+
+<ResponseExample>
+```json 204 OK
+<No content>
+```
+</ResponseExample>

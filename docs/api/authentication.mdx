@@ -1,0 +1,16 @@
+---
+title: Authentication
+description: Sequin's API uses HTTP Bearer Authentication.
+icon: "key"
+iconType: "solid"
+---
+
+You can [retrieve your API token](/api/introduction) in the [Sequin Console](https://console.sequinstream.com).
+
+You'll include your token in the header of your HTTP requests. For example, with a client such as `curl`, you can include your token by using the `--header` option:
+
+```bash
+curl --request GET \
+  --url api.sequinstream.com/api/http_pull_consumers/consumer_name/receive \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```

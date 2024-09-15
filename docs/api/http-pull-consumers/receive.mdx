@@ -1,0 +1,142 @@
+---
+title: 'Receive next messages'
+sidebarTitle: "Receive"
+description: "Use the `/receive` endpoint to get one or more messages from a pull consumer"
+api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
+---
+
+<Note>You can use either `POST` or `GET` to receive messages for a pull consumer.</Note>
+
+## Request parameters
+
+<ParamField path="name_or_id" type="string" required>
+  The ID or name of the consumer.
+</ParamField>
+<ParamField body="batch_size" type="integer" placeholder={1}>
+  Number of messages to try to fetch from the consumer. Defaults to `1`.
+
+  The count of returned messages may be less than the requested batch size if there are fewer messages available for the consumer.
+</ParamField>
+<ParamField body="wait_for" type="integer" placeholder={0}>
+  Amount of time to wait for messages to become available in the consumer, in milliseconds. Defaults to `0`.
+
+  When `wait_for` is greater than `0`, the request will block until either `batch_size` messages are available or `wait_for` milliseconds have passed.
+
+  Therefore, you can use `wait_for` to implement long polling.
+</ParamField>
+
+## Response fields
+
+The response is an object with a `data` property that contains a list of messages.
+
+<ResponseField name="data" type="list">
+  <Expandable title="properties">
+    <ResponseField name="record" type="Record">
+    A [record](/core-concepts#records) containing the message data with a key for each column in the associated table.
+    </ResponseField>
+    <ResponseField name="ack_token" type="string">
+    You'll use the `ack_token` in follow-up requests to either [ack](/streams/consume/ack) or [nack](/streams/consume/ack) this specific message.
+    </ResponseField>
+    <ResponseField name="changes" type="object">
+    If the consumer is processing changes, a [changes](/core-concepts#changes) object will be returned.
+    </ResponseField>
+    <ResponseField name="action" type="string">
+    The action that was performed on the record.
+    </ResponseField>
+    <ResponseField name="metadata" type="object">
+    Metadata about the message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="info" type="object">
+  <Expandable title="properties">
+    <ResponseField name="num_pending" type="integer">
+      The number of messages available for the consumer.
+    </ResponseField>
+    <ResponseField name="num_ack_pending" type="integer">
+      The number of messages that are delivered but not yet acknowledged for this consumer.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```shell Using POST
+curl --request POST \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/receive \
+  --header 'Authorization: Bearer YOUR_API_TOKEN' \
+  --header 'Content-Type: application/json' \
+  -d '{ "batch_size": 10 }'
+```
+
+```shell Using GET
+curl --request GET \
+  --url https://api.sequin.io/v1/http-consumers/c906b4a4-0cda-4f46-bd80-255f570c195d/next?batch_size=10 \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+</ RequestExample>
+
+<ResponseExample>
+```json Consumer processing changes
+{
+  "data": [
+    {
+      "ack_token": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 2,
+        "name": "Chani",
+        "title": "Fremen Warrior",
+        "spice_allocation": 500,
+        "is_sayyadina": true
+      },
+      "changes": null,
+      "action": "insert",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "fremen_members",
+        "commit_timestamp": "2023-10-15T14:30:00Z",
+        "consumer": {
+          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+          "name": "arrakis_population_consumer"
+        }
+      }
+    },
+    // more messages...
+  ],
+  "info": {
+    "num_pending": 100,
+    "num_ack_pending": 10
+  }
+}
+```
+
+```json Consumer processing rows
+{
+  "data": [
+    {
+      "ack_token": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 1,
+        "name": "Paul Atreides",
+        "title": "Duke of Arrakis",
+        "spice_allocation": 1000,
+        "is_kwisatz_haderach": true
+      },
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "house_atreides_members",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "dune_characters_consumer"
+        }
+      }
+    },
+    // more messages...
+  ],
+  "info": {
+    "num_pending": 100,
+    "num_ack_pending": 10
+  }
+}
+```
+</ResponseExample>
+

@@ -266,13 +266,13 @@ If webhook endpoint does not respond before the request timeout elapses, Sequin 
 
 #### Pull consumers
 
-You can pull messages from the consumer using Sequin's HTTP API or SDKs. When a consumer is configured for pull consumption, Sequin will provision a unique endpoint for the consumer. Your workers will pull messages from this endpoint:
+You can pull messages from the consumer using Sequin's [HTTP API](/api/introduction) or [SDKs](/sdks). When a consumer is configured for pull consumption, Sequin will provision a unique endpoint for the consumer. Your workers will pull messages from this endpoint:
 
 <Frame>
   <img src="/images/core/pull-instructions.png" alt="The Sequin UI, displaying instructions for pulling messages from a consumer. The instructions are curl requests to the consumer's endpoint." style={{ maxWidth: '500px' }} />
 </Frame>
 
-After receiving a message from a pull consumer, your system will send a follow-up acknowledgement request when the message has finished processing (i.e. `POST /consumers/:consumer_id/ack`).
+After [receiving a message](/api/http-pull-consumers/receive) from a pull consumer, your system will send a follow-up [acknowledgement request](/api/http-pull-consumers/ack) when the message has finished processing (i.e. `POST /consumers/:consumer_id/ack`).
 
 If the message is not acknowledged within the pull consumer's visability timeout, Sequin will make the message available to other workers.
 

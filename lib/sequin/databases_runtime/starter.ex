@@ -14,7 +14,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
   def init(_) do
     Logger.info("[DatabasesRuntimeStarter] Booting")
 
-    schedule_start(:timer.seconds(5))
+    schedule_start(:timer.seconds(1))
 
     {:ok, :ignore}
   end
@@ -40,7 +40,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
   defp start do
     Enum.each(Consumers.list_consumers_where_table_producer(), fn consumer ->
       Enum.each(consumer.source_tables, fn %SourceTable{} = source_table ->
-        Supervisor.start_table_producer(Supervisor, consumer, table_oid: source_table.oid)
+        Supervisor.start_table_producer({consumer, source_table.oid})
       end)
     end)
   end

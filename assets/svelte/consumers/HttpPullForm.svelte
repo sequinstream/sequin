@@ -16,8 +16,6 @@
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
   import TableSelector from "../components/TableSelector.svelte";
-  import TableFilters from "../components/TableFilters.svelte";
-  import { Switch } from "$lib/components/ui/switch";
   import {
     Card,
     CardContent,
@@ -27,6 +25,7 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils";
   import { ExternalLinkIcon } from "lucide-svelte";
+  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
 
   export let live;
   export let parent;
@@ -45,6 +44,7 @@
     ackWaitMs: consumer.ack_wait_ms || 30000,
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
+    sortColumnAttnum: consumer.sort_column_attnum || null,
   };
 
   let form = { ...initialForm };
@@ -235,58 +235,14 @@
       </CardContent>
     </Card>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Filters</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {#if form.messageKind === "event"}
-          {@const actions = form.sourceTableActions || []}
-          {@const switches = [
-            { id: "insert", label: "Insert" },
-            { id: "update", label: "Update" },
-            { id: "delete", label: "Delete" },
-          ]}
-          <div class="space-y-2 mb-6">
-            <Label>Operations to capture</Label>
-            <div class="flex items-center space-x-4">
-              {#each switches as { id, label }}
-                <div class="flex items-center space-x-2">
-                  <Label for={id} class="cursor-pointer">
-                    {label}
-                  </Label>
-                  <Switch
-                    {id}
-                    disabled={!form.postgresDatabaseId && !form.tableOid}
-                    checked={actions.includes(id)}
-                    onCheckedChange={(checked) => {
-                      const newActions = checked
-                        ? [...actions, id]
-                        : actions.filter((a) => a !== id);
-                      form.sourceTableActions = newActions;
-                    }}
-                  />
-                </div>
-              {/each}
-            </div>
-            {#if errors.source_table?.actions}
-              <p class="text-destructive text-sm">
-                {errors.source_table?.actions}
-              </p>
-            {/if}
-          </div>
-        {/if}
-        <div class="my-3">
-          <TableFilters
-            filters={form.sourceTableFilters}
-            columns={selectedTable ? selectedTable.columns : []}
-            onFilterChange={handleFilterChange}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-            errors={errors.source_tables?.[0]?.column_filters || []}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    <SortAndFilterCard
+      messageKind={form.messageKind}
+      {selectedTable}
+      bind:form
+      {errors}
+      {isEditMode}
+      onFilterChange={handleFilterChange}
+    />
 
     <Card>
       <CardHeader>

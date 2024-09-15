@@ -5,6 +5,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   use Supervisor
 
   alias Sequin.DatabasesRuntime.TableProducerServer
+  alias Sequin.DatabasesRuntime.TableProducerSupervisor
   alias Sequin.Repo
 
   def start_link(opts) do
@@ -17,15 +18,11 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_table_producer(supervisor \\ __MODULE__, consumer, opts \\ [])
-
-  def start_table_producer(supervisor, consumer, opts) do
+  def start_table_producer(supervisor \\ TableProducerSupervisor, {consumer, table_oid}, opts \\ []) do
     consumer = Repo.preload(consumer, replication_slot: :postgres_database)
-    table_oid = Keyword.fetch!(opts, :table_oid)
 
     default_opts = [
       consumer: consumer,
-      page_size: 1000,
       table_oid: table_oid
     ]
 
@@ -34,20 +31,20 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Sequin.DynamicSupervisor.start_child(supervisor, {TableProducerServer, opts})
   end
 
-  def stop_table_producer(supervisor \\ __MODULE__, consumer_id) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, TableProducerServer.via_tuple(consumer_id))
+  def stop_table_producer(supervisor \\ TableProducerSupervisor, consumer_and_table_oid) do
+    Sequin.DynamicSupervisor.stop_child(supervisor, TableProducerServer.via_tuple(consumer_and_table_oid))
     :ok
   end
 
-  def restart_table_producer(supervisor \\ __MODULE__, consumer, opts) do
-    stop_table_producer(supervisor, consumer.id)
-    start_table_producer(supervisor, consumer, opts)
+  def restart_table_producer(supervisor \\ TableProducerSupervisor, consumer_and_table_oid, opts) do
+    stop_table_producer(supervisor, consumer_and_table_oid)
+    start_table_producer(supervisor, consumer_and_table_oid, opts)
   end
 
   defp children do
     [
       Sequin.DatabasesRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: Sequin.DatabasesRuntime.TableProducerSupervisor)
+      Sequin.DynamicSupervisor.child_spec(name: TableProducerSupervisor)
     ]
   end
 end

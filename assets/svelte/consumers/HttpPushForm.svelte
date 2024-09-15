@@ -15,9 +15,7 @@
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
   import TableSelector from "../components/TableSelector.svelte";
-  import TableFilters from "../components/TableFilters.svelte";
   import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
-  import { Switch } from "$lib/components/ui/switch";
   import {
     Card,
     CardContent,
@@ -30,6 +28,7 @@
   import { toast } from "svelte-sonner";
   import { ExternalLinkIcon, Loader2 } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
+  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
 
   export let live;
   export let parent;
@@ -57,6 +56,7 @@
       headers: {},
       encryptedHeaders: {},
     },
+    sortColumnAttnum: consumer.sort_column_attnum || null,
   };
 
   const pushEvent = (event, payload = {}, cb = (result?: any) => {}) => {
@@ -287,58 +287,14 @@
       </CardContent>
     </Card>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Filters</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {#if form.messageKind === "event"}
-          {@const actions = form.sourceTableActions || []}
-          {@const switches = [
-            { id: "insert", label: "Insert" },
-            { id: "update", label: "Update" },
-            { id: "delete", label: "Delete" },
-          ]}
-          <div class="space-y-2">
-            <Label>Operations to capture</Label>
-            <div class="flex items-center space-x-4">
-              {#each switches as { id, label }}
-                <div class="flex items-center space-x-2">
-                  <Label for={id} class="cursor-pointer">
-                    {label}
-                  </Label>
-                  <Switch
-                    {id}
-                    disabled={!form.postgresDatabaseId && !form.tableOid}
-                    checked={actions.includes(id)}
-                    onCheckedChange={(checked) => {
-                      const newActions = checked
-                        ? [...actions, id]
-                        : actions.filter((a) => a !== id);
-                      form.sourceTableActions = newActions;
-                    }}
-                  />
-                </div>
-              {/each}
-            </div>
-            {#if errors.source_tables?.[1]?.actions}
-              <p class="text-destructive text-sm">
-                {errors.source_tables[1].actions}
-              </p>
-            {/if}
-          </div>
-        {/if}
-        <div class="my-6">
-          <TableFilters
-            filters={form.sourceTableFilters}
-            columns={selectedTable ? selectedTable.columns : []}
-            onFilterChange={handleFilterChange}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-            errors={errors.source_tables?.[0]?.column_filters || []}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    <SortAndFilterCard
+      messageKind={form.messageKind}
+      {selectedTable}
+      bind:form
+      {errors}
+      {isEditMode}
+      onFilterChange={handleFilterChange}
+    />
 
     <Card>
       <CardHeader>
@@ -479,7 +435,7 @@
           <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
           <div class="flex flex-row bg-white">
             <div
-              class="font-medium rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+              class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
             >
               {#if selectedHttpEndpoint}
                 {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}

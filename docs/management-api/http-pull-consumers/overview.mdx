@@ -31,7 +31,7 @@ There are three lifecycle steps to keep in mind when processing messages with a 
 
 ## Processing messages
 
-The first step is to make a call to the [`/receive` endpoint](/api/http-pull-consumers/receive) to get one or a batch of messages:
+The first step is to make a call to the [`/receive` endpoint](/management-api/http-pull-consumers/receive) to get one or a batch of messages:
 
 ```bash
 curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/receive?batch_size=10 \
@@ -75,7 +75,7 @@ This will return a batch of messages, which contain an `ack_token`, either a row
 
 While your worker is processing this batch of messages, the messages will not be visible to other workers. The amount of time these messages are not visible (i.e. the visibility timeout) defaults to `30` seconds and is configurable in your consumer's settings.
 
-Once your worker has finished processing the messages, you'll [acknowledge](/api/http-pull-consumers/ack) or **ack** them. This tells Sequin you're done processing them, and ensures that workers for your consumer won't see them again:
+Once your worker has finished processing the messages, you'll [acknowledge](/management-api/http-pull-consumers/ack) or **ack** them. This tells Sequin you're done processing them, and ensures that workers for your consumer won't see them again:
 
 ```bash
 curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/ack \
@@ -86,7 +86,7 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
   }'
 ```
 
-Alternatively, if you're unable to process the messages, you can [**nack**](/api/http-pull-consumers/nack) them. This tells Sequin to make the messages available for processing again:
+Alternatively, if you're unable to process the messages, you can [**nack**](/management-api/http-pull-consumers/nack) them. This tells Sequin to make the messages available for processing again:
 
 ```bash
 curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/nack \

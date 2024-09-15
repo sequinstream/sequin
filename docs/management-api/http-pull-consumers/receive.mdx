@@ -27,7 +27,7 @@ api: 'POST /http_pull_consumers/{consumer_name_or_id}/receive'
 
 ## Response fields
 
-The response is an object with a `data` property that contains a list of messages.
+The response is an object with a `data` property that contains a list of messages. Within each message is an `ack_token` and a `data` property that contains the message data.
 
 <ResponseField name="data" type="list">
   <Expandable title="properties">
@@ -35,7 +35,7 @@ The response is an object with a `data` property that contains a list of message
     A [record](/core-concepts#records) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="ack_token" type="string">
-    You'll use the `ack_token` in follow-up requests to either [ack](/api/http-pull-consumers/ack) or [nack](/api/http-pull-consumers/nack) this specific message.
+    You'll use the `ack_token` in follow-up requests to either [ack](/management-api/http-pull-consumers/ack) or [nack](/management-api/http-pull-consumers/nack) this specific message.
     </ResponseField>
     <ResponseField name="changes" type="object">
     If the consumer is processing changes, a [changes](/core-concepts#changes) object will be returned.
@@ -68,15 +68,17 @@ curl --request GET \
   "data": [
     {
       "ack_token": "MTYyeJ7abUjl1pO",
-      "record": {
-        "id": 2,
-        "name": "Chani",
-        "title": "Fremen Warrior",
-        "spice_allocation": 500,
-        "is_sayyadina": true
-      },
-      "changes": null,
-      "action": "insert",
+      "data": {
+        "record": {
+          "id": 2,
+          "name": "Chani",
+          "title": "Fremen Warrior",
+          "spice_allocation": 500,
+          "is_sayyadina": true
+        },
+        "changes": null,
+        "action": "insert",
+      }
     },
     // more messages...
   ]
@@ -88,13 +90,15 @@ curl --request GET \
   "data": [
     {
       "ack_token": "MTYyeJ7abUjl1pO",
-      "record": {
-        "id": 1,
-        "name": "Paul Atreides",
-        "title": "Duke of Arrakis",
-        "spice_allocation": 1000,
-        "is_kwisatz_haderach": true
-      },
+      "data": {
+        "record": {
+          "id": 1,
+          "name": "Paul Atreides",
+          "title": "Duke of Arrakis",
+          "spice_allocation": 1000,
+          "is_kwisatz_haderach": true
+        }
+      }
     },
     // more messages...
   ]

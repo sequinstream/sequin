@@ -29,7 +29,7 @@
   export let metrics;
   export let live;
   export let parent;
-  export let host;
+  export let hostWithProtocol;
   export let api_token;
   export let replica_identity;
 
@@ -239,7 +239,7 @@ alter table {consumer.source_table.schema}.{consumer.source_table
                 tabs={[
                   {
                     name: "cURL",
-                    value: `curl -X GET "${host}/api/http_pull_consumers/${consumer.name}/receive" \\
+                    value: `curl -X GET "${hostWithProtocol}/api/http_pull_consumers/${consumer.name}/receive" \\
      -H "Authorization: Bearer {{secret}}"`,
                   },
                 ]}
@@ -252,7 +252,7 @@ alter table {consumer.source_table.schema}.{consumer.source_table
                 tabs={[
                   {
                     name: "cURL",
-                    value: `curl -X POST "${host}/api/http_pull_consumers/${consumer.name}/ack" \\
+                    value: `curl -X POST "${hostWithProtocol}/api/http_pull_consumers/${consumer.name}/ack" \\
      -H "Authorization: Bearer {{secret}}" \\
      -H "Content-Type: application/json" \\
      -d '{"ack_ids": ["<ack_id>"]}'`,

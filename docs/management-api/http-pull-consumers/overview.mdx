@@ -25,7 +25,7 @@ There are three lifecycle steps to keep in mind when processing messages with a 
     Alternatively, you can **nack** a message to have it become available again.
   </Step>
   <Step title="Visibility Timeout" icon="timer">
-    If the message is neither an `ack` or `nack is returned from your worker within the **visibility timeout**, Sequin will make the message available for other consumers to process.
+    If the message is neither `ack`'d or `nack`'d within the **visibility timeout**, Sequin will make the message available for other workers to process it.
   </Step>
 </Steps>
 
@@ -38,7 +38,7 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
   -H "Authorization: Bearer {your-token}"
 ```
 
-This will return a batch of messages, which contain an `ack_token`, either a row or changes object, and an `info` object:
+This will return a batch of messages. Each message will contain an `ack_token` and either a row or changes object:
 
 ```json
 {
@@ -54,22 +54,9 @@ This will return a batch of messages, which contain an `ack_token`, either a row
       },
       "changes": null,
       "action": "insert",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "fremen_members",
-        "commit_timestamp": "2023-10-15T14:30:00Z",
-        "consumer": {
-          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-          "name": "arrakis_population_consumer"
-        }
-      }
     },
     // more messages...
-  ],
-  "info": {
-    "num_pending": 100,
-    "num_ack_pending": 10
-  }
+  ]
 }
 ```
 

@@ -37,7 +37,7 @@ defmodule Sequin.TableProducerTest do
     }
   end
 
-  describe "fetch_max_cursor/3" do
+  describe "fetch_max_cursor/4" do
     test "fetches max cursor with timestamp sort_column", %{
       db: db,
       characters_table: table,
@@ -47,15 +47,20 @@ defmodule Sequin.TableProducerTest do
       _char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -3, :second))
       _char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
       char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
-      _char4 = CharacterFactory.insert_character!(updated_at: now)
+      char4 = CharacterFactory.insert_character!(updated_at: now)
 
-      cursor = nil
+      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
 
       assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
       assert char3.id == cursor[attnums["id"]]
+
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: false)
+
+      assert char4.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
+      assert char4.id == cursor[attnums["id"]]
     end
 
     test "fetches max cursor with compound primary key", %{
@@ -69,10 +74,10 @@ defmodule Sequin.TableProducerTest do
       char3 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      cursor = nil
+      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
 
       assert_maps_equal(
         cursor,
@@ -89,7 +94,7 @@ defmodule Sequin.TableProducerTest do
       # Test with a cursor to ensure we can move past records with the same updated_at
       cursor = create_cursor(char2, attnums)
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit)
+      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit: limit, include_min: true)
 
       assert_maps_equal(
         cursor,
@@ -118,19 +123,20 @@ defmodule Sequin.TableProducerTest do
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      min_cursor = create_cursor(char1, attnums)
+      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
       max_cursor = create_cursor(char4, attnums)
 
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(db, table, initial_min_cursor, max_cursor, limit: limit, include_min: true)
 
-      assert length(results) == 3
+      assert length(results) == 4
 
-      assert_character_equal(Enum.at(results, 0), char2)
-      assert_character_equal(Enum.at(results, 1), char3)
-      assert_character_equal(Enum.at(results, 2), char4)
+      assert_character_equal(Enum.at(results, 0), char1)
+      assert_character_equal(Enum.at(results, 1), char2)
+      assert_character_equal(Enum.at(results, 2), char3)
+      assert_character_equal(Enum.at(results, 3), char4)
     end
 
     test "fetches records in range with compound primary key and same timestamp", %{
@@ -151,7 +157,7 @@ defmodule Sequin.TableProducerTest do
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit)
+        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit: limit)
 
       assert length(results) == 2
 
@@ -174,14 +180,18 @@ defmodule Sequin.TableProducerTest do
         end)
 
       page_size = 2
-      cursor = nil
+      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
       processed_characters = []
 
       # Simulate processing all characters
-      # arbitrary number of iterations until we get a nil max_cursor
       {processed_characters, _} =
-        Enum.reduce_while(1..10, {processed_characters, cursor}, fn _, {acc, current_cursor} ->
-          case TableProducer.fetch_max_cursor(db, table, current_cursor, page_size) do
+        Enum.reduce_while(1..10, {processed_characters, initial_min_cursor}, fn _, {acc, current_cursor} ->
+          include_min = current_cursor == initial_min_cursor
+
+          case TableProducer.fetch_max_cursor(db, table, current_cursor,
+                 limit: page_size,
+                 include_min: include_min
+               ) do
             {:ok, nil} ->
               {:halt, {acc, current_cursor}}
 
@@ -192,7 +202,8 @@ defmodule Sequin.TableProducerTest do
                   table,
                   current_cursor,
                   max_cursor,
-                  page_size
+                  limit: page_size,
+                  include_min: include_min
                 )
 
               new_acc = acc ++ records
@@ -209,6 +220,44 @@ defmodule Sequin.TableProducerTest do
           char.id_string == processed["id_string"] &&
           char.id_uuid == processed["id_uuid"]
       end)
+    end
+  end
+
+  describe "fetch_first_row/2" do
+    test "fetches the first row and initial min cursor for characters_multi_pk table", %{
+      db: db,
+      characters_multi_pk_table: table,
+      character_multi_pk_attnums: attnums
+    } do
+      # Insert a character with multiple primary keys
+      char = CharacterFactory.insert_character_multi_pk!()
+
+      # Fetch the first row
+      {:ok, first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+
+      # Assert that the first_row matches the inserted character
+      assert first_row["id_integer"] == char.id_integer
+      assert first_row["id_string"] == char.id_string
+      assert first_row["id_uuid"] == char.id_uuid
+      assert first_row["name"] == char.name
+      assert NaiveDateTime.compare(first_row["updated_at"], char.updated_at) == :eq
+
+      # Assert that the initial_min_cursor is correct
+      assert NaiveDateTime.truncate(initial_min_cursor[table.sort_column_attnum], :second) == char.updated_at
+      assert initial_min_cursor[attnums["id_integer"]] == char.id_integer
+      assert initial_min_cursor[attnums["id_string"]] == char.id_string
+      assert initial_min_cursor[attnums["id_uuid"]] == char.id_uuid
+    end
+
+    test "returns nil when the table is empty", %{
+      db: db,
+      characters_table: table
+    } do
+      # Ensure the table is empty
+      Repo.delete_all(Sequin.Test.Support.Models.Character)
+
+      # Fetch the first row
+      assert {:ok, nil, nil} = TableProducer.fetch_first_row(db, table)
     end
   end
 

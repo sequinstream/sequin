@@ -5,6 +5,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Repo
@@ -27,7 +28,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   # Convenience function
   def via_tuple(consumer_id) do
     consumer = Consumers.get_consumer!(consumer_id)
-    via_tuple({consumer.id, consumer.source_tables |> List.first() |> Map.fetch!(:oid)})
+    table_oid = consumer.source_tables |> List.first() |> Map.fetch!(:oid)
+    via_tuple({consumer.id, table_oid})
   end
 
   def child_spec(opts) do
@@ -87,12 +89,37 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   def handle_event(:internal, :init, :initializing, state) do
-    cursor_min = TableProducer.cursor(state.consumer.id, :min)
+    consumer = state.consumer
+    cursor_min = TableProducer.cursor(consumer.id, :min)
+    cursor_min = cursor_min || initial_min_cursor(consumer)
     state = %{state | cursor_min: cursor_min}
-    {:next_state, :query_max_cursor, state}
+
+    if is_nil(cursor_min) do
+      record_state = Map.from_struct(consumer.record_consumer_state)
+
+      case TableProducer.fetch_first_row(database(state), table(state)) do
+        {:ok, _first_row, initial_min_cursor} ->
+          {:ok, consumer} =
+            Consumers.update_consumer(
+              consumer,
+              %{record_consumer_state: %{record_state | initial_min_cursor: initial_min_cursor}}
+            )
+
+          state = %{state | cursor_min: initial_min_cursor, consumer: consumer}
+          {:next_state, :query_max_cursor, state}
+
+        error ->
+          Logger.error("[TableProducerServer] Error fetching first row: #{inspect(error)}")
+          {:stop, :normal}
+      end
+    else
+      {:next_state, :query_max_cursor, state}
+    end
   end
 
   def handle_event(:enter, _old_state, :query_max_cursor, state) do
+    include_min = state.cursor_min == initial_min_cursor(state.consumer)
+
     task =
       Task.Supervisor.async_nolink(
         Sequin.TaskSupervisor,
@@ -103,7 +130,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
             database(state),
             table(state),
             state.cursor_min,
-            state.page_size
+            limit: state.page_size,
+            include_min: include_min
           )
         end,
         timeout: 60_000
@@ -131,6 +159,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   @page_size_multiplier 3
   def handle_event(:enter, _old_state, :query_fetch_records, state) do
+    include_min = state.cursor_min == initial_min_cursor(state.consumer)
+
     task =
       Task.Supervisor.async_nolink(
         Sequin.TaskSupervisor,
@@ -142,7 +172,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
             table(state),
             state.cursor_min,
             state.cursor_max,
-            state.page_size * @page_size_multiplier
+            limit: state.page_size * @page_size_multiplier,
+            include_min: include_min
           )
         end,
         timeout: 60_000
@@ -222,6 +253,11 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     # TODO
     # TracerServer.messages_ingested(consumer, consumer_records)
     Consumers.insert_consumer_records(consumer_records)
+  end
+
+  defp initial_min_cursor(consumer) do
+    %{record_consumer_state: %RecordConsumerState{initial_min_cursor: initial_min_cursor}} = consumer
+    initial_min_cursor
   end
 
   defp record_pks(%Table{} = table, map) do

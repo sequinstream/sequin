@@ -80,10 +80,10 @@ defmodule Sequin.Consumers.HttpPushConsumer do
         HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
       end
     )
-    |> cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
     |> foreign_key_constraint(:http_endpoint_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
+    |> Sequin.Changeset.cast_embed(:source_tables)
     |> Sequin.Changeset.validate_name()
   end
 
@@ -97,12 +97,12 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :status,
-      :replica_warning_dismissed
+      :replica_warning_dismissed,
+      :message_kind
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
-    |> cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
   end
 

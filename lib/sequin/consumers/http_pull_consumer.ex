@@ -63,7 +63,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :replication_slot_id,
       :status
     ])
-    |> cast_embed(:source_tables)
+    |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
     |> validate_required([:name, :status])
     |> unique_constraint([:account_id, :name], error_key: :name)
@@ -80,7 +80,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :backfill_completed_at,
       :status
     ])
-    |> cast_embed(:source_tables)
+    |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
   end
 

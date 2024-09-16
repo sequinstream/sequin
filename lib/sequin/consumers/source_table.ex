@@ -381,4 +381,14 @@ defmodule Sequin.Consumers.SourceTable do
     |> cast_embed(:column_filters, with: &ColumnFilter.changeset/2)
     |> validate_length(:actions, min: 1)
   end
+
+  def record_changeset(source_table, attrs) do
+    source_table
+    |> changeset(attrs)
+    |> validate_required([:sort_column_attnum])
+  end
+
+  def event_changeset(source_table, attrs) do
+    changeset(source_table, attrs)
+  end
 end

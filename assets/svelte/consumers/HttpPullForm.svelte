@@ -339,13 +339,14 @@
             <p class="text-destructive text-sm">{errors.name}</p>
           {/if}
         </div>
-
+        {#if submitError}
+          <p class="text-destructive text-sm">{submitError}</p>
+        {:else if Object.keys(errors).length > 0}
+          <p class="text-destructive text-sm">Validation errors, see above</p>
+        {/if}
         <Button type="submit" disabled={isCreateConsumerDisabled}
           >{isEditMode ? "Update" : "Create"} consumer</Button
         >
-        {#if submitError}
-          <p class="text-destructive text-sm">{submitError}</p>
-        {/if}
       </CardContent>
     </Card>
   </form>

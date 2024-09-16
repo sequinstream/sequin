@@ -172,6 +172,11 @@
             {/each}
           </SelectContent>
         </Select>
+        {#if errors.source_tables?.[0]?.sort_column_attnum}
+          <p class="text-destructive text-sm">
+            {errors.source_tables[0].sort_column_attnum[0]}
+          </p>
+        {/if}
         <p class="text-sm text-muted-foreground">
           Select the sort column for the table. Your system should update the
           sort column whenever a row is updated. A good example of a sort column
@@ -186,9 +191,6 @@
             <ExternalLinkIcon class="w-3 h-3 ml-1" />
           </a>
         </p>
-        {#if errors.sort_column_attnum}
-          <p class="text-destructive text-sm">{errors.sort_column_attnum}</p>
-        {/if}
       </div>
     {/if}
 

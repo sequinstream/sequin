@@ -8,8 +8,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.DatabasesRuntime.TableProducer
+  alias Sequin.Health
   alias Sequin.Repo
-  # alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -250,8 +250,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         })
       end)
 
-    # TODO
-    # TracerServer.messages_ingested(consumer, consumer_records)
+    Health.update(consumer, :ingestion, :healthy)
+
     Consumers.insert_consumer_records(consumer_records)
   end
 

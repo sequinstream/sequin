@@ -196,7 +196,8 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs = Map.new(attrs)
 
     %RecordConsumerState{
-      producer: Enum.random([:table_and_wal, :wal])
+      producer: Enum.random([:table_and_wal, :wal]),
+      initial_min_cursor: %{Factory.unique_integer() => Factory.timestamp()}
     }
     |> merge_attributes(attrs)
     |> Sequin.Map.from_ecto()

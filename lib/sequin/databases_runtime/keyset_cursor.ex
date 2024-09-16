@@ -56,10 +56,19 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     Enum.map(columns, fn %Table.Column{} = column ->
       val = Map.fetch!(cursor, column.attnum)
 
-      if column.type == "uuid" do
-        UUID.string_to_binary!(val)
-      else
-        val
+      cond do
+        column.type == "uuid" ->
+          UUID.string_to_binary!(val)
+
+        column.type == "timestamp without time zone" and is_binary(val) ->
+          NaiveDateTime.from_iso8601!(val)
+
+        column.type == "timestamp with time zone" and is_binary(val) ->
+          {:ok, dt, _offset} = DateTime.from_iso8601(val)
+          dt
+
+        true ->
+          val
       end
     end)
   end

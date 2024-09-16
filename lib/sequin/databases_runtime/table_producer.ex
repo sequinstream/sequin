@@ -51,27 +51,28 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   end
 
   # Queries
-  def fetch_records_in_range(_db, _table, _min, max_cursor, _limit) when map_size(max_cursor) == 0 or is_nil(max_cursor),
-    do: raise(ArgumentError, "max cursor cannot be empty")
+  def fetch_records_in_range(db, table, min_cursor, max_cursor, opts \\ [])
 
-  def fetch_records_in_range(%PostgresDatabase{} = db, %Table{} = table, min_cursor, max_cursor, limit) do
+  def fetch_records_in_range(_db, _table, min_cursor, max_cursor, _opts)
+      when map_size(max_cursor) == 0 or is_nil(max_cursor) or map_size(min_cursor) == 0 or is_nil(min_cursor),
+      do: raise(ArgumentError, "cursors cannot be empty")
+
+  def fetch_records_in_range(%PostgresDatabase{} = db, %Table{} = table, min_cursor, max_cursor, opts) do
     order_by_clause = KeysetCursor.order_by_sql(table)
+
+    include_min = Keyword.get(opts, :include_min, false)
+    min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
+    min_cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
 
     max_where_clause = KeysetCursor.where_sql(table, "<=")
     max_cursor_values = KeysetCursor.casted_cursor_values(table, max_cursor)
 
-    {min_where_clause, min_cursor_values} =
-      if is_nil(min_cursor) do
-        {"", []}
-      else
-        values = KeysetCursor.casted_cursor_values(table, min_cursor)
-        {" and " <> KeysetCursor.where_sql(table, ">"), values}
-      end
+    limit = Keyword.get(opts, :limit, 1000)
 
     sql =
       """
       select * from #{Postgres.quote_name(table.schema, table.name)}
-      where #{max_where_clause}#{min_where_clause}
+      where #{min_where_clause} and #{max_where_clause}
       order by #{order_by_clause}
       limit ?
       """
@@ -79,7 +80,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     sql = Postgres.parameterize_sql(sql)
 
     # Careful about ordering! Note order of `?` above
-    params = max_cursor_values ++ min_cursor_values ++ [limit]
+    params = min_cursor_values ++ max_cursor_values ++ [limit]
 
     with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
       result = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
@@ -87,13 +88,13 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
-  def fetch_max_cursor(%PostgresDatabase{} = db, %Table{} = table, min_cursor, limit) do
+  def fetch_max_cursor(%PostgresDatabase{} = db, %Table{} = table, min_cursor, opts \\ []) do
     select_columns =
       table
       |> KeysetCursor.cursor_columns()
       |> Enum.map_join(", ", fn %Table.Column{} = col -> Postgres.quote_name(col.name) end)
 
-    {inner_sql, params} = fetch_window_query(table, select_columns, min_cursor, limit)
+    {inner_sql, params} = fetch_window_query(table, select_columns, min_cursor, opts)
 
     sql = """
     with window_data as (
@@ -114,22 +115,11 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
-  defp fetch_window_query(%Table{} = table, select_columns, nil, limit) do
+  defp fetch_window_query(%Table{} = table, select_columns, min_cursor, opts) do
+    limit = Keyword.get(opts, :limit, 1000)
+    include_min = Keyword.get(opts, :include_min, false)
     order_by = KeysetCursor.order_by_sql(table)
-
-    sql = """
-    select #{select_columns}, row_number() over (order by #{order_by}) as row_num
-    from #{Postgres.quote_name(table.schema, table.name)}
-    order by #{order_by}
-    limit ?
-    """
-
-    {sql, [limit]}
-  end
-
-  defp fetch_window_query(%Table{} = table, select_columns, min_cursor, limit) do
-    order_by = KeysetCursor.order_by_sql(table)
-    min_where_clause = KeysetCursor.where_sql(table, ">")
+    min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
     cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
 
     sql = """
@@ -149,5 +139,31 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     Enum.reduce(uuid_columns, map, fn column, acc ->
       Map.update(acc, column.name, nil, &UUID.binary_to_string!/1)
     end)
+  end
+
+  # Fetch first row
+  # Can be used to both validate the sort column, show the user where we're going to start the process,
+  # and initialize the min cursor
+  def fetch_first_row(%PostgresDatabase{} = db, %Table{} = table) do
+    order_by = KeysetCursor.order_by_sql(table, "asc")
+
+    sql = """
+    select * from #{Postgres.quote_name(table.schema, table.name)}
+    order by #{order_by}
+    limit 1
+    """
+
+    sql = Postgres.parameterize_sql(sql)
+
+    with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, []) do
+      case result.num_rows do
+        0 ->
+          {:ok, nil, nil}
+
+        _ ->
+          [row] = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
+          {:ok, row, KeysetCursor.cursor_from_result(table, result)}
+      end
+    end
   end
 end

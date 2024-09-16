@@ -148,7 +148,6 @@ defmodule Sequin.Consumers do
   def update_consumer_with_lifecycle(consumer, attrs) do
     with {:ok, updated_consumer} <- update_consumer(consumer, attrs) do
       :ok = notify_consumer_update(updated_consumer)
-      notify_consumer_update(updated_consumer)
 
       {:ok, updated_consumer}
     end

@@ -36,15 +36,13 @@ defmodule SequinWeb.ConsumersLive.Show do
       Process.send_after(self(), :update_metrics, 1000)
     end
 
-    host_with_protocol =
-      Application.get_env(:sequin, :api_protocol, "http") <>
-        "://" <> Application.get_env(:sequin, :api_host, SequinWeb.Endpoint.host())
+    api_base_url = Application.get_env(:sequin, :api_base_url, SequinWeb.Endpoint.url())
 
     {:ok,
      socket
      |> assign(:consumer, consumer)
      |> assign(:api_token, api_token)
-     |> assign(:host_with_protocol, host_with_protocol)
+     |> assign(:api_base_url, api_base_url)
      |> assign_replica_identity()
      |> assign_metrics()}
   end
@@ -96,7 +94,7 @@ defmodule SequinWeb.ConsumersLive.Show do
                 replica_identity: @replica_identity,
                 parent: "consumer-show",
                 metrics: @metrics,
-                hostWithProtocol: @host_with_protocol,
+                apiBaseUrl: @api_base_url,
                 api_token: encode_api_token(@api_token)
               }
             }

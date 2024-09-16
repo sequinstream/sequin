@@ -134,8 +134,7 @@ if config_env() == :prod and not self_hosted do
     secret_key_base: secret_key_base
 
   config :sequin,
-    api_host: "api.sequinstream.com",
-    api_protocol: "https",
+    api_base_url: "https://api.sequinstream.com",
     # this is a public token
     posthog_token: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
 end

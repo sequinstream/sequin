@@ -388,6 +388,7 @@ defmodule Sequin.PostgresReplicationTest do
         ConsumersFactory.source_table_attrs(
           oid: Character.table_oid(),
           actions: [:insert, :update],
+          sort_column_attnum: if(consumer.message_kind == :record, do: Character.column_attnum("is_active")),
           column_filters: [
             ConsumersFactory.column_filter_attrs(
               column_attnum: Character.column_attnum("is_active"),
@@ -400,7 +401,7 @@ defmodule Sequin.PostgresReplicationTest do
         )
       ]
 
-      Consumers.update_consumer_with_lifecycle(consumer, %{source_tables: source_tables})
+      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{source_tables: source_tables})
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)

@@ -104,6 +104,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
     |> cast_embed(:record_consumer_state)
+    |> Sequin.Changeset.cast_embed(:source_tables)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

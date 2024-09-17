@@ -64,6 +64,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   def handle_event("delete", _params, socket) do
     if socket.assigns.http_endpoint.id |> Consumers.list_consumers_for_http_endpoint() |> Enum.empty?() do
       Consumers.delete_http_endpoint(socket.assigns.http_endpoint)
+      socket = put_flash(socket, :toast, %{kind: :success, title: "HTTP endpoint deleted."})
       {:reply, %{ok: true}, push_navigate(socket, to: ~p"/http-endpoints")}
     else
       {:reply, %{error: "Cannot delete HTTP endpoint with consumers."}, socket}

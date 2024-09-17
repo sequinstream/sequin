@@ -27,7 +27,9 @@ defmodule SequinWeb.LiveHooks do
 
   defp push_toast(socket) do
     if toast = Phoenix.Flash.get(socket.assigns.flash, :toast) do
-      Phoenix.LiveView.push_event(socket, "toast", toast)
+      socket
+      |> Phoenix.LiveView.push_event("toast", toast)
+      |> Phoenix.LiveView.clear_flash(:toast)
     else
       socket
     end

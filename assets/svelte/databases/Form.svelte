@@ -117,7 +117,8 @@
       form.hostname = hostname;
       form.port = port || 5432;
       form.username = username;
-      form.password = password;
+      // Do not autofill the password if Supabase placeholder value
+      form.password = password === "[YOUR-PASSWORD]" ? "" : password;
       form.ssl = ssl !== "disable";
 
       // Close the popover

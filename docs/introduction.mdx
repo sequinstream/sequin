@@ -16,7 +16,7 @@ You can think of Sequin as a material improvement over native Postgres triggers 
 - **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-Changes are sent as messages via HTTP [push](/core-concepts#push-consumers) (webhooks) or [pull](/core-concepts#pull-consumers) (SQS-like, with Sequin SDKs). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
+Changes are sent as messages via HTTP [push](/core-concepts#push-consumers) (webhooks) or [pull](/core-concepts#pull-consumers) (SQS-like). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
 
 Messages in Sequin are durable and persistent, so you can also use Sequin to replace other queues and streaming systems like SQS and Kafka.
 
@@ -32,7 +32,7 @@ Sequin comes with a web console/UI for configuration:
 
 1. Connect any Postgres database to Sequin (Sequin uses logical replication to detect changes).
 2. Select the tables, actions, and SQL filters that publish messages to your consumers.
-3. Consume messages using HTTP pull and push interfaces. (You can use our SDKs.)
+3. Consume messages using HTTP pull and push interfaces.
 
 ## Getting started
 
@@ -43,9 +43,6 @@ Sequin is available as a cloud version or self-hosted. See the following docs to
 </Card>
 <Card title="Self-hosted Quickstart" icon="docker" href="/self-hosting/docker-compose" horizontal>
   Self-host Sequin and start with a local Postgres database.
-</Card>
-<Card title="SDKs" icon="code" href="/sdks" horizontal>
-  Install one of our SDKs to dynamically create consumers and ack messages.
 </Card>
 
 ## Getting help

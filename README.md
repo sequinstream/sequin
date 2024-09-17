@@ -151,16 +151,6 @@ Sequin is available as a cloud version or self-hosted. See the following docs to
 - [Sequin cloud quickstart](https://sequinstream.com/docs/quickstart)
 - [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/docker-compose)
 
-### SDKs
-
-Use Sequin's SDKs to dynamically create new consumers and work with messages:
-
-- [JavaScript](https://github.com/sequinstream/sequin-js)
-- [Python](https://github.com/sequinstream/sequin-py)
-- [Go](https://github.com/sequinstream/sequin-go)
-- [Elixir](https://github.com/sequinstream/sequin-elixir) (and [Elixir Broadway](https://github.com/sequinstream/off_broadway_sequin))
-- [Ruby](https://github.com/sequinstream/sequin-ruby)
-
 ## Contribute
 
 Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or send us a note: [support@sequinstream.com](mailto:support@sequinstream.com)

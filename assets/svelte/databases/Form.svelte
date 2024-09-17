@@ -18,18 +18,24 @@
     AlertDescription,
     AlertTitle,
   } from "$lib/components/ui/alert";
-  import { AlertCircle } from "lucide-svelte";
+  import {
+    AlertCircle,
+    Eye,
+    EyeOff,
+    HelpCircle,
+    Wand,
+    Zap,
+  } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { HelpCircle } from "lucide-svelte";
   import {
     Popover,
     PopoverContent,
     PopoverTrigger,
   } from "$lib/components/ui/popover";
   import { isValidPostgresURL, parsePostgresURL } from "./utils";
-  import { Eye, EyeOff } from "lucide-svelte";
-  import { Wand } from "lucide-svelte";
-  import { Zap } from "lucide-svelte";
+  import { Progress } from "$lib/components/ui/progress";
+  import { tweened } from "svelte/motion";
+  import { cubicOut } from "svelte/easing";
 
   export let database: {
     id?: string;
@@ -78,12 +84,19 @@
   let showConfirmDialog = false;
   let validating = false;
 
+  const progress = tweened(0, { duration: 10000, easing: cubicOut });
+
+  $: if (validating) {
+    progress.set(100);
+  }
+
   function handleSubmit(event: Event) {
     event.preventDefault();
     validating = true;
     pushEvent("form_submitted", { form }, (reply) => {
       if (reply?.ok !== true) {
         validating = false;
+        progress.set(0);
       }
     });
   }
@@ -135,10 +148,6 @@
   }
 
   let testDatabaseCardExpanded = false;
-
-  function toggleTestDatabaseCard() {
-    testDatabaseCardExpanded = !testDatabaseCardExpanded;
-  }
 </script>
 
 <FullPageModal
@@ -453,6 +462,10 @@
             Connect Database
           {/if}
         </Button>
+
+        {#if validating}
+          <Progress class="mt-4" value={$progress} />
+        {/if}
       </CardContent>
     </Card>
   </form>

@@ -26,7 +26,7 @@
   import FullPageModal from "../components/FullPageModal.svelte";
   import { cn, truncateMiddle } from "$lib/utils";
   import { toast } from "svelte-sonner";
-  import { ExternalLinkIcon, Loader2 } from "lucide-svelte";
+  import { ExternalLinkIcon, Loader2, ExternalLink } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
   import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
 
@@ -378,21 +378,41 @@
           </p>
         {/if}
         {#if isEditMode}
-          <Select
-            disabled
-            selected={{
-              value: form.httpEndpointId,
-              label:
-                selectedHttpEndpoint?.name ||
-                (showNewHttpEndpointForm ? "+ Add new" : "Select an endpoint"),
-            }}
-          >
-            <SelectTrigger
-              class={cn("w-full", "bg-muted text-muted-foreground opacity-100")}
+          <div class="flex justify-between items-center">
+            <Select
+              disabled
+              selected={{
+                value: form.httpEndpointId,
+                label:
+                  selectedHttpEndpoint?.name ||
+                  (showNewHttpEndpointForm
+                    ? "+ Add new"
+                    : "Select an endpoint"),
+              }}
             >
-              <SelectValue placeholder="Selected HTTP endpoint" />
-            </SelectTrigger>
-          </Select>
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected HTTP endpoint" />
+              </SelectTrigger>
+            </Select>
+            {#if form.httpEndpointId}
+              <a
+                href="/http-endpoints/{form.httpEndpointId}"
+                class="ml-2"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Button variant="outline" size="sm">
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  Edit HTTP Endpoint
+                </Button>
+              </a>
+            {/if}
+          </div>
         {:else}
           <Select
             selected={{

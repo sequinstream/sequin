@@ -282,7 +282,12 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">View Live Trace</h2>
-            <a href="/trace?consumer={consumer.id}" class="inline-block">
+            <a
+              href="/trace?consumer={consumer.id}"
+              class="inline-block"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
               <Button
                 variant="outline"
                 size="sm"
@@ -304,7 +309,11 @@
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
             <div class="flex space-x-2">
-              <a href="/http-endpoints/{consumer.http_endpoint.id}">
+              <a
+                href="/http-endpoints/{consumer.http_endpoint.id}"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
                 <Button variant="outline" size="sm">
                   <ExternalLink class="h-4 w-4 mr-2" />
                   View Endpoint
@@ -338,7 +347,11 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">Source table</h2>
-            <a href="/databases/{consumer.postgres_database.id}">
+            <a
+              href="/databases/{consumer.postgres_database.id}"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
               <Button variant="outline" size="sm">
                 <ExternalLink class="h-4 w-4 mr-2" />
                 View Database

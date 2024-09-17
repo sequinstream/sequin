@@ -135,6 +135,10 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("refresh_replica_warning", _params, socket) do
+    {:noreply, assign_replica_identity(socket)}
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end

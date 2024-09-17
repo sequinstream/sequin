@@ -110,6 +110,20 @@ const config = {
           100: "rgb(var(--color-honey-100))",
           900: "rgb(var(--color-honey-900))",
         },
+        warning: {
+          DEFAULT: "rgb(var(--color-honey-600))",
+          foreground: "rgb(var(--color-carbon-0))",
+          50: "rgb(var(--color-honey-50))",
+          100: "rgb(var(--color-honey-100))",
+          200: "rgb(var(--color-honey-200))",
+          300: "rgb(var(--color-honey-300))",
+          400: "rgb(var(--color-honey-400))",
+          500: "rgb(var(--color-honey-500))",
+          600: "rgb(var(--color-honey-600))",
+          700: "rgb(var(--color-honey-700))",
+          800: "rgb(var(--color-honey-800))",
+          900: "rgb(var(--color-honey-900))",
+        },
       },
       backgroundColor: {
         canvas: {
@@ -122,12 +136,17 @@ const config = {
           subtle: "rgb(var(--color-background-surface-subtle))",
           muted: "rgb(var(--color-background-surface-muted))",
         },
+        warning: {
+          DEFAULT: "rgb(var(--color-background-warning))",
+          contrast: "rgb(var(--color-background-warningContrast))",
+        },
       },
       textColor: {
         base: "rgb(var(--color-foreground-base))",
         subtle: "rgb(var(--color-foreground-subtle))",
         muted: "rgb(var(--color-foreground-muted))",
         link: "rgb(var(--color-foreground-link))",
+        warning: "rgb(var(--color-foreground-warning))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -136,6 +155,9 @@ const config = {
       },
       fontFamily: {
         sans: [...fontFamily.sans],
+      },
+      borderColor: {
+        warning: "rgb(var(--color-border-warning))",
       },
     },
   },

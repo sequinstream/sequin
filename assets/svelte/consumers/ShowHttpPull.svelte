@@ -6,6 +6,8 @@
     ArrowLeftFromLine,
     HelpCircle,
     SquareStack,
+    RefreshCw,
+    XCircle,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
@@ -24,6 +26,8 @@
   import HealthComponent from "../health/HealthComponent.svelte";
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import * as Alert from "$lib/components/ui/alert";
+  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
 
   export let consumer;
   export let metrics;
@@ -186,40 +190,58 @@
       </Card>
 
       {#if consumer.message_kind === "event" && replica_identity !== "full" && !consumer.replica_warning_dismissed}
-        <Card>
-          <CardContent
-            class="p-4 bg-yellow-100 border border-yellow-400 rounded-md"
-          >
-            <div class="flex justify-between items-start">
-              <div>
-                <h3 class="text-sm font-semibold text-yellow-800 mb-2">
-                  Warning
-                </h3>
-                <p class="text-sm text-yellow-700 mb-2">
-                  The replica identity for your table is not set to 'full'. This
-                  means the <code>changes</code> field in message payloads will be
-                  empty.
-                </p>
-                <p class="text-sm text-yellow-700">
-                  If you want the <code>changes</code> field to appear in message
-                  payloads, run the following SQL command:
-                </p>
-                <pre class="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded">
-alter table {consumer.source_table.schema}.{consumer.source_table
-                    .name} replica identity full;</pre>
-              </div>
+        <Alert.Root variant="warning">
+          <Alert.Title class="flex items-center justify-between">
+            <span>Warning: Replica Identity Not Set to Full</span>
+            <div class="space-x-2">
+              <Button
+                variant="outline"
+                loading={refreshReplicaWarningLoading}
+                size="sm"
+                on:click={() => {
+                  refreshReplicaWarningLoading = true;
+                  live.pushEventTo(
+                    "#" + parent,
+                    "refresh_replica_warning",
+                    {},
+                    () => {
+                      refreshReplicaWarningLoading = false;
+                    }
+                  );
+                }}
+              >
+                <RefreshCw class="h-4 w-4 mr-1" />
+                Refresh
+                <span slot="loading">Refreshing...</span>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
-                class="text-yellow-800 hover:text-yellow-900 border-yellow-400 hover:bg-yellow-200"
                 on:click={() =>
                   live.pushEventTo("#" + parent, "dismiss_replica_warning", {})}
               >
+                <XCircle class="h-4 w-4 mr-1" />
                 Dismiss
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </Alert.Title>
+          <Alert.Description>
+            <p class="mb-2">
+              The replica identity for your table is not set to 'full'. This
+              means the <code>changes</code> field in message payloads will be empty.
+            </p>
+            <p class="mb-2">
+              If you want the <code>changes</code> field to appear in message payloads,
+              run the following SQL command:
+            </p>
+            <CodeWithCopy
+              maxWidth="750px"
+              language="sql"
+              code="alter table {consumer.source_table.schema}.{consumer
+                .source_table.name} replica identity full;"
+            />
+          </Alert.Description>
+        </Alert.Root>
       {/if}
 
       <Card>

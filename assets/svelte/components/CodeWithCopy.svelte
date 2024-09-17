@@ -3,15 +3,20 @@
 
   export let language: string = "";
   export let code: string = "";
+  export let maxWidth: string = "100%";
 
   $: codeContent = code.trim();
 </script>
 
-<div class="relative bg-muted p-4 rounded-md mb-4">
-  <pre class="text-sm overflow-x-auto"><code class={language}
+<div
+  class="flex flex-row items-center bg-muted p-4 rounded-md overflow-hidden"
+  style="max-width: {maxWidth}"
+>
+  <pre class="text-sm overflow-x-auto flex flex-grow"><code class={language}
       >{codeContent}</code
-    ></pre>
-  <div class="absolute top-2 right-2">
+    >
+  </pre>
+  <span class="ml-4 flex-shrink-0">
     <CopyIcon content={codeContent} />
-  </div>
+  </span>
 </div>

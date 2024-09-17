@@ -362,7 +362,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.put(:consumer_id, consumer_id)
     |> consumer_event_attrs()
-    |> then(&ConsumerEvent.changeset(%ConsumerEvent{}, &1))
+    |> then(&ConsumerEvent.create_changeset(%ConsumerEvent{}, &1))
     |> Repo.insert!()
   end
 

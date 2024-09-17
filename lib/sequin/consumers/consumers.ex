@@ -805,33 +805,72 @@ defmodule Sequin.Consumers do
   end
 
   @spec nack_messages(consumer(), [String.t()]) :: :ok
-  @spec nack_messages(consumer(), [String.t()], Keyword.t()) :: :ok
-  def nack_messages(consumer, ack_ids, opts \\ [])
-
-  def nack_messages(%{message_kind: :event} = consumer, ack_ids, opts) do
-    # Allow for backing off the redelivery of messages
-    not_visible_until = Keyword.get(opts, :not_visible_until)
-
+  def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
-      |> Repo.update_all(set: [not_visible_until: not_visible_until])
+      |> Repo.update_all(set: [not_visible_until: nil])
 
     :ok
   end
 
-  def nack_messages(%{message_kind: :record} = consumer, ack_ids, opts) do
-    # Allow for backing off the redelivery of messages
-    not_visible_until = Keyword.get(opts, :not_visible_until)
-
+  def nack_messages(%{message_kind: :record} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
-      |> Repo.update_all(set: [not_visible_until: not_visible_until])
+      |> Repo.update_all(set: [not_visible_until: nil, state: :available])
 
     :ok
+  end
+
+  @doc """
+  Nack messages with backoff allows us to both nack a message and set its not_visible_until
+  to some time in the future. This is used to start for backing off in the HttpPushPipeline
+  This is easy to do in Postgres with a single entry. When we want to perform an update
+  for multiple messages, cleanest thing to do is to craft an upsert query.
+  """
+  def nack_messages_with_backoff(%{message_kind: :event} = consumer, ack_ids_with_not_visible_until) do
+    nack_messages_with_backoff(ConsumerEvent, consumer, ack_ids_with_not_visible_until)
+  end
+
+  def nack_messages_with_backoff(%{message_kind: :record} = consumer, ack_ids_with_not_visible_until) do
+    nack_messages_with_backoff(ConsumerRecord, consumer, ack_ids_with_not_visible_until)
+  end
+
+  def nack_messages_with_backoff(model, consumer, ack_ids_with_not_visible_until) do
+    Repo.transaction(fn ->
+      # Get the list of ack_ids
+      ack_ids = Map.keys(ack_ids_with_not_visible_until)
+
+      # Select existing records and lock them
+      # This will let us do an upsert on conflict to update each row individually
+      # We don't want to insert a message that was already acked, hence the select
+      # before the upsert
+      existing_records =
+        consumer.id
+        |> model.where_consumer_id()
+        |> model.where_ack_ids(ack_ids)
+        |> lock("FOR UPDATE")
+        |> Repo.all()
+
+      # Prepare updates only for existing records
+      updates =
+        Enum.map(existing_records, fn existing_record ->
+          not_visible_until = Map.fetch!(ack_ids_with_not_visible_until, existing_record.ack_id)
+
+          existing_record
+          |> Sequin.Map.from_ecto()
+          |> Map.put(:not_visible_until, not_visible_until)
+        end)
+
+      # Perform the upsert
+      Repo.insert_all(model, updates,
+        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until"))]],
+        conflict_target: [:consumer_id, :ack_id]
+      )
+    end)
   end
 
   # HttpEndpoint

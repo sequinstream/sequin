@@ -7,6 +7,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Time
 
   describe "events are sent to the HTTP endpoint" do
     setup do
@@ -99,22 +100,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
-
-    defp start_pipeline!(consumer, adapter) do
-      start_supervised!(
-        {HttpPushPipeline,
-         [consumer: consumer, req_opts: [adapter: adapter], producer: Broadway.DummyProducer, test_pid: self()]}
-      )
-    end
-
-    defp send_test_event(consumer, event \\ nil) do
-      event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
-      Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
-    end
-
-    defp broadway(consumer) do
-      HttpPushPipeline.via_tuple(consumer.id)
-    end
   end
 
   describe "messages flow from postgres to http end-to-end" do
@@ -174,7 +159,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       # Wait for the message to be processed
-      assert_receive {:http_request, req}, 5000
+      assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
       assert to_string(req.url) == consumer.http_endpoint.base_url
@@ -184,10 +169,99 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "users"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {:ack, [_successful], []}, 5000
+      assert_receive {:ack, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
       refute Consumers.reload(consumer_event)
     end
+
+    @tag capture_log: true
+    test "failed messages are nacked with correct not_visible_until using exponential backoff", %{consumer: consumer} do
+      test_pid = self()
+      deliver_count1 = 3
+      deliver_count2 = 5
+      base_backoff = 1000
+      max_backoff = :timer.minutes(5)
+
+      # Insert a consumer_event with a specific deliver_count
+      event1 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          deliver_count: deliver_count1
+        )
+
+      event2 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          action: :insert,
+          deliver_count: deliver_count2
+        )
+
+      # Capture the current time before the push attempt
+      initial_time = DateTime.utc_now()
+
+      # Define the adapter to simulate a failure
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, :sent)
+        {req, Req.Response.new(status: 500)}
+      end
+
+      # Start the pipeline with the failing adapter
+      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Send the test event
+      ref1 = send_test_event(consumer, event1)
+      ref2 = send_test_event(consumer, event2)
+
+      # Assert that the ack receives the failed event
+      assert_receive {:ack, ^ref1, [], [_failed]}, 2_000
+      assert_receive :sent, 1_000
+      assert_receive {:ack, ^ref2, [], [_failed]}, 2_000
+      assert_receive :sent, 1_000
+
+      # Reload the event from the database to check not_visible_until
+      updated_event1 = Consumers.reload(event1)
+      updated_event2 = Consumers.reload(event2)
+
+      assert updated_event1.not_visible_until != nil
+
+      # Calculate expected backoff time
+      expected_backoff1 = Time.exponential_backoff(base_backoff, deliver_count1 + 1, max_backoff)
+      expected_backoff2 = Time.exponential_backoff(base_backoff, deliver_count2 + 1, max_backoff)
+      expected_seconds1 = div(expected_backoff1, 1000)
+      expected_seconds2 = div(expected_backoff2, 1000)
+
+      # Calculate the difference between initial_time and not_visible_until
+      diff_seconds1 = DateTime.diff(updated_event1.not_visible_until, initial_time, :second)
+      diff_seconds2 = DateTime.diff(updated_event2.not_visible_until, initial_time, :second)
+
+      # Allow a margin of +/- 1 second
+      assert diff_seconds1 >= expected_seconds1
+      assert diff_seconds1 <= expected_seconds1 + 1
+      assert diff_seconds2 >= expected_seconds2
+      assert diff_seconds2 <= expected_seconds2 + 1
+    end
+  end
+
+  defp start_pipeline!(consumer, adapter) do
+    start_supervised!(
+      {HttpPushPipeline,
+       [
+         consumer: consumer,
+         req_opts: [adapter: adapter],
+         producer: Broadway.DummyProducer,
+         test_pid: self()
+       ]}
+    )
+  end
+
+  defp send_test_event(consumer, event \\ nil) do
+    event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+    Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
+  end
+
+  defp broadway(consumer) do
+    HttpPushPipeline.via_tuple(consumer.id)
   end
 end

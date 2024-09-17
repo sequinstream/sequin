@@ -8,6 +8,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Repo
+  alias Sequin.Time
 
   @impl GenStage
   def init(opts) do
@@ -77,6 +78,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil}}
   end
 
+  @exponential_backoff_max :timer.minutes(3)
   def ack({consumer, test_pid}, successful, failed) do
     successful_ids = Enum.map(successful, & &1.data.ack_id)
     failed_ids = Enum.map(failed, & &1.data.ack_id)
@@ -89,10 +91,19 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       Consumers.ack_messages(consumer, successful_ids)
     end
 
-    # TODO: Implement nack with backoff
-    # if length(failed_ids) > 0 do
-    #   Consumers.nack_messages(consumer, failed_ids)
-    # end
+    failed
+    |> Enum.map(fn message ->
+      deliver_count = message.data.deliver_count
+      backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+      not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
+
+      {message.data.ack_id, not_visible_until}
+    end)
+    |> Enum.chunk_every(1000)
+    |> Enum.each(fn chunk ->
+      ack_ids_with_not_visible_until = Map.new(chunk)
+      Consumers.nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until)
+    end)
 
     if test_pid do
       send(test_pid, {:ack, successful_ids, failed_ids})

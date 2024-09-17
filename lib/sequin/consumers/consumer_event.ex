@@ -39,7 +39,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     timestamps(type: :utc_datetime_usec)
   end
 
-  def changeset(consumer_event, attrs) do
+  def create_changeset(consumer_event, attrs) do
     attrs = stringify_record_pks(attrs)
 
     consumer_event
@@ -63,6 +63,12 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :data,
       :replication_message_trace_id
     ])
+  end
+
+  def update_changeset(consumer_event, attrs) do
+    consumer_event
+    |> cast(attrs, [:not_visible_until, :deliver_count, :last_delivered_at])
+    |> validate_required([:not_visible_until, :deliver_count, :last_delivered_at])
   end
 
   def stringify_record_pks(attrs) when is_map(attrs) do

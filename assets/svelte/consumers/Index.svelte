@@ -54,60 +54,6 @@
 </script>
 
 <div class="container mx-auto py-10">
-  {#if !hasDatabases}
-    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
-      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
-        <AlertCircle class="h-5 w-5 text-carbon-600" />
-        <AlertTitle class="text-lg font-semibold text-carbon-900">
-          First, you need to connect to a database
-        </AlertTitle>
-        <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must be connected to at least one Postgres database before you
-          can create a consumer.
-        </AlertDescription>
-
-        <div class="flex mt-2 gap-4 col-start-2">
-          <a
-            href="/databases/new"
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button
-              variant="default"
-              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
-              ><Database class="inline-block h-4 w-4 mr-2" />
-              Connect database
-            </Button>
-          </a>
-          <Popover>
-            <PopoverTrigger>
-              <Button variant="magic">
-                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-80">
-              <div class="space-y-2">
-                <h4 class="font-medium">Need a test database?</h4>
-                <p class="text-sm text-muted-foreground">
-                  We recommend setting up a free database with Supabase to get
-                  started.
-                </p>
-                <Button
-                  variant="outline"
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Go to Supabase Dashboard
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-    </Alert>
-  {/if}
-
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Radio class="h-6 w-6 mr-2" />
@@ -169,75 +115,159 @@
             </DropdownMenu>
           </div>
         </div>
-      {:else}
-        <a
-          href="/consumers/new"
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          <Button variant="default">Create Consumer</Button>
-        </a>
       {/if}
     {/if}
   </div>
+  {#if !hasDatabases}
+    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
+      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
+        <AlertCircle class="h-5 w-5 text-carbon-600" />
+        <AlertTitle class="text-lg font-semibold text-carbon-900">
+          First, you need to connect to a database
+        </AlertTitle>
+        <AlertDescription class="text-carbon-600 col-start-2">
+          Sequin must be connected to at least one Postgres database before you
+          can create a consumer.
+        </AlertDescription>
+        <div class="col-start-2 my-3">
+          <img src="/images/diagram-add-db.svg" alt="Sequin Diagram" />
+        </div>
 
-  <Table.Root>
-    <Table.Header>
-      <Table.Row>
-        <Table.Head>Name</Table.Head>
-        <Table.Head>Health</Table.Head>
-        <Table.Head>
-          <div class="flex items-center">
-            <Database class="h-4 w-4 mr-2" />
-            <span>Database</span>
-          </div>
-        </Table.Head>
-        <Table.Head>Type</Table.Head>
-        <Table.Head>Status</Table.Head>
-        <Table.Head>Created at</Table.Head>
-      </Table.Row>
-    </Table.Header>
-    <Table.Body>
-      {#each consumers as consumer}
-        <Table.Row
-          on:click={() => handleConsumerClick(consumer.id)}
-          class="cursor-pointer"
-        >
-          <Table.Cell>{consumer.name}</Table.Cell>
-          <Table.Cell>
-            <HealthPill status={consumer.health.status} />
-          </Table.Cell>
-          <Table.Cell>{consumer.database_name}</Table.Cell>
-          <Table.Cell>
-            {#if consumer.type === "pull"}
-              <Badge variant="default">
-                <ArrowLeftFromLine class="h-4 w-4 mr-1" />
-                Pull consumer
-              </Badge>
-            {:else if consumer.type === "push"}
-              <Badge variant="default">
-                <ArrowRightToLine class="h-4 w-4 mr-1" />
-                Push consumer
-              </Badge>
-            {/if}
-          </Table.Cell>
-          <Table.Cell>
-            {#if consumer.status === "active"}
-              <Badge variant="default"
-                ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
-              >
-            {:else}
-              <Badge variant="disabled"
-                ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
-              >
-            {/if}
-          </Table.Cell>
-          <Table.Cell>{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+        <div class="flex mt-2 gap-4 col-start-2">
+          <a
+            href="/databases/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
-        </Table.Row>
-      {/each}
-    </Table.Body>
-  </Table.Root>
+            <Button
+              variant="default"
+              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+              ><Database class="inline-block h-4 w-4 mr-2" />
+              Connect database
+            </Button>
+          </a>
+          <Popover>
+            <PopoverTrigger>
+              <Button variant="magic">
+                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-80">
+              <div class="space-y-2">
+                <h4 class="font-medium">Need a test database?</h4>
+                <p class="text-sm text-muted-foreground">
+                  We recommend setting up a free database with Supabase to get
+                  started.
+                </p>
+                <Button
+                  variant="outline"
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Go to Supabase Dashboard
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+    </Alert>
+  {/if}
+
+  {#if hasDatabases}
+    {#if !hasConsumers}
+      <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
+        <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
+          <AlertCircle class="h-5 w-5 text-carbon-600" />
+          <AlertTitle class="text-lg font-semibold text-carbon-900">
+            No consumers created yet
+          </AlertTitle>
+          <AlertDescription class="text-carbon-600 col-start-2">
+            Sequin is connected to your database. Now you can create a consumer
+            to start capturing changes.
+          </AlertDescription>
+          <div class="col-start-2 my-3">
+            <img src="/images/diagram-add-consumer.svg" alt="Sequin Diagram" />
+          </div>
+
+          <div class="flex mt-2 gap-4 col-start-2">
+            <a
+              href="/consumers/new"
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
+              <Button
+                variant="default"
+                class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl ml-[218px]"
+                ><Radio class="inline-block h-4 w-4 mr-2" />
+                Create consumer
+              </Button>
+            </a>
+          </div>
+        </div>
+      </Alert>
+    {:else}
+      <Table.Root>
+        <Table.Header>
+          <Table.Row>
+            <Table.Head>Name</Table.Head>
+            <Table.Head>Health</Table.Head>
+            <Table.Head>
+              <div class="flex items-center">
+                <Database class="h-4 w-4 mr-2" />
+                <span>Database</span>
+              </div>
+            </Table.Head>
+            <Table.Head>Type</Table.Head>
+            <Table.Head>Status</Table.Head>
+            <Table.Head>Created at</Table.Head>
+          </Table.Row>
+        </Table.Header>
+        <Table.Body>
+          {#each consumers as consumer}
+            <Table.Row
+              on:click={() => handleConsumerClick(consumer.id)}
+              class="cursor-pointer"
+            >
+              <Table.Cell>{consumer.name}</Table.Cell>
+              <Table.Cell>
+                <HealthPill status={consumer.health.status} />
+              </Table.Cell>
+              <Table.Cell>{consumer.database_name}</Table.Cell>
+              <Table.Cell>
+                {#if consumer.type === "pull"}
+                  <Badge variant="default">
+                    <ArrowLeftFromLine class="h-4 w-4 mr-1" />
+                    Pull consumer
+                  </Badge>
+                {:else if consumer.type === "push"}
+                  <Badge variant="default">
+                    <ArrowRightToLine class="h-4 w-4 mr-1" />
+                    Push consumer
+                  </Badge>
+                {/if}
+              </Table.Cell>
+              <Table.Cell>
+                {#if consumer.status === "active"}
+                  <Badge variant="default"
+                    ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
+                  >
+                {:else}
+                  <Badge variant="disabled"
+                    ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
+                  >
+                {/if}
+              </Table.Cell>
+              <Table.Cell
+                >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+              >
+            </Table.Row>
+          {/each}
+        </Table.Body>
+      </Table.Root>
+    {/if}
+  {/if}
 </div>
 
 <style>

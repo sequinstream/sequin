@@ -309,8 +309,7 @@
             <p class="text-sm font-medium text-gray-900 mb-3">
               No consumers attached to database
             </p>
-            <Button href="/consumers/new" variant="outline"
-              >Add a consumer</Button
+            <Button href="/consumers/new" variant="magic">Add a consumer</Button
             >
           </div>
         {/if}

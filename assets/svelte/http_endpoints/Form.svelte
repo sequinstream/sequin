@@ -26,15 +26,20 @@
   let showConfirmDialog = false;
   let validating = false;
 
-  function pushEvent(event: string, payload = {}, callback = () => {}) {
+  function pushEvent(
+    event: string,
+    payload = {},
+    callback = (event: any) => {}
+  ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
   function handleSubmit(event: Event) {
     event.preventDefault();
-    validating = true;
-    pushEvent("form_submitted", { form }, () => {
-      validating = false;
+    pushEvent("form_submitted", { form }, (reply) => {
+      if (reply?.ok !== true) {
+        validating = false;
+      }
     });
   }
 
@@ -67,9 +72,8 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <Button type="submit" loading={validating} variant="default">
-          {#if validating}
-            Validating...
-          {:else if isEdit}
+          <span slot="loading"> Validating... </span>
+          {#if isEdit}
             Update HTTP Endpoint
           {:else}
             Create HTTP Endpoint

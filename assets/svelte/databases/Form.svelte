@@ -81,8 +81,10 @@
   function handleSubmit(event: Event) {
     event.preventDefault();
     validating = true;
-    pushEvent("form_submitted", { form }, () => {
-      validating = false;
+    pushEvent("form_submitted", { form }, (reply) => {
+      if (reply?.ok !== true) {
+        validating = false;
+      }
     });
   }
 
@@ -444,9 +446,8 @@
         {/if}
 
         <Button type="submit" loading={validating} variant="default">
-          {#if validating}
-            Validating...
-          {:else if isEdit}
+          <span slot="loading"> Validating... </span>
+          {#if isEdit}
             Update Database
           {:else}
             Connect Database

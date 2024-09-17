@@ -251,8 +251,10 @@
               <Button
                 variant="outline"
                 size="sm"
-                on:click={() =>
-                  live.pushEventTo("#" + parent, "dismiss_replica_warning", {})}
+                on:click={() => {
+                  consumer.replica_warning_dismissed = true;
+                  live.pushEventTo("#" + parent, "dismiss_replica_warning", {});
+                }}
               >
                 <XCircle class="h-4 w-4 mr-1" />
                 Dismiss

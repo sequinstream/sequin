@@ -6,8 +6,6 @@
     CirclePlay,
     CircleStop,
     Radio,
-    ArrowRightToLine,
-    ArrowLeftFromLine,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";

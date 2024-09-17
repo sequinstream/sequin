@@ -125,10 +125,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   def handle_event("dismiss_replica_warning", _params, socket) do
     case Consumers.update_consumer(socket.assigns.consumer, %{replica_warning_dismissed: true}) do
       {:ok, updated_consumer} ->
-        {:noreply,
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Warning dismissed successfully."})}
+        {:noreply, assign(socket, :consumer, updated_consumer)}
 
       {:error, _changeset} ->
         {:noreply, push_toast(socket, %{kind: :error, title: "Failed to dismiss warning. Please try again."})}

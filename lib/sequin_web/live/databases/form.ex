@@ -131,10 +131,10 @@ defmodule SequinWeb.DatabasesLive.Form do
             }
           })
 
-          {:noreply, push_navigate(socket, to: ~p"/databases/#{database.id}")}
+          {:reply, %{ok: true}, push_navigate(socket, to: ~p"/databases/#{database.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
-          {:noreply, assign(socket, :changeset, changeset)}
+          {:reply, %{ok: false}, assign(socket, :changeset, changeset)}
 
         {:error, %Postgrex.Error{postgres: %{code: :invalid_catalog_name}}} ->
           changeset = socket.assigns.changeset
@@ -142,20 +142,20 @@ defmodule SequinWeb.DatabasesLive.Form do
           changeset =
             Ecto.Changeset.add_error(changeset, :database, "Database does not exist.")
 
-          {:noreply,
+          {:reply, %{ok: false},
            socket
            |> assign(:submit_error, "Database does not exist. See errors above.")
            |> assign(:changeset, changeset)}
 
         {:error, error} when is_error(error) ->
-          {:noreply, assign(socket, :submit_error, Exception.message(error))}
+          {:reply, %{ok: false}, assign(socket, :submit_error, Exception.message(error))}
 
         {:error, error} ->
-          {:noreply, assign(socket, :submit_error, error_msg(error))}
+          {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error))}
       end
     else
       _ ->
-        {:noreply, socket}
+        {:reply, %{ok: false}, socket}
     end
   rescue
     error ->

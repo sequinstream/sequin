@@ -86,13 +86,13 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       case create_or_update_http_endpoint(socket, params["http_endpoint"]) do
         {:ok, http_endpoint} ->
           Health.update(http_endpoint, :reachable, :healthy)
-          {:noreply, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
+          {:reply, %{ok: true}, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
-          {:noreply, assign(socket, :changeset, changeset)}
+          {:reply, %{ok: false}, assign(socket, :changeset, changeset)}
       end
     else
-      {:noreply, socket}
+      {:reply, %{ok: false}, socket}
     end
   end
 

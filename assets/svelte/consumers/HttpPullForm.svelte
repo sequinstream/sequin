@@ -49,13 +49,14 @@
 
   let form = { ...initialForm };
   let isDirty = false;
+  let isSubmitting = false;
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
     pushEvent("form_updated", { form });
   }
 
-  const pushEvent = (event, payload = {}, cb = () => {}) => {
+  const pushEvent = (event, payload = {}, cb = (event: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
@@ -79,7 +80,12 @@
   let showConfirmDialog = false;
 
   function handleConsumerSubmit() {
-    pushEvent("form_submitted", { form });
+    isSubmitting = true;
+    pushEvent("form_submitted", { form }, (reply) => {
+      if (reply?.ok !== true) {
+        isSubmitting = false;
+      }
+    });
   }
 
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
@@ -344,9 +350,16 @@
         {:else if Object.keys(errors).length > 0}
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
-        <Button type="submit" disabled={isCreateConsumerDisabled}
-          >{isEditMode ? "Update" : "Create"} consumer</Button
+        <Button
+          loading={isSubmitting}
+          type="submit"
+          disabled={isCreateConsumerDisabled}
         >
+          {isEditMode ? "Update" : "Create"} consumer
+          <span slot="loading"
+            >{isEditMode ? "Updating..." : "Creating..."}</span
+          >
+        </Button>
       </CardContent>
     </Card>
   </form>

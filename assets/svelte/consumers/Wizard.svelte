@@ -116,7 +116,7 @@
 
   let showConfirmOnExit = false;
   let formLoadedFromLocalStorage = false;
-
+  let isCreatingConsumer = false;
   $: {
     // Set to true when form is touched
     if (form) {
@@ -310,12 +310,15 @@
   }
 
   function onConsumerCreate() {
+    isCreatingConsumer = true;
     // Optimistically clear the form storage. If we hear back that the form is invalid, we'll restore it.
     // This is a workaround. If the form *is* valid, the reply from the server will be invalid, as we'll
     // be in the middle of a redirect.
     clearFormStorage();
     pushEvent("form_submitted", { form }, (event) => {
-      if (event?.ok === false) {
+      // if the event was ok, no need to switch isCreatingConsumer back, they will be redirected
+      if (event?.ok !== true) {
+        isCreatingConsumer = false;
         saveFormToStorage();
       }
     });
@@ -1141,9 +1144,13 @@
               Select a consumer type to continue
             </p>
           {:else if step === "configure_consumer"}
-            <Button on:click={onConsumerCreate} disabled={continueDisabled}
-              >Create Consumer</Button
-            >
+            <Button
+              loading={isCreatingConsumer}
+              on:click={onConsumerCreate}
+              disabled={continueDisabled}
+              >Create Consumer
+              <span slot="loading">Creating...</span>
+            </Button>
           {:else}
             <Button on:click={goForward} disabled={continueDisabled}>
               Continue

@@ -58,6 +58,7 @@
     },
     sortColumnAttnum: consumer.sort_column_attnum || null,
   };
+  let isSubmitting = false;
 
   const pushEvent = (event, payload = {}, cb = (result?: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
@@ -105,7 +106,12 @@
   let isGeneratingWebhookSite = false;
 
   function handleConsumerSubmit() {
-    pushEvent("form_submitted", { form });
+    isSubmitting = true;
+    pushEvent("form_submitted", { form }, (reply) => {
+      if (reply?.ok !== true) {
+        isSubmitting = false;
+      }
+    });
   }
 
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
@@ -518,9 +524,16 @@
         {:else if Object.keys(errors).length > 0}
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
-        <Button type="submit" disabled={isCreateConsumerDisabled}
-          >{isEditMode ? "Update" : "Create"} consumer</Button
+        <Button
+          loading={isSubmitting}
+          type="submit"
+          disabled={isCreateConsumerDisabled}
         >
+          {isEditMode ? "Update" : "Create"} consumer
+          <span slot="loading"
+            >{isEditMode ? "Updating..." : "Creating..."}</span
+          >
+        </Button>
       </CardContent>
     </Card>
   </form>

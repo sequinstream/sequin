@@ -804,24 +804,32 @@ defmodule Sequin.Consumers do
     })
   end
 
-  @spec nack_messages(consumer(), [integer()]) :: :ok
-  def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
+  @spec nack_messages(consumer(), [String.t()]) :: :ok
+  @spec nack_messages(consumer(), [String.t()], Keyword.t()) :: :ok
+  def nack_messages(consumer, ack_ids, opts \\ [])
+
+  def nack_messages(%{message_kind: :event} = consumer, ack_ids, opts) do
+    # Allow for backing off the redelivery of messages
+    not_visible_until = Keyword.get(opts, :not_visible_until)
+
     {_, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
-      |> Repo.update_all(set: [not_visible_until: nil])
+      |> Repo.update_all(set: [not_visible_until: not_visible_until])
 
     :ok
   end
 
-  @spec nack_messages(consumer(), [String.t()]) :: :ok
-  def nack_messages(%{message_kind: :record} = consumer, ack_ids) do
+  def nack_messages(%{message_kind: :record} = consumer, ack_ids, opts) do
+    # Allow for backing off the redelivery of messages
+    not_visible_until = Keyword.get(opts, :not_visible_until)
+
     {_, _} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
-      |> Repo.update_all(set: [not_visible_until: nil, state: :available])
+      |> Repo.update_all(set: [not_visible_until: not_visible_until])
 
     :ok
   end

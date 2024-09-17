@@ -346,44 +346,47 @@
           {/if}
         </div>
         <h3 class="text-md font-semibold mb-2">Step 1: Create a publication</h3>
-        <p class="text-sm text-muted-foreground">
-          Choose from one of the following examples to create a publication:
-        </p>
-        <p class="text-sm font-medium">
-          • Create a publication for all tables:
-        </p>
-        <CodeWithCopy
-          language="sql"
-          code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
-        />
+        <div class="pl-6 space-y-2">
+          <p class="text-sm text-muted-foreground">
+            Choose from one of the following examples to create a publication:
+          </p>
+          <p class="text-sm font-medium">
+            Create a publication for all tables:
+          </p>
+          <CodeWithCopy
+            language="sql"
+            code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
+          />
 
-        <p class="text-sm font-medium">
-          • Create a publication for certain tables:
-        </p>
-        <CodeWithCopy
-          language="sql"
-          code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
-        />
+          <p class="text-sm font-medium">
+            Create a publication for certain tables:
+          </p>
+          <CodeWithCopy
+            language="sql"
+            code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
+          />
 
-        <p class="text-sm font-medium">
-          • Create a publication for all tables in a schema:
-        </p>
-        <CodeWithCopy
-          language="sql"
-          code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
-        />
-
+          <p class="text-sm font-medium">
+            Create a publication for all tables in a schema:
+          </p>
+          <CodeWithCopy
+            language="sql"
+            code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+          />
+        </div>
         <h3 class="text-md font-semibold mb-2">
           Step 2: Create a replication slot
         </h3>
-        <p class="text-sm text-muted-foreground">
-          Run the following command on your database to create a replication
-          slot:
-        </p>
-        <CodeWithCopy
-          language="sql"
-          code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
-        />
+        <div class="pl-6 space-y-2">
+          <p class="text-sm text-muted-foreground">
+            Run the following command on your database to create a replication
+            slot:
+          </p>
+          <CodeWithCopy
+            language="sql"
+            code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
+          />
+        </div>
       </CardContent>
     </Card>
 

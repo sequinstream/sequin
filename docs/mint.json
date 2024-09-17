@@ -49,7 +49,6 @@
         "compare",
         "quickstart",
         "core-concepts",
-        "sdks",
         "self-hosting/docker-compose"
       ]
     },

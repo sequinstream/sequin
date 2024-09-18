@@ -413,8 +413,8 @@
         <ul class="list-disc list-inside space-y-2 text-sm">
           <li>
             <div class="inline-flex items-center">
-              <span class="mr-2">18.215.20.217</span>
-              <CopyIcon class="h-4 w-4" content="18.215.20.217" />
+              <span class="mr-2">3.221.69.77</span>
+              <CopyIcon class="h-4 w-4" content="3.221.69.77" />
             </div>
           </li>
           <li>

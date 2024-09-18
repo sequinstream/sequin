@@ -15,7 +15,7 @@ defmodule Sequin.Consumers do
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.DatabasesRuntime.Supervisor
+  alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
@@ -1130,8 +1130,8 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_create(consumer) do
-    if consumer.message_kind == :record and env() != :test do
-      Enum.each(consumer.source_tables, &Supervisor.start_table_producer({consumer, &1.oid}))
+    if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal and env() != :test do
+      Enum.each(consumer.source_tables, &DatabasesRuntimeSupervisor.start_table_producer({consumer, &1.oid}))
     end
   end
 
@@ -1154,7 +1154,7 @@ defmodule Sequin.Consumers do
 
   defp maybe_disable_table_producer(%{message_kind: :record} = consumer) do
     unless env() == :test do
-      Enum.each(consumer.source_tables, &Supervisor.stop_table_producer({consumer, &1.oid}))
+      Enum.each(consumer.source_tables, &DatabasesRuntimeSupervisor.stop_table_producer({consumer, &1.oid}))
     end
   end
 

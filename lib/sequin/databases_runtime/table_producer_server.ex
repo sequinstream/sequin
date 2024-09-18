@@ -88,33 +88,22 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     :keep_state_and_data
   end
 
+  def handle_event(:internal, :init, :initializing, %State{
+        consumer: %{record_consumer_state: %RecordConsumerState{producer: :wal}}
+      }) do
+    Logger.info("[TableProducerServer] Producer should only be :wal, shutting down")
+    {:stop, :normal}
+  end
+
   def handle_event(:internal, :init, :initializing, state) do
     consumer = state.consumer
     cursor_min = TableProducer.cursor(consumer.id, :min)
     cursor_min = cursor_min || initial_min_cursor(consumer)
     state = %{state | cursor_min: cursor_min}
 
-    if is_nil(cursor_min) do
-      record_state = Map.from_struct(consumer.record_consumer_state)
+    actions = [reload_consumer_timeout()]
 
-      case TableProducer.fetch_first_row(database(state), table(state)) do
-        {:ok, _first_row, initial_min_cursor} ->
-          {:ok, consumer} =
-            Consumers.update_consumer(
-              consumer,
-              %{record_consumer_state: %{record_state | initial_min_cursor: initial_min_cursor}}
-            )
-
-          state = %{state | cursor_min: initial_min_cursor, consumer: consumer}
-          {:next_state, :query_max_cursor, state}
-
-        error ->
-          Logger.error("[TableProducerServer] Error fetching first row: #{inspect(error)}")
-          {:stop, :normal}
-      end
-    else
-      {:next_state, :query_max_cursor, state}
-    end
+    {:next_state, :query_max_cursor, state, actions}
   end
 
   def handle_event(:enter, _old_state, :query_max_cursor, state) do
@@ -222,6 +211,27 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   # Handle the retry after backoff
   def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
     {:next_state, state_name, state}
+  end
+
+  def handle_event({:timeout, :reload_consumer}, _evt, _state_name, state) do
+    case Repo.reload(state.consumer, preload: [replication_slot: :postgres_database]) do
+      nil ->
+        Logger.info("[TableProducerServer] Consumer #{state.consumer.id} not found, shutting down")
+        {:stop, :normal}
+
+      %{record_consumer_state: %RecordConsumerState{producer: :wal}} ->
+        Logger.info("[TableProducerServer] Consumer is wal-only, shutting down")
+        {:stop, :normal}
+
+      consumer ->
+        actions = [reload_consumer_timeout()]
+
+        {:keep_state, %{state | consumer: consumer}, actions}
+    end
+  end
+
+  defp reload_consumer_timeout do
+    {{:timeout, :reload_consumer}, :timer.minutes(1), nil}
   end
 
   defp database(%State{consumer: consumer}) do

@@ -27,6 +27,43 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     end
   end
 
+  @doc """
+  Given a table and a minimum sort column value, return a cursor with the minimum values for all columns
+  """
+  @spec min_cursor(%Table{}, any()) :: map()
+  def min_cursor(%Table{} = table, min_sort_col_cursor_value) do
+    [sort_column | pk_columns] = cursor_columns(table)
+
+    pk_cursor =
+      Map.new(pk_columns, fn column ->
+        {column.attnum, min_for_type(column.type)}
+      end)
+
+    sort_col_value = cast_value(sort_column, min_sort_col_cursor_value)
+
+    Map.put(pk_cursor, sort_column.attnum, sort_col_value)
+  end
+
+  @doc """
+  Given a table, return a cursor with the minimum values for all columns
+  """
+  def min_cursor(%Table{} = table) do
+    [sort_column | _pk_columns] = cursor_columns(table)
+    sort_col_value = min_for_type(sort_column.type)
+    min_cursor(table, sort_col_value)
+  end
+
+  # Return the lexographically smallest value for the given type
+  defp min_for_type("uuid"), do: "00000000-0000-0000-0000-000000000000"
+  defp min_for_type("timestamp without time zone"), do: ~N[0001-01-01 00:00:00]
+  defp min_for_type("timestamp with time zone"), do: ~U[0001-01-01 00:00:00Z]
+
+  defp min_for_type(numeric_type)
+       when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"],
+       do: 0
+
+  defp min_for_type(_), do: ""
+
   @spec where_sql(Table.t(), String.t()) :: String.t()
   def where_sql(%Table{} = table, operator) do
     columns = cursor_columns(table)
@@ -55,23 +92,29 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
 
     Enum.map(columns, fn %Table.Column{} = column ->
       val = Map.fetch!(cursor, column.attnum)
-
-      cond do
-        column.type == "uuid" ->
-          UUID.string_to_binary!(val)
-
-        column.type == "timestamp without time zone" and is_binary(val) ->
-          NaiveDateTime.from_iso8601!(val)
-
-        column.type == "timestamp with time zone" and is_binary(val) ->
-          {:ok, dt, _offset} = DateTime.from_iso8601(val)
-          dt
-
-        true ->
-          val
-      end
+      cast_value(column, val)
     end)
   end
+
+  defp cast_value(%Table.Column{type: "uuid"}, val) do
+    UUID.string_to_binary!(val)
+  end
+
+  defp cast_value(%Table.Column{type: "timestamp without time zone"}, val) when is_binary(val) do
+    NaiveDateTime.from_iso8601!(val)
+  end
+
+  defp cast_value(%Table.Column{type: "timestamp with time zone"}, val) when is_binary(val) do
+    {:ok, dt, _offset} = DateTime.from_iso8601(val)
+    dt
+  end
+
+  defp cast_value(%Table.Column{type: type}, val)
+       when type in ["integer", "bigint", "smallint", "serial"] and is_binary(val) do
+    String.to_integer(val)
+  end
+
+  defp cast_value(_, val), do: val
 
   @doc """
   Result is the result of fetching the cursor column values of a single row from the database

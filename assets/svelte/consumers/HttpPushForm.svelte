@@ -57,6 +57,9 @@
       encryptedHeaders: {},
     },
     sortColumnAttnum: consumer.sort_column_attnum || null,
+    recordConsumerState: consumer.record_consumer_state || {
+      initialMinSortCol: null,
+    },
   };
   let isSubmitting = false;
 
@@ -295,6 +298,7 @@
 
     <SortAndFilterCard
       messageKind={form.messageKind}
+      showStartPositionForm={!isEditMode}
       {selectedTable}
       bind:form
       {errors}

@@ -405,18 +405,24 @@
     </div>
   {:else}
     <div class="w-full flex items-center justify-center min-h-[400px]">
-      <div class="w-full max-w-4xl bg-white p-8 rounded-lg text-center">
+      <div class="w-full max-w-4xl bg-white pt-6 pb-8 rounded-lg text-center">
         {#if databases.length === 0}
-          <h2 class="text-2xl font-bold mb-4">No Databases Found</h2>
-          <p class="text-gray-600 mb-4">
-            You need to create a database before tracing can occur.
-          </p>
-          <a href="/databases/new" class="inline-block">
-            <Button variant="default" class="mb-4">
-              Create Database
-              <ArrowUpRight class="h-4 w-4 ml-2" />
-            </Button>
-          </a>
+          <div class="text-center py-8 w-2/3 mx-auto">
+            <h2 class="text-2xl font-bold mb-4">No database connected</h2>
+            <p class="text-gray-600 mb-4">
+              You need to connect a database to Sequin before tracing can occur.
+            </p>
+            <p class="text-gray-600 mb-6">
+              Once connected, you'll be able to trace every change from your
+              database, through consumers, to your application.
+            </p>
+            <a href="/databases/new" class="inline-block">
+              <Button variant="default" class="mb-4">
+                Create Database
+                <ArrowUpRight class="h-4 w-4 ml-2" />
+              </Button>
+            </a>
+          </div>
           <div
             class="mb-6 drop-shadow-lg relative pb-[56.25%] overflow-hidden max-w-full"
           >
@@ -440,7 +446,8 @@
         {:else}
           <h2 class="text-2xl font-bold mb-4">Trace started</h2>
           <p class="text-gray-600">
-            Messages from your database will appear here shortly
+            As soon as a change is detected in your database, it will appear
+            here.
           </p>
         {/if}
       </div>

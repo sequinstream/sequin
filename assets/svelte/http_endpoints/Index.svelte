@@ -40,18 +40,23 @@
   </div>
 
   {#if httpEndpoints.length === 0}
-    <div class="text-center py-12">
-      <h2 class="text-xl font-semibold mb-4">No HTTP endpoints found</h2>
-      <p class="text-gray-600 mb-6">
-        Get started by creating your first HTTP endpoint
-      </p>
-      <a
-        href="/http-endpoints/new"
-        data-phx-link="redirect"
-        data-phx-link-state="push"
-      >
-        <Button>Create your first HTTP Endpoint</Button>
-      </a>
+    <div
+      class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
+    >
+      <div class="text-center py-12 w-1/2 mx-auto">
+        <h2 class="text-xl font-semibold mb-4">No HTTP endpoints found</h2>
+        <p class="text-gray-600 mb-6">
+          Sequin can push changes from your database to HTTP endpoints in your
+          application or another service.
+        </p>
+        <a
+          href="/http-endpoints/new"
+          data-phx-link="redirect"
+          data-phx-link-state="push"
+        >
+          <Button>Create your first HTTP Endpoint</Button>
+        </a>
+      </div>
     </div>
   {:else}
     <Table.Root>

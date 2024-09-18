@@ -169,75 +169,112 @@
             </DropdownMenu>
           </div>
         </div>
-      {:else}
-        <a
-          href="/consumers/new"
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          <Button variant="default">Create Consumer</Button>
-        </a>
       {/if}
     {/if}
   </div>
 
-  <Table.Root>
-    <Table.Header>
-      <Table.Row>
-        <Table.Head>Name</Table.Head>
-        <Table.Head>Health</Table.Head>
-        <Table.Head>
-          <div class="flex items-center">
-            <Database class="h-4 w-4 mr-2" />
-            <span>Database</span>
-          </div>
-        </Table.Head>
-        <Table.Head>Type</Table.Head>
-        <Table.Head>Status</Table.Head>
-        <Table.Head>Created at</Table.Head>
-      </Table.Row>
-    </Table.Header>
-    <Table.Body>
-      {#each consumers as consumer}
-        <Table.Row
-          on:click={() => handleConsumerClick(consumer.id)}
-          class="cursor-pointer"
-        >
-          <Table.Cell>{consumer.name}</Table.Cell>
-          <Table.Cell>
-            <HealthPill status={consumer.health.status} />
-          </Table.Cell>
-          <Table.Cell>{consumer.database_name}</Table.Cell>
-          <Table.Cell>
-            {#if consumer.type === "pull"}
-              <Badge variant="default">
-                <ArrowLeftFromLine class="h-4 w-4 mr-1" />
-                Pull consumer
-              </Badge>
-            {:else if consumer.type === "push"}
-              <Badge variant="default">
-                <ArrowRightToLine class="h-4 w-4 mr-1" />
-                Push consumer
-              </Badge>
-            {/if}
-          </Table.Cell>
-          <Table.Cell>
-            {#if consumer.status === "active"}
-              <Badge variant="default"
-                ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
-              >
-            {:else}
-              <Badge variant="disabled"
-                ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
-              >
-            {/if}
-          </Table.Cell>
-          <Table.Cell>{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+  {#if !hasConsumers}
+    {#if !hasDatabases}
+      <div
+        class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
+      >
+        <div class="text-center py-12 w-1/2 mx-auto">
+          <h2 class="text-xl font-semibold mb-4">No consumers</h2>
+          <p class="text-gray-600 mb-6">
+            Consumers filter, transform, and send messages from a table in your
+            database to your application or another service.
+          </p>
+          <p class="text-gray-600 mb-6">
+            You need to connect a databaseto Sequin before you can create a
+            consumer.
+          </p>
+          <Button disabled={!hasDatabases}>Create consumer</Button>
+        </div>
+      </div>
+    {/if}
+    {#if hasDatabases && !hasConsumers}
+      <div
+        class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
+      >
+        <div class="text-center py-12 w-1/2 mx-auto">
+          <h2 class="text-xl font-semibold mb-4">No consumers</h2>
+          <p class="text-gray-600 mb-6">
+            Consumers filter, transform, and send messages from a table in your
+            database to your application or another service.
+          </p>
+          <p class="text-gray-600 mb-6">
+            Create your first consumer to start capturing changes.
+          </p>
+          <a
+            href="/consumers/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
+            <Button>Create consumer</Button>
+          </a>
+        </div>
+      </div>
+    {/if}
+  {:else}
+    <Table.Root>
+      <Table.Header>
+        <Table.Row>
+          <Table.Head>Name</Table.Head>
+          <Table.Head>Health</Table.Head>
+          <Table.Head>
+            <div class="flex items-center">
+              <Database class="h-4 w-4 mr-2" />
+              <span>Database</span>
+            </div>
+          </Table.Head>
+          <Table.Head>Type</Table.Head>
+          <Table.Head>Status</Table.Head>
+          <Table.Head>Created at</Table.Head>
         </Table.Row>
-      {/each}
-    </Table.Body>
-  </Table.Root>
+      </Table.Header>
+      <Table.Body>
+        {#each consumers as consumer}
+          <Table.Row
+            on:click={() => handleConsumerClick(consumer.id)}
+            class="cursor-pointer"
+          >
+            <Table.Cell>{consumer.name}</Table.Cell>
+            <Table.Cell>
+              <HealthPill status={consumer.health.status} />
+            </Table.Cell>
+            <Table.Cell>{consumer.database_name}</Table.Cell>
+            <Table.Cell>
+              {#if consumer.type === "pull"}
+                <Badge variant="default">
+                  <ArrowLeftFromLine class="h-4 w-4 mr-1" />
+                  Pull consumer
+                </Badge>
+              {:else if consumer.type === "push"}
+                <Badge variant="default">
+                  <ArrowRightToLine class="h-4 w-4 mr-1" />
+                  Push consumer
+                </Badge>
+              {/if}
+            </Table.Cell>
+            <Table.Cell>
+              {#if consumer.status === "active"}
+                <Badge variant="default"
+                  ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
+                >
+              {:else}
+                <Badge variant="disabled"
+                  ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
+                >
+              {/if}
+            </Table.Cell>
+            <Table.Cell
+              >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
+            >
+          </Table.Row>
+        {/each}
+      </Table.Body>
+    </Table.Root>
+  {/if}
 </div>
 
 <style>

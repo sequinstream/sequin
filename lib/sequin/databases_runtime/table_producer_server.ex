@@ -246,11 +246,15 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         Sequin.Map.from_ecto(%ConsumerRecord{
           consumer_id: consumer.id,
           table_oid: table.oid,
-          record_pks: record_pks(table, record)
+          record_pks: record_pks(table, record),
+          replication_message_trace_id: UUID.uuid4()
         })
       end)
 
     Health.update(consumer, :ingestion, :healthy)
+
+    # TODO: Add to tracer, ie:
+    # Sequin.Tracer.Server.records_replicated(consumer, consumer_records)
 
     Consumers.insert_consumer_records(consumer_records)
   end

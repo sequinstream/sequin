@@ -3,6 +3,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
 
   describe "consumer_record" do
@@ -177,7 +178,8 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
         record_pks: existing_record.record_pks,
         table_oid: existing_record.table_oid,
         commit_lsn: existing_record.commit_lsn + 1,
-        state: :available
+        state: :available,
+        replication_message_trace_id: Factory.uuid()
       }
 
       assert {:ok, 1} = Consumers.insert_consumer_records([updated_attrs])
@@ -185,6 +187,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       updated_record = Consumers.reload(existing_record)
       assert updated_record.commit_lsn == updated_attrs.commit_lsn
       assert updated_record.state == :available
+      assert updated_record.replication_message_trace_id == existing_record.replication_message_trace_id
     end
 
     test "upserts multiple records, some new and some existing" do
@@ -197,7 +200,8 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
         record_pks: existing_record.record_pks,
         table_oid: existing_record.table_oid,
         commit_lsn: existing_record.commit_lsn + 1,
-        state: :available
+        state: :available,
+        replication_message_trace_id: Factory.uuid()
       }
 
       assert {:ok, 2} = Consumers.insert_consumer_records([updated_attrs, new_record])
@@ -225,7 +229,8 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
             record_pks: record.record_pks,
             table_oid: record.table_oid,
             commit_lsn: record.commit_lsn + 1,
-            state: :available
+            state: :available,
+            replication_message_trace_id: Factory.uuid()
           }
         end)
 

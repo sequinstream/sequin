@@ -70,6 +70,10 @@
     };
     httpEndpointPath: string;
     sortColumnAttnum: number | null;
+    recordConsumerState: {
+      producer: "table_and_wal";
+      initialMinSortCol: number | null | Date;
+    };
   } = {
     postgresDatabaseId: null,
     tableOid: null,
@@ -90,6 +94,10 @@
     },
     httpEndpointPath: "",
     sortColumnAttnum: null,
+    recordConsumerState: {
+      producer: "table_and_wal",
+      initialMinSortCol: null,
+    },
   };
 
   export let databases: Array<{
@@ -250,20 +258,6 @@
           (table) => table.oid === form.tableOid
         );
       }
-    }
-  }
-
-  let tableRefreshState: "idle" | "refreshing" | "done" = "idle";
-
-  function refreshTables(databaseId: string) {
-    if (databaseId) {
-      tableRefreshState = "refreshing";
-      pushEvent("refresh_tables", { database_id: databaseId }, () => {
-        tableRefreshState = "done";
-        setTimeout(() => {
-          tableRefreshState = "idle";
-        }, 2000);
-      });
     }
   }
 
@@ -750,6 +744,7 @@
         </div>
         <div class="p-8 max-w-5xl mx-auto">
           <SortAndFilterCard
+            showCardTitle={false}
             showTableInfo
             messageKind={form.messageKind}
             {selectedTable}

@@ -19,6 +19,8 @@
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { PlusCircle } from "lucide-svelte";
+  import Datetime from "./Datetime.svelte";
+  import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
 
   export let messageKind: string;
   export let selectedTable: any;
@@ -27,8 +29,14 @@
   export let isEditMode: boolean;
   export let onFilterChange: (newFilters: any) => void;
   export let showTableInfo = false; // New prop to control table info display
+  export let showCardTitle = true;
+  export let showStartPositionForm = true;
 
   $: actions = form.sourceTableActions || [];
+
+  $: sortColumn = selectedTable?.columns?.find(
+    (col) => col.attnum === form.sortColumnAttnum
+  );
 
   const switches = [
     { id: "insert", label: "Insert" },
@@ -114,17 +122,37 @@
     },
     {} as Record<number, string>
   );
+
+  let startPosition = "beginning";
+
+  $: {
+    if (startPosition === "beginning") {
+      form.recordConsumerState = {
+        producer: "table_and_wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "end") {
+      form.recordConsumerState = {
+        producer: "wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "specific") {
+      form.recordConsumerState.producer = "table_and_wal";
+    }
+  }
 </script>
 
 <Card>
   <CardHeader>
-    {#if messageKind === "record"}
-      <CardTitle>Sort and filter</CardTitle>
-    {:else}
-      <CardTitle>Filters</CardTitle>
-    {/if}
+    <CardTitle>
+      {#if messageKind === "record" && showCardTitle}
+        Records to process
+      {:else if showCardTitle}
+        Changes to process
+      {/if}
+    </CardTitle>
   </CardHeader>
-  <CardContent>
+  <CardContent class="space-y-6">
     {#if showTableInfo && selectedTable}
       <div class="mb-6">
         <div class="grid grid-cols-[auto_1fr] gap-4 mb-2 items-center">
@@ -141,56 +169,123 @@
     {/if}
 
     {#if messageKind === "record"}
-      <div class="space-y-2 mb-6">
-        <Label for="sortColumn">Sort Column</Label>
-        <Select
-          selected={{
-            value: form.sortColumnAttnum,
-            label:
-              selectedTable?.columns.find(
-                (c) => c.attnum === form.sortColumnAttnum
-              )?.name ||
-              (selectedTable
-                ? "Select a column"
-                : "Please select a table first"),
-          }}
-          onSelectedChange={(event) => {
-            form.sortColumnAttnum = event.value;
-          }}
-          disabled={isEditMode || !selectedTable}
-        >
-          <SelectTrigger
-            class="w-full {isEditMode || !selectedTable
-              ? 'bg-muted text-muted-foreground opacity-100'
-              : ''}"
-          >
-            <SelectValue placeholder="Select a column" />
-          </SelectTrigger>
-          <SelectContent>
-            {#each selectedTable?.columns || [] as column}
-              <SelectItem value={column.attnum}>{column.name}</SelectItem>
-            {/each}
-          </SelectContent>
-        </Select>
-        {#if errors.source_tables?.[0]?.sort_column_attnum}
-          <p class="text-destructive text-sm">
-            {errors.source_tables[0].sort_column_attnum[0]}
-          </p>
+      <div class="space-y-6">
+        <div>
+          <h4 class="text-lg font-semibold mb-2">Sort and start</h4>
+
+          <div class="space-y-4">
+            <div>
+              <Label for="sortColumn" class="text-base font-medium"
+                >Sort column</Label
+              >
+              <p class="text-sm text-muted-foreground mt-1 mb-2">
+                Select the sort column for the table. Your system should update
+                the sort column whenever a row is updated. A good example of a
+                sort column is <code>updated_at</code>.
+                <a
+                  href="https://sequinstream.com/docs/core-concepts#sorting-row-consumers-only"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center text-link hover:underline"
+                >
+                  Learn more
+                  <ExternalLinkIcon class="w-3 h-3 ml-1" />
+                </a>
+              </p>
+              <Select
+                selected={{
+                  value: form.sortColumnAttnum,
+                  label:
+                    selectedTable?.columns.find(
+                      (c) => c.attnum === form.sortColumnAttnum
+                    )?.name ||
+                    (selectedTable
+                      ? "Select a column"
+                      : "Please select a table first"),
+                }}
+                onSelectedChange={(event) => {
+                  form.sortColumnAttnum = event.value;
+                }}
+                disabled={isEditMode || !selectedTable}
+              >
+                <SelectTrigger
+                  class="w-full {isEditMode || !selectedTable
+                    ? 'bg-muted text-muted-foreground opacity-100'
+                    : ''}"
+                >
+                  <SelectValue placeholder="Select a column" />
+                </SelectTrigger>
+                <SelectContent>
+                  {#each selectedTable?.columns || [] as column}
+                    <SelectItem value={column.attnum}>{column.name}</SelectItem>
+                  {/each}
+                </SelectContent>
+              </Select>
+              {#if errors.source_tables?.[0]?.sort_column_attnum}
+                <p class="text-destructive text-sm mt-1">
+                  {errors.source_tables[0].sort_column_attnum[0]}
+                </p>
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        {#if showStartPositionForm && sortColumn}
+          <div>
+            <Label for="startPosition" class="text-base font-medium">
+              Where should the consumer start?
+            </Label>
+            <p class="text-sm text-muted-foreground mt-1 mb-2">
+              Indicate where in the table you want the consumer to start.
+            </p>
+            <RadioGroup bind:value={startPosition}>
+              <div class="flex items-center space-x-2">
+                <RadioGroupItem value="beginning" id="beginning" />
+                <Label for="beginning">At the beginning of the table</Label>
+              </div>
+              <div class="flex items-center space-x-2">
+                <RadioGroupItem value="end" id="end" />
+                <Label for="end">At the end of the table (now forward)</Label>
+              </div>
+              <div class="flex items-center space-x-2">
+                <RadioGroupItem value="specific" id="specific" />
+                <Label for="specific">At a specific position...</Label>
+              </div>
+            </RadioGroup>
+
+            {#if startPosition === "specific"}
+              <div class="grid grid-cols-[auto_1fr] gap-4 mt-4 content-center">
+                <div
+                  class="flex content-center items-center space-x-2 text-sm font-mono"
+                  class:mt-8={sortColumn?.type.startsWith("timestamp")}
+                >
+                  <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
+                    >{sortColumn.name}</span
+                  >
+                  <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
+                    >&gt;=</span
+                  >
+                </div>
+
+                {#if sortColumn?.type.startsWith("timestamp")}
+                  <Datetime
+                    bind:value={form.recordConsumerState.initialMinSortCol}
+                  />
+                {:else if ["integer", "bigint", "smallint", "serial"].includes(sortColumn?.type)}
+                  <Input
+                    type="number"
+                    bind:value={form.recordConsumerState.initialMinSortCol}
+                  />
+                {:else}
+                  <Input
+                    type="text"
+                    bind:value={form.recordConsumerState.initialMinSortCol}
+                  />
+                {/if}
+              </div>
+            {/if}
+          </div>
         {/if}
-        <p class="text-sm text-muted-foreground">
-          Select the sort column for the table. Your system should update the
-          sort column whenever a row is updated. A good example of a sort column
-          is <code>updated_at</code>.
-          <a
-            href="https://sequinstream.com/docs/core-concepts#sorting-row-consumers-only"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center text-link hover:underline"
-          >
-            Learn more
-            <ExternalLinkIcon class="w-3 h-3 ml-1" />
-          </a>
-        </p>
       </div>
     {/if}
 
@@ -223,7 +318,8 @@
       </div>
     {/if}
 
-    <div class="my-6">
+    <div>
+      <h4 class="text-lg font-semibold mb-4">Filters</h4>
       {#each form.sourceTableFilters as filter, index}
         <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
           <Select

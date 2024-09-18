@@ -9,6 +9,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Name
   alias Sequin.Postgres
@@ -16,6 +17,8 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Repo
 
   require Logger
+
+  defguardp is_create?(socket) when is_nil(socket.assigns.consumer) or is_nil(socket.assigns.consumer.id)
 
   @impl Phoenix.LiveComponent
   def render(assigns) do
@@ -97,7 +100,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   @impl Phoenix.LiveComponent
   def handle_event("form_updated", %{"form" => form}, socket) do
-    params = form |> decode_params() |> maybe_put_replication_slot_id(socket)
+    params = form |> decode_params(socket) |> maybe_put_replication_slot_id(socket)
 
     socket =
       socket
@@ -113,7 +116,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     params =
       form
-      |> decode_params()
+      |> decode_params(socket)
       |> maybe_put_replication_slot_id(socket)
       |> Sequin.Map.reject_nil_values()
 
@@ -170,7 +173,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
-  defp decode_params(form) do
+  defp decode_params(form, socket) do
     message_kind = form["messageKind"]
 
     source_table_actions =
@@ -201,7 +204,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       ]
     }
     |> maybe_delete_http_endpoint()
-    |> maybe_put_record_consumer_state()
+    |> maybe_put_record_consumer_state(form, socket)
   end
 
   defp maybe_delete_http_endpoint(params) do
@@ -212,11 +215,32 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
-  defp maybe_put_record_consumer_state(params) do
-    if params["message_kind"] == "record" do
-      Map.put(params, "record_consumer_state", %{"producer" => "table_and_wal"})
-    else
-      params
+  defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
+    [source_table] = params["source_tables"]
+    table = table(socket.assigns.databases, params["postgres_database_id"], source_table)
+
+    initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
+    producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
+
+    initial_min_cursor =
+      cond do
+        producer == "wal" -> nil
+        initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
+        true -> source_table["sort_column_attnum"] && KeysetCursor.min_cursor(table)
+      end
+
+    Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
+  end
+
+  defp maybe_put_record_consumer_state(params, _form, _socket) do
+    params
+  end
+
+  defp table(databases, postgres_database_id, source_table) do
+    if postgres_database_id do
+      db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
+      table = Sequin.Enum.find!(db.tables, &(&1.oid == source_table["oid"]))
+      %{table | sort_column_attnum: source_table["sort_column_attnum"]}
     end
   end
 

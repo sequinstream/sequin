@@ -45,6 +45,10 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
     sortColumnAttnum: consumer.sort_column_attnum || null,
+    recordConsumerState: consumer.record_consumer_state || {
+      producer: "table_and_wal",
+      initialMinSortCol: null,
+    },
   };
 
   let form = { ...initialForm };
@@ -243,6 +247,7 @@
 
     <SortAndFilterCard
       messageKind={form.messageKind}
+      showStartPositionForm={!isEditMode}
       {selectedTable}
       bind:form
       {errors}

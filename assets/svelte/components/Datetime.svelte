@@ -1,6 +1,8 @@
 <script lang="ts">
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { Button } from "$lib/components/ui/button";
+  import * as Popover from "$lib/components/ui/popover";
   import {
     Select,
     SelectTrigger,
@@ -9,11 +11,8 @@
     SelectItem,
   } from "$lib/components/ui/select";
 
-  export let value: Date = new Date(
-    new Date().getFullYear(),
-    new Date().getMonth(),
-    1
-  );
+  export let value: Date;
+  value = value || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   const months = [
     "January",
@@ -114,9 +113,34 @@
       value = newDate;
     }
   }
+
+  let iso8601Input = "";
+  let iso8601Error = "";
+  let isPopoverOpen = false;
+
+  function autofillFromISO8601(event: Event) {
+    const trimmedInput = iso8601Input.trim().replace(/^['"]|['"]$/g, "");
+    const date = new Date(trimmedInput);
+
+    if (isNaN(date.getTime())) {
+      iso8601Error = "Invalid ISO8601 format";
+    } else {
+      iso8601Error = "";
+      day = date.getUTCDate().toString().padStart(2, "0");
+      month = months[date.getUTCMonth()];
+      year = date.getUTCFullYear().toString();
+      hours = date.getUTCHours().toString().padStart(2, "0");
+      minutes = date.getUTCMinutes().toString().padStart(2, "0");
+      seconds = date.getUTCSeconds().toString().padStart(2, "0");
+
+      // Close the popover after successful autofill
+      isPopoverOpen = false;
+      iso8601Input = ""; // Clear the input field
+    }
+  }
 </script>
 
-<div class="space-y-2">
+<div class="space-y-2 {$$props.class}">
   <div class="flex space-x-6">
     <div class="space-y-2">
       <Label class="text-sm text-muted-foreground">Date</Label>
@@ -147,7 +171,46 @@
       </div>
     </div>
     <div class="space-y-2">
-      <Label class="text-sm text-muted-foreground">Time</Label>
+      <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
+        <Label class="text-sm text-muted-foreground">Time</Label>
+        <Popover.Root bind:open={isPopoverOpen}>
+          <Popover.Trigger asChild let:builder>
+            <Button
+              builders={[builder]}
+              variant="link"
+              class="text-xs text-blue-500 cursor-pointer p-0 h-auto"
+            >
+              Autofill from ISO8601
+            </Button>
+          </Popover.Trigger>
+          <Popover.Content class="w-80">
+            <div class="grid gap-4">
+              <div class="space-y-2">
+                <p class="text-sm text-muted-foreground">
+                  Enter an ISO8601 formatted datetime string.
+                </p>
+              </div>
+              <div class="flex space-x-2">
+                <Input
+                  type="text"
+                  bind:value={iso8601Input}
+                  placeholder="YYYY-MM-DDTHH:mm:ssZ"
+                />
+                <Button
+                  variant="secondary"
+                  on:click={autofillFromISO8601}
+                  disabled={!iso8601Input}
+                >
+                  Autofill
+                </Button>
+              </div>
+              {#if iso8601Error}
+                <p class="text-sm text-red-500">{iso8601Error}</p>
+              {/if}
+            </div>
+          </Popover.Content>
+        </Popover.Root>
+      </div>
       <div class="flex space-x-2">
         <Input
           type="number"

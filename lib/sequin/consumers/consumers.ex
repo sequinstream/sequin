@@ -302,6 +302,9 @@ defmodule Sequin.Consumers do
         {:limit, limit}, query ->
           limit(query, ^limit)
 
+        {:offset, offset}, query ->
+          offset(query, ^offset)
+
         {:order_by, order_by}, query ->
           order_by(query, ^order_by)
       end)
@@ -367,11 +370,47 @@ defmodule Sequin.Consumers do
         {:limit, limit}, query ->
           limit(query, ^limit)
 
+        {:offset, offset}, query ->
+          offset(query, ^offset)
+
         {:order_by, order_by}, query ->
           order_by(query, ^order_by)
       end)
 
     Repo.all(query)
+  end
+
+  @fast_count_threshold 50_000
+  def fast_count_threshold, do: @fast_count_threshold
+
+  def fast_count_messages_for_consumer(consumer) do
+    query = consumer_messages_query(consumer)
+
+    # This number can be pretty inaccurate
+    result = Ecto.Adapters.SQL.explain(Repo, :all, query)
+    [_, rows] = Regex.run(~r/rows=(\d+)/, result)
+
+    case String.to_integer(rows) do
+      count when count > @fast_count_threshold ->
+        count
+
+      _ ->
+        count_messages_for_consumer(consumer)
+    end
+  end
+
+  defp consumer_messages_query(%{message_kind: :record} = consumer) do
+    ConsumerRecord.where_consumer_id(consumer.id)
+  end
+
+  defp consumer_messages_query(%{message_kind: :event} = consumer) do
+    ConsumerEvent.where_consumer_id(consumer.id)
+  end
+
+  def count_messages_for_consumer(consumer) do
+    consumer
+    |> consumer_messages_query()
+    |> Repo.aggregate(:count, :id)
   end
 
   # Only way to get this fragment to compile with the dynamic enum name.
@@ -681,6 +720,7 @@ defmodule Sequin.Consumers do
       updated_records =
         Enum.map(records, fn record ->
           metadata = %ConsumerRecordData.Metadata{
+            consumer: %{id: record.consumer_id},
             table_name: table.name,
             table_schema: table.schema
           }
@@ -1003,19 +1043,19 @@ defmodule Sequin.Consumers do
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
 
-        Logger.debug("""
-        [Consumers]
-          matches?: #{table_matches && action_matches && column_filters_match}
-            table_matches: #{table_matches}
-            action_matches: #{action_matches}
-            column_filters_match: #{column_filters_match}
+        # Logger.debug("""
+        # [Consumers]
+        #   matches?: #{table_matches && action_matches && column_filters_match}
+        #     table_matches: #{table_matches}
+        #     action_matches: #{action_matches}
+        #     column_filters_match: #{column_filters_match}
 
-          consumer:
-            #{inspect(consumer, pretty: true)}
+        #   consumer:
+        #     #{inspect(consumer, pretty: true)}
 
-          message:
-            #{inspect(message, pretty: true)}
-        """)
+        #   message:
+        #     #{inspect(message, pretty: true)}
+        # """)
 
         table_matches && action_matches && column_filters_match
       end)

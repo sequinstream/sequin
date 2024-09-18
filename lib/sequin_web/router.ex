@@ -102,6 +102,7 @@ defmodule SequinWeb.Router do
       get "/easter-egg", EasterEggController, :home
 
       live "/trace", TracerLive, :index
+      live "/outbox", OutboxLive, :index
     end
 
     get "/admin/impersonate/:secret", UserSessionController, :impersonate

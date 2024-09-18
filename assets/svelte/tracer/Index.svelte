@@ -41,13 +41,6 @@
     return spanTypeMapping[backendType.toLowerCase()]?.frontend || backendType;
   }
 
-  function getBackendSpanType(frontendType: string): string {
-    return (
-      Object.values(spanTypeMapping).find((v) => v.frontend === frontendType)
-        ?.backend || frontendType
-    );
-  }
-
   const getStateColor = (state: string) => {
     switch (state.toLowerCase()) {
       case "replicated":
@@ -184,11 +177,6 @@
 
   function togglePause() {
     paused = !paused;
-    if (paused) {
-      live.pushEvent("pause_updates", {});
-    } else {
-      live.pushEvent("resume_updates", {});
-    }
     updateFilters();
   }
 

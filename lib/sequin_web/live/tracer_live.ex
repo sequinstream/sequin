@@ -68,21 +68,11 @@ defmodule SequinWeb.TracerLive do
   end
 
   @impl true
-  def handle_event("pause_updates", _params, socket) do
-    {:noreply, push_patch(socket, to: update_url_with_paused(socket, true), replace: true)}
-  end
-
-  @impl true
-  def handle_event("resume_updates", _params, socket) do
-    {:noreply, push_patch(socket, to: update_url_with_paused(socket, false), replace: true)}
-  end
-
-  @impl true
   def render(assigns) do
     ~H"""
     <div id="tracer-live">
       <.svelte
-        name="components/tracer/Index"
+        name="tracer/Index"
         props={
           %{
             trace_state: encode_trace_state(assigns),
@@ -234,21 +224,6 @@ defmodule SequinWeb.TracerLive do
       :ingested in states -> "Ingested"
       true -> "Unknown"
     end
-  end
-
-  defp update_url_with_paused(socket, paused) do
-    current_path = URI.parse(socket.assigns.live_action)
-    query_params = URI.decode_query(current_path.query || "")
-
-    updated_params =
-      if paused do
-        Map.put(query_params, "paused", "true")
-      else
-        Map.delete(query_params, "paused")
-      end
-
-    query_string = URI.encode_query(updated_params)
-    "#{current_path.path}?#{query_string}"
   end
 
   defp filter_trace?(trace, params) do

@@ -23,7 +23,13 @@ Sequin sends changes over HTTP with exactly-once processing. This gives you a mu
 
 Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
 
-Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, the messages you're processing pertain to changes and records in your database. Like SQS, Sequin offers FIFO (first-in, first-out) processing. Unlike SQS, Sequin also has an HTTP push interface so you can receive messages via webhooks.
+Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, the messages you're processing pertain to changes and records in your database. Like SQS, Sequin offers FIFO (first-in, first-out) processing. Unlike SQS, Sequin also has an HTTP push interface so you can receive messages via webhooks. Importantly, Sequin offers persistent message storage, giving you message durability and replay-ability of a stream (as opposed to a queue).
+
+## PGMQ
+
+PGMQ is a Postgres extension that provides a durable message queue with a SQL interface that mimics SQS methods. It offers exactly-once processing like SQS, but runs entirely in Postgres. You can add durable message mechanics to PGMQ by archiving (instead of deleting) messages - giving you the ability to replay through the queue. However, PGMQ does not provide any order guarantees.
+
+Like PGMQ, Sequin leverages Postgres for persistence and to provide transactional enqueueing with minimal overhead. Importantly, Sequin provides both change data captures and durable stream replay and backfill from existing tables in your database. Sequin comes with an HTTP pull and push interface, filtering, transformation, built in observability, and strict ordering guarantees.
 
 ## Debezium
 

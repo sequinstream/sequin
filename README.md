@@ -76,18 +76,18 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ## Compare Sequin
 
-| Feature             | Sequin                   | [PG triggers](#pg-triggers)       | [LISTEN / NOTIFY](#listen--notify)  | [Supabase Webhooks](#supabase-webhooks)  | [Amazon SQS](#amazon-sqs)   |
-| ------------------- | ------------------------ | ----------------- | ---------------- | ------------------ | ------------ |
-| Trigger guarantees  | Transactional            | Transactional     | Transactional    | Transactional      | N/A          |
-| Delivery guarantees | Exactly-once             | Exactly-once      | At-most-once     | At-least-once      | Exactly-once |
-| Order guarantees    | FIFO, strict by PK       | FIFO              | ❌ No            | ❌ No              | FIFO option  |
-| Replay              | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        |
-| Filtering           | ✅ Yes                   | ✅ Yes            | ✅ Yes           | ✅ PG triggers     | N/A          |
-| Transformation      | ✅ LUA                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        |
-| Backfills           | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | N/A          |
-| Interface           | HTTP pull<br />HTTP push | plpgsql           | Postgres client  | HTTP push          | HTTP pull    |
-| Observability       | Sequin console           | PG logging\*      | PG logging\*     | Supabase dashboard | AWS console  |
-| Performance         | WAL, minimal overhead    | Serial ops / row^ | Minimal overhead | Serial ops / row^  | N/A          |
+| Feature             | Sequin                   | [PG triggers](#pg-triggers)       | [LISTEN / NOTIFY](#listen--notify)  | [Supabase Webhooks](#supabase-webhooks)  | [Amazon SQS](#amazon-sqs)   | [PGMQ](#pgmq)  |
+| ------------------- | ------------------------ | ----------------- | ---------------- | ------------------ | ------------ | -------------- |
+| Trigger guarantees  | Transactional            | Transactional     | Transactional    | Transactional      | N/A          | Transactional  |
+| Processing guarantees | Exactly-once             | Exactly-once      | At-most-once     | At-least-once      | Exactly-once | Exactly-once |
+| Order guarantees    | FIFO, strict by PK       | FIFO              | ❌ No            | ❌ No              | FIFO option  | ❌ No          |
+| Replay              | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        | ✅ Yes         |
+| Filtering           | ✅ Yes                   | ✅ Yes            | ✅ Yes           | ✅ PG triggers     | N/A          | ❌ No          |
+| Transformation      | ✅ LUA                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        | ❌ No          |
+| Backfills           | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | N/A          | N/A            |
+| Interface           | HTTP pull<br />HTTP push | plpgsql           | Postgres client  | HTTP push          | HTTP pull    | SQL functions  |
+| Observability       | Sequin console           | PG logging\*      | PG logging\*     | Supabase dashboard | AWS console  | PG logging\*   |
+| Performance         | WAL, minimal overhead    | Serial ops / row^ | Minimal overhead | Serial ops / row^  | N/A          | PG table limits|
 
 <sub>\* **PG logging:** You can configure logging in your database, but nothing is built in. Generally hard to see the state of any given side-effect.</sub>
 
@@ -138,6 +138,17 @@ Amazon SQS is a simple queue with an HTTP interface. It can be configured to pro
 
 Sequin provides this same functionality with a transactional enqueue guarantee. Sequin also provide an HTTP push interface to enable easy integration with other services.
 
+</details>
+
+<details>
+
+<summary>PGMQ v Sequin</summary>
+
+### PGMQ
+
+PGMQ is a Postgres extension that provides a durable message queue with a SQL interface that mimics SQS methods. It offers exactly-once processing like SQS, but runs entirely in Postgres. You can add message persistence to PGMQ by archiving (instead of deleting) messages - giving you the ability to replay through the queue. However, PGMQ does not provide any order guarantees.
+
+Like PGMQ, Sequin leverages Postgres for persistence and to provide transactional enqueueing. Importantly, Sequin provides both change data captures and durable stream replay and backfill from existing tables in your database. Sequin comes with an HTTP pull and push interface, filtering, transformation, built in observability, and strict ordering guarantees.
 </details>
 
 ## Documentation

@@ -159,7 +159,7 @@
     }
   }
 
-  const pushEvent = (event, payload = {}, cb = (event?: any) => {}) => {
+  const pushEvent = (event, payload = {}, cb = (event: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
@@ -316,8 +316,8 @@
     // be in the middle of a redirect.
     clearFormStorage();
     pushEvent("form_submitted", { form }, (event) => {
-      // if the event was ok, no need to switch isCreatingConsumer back, they will be redirected
-      if (event?.ok !== true) {
+      // if the event was ok, we want to keep isCreatingConsumer=true while they are being redirected
+      if (event?.ok === false) {
         isCreatingConsumer = false;
         saveFormToStorage();
       }

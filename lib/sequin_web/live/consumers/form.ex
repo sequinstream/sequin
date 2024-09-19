@@ -127,6 +127,8 @@ defmodule SequinWeb.ConsumersLive.Form do
         create_consumer(socket, params)
       end
 
+    dbg()
+
     case res do
       {:ok, socket} ->
         {:reply, %{ok: true}, socket}

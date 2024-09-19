@@ -23,8 +23,6 @@
     TableRow,
   } from "$lib/components/ui/table";
   import { getColorFromName, formatNumberWithCommas } from "../utils";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import ShowHeader from "./ShowHeader.svelte";
   import HealthComponent from "../health/HealthComponent.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { concatenateUrl } from "../databases/utils";
@@ -37,29 +35,7 @@
   export let metrics;
   export let replica_identity;
 
-  function handleEdit() {
-    live.pushEventTo("#" + parent, "edit", {});
-  }
-
-  let showDeleteConfirmDialog = false;
-  let deleteConfirmDialogLoading = false;
   let refreshReplicaWarningLoading = false;
-
-  function handleDelete() {
-    showDeleteConfirmDialog = true;
-  }
-
-  function confirmDelete() {
-    deleteConfirmDialogLoading = true;
-    live.pushEventTo("#" + parent, "delete", {}, () => {
-      showDeleteConfirmDialog = false;
-      deleteConfirmDialogLoading = false;
-    });
-  }
-
-  function cancelDelete() {
-    showDeleteConfirmDialog = false;
-  }
 
   function isWebhookSiteUrl(url: string): boolean {
     return url.startsWith("https://webhook.site/");
@@ -76,10 +52,9 @@
   );
 </script>
 
-<div class="min-h-screen font-sans bg-white">
-  <ShowHeader {consumer} onEdit={handleEdit} onDelete={handleDelete} />
-
-  <div class="container mx-auto px-4 py-8">
+<div class="flex flex-col flex-1">
+  <!-- Content container with overflow handling -->
+  <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
       <HealthComponent health={consumer.health} />
       <Card>
@@ -283,32 +258,6 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">View Live Trace</h2>
-            <a
-              href="/trace?consumer={consumer.id}"
-              class="inline-block"
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                class="text-black hover:text-gray-700"
-              >
-                View Live Trace
-                <ArrowUpRight class="h-4 w-4 ml-2" />
-              </Button>
-            </a>
-          </div>
-          <p class="text-sm text-gray-500">
-            Monitor real-time consumer activity and message flow.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
             <div class="flex space-x-2">
               <a
@@ -413,27 +362,3 @@
     </div>
   </div>
 </div>
-
-<Dialog.Root bind:open={showDeleteConfirmDialog}>
-  <Dialog.Content>
-    <Dialog.Header>
-      <Dialog.Title>Are you sure you want to delete this consumer?</Dialog.Title
-      >
-      <Dialog.Description>This action cannot be undone.</Dialog.Description>
-    </Dialog.Header>
-    <Dialog.Footer>
-      <Button variant="outline" on:click={cancelDelete}>Cancel</Button>
-      <Button
-        variant="destructive"
-        on:click={confirmDelete}
-        disabled={deleteConfirmDialogLoading}
-      >
-        {#if deleteConfirmDialogLoading}
-          Deleting...
-        {:else}
-          Delete
-        {/if}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>

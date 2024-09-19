@@ -8,8 +8,10 @@
     SquareStack,
     RefreshCw,
     XCircle,
+    ExternalLink,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
+  import * as Tooltip from "$lib/components/ui/tooltip";
   import { Card, CardContent } from "$lib/components/ui/card";
   import {
     Table,
@@ -21,8 +23,6 @@
   } from "$lib/components/ui/table";
   import { getColorFromName, formatNumberWithCommas } from "../utils";
   import * as Dialog from "$lib/components/ui/dialog";
-  import ShowHeader from "./ShowHeader.svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
   import HealthComponent from "../health/HealthComponent.svelte";
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
   import { Badge } from "$lib/components/ui/badge";
@@ -37,35 +37,27 @@
   export let api_token;
   export let replica_identity;
 
-  function handleEdit() {
-    live.pushEventTo("#" + parent, "edit", {});
-  }
-
-  let showDeleteConfirmDialog = false;
-  let deleteConfirmDialogLoading = false;
+  // Remove functions and variables related to header
   let refreshReplicaWarningLoading = false;
 
-  function handleDelete() {
-    showDeleteConfirmDialog = true;
-  }
-
-  function confirmDelete() {
-    deleteConfirmDialogLoading = true;
-    live.pushEventTo("#" + parent, "delete", {}, () => {
-      showDeleteConfirmDialog = false;
-      deleteConfirmDialogLoading = false;
+  function handleRefreshReplicaWarning() {
+    refreshReplicaWarningLoading = true;
+    live.pushEventTo("#" + parent, "refresh_replica_warning", {}, () => {
+      refreshReplicaWarningLoading = false;
     });
   }
 
-  function cancelDelete() {
-    showDeleteConfirmDialog = false;
+  function handleDismissReplicaWarning() {
+    consumer.replica_warning_dismissed = true;
+    live.pushEventTo("#" + parent, "dismiss_replica_warning", {});
   }
 </script>
 
-<div class="min-h-screen font-sans bg-white">
-  <ShowHeader {consumer} onEdit={handleEdit} onDelete={handleDelete} />
-
-  <div class="container mx-auto px-4 py-8">
+<!-- Wrap the content in a flex column that fills available space -->
+<div class="flex flex-col flex-1">
+  <!-- Content container with overflow handling -->
+  <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
+    <!-- Main content without the header -->
     <div class="grid gap-6 md:grid-cols-3 mb-8">
       <HealthComponent health={consumer.health} />
       <Card>
@@ -199,17 +191,7 @@
                 variant="outline"
                 loading={refreshReplicaWarningLoading}
                 size="sm"
-                on:click={() => {
-                  refreshReplicaWarningLoading = true;
-                  live.pushEventTo(
-                    "#" + parent,
-                    "refresh_replica_warning",
-                    {},
-                    () => {
-                      refreshReplicaWarningLoading = false;
-                    }
-                  );
-                }}
+                on:click={handleRefreshReplicaWarning}
               >
                 <RefreshCw class="h-4 w-4 mr-1" />
                 Refresh
@@ -218,10 +200,7 @@
               <Button
                 variant="outline"
                 size="sm"
-                on:click={() => {
-                  consumer.replica_warning_dismissed = true;
-                  live.pushEventTo("#" + parent, "dismiss_replica_warning", {});
-                }}
+                on:click={handleDismissReplicaWarning}
               >
                 <XCircle class="h-4 w-4 mr-1" />
                 Dismiss
@@ -249,27 +228,6 @@
 
       <Card>
         <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">View Live Trace</h2>
-            <a href="/trace?consumer={consumer.id}" class="inline-block">
-              <Button
-                variant="outline"
-                size="sm"
-                class="text-black hover:text-gray-700"
-              >
-                View Live Trace
-                <ArrowUpRight class="h-4 w-4 ml-2" />
-              </Button>
-            </a>
-          </div>
-          <p class="text-sm text-gray-500">
-            Monitor real-time consumer activity and message flow.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent class="p-6">
           <h2 class="text-lg font-semibold mb-4">
             Receive and Acknowledge Messages
           </h2>
@@ -281,7 +239,7 @@
                   {
                     name: "cURL",
                     value: `curl -X GET "${apiBaseUrl}/api/http_pull_consumers/${consumer.name}/receive" \\
-     -H "Authorization: Bearer {{secret}}"`,
+       -H "Authorization: Bearer {{secret}}"`,
                   },
                 ]}
                 secret={api_token.token}
@@ -294,9 +252,9 @@
                   {
                     name: "cURL",
                     value: `curl -X POST "${apiBaseUrl}/api/http_pull_consumers/${consumer.name}/ack" \\
-     -H "Authorization: Bearer {{secret}}" \\
-     -H "Content-Type: application/json" \\
-     -d '{"ack_ids": ["<ack_id>"]}'`,
+       -H "Authorization: Bearer {{secret}}" \\
+       -H "Content-Type: application/json" \\
+       -d '{"ack_ids": ["<ack_id>"]}'`,
                   },
                 ]}
                 secret={api_token.token}
@@ -371,26 +329,4 @@
   </div>
 </div>
 
-<Dialog.Root bind:open={showDeleteConfirmDialog}>
-  <Dialog.Content>
-    <Dialog.Header>
-      <Dialog.Title>Are you sure you want to delete this consumer?</Dialog.Title
-      >
-      <Dialog.Description>This action cannot be undone.</Dialog.Description>
-    </Dialog.Header>
-    <Dialog.Footer>
-      <Button variant="outline" on:click={cancelDelete}>Cancel</Button>
-      <Button
-        variant="destructive"
-        on:click={confirmDelete}
-        disabled={deleteConfirmDialogLoading}
-      >
-        {#if deleteConfirmDialogLoading}
-          Deleting...
-        {:else}
-          Delete
-        {/if}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
+<!-- Remove the delete confirmation dialog if it's now handled elsewhere -->

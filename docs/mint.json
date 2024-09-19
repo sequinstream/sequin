@@ -72,6 +72,10 @@
       ]
     },
     {
+      "group": "Guides",
+      "pages": ["guides/inngest"]
+    },
+    {
       "group": "API",
       "pages": [
         "management-api/introduction",

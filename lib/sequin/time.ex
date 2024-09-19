@@ -75,7 +75,13 @@ defmodule Sequin.Time do
   """
   @spec exponential_backoff(non_neg_integer(), non_neg_integer(), non_neg_integer()) :: non_neg_integer()
   def exponential_backoff(base \\ :timer.seconds(1), count \\ 0, max \\ :timer.minutes(3)) do
-    backoff = if count <= 1, do: base, else: base * :math.pow(2, count - 1)
-    trunc(min(backoff, max))
+    max_count = trunc(:math.log2(max / base) + 1)
+
+    if count >= max_count do
+      max
+    else
+      backoff = if count <= 1, do: base, else: base * :math.pow(2, count - 1)
+      trunc(backoff)
+    end
   end
 end

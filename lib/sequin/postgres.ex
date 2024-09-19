@@ -221,11 +221,14 @@ defmodule Sequin.Postgres do
   end
 
   def check_replication_permissions(conn) do
-    query =
-      "select pg_is_in_recovery(), current_setting('max_replication_slots')::int > 0"
+    query = """
+    select pg_is_in_recovery(),
+           current_setting('max_replication_slots')::int > 0,
+           current_setting('wal_level') = 'logical'
+    """
 
     case query(conn, query) do
-      {:ok, %{rows: [[is_in_recovery, has_replication_slots]]}} ->
+      {:ok, %{rows: [[is_in_recovery, has_replication_slots, has_logical_wal_level]]}} ->
         cond do
           is_in_recovery ->
             {:error, Error.validation(summary: "Database is in recovery mode and cannot be used for replication")}
@@ -233,12 +236,23 @@ defmodule Sequin.Postgres do
           not has_replication_slots ->
             {:error, Error.validation(summary: "Database does not have replication slots enabled")}
 
+          not has_logical_wal_level ->
+            {:error,
+             Error.validation(
+               summary:
+                 "Database wal_level is not set to 'logical'. If you recently turned this setting on, it's possible you still need to restart your server."
+             )}
+
           true ->
             :ok
         end
 
       {:error, %Postgrex.Error{} = error} ->
-        {:error, ValidationError.from_postgrex("Failed to check replication permissions: ", error)}
+        {:error,
+         ValidationError.from_postgrex(
+           "Failed to check replication permissions: ",
+           error
+         )}
     end
   end
 

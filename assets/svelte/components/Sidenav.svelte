@@ -23,13 +23,7 @@
     { path: "/consumers", text: "Consumers", icon: Radio },
     { path: "/databases", text: "Databases", icon: Database },
     { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
-    {
-      header: "Monitor",
-      items: [
-        { path: "/trace", text: "Trace", icon: Activity },
-        { path: "/outbox", text: "Outbox", icon: Inbox },
-      ],
-    },
+    { path: "/trace", text: "Trace", icon: Activity },
   ];
 
   function navLink(path: string) {
@@ -78,58 +72,21 @@
   <div class="flex grow flex-col justify-between">
     <div class="text-basis mx-4 mt-5 flex h-full flex-col">
       {#each navItems as item}
-        {#if item.header}
+        <a href={item.path} data-phx-link="redirect" data-phx-link-state="push">
           <div
-            class="mt-4 mb-2 text-xs font-semibold text-muted {$isNavCollapsed
-              ? 'hidden'
-              : ''}"
+            class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+              item.path
+            )}"
           >
-            {item.header}
+            <svelte:component
+              this={item.icon}
+              class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
+            />
+            {#if !$isNavCollapsed}
+              <span class="text-sm leading-tight truncate">{item.text}</span>
+            {/if}
           </div>
-          {#each item.items as subItem}
-            <a
-              href={subItem.path}
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <div
-                class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-                  subItem.path
-                )}"
-              >
-                <svelte:component
-                  this={subItem.icon}
-                  class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
-                />
-                {#if !$isNavCollapsed}
-                  <span class="text-sm leading-tight truncate"
-                    >{subItem.text}</span
-                  >
-                {/if}
-              </div>
-            </a>
-          {/each}
-        {:else}
-          <a
-            href={item.path}
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <div
-              class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-                item.path
-              )}"
-            >
-              <svelte:component
-                this={item.icon}
-                class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
-              />
-              {#if !$isNavCollapsed}
-                <span class="text-sm leading-tight truncate">{item.text}</span>
-              {/if}
-            </div>
-          </a>
-        {/if}
+        </a>
       {/each}
     </div>
 

@@ -5,6 +5,8 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.ApiTokens
   alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases
@@ -12,6 +14,9 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Metrics
   alias Sequin.Repo
   alias SequinWeb.ConsumersLive.Form
+
+  # For message management
+  @page_size 25
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -34,17 +39,27 @@ defmodule SequinWeb.ConsumersLive.Show do
     if connected?(socket) do
       Process.send_after(self(), :update_health, 1000)
       Process.send_after(self(), :update_metrics, 1000)
+      # Start message updates
+      Process.send_after(self(), :update_messages, 100)
     end
 
     api_base_url = Application.get_env(:sequin, :api_base_url, SequinWeb.Endpoint.url())
 
-    {:ok,
-     socket
-     |> assign(:consumer, consumer)
-     |> assign(:api_token, api_token)
-     |> assign(:api_base_url, api_base_url)
-     |> assign_replica_identity()
-     |> assign_metrics()}
+    # Initialize message-related assigns
+    socket =
+      socket
+      |> assign(:consumer, consumer)
+      |> assign(:api_token, api_token)
+      |> assign(:api_base_url, api_base_url)
+      |> assign_replica_identity()
+      |> assign_metrics()
+      |> assign(:paused, false)
+      |> assign(:page, 0)
+      |> assign(:page_size, @page_size)
+      |> assign(:total_count, 0)
+      |> load_consumer_messages()
+
+    {:ok, socket}
   end
 
   @impl Phoenix.LiveView
@@ -60,46 +75,82 @@ defmodule SequinWeb.ConsumersLive.Show do
     assign(socket, :page_title, "Edit Consumer")
   end
 
+  defp apply_action(socket, :messages, _params) do
+    assign(socket, :page_title, "Messages")
+  end
+
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div id="consumer-show">
-      <%= case {@live_action, @consumer} do %>
-        <% {:edit, _consumer} -> %>
-          <.live_component
-            module={Form}
-            id="edit-consumer"
-            consumer={@consumer}
-            on_finish={&handle_edit_finish/1}
-            current_user={@current_user}
-          />
-        <% {:show, %HttpPushConsumer{}} -> %>
-          <.svelte
-            name="consumers/ShowHttpPush"
-            props={
-              %{
-                consumer: encode_consumer(@consumer),
-                replica_identity: @replica_identity,
-                parent: "consumer-show",
-                metrics: @metrics
+    <!-- Use Flexbox to arrange header and content vertically -->
+    <div id="consumer-show" class="flex flex-col">
+      <!-- The header component -->
+      <.svelte
+        name="consumers/ShowHeader"
+        props={
+          %{
+            consumer: encode_consumer(@consumer),
+            parent: "consumer-show",
+            live_action: @live_action
+          }
+        }
+      />
+      <!-- Main content area that fills the remaining space -->
+      <div class="flex-1 overflow-auto">
+        <%= case {@live_action, @consumer} do %>
+          <% {:edit, _consumer} -> %>
+            <!-- Edit component -->
+            <.live_component
+              module={Form}
+              id="edit-consumer"
+              consumer={@consumer}
+              on_finish={&handle_edit_finish/1}
+              current_user={@current_user}
+            />
+          <% {:show, %HttpPushConsumer{}} -> %>
+            <!-- ShowHttpPush component -->
+            <.svelte
+              name="consumers/ShowHttpPush"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  replica_identity: @replica_identity,
+                  parent: "consumer-show",
+                  metrics: @metrics
+                }
               }
-            }
-          />
-        <% {:show, %HttpPullConsumer{}} -> %>
-          <.svelte
-            name="consumers/ShowHttpPull"
-            props={
-              %{
-                consumer: encode_consumer(@consumer),
-                replica_identity: @replica_identity,
-                parent: "consumer-show",
-                metrics: @metrics,
-                apiBaseUrl: @api_base_url,
-                api_token: encode_api_token(@api_token)
+            />
+          <% {:show, %HttpPullConsumer{}} -> %>
+            <!-- ShowHttpPull component -->
+            <.svelte
+              name="consumers/ShowHttpPull"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  replica_identity: @replica_identity,
+                  parent: "consumer-show",
+                  metrics: @metrics,
+                  apiBaseUrl: @api_base_url,
+                  api_token: encode_api_token(@api_token)
+                }
               }
-            }
-          />
-      <% end %>
+            />
+          <% {:messages, _consumer} -> %>
+            <!-- ShowMessages component -->
+            <.svelte
+              name="consumers/ShowMessages"
+              props={
+                %{
+                  consumer: encode_consumer(@consumer),
+                  messages: encode_messages(@messages),
+                  totalCount: @total_count,
+                  pageSize: @page_size,
+                  paused: @paused
+                }
+              }
+            />
+        <% end %>
+      </div>
     </div>
     """
   end
@@ -109,6 +160,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply, push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}/edit")}
   end
 
+  @impl Phoenix.LiveView
   def handle_event("delete", _params, socket) do
     case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
       {:ok, _deleted_consumer} ->
@@ -134,6 +186,33 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   def handle_event("refresh_replica_warning", _params, socket) do
     {:noreply, assign_replica_identity(socket)}
+  end
+
+  def handle_event("pause_updates", _params, socket) do
+    {:noreply, assign(socket, paused: true)}
+  end
+
+  def handle_event("resume_updates", _params, socket) do
+    {:noreply, assign(socket, paused: false)}
+  end
+
+  def handle_event("change_page", %{"page" => page}, socket) do
+    {:noreply,
+     socket
+     |> assign(page: page)
+     |> load_consumer_messages()}
+  end
+
+  def handle_event("fetch_message_data", %{"message_id" => message_id}, socket) do
+    message = Enum.find(socket.assigns.messages, &(&1.id == message_id))
+
+    case fetch_message_data(message, socket.assigns.consumer) do
+      {:ok, data} ->
+        {:reply, %{data: data}, socket}
+
+      {:error, reason} ->
+        {:reply, %{error: reason}, socket}
+    end
   end
 
   defp handle_edit_finish(updated_consumer) do
@@ -162,9 +241,23 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  @impl Phoenix.LiveView
   def handle_info(:update_metrics, socket) do
     Process.send_after(self(), :update_metrics, 1000)
     {:noreply, assign_metrics(socket)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:update_messages, %{assigns: %{paused: true}} = socket) do
+    schedule_update()
+    {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:update_messages, socket) do
+    socket = load_consumer_messages(socket)
+    schedule_update()
+    {:noreply, socket}
   end
 
   defp assign_replica_identity(socket) do
@@ -286,5 +379,106 @@ defmodule SequinWeb.ConsumersLive.Show do
       name: api_token.name,
       token: api_token.token
     }
+  end
+
+  # Function to load messages for the consumer
+  defp load_consumer_messages(socket) do
+    consumer = socket.assigns.consumer
+    page = socket.assigns.page
+
+    params = [
+      order_by: {:asc, :id},
+      limit: @page_size,
+      offset: page * @page_size
+    ]
+
+    messages =
+      case consumer do
+        %{message_kind: :record} ->
+          Consumers.list_consumer_records_for_consumer(consumer.id, params)
+
+        %{message_kind: :event} ->
+          Consumers.list_consumer_events_for_consumer(consumer.id, params)
+      end
+
+    socket
+    |> assign(:messages, messages)
+    |> assign(:total_count, Consumers.fast_count_messages_for_consumer(consumer))
+  end
+
+  # Function to fetch message data
+  defp fetch_message_data(nil, _consumer) do
+    {:error,
+     """
+     Message not found.
+
+     The message may have been acknowledged and removed from the outbox.
+     """}
+  end
+
+  defp fetch_message_data(%ConsumerRecord{} = record, %{message_kind: :record} = consumer) do
+    case Consumers.put_source_data(consumer, [record]) do
+      {:ok, [record]} ->
+        {:ok, record.data}
+
+      {:error, error} when is_exception(error) ->
+        {:error, Exception.message(error)}
+
+      {:error, error} when is_atom(error) ->
+        {:error, Atom.to_string(error)}
+
+      {:error, error} when is_binary(error) ->
+        {:error, error}
+
+      {:error, error} ->
+        {:error, inspect(error)}
+    end
+  end
+
+  defp fetch_message_data(%ConsumerEvent{} = event, %{message_kind: :event}) do
+    {:ok, event.data}
+  end
+
+  # Function to schedule periodic message updates
+  defp schedule_update do
+    # Adjust the interval as needed
+    Process.send_after(self(), :update_messages, 1000)
+  end
+
+  # Function to encode messages for the Svelte component
+  defp encode_messages(messages) do
+    Enum.map(messages, fn
+      %ConsumerRecord{} = message ->
+        %{
+          id: message.id,
+          type: "record",
+          consumer_id: message.consumer_id,
+          commit_lsn: message.commit_lsn,
+          ack_id: message.ack_id,
+          deliver_count: message.deliver_count,
+          last_delivered_at: message.last_delivered_at,
+          record_pks: message.record_pks,
+          table_oid: message.table_oid,
+          not_visible_until: message.not_visible_until,
+          inserted_at: message.inserted_at,
+          data: message.data
+        }
+
+      %ConsumerEvent{} = message ->
+        %{
+          id: message.id,
+          type: "event",
+          consumer_id: message.consumer_id,
+          commit_lsn: message.commit_lsn,
+          ack_id: message.ack_id,
+          deliver_count: message.deliver_count,
+          last_delivered_at: message.last_delivered_at,
+          record_pks: message.record_pks,
+          table_oid: message.table_oid,
+          not_visible_until: message.not_visible_until,
+          inserted_at: message.inserted_at,
+          data: message.data
+        }
+    end)
   end
 end

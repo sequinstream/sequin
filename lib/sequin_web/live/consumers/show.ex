@@ -215,6 +215,17 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do
+    {:noreply, socket}
+  end
+
+  def handle_event("update_page_size", %{"page_size" => page_size}, socket) do
+    {:noreply,
+     socket
+     |> assign(:page_size, page_size)
+     |> load_consumer_messages()}
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end
@@ -385,11 +396,12 @@ defmodule SequinWeb.ConsumersLive.Show do
   defp load_consumer_messages(socket) do
     consumer = socket.assigns.consumer
     page = socket.assigns.page
+    page_size = socket.assigns.page_size
 
     params = [
       order_by: {:asc, :id},
-      limit: @page_size,
-      offset: page * @page_size
+      limit: page_size,
+      offset: page * page_size
     ]
 
     messages =

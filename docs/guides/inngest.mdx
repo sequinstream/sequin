@@ -138,7 +138,7 @@ Now, create a webhook to trigger the `sendWelcomeEmail` function:
       }
     }
     ```
-    You need to transform this payload into an Inngest event that triggers the `sendWelcomeEmail` function. To do so, use a **Transfrom** to extract the the event name and data from the Sequin payload:
+    You need to transform this payload into an Inngest event that triggers the `sendWelcomeEmail` function. To do so, use a **Transform** to extract the the event name and data from the Sequin payload:
 
     ```ts
     function transform(evt, headers = {}, queryParams = {}) {
@@ -203,7 +203,7 @@ You'll now configure Sequin to capture every new user in your database and send 
       <img src="/images/guides/inngest/webhook_url.png" alt="Consumer Settings" />
     </Frame>
 
-    7. Click the **Create Consumer** button. Sequin will varify your database is set up properly and may give you another SQL command to run to ensure every new user is captured.
+    7. Click the **Create Consumer** button. Sequin will verify your database is set up properly and may give you another SQL command to run to ensure every new user is captured.
     </Step>
 </Steps>
 

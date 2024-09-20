@@ -118,41 +118,70 @@ defmodule Sequin.Health do
   defp expected_check(%PostgresDatabase{}, check_id, status, error) when check_id in @postgres_checks do
     case check_id do
       :reachable ->
-        %Check{id: :reachable, name: "Database Reachable", status: status, error: error}
+        %Check{id: :reachable, name: "Database Reachable", status: status, error: error, created_at: DateTime.utc_now()}
 
       :replication_connected ->
-        %Check{id: :replication_connected, name: "Replication Connected", status: status, error: error}
+        %Check{
+          id: :replication_connected,
+          name: "Replication Connected",
+          status: status,
+          error: error,
+          created_at: DateTime.utc_now()
+        }
 
       :replication_messages ->
-        %Check{id: :replication_messages, name: "Replication Messages", status: status, error: error}
+        %Check{
+          id: :replication_messages,
+          name: "Replication Messages",
+          status: status,
+          error: error,
+          created_at: DateTime.utc_now()
+        }
     end
   end
 
   @http_endpoint_checks [:reachable]
   defp expected_check(%HttpEndpoint{}, check_id, status, error) when check_id in @http_endpoint_checks do
     case check_id do
-      :reachable -> %Check{id: :reachable, name: "Endpoint Reachable", status: status, error: error}
+      :reachable ->
+        %Check{id: :reachable, name: "Endpoint Reachable", status: status, error: error, created_at: DateTime.utc_now()}
     end
   end
 
   @http_push_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
   defp expected_check(%HttpPushConsumer{}, check_id, status, error) when check_id in @http_push_consumer_checks do
     case check_id do
-      :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
-      :ingestion -> %Check{id: :ingestion, name: "Ingest", status: status, error: error}
-      :receive -> %Check{id: :receive, name: "Produce", status: status, error: error}
-      :push -> %Check{id: :push, name: "Push", status: status, error: error}
-      :acknowledge -> %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error}
+      :filters ->
+        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :ingestion ->
+        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :receive ->
+        %Check{id: :receive, name: "Produce", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :push ->
+        %Check{id: :push, name: "Push", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :acknowledge ->
+        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
     end
   end
 
   @http_pull_consumer_checks [:filters, :ingestion, :receive, :acknowledge]
   defp expected_check(%HttpPullConsumer{}, check_id, status, error) when check_id in @http_pull_consumer_checks do
     case check_id do
-      :filters -> %Check{id: :filters, name: "Filters", status: status, error: error}
-      :ingestion -> %Check{id: :ingestion, name: "Ingest", status: status, error: error}
-      :receive -> %Check{id: :receive, name: "Pull", status: status, error: error}
-      :acknowledge -> %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error}
+      :filters ->
+        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :ingestion ->
+        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :receive ->
+        %Check{id: :receive, name: "Pull", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :acknowledge ->
+        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
     end
   end
 
@@ -338,15 +367,18 @@ defmodule Sequin.Health do
   """
   @spec to_external(t()) :: map()
   def to_external(%Health{} = health) do
+    {transformed_checks, updated_health} =
+      health.checks
+      |> Enum.reject(&(&1.status == :waiting))
+      |> Enum.map_reduce(health, &transform_check_for_external/2)
+
     %{
-      entity_kind: health.entity_kind,
-      entity_id: health.entity_id,
-      status: health.status,
-      name: health.name,
+      entity_kind: updated_health.entity_kind,
+      entity_id: updated_health.entity_id,
+      status: updated_health.status,
+      name: updated_health.name,
       checks:
-        health.checks
-        |> Enum.reject(&(&1.status == :waiting))
-        |> Enum.map(fn check ->
+        Enum.map(transformed_checks, fn check ->
           %{
             name: check.name,
             status: check.status,
@@ -355,5 +387,32 @@ defmodule Sequin.Health do
           }
         end)
     }
+  end
+
+  defp transform_check_for_external(
+         %Check{id: :replication_connected, status: :initializing} = check,
+         %Health{entity_kind: :postgres_database} = health
+       ) do
+    thirty_seconds_ago = DateTime.add(DateTime.utc_now(), -30 * 1000, :millisecond)
+
+    if DateTime.before?(check.created_at, thirty_seconds_ago) do
+      updated_check = %{check | status: :error, message: "Replication took too long to connect."}
+      updated_health = update_health_status(health, updated_check)
+      {updated_check, updated_health}
+    else
+      {check, health}
+    end
+  end
+
+  defp transform_check_for_external(check, health), do: {check, health}
+
+  defp update_health_status(health, updated_check) do
+    updated_checks =
+      Enum.map(health.checks, fn check ->
+        if check.id == updated_check.id, do: updated_check, else: check
+      end)
+
+    new_status = calculate_overall_status(updated_checks)
+    %{health | status: new_status, checks: updated_checks}
   end
 end

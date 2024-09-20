@@ -3,8 +3,10 @@ defmodule Sequin.HealthTest do
 
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ErrorFactory
   alias Sequin.Health
+  alias Sequin.Health.Check
 
   describe "initializes a new health" do
     test "initializes a new health" do
@@ -86,6 +88,27 @@ defmodule Sequin.HealthTest do
       assert external = Health.to_external(health)
       assert external.status == :error
       assert Enum.find(external.checks, &(not is_nil(&1.error)))
+    end
+
+    test ":postgres_database :replication_connected check is marked as erroring if it waiting for > 5 minutes" do
+      entity = DatabasesFactory.postgres_database(id: Factory.uuid())
+      assert {:ok, %Health{} = health} = Health.get(entity)
+
+      ten_minutes_ago = DateTime.add(DateTime.utc_now(), -300, :second)
+
+      health =
+        update_in(health.checks, fn checks ->
+          Enum.map(checks, fn
+            %Check{id: :replication_connected} = check ->
+              %{check | created_at: ten_minutes_ago}
+
+            %Check{} = check ->
+              check
+          end)
+        end)
+
+      assert external = Health.to_external(health)
+      assert external.status == :error
     end
   end
 end

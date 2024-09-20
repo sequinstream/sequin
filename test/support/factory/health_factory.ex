@@ -35,7 +35,8 @@ defmodule Sequin.Factory.HealthFactory do
         id: Factory.uuid(),
         name: Factory.word(),
         status: status,
-        error: maybe_error(status)
+        error: maybe_error(status),
+        created_at: Factory.utc_datetime_usec()
       },
       attrs
     )

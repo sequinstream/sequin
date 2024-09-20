@@ -13,6 +13,7 @@ defmodule Sequin.Health.Check do
     field :status, Sequin.Health.status(), enforce: true
     field :error, Error.t() | nil
     field :message, String.t() | nil
+    field :created_at, DateTime.t(), enforce: true
   end
 
   @spec from_json!(String.t()) :: t()
@@ -28,6 +29,9 @@ defmodule Sequin.Health.Check do
     |> JSON.decode_atom("id")
     |> JSON.decode_atom("status")
     |> JSON.decode_polymorphic("error")
+    # Backwards compatibility for old health check JSON which lacked a created_at field
+    |> JSON.decode_timestamp("created_at")
+    |> Map.put_new("created_at", DateTime.utc_now())
     |> JSON.struct(Check)
   end
 

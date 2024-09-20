@@ -48,7 +48,7 @@
   });
 </script>
 
-<div class="bg-white border-b">
+<div class="bg-white border-b header">
   <!-- Header content -->
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">

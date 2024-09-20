@@ -127,8 +127,6 @@ defmodule SequinWeb.ConsumersLive.Form do
         create_consumer(socket, params)
       end
 
-    dbg()
-
     case res do
       {:ok, socket} ->
         {:reply, %{ok: true}, socket}
@@ -142,7 +140,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   def handle_event("form_closed", _params, socket) do
     socket =
       if socket.assigns.consumer && socket.assigns.consumer.id do
-        push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
+        push_navigate(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
       else
         push_navigate(socket, to: ~p"/consumers")
       end

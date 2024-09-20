@@ -68,9 +68,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         message
 
       {:error, reason} ->
-        Health.update(consumer, :push, :error, reason)
+        Logger.warning("Failed to push message: #{inspect(reason)}")
 
-        Logger.error("Failed to push message: #{inspect(reason)}")
+        Health.update(consumer, :push, :error, reason)
         Broadway.Message.failed(message, reason)
     end
   end

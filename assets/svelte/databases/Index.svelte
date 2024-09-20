@@ -36,18 +36,12 @@
   </div>
 
   {#if databases.length === 0}
-    <div
-      class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
-    >
-      <div class="text-center py-12 w-1/2 mx-auto">
+    <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
+      <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No databases found</h2>
         <p class="text-gray-600 mb-6">
           Sequin connects to your database and detects every insert, update, and
-          delete using the WAL. You'll then send these changes to your
-          application by creating a consumer.
-        </p>
-        <p class="text-gray-600 mb-6">
-          Get started by connecting your first database.
+          delete using the WAL.
         </p>
         <a
           href="/databases/new"

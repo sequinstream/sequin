@@ -175,17 +175,15 @@
 
   {#if !hasConsumers}
     {#if !hasDatabases}
-      <div
-        class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
-      >
-        <div class="text-center py-12 w-1/2 mx-auto">
+      <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
+        <div class="text-center py-12 w-1/2 mx-auto my-auto">
           <h2 class="text-xl font-semibold mb-4">No consumers</h2>
           <p class="text-gray-600 mb-6">
             Consumers filter, transform, and send messages from a table in your
             database to your application or another service.
           </p>
           <p class="text-gray-600 mb-6">
-            You need to connect a databaseto Sequin before you can create a
+            You need to connect a database to Sequin before you can create a
             consumer.
           </p>
           <Button disabled={!hasDatabases}>Create consumer</Button>
@@ -193,10 +191,8 @@
       </div>
     {/if}
     {#if hasDatabases && !hasConsumers}
-      <div
-        class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
-      >
-        <div class="text-center py-12 w-1/2 mx-auto">
+      <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
+        <div class="text-center py-12 w-1/2 mx-auto my-auto">
           <h2 class="text-xl font-semibold mb-4">No consumers</h2>
           <p class="text-gray-600 mb-6">
             Consumers filter, transform, and send messages from a table in your

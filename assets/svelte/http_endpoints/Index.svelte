@@ -40,10 +40,8 @@
   </div>
 
   {#if httpEndpoints.length === 0}
-    <div
-      class="w-full h-[500px] rounded-lg border-2 border-dashed border-gray-300"
-    >
-      <div class="text-center py-12 w-1/2 mx-auto">
+    <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
+      <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No HTTP endpoints found</h2>
         <p class="text-gray-600 mb-6">
           Sequin can push changes from your database to HTTP endpoints in your

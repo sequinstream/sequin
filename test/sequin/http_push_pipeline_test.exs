@@ -3,6 +3,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -104,7 +105,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
   describe "messages flow from postgres to http end-to-end" do
     setup do
-      account = AccountsFactory.account()
+      account = AccountsFactory.account(id: Factory.uuid())
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
 
       database = DatabasesFactory.postgres_database(account_id: account.id)

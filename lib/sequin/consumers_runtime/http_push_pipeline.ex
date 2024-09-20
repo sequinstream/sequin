@@ -63,7 +63,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       :ok ->
         Health.update(consumer, :push, :healthy)
         Metrics.incr_http_endpoint_throughput(http_endpoint)
-        :ok
+
+        Sequin.Logs.log_for_consumer_message(
+          :info,
+          consumer.account_id,
+          consumer_event.replication_message_trace_id,
+          "Pushed message successfully"
+        )
 
         message
 
@@ -71,6 +77,14 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         Logger.warning("Failed to push message: #{inspect(reason)}")
 
         Health.update(consumer, :push, :error, reason)
+
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer_event.replication_message_trace_id,
+          "Failed to push message: #{Exception.message(reason)}"
+        )
+
         Broadway.Message.failed(message, reason)
     end
   end

@@ -28,6 +28,68 @@
   let messageDataError = null;
   let isLoadingMessageData = false;
 
+  let rowHeight = 0; // Will be calculated
+  let totalAvailableHeight = 0;
+
+  onMount(() => {
+    // Calculate row height after the component is mounted
+    const sampleRow = document.querySelector("tr.sample-row");
+    if (sampleRow) {
+      rowHeight = sampleRow.getBoundingClientRect().height;
+    }
+
+    // Calculate the available height
+    const updatePageSize = () => {
+      const headerElement = document.querySelector(".header");
+      const messagesHeaderElement = document.querySelector(".messages-header");
+      const messagesFooterElement = document.querySelector(".messages-footer");
+      let headerHeight = 0;
+      let messagesHeaderHeight = 0;
+      let messagesFooterHeight = 0;
+
+      if (headerElement) {
+        headerHeight = headerElement.getBoundingClientRect().height;
+      }
+
+      if (messagesHeaderElement) {
+        messagesHeaderHeight =
+          messagesHeaderElement.getBoundingClientRect().height;
+      }
+
+      if (messagesFooterElement) {
+        messagesFooterHeight =
+          messagesFooterElement.getBoundingClientRect().height;
+      }
+
+      totalAvailableHeight =
+        window.innerHeight -
+        headerHeight -
+        messagesHeaderHeight -
+        messagesFooterHeight -
+        200;
+
+      if (rowHeight > 0) {
+        const calculatedPageSize = Math.floor(totalAvailableHeight / rowHeight);
+        console.log("calculatedPageSize", calculatedPageSize);
+        if (calculatedPageSize !== pageSize) {
+          pageSize = calculatedPageSize;
+          // Send new pageSize to backend
+          live.pushEvent("update_page_size", { page_size: pageSize });
+        }
+      }
+    };
+
+    // Initial calculation
+    updatePageSize();
+
+    // Add event listener for window resize
+    window.addEventListener("resize", updatePageSize);
+
+    return () => {
+      window.removeEventListener("resize", updatePageSize);
+    };
+  });
+
   function changePage(newPage: number) {
     if (newPage >= 0 && newPage < Math.ceil(totalCount / pageSize)) {
       page = newPage;
@@ -103,18 +165,7 @@
     return count > 1;
   }
 
-  $: startIndex = page * pageSize + 1;
-  $: endIndex = Math.min((page + 1) * pageSize, totalCount);
-  $: totalPages = Math.ceil(totalCount / pageSize);
-
-  $: {
-    console.log("totalPages", totalPages);
-    console.log("page", page);
-    console.log("totalCount", totalCount);
-    console.log("pageSize", pageSize);
-    console.log("startIndex", startIndex);
-    console.log("endIndex", endIndex);
-  }
+  $: pageCount = Math.ceil(totalCount / pageSize);
 </script>
 
 <div class="flex flex-col flex-1">
@@ -138,7 +189,8 @@
         </h2>
       </div>
     {:else}
-      <div class="flex items-center justify-between mb-4">
+      <!-- Header Div -->
+      <div class="flex items-center justify-between mb-4 messages-header">
         <h1 class="text-2xl font-bold">Messages</h1>
         <div>
           <Button
@@ -200,6 +252,21 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
+          <tr
+            class="sample-row"
+            style="visibility: hidden; position: absolute;"
+          >
+            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+              sample
+            </td>
+            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+              sample
+            </td>
+            <td class="px-2 py-1 whitespace-nowrap text-2xs">sample</td>
+            <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+              sample
+            </td>
+          </tr>
           {#each messages as message}
             <tr
               class="relative hover:bg-gray-50 cursor-pointer"
@@ -241,7 +308,8 @@
           {/each}
         </tbody>
       </table>
-      <div class="flex items-center justify-between mt-4">
+      <!-- Pagination Div -->
+      <div class="flex items-center justify-between mt-4 messages-footer">
         <div class="flex space-x-2">
           <Button
             variant="outline"
@@ -257,7 +325,7 @@
             variant="outline"
             size="sm"
             on:click={() => changePage(page + 1)}
-            disabled={endIndex >= totalCount}
+            disabled={page >= pageCount - 1}
             class="flex items-center"
           >
             <span>Next</span>
@@ -265,7 +333,7 @@
           </Button>
         </div>
         <div class="text-sm text-gray-600">
-          Showing {startIndex} – {endIndex} of {totalCount}
+          Page {page + 1} of {pageCount}
         </div>
       </div>
     {/if}

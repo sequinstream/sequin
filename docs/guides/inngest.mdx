@@ -6,13 +6,23 @@ icon: "hexagon-check"
 iconType: "solid"
 ---
 
-<Frame>
-  <img src="/images/guides/inngest/send-with-sequin.svg" alt="Inngest Overview" />
-</Frame>
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/_sxn2W6zFNY"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen
+></iframe>
 
 [Inngest](https://www.inngest.com/) is a serverless jobs queue. You write and test functions locally in your project, and then deploy them to Inngest where they reliably invoke the functions you write. Inngest handles the infrastructure, observability, and execution.
 
-Often, you want to trigger Inngest events when a record in your database is created, updated, or deleted. For instance, you might want to send a welcome email to a user as soon as they are inserted into the database.
+Often, you want to trigger Inngest events when a record in your database is created, updated, or deleted. For instance, you might want to send a welcome email to a user as soon as they are inserted into the database:
+
+<Frame>
+  <img src="/images/guides/inngest/send-with-sequin.svg" alt="Inngest Overview" />
+</Frame>
 
 In this guide, you'll learn how to use Sequin to trigger Inngest events from database changes.
 

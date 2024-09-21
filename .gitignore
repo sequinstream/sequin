@@ -53,3 +53,5 @@ docker-compose.override.yaml
 /priv/svelte/
 
 assets/node_modules
+
+priv/logs/consumer_messages.log

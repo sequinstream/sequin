@@ -215,6 +215,18 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("fetch_message_logs", %{"trace_id" => trace_id}, socket) do
+    account_id = current_account_id(socket)
+
+    case Sequin.Logs.get_logs_for_consumer_message(account_id, trace_id) do
+      {:ok, logs} ->
+        {:reply, %{logs: logs}, socket}
+
+      {:error, reason} ->
+        {:reply, %{error: reason}, socket}
+    end
+  end
+
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do
     {:noreply, socket}
   end
@@ -473,7 +485,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           table_oid: message.table_oid,
           not_visible_until: message.not_visible_until,
           inserted_at: message.inserted_at,
-          data: message.data
+          data: message.data,
+          trace_id: message.replication_message_trace_id
         }
 
       %ConsumerEvent{} = message ->
@@ -489,7 +502,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           table_oid: message.table_oid,
           not_visible_until: message.not_visible_until,
           inserted_at: message.inserted_at,
-          data: message.data
+          data: message.data,
+          trace_id: message.replication_message_trace_id
         }
     end)
   end

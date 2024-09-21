@@ -5,7 +5,39 @@ defmodule Sequin.Logs do
 
   require Logger
 
+  defp env, do: Application.fetch_env!(:sequin, :env)
+
   def get_logs_for_consumer_message(account_id, trace_id) do
+    if env() in [:dev, :test] do
+      get_logs_from_file(account_id, trace_id)
+    else
+      get_logs_from_datadog(account_id, trace_id)
+    end
+  end
+
+  defp get_logs_from_file(account_id, trace_id) do
+    log_file_path()
+    |> File.stream!()
+    |> Stream.map(&String.trim/1)
+    |> Stream.filter(&(&1 != ""))
+    |> Stream.map(&Jason.decode!/1)
+    |> Stream.filter(fn log ->
+      log["account_id"] == account_id and log["trace_id"] == trace_id and log["console_logs"] == "consumer_message"
+    end)
+    |> Enum.map(fn log ->
+      {:ok, timestamp, 0} = DateTime.from_iso8601(log["timestamp"])
+
+      %Log{
+        timestamp: timestamp,
+        status: log["level"],
+        account_id: log["account_id"],
+        message: log["message"]
+      }
+    end)
+    |> then(&{:ok, &1})
+  end
+
+  defp get_logs_from_datadog(account_id, trace_id) do
     case search_logs(query: "* @account_id:#{account_id} @trace_id:#{trace_id} @console_logs:consumer_message") do
       {:ok, %{"data" => data}} ->
         logs =
@@ -31,6 +63,33 @@ defmodule Sequin.Logs do
   def log_for_consumer_message(_, _, _, nil), do: raise(ArgumentError, "Invalid message: nil")
 
   def log_for_consumer_message(level, account_id, trace_id, message) do
+    if env() in [:dev, :test] do
+      log_to_file(level, account_id, trace_id, message)
+    else
+      log_to_logger(level, account_id, trace_id, message)
+    end
+  end
+
+  defp log_to_file(level, account_id, trace_id, message) do
+    log_entry = %{
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
+      level: to_string(level),
+      account_id: account_id,
+      trace_id: trace_id,
+      message: message,
+      console_logs: "consumer_message"
+    }
+
+    log_line = Jason.encode!(log_entry) <> "\n"
+    File.mkdir_p!(Path.dirname(log_file_path()))
+    File.write!(log_file_path(), log_line, [:append])
+  end
+
+  defp log_file_path do
+    Path.join(:code.priv_dir(:sequin), "logs/consumer_messages.log")
+  end
+
+  defp log_to_logger(level, account_id, trace_id, message) do
     metadata = [account_id: account_id, trace_id: trace_id, console_logs: :consumer_message]
 
     case level do
@@ -41,6 +100,15 @@ defmodule Sequin.Logs do
   end
 
   def search_logs(params \\ []) do
+    if env() in [:dev, :test] do
+      # Implement file-based log search if needed
+      {:error, "Log search not implemented for file-based logs."}
+    else
+      search_logs_in_datadog(params)
+    end
+  end
+
+  defp search_logs_in_datadog(params) do
     query = Keyword.get(params, :query, "*")
 
     # Construct the API request body
@@ -73,13 +141,10 @@ defmodule Sequin.Logs do
     response.body
   end
 
-  # defp api_key, do: Application.fetch_env!(:sequin, :datadog)[:api_key]
-  # defp app_key, do: Application.fetch_env!(:sequin, :datadog)[:app_key]
-  defp api_key, do: "9b0b1923c0583dcf52f06f6c20576555"
-  defp app_key, do: "0c462828725f0cf3176579c3252d9fb98d4e139d"
+  defp api_key, do: Application.fetch_env!(:sequin, :datadog)[:api_key]
+  defp app_key, do: Application.fetch_env!(:sequin, :datadog)[:app_key]
 
-  # defp default_query do
-  #   Application.fetch_env!(:sequin, :datadog)[:default_query] || ""
-  # end
-  defp default_query, do: ""
+  defp default_query do
+    Application.fetch_env!(:sequin, :datadog)[:default_query] || ""
+  end
 end

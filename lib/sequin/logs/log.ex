@@ -2,6 +2,7 @@ defmodule Sequin.Logs.Log do
   @moduledoc false
   alias __MODULE__
 
+  @derive Jason.Encoder
   defstruct [
     :account_id,
     :timestamp,

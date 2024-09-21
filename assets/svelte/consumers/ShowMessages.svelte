@@ -9,6 +9,7 @@
     X,
     Play,
     Pause,
+    RefreshCw,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
 
@@ -27,6 +28,12 @@
   let messageData = null;
   let messageDataError = null;
   let isLoadingMessageData = false;
+
+  // New state variables for logs
+  let messageLogs = null;
+  let isLoadingMessageLogs = false;
+  let messageLogsError = null;
+  let isRefreshingLogs = false;
 
   let rowHeight = 0; // Will be calculated
   let totalAvailableHeight = 0;
@@ -110,12 +117,35 @@
     }
   }
 
+  // Function to map log status to color
+  function getLogLevelColor(status) {
+    switch (status?.toLowerCase()) {
+      case "error":
+        return "bg-red-500";
+      case "warn":
+      case "warning":
+        return "bg-yellow-500";
+      case "info":
+        return "bg-blue-500";
+      case "debug":
+        return "bg-gray-500";
+      default:
+        return "bg-gray-400";
+    }
+  }
+
   function openDrawer(message) {
     selectedMessage = message;
     isDrawerOpen = true;
     messageData = null;
     messageDataError = null;
     isLoadingMessageData = true;
+
+    // Initialize log variables
+    messageLogs = null;
+    isLoadingMessageLogs = true;
+    messageLogsError = null;
+
     live.pushEvent(
       "fetch_message_data",
       { message_id: message.id },
@@ -128,6 +158,19 @@
         }
       }
     );
+
+    live.pushEvent(
+      "fetch_message_logs",
+      { trace_id: message.trace_id },
+      (reply) => {
+        isLoadingMessageLogs = false;
+        if (reply.error) {
+          messageLogsError = reply.error;
+        } else {
+          messageLogs = reply.logs;
+        }
+      }
+    );
   }
 
   function closeDrawer() {
@@ -135,6 +178,11 @@
     selectedMessage = null;
     messageData = null;
     messageDataError = null;
+
+    // Reset log variables
+    messageLogs = null;
+    isLoadingMessageLogs = false;
+    messageLogsError = null;
   }
 
   function formatDate(dateString: string) {
@@ -163,6 +211,26 @@
 
   function isHighDeliveryCount(count: number) {
     return count > 1;
+  }
+
+  function refreshLogs() {
+    isRefreshingLogs = true;
+    isLoadingMessageLogs = true;
+    messageLogsError = null;
+
+    live.pushEvent(
+      "fetch_message_logs",
+      { trace_id: selectedMessage.trace_id },
+      (reply) => {
+        isLoadingMessageLogs = false;
+        isRefreshingLogs = false;
+        if (reply.error) {
+          messageLogsError = reply.error;
+        } else {
+          messageLogs = reply.logs;
+        }
+      }
+    );
   }
 
   $: pageCount = Math.ceil(totalCount / pageSize);
@@ -496,6 +564,69 @@
                       </a>
                     </div>
                   </div>
+
+                  <!-- Logs Section -->
+                  <div>
+                    <div class="flex justify-between items-center mb-4">
+                      <h3 class="text-lg font-semibold">Logs</h3>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        on:click={refreshLogs}
+                        disabled={isRefreshingLogs}
+                      >
+                        {#if isRefreshingLogs}
+                          <Loader2 class="h-4 w-4 mr-2 animate-spin" />
+                        {:else}
+                          <RefreshCw class="h-4 w-4 mr-2" />
+                        {/if}
+                        Refresh
+                      </Button>
+                    </div>
+                    {#if messageLogsError}
+                      <div
+                        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+                        role="alert"
+                      >
+                        <strong class="font-bold">Error:</strong>
+                        <span class="block sm:inline">{messageLogsError}</span>
+                      </div>
+                    {:else if messageLogs && messageLogs.length > 0}
+                      <div class="overflow-x-auto">
+                        <table class="w-full">
+                          <tbody>
+                            {#each messageLogs as log}
+                              <tr>
+                                <td class="py-1" colspan="3">
+                                  <div
+                                    class="flex border border-gray-200 rounded overflow-hidden"
+                                  >
+                                    <div
+                                      class={`w-1 ${getLogLevelColor(log.status)}`}
+                                    ></div>
+                                    <div class="flex-grow p-2">
+                                      <div class="text-xs text-gray-500 mb-1">
+                                        {new Date(
+                                          log.timestamp
+                                        ).toLocaleString()}
+                                      </div>
+                                      <div class="text-sm text-gray-900">
+                                        {log.message}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      </div>
+                    {:else}
+                      <div class="text-sm text-gray-500">
+                        No logs available for this message.
+                      </div>
+                    {/if}
+                  </div>
                 </div>
               {/if}
             </div>
@@ -538,4 +669,35 @@
     background-color: #cbd5e0;
     border-radius: 4px;
   }
+
+  .overflow-x-auto {
+    overflow-x: auto;
+  }
+
+  td {
+    vertical-align: top;
+  }
+
+  .w-1 {
+    width: 4px;
+  }
+
+  .text-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .text-gray-500 {
+    color: #6b7280;
+  }
+
+  .text-gray-900 {
+    color: #111827;
+  }
+
+  tr + tr {
+    margin-top: 0.5rem;
+  }
+
+  /* You can adjust or add more styles as needed */
 </style>

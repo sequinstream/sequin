@@ -7,6 +7,7 @@ import (
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/choria-io/fisk"
+	"github.com/google/go-cmp/cmp"
 	"github.com/jedib0t/go-pretty/v6/text"
 
 	"github.com/sequinstream/sequin/cli/context"
@@ -19,6 +20,8 @@ type ctxCommand struct {
 	tls           bool
 	setDefault    bool
 	apiToken      string
+	tunnelPorts   string // New field for tunnel ports
+	force         bool   // New field for force edit
 }
 
 func AddContextCommands(app *fisk.Application, _config *Config) {
@@ -39,6 +42,8 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 		BoolVar(&cmd.setDefault)
 	add.Flag("api-token", "The API Token for this context").
 		StringVar(&cmd.apiToken)
+	add.Flag("tunnel-ports", "Comma-separated list of tunnel ports in the format port:nameOrId").
+		StringVar(&cmd.tunnelPorts)
 
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
 
@@ -50,6 +55,15 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 
 	selectCmd := ctx.Command("select", "Select a default context").Action(cmd.selectAction)
 	selectCmd.Arg("name", "The context name").StringVar(&cmd.name)
+
+	edit := ctx.Command("edit", "Edit an existing context").Action(cmd.editAction)
+	edit.Arg("name", "The context name to edit").StringVar(&cmd.name)
+	edit.Flag("hostname", "The API hostname for this context").StringVar(&cmd.hostname)
+	edit.Flag("portal-base-url", "The Portal hostname for this context").StringVar(&cmd.portalBaseURL)
+	edit.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
+	edit.Flag("api-token", "The API Token for this context").StringVar(&cmd.apiToken)
+	edit.Flag("tunnel-ports", "Comma-separated list of tunnel ports in the format port:nameOrId").StringVar(&cmd.tunnelPorts)
+	edit.Flag("force", "Force edit without confirmation").BoolVar(&cmd.force)
 }
 
 func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
@@ -77,6 +91,15 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 	ctx := context.Context{
 		Name:     c.name,
 		ApiToken: c.apiToken,
+	}
+
+	// Parse and add tunnel ports if provided
+	if c.tunnelPorts != "" {
+		tunnelPorts, err := parseTunnelPorts(c.tunnelPorts)
+		if err != nil {
+			return fmt.Errorf("failed to parse tunnel ports: %w", err)
+		}
+		ctx.TunnelPorts = tunnelPorts
 	}
 
 	err := context.SaveContext(ctx)
@@ -178,6 +201,12 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		{"API Token", strings.Repeat("*", len(ctx.ApiToken))},
 	}
 
+	// Add tunnel ports information
+	if len(ctx.TunnelPorts) > 0 {
+		tunnelPortsStr := formatTunnelPorts(ctx.TunnelPorts)
+		rows = append(rows, table.Row{"Tunnel Ports", tunnelPortsStr})
+	}
+
 	t := NewTable(columns, rows, PrintableTable)
 	fmt.Printf("Information for Context %s\n", ctx.Name)
 	return t.Render()
@@ -268,5 +297,96 @@ func (c *ctxCommand) selectAction(_ *fisk.ParseContext) error {
 	}
 
 	fmt.Printf("Default context set to '%s'.\n", ctx.Name)
+	return nil
+}
+
+// New helper function to parse tunnel ports
+func parseTunnelPorts(input string) ([]map[string]string, error) {
+	var tunnelPorts []map[string]string
+	pairs := strings.Split(input, ",")
+	for _, pair := range pairs {
+		parts := strings.Split(pair, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid tunnel port format: %s", pair)
+		}
+		tunnelPorts = append(tunnelPorts, map[string]string{
+			"port":     parts[0],
+			"nameOrId": parts[1],
+		})
+	}
+	return tunnelPorts, nil
+}
+
+// New helper function to format tunnel ports for display
+func formatTunnelPorts(tunnelPorts []map[string]string) string {
+	var formatted []string
+	for _, tp := range tunnelPorts {
+		formatted = append(formatted, fmt.Sprintf("%s:%s", tp["port"], tp["nameOrId"]))
+	}
+	return strings.Join(formatted, ", ")
+}
+
+func (c *ctxCommand) editAction(_ *fisk.ParseContext) error {
+	if c.name == "" {
+		err := c.pickContext("Choose a context to edit:")
+		if err != nil {
+			return err
+		}
+	}
+
+	existingCtx, err := context.LoadContext(c.name)
+	if err != nil {
+		return fmt.Errorf("failed to load context: %w", err)
+	}
+
+	// Create a new context based on the existing one
+	newCtx := *existingCtx
+
+	// Update the new context with provided values
+	if c.hostname != "" {
+		newCtx.Hostname = c.hostname
+	}
+	if c.portalBaseURL != "" {
+		newCtx.PortalBaseURL = c.portalBaseURL
+	}
+	if c.tls {
+		newCtx.TLS = c.tls
+	}
+	if c.apiToken != "" {
+		newCtx.ApiToken = c.apiToken
+	}
+	if c.tunnelPorts != "" {
+		tunnelPorts, err := parseTunnelPorts(c.tunnelPorts)
+		if err != nil {
+			return fmt.Errorf("failed to parse tunnel ports: %w", err)
+		}
+		newCtx.TunnelPorts = tunnelPorts
+	}
+
+	// Compare the configurations
+	diff := cmp.Diff(existingCtx, &newCtx)
+	if diff == "" {
+		fmt.Println("No changes to apply.")
+		return nil
+	}
+
+	fmt.Printf("Differences (-old +new):\n%s", diff)
+
+	if !c.force {
+		ok, err := askConfirmation(fmt.Sprintf("Really edit context %s", c.name), false)
+		if err != nil {
+			return fmt.Errorf("could not obtain confirmation: %w", err)
+		}
+		if !ok {
+			return nil
+		}
+	}
+
+	err = context.SaveContext(newCtx)
+	if err != nil {
+		return fmt.Errorf("failed to save updated context: %w", err)
+	}
+
+	fmt.Printf("Context '%s' updated successfully.\n", c.name)
 	return nil
 }

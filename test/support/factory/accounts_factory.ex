@@ -3,6 +3,7 @@ defmodule Sequin.Factory.AccountsFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Accounts.Account
+  alias Sequin.Accounts.LocalTunnel
   alias Sequin.Accounts.User
   alias Sequin.Factory
   alias Sequin.Repo
@@ -88,5 +89,35 @@ defmodule Sequin.Factory.AccountsFactory do
     |> Repo.insert!()
     # Some tests need to then use the password
     |> Map.put(:password, attrs.password)
+  end
+
+  def local_tunnel(attrs \\ []) do
+    merge_attributes(
+      %Sequin.Accounts.LocalTunnel{
+        description: "Local Tunnel #{Factory.unique_integer()}",
+        bastion_port: Enum.random(10_000..65_535),
+        account_id: Factory.uuid(),
+        inserted_at: Factory.utc_datetime(),
+        updated_at: Factory.utc_datetime()
+      },
+      attrs
+    )
+  end
+
+  def local_tunnel_attrs(attrs \\ []) do
+    attrs
+    |> local_tunnel()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_local_tunnel!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> insert_account!().id end)
+
+    attrs = local_tunnel_attrs(attrs)
+
+    %LocalTunnel{account_id: account_id}
+    |> LocalTunnel.create_changeset(attrs)
+    |> Repo.insert!()
   end
 end

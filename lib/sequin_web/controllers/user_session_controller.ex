@@ -72,9 +72,7 @@ defmodule SequinWeb.UserSessionController do
             extra: user_data
           })
 
-        conn
-        |> put_flash(:toast, %{kind: :info, title: "Account created successfully!"})
-        |> UserAuth.log_in_user(user)
+        UserAuth.log_in_user(conn, user)
 
       user ->
         {:ok, updated_user} =

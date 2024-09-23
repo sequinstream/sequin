@@ -126,6 +126,7 @@ defmodule SequinWeb.Router do
     resources("/api_keys", ApiKeyController, only: [:index, :create, :delete])
 
     resources("/postgres_replications", PostgresReplicationController, except: [:new, :edit])
+    resources("/local_tunnels", LocalTunnelController, only: [:index])
 
     post("/databases/:id_or_name/test_connection", DatabaseController, :test_connection)
     post("/databases/:id_or_name/setup_replication", DatabaseController, :setup_replication)

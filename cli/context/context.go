@@ -10,13 +10,14 @@ import (
 )
 
 type Context struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	Hostname      string `json:"hostname"`
-	TLS           bool   `json:"tls"`
-	PortalBaseURL string `json:"portal_hostname"`
-	Default       bool   `json:"default"`
-	ApiToken      string `json:"api_token"`
+	Name          string              `json:"name"`
+	Description   string              `json:"description"`
+	Hostname      string              `json:"hostname"`
+	TLS           bool                `json:"tls"`
+	PortalBaseURL string              `json:"portal_hostname"`
+	Default       bool                `json:"default"`
+	ApiToken      string              `json:"api_token"`
+	TunnelPorts   []map[string]string `json:"tunnelPorts,omitempty"`
 }
 
 var defaultContext = Context{

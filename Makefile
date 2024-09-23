@@ -32,6 +32,9 @@ init:
 release:
 	@./scripts/release.sh
 
+release-dirty:
+	@./scripts/release.sh --dirty
+
 spellcheck:
 	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
 

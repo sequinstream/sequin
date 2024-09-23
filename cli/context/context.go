@@ -10,22 +10,21 @@ import (
 )
 
 type Context struct {
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	Hostname       string `json:"hostname"`
-	TLS            bool   `json:"tls"`
-	PortalHostname string `json:"portal_hostname"`
-	Default        bool   `json:"default"`
-	KeyID          string `json:"key_id"`
-	KeySecret      string `json:"key_secret"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Hostname      string `json:"hostname"`
+	TLS           bool   `json:"tls"`
+	PortalBaseURL string `json:"portal_hostname"`
+	Default       bool   `json:"default"`
+	ApiToken      string `json:"api_token"`
 }
 
 var defaultContext = Context{
-	Name:           "default",
-	Description:    "Default context for Sequin cloud",
-	Hostname:       "api.sequinstream.com",
-	TLS:            true,
-	PortalHostname: "portal.sequinstream.com",
+	Name:          "default",
+	Description:   "Default context for Sequin cloud",
+	Hostname:      "api.sequinstream.com",
+	TLS:           true,
+	PortalBaseURL: "https://portal.sequinstream.com",
 }
 
 // GetServerURL returns the server URL based on the current context
@@ -108,8 +107,8 @@ func LoadContext(name string) (*Context, error) {
 		ctx.Hostname = defaultContext.Hostname
 		ctx.TLS = defaultContext.TLS
 	}
-	if ctx.PortalHostname == "" {
-		ctx.PortalHostname = defaultContext.PortalHostname
+	if ctx.PortalBaseURL == "" {
+		ctx.PortalBaseURL = defaultContext.PortalBaseURL
 	}
 
 	return &ctx, nil

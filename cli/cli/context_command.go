@@ -13,13 +13,12 @@ import (
 )
 
 type ctxCommand struct {
-	name           string
-	hostname       string
-	portalHostname string
-	tls            bool
-	setDefault     bool
-	keyID          string
-	keySecret      string
+	name          string
+	hostname      string
+	portalBaseURL string
+	tls           bool
+	setDefault    bool
+	apiToken      string
 }
 
 func AddContextCommands(app *fisk.Application, _config *Config) {
@@ -33,15 +32,13 @@ func AddContextCommands(app *fisk.Application, _config *Config) {
 	add.Arg("name", "The context name").StringVar(&cmd.name)
 	add.Flag("hostname", "The API hostname for this context").
 		StringVar(&cmd.hostname)
-	add.Flag("portal-hostname", "The Portal hostname for this context").
-		StringVar(&cmd.portalHostname)
+	add.Flag("portal-base-url", "The Portal hostname for this context").
+		StringVar(&cmd.portalBaseURL)
 	add.Flag("tls", "Enable TLS for this context").BoolVar(&cmd.tls)
 	add.Flag("set-default", "Set this context as the default").
 		BoolVar(&cmd.setDefault)
-	add.Flag("key-id", "The Key ID for this context").
-		StringVar(&cmd.keyID)
-	add.Flag("key-secret", "The Key Secret for this context").
-		StringVar(&cmd.keySecret)
+	add.Flag("api-token", "The API Token for this context").
+		StringVar(&cmd.apiToken)
 
 	ctx.Command("ls", "List all contexts").Action(cmd.listAction)
 
@@ -67,30 +64,19 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 		}
 	}
 
-	if c.keyID == "" {
-		prompt := &survey.Input{
-			Message: "Enter the Key ID for this context:",
-		}
-		err := survey.AskOne(prompt, &c.keyID)
-		if err != nil {
-			return fmt.Errorf("failed to get Key ID: %w", err)
-		}
-	}
-
-	if c.keySecret == "" {
+	if c.apiToken == "" {
 		prompt := &survey.Password{
-			Message: "Enter the Key Secret for this context:",
+			Message: "Enter the API Token for this context:",
 		}
-		err := survey.AskOne(prompt, &c.keySecret)
+		err := survey.AskOne(prompt, &c.apiToken)
 		if err != nil {
-			return fmt.Errorf("failed to get Key Secret: %w", err)
+			return fmt.Errorf("failed to get API Token: %w", err)
 		}
 	}
 
 	ctx := context.Context{
-		Name:      c.name,
-		KeyID:     c.keyID,
-		KeySecret: c.keySecret,
+		Name:     c.name,
+		ApiToken: c.apiToken,
 	}
 
 	err := context.SaveContext(ctx)
@@ -153,7 +139,6 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 			ctx.Hostname,
 			fmt.Sprintf("%t", ctx.TLS),
 			isDefault,
-			ctx.KeyID,
 		})
 	}
 	t := NewTable(columns, rows, PrintableTable)
@@ -188,10 +173,9 @@ func (c *ctxCommand) infoAction(_ *fisk.ParseContext) error {
 		{"Description", ctx.Description},
 		{"Hostname", ctx.Hostname},
 		{"TLS", fmt.Sprintf("%t", ctx.TLS)},
-		{"Portal Hostname", ctx.PortalHostname},
+		{"Portal Base URL", ctx.PortalBaseURL},
 		{"Default", fmt.Sprintf("%t", ctx.Default)},
-		{"Key ID", ctx.KeyID},
-		{"Key Secret", strings.Repeat("*", len(ctx.KeySecret))},
+		{"API Token", strings.Repeat("*", len(ctx.ApiToken))},
 	}
 
 	t := NewTable(columns, rows, PrintableTable)

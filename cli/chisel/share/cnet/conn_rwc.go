@@ -11,7 +11,7 @@ type rwcConn struct {
 	buff []byte
 }
 
-//NewRWCConn converts a RWC into a net.Conn
+// NewRWCConn converts a RWC into a net.Conn
 func NewRWCConn(rwc io.ReadWriteCloser) net.Conn {
 	c := rwcConn{
 		ReadWriteCloser: rwc,

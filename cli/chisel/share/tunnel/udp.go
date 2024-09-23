@@ -15,7 +15,7 @@ func init() {
 	gob.Register(&udpPacket{})
 }
 
-//udpChannel encodes/decodes udp payloads over a stream
+// udpChannel encodes/decodes udp payloads over a stream
 type udpChannel struct {
 	r *gob.Decoder
 	w *gob.Encoder

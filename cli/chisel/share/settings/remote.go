@@ -2,13 +2,11 @@ package settings
 
 import (
 	"errors"
+	"fmt"
 	"net"
-	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 // short-hand conversions (see remote_test)
@@ -43,100 +41,31 @@ type Remote struct {
 const revPrefix = "R:"
 
 func DecodeRemote(s string) (*Remote, error) {
-	reverse := false
-	if strings.HasPrefix(s, revPrefix) {
-		s = strings.TrimPrefix(s, revPrefix)
-		reverse = true
+	if !strings.HasPrefix(s, revPrefix) {
+		return nil, errors.New("Remote string must start with 'R:'")
 	}
-	parts := regexp.MustCompile(`(\[[^\[\]]+\]|[^\[\]:]+):?`).FindAllStringSubmatch(s, -1)
-	if len(parts) <= 0 || len(parts) >= 5 {
-		return nil, errors.New("Invalid remote")
+	s = strings.TrimPrefix(s, revPrefix)
+	parts := strings.Split(s, ":")
+	if len(parts) != 3 {
+		return nil, fmt.Errorf("invalid remote format. Expected 'R:<localPort>:<localHost>:<remoteHostOrId>'")
 	}
-	r := &Remote{Reverse: reverse}
-	//parse from back to front, to set 'remote' fields first,
-	//then to set 'local' fields second (allows the 'remote' side
-	//to provide the defaults)
-	for i := len(parts) - 1; i >= 0; i-- {
-		p := parts[i][1]
-		//remote portion is socks?
-		if i == len(parts)-1 && p == "socks" {
-			r.Socks = true
-			continue
-		}
-		//local portion is stdio?
-		if i == 0 && p == "stdio" {
-			r.Stdio = true
-			continue
-		}
-		p, proto := L4Proto(p)
-		if proto != "" {
-			if r.RemotePort == "" {
-				r.RemoteProto = proto
-			} else if r.LocalProto == "" {
-				r.LocalProto = proto
-			}
-		}
-		// Check if p is a UUID
-		if _, err := uuid.Parse(p); err == nil {
-			// It's a UUID, treat it as LocalPort
-			r.LocalPort = p
-			continue
-		}
-		if isPort(p) {
-			if !r.Socks && r.RemotePort == "" {
-				r.RemotePort = p
-			} else if r.LocalPort == "" {
-				r.LocalPort = p
-			}
-			continue
-		}
-		if !r.Socks && (r.RemotePort == "" && r.LocalPort == "") {
-			return nil, errors.New("missing ports")
-		}
-		if !isHost(p) {
-			return nil, errors.New("invalid host")
-		}
-		if !r.Socks && r.RemoteHost == "" {
-			r.RemoteHost = p
-		} else {
-			r.LocalHost = p
-		}
+	localPort := parts[0]
+	localHost := parts[1]
+	remoteHost := parts[2]
+
+	if localPort == "" || localHost == "" || remoteHost == "" {
+		return nil, errors.New("invalid remote: missing fields")
 	}
-	//remote string parsed, apply defaults...
-	if r.Socks {
-		//socks defaults
-		if r.LocalHost == "" {
-			r.LocalHost = "127.0.0.1"
-		}
-		if r.LocalPort == "" {
-			r.LocalPort = "1080"
-		}
-	} else {
-		//non-socks defaults
-		if r.LocalHost == "" {
-			r.LocalHost = "0.0.0.0"
-		}
-		if r.RemoteHost == "" {
-			r.RemoteHost = "127.0.0.1"
-		}
-	}
-	if r.RemoteProto == "" {
-		r.RemoteProto = "tcp"
-	}
-	if r.LocalProto == "" {
-		r.LocalProto = r.RemoteProto
-	}
-	if r.LocalProto != r.RemoteProto {
-		//TODO support cross protocol
-		//tcp <-> udp, is faily straight forward
-		//udp <-> tcp, is trickier since udp is stateless and tcp is not
-		return nil, errors.New("cross-protocol remotes are not supported yet")
-	}
-	if r.Socks && r.RemoteProto != "tcp" {
-		return nil, errors.New("only TCP SOCKS is supported")
-	}
-	if r.Stdio && r.Reverse {
-		return nil, errors.New("stdio cannot be reversed")
+
+	// Because it's reversed, we need to swap the local and remote
+	r := &Remote{
+		LocalHost:   remoteHost,
+		LocalPort:   "",
+		RemoteHost:  localHost,
+		RemotePort:  localPort,
+		Reverse:     true,
+		LocalProto:  "tcp",
+		RemoteProto: "tcp",
 	}
 	return r, nil
 }
@@ -152,12 +81,15 @@ func isPort(s string) bool {
 	return true
 }
 
+// isHost checks if the given string is a valid host.
+// Modified to accept any non-empty string, as we're changing this interface.
 func isHost(s string) bool {
-	_, err := url.Parse("//" + s)
-	if err != nil {
-		return false
-	}
-	return true
+	// _, err := url.Parse("//" + s)
+	// if err != nil {
+	//     return false
+	// }
+	// return true
+	return s != ""
 }
 
 var l4Proto = regexp.MustCompile(`(?i)\/(tcp|udp)$`)

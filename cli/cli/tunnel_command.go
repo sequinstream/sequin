@@ -41,11 +41,6 @@ func (c *tunnelCommand) tunnelAction(config *Config) error {
 		return fmt.Errorf("could not load context: %w", err)
 	}
 
-	// Validate that key ID and key secret are set in the context
-	if sqctx.KeyID == "" || sqctx.KeySecret == "" {
-		return fmt.Errorf("key id and key secret are not set in the current context")
-	}
-
 	// Prepare remotes
 	var remotes []string
 	for _, portMapping := range c.ports {
@@ -64,9 +59,9 @@ func (c *tunnelCommand) tunnelAction(config *Config) error {
 
 	// Build client configuration
 	clientConfig := &chclient.Config{
-		Server:      fmt.Sprintf("https://%s", sqctx.PortalHostname),
+		Server:      sqctx.PortalBaseURL,
 		Remotes:     remotes,
-		Auth:        fmt.Sprintf("%s:%s", sqctx.KeyID, sqctx.KeySecret),
+		Auth:        fmt.Sprintf("notused:%s", sqctx.ApiToken),
 		Fingerprint: "", // Set this if you need to verify the server's fingerprint
 		KeepAlive:   25 * time.Second,
 	}

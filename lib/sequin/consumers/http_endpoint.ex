@@ -6,7 +6,8 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   alias __MODULE__
 
-  @derive {Jason.Encoder, only: [:id, :name, :base_url, :headers, :account_id, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder,
+           only: [:id, :name, :base_url, :headers, :account_id, :local_tunnel_id, :inserted_at, :updated_at]}
   typed_schema "http_endpoints" do
     field :name, :string
     field :base_url, :string
@@ -15,6 +16,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :health, :map, virtual: true
 
     belongs_to :account, Sequin.Accounts.Account
+    belongs_to :local_tunnel, Sequin.Accounts.LocalTunnel
 
     has_many :http_push_consumers, Sequin.Consumers.HttpPushConsumer
 
@@ -23,7 +25,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   def create_changeset(http_endpoint, attrs) do
     http_endpoint
-    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers])
+    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers, :local_tunnel_id])
     |> validate_required([:name, :base_url])
     |> validate_base_url()
     |> foreign_key_constraint(:account_id)
@@ -31,7 +33,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   def update_changeset(http_endpoint, attrs) do
     http_endpoint
-    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers])
+    |> cast(attrs, [:name, :base_url, :headers, :encrypted_headers, :local_tunnel_id])
     |> validate_base_url()
   end
 

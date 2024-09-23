@@ -27,7 +27,8 @@ defmodule Sequin.Databases.PostgresDatabase do
              :ssl,
              :username,
              :password,
-             :ipv6
+             :ipv6,
+             :local_tunnel_id
            ]}
   @derive {Inspect, except: [:tables, :password]}
   typed_schema "postgres_databases" do
@@ -61,6 +62,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :health, :map, virtual: true
 
     belongs_to(:account, Sequin.Accounts.Account)
+    belongs_to(:local_tunnel, Sequin.Accounts.LocalTunnel)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
 
     timestamps()
@@ -80,7 +82,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       :ssl,
       :tables_refreshed_at,
       :username,
-      :ipv6
+      :ipv6,
+      :local_tunnel_id
     ])
     |> validate_required([:database, :hostname, :port, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)

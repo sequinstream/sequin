@@ -12,7 +12,7 @@ config :logger,
   level: :info,
   default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
 
-config :sequin, self_hosted: self_hosted
+config :sequin, self_hosted: self_hosted, portal_hostname: "portal.sequin.local"
 
 # Configures Swoosh API Client
 config :swoosh, Sequin.Mailer, adapter: Swoosh.Adapters.Sendgrid

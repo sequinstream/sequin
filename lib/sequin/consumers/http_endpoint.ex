@@ -5,6 +5,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
   import Ecto.Query
 
   alias __MODULE__
+  alias Sequin.Repo
 
   @derive {Jason.Encoder,
            only: [:id, :name, :base_url, :headers, :account_id, :local_tunnel_id, :inserted_at, :updated_at]}
@@ -59,5 +60,15 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   defp base_query(query \\ HttpEndpoint) do
     from(he in query, as: :http_endpoint)
+  end
+
+  def base_url(%__MODULE__{} = endpoint) do
+    endpoint = Repo.preload(endpoint, :local_tunnel)
+
+    if endpoint.local_tunnel do
+      "http://#{Application.fetch_env!(:sequin, :portal_hostname)}:#{endpoint.local_tunnel.bastion_port}"
+    else
+      endpoint.base_url
+    end
   end
 end

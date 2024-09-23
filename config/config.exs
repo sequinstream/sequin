@@ -71,7 +71,8 @@ config :sequin,
   env: Mix.env(),
   generators: [timestamp_type: :utc_datetime],
   self_hosted: true,
-  retool_workflow_key: "dummy_retool_workflow_key"
+  retool_workflow_key: "dummy_retool_workflow_key",
+  portal_hostname: "localhost:4100"
 
 # Configure tailwind (the version is required)
 config :tailwind,

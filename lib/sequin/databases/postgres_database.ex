@@ -9,6 +9,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Repo
 
   require Logger
 
@@ -183,6 +184,8 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
+    pd = Repo.preload(pd, :local_tunnel)
+
     opts =
       pd
       |> Sequin.Map.from_ecto()
@@ -200,6 +203,15 @@ defmodule Sequin.Databases.PostgresDatabase do
       ])
       |> Enum.to_list()
       |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
+
+    opts =
+      if pd.local_tunnel do
+        opts
+        |> Keyword.put(:hostname, Application.get_env(:sequin, :portal_hostname))
+        |> Keyword.put(:port, pd.local_tunnel.bastion_port)
+      else
+        opts
+      end
 
     # TODO: Remove this when we have CA certs for the cloud providers
     # We likely need a bundle that covers many different database providers

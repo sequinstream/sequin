@@ -3,6 +3,7 @@ defmodule Sequin.ConsumersTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SourceTable.BooleanValue
   alias Sequin.Consumers.SourceTable.DateTimeValue
   alias Sequin.Consumers.SourceTable.ListValue
@@ -13,6 +14,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
+  alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -513,6 +515,26 @@ defmodule Sequin.ConsumersTest do
       }
 
       assert Consumers.matches_record?(consumer, @table_oid, record)
+    end
+  end
+
+  describe "HttpEndpoint.base_url/1" do
+    test "returns original base_url when not associated with a local tunnel" do
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(base_url: "https://example.com")
+      assert HttpEndpoint.base_url(http_endpoint) == "https://example.com"
+    end
+
+    test "returns modified base_url when associated with a local tunnel" do
+      local_tunnel = AccountsFactory.insert_local_tunnel!()
+
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          base_url: "https://example.com",
+          local_tunnel_id: local_tunnel.id
+        )
+
+      expected_url = "http://#{Application.get_env(:sequin, :portal_hostname)}:#{local_tunnel.bastion_port}"
+      assert HttpEndpoint.base_url(http_endpoint) == expected_url
     end
   end
 

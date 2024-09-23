@@ -96,7 +96,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
     req =
       [
-        base_url: http_endpoint.base_url,
+        base_url: HttpEndpoint.base_url(http_endpoint),
         url: consumer.http_endpoint_path || "",
         headers: headers,
         json: message_data,

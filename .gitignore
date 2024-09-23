@@ -55,3 +55,5 @@ docker-compose.override.yaml
 assets/node_modules
 
 priv/logs/consumer_messages.log
+
+sequin.log

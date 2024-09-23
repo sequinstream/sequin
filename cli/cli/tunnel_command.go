@@ -16,7 +16,7 @@ import (
 )
 
 type tunnelCommand struct {
-	ports []string
+	ports string
 }
 
 func AddTunnelCommands(app *fisk.Application, config *Config) {
@@ -30,8 +30,7 @@ func AddTunnelCommands(app *fisk.Application, config *Config) {
 
 	// Add flags
 	tunnel.Flag("ports", "Ports to tunnel, in the format <local-port>:<name-or-id>[,<local-port>:<name-or-id>]").
-		Required().
-		StringsVar(&cmd.ports)
+		StringVar(&cmd.ports)
 }
 
 func (c *tunnelCommand) tunnelAction(config *Config) error {
@@ -41,20 +40,29 @@ func (c *tunnelCommand) tunnelAction(config *Config) error {
 		return fmt.Errorf("could not load context: %w", err)
 	}
 
+	// Determine which ports to use
+	var portMappings []string
+	if c.ports != "" {
+		portMappings = strings.Split(c.ports, ",")
+	} else if len(sqctx.TunnelPorts) > 0 {
+		for _, tp := range sqctx.TunnelPorts {
+			portMappings = append(portMappings, fmt.Sprintf("%s:%s", tp["port"], tp["nameOrId"]))
+		}
+	} else {
+		return fmt.Errorf("no ports specified and no tunnel ports found in context")
+	}
+
 	// Prepare remotes
 	var remotes []string
-	for _, portMapping := range c.ports {
-		portPairs := strings.Split(portMapping, ",")
-		for _, pair := range portPairs {
-			parts := strings.Split(pair, ":")
-			if len(parts) != 2 {
-				return fmt.Errorf("invalid port mapping: %s", pair)
-			}
-			localPort := parts[0]
-			nameOrID := parts[1]
-			remote := fmt.Sprintf("R:%s:localhost:%s", localPort, nameOrID)
-			remotes = append(remotes, remote)
+	for _, portMapping := range portMappings {
+		parts := strings.Split(portMapping, ":")
+		if len(parts) != 2 {
+			return fmt.Errorf("invalid port mapping: %s", portMapping)
 		}
+		localPort := parts[0]
+		nameOrID := parts[1]
+		remote := fmt.Sprintf("R:%s:localhost:%s", localPort, nameOrID)
+		remotes = append(remotes, remote)
 	}
 
 	// Build client configuration
@@ -90,6 +98,16 @@ func (c *tunnelCommand) tunnelAction(config *Config) error {
 	if err := chiselClient.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start chisel client: %w", err)
 	}
+
+	// Print information about established tunnels
+	fmt.Println("Establishing tunnels:")
+	for _, portMapping := range portMappings {
+		parts := strings.Split(portMapping, ":")
+		localPort := parts[0]
+		nameOrID := parts[1]
+		fmt.Printf("\t\tLocal port %s connected to entity %s\n", localPort, nameOrID)
+	}
+	fmt.Println("Press Ctrl+C to stop tunnels.")
 
 	// Wait for the client to finish
 	if err := chiselClient.Wait(); err != nil {

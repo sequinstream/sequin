@@ -9,6 +9,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Metrics
@@ -385,7 +386,7 @@ defmodule SequinWeb.ConsumersLive.Show do
 
     %{
       column: column.name,
-      operator: column_filter.operator,
+      operator: ColumnFilter.to_external_operator(column_filter.operator),
       value: column_filter.value.value
     }
   end

@@ -99,6 +99,7 @@
           updatedFilter.valueType = selectedColumn
             ? selectedColumn.filterType
             : "";
+          updatedFilter.operator = "="; // Set default operator to "="
         }
 
         return updatedFilter;
@@ -345,8 +346,8 @@
           </Select>
           <Select
             selected={{
-              value: filter.operator,
-              label: filter.operator || "Operator",
+              value: filter.operator || "=",
+              label: filter.operator || "=",
             }}
             onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
             disabled={!form.postgresDatabaseId && !form.tableOid}

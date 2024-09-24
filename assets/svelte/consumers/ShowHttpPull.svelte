@@ -304,7 +304,13 @@
                   {#each consumer.source_table.column_filters as filter}
                     <TableRow>
                       <TableCell><code>{filter.column}</code></TableCell>
-                      <TableCell><code>{filter.operator}</code></TableCell>
+                      <TableCell
+                        ><code
+                          >{filter.operator === "=="
+                            ? "="
+                            : filter.operator}</code
+                        ></TableCell
+                      >
                       <TableCell><code>{filter.value}</code></TableCell>
                     </TableRow>
                   {/each}

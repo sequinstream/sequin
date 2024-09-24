@@ -3,7 +3,6 @@ defmodule Sequin.DatabasesTest do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
 
   describe "tables/1" do
@@ -60,13 +59,21 @@ defmodule Sequin.DatabasesTest do
 
   describe "to_postgrex_opts/1" do
     test "updates hostname and port when using a local tunnel" do
-      local_tunnel = AccountsFactory.insert_local_tunnel!()
-      db = DatabasesFactory.insert_configured_postgres_database!(local_tunnel_id: local_tunnel.id)
+      db = DatabasesFactory.insert_configured_postgres_database!(use_local_tunnel: true, port: nil)
 
       postgrex_opts = PostgresDatabase.to_postgrex_opts(db)
 
       assert Keyword.get(postgrex_opts, :hostname) == Application.get_env(:sequin, :portal_hostname)
-      assert Keyword.get(postgrex_opts, :port) == local_tunnel.bastion_port
+      assert Keyword.get(postgrex_opts, :port) == db.port
+    end
+
+    test "uses original hostname and port when not using a local tunnel" do
+      db = DatabasesFactory.insert_configured_postgres_database!(use_local_tunnel: false)
+
+      postgrex_opts = PostgresDatabase.to_postgrex_opts(db)
+
+      assert Keyword.get(postgrex_opts, :hostname) == db.hostname
+      assert Keyword.get(postgrex_opts, :port) == db.port
     end
   end
 end

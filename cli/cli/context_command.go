@@ -89,8 +89,11 @@ func (c *ctxCommand) addAction(pctx *fisk.ParseContext) error {
 	}
 
 	ctx := context.Context{
-		Name:     c.name,
-		ApiToken: c.apiToken,
+		Name:          c.name,
+		ApiToken:      c.apiToken,
+		Hostname:      c.hostname,
+		TLS:           c.tls,
+		PortalBaseURL: c.portalBaseURL,
 	}
 
 	// Parse and add tunnel ports if provided

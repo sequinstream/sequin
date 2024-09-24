@@ -5,7 +5,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
   import Ecto.Query
 
   alias __MODULE__
-  alias Sequin.Repo
+  alias Ecto.Changeset
 
   @derive {Jason.Encoder,
            only: [
@@ -20,7 +20,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
              :fragment,
              :headers,
              :account_id,
-             :local_tunnel_id,
+             :use_local_tunnel,
              :inserted_at,
              :updated_at
            ]}
@@ -29,16 +29,17 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :scheme, Ecto.Enum, values: [:http, :https]
     field :userinfo, :string
     field :host, :string
-    field :port, :integer
+    # can be auto-generated when use_local_tunnel is true
+    field :port, :integer, read_after_writes: true
     field :path, :string
     field :query, :string
     field :fragment, :string
     field :headers, :map, default: %{}
     field :encrypted_headers, Sequin.Encrypted.Map
     field :health, :map, virtual: true
+    field :use_local_tunnel, :boolean, default: false
 
     belongs_to :account, Sequin.Accounts.Account
-    belongs_to :local_tunnel, Sequin.Accounts.LocalTunnel
 
     has_many :http_push_consumers, Sequin.Consumers.HttpPushConsumer
 
@@ -58,11 +59,12 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :fragment,
       :headers,
       :encrypted_headers,
-      :local_tunnel_id
+      :use_local_tunnel
     ])
-    |> validate_required([:name, :scheme, :host])
+    |> validate_required([:name])
     |> validate_uri_components()
     |> foreign_key_constraint(:account_id)
+    |> validate_no_port_if_local_tunnel_enabled()
   end
 
   def update_changeset(http_endpoint, attrs) do
@@ -78,13 +80,9 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :fragment,
       :headers,
       :encrypted_headers,
-      :local_tunnel_id
+      :use_local_tunnel
     ])
     |> validate_uri_components()
-  end
-
-  def where_account_id(query \\ base_query(), account_id) do
-    from([http_endpoint: he] in query, where: he.account_id == ^account_id)
   end
 
   defp validate_uri_components(changeset) do
@@ -92,6 +90,31 @@ defmodule Sequin.Consumers.HttpEndpoint do
     |> validate_inclusion(:scheme, [:http, :https])
     |> validate_format(:host, ~r/^[a-zA-Z0-9.-]+$/, message: "must be a valid hostname")
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
+    |> maybe_validate_required()
+  end
+
+  defp maybe_validate_required(changeset) do
+    if changeset.valid? && !Changeset.get_field(changeset, :use_local_tunnel) do
+      validate_required(changeset, [:scheme, :host])
+    else
+      changeset
+    end
+  end
+
+  defp validate_no_port_if_local_tunnel_enabled(changeset) do
+    if changeset.valid? && Changeset.get_field(changeset, :use_local_tunnel) && Changeset.get_field(changeset, :port) do
+      add_error(changeset, :port, "must not be set if local tunnel is enabled")
+    else
+      changeset
+    end
+  end
+
+  def where_account_id(query \\ base_query(), account_id) do
+    from([http_endpoint: he] in query, where: he.account_id == ^account_id)
+  end
+
+  def where_use_local_tunnel(query \\ base_query()) do
+    from([http_endpoint: he] in query, where: he.use_local_tunnel == true)
   end
 
   defp base_query(query \\ HttpEndpoint) do
@@ -106,13 +129,11 @@ defmodule Sequin.Consumers.HttpEndpoint do
   end
 
   def uri(%__MODULE__{} = endpoint) do
-    endpoint = Repo.preload(endpoint, :local_tunnel)
-
-    if endpoint.local_tunnel do
+    if endpoint.use_local_tunnel do
       %URI{
         scheme: "http",
         host: Application.fetch_env!(:sequin, :portal_hostname),
-        port: endpoint.local_tunnel.bastion_port,
+        port: endpoint.port,
         path: endpoint.path,
         query: endpoint.query,
         fragment: endpoint.fragment

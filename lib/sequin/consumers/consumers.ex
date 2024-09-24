@@ -994,6 +994,14 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
+  def list_local_tunnel_http_endpoints_for_account(account_id, preload \\ []) do
+    account_id
+    |> HttpEndpoint.where_account_id()
+    |> HttpEndpoint.where_use_local_tunnel()
+    |> preload(^preload)
+    |> Repo.all()
+  end
+
   def get_http_endpoint_for_account(account_id, id) do
     account_id
     |> HttpEndpoint.where_account_id()

@@ -10,6 +10,14 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { PlusCircle, Eye, EyeOff } from "lucide-svelte";
+  import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+  } from "$lib/components/ui/popover";
+  import { Switch } from "$lib/components/ui/switch";
+  import { Info } from "lucide-svelte";
+  import CodeWithSecret from "$lib/components/CodeWithSecret.svelte";
 
   export let httpEndpoint: {
     id?: string;
@@ -17,27 +25,31 @@
     baseUrl: string;
     headers: Record<string, string>;
     encryptedHeaders: Record<string, string>;
+    useLocalTunnel: boolean;
   };
   export let errors: Record<string, any> = {};
   export let parent: string;
   export let live;
+  export let api_token: { name: string; token: string };
 
-  let form = { ...httpEndpoint };
+  const url = httpEndpoint.id ? new URL(httpEndpoint.baseUrl) : ({} as any);
+  let baseUrl = httpEndpoint.useLocalTunnel
+    ? `${url.pathname}${url.search}${url.hash}`
+    : httpEndpoint.baseUrl;
+
+  let form = { ...httpEndpoint, baseUrl };
   let isEdit = !!form.id;
   let dialogOpen = true;
   let showConfirmDialog = false;
   let validating = false;
   let showEncryptedValues: Record<string, boolean> = {};
 
-  $: baseUrlError =
-    errors.host ||
-    errors.scheme ||
-    errors.port ||
-    errors.path ||
-    errors.query ||
-    errors.fragment
-      ? "The URL is invalid. Please include a scheme (e.g. http:// or https://) and a full hostname."
-      : "";
+  // Map.take
+  $: baseUrlErrors = Object.fromEntries(
+    ["host", "scheme", "port", "path", "query", "fragment"]
+      .map((key) => [key, errors[key]])
+      .filter(([_, value]) => value !== undefined)
+  );
 
   function pushEvent(
     event: string,
@@ -101,6 +113,18 @@
   function toggleEncryptedValue(key: string) {
     showEncryptedValues[key] = !showEncryptedValues[key];
   }
+
+  function toggleLocalTunnel() {
+    form.useLocalTunnel = !form.useLocalTunnel;
+    pushEvent("form_updated", { form });
+  }
+
+  $: setupTunnelCode = `# if it's your first time using the Sequin CLI
+sequin context add --api-token={{secret}} --set-default
+
+# every time you want to boot the tunnel
+# Replace [your-local-port] with the local port you want Sequin to connect to
+sequin tunnel --ports=[your-local-port]:${form.name}`;
 </script>
 
 <FullPageModal
@@ -138,14 +162,75 @@
 
           <div class="space-y-2">
             <Label for="baseUrl">Base URL</Label>
-            <Input
-              id="http-endpoint-baseUrl"
-              bind:value={form.baseUrl}
-              placeholder="https://api.example.com"
-            />
-            {#if baseUrlError}
-              <p class="text-sm text-destructive">{baseUrlError}</p>
+            {#if isEdit}
+              {#if form.useLocalTunnel}
+                <div class="flex flex-row bg-white">
+                  <div
+                    class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                  >
+                    localhost (via CLI)
+                  </div>
+                  <Input
+                    id="http-endpoint-baseUrl"
+                    bind:value={form.baseUrl}
+                    placeholder="/api"
+                    class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    style="border-left: none;"
+                  />
+                </div>
+              {:else}
+                <Input
+                  id="http-endpoint-baseUrl"
+                  bind:value={form.baseUrl}
+                  placeholder="https://api.example.com"
+                />
+              {/if}
+            {:else}
+              <div class="flex items-center space-x-2 mb-2">
+                <Switch
+                  id="use-localhost"
+                  checked={form.useLocalTunnel}
+                  onCheckedChange={toggleLocalTunnel}
+                />
+                <Label for="use-localhost">Use localhost</Label>
+                <Popover>
+                  <PopoverTrigger>
+                    <Info class="w-4 h-4 text-muted-foreground" />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    You can use the Sequin CLI to connect Sequin to an HTTP
+                    endpoint running on your local machine.
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {#if form.useLocalTunnel}
+                <div class="flex flex-row bg-white">
+                  <div
+                    class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                  >
+                    localhost (via CLI)
+                  </div>
+                  <Input
+                    id="http-endpoint-baseUrl"
+                    bind:value={form.baseUrl}
+                    placeholder="/api"
+                    class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    style="border-left: none;"
+                  />
+                </div>
+              {:else}
+                <Input
+                  id="http-endpoint-baseUrl"
+                  bind:value={form.baseUrl}
+                  placeholder="https://api.example.com"
+                />
+              {/if}
             {/if}
+            <ul>
+              {#each Object.entries(baseUrlErrors) as [key, value], index}
+                <li class="text-sm text-destructive">{key}: {value}</li>
+              {/each}
+            </ul>
           </div>
 
           <div class="space-y-2">
@@ -243,6 +328,28 @@
         </div>
       </CardContent>
     </Card>
+
+    {#if form.useLocalTunnel}
+      <Card>
+        <CardHeader>
+          <CardTitle>Local Tunnel</CardTitle>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <p>Install the Sequin CLI and boot up a tunnel now.</p>
+          <div>
+            <CodeWithSecret
+              tabs={[
+                {
+                  name: "Connect",
+                  value: setupTunnelCode,
+                },
+              ]}
+              secret={api_token.token}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    {/if}
 
     <Card>
       <CardHeader>

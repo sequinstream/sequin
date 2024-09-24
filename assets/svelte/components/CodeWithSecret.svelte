@@ -6,10 +6,12 @@
   export let secret;
 
   let tabNames = tabs.map((tab) => tab.name);
-  let selectedTab = tabs[0];
+  let selectedTabIdx = 0;
   let showSecret = false;
   let codeForDisplay;
   let codeForCopy;
+
+  $: selectedTab = tabs[selectedTabIdx];
 
   $: {
     codeForCopy = selectedTab.value.replace(/{{secret}}/g, secret);
@@ -29,8 +31,8 @@
       <div class="relative">
         {#each tabNames as tabName}
           <button
-            on:click={() =>
-              (selectedTab = tabs.find((tab) => tab.name === tabName))}
+            on:click|preventDefault={() =>
+              (selectedTabIdx = tabs.findIndex((tab) => tab.name === tabName))}
             class="text-primary py-1">{tabName}</button
           >
           <div
@@ -46,7 +48,10 @@
       class="flex items-center space-x-2 text-muted-foreground px-2 py-1 rounded"
     >
       <div class="cursor-pointer">
-        <button class="icon-button" on:click={() => (showSecret = !showSecret)}>
+        <button
+          class="icon-button"
+          on:click|preventDefault={() => (showSecret = !showSecret)}
+        >
           <icon class:hidden={showSecret} class="hero-eye text-gray-500" />
           <icon
             class:hidden={!showSecret}

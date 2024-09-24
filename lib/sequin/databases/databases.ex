@@ -28,6 +28,14 @@ defmodule Sequin.Databases do
     |> Repo.all()
   end
 
+  def list_local_tunnel_dbs_for_account(account_id, preload \\ []) do
+    account_id
+    |> PostgresDatabase.where_account()
+    |> PostgresDatabase.where_use_local_tunnel()
+    |> preload(^preload)
+    |> Repo.all()
+  end
+
   def get_db(id) do
     case Repo.get(PostgresDatabase, id) do
       nil -> {:error, Error.not_found(entity: :postgres_database)}

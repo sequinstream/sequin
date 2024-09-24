@@ -87,10 +87,22 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   end
 
   defp encode_http_endpoint(http_endpoint) do
+    base_url =
+      if http_endpoint.use_local_tunnel do
+        http_endpoint
+        |> HttpEndpoint.uri()
+        |> Map.put(:host, "(localhost)")
+        |> Map.put(:scheme, "http")
+        |> Map.put(:port, nil)
+        |> URI.to_string()
+      else
+        HttpEndpoint.url(http_endpoint)
+      end
+
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      baseUrl: HttpEndpoint.url(http_endpoint),
+      baseUrl: base_url,
       headers: http_endpoint.headers,
       encryptedHeaders: http_endpoint.encrypted_headers || %{},
       health: Health.to_external(http_endpoint.health),

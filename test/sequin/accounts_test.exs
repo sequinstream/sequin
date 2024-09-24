@@ -634,17 +634,4 @@ defmodule Sequin.AccountsTest do
       assert changeset.valid?
     end
   end
-
-  describe "local_tunnels" do
-    test "create_local_tunnel/1 sets bastion_port when not provided" do
-      account = AccountsFactory.insert_account!()
-      attrs = Map.delete(AccountsFactory.local_tunnel_attrs(), :bastion_port)
-      attrs = Map.put(attrs, :account_id, account.id)
-
-      assert {:ok, local_tunnel} = Accounts.create_local_tunnel_for_account(account.id, attrs)
-      assert local_tunnel.bastion_port != nil
-      assert local_tunnel.bastion_port >= 10_000
-      assert local_tunnel.bastion_port <= 65_535
-    end
-  end
 end

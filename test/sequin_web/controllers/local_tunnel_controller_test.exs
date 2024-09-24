@@ -7,58 +7,64 @@ defmodule SequinWeb.LocalTunnelControllerTest do
 
   setup :authenticated_conn
 
-  setup %{account: account} do
-    tunnel = AccountsFactory.insert_local_tunnel!(account_id: account.id)
-
-    %{tunnel: tunnel}
-  end
-
   describe "index" do
-    test "lists local tunnels in the given account", %{
+    test "lists entities using local tunnels in the given account", %{
       conn: conn,
-      tunnel: tunnel1,
       account: account
     } do
-      tunnel2 = AccountsFactory.insert_local_tunnel!(account_id: account.id)
+      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, use_local_tunnel: true)
+      postgres_database = DatabasesFactory.insert_postgres_database!(account_id: account.id, use_local_tunnel: true)
+
+      # Create entities that should not be included
+      ConsumersFactory.insert_http_endpoint!(account_id: account.id, use_local_tunnel: false)
+      DatabasesFactory.insert_postgres_database!(account_id: account.id, use_local_tunnel: false)
+
       other_account = AccountsFactory.insert_account!()
-      other_tunnel = AccountsFactory.insert_local_tunnel!(account_id: other_account.id)
+      ConsumersFactory.insert_http_endpoint!(account_id: other_account.id, use_local_tunnel: true)
 
       conn = get(conn, ~p"/api/local_tunnels")
-      assert %{"data" => local_tunnels} = json_response(conn, 200)
-      assert length(local_tunnels) == 2
+      assert %{"data" => entities} = json_response(conn, 200)
+      assert length(entities) == 2
 
-      tunnel_ids = Enum.map(local_tunnels, & &1["id"])
-      assert tunnel1.id in tunnel_ids
-      assert tunnel2.id in tunnel_ids
-      refute other_tunnel.id in tunnel_ids
+      entity_ids = Enum.map(entities, & &1["entity_id"])
+      assert http_endpoint.id in entity_ids
+      assert postgres_database.id in entity_ids
     end
 
-    test "if an http_endpoint belongs to a local tunnel, lists its name and id", %{
+    test "includes correct information for http_endpoints", %{
       conn: conn,
-      tunnel: tunnel,
       account: account
     } do
-      http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, local_tunnel_id: tunnel.id)
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          account_id: account.id,
+          use_local_tunnel: true,
+          port: nil
+        )
 
       conn = get(conn, ~p"/api/local_tunnels")
-      assert %{"data" => [tunnel]} = json_response(conn, 200)
+      assert %{"data" => [entity]} = json_response(conn, 200)
 
-      assert tunnel["entity_id"] == http_endpoint.id
-      assert tunnel["entity_name"] == http_endpoint.name
+      assert entity["entity_id"] == http_endpoint.id
+      assert entity["bastion_port"] == http_endpoint.port
     end
 
-    test "if a postgres_database belongs to a local tunnel, lists its name and id", %{
+    test "includes correct information for postgres_databases", %{
       conn: conn,
-      tunnel: tunnel,
       account: account
     } do
-      postgres_database = DatabasesFactory.insert_postgres_database!(account_id: account.id, local_tunnel_id: tunnel.id)
+      postgres_database =
+        DatabasesFactory.insert_postgres_database!(
+          account_id: account.id,
+          use_local_tunnel: true,
+          port: nil
+        )
 
       conn = get(conn, ~p"/api/local_tunnels")
-      assert %{"data" => [tunnel]} = json_response(conn, 200)
+      assert %{"data" => [entity]} = json_response(conn, 200)
 
-      assert tunnel["entity_id"] == postgres_database.id
-      assert tunnel["entity_name"] == postgres_database.name
+      assert entity["entity_id"] == postgres_database.id
+      assert entity["bastion_port"] == postgres_database.port
     end
   end
 end

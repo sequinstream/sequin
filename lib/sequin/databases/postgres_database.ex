@@ -9,7 +9,6 @@ defmodule Sequin.Databases.PostgresDatabase do
   alias Ecto.Queryable
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Repo
 
   require Logger
 
@@ -29,14 +28,15 @@ defmodule Sequin.Databases.PostgresDatabase do
              :username,
              :password,
              :ipv6,
-             :local_tunnel_id
+             :use_local_tunnel
            ]}
   @derive {Inspect, except: [:tables, :password]}
   typed_schema "postgres_databases" do
     field :database, :string
     field :hostname, :string
     field :pool_size, :integer, default: 3
-    field :port, :integer
+    # can be auto-generated when use_local_tunnel is true
+    field :port, :integer, read_after_writes: true
     field :queue_interval, :integer, default: 1000
     field :queue_target, :integer, default: 50
     field :name, :string
@@ -45,6 +45,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field(:password, Sequin.Encrypted.Binary) :: String.t()
     field :tables_refreshed_at, :utc_datetime
     field :ipv6, :boolean, default: false
+    field :use_local_tunnel, :boolean, default: false
 
     embeds_many :tables, Table, on_replace: :delete, primary_key: false do
       field :oid, :integer, primary_key: true
@@ -63,7 +64,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :health, :map, virtual: true
 
     belongs_to(:account, Sequin.Accounts.Account)
-    belongs_to(:local_tunnel, Sequin.Accounts.LocalTunnel)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
 
     timestamps()
@@ -84,9 +84,9 @@ defmodule Sequin.Databases.PostgresDatabase do
       :tables_refreshed_at,
       :username,
       :ipv6,
-      :local_tunnel_id
+      :use_local_tunnel
     ])
-    |> validate_required([:database, :hostname, :port, :username, :password, :name])
+    |> validate_required([:database, :hostname, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
     |> Sequin.Changeset.validate_name()
@@ -162,6 +162,10 @@ defmodule Sequin.Databases.PostgresDatabase do
     from([database: pd] in query, where: pd.account_id == ^account_id)
   end
 
+  def where_use_local_tunnel(query \\ base_query()) do
+    from([database: pd] in query, where: pd.use_local_tunnel == true)
+  end
+
   @spec where_id(Queryable.t(), String.t()) :: Queryable.t()
   def where_id(query \\ base_query(), id) do
     from([database: pd] in query, where: pd.id == ^id)
@@ -184,8 +188,6 @@ defmodule Sequin.Databases.PostgresDatabase do
   end
 
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
-    pd = Repo.preload(pd, :local_tunnel)
-
     opts =
       pd
       |> Sequin.Map.from_ecto()
@@ -205,10 +207,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
 
     opts =
-      if pd.local_tunnel do
-        opts
-        |> Keyword.put(:hostname, Application.get_env(:sequin, :portal_hostname))
-        |> Keyword.put(:port, pd.local_tunnel.bastion_port)
+      if pd.use_local_tunnel do
+        Keyword.put(opts, :hostname, Application.get_env(:sequin, :portal_hostname))
       else
         opts
       end

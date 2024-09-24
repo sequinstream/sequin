@@ -37,7 +37,6 @@
   import HttpPushVisual from "./HttpPushVisual.svelte";
   import HttpPullVisual from "./HttpPullVisual.svelte";
   import TableSelector from "../components/TableSelector.svelte";
-  import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
   import { toast } from "svelte-sonner";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tabs from "$lib/components/ui/tabs";

@@ -137,7 +137,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
 
       {:error, reason} ->
         changeset =
-          Ecto.Changeset.add_error(changeset, :base_url, "Endpoint is not reachable: #{inspect(reason)}")
+          Ecto.Changeset.add_error(changeset, :host, "Endpoint is not reachable: #{inspect(reason)}")
 
         {:error, changeset}
     end
@@ -147,7 +147,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     %{
       "id" => http_endpoint.id,
       "name" => http_endpoint.name || Name.generate(99),
-      "baseUrl" => http_endpoint.base_url,
+      "baseUrl" => HttpEndpoint.url(http_endpoint),
       "headers" => http_endpoint.headers || %{},
       # Add this line
       "encryptedHeaders" => http_endpoint.encrypted_headers || %{}
@@ -155,12 +155,19 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   defp decode_params(form) do
+    uri = URI.parse(form["baseUrl"])
+
     %{
       "http_endpoint" => %{
         "name" => form["name"],
-        "base_url" => form["baseUrl"],
+        "scheme" => uri.scheme,
+        "userinfo" => uri.userinfo,
+        "host" => uri.host,
+        "port" => uri.port,
+        "path" => uri.path,
+        "query" => uri.query,
+        "fragment" => uri.fragment,
         "headers" => form["headers"] || %{},
-        # Add this line
         "encrypted_headers" => form["encryptedHeaders"] || %{}
       }
     }

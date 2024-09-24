@@ -260,7 +260,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %HttpEndpoint{
         name: "Test Endpoint",
-        base_url: "https://example.com/webhook",
+        scheme: :https,
+        host: "example.com",
+        path: "/webhook",
         headers: %{"Content-Type" => "application/json"},
         account_id: Factory.uuid()
       },

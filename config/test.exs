@@ -58,7 +58,8 @@ config :sequin, UnboxedRepo,
   priv: "test/support/unboxed_repo"
 
 config :sequin,
-  ecto_repos: [Sequin.Repo, UnboxedRepo]
+  ecto_repos: [Sequin.Repo, UnboxedRepo],
+  portal_hostname: "portal.sequin.test"
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

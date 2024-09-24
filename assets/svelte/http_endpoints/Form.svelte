@@ -29,6 +29,16 @@
   let validating = false;
   let showEncryptedValues: Record<string, boolean> = {};
 
+  $: baseUrlError =
+    errors.host ||
+    errors.scheme ||
+    errors.port ||
+    errors.path ||
+    errors.query ||
+    errors.fragment
+      ? "The URL is invalid. Please include a scheme (e.g. http:// or https://) and a full hostname."
+      : "";
+
   function pushEvent(
     event: string,
     payload = {},
@@ -127,8 +137,8 @@
               bind:value={form.baseUrl}
               placeholder="https://api.example.com"
             />
-            {#if errors.base_url}
-              <p class="text-sm text-destructive">{errors.base_url}</p>
+            {#if baseUrlError}
+              <p class="text-sm text-destructive">{baseUrlError}</p>
             {/if}
           </div>
 

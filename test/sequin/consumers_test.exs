@@ -518,23 +518,119 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
-  describe "HttpEndpoint.base_url/1" do
-    test "returns original base_url when not associated with a local tunnel" do
-      http_endpoint = ConsumersFactory.insert_http_endpoint!(base_url: "https://example.com")
-      assert HttpEndpoint.base_url(http_endpoint) == "https://example.com"
+  describe "HttpEndpoint.url/1" do
+    test "returns correct URL for standard endpoint" do
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          scheme: :https,
+          host: "example.com",
+          port: 8080,
+          path: "/webhook",
+          query: "param=value",
+          fragment: "section"
+        )
+
+      assert HttpEndpoint.url(http_endpoint) == "https://example.com:8080/webhook?param=value#section"
     end
 
-    test "returns modified base_url when associated with a local tunnel" do
+    test "returns correct URL when port is not specified" do
+      http_endpoint =
+        ConsumersFactory.insert_http_endpoint!(
+          scheme: :https,
+          host: "example.com",
+          path: "/webhook"
+        )
+
+      assert HttpEndpoint.url(http_endpoint) == "https://example.com/webhook"
+    end
+
+    test "returns modified URL when associated with a local tunnel" do
       local_tunnel = AccountsFactory.insert_local_tunnel!()
 
       http_endpoint =
         ConsumersFactory.insert_http_endpoint!(
-          base_url: "https://example.com",
+          scheme: :https,
+          host: "example.com",
+          path: "/webhook",
           local_tunnel_id: local_tunnel.id
         )
 
-      expected_url = "http://#{Application.get_env(:sequin, :portal_hostname)}:#{local_tunnel.bastion_port}"
-      assert HttpEndpoint.base_url(http_endpoint) == expected_url
+      expected_url = "http://#{Application.fetch_env!(:sequin, :portal_hostname)}:#{local_tunnel.bastion_port}/webhook"
+      assert HttpEndpoint.url(http_endpoint) == expected_url
+    end
+  end
+
+  describe "create_http_endpoint_for_account/2" do
+    test "creates a http_endpoint with valid attributes" do
+      account = AccountsFactory.insert_account!()
+
+      valid_attrs = %{
+        name: "Test Endpoint",
+        scheme: :https,
+        host: "example.com",
+        port: 443,
+        path: "/webhook",
+        headers: %{"Content-Type" => "application/json"}
+      }
+
+      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
+      assert http_endpoint.name == "Test Endpoint"
+      assert http_endpoint.scheme == :https
+      assert http_endpoint.host == "example.com"
+      assert http_endpoint.port == 443
+      assert http_endpoint.path == "/webhook"
+      assert http_endpoint.headers == %{"Content-Type" => "application/json"}
+    end
+
+    test "returns error changeset with invalid attributes" do
+      account = AccountsFactory.insert_account!()
+
+      invalid_attrs = %{
+        name: nil,
+        scheme: :invalid,
+        host: "",
+        port: -1,
+        headers: "invalid"
+      }
+
+      assert {:error, %Ecto.Changeset{}} = Consumers.create_http_endpoint_for_account(account.id, invalid_attrs)
+    end
+  end
+
+  describe "update_http_endpoint/2" do
+    test "updates the http_endpoint with valid attributes" do
+      http_endpoint = ConsumersFactory.insert_http_endpoint!()
+
+      update_attrs = %{
+        name: "Updated Endpoint",
+        scheme: :http,
+        host: "updated.example.com",
+        port: 8080,
+        path: "/updated",
+        headers: %{"Authorization" => "Bearer token"}
+      }
+
+      assert {:ok, %HttpEndpoint{} = updated_endpoint} = Consumers.update_http_endpoint(http_endpoint, update_attrs)
+      assert updated_endpoint.name == "Updated Endpoint"
+      assert updated_endpoint.scheme == :http
+      assert updated_endpoint.host == "updated.example.com"
+      assert updated_endpoint.port == 8080
+      assert updated_endpoint.path == "/updated"
+      assert updated_endpoint.headers == %{"Authorization" => "Bearer token"}
+    end
+
+    test "returns error changeset with invalid attributes" do
+      http_endpoint = ConsumersFactory.insert_http_endpoint!()
+
+      invalid_attrs = %{
+        name: nil,
+        scheme: :invalid,
+        host: "",
+        port: -1,
+        headers: "invalid"
+      }
+
+      assert {:error, %Ecto.Changeset{}} = Consumers.update_http_endpoint(http_endpoint, invalid_attrs)
     end
   end
 

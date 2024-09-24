@@ -393,7 +393,6 @@
     },
   ];
 
-  let showNewHttpEndpointForm = false;
   let selectedHttpEndpoint: {
     id: string;
     name: string;
@@ -469,14 +468,10 @@
     isGeneratingWebhookSite = true;
     pushEvent("generate_webhook_site_url", {}, (result: any) => {
       isGeneratingWebhookSite = false;
-      if (result.url && result.name) {
-        form.httpEndpoint = {
-          name: result.name,
-          baseUrl: result.url,
-          headers: {},
-          encryptedHeaders: {},
-        };
-        showNewHttpEndpointForm = true;
+      if (result.http_endpoint_id) {
+        pushEvent("refresh_http_endpoints", {}, () => {
+          form.httpEndpointId = result.http_endpoint_id;
+        });
       } else if (result.error) {
         toast.error("Failed to generate Webhook.site URL:", result.error);
       } else {

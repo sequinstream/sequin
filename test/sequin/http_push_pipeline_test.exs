@@ -2,6 +2,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -28,7 +29,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
 
       adapter = fn %Req.Request{} = req ->
-        assert to_string(req.url) == http_endpoint.base_url
+        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
         json = Jason.decode!(req.body)
 
         assert_maps_equal(
@@ -163,7 +164,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == consumer.http_endpoint.base_url
+      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
       json = Jason.decode!(req.body)
 
       assert json["record"] == record

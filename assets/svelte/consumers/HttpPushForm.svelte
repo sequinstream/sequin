@@ -15,7 +15,6 @@
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
   import TableSelector from "../components/TableSelector.svelte";
-  import HttpEndpointForm from "../http_endpoints/FormBody.svelte";
   import {
     Card,
     CardContent,
@@ -26,7 +25,13 @@
   import FullPageModal from "../components/FullPageModal.svelte";
   import { cn, truncateMiddle } from "$lib/utils";
   import { toast } from "svelte-sonner";
-  import { ExternalLinkIcon, Loader2, ExternalLink } from "lucide-svelte";
+  import {
+    ExternalLinkIcon,
+    Loader2,
+    ExternalLink,
+    RefreshCwIcon,
+    CheckIcon,
+  } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
   import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
 
@@ -105,7 +110,6 @@
 
   let dialogOpen = true;
   let showConfirmDialog = false;
-  let showNewHttpEndpointForm = false;
   let isGeneratingWebhookSite = false;
 
   function handleConsumerSubmit() {
@@ -143,7 +147,6 @@
           headers: {},
           encryptedHeaders: {},
         };
-        showNewHttpEndpointForm = true;
       } else if (result.error) {
         toast.error("Failed to generate Webhook.site URL:", result.error);
       } else {
@@ -151,6 +154,18 @@
       }
     });
   }
+
+  function refreshHttpEndpoints() {
+    httpEndpointsRefreshState = "refreshing";
+    pushEvent("refresh_http_endpoints", {}, () => {
+      httpEndpointsRefreshState = "done";
+      setTimeout(() => {
+        httpEndpointsRefreshState = "idle";
+      }, 2000);
+    });
+  }
+
+  let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
@@ -367,7 +382,7 @@
         <CardTitle>HTTP Endpoint</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        {#if !form.httpEndpointId && !showNewHttpEndpointForm}
+        {#if !form.httpEndpointId}
           <p class="text-xs mb-2">
             Just kicking the tires?
             <button
@@ -387,55 +402,14 @@
             </button>
           </p>
         {/if}
-        {#if isEditMode}
-          <div class="flex justify-between items-center">
-            <Select
-              disabled
-              selected={{
-                value: form.httpEndpointId,
-                label:
-                  selectedHttpEndpoint?.name ||
-                  (showNewHttpEndpointForm
-                    ? "+ Add new"
-                    : "Select an endpoint"),
-              }}
-            >
-              <SelectTrigger
-                class={cn(
-                  "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
-                )}
-              >
-                <SelectValue placeholder="Selected HTTP endpoint" />
-              </SelectTrigger>
-            </Select>
-            {#if form.httpEndpointId}
-              <a
-                href="/http-endpoints/{form.httpEndpointId}"
-                class="ml-2"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <Button variant="outline" size="sm">
-                  <ExternalLink class="h-4 w-4 mr-2" />
-                  Edit HTTP Endpoint
-                </Button>
-              </a>
-            {/if}
-          </div>
-        {:else}
+        <div class="flex items-center space-x-2">
           <Select
             selected={{
               value: form.httpEndpointId,
               label: selectedHttpEndpoint?.name || "Select an endpoint",
             }}
             onSelectedChange={(event) => {
-              if (event.value === "new") {
-                form.httpEndpointId = null;
-                showNewHttpEndpointForm = true;
-              } else {
-                form.httpEndpointId = event.value;
-              }
+              form.httpEndpointId = event.value;
             }}
           >
             <SelectTrigger class="w-full">
@@ -445,51 +419,67 @@
               {#each httpEndpoints as endpoint}
                 <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
               {/each}
-              <SelectItem value="new">+ Add new</SelectItem>
             </SelectContent>
           </Select>
-        {/if}
-
-        {#if showNewHttpEndpointForm}
-          <HttpEndpointForm
-            bind:form={form.httpEndpoint}
-            errors={errors.http_endpoint || {}}
-          />
-        {:else if errors.http_endpoint_id || errors.http_endpoint}
-          <p class="text-destructive text-sm">
-            Please select or create an HTTP endpoint
-          </p>
-        {/if}
-
-        <div class="space-y-2">
-          <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
-          <div class="flex flex-row bg-white">
-            <div
-              class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+          <div class="flex items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={refreshHttpEndpoints}
+              disabled={httpEndpointsRefreshState === "refreshing"}
+              class="p-2"
+              aria-label="Refresh HTTP Endpoints"
             >
-              {#if selectedHttpEndpoint}
-                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+              {#if httpEndpointsRefreshState === "refreshing"}
+                <RefreshCwIcon class="h-5 w-5 animate-spin" />
+              {:else if httpEndpointsRefreshState === "done"}
+                <CheckIcon class="h-5 w-5 text-green-500" />
               {:else}
-                {truncateMiddle(form.httpEndpoint.baseUrl, 50)}
+                <RefreshCwIcon class="h-5 w-5" />
               {/if}
-            </div>
-            <Input
-              id="http-endpoint-path"
-              bind:value={form.httpEndpointPath}
-              placeholder="/webhook"
-              class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-              style="border-left: none;"
-            />
+            </Button>
+            <a href="/http-endpoints/new" target="_blank" class="ml-2">
+              <Button variant="outline" size="sm">
+                <ExternalLink class="h-4 w-4 mr-2" />
+                New HTTP Endpoint
+              </Button>
+            </a>
           </div>
-          <p class="text-sm text-muted-foreground">
-            The path to append to the base URL for this consumer's requests.
-          </p>
-          {#if errors.http_endpoint_path}
-            <p class="text-destructive text-sm">{errors.http_endpoint_path}</p>
-          {/if}
         </div>
 
-        {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
+        {#if errors.http_endpoint_id}
+          <p class="text-destructive text-sm">Please select an HTTP endpoint</p>
+        {/if}
+
+        {#if form.httpEndpointId}
+          <div class="space-y-2">
+            <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
+            <div class="flex flex-row bg-white">
+              <div
+                class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+              >
+                {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+              </div>
+              <Input
+                id="http-endpoint-path"
+                bind:value={form.httpEndpointPath}
+                placeholder="/webhook"
+                class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                style="border-left: none;"
+              />
+            </div>
+            <p class="text-sm text-muted-foreground">
+              The path to append to the base URL for this consumer's requests.
+            </p>
+            {#if errors.http_endpoint_path}
+              <p class="text-destructive text-sm">
+                {errors.http_endpoint_path}
+              </p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if form.httpEndpointId}
           <div class="mt-4 space-y-2">
             <Label>Fully Qualified URL</Label>
             <div class="flex items-center space-x-2 overflow-x-auto">

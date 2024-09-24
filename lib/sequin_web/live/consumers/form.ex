@@ -173,6 +173,10 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
+  def handle_event("refresh_http_endpoints", _params, socket) do
+    {:noreply, assign_http_endpoints(socket)}
+  end
+
   defp decode_params(form, socket) do
     message_kind = form["messageKind"]
 

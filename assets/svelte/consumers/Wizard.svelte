@@ -9,6 +9,8 @@
     Loader2,
     XIcon,
     CircleIcon,
+    RefreshCwIcon,
+    ExternalLink,
   } from "lucide-svelte";
   import {
     Card,
@@ -578,6 +580,20 @@
       showRowExample = true;
     }
   }
+
+  // Add a new function to handle refreshing HTTP Endpoints
+  function refreshHttpEndpoints() {
+    httpEndpointsRefreshState = "refreshing";
+    pushEvent("refresh_http_endpoints", {}, () => {
+      httpEndpointsRefreshState = "done";
+      setTimeout(() => {
+        httpEndpointsRefreshState = "idle";
+      }, 2000);
+    });
+  }
+
+  // Add a reactive variable to track the refresh state
+  let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
 </script>
 
 <FullPageModal {showConfirmOnExit} on:close={handleClose} bodyPadding={0}>
@@ -956,7 +972,7 @@
                 {#if form.consumerKind === "http_push"}
                   <div class="space-y-2">
                     <h3 class="text-lg font-medium">HTTP Endpoint</h3>
-                    {#if !form.httpEndpointId && !showNewHttpEndpointForm}
+                    {#if !form.httpEndpointId}
                       <p class="text-xs mb-2">
                         Just kicking the tires?
                         <button
@@ -976,108 +992,120 @@
                         </button>
                       </p>
                     {/if}
-                    <Select
-                      selected={{
-                        value: form.httpEndpointId,
-                        label:
-                          selectedHttpEndpoint?.name ||
-                          (showNewHttpEndpointForm
-                            ? "+ Add new"
-                            : "Select an endpoint"),
-                      }}
-                      onSelectedChange={(event) => {
-                        if (event.value === "new") {
-                          form.httpEndpointId = null;
-                          showNewHttpEndpointForm = true;
-                        } else {
+                    <div class="flex items-center space-x-2">
+                      <Select
+                        selected={{
+                          value: form.httpEndpointId,
+                          label:
+                            selectedHttpEndpoint?.name || "Select an endpoint",
+                        }}
+                        onSelectedChange={(event) => {
                           form.httpEndpointId = event.value;
-                          showNewHttpEndpointForm = false;
-                        }
-                        handleFormUpdate({
-                          httpEndpointId: form.httpEndpointId,
-                        });
-                      }}
-                    >
-                      <SelectTrigger class="w-full">
-                        <SelectValue placeholder="Select an endpoint" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {#each httpEndpoints as endpoint}
-                          <SelectItem value={endpoint.id}
-                            >{endpoint.name}</SelectItem
-                          >
-                        {/each}
-                        <SelectItem value="new">+ Add new</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {#if showNewHttpEndpointForm}
-                    <HttpEndpointForm
-                      bind:form={form.httpEndpoint}
-                      errors={errors.http_endpoint || {}}
-                    />
-                  {:else if errors.http_endpoint_id || errors.http_endpoint}
-                    <p class="text-destructive text-sm">
-                      Please select or create an HTTP endpoint
-                    </p>
-                  {/if}
-
-                  <div class="space-y-2">
-                    <Label for="http-endpoint-path"
-                      >Consumer Endpoint Path</Label
-                    >
-                    <div class="flex flex-row bg-white">
-                      <div
-                        class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-                      >
-                        {#if selectedHttpEndpoint}
-                          {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
-                        {:else}
-                          {truncateMiddle(form.httpEndpoint.baseUrl, 50)}
-                        {/if}
-                      </div>
-                      <Input
-                        id="http-endpoint-path"
-                        bind:value={form.httpEndpointPath}
-                        placeholder="/webhook"
-                        class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                        style="border-left: none;"
-                        on:input={() =>
                           handleFormUpdate({
-                            httpEndpointPath: form.httpEndpointPath,
-                          })}
-                      />
+                            httpEndpointId: form.httpEndpointId,
+                          });
+                        }}
+                      >
+                        <SelectTrigger class="w-full">
+                          <SelectValue placeholder="Select an endpoint" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {#each httpEndpoints as endpoint}
+                            <SelectItem value={endpoint.id}
+                              >{endpoint.name}</SelectItem
+                            >
+                          {/each}
+                        </SelectContent>
+                      </Select>
+                      <div class="flex items-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          on:click={refreshHttpEndpoints}
+                          disabled={httpEndpointsRefreshState === "refreshing"}
+                          class="p-2"
+                          aria-label="Refresh HTTP Endpoints"
+                        >
+                          {#if httpEndpointsRefreshState === "refreshing"}
+                            <RefreshCwIcon class="h-5 w-5 animate-spin" />
+                          {:else if httpEndpointsRefreshState === "done"}
+                            <CheckIcon class="h-5 w-5 text-green-500" />
+                          {:else}
+                            <RefreshCwIcon class="h-5 w-5" />
+                          {/if}
+                        </Button>
+                        <a
+                          href="/http-endpoints/new"
+                          target="_blank"
+                          class="ml-2"
+                        >
+                          <Button variant="outline" size="sm">
+                            <ExternalLink class="h-4 w-4 mr-2" />
+                            New HTTP Endpoint
+                          </Button>
+                        </a>
+                      </div>
                     </div>
-                    <p class="text-sm text-muted-foreground">
-                      The path to append to the base URL for this consumer's
-                      requests.
-                    </p>
-                    {#if errors.http_endpoint_path}
+
+                    {#if errors.http_endpoint_id}
                       <p class="text-destructive text-sm">
-                        {errors.http_endpoint_path}
+                        Please select an HTTP endpoint
                       </p>
                     {/if}
-                  </div>
 
-                  {#if form.httpEndpointId || form.httpEndpoint.baseUrl}
-                    <div class="mt-4 space-y-2">
-                      <Label>Fully Qualified URL</Label>
-                      <div class="flex items-center space-x-2 overflow-x-auto">
-                        <p
-                          class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                    {#if form.httpEndpointId}
+                      <div class="space-y-2">
+                        <Label for="http-endpoint-path"
+                          >Consumer Endpoint Path</Label
                         >
-                          {(form.httpEndpointId
-                            ? selectedHttpEndpoint?.baseUrl
-                            : form.httpEndpoint.baseUrl
-                          ).replace(/\/$/, "")}/{form.httpEndpointPath.replace(
-                            /^\//,
-                            ""
-                          )}
+                        <div class="flex flex-row bg-white">
+                          <div
+                            class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
+                          >
+                            {truncateMiddle(selectedHttpEndpoint.baseUrl, 50)}
+                          </div>
+                          <Input
+                            id="http-endpoint-path"
+                            bind:value={form.httpEndpointPath}
+                            placeholder="/webhook"
+                            class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                            style="border-left: none;"
+                            on:input={() =>
+                              handleFormUpdate({
+                                httpEndpointPath: form.httpEndpointPath,
+                              })}
+                          />
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                          The path to append to the base URL for this consumer's
+                          requests.
                         </p>
+                        {#if errors.http_endpoint_path}
+                          <p class="text-destructive text-sm">
+                            {errors.http_endpoint_path}
+                          </p>
+                        {/if}
                       </div>
-                    </div>
-                  {/if}
+                    {/if}
+
+                    {#if form.httpEndpointId}
+                      <div class="mt-4 space-y-2">
+                        <Label>Fully Qualified URL</Label>
+                        <div
+                          class="flex items-center space-x-2 overflow-x-auto"
+                        >
+                          <p
+                            class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+                          >
+                            {selectedHttpEndpoint.baseUrl.replace(
+                              /\/$/,
+                              ""
+                            )}/{form.httpEndpointPath.replace(/^\//, "")}
+                          </p>
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
                 {/if}
               </form>
             </div>

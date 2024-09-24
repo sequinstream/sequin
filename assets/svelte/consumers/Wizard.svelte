@@ -155,6 +155,10 @@
         }
         break;
 
+      case "select_consumer":
+        continueDisabled = !form.consumerKind;
+        break;
+
       case "configure_consumer":
         if (form.consumerKind === "http_push" && form.httpEndpointId) {
           continueDisabled = !form.name;
@@ -237,12 +241,11 @@
     }
   }
 
-  function handleConsumerClick(consumer) {
+  function handleConsumerSelect(consumer) {
     if (!consumer.comingSoon) {
-      handleFormUpdate({ consumerKind: consumer.id });
-      pushEvent("form_updated", { form });
-      step = "configure_consumer";
-      saveFormToStorage();
+      handleFormUpdate({
+        consumerKind: form.consumerKind === consumer.id ? null : consumer.id,
+      });
     }
   }
 
@@ -769,39 +772,45 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
             {#each consumerTypes as consumer}
               <div
-                class="bg-white border border-gray-200 overflow-hidden rounded-lg shadow {consumer.comingSoon
-                  ? 'opacity-50 cursor-not-allowed'
-                  : 'cursor-pointer hover:shadow-md transition-shadow'}"
-                on:click={() =>
-                  !consumer.comingSoon && handleConsumerClick(consumer)}
-                on:keydown={(e) =>
-                  !consumer.comingSoon &&
-                  e.key === "Enter" &&
-                  handleConsumerClick(consumer)}
-                tabindex={consumer.comingSoon ? -1 : 0}
-                role="button"
-                aria-disabled={consumer.comingSoon}
+                class="bg-white border border-gray-200 overflow-hidden rounded-lg shadow flex flex-col justify-between"
               >
-                <div class="p-4">
-                  <h2 class="text-lg font-medium text-gray-700 mb-2">
-                    {consumer.title}
-                  </h2>
-                  <div class="text-sm text-gray-500 mb-4">
-                    {consumer.description}
-                  </div>
-                  {#if consumer.id === "http_push"}
-                    <HttpPushVisual />
-                  {:else if consumer.id === "http_pull"}
-                    <HttpPullVisual />
-                  {/if}
-                  <p class="text-sm text-gray-600 mt-4">
+                <div class="p-4 flex flex-col gap-2">
+                  <div class="h-80">
+                    <h2 class="text-lg font-medium text-gray-700 mb-2">
+                      {consumer.title}
+                    </h2>
+                    <div class="text-sm text-gray-500 mb-4">
+                      {consumer.description}
+                    </div>
                     {#if consumer.id === "http_push"}
-                      Sequin will send updates from Postgres tables to an
-                      endpoint you specify.
+                      <HttpPushVisual />
                     {:else if consumer.id === "http_pull"}
-                      Your application will read from Sequin's queue via HTTP.
+                      <HttpPullVisual />
                     {/if}
-                  </p>
+                    <p class="text-sm text-gray-600 mt-4">
+                      {#if consumer.id === "http_push"}
+                        Sequin will send updates from Postgres tables to an
+                        endpoint you specify.
+                      {:else if consumer.id === "http_pull"}
+                        Your application will read from Sequin's queue via HTTP.
+                      {/if}
+                    </p>
+                  </div>
+                  <Button
+                    class="w-full mt-4"
+                    variant={form.consumerKind === consumer.id
+                      ? "outline"
+                      : "default"}
+                    on:click={() =>
+                      !consumer.comingSoon && handleConsumerSelect(consumer)}
+                  >
+                    {#if form.consumerKind === consumer.id}
+                      <CheckIcon class="w-4 h-4 mr-2" />
+                      Selected
+                    {:else}
+                      {consumer.comingSoon ? "Coming Soon" : `Select`}
+                    {/if}
+                  </Button>
                 </div>
                 {#if consumer.comingSoon}
                   <div
@@ -1147,11 +1156,7 @@
           {/if}
         </div>
         <div>
-          {#if step === "select_consumer"}
-            <p class="text-sm leading-4 text-carbon-200 font-semibold">
-              Select a consumer type to continue
-            </p>
-          {:else if step === "configure_consumer"}
+          {#if step === "configure_consumer"}
             <Button
               loading={isCreatingConsumer}
               on:click={onConsumerCreate}

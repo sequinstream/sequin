@@ -544,18 +544,16 @@ defmodule Sequin.ConsumersTest do
       assert HttpEndpoint.url(http_endpoint) == "https://example.com/webhook"
     end
 
-    test "returns modified URL when associated with a local tunnel" do
-      local_tunnel = AccountsFactory.insert_local_tunnel!()
-
+    test "returns modified URL when using a local tunnel" do
       http_endpoint =
         ConsumersFactory.insert_http_endpoint!(
           scheme: :https,
           host: "example.com",
           path: "/webhook",
-          local_tunnel_id: local_tunnel.id
+          use_local_tunnel: true
         )
 
-      expected_url = "http://#{Application.fetch_env!(:sequin, :portal_hostname)}:#{local_tunnel.bastion_port}/webhook"
+      expected_url = "http://#{Application.fetch_env!(:sequin, :portal_hostname)}:#{http_endpoint.port}/webhook"
       assert HttpEndpoint.url(http_endpoint) == expected_url
     end
   end
@@ -570,7 +568,8 @@ defmodule Sequin.ConsumersTest do
         host: "example.com",
         port: 443,
         path: "/webhook",
-        headers: %{"Content-Type" => "application/json"}
+        headers: %{"Content-Type" => "application/json"},
+        use_local_tunnel: false
       }
 
       assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
@@ -580,6 +579,22 @@ defmodule Sequin.ConsumersTest do
       assert http_endpoint.port == 443
       assert http_endpoint.path == "/webhook"
       assert http_endpoint.headers == %{"Content-Type" => "application/json"}
+      refute http_endpoint.use_local_tunnel
+    end
+
+    test "creates a http_endpoint with local tunnel" do
+      account = AccountsFactory.insert_account!()
+
+      valid_attrs = %{
+        name: "my-endpoint",
+        use_local_tunnel: true
+      }
+
+      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
+      assert http_endpoint.name == "my-endpoint"
+      assert http_endpoint.use_local_tunnel
+      assert http_endpoint.port
+      refute http_endpoint.host
     end
 
     test "returns error changeset with invalid attributes" do
@@ -602,16 +617,17 @@ defmodule Sequin.ConsumersTest do
       http_endpoint = ConsumersFactory.insert_http_endpoint!()
 
       update_attrs = %{
-        name: "Updated Endpoint",
+        name: "update-endpoint",
         scheme: :http,
         host: "updated.example.com",
         port: 8080,
         path: "/updated",
-        headers: %{"Authorization" => "Bearer token"}
+        headers: %{"Authorization" => "Bearer token"},
+        use_local_tunnel: false
       }
 
       assert {:ok, %HttpEndpoint{} = updated_endpoint} = Consumers.update_http_endpoint(http_endpoint, update_attrs)
-      assert updated_endpoint.name == "Updated Endpoint"
+      assert updated_endpoint.name == "update-endpoint"
       assert updated_endpoint.scheme == :http
       assert updated_endpoint.host == "updated.example.com"
       assert updated_endpoint.port == 8080

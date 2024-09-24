@@ -7,6 +7,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Name
+  alias Sequin.Repo
 
   @parent_id "http_endpoints_form"
 
@@ -34,7 +35,13 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   defp fetch_or_build_http_endpoint(socket, %{"id" => id}) do
-    Consumers.get_http_endpoint_for_account(current_account_id(socket), id)
+    case Consumers.get_http_endpoint_for_account(current_account_id(socket), id) do
+      {:ok, http_endpoint} ->
+        {:ok, http_endpoint}
+
+      error ->
+        error
+    end
   end
 
   defp fetch_or_build_http_endpoint(_socket, _) do
@@ -117,27 +124,36 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   defp create_or_update_http_endpoint(socket, params) do
-    changeset =
-      if socket.assigns.is_edit? do
-        HttpEndpoint.update_changeset(socket.assigns.http_endpoint, params)
-      else
-        HttpEndpoint.create_changeset(%HttpEndpoint{account_id: current_account_id(socket)}, params)
+    Repo.transact(fn ->
+      with {:ok, http_endpoint} <- create_or_update_base_endpoint(socket, params),
+           :ok <- test_endpoint_reachability(http_endpoint) do
+        {:ok, http_endpoint}
       end
+    end)
+  end
 
-    with {:ok, valid_changes} <- Ecto.Changeset.apply_action(changeset, :validate),
-         {:ok, :reachable} <- Consumers.test_reachability(valid_changes) do
-      if socket.assigns.is_edit? do
-        Consumers.update_http_endpoint_with_lifecycle(socket.assigns.http_endpoint, params)
-      else
-        Consumers.create_http_endpoint_for_account(current_account_id(socket), params)
-      end
+  defp create_or_update_base_endpoint(socket, http_endpoint_params) do
+    if socket.assigns.is_edit? do
+      Consumers.update_http_endpoint(socket.assigns.http_endpoint, http_endpoint_params)
     else
-      {:error, %Ecto.Changeset{} = invalid_changeset} ->
-        {:error, invalid_changeset}
+      Consumers.create_http_endpoint_for_account(current_account_id(socket), http_endpoint_params)
+    end
+  end
+
+  defp test_endpoint_reachability(%HttpEndpoint{use_local_tunnel: true}) do
+    :ok
+  end
+
+  defp test_endpoint_reachability(http_endpoint) do
+    case Consumers.test_reachability(http_endpoint) do
+      {:ok, :reachable} ->
+        :ok
 
       {:error, reason} ->
         changeset =
-          Ecto.Changeset.add_error(changeset, :host, "Endpoint is not reachable: #{inspect(reason)}")
+          http_endpoint
+          |> Ecto.Changeset.change()
+          |> Ecto.Changeset.add_error(:host, "Endpoint is not reachable: #{inspect(reason)}")
 
         {:error, changeset}
     end
@@ -149,26 +165,30 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       "name" => http_endpoint.name || Name.generate(99),
       "baseUrl" => HttpEndpoint.url(http_endpoint),
       "headers" => http_endpoint.headers || %{},
-      # Add this line
-      "encryptedHeaders" => http_endpoint.encrypted_headers || %{}
+      "encryptedHeaders" => http_endpoint.encrypted_headers || %{},
+      "useLocalTunnel" => http_endpoint.use_local_tunnel
     }
   end
 
   defp decode_params(form) do
+    use_local_tunnel = form["useLocalTunnel"]
     uri = URI.parse(form["baseUrl"])
+    host = if use_local_tunnel, do: Application.get_env(:sequin, :portal_hostname), else: uri.host
+    scheme = if use_local_tunnel, do: "http", else: uri.scheme
 
     %{
       "http_endpoint" => %{
         "name" => form["name"],
-        "scheme" => uri.scheme,
+        "scheme" => scheme,
         "userinfo" => uri.userinfo,
-        "host" => uri.host,
+        "host" => host,
         "port" => uri.port,
         "path" => uri.path,
         "query" => uri.query,
         "fragment" => uri.fragment,
         "headers" => form["headers"] || %{},
-        "encrypted_headers" => form["encryptedHeaders"] || %{}
+        "encrypted_headers" => form["encryptedHeaders"] || %{},
+        "use_local_tunnel" => use_local_tunnel
       }
     }
   end

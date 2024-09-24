@@ -6,7 +6,6 @@ defmodule Sequin.Accounts do
   import Ecto.Query, warn: false
 
   alias Sequin.Accounts.Account
-  alias Sequin.Accounts.LocalTunnel
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserNotifier
   alias Sequin.Accounts.UserToken
@@ -601,43 +600,5 @@ defmodule Sequin.Accounts do
     user
     |> User.github_update_changeset(attrs)
     |> Repo.update()
-  end
-
-  # Add these functions to the module
-
-  @doc """
-  Returns the list of local tunnels for a given account.
-  """
-  def list_local_tunnels_for_account(account_id) do
-    account_id
-    |> LocalTunnel.where_account_id()
-    |> preload([:http_endpoints, :postgres_databases])
-    |> Repo.all()
-  end
-
-  @doc """
-  Gets a single local tunnel.
-  """
-  def get_local_tunnel(id) do
-    case Repo.get(LocalTunnel, id) do
-      nil -> {:error, Error.not_found(entity: :local_tunnel)}
-      local_tunnel -> {:ok, local_tunnel}
-    end
-  end
-
-  @doc """
-  Creates a local tunnel.
-  """
-  def create_local_tunnel_for_account(account_id, attrs \\ %{}) do
-    %LocalTunnel{account_id: account_id}
-    |> LocalTunnel.create_changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Deletes a local tunnel.
-  """
-  def delete_local_tunnel(%LocalTunnel{} = local_tunnel) do
-    Repo.delete(local_tunnel)
   end
 end

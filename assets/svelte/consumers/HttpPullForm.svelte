@@ -95,6 +95,23 @@
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
     form.postgresDatabaseId = event.databaseId;
     form.tableOid = event.tableOid;
+
+    // Set the form name based on the selected table
+    if (form.tableOid) {
+      const selectedDatabase = databases.find(
+        (db) => db.id === form.postgresDatabaseId
+      );
+      if (selectedDatabase) {
+        const selectedTable = selectedDatabase.tables.find(
+          (table) => table.oid === form.tableOid
+        );
+        if (selectedTable) {
+          const tableName = selectedTable.name;
+          const newName = `${tableName}_pull_consumer`;
+          form.name = newName;
+        }
+      }
+    }
   }
 
   function handleFilterChange(newFilters) {
@@ -337,15 +354,21 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="consumer-name">Name</Label>
-          <Input
-            id="consumer-name"
-            bind:value={form.name}
-            placeholder="Enter a unique name for your consumer"
-            data-1p-ignore
-            data-lpignore="true"
-            data-form-type="other"
-            disabled={isEditMode}
-          />
+          <div class="flex flex-col gap-1">
+            <Input
+              id="consumer-name"
+              bind:value={form.name}
+              placeholder="Enter a unique name for your consumer"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
+              disabled={isEditMode}
+            />
+            <p class="text-xs font-light">
+              Must contain only alphanumeric characters, underscores, hyphens,
+              or dots.
+            </p>
+          </div>
           {#if errors.name}
             <p class="text-destructive text-sm">{errors.name}</p>
           {/if}

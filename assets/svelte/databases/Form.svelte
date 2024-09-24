@@ -434,15 +434,21 @@
       <CardContent class="space-y-4">
         <div class="space-y-2">
           <Label for="name">Name</Label>
-          <Input
-            type="text"
-            id="name"
-            bind:value={form.name}
-            placeholder="Enter a unique name for your database"
-            data-1p-ignore
-            data-lpignore="true"
-            data-form-type="other"
-          />
+          <div class="flex flex-col gap-1">
+            <Input
+              type="text"
+              id="name"
+              bind:value={form.name}
+              placeholder="Enter a unique name for your database"
+              data-1p-ignore
+              data-lpignore="true"
+              data-form-type="other"
+            />
+            <p class="text-xs font-light">
+              Must contain only alphanumeric characters, underscores, hyphens,
+              or dots.
+            </p>
+          </div>
           {#if errors.name}
             <p class="text-destructive text-sm">{errors.name}</p>
           {/if}

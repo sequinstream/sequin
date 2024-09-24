@@ -30,6 +30,6 @@ defmodule Sequin.Name do
     noun = Enum.random(@nouns)
     id = :rand.uniform(max_id)
 
-    Enum.join([adjective, noun, id], "-")
+    Enum.join([adjective, noun, id], "_")
   end
 end

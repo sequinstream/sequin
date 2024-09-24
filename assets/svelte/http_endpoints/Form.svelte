@@ -118,13 +118,19 @@
         <div class="space-y-4">
           <div class="space-y-2">
             <Label for="name">Name</Label>
-            <Input
-              id="http-endpoint-name"
-              bind:value={form.name}
-              autocomplete="off"
-              data-1p-ignore
-              placeholder="Enter a unique name for your HTTP endpoint"
-            />
+            <div class="flex flex-col gap-1">
+              <Input
+                id="http-endpoint-name"
+                bind:value={form.name}
+                autocomplete="off"
+                data-1p-ignore
+                placeholder="Enter a unique name for your HTTP endpoint"
+              />
+              <p class="text-xs font-light">
+                Must contain only alphanumeric characters, underscores, hyphens,
+                or dots.
+              </p>
+            </div>
             {#if errors.name}
               <p class="text-sm text-destructive">{errors.name}</p>
             {/if}

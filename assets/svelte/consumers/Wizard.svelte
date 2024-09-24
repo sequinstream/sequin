@@ -480,8 +480,7 @@
     });
   }
 
-  let showRowExample = false;
-  let showChangeExample = false;
+  let showExample = false;
 
   const rowExample = {
     record: {
@@ -566,14 +565,6 @@
       },
     },
   };
-
-  function showExample(type: string) {
-    if (type === "event") {
-      showChangeExample = true;
-    } else if (type === "record") {
-      showRowExample = true;
-    }
-  }
 
   // Add a new function to handle refreshing HTTP Endpoints
   function refreshHttpEndpoints() {
@@ -719,7 +710,7 @@
                     <Button
                       class="w-full"
                       variant="outline"
-                      on:click={() => showExample(type.id)}
+                      on:click={() => (showExample = true)}
                     >
                       See example
                     </Button>
@@ -1180,55 +1171,68 @@
   </svelte:fragment>
 </FullPageModal>
 
-<Dialog.Root bind:open={showRowExample}>
+<Dialog.Root bind:open={showExample}>
   <Dialog.Portal>
     <Dialog.Overlay />
-    <Dialog.Content class="max-w-3xl">
-      <Dialog.Header class="mb-4">
-        <Dialog.Title>Row Example</Dialog.Title>
-      </Dialog.Header>
-      <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
-          >{JSON.stringify(rowExample, null, 2).trim()}</code
-        ></pre>
-      <Dialog.Footer>
-        <Button on:click={() => (showRowExample = false)}>Close</Button>
-      </Dialog.Footer>
-      <Dialog.Close />
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
-
-<Dialog.Root bind:open={showChangeExample}>
-  <Dialog.Portal>
-    <Dialog.Overlay />
-    <Dialog.Content class="max-w-3xl">
-      <Dialog.Header class="mb-4">
-        <Dialog.Title>Change Example</Dialog.Title>
-      </Dialog.Header>
-      <Tabs.Root value="insert" class="w-full mb-4">
-        <Tabs.List class="grid grid-cols-3 mb-4">
-          <Tabs.Trigger value="insert" class="w-full">Insert</Tabs.Trigger>
-          <Tabs.Trigger value="update" class="w-full">Update</Tabs.Trigger>
-          <Tabs.Trigger value="delete" class="w-full">Delete</Tabs.Trigger>
-        </Tabs.List>
-        <Tabs.Content value="insert">
-          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
-              >{JSON.stringify(changeExamples.insert, null, 2).trim()}</code
+    <Dialog.Content class="max-w-5xl max-h-[calc(100vh-2rem)] flex flex-col">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <Dialog.Header class="mb-4">
+            <Dialog.Title>Change Example</Dialog.Title>
+          </Dialog.Header>
+          <Tabs.Root value="insert" class="w-full mb-4">
+            <Tabs.List class="grid grid-cols-3 mb-4">
+              <Tabs.Trigger value="insert" class="w-full">Insert</Tabs.Trigger>
+              <Tabs.Trigger value="update" class="w-full">Update</Tabs.Trigger>
+              <Tabs.Trigger value="delete" class="w-full">Delete</Tabs.Trigger>
+            </Tabs.List>
+            <div class="">
+              <Tabs.Content value="insert">
+                <pre class="bg-slate-100 p-4 rounded-md overflow-x-auto"><code
+                    >{JSON.stringify(
+                      changeExamples.insert,
+                      null,
+                      2
+                    ).trim()}</code
+                  ></pre>
+              </Tabs.Content>
+              <Tabs.Content value="update">
+                <pre class="bg-slate-100 p-4 rounded-md overflow-x-auto"><code
+                    >{JSON.stringify(
+                      changeExamples.update,
+                      null,
+                      2
+                    ).trim()}</code
+                  ></pre>
+              </Tabs.Content>
+              <Tabs.Content value="delete">
+                <pre class="bg-slate-100 p-4 rounded-md overflow-x-auto"><code
+                    >{JSON.stringify(
+                      changeExamples.delete,
+                      null,
+                      2
+                    ).trim()}</code
+                  ></pre>
+              </Tabs.Content>
+            </div>
+          </Tabs.Root>
+        </div>
+        <div>
+          <Dialog.Header class="mb-4">
+            <Dialog.Title>Row Example</Dialog.Title>
+          </Dialog.Header>
+          <div
+            class="h-[40px] mb-4 bg-slate-100 p-4 flex items-center justify-start text-center rounded-md text-sm font-medium"
+          >
+            The latest state of the row is always sent. No deletes.
+          </div>
+          <pre class="bg-slate-100 p-4 rounded-md overflow-x-auto"><code
+              >{JSON.stringify(rowExample, null, 2).trim()}</code
             ></pre>
-        </Tabs.Content>
-        <Tabs.Content value="update">
-          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
-              >{JSON.stringify(changeExamples.update, null, 2).trim()}</code
-            ></pre>
-        </Tabs.Content>
-        <Tabs.Content value="delete">
-          <pre class="bg-gray-100 p-4 rounded-md overflow-x-auto"><code
-              >{JSON.stringify(changeExamples.delete, null, 2).trim()}</code
-            ></pre>
-        </Tabs.Content>
-      </Tabs.Root>
-      <Dialog.Footer>
-        <Button on:click={() => (showChangeExample = false)}>Close</Button>
+        </div>
+      </div>
+      <Dialog.Footer class="mt-auto">
+        <Button on:click={() => (showExample = false)}>Close</Button>
       </Dialog.Footer>
       <Dialog.Close />
     </Dialog.Content>

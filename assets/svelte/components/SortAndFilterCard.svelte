@@ -68,7 +68,7 @@
   function addFilter() {
     const newFilter: Filter = {
       columnAttnum: null,
-      operator: null,
+      operator: "=",
       value: "",
       valueType: null,
     };

@@ -337,7 +337,7 @@ defmodule Sequin.Consumers.SourceTable do
       end
     end
 
-    defp to_external_operator(operator) do
+    def to_external_operator(operator) do
       case operator do
         :== -> "="
         :!= -> "!="

@@ -1,7 +1,332 @@
 ---
-title: "Trigger Trigger.dev events from database changes"
+title: "Trigger Trigger.dev tasks from database changes"
 sidebarTitle: "Trigger.dev"
-description: "How to use Sequin to trigger Trigger.dev events from database changes."
+description: "How to use Sequin to trigger Trigger.dev tasks from database changes."
 icon: "triangle"
 iconType: "solid"
 ---
+
+[Trigger.dev](https://trigger.dev) makes it easy to write and run long-running tasks. You write and test tasks locally in your project, and then deploy them to Trigger.dev where they reliably invoke the tasks. Trigger.dev handles the infrastructure, observability, and execution.
+
+Often, you want to trigger a task when a record in your database is created, updated, or deleted. For instance, you might want to send a welcome email to a user as soon as they are inserted into the database:
+
+<Frame>
+  <img src="/images/guides/trigger-dev/send-with-sequin.svg" alt="Trigger.dev Overview" />
+</Frame>
+
+In this guide, you'll learn how to use Sequin to trigger Trigger.dev tasks from database changes.
+
+## Prerequisites
+
+You are about to create a [regular Trigger.dev task](https://trigger.dev/docs/tasks-regular) that you will execute when a new user is inserted into your database. Sequin will detect the `insert` operation on the `users` table and then send an HTTP request to an API endpoint that will then process the request by calling `tasks.trigger()`.
+
+As long as you create an HTTP endpoint that Sequin can deliver webhooks to, you can use any web framework or edge function (e.g. Supabase Edge Functions, Vercel Functions, Cloudflare Workers, etc.) to invoke your Trigger.dev task. In this guide, we'll show you how to setup Trigger.dev tasks using Next.js API Routes.
+
+You'll need the following to follow this guide:
+
+- A Next.js project with [Trigger.dev](https://trigger.dev) installed
+<Info>
+If you don't have one already, follow [Trigger.dev's Next.js setup guide](https://trigger.dev/docs/guides/frameworks/nextjs) to setup your project. You can return to this guide when you're ready to write your first Trigger.dev task.
+</Info>
+- A [Sequin](https://console.sequinstream.com/register) account
+- A Postgres database (Sequin works with any Postgres database version 12 and up)
+
+## Create a Trigger.dev task
+
+Start by creating a new Trigger.dev task that takes in a Sequin change event as a payload and sends a welcome email to the user:
+
+<Steps titleSize="h3">
+  <Step title="Create a `send-welcome-email` task">
+  In your `src/trigger/tasks` directory, create a new file called `send-welcome-email.ts` and add the following code:
+
+  ```ts
+  import { task } from "@trigger.dev/sdk/v3";
+
+  export const sendWelcomeEmail = task({
+    id: "send-welcome-email",
+    run: async (payload: {
+    record: {
+      id: number;
+      name: string;
+      email: string;
+    };
+    changes: string | null;
+    action: string;
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      commit_timestamp: string;
+        consumer: {
+          id: string;
+          name: string;
+        };
+      };
+    }) => {
+    const user = payload.record;
+    console.log(`Start email sequence for user ${user.id}`, user);
+        //function to send welcome email
+    }
+  });
+  ```
+
+  This task takes in a Sequin change event as a payload and mocks up the steps to send a welcome email to the user.
+  </Step>
+  <Step title="Add the task to your Trigger.dev project">
+  Register the `send-welcome-email` task to your Trigger.dev cloud project by running the following command:
+
+  ```bash
+  npx trigger.dev@latest dev
+  ```
+
+  In the Trigger.dev dashboard, you should now see the `send-welcome-email` task:
+
+  <Frame>
+    <img src="/images/guides/trigger-dev/register-task.png" alt="Task added" />
+  </Frame>
+  </Step>
+  <Step title="Test the task">
+  Now that you've registered the task, you can test it by navigating to the **Test** tab and selecting the `send-welcome-email` task. Paste in a Sequin change event as a payload:
+
+  ```json
+  {
+    "record": {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john.doe@example.com"
+    },
+    "changes": null,
+    "action": "insert",
+    "metadata": {
+        "table_schema": "public",
+        "table_name": "users",
+        "commit_timestamp": "2024-02-20T14:30:00Z",
+        "consumer": {
+            "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+            "name": "new_user_consumer"
+        }
+    }
+  }
+  ```
+
+  Click the **Run test** button:
+
+  <Frame>
+    <img src="/images/guides/trigger-dev/run-test.png" alt="Run test" />
+  </Frame>
+
+   Back in your terminal you should see logs indicating the payload is being processed and the welcome email is being sent:
+
+  ```bash
+  ○ Sep 23, 14:43:15.064 ->  20240923.7 | send-welcome-email | run_627u472k64qx5f5s62drx.1
+  ○ Sep 23, 14:43:15.277 run_627u472k64qx5f5s62drx.1 Start email sequence for user 1 { id: 1, name: 'John Doe', email: 'john.doe@example.com' }
+  ○ Sep 23, 14:43:15.719 ->  20240923.7 | send-welcome-email | run_627u472k64qx5f5s62drx.1 | Success (621.8ms)
+  ```
+  </Step>
+</Steps>
+
+<Check>
+    You've successfully created a Trigger.dev task that sends a welcome email to a user when Sequin delivers a change payload with a new user. In the next step, you'll create an API endpoint that Sequin can deliver change payloads to.
+</Check>
+
+## Setup an API endpoint to trigger the task
+
+You'll now create an API endpoint that will receive change payloads from Sequin and then trigger the `send-welcome-email` task.
+
+<Info>
+This guide covers how to setup an API endpoint using the Next.js App Router. You can find examples for Next.js Server Actions and Pages Router in the [Trigger.dev documentation](https://trigger.dev/docs/guides/frameworks/nextjs).
+</Info>
+
+<Steps titleSize="h3">
+  <Step title="Create a route handler">
+  Add a route handler by creating a new `route.ts` file in a `/app/api/send-welcome-email` directory:
+
+  ```ts app/api/send-welcome-email/route.ts
+  import type { sendWelcomeEmail } from "@/trigger/send-welcome-email";
+  import { tasks } from "@trigger.dev/sdk/v3";
+  import { NextResponse } from "next/server";
+
+  export async function POST(req: Request) {
+    const payload = await req.json();
+    const handle = await tasks.trigger<typeof sendWelcomeEmail>(
+      "send-welcome-email",
+      payload
+    );
+
+    return NextResponse.json(handle);
+  }
+  ```
+
+  This route handler will receive change payloads from Sequin, parse them, and then trigger the `send-welcome-email` task.
+  </Step>
+  <Step title="Set secret keys">
+  For security, you'll need to set two secret keys in a `.env.local` file:
+
+  ```bash
+  SEQUIN_WEBHOOK_SECRET=your-secret-key
+  TRIGGER_SECRET_KEY=secret-from-trigger-dev
+  ```
+
+  The `SEQUIN_WEBHOOK_SECRET` is optional, but will help you ensure that only Sequin can deliver change payloads to your endpoint. You can add verification to your endpoint easily:
+
+  ```ts
+  if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  ```
+
+  The `TRIGGER_SECRET_KEY` is used to authenticate requests to Trigger.dev and can be found in the **API keys** tab of the Trigger.dev dashboard.
+  </Step>
+  <Step title="Test the endpoint">
+  Ensure your Next.js app is running:
+
+  ```bash
+  npm run dev
+ ```
+
+ And ensure your Trigger.dev server is running:
+
+  ```bash
+  npx trigger.dev@latest dev
+  ```
+
+  Then make a request to your endpoint:
+
+ ```curl
+  curl -X POST http://localhost:3001/api/send-welcome-email \
+   -H "Content-Type: application/json" \
+   -H "Authorization: Bearer your_secret_token_here" \
+   -d '{
+     "record": {
+       "id": 1,
+       "name": "John Doe",
+       "email": "john.doe@example.com"
+     },
+     "changes": null,
+     "action": "insert",
+     "metadata": {
+       "table_schema": "public",
+       "table_name": "users",
+       "commit_timestamp": "2024-02-20T14:30:00Z",
+       "consumer": {
+         "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+         "name": "new_user_consumer"
+       }
+     }
+    }'
+
+  {"id":"run_ykmz5mr23anagm1j3o6sq"}
+  ```
+
+  If everything is setup correctly, the CURL request will return a run ID and you should see the task run in both your dev server and the Trigger.dev dashboard.
+  </Step>
+</Steps>
+
+<Check>
+  You've successfully created an API endpoint that can receive change payloads from Sequin and trigger a Trigger.dev task. In the next step, you'll setup Sequin to trigger the endpoint.
+</Check>
+
+## Setup Sequin to trigger your task
+
+You'll now configure Sequin to capture every new user in your `users` table and send an event to the API endpoint you created above.
+
+<Steps titleSize="h3">
+    <Step title="Connect Sequin to your database">
+        1. Login to your Sequin account and click the **Add New Database** button.
+        2. Enter the connection details for your Postgres database. If you need to connect to a local dev database, create a tunnel using the [Sequin CLI](/guides/sequin-cli).
+        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+        ```sql
+        create publication sequin_pub for all tables;
+        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+        ```
+        4. Name your database and click the **Connect Database** button.
+
+        Sequin will connect to your database and ensure that it's configured properly.
+
+        <Note>
+        If you need step-by-step connection instructions to connect Sequin to your database, check out our [quickstart guide](/quickstart).
+        </Note>
+    </Step>
+    <Step title="Tunnel to your local endpoint">
+    Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
+
+    1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
+    2. Enter a name for your endpoint (i.e. `local-endpoint`) and check the **Local tunnel** option.
+    3. Now, click **Add encryption header** and set the key to `authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`.
+    4. Click **Create HTTP Endpoint**.
+
+    Now, [install the Sequin CLI](/cli) and run:
+
+    ```bash
+    sequin tunnel --ports=3001:local-endpoint
+    ```
+
+    This will create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API.
+    </Step>
+    <Step title="Create a Push Consumer">
+    Create a push consumer that will capture events from your database and deliver them to your local endpoint:
+
+    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
+    2. Select your users table (i.e `public.users`).
+    3. Select to process **changes** and click **Continue**.
+    4. Configure which kinds of changes you want to capture and apply filters (for instance, ignore internal emails). Since you just want to email all new users, you'll capture just the `insert` changes and apply no additional filters
+    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
+    6. Now, give your consumer a name (i.e. `new_user_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above.
+    7. Click the **Create Consumer** button. Sequin will verify your database is set up properly and may give you another SQL command to run to ensure every new user is captured.
+    </Step>
+</Steps>
+
+<Check>
+    Your Sequin consumer is now created and ready to send events to your API endpoint.
+</Check>
+
+## Test end-to-end
+
+<Steps titleSize="h3">
+    <Step title="Spin up you dev environment">
+    1. The Next.js app is running: `npm run dev`
+    2. The Trigger.dev dev server is running `npx trigger.dev@latest dev`
+    3. The Sequin tunnel is running: `sequin tunnel --ports=3001:local-endpoint`
+    </Step>
+    <Step title="Create a new user in your database">
+    Insert a new user into your database:
+
+    ```sql
+    insert into users (name, email) values ('Eric Goldman', 'eric@sequinstream.com');
+    ```
+    </Step>
+    <Step title="Trace the change in the Sequin dashboard">
+    In the Sequin console, navigate to the [**Trace**](https://console.sequinstream.com/trace) tab and confirm that Sequin delivered the event to your local endpoint:
+    <Frame>
+      <img src="/images/guides/trigger-dev/trace.png" alt="Trace Event" />
+    </Frame>
+    </Step>
+
+    <Step title="Confirm the event was received by your endpoint">
+    In your local terminal, you should see a `200` response in your Next.js app:
+
+    ```bash
+    POST /api/send-welcome-email 200 in 372ms
+    ```
+    </Step>
+    <Step title="Observe the task run in the Trigger.dev dashboard">
+    Finally, in the Trigger.dev dashboard, navigate to the [**Runs**](https://trigger.dev/runs) tab and confirm that the task run was created:
+
+    <Frame>
+        <img src="/images/guides/trigger-dev/final-run.png" alt="Task run" />
+    </Frame>
+    </Step>
+</Steps>
+
+<Check>
+    Every new user will now trigger a Trigger.dev task that sends a welcome email!
+</Check>
+
+## Next steps
+
+Each new user in your database will now trigger a Trigger.dev task that sends a welcome email. This is a simple example, but Sequin can deliver change payloads for any database event to Trigger.dev tasks.
+
+From here, add error handling and deploy to production:
+
+- Add error handling so your API endpoint only returns a `200` when you know the task run has been received. Sequin will retry sending the payload if you don't return a `200` status to provide exactly-once processing guarantees.
+- Add [retries](https://trigger.dev/docs/errors-retrying) to your Trigger.dev task to ensure that any errors are captured and logged.
+- Deploy to [production](https://trigger.dev/docs/guides/frameworks/nextjs#deploying-your-task-to-trigger-dev) and update your Sequin consumer to point to your production database and endpoint.

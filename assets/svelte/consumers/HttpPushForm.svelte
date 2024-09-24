@@ -55,12 +55,6 @@
     maxWaiting: consumer.max_waiting,
     httpEndpointId: consumer.http_endpoint_id,
     httpEndpointPath: consumer.http_endpoint_path || "",
-    httpEndpoint: {
-      name: "",
-      baseUrl: "",
-      headers: {},
-      encryptedHeaders: {},
-    },
     sortColumnAttnum: consumer.sort_column_attnum || null,
     recordConsumerState: consumer.record_consumer_state || {
       initialMinSortCol: null,
@@ -112,6 +106,37 @@
   let showConfirmDialog = false;
   let isGeneratingWebhookSite = false;
 
+  // Updated createWebhookSiteEndpoint function
+  function createWebhookSiteEndpoint() {
+    isGeneratingWebhookSite = true;
+    pushEvent("generate_webhook_site_url", {}, (result: any) => {
+      isGeneratingWebhookSite = false;
+      if (result.http_endpoint_id) {
+        pushEvent("refresh_http_endpoints", {}, () => {
+          form.httpEndpointId = result.http_endpoint_id;
+        });
+      } else if (result.error) {
+        toast.error("Failed to generate Webhook.site URL:", result.error);
+      } else {
+        toast.error("Failed to generate Webhook.site URL");
+      }
+    });
+  }
+
+  // Updated refreshHttpEndpoints function
+  function refreshHttpEndpoints() {
+    httpEndpointsRefreshState = "refreshing";
+    pushEvent("refresh_http_endpoints", {}, () => {
+      httpEndpointsRefreshState = "done";
+      setTimeout(() => {
+        httpEndpointsRefreshState = "idle";
+      }, 2000);
+    });
+  }
+
+  // Declare the httpEndpointsRefreshState variable
+  let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
+
   function handleConsumerSubmit() {
     isSubmitting = true;
     pushEvent("form_submitted", { form }, (reply) => {
@@ -136,45 +161,12 @@
     pushEvent("form_closed");
   }
 
-  function createWebhookSiteEndpoint() {
-    isGeneratingWebhookSite = true;
-    pushEvent("generate_webhook_site_url", {}, (result: any) => {
-      isGeneratingWebhookSite = false;
-      if (result.url && result.name) {
-        form.httpEndpoint = {
-          name: result.name,
-          baseUrl: result.url,
-          headers: {},
-          encryptedHeaders: {},
-        };
-      } else if (result.error) {
-        toast.error("Failed to generate Webhook.site URL:", result.error);
-      } else {
-        toast.error("Failed to generate Webhook.site URL");
-      }
-    });
-  }
-
-  function refreshHttpEndpoints() {
-    httpEndpointsRefreshState = "refreshing";
-    pushEvent("refresh_http_endpoints", {}, () => {
-      httpEndpointsRefreshState = "done";
-      setTimeout(() => {
-        httpEndpointsRefreshState = "idle";
-      }, 2000);
-    });
-  }
-
-  let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
-
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
-  $: fullUrl = concatenateUrl(
-    form.httpEndpointId
-      ? selectedHttpEndpoint?.baseUrl
-      : form.httpEndpoint.baseUrl,
-    form.httpEndpointPath
-  );
+  $: fullUrl =
+    selectedHttpEndpoint?.baseUrl && form.httpEndpointPath
+      ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.httpEndpointPath)
+      : "";
 </script>
 
 <FullPageModal
@@ -479,9 +471,9 @@
           </div>
         {/if}
 
-        {#if form.httpEndpointId}
+        {#if form.httpEndpointId && fullUrl && fullUrl !== ""}
           <div class="mt-4 space-y-2">
-            <Label>Fully Qualified URL</Label>
+            <Label>Fully qualified URL</Label>
             <div class="flex items-center space-x-2 overflow-x-auto">
               <p
                 class="text-xs w-fit font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"

@@ -1031,7 +1031,7 @@ defmodule Sequin.Consumers do
   end
 
   def test_reachability(%HttpEndpoint{} = http_endpoint) do
-    case URI.parse(http_endpoint.base_url) do
+    case HttpEndpoint.uri(http_endpoint) do
       %URI{host: host} when is_binary(host) ->
         case :inet.gethostbyname(String.to_charlist(host)) do
           {:ok, _} -> {:ok, :reachable}
@@ -1044,11 +1044,8 @@ defmodule Sequin.Consumers do
   end
 
   def test_connect(%HttpEndpoint{} = http_endpoint) do
-    case URI.parse(http_endpoint.base_url) do
+    case HttpEndpoint.uri(http_endpoint) do
       %URI{host: host, port: port} when is_binary(host) ->
-        # Use default HTTP/HTTPS ports if not specified
-        port = port || if http_endpoint.base_url =~ ~r/^https:/, do: 443, else: 80
-
         # Convert host to charlist as required by :gen_tcp.connect
         host_charlist = String.to_charlist(host)
 

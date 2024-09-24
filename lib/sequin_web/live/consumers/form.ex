@@ -3,6 +3,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
@@ -164,9 +165,9 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   def handle_event("generate_webhook_site_url", _params, socket) do
-    case generate_webhook_site_url() do
-      {:ok, url, name} ->
-        {:reply, %{url: url, name: name}, socket}
+    case generate_webhook_site_endpoint(socket) do
+      {:ok, %HttpEndpoint{} = http_endpoint} ->
+        {:reply, %{http_endpoint_id: http_endpoint.id}, socket}
 
       {:error, reason} ->
         {:reply, %{error: reason}, socket}
@@ -190,7 +191,6 @@ defmodule SequinWeb.ConsumersLive.Form do
     %{
       "consumer_kind" => form["consumerKind"],
       "ack_wait_ms" => form["ackWaitMs"],
-      "http_endpoint" => decode_http_endpoint(form["httpEndpoint"]),
       "http_endpoint_id" => form["httpEndpointId"],
       "http_endpoint_path" => form["httpEndpointPath"],
       "max_ack_pending" => form["maxAckPending"],
@@ -328,19 +328,9 @@ defmodule SequinWeb.ConsumersLive.Form do
     %{
       "id" => http_endpoint.id,
       "name" => http_endpoint.name,
-      "baseUrl" => http_endpoint.base_url
+      "baseUrl" => HttpEndpoint.url(http_endpoint)
     }
   end
-
-  defp decode_http_endpoint(http_endpoint) when is_map(http_endpoint) do
-    %{
-      "name" => http_endpoint["name"],
-      "base_url" => http_endpoint["baseUrl"],
-      "headers" => http_endpoint["headers"]
-    }
-  end
-
-  defp decode_http_endpoint(_http_endpoint), do: nil
 
   defp update_consumer(socket, params) do
     consumer = socket.assigns.consumer
@@ -453,7 +443,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
-  defp generate_webhook_site_url do
+  defp generate_webhook_site_endpoint(socket) do
     url = "https://webhook.site/token"
     headers = [{"Content-Type", "application/json"}]
 
@@ -467,9 +457,12 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case Req.post(url, headers: headers, body: body) do
       {:ok, %Req.Response{status: 201, body: %{"uuid" => uuid}}} ->
-        url = "https://webhook.site/#{uuid}"
-        name = "webhook-site-#{String.slice(uuid, 0, 8)}"
-        {:ok, url, name}
+        Consumers.create_http_endpoint_for_account(current_account_id(socket), %{
+          name: "webhook-site-#{String.slice(uuid, 0, 8)}",
+          scheme: :https,
+          host: "webhook.site",
+          path: "/#{uuid}"
+        })
 
       {:error, reason} ->
         {:error, "Failed to generate Webhook.site URL: #{inspect(reason)}"}

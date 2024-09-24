@@ -7,6 +7,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
@@ -363,7 +364,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   defp encode_http_endpoint(http_endpoint) do
     %{
       id: http_endpoint.id,
-      url: http_endpoint.base_url
+      url: HttpEndpoint.url(http_endpoint)
     }
   end
 

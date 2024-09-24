@@ -3,6 +3,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Health
 
   @impl Phoenix.LiveView
@@ -68,7 +69,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      baseUrl: http_endpoint.base_url,
+      baseUrl: HttpEndpoint.url(http_endpoint),
       insertedAt: http_endpoint.inserted_at,
       httpPushConsumersCount: length(http_endpoint.http_push_consumers),
       health: Health.to_external(http_endpoint.health)

@@ -3,6 +3,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Health
   alias Sequin.Metrics
 
@@ -89,7 +90,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     %{
       id: http_endpoint.id,
       name: http_endpoint.name,
-      baseUrl: http_endpoint.base_url,
+      baseUrl: HttpEndpoint.url(http_endpoint),
       headers: http_endpoint.headers,
       encryptedHeaders: http_endpoint.encrypted_headers || %{},
       health: Health.to_external(http_endpoint.health),

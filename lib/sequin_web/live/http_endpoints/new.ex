@@ -87,9 +87,19 @@ defmodule SequinWeb.HttpEndpointsLive.New do
   end
 
   defp changeset_to_form_data(changeset) do
+    uri = %URI{
+      scheme: Ecto.Changeset.get_field(changeset, :scheme),
+      userinfo: Ecto.Changeset.get_field(changeset, :userinfo),
+      host: Ecto.Changeset.get_field(changeset, :host),
+      port: Ecto.Changeset.get_field(changeset, :port),
+      path: Ecto.Changeset.get_field(changeset, :path),
+      query: Ecto.Changeset.get_field(changeset, :query),
+      fragment: Ecto.Changeset.get_field(changeset, :fragment)
+    }
+
     %{
       name: Ecto.Changeset.get_field(changeset, :name),
-      baseUrl: Ecto.Changeset.get_field(changeset, :base_url),
+      baseUrl: URI.to_string(uri),
       headers: Ecto.Changeset.get_field(changeset, :headers) || %{}
     }
   end

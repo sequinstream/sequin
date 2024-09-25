@@ -251,9 +251,9 @@
 
       // Set the form name based on the selected table and consumer kind
       if (newConsumerKind && selectedTable) {
-        const tableName = selectedTable.name.replace(/_/g, "-");
+        const tableName = selectedTable.name;
         const consumerType = newConsumerKind === "http_push" ? "push" : "pull";
-        const newName = `${tableName}-${consumerType}-consumer`;
+        const newName = `${tableName}_${consumerType}_consumer`;
         handleFormUpdate({ name: newName });
       }
     }
@@ -875,13 +875,19 @@
                       <InfoIcon class="h-4 w-4" />
                     </button>
                   </Label>
-                  <Input
-                    id="name"
-                    bind:value={form.name}
-                    placeholder="Enter consumer name"
-                    on:input={() => handleFormUpdate({ name: form.name })}
-                    on:focus={() => (activeInfo = "name")}
-                  />
+                  <div class="flex flex-col gap-1">
+                    <Input
+                      id="name"
+                      bind:value={form.name}
+                      placeholder="Enter consumer name"
+                      on:input={() => handleFormUpdate({ name: form.name })}
+                      on:focus={() => (activeInfo = "name")}
+                    />
+                    <p class="text-xs font-light">
+                      Alphanumeric separated by underscores. No special
+                      characters.
+                    </p>
+                  </div>
                   {#if errors.name}
                     <p class="text-destructive text-sm">{errors.name[0]}</p>
                   {/if}

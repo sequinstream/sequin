@@ -36,6 +36,8 @@
   import { Progress } from "$lib/components/ui/progress";
   import { tweened } from "svelte/motion";
   import { cubicOut } from "svelte/easing";
+  import { Info } from "lucide-svelte";
+  import CodeWithSecret from "$lib/components/CodeWithSecret.svelte";
 
   export let database: {
     id?: string;
@@ -48,12 +50,14 @@
     ssl: boolean;
     publication_name: string;
     slot_name: string;
+    useLocalTunnel: boolean;
   };
   export let errors: Record<string, any> = {};
   export let submitError: string | null = null;
   export let parent: string;
   export let live;
   export let showSupabasePoolerPrompt: boolean = false;
+  export let api_token: { name: string; token: string };
 
   let form = { ...database, ssl: true }; // Set default SSL to true
 
@@ -148,6 +152,18 @@
   }
 
   let testDatabaseCardExpanded = false;
+
+  function toggleLocalTunnel() {
+    form.useLocalTunnel = !form.useLocalTunnel;
+    pushEvent("form_updated", { form });
+  }
+
+  $: setupTunnelCode = `# if it's your first time using the Sequin CLI
+sequin context add default --api-token={{secret}} --set-default
+
+# every time you want to boot the tunnel
+# Replace [your-local-port] with the local port you want Sequin to connect to
+sequin tunnel --ports=[your-local-port]:${form.name}`;
 </script>
 
 <FullPageModal
@@ -212,8 +228,36 @@
           </Popover>
         </div>
         <div class="space-y-2">
-          <Label for="hostname">Host</Label>
-          <Input type="text" id="hostname" bind:value={form.hostname} />
+          <div
+            class="grid grid-cols-[1fr_auto] items-center align-middle gap-2"
+          >
+            <Label for="hostname">Host</Label>
+            <div class="flex items-center space-x-2">
+              <Switch
+                id="use-localhost"
+                checked={form.useLocalTunnel}
+                onCheckedChange={toggleLocalTunnel}
+                disabled={isEdit}
+              />
+              <Label for="use-localhost">Use localhost</Label>
+              <Popover>
+                <PopoverTrigger>
+                  <Info class="w-4 h-4 text-muted-foreground" />
+                </PopoverTrigger>
+                <PopoverContent>
+                  You can use the Sequin CLI to connect Sequin to a database
+                  running on your local machine.
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+          <Input
+            type="text"
+            id="hostname"
+            bind:value={form.hostname}
+            disabled={form.useLocalTunnel}
+            placeholder={form.useLocalTunnel ? "Handled by Sequin" : ""}
+          />
           {#if databaseErrors.hostname}
             <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
           {/if}
@@ -221,12 +265,21 @@
 
         <div class="space-y-2">
           <Label for="port">Port</Label>
-          <Input
-            type="number"
-            id="port"
-            bind:value={form.port}
-            placeholder="5432"
-          />
+          {#if form.useLocalTunnel}
+            <Input
+              type="number"
+              id="port"
+              placeholder="Handled by Sequin"
+              disabled
+            />
+          {:else}
+            <Input
+              type="number"
+              id="port"
+              bind:value={form.port}
+              placeholder="5432"
+            />
+          {/if}
           {#if databaseErrors.port}
             <p class="text-destructive text-sm">{databaseErrors.port}</p>
           {/if}
@@ -297,13 +350,17 @@
         </div>
 
         <div class="flex items-center space-x-2">
-          <Switch
-            id="ssl"
-            checked={form.ssl}
-            onCheckedChange={(checked) => {
-              form.ssl = checked;
-            }}
-          />
+          {#if form.useLocalTunnel}
+            <Switch id="ssl" checked={false} disabled />
+          {:else}
+            <Switch
+              id="ssl"
+              checked={form.ssl}
+              onCheckedChange={(checked) => {
+                form.ssl = checked;
+              }}
+            />
+          {/if}
           <Label for="ssl">SSL</Label>
         </div>
         {#if databaseErrors.ssl}
@@ -323,6 +380,24 @@
                 Convert to direct connection
               </Button>
             </Alert>
+          </div>
+        {/if}
+        {#if form.useLocalTunnel}
+          <div class="text-sm p-4 text-muted-foreground bg-muted rounded-md">
+            <p class="mb-4">Install the Sequin CLI and boot up a tunnel now.</p>
+            <div>
+              <CodeWithSecret
+                preClass="text-xs bg-muted"
+                containerClass="bg-muted"
+                tabs={[
+                  {
+                    name: "Connect",
+                    value: setupTunnelCode,
+                  },
+                ]}
+                secret={api_token.token}
+              />
+            </div>
           </div>
         {/if}
       </CardContent>

@@ -120,7 +120,7 @@
   }
 
   $: setupTunnelCode = `# if it's your first time using the Sequin CLI
-sequin context add --api-token={{secret}} --set-default
+sequin context add default --api-token={{secret}} --set-default
 
 # every time you want to boot the tunnel
 # Replace [your-local-port] with the local port you want Sequin to connect to

@@ -86,7 +86,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       :ipv6,
       :use_local_tunnel
     ])
-    |> validate_required([:database, :hostname, :username, :password, :name])
+    |> validate_required([:database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
     |> Sequin.Changeset.validate_name()
@@ -187,9 +187,16 @@ defmodule Sequin.Databases.PostgresDatabase do
     from(pd in query, as: :database)
   end
 
+  def with_local_tunnel(%PostgresDatabase{use_local_tunnel: true} = pd) do
+    %PostgresDatabase{pd | hostname: Application.get_env(:sequin, :portal_hostname)}
+  end
+
+  def with_local_tunnel(pd), do: pd
+
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
     opts =
       pd
+      |> with_local_tunnel()
       |> Sequin.Map.from_ecto()
       |> Map.take([
         :database,
@@ -205,13 +212,6 @@ defmodule Sequin.Databases.PostgresDatabase do
       ])
       |> Enum.to_list()
       |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
-
-    opts =
-      if pd.use_local_tunnel do
-        Keyword.put(opts, :hostname, Application.get_env(:sequin, :portal_hostname))
-      else
-        opts
-      end
 
     # TODO: Remove this when we have CA certs for the cloud providers
     # We likely need a bundle that covers many different database providers

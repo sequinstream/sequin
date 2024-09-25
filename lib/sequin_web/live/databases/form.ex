@@ -4,6 +4,8 @@ defmodule SequinWeb.DatabasesLive.Form do
 
   import Sequin.Error.Guards, only: [is_error: 1]
 
+  alias Sequin.Accounts
+  alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -23,13 +25,18 @@ defmodule SequinWeb.DatabasesLive.Form do
 
     case fetch_or_build_database(socket, id) do
       {:ok, database} ->
+        {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
+
         socket =
           socket
           |> assign(
             is_edit?: not is_nil(id),
             show_errors?: false,
             submit_error: nil,
-            database: database
+            database: database,
+            api_token: api_token,
+            allocated_bastion_port: nil,
+            update_allocated_bastion_port_timer: nil
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
@@ -80,7 +87,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
             submitError: @submit_error,
-            showSupabasePoolerPrompt: @show_supabase_pooler_prompt
+            showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
+            api_token: @api_token
           }
         }
       />
@@ -95,6 +103,8 @@ defmodule SequinWeb.DatabasesLive.Form do
 
     show_supabase_pooler_prompt = detect_supabase_pooled(params["database"])
     socket = assign(socket, :show_supabase_pooler_prompt, show_supabase_pooler_prompt)
+
+    socket = maybe_allocate_bastion_port(socket)
 
     {:noreply, socket}
   end
@@ -151,7 +161,7 @@ defmodule SequinWeb.DatabasesLive.Form do
           {:reply, %{ok: false}, assign(socket, :submit_error, Exception.message(error))}
 
         {:error, error} ->
-          {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error))}
+          {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error, params["use_local_tunnel"]))}
       end
     else
       _ ->
@@ -160,7 +170,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   rescue
     error ->
       Logger.error("Crashed in databases/form.ex:handle_event/2: #{inspect(error)}")
-      {:noreply, assign(socket, :submit_error, error_msg(error))}
+      {:noreply, assign(socket, :submit_error, error_msg(error, false))}
   end
 
   @impl Phoenix.LiveView
@@ -173,6 +183,13 @@ defmodule SequinWeb.DatabasesLive.Form do
       end
 
     {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:allocate_bastion_port, socket) do
+    name = Ecto.Changeset.get_change(socket.assigns.changeset, :name)
+    {:ok, abp} = Accounts.get_or_allocate_bastion_port_for_account(current_account_id(socket), name)
+    {:noreply, socket |> assign(:allocated_bastion_port, abp) |> assign(:update_allocated_bastion_port_timer, nil)}
   end
 
   defp put_changesets(socket, params) do
@@ -198,16 +215,22 @@ defmodule SequinWeb.DatabasesLive.Form do
     |> assign(:replication_changeset, replication_changeset)
   end
 
-  def error_msg(error) do
+  def error_msg(error, use_local_tunnel) do
     case error do
       {:error, error} ->
-        error_msg(error)
+        error_msg(error, use_local_tunnel)
 
       :econnrefused ->
-        "Connection refused. Please check if the database server is running and accessible."
+        maybe_append_local_tunnel_error(
+          "Connection refused. Please check if the database server is running and accessible.",
+          use_local_tunnel
+        )
 
       :timeout ->
-        "Connection timed out. Please verify the hostname and port are correct."
+        maybe_append_local_tunnel_error(
+          "Connection timed out. Please verify the hostname and port are correct.",
+          use_local_tunnel
+        )
 
       :nxdomain ->
         "Unable to resolve the hostname. Please check if the hostname is correct."
@@ -224,6 +247,12 @@ defmodule SequinWeb.DatabasesLive.Form do
       %Postgrex.Error{} = error ->
         Logger.warning("Unhandled Postgrex error in databases/form.ex:error_msg/1: #{inspect(error)}")
         Exception.message(error)
+
+      %DBConnection.ConnectionError{reason: :queue_timeout} ->
+        maybe_append_local_tunnel_error(
+          "The database is not reachable. Please ensure the database server is running and accessible.",
+          use_local_tunnel
+        )
 
       :database_connect_forbidden ->
         "The provided user does not have permission to connect to the database."
@@ -249,70 +278,87 @@ defmodule SequinWeb.DatabasesLive.Form do
     end
   end
 
+  defp maybe_append_local_tunnel_error(error, use_local_tunnel) do
+    if use_local_tunnel do
+      "#{error} Also, please make sure your tunnel is running via the Sequin CLI."
+    else
+      error
+    end
+  end
+
   defp validate_and_create_or_update(socket, params) do
     account_id = current_account_id(socket)
-    db_params = Map.put(params["database"], "account_id", account_id)
+
+    db_params =
+      params["database"]
+      |> Map.put("account_id", account_id)
+      |> put_ipv6()
+
     replication_params = params["replication_slot"]
 
-    temp_db = struct(PostgresDatabase, Sequin.Map.atomize_keys(db_params))
-    temp_slot = struct(PostgresReplicationSlot, Sequin.Map.atomize_keys(replication_params))
+    Repo.transact(fn ->
+      res =
+        if socket.assigns.is_edit? do
+          update_database(socket.assigns.database, db_params, replication_params)
+        else
+          create_database(account_id, db_params, replication_params)
+        end
 
-    with {:ok, ipv6?} <- Sequin.NetworkUtils.check_ipv6(temp_db.hostname),
-         temp_db = %PostgresDatabase{temp_db | ipv6: ipv6?},
-         db_params = Map.put(db_params, "ipv6", ipv6?),
-         :ok <- Databases.test_tcp_reachability(temp_db),
-         :ok <- Databases.test_connect(temp_db, 10_000),
-         :ok <- Databases.test_permissions(temp_db),
-         :ok <- Databases.test_slot_permissions(temp_db, temp_slot) do
-      if socket.assigns.is_edit? do
-        update_database(socket.assigns.database, db_params, replication_params)
-      else
-        create_database(account_id, db_params, replication_params)
+      with {:ok, db} <- res,
+           :ok <- Databases.test_tcp_reachability(db),
+           :ok <- Databases.test_connect(db, 10_000),
+           :ok <- Databases.test_permissions(db),
+           :ok <- Databases.test_slot_permissions(db, db.replication_slot) do
+        # Safe to update health here because we just validated that the database is reachable
+        # TODO: Implement background health updates for reachability
+        Health.update(db, :reachable, :healthy)
+        {:ok, db}
       end
+    end)
+  end
+
+  defp put_ipv6(%{"use_local_tunnel" => true} = db_params), do: db_params
+
+  defp put_ipv6(db_params) do
+    case Sequin.NetworkUtils.check_ipv6(db_params["hostname"]) do
+      {:ok, true} -> Map.put(db_params, "ipv6", true)
+      {:ok, false} -> Map.put(db_params, "ipv6", false)
     end
   end
 
   defp update_database(database, db_params, replication_params) do
-    Repo.transact(fn ->
-      database
-      |> Databases.update_db(db_params)
-      |> case do
-        {:ok, updated_db} ->
-          replication_slot = Repo.preload(updated_db, :replication_slot).replication_slot
+    database
+    |> Databases.update_db(db_params)
+    |> case do
+      {:ok, updated_db} ->
+        replication_slot = Repo.preload(updated_db, :replication_slot).replication_slot
 
-          case Replication.update_pg_replication(replication_slot, replication_params) do
-            {:ok, _replication} -> {:ok, updated_db}
-            {:error, error} -> {:error, error}
-          end
+        case Replication.update_pg_replication(replication_slot, replication_params) do
+          {:ok, replication} -> {:ok, %PostgresDatabase{updated_db | replication_slot: replication}}
+          {:error, error} -> {:error, error}
+        end
 
-        {:error, error} ->
-          {:error, error}
-      end
-    end)
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp create_database(account_id, db_params, replication_params) do
-    Repo.transact(fn ->
-      account_id
-      |> Databases.create_db_for_account_with_lifecycle(db_params)
-      |> case do
-        {:ok, db} ->
-          # Safe to update health here because we just validated that the database is reachable
-          # TODO: Implement background health updates for reachability
-          Health.update(db, :reachable, :healthy)
+    account_id
+    |> Databases.create_db_for_account_with_lifecycle(db_params)
+    |> case do
+      {:ok, db} ->
+        case Replication.create_pg_replication_for_account_with_lifecycle(
+               account_id,
+               Map.put(replication_params, "postgres_database_id", db.id)
+             ) do
+          {:ok, replication} -> {:ok, %PostgresDatabase{db | replication_slot: replication}}
+          {:error, error} -> {:error, error}
+        end
 
-          case Replication.create_pg_replication_for_account_with_lifecycle(
-                 account_id,
-                 Map.put(replication_params, "postgres_database_id", db.id)
-               ) do
-            {:ok, _replication} -> {:ok, db}
-            {:error, error} -> {:error, error}
-          end
-
-        {:error, error} ->
-          {:error, error}
-      end
-    end)
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp encode_database(%PostgresDatabase{} = database) do
@@ -322,11 +368,12 @@ defmodule SequinWeb.DatabasesLive.Form do
       "database" => database.database,
       "hostname" => database.hostname,
       "port" => database.port || 5432,
-      "username" => database.username,
+      "username" => database.username || "postgres",
       "password" => database.password,
-      "ssl" => database.ssl || false,
+      "ssl" => database.ssl || true,
       "publication_name" => database.replication_slot.publication_name || "sequin_pub",
-      "slot_name" => database.replication_slot.slot_name || "sequin_slot"
+      "slot_name" => database.replication_slot.slot_name || "sequin_slot",
+      "useLocalTunnel" => database.use_local_tunnel || false
     }
   end
 
@@ -339,15 +386,19 @@ defmodule SequinWeb.DatabasesLive.Form do
         port when is_integer(port) -> port
       end
 
+    ssl = if form["useLocalTunnel"], do: false, else: form["ssl"]
+    hostname = if form["useLocalTunnel"], do: Application.get_env(:sequin, :portal_hostname), else: form["hostname"]
+
     %{
       "database" => %{
         "name" => form["name"],
-        "hostname" => form["hostname"],
+        "hostname" => hostname,
         "port" => port,
         "database" => form["database"],
         "username" => form["username"],
         "password" => form["password"],
-        "ssl" => form["ssl"]
+        "ssl" => ssl,
+        "use_local_tunnel" => form["useLocalTunnel"]
       },
       "replication_slot" => %{
         "publication_name" => form["publication_name"],
@@ -356,7 +407,6 @@ defmodule SequinWeb.DatabasesLive.Form do
     }
   end
 
-  # Add these helper functions
   defp detect_supabase_pooled(%{"username" => username, "hostname" => hostname}) do
     username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase.com")
   end
@@ -370,5 +420,24 @@ defmodule SequinWeb.DatabasesLive.Form do
     |> Map.put("username", "postgres")
     |> Map.put("hostname", "db.#{project_name}.supabase.co")
     |> Map.put("port", 5432)
+  end
+
+  defp maybe_allocate_bastion_port(socket) do
+    %Ecto.Changeset{} = changeset = socket.assigns.changeset
+    use_local_tunnel = Ecto.Changeset.get_change(changeset, :use_local_tunnel, false)
+    name = Ecto.Changeset.get_change(changeset, :name)
+    allocated_bastion_port = socket.assigns.allocated_bastion_port
+    existing_timer = socket.assigns.update_allocated_bastion_port_timer
+
+    allocated_bastion_port_changed? = is_nil(allocated_bastion_port) or allocated_bastion_port.name != name
+
+    if use_local_tunnel and not socket.assigns.is_edit? and allocated_bastion_port_changed? do
+      # Debounce change
+      existing_timer && Process.cancel_timer(existing_timer)
+      timer = Process.send_after(self(), :allocate_bastion_port, 500)
+      assign(socket, :update_allocated_bastion_port_timer, timer)
+    else
+      socket
+    end
   end
 end

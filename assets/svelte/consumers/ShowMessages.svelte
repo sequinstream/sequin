@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
+  import { Switch } from "$lib/components/ui/switch";
   import {
     ArrowUpRight,
     ChevronLeft,
@@ -20,6 +21,7 @@
   export let pageSize: number;
   export let live;
   export let paused: boolean = false;
+  export let showAcked: boolean = true;
 
   let page: number = 0;
   let loading = false;
@@ -37,6 +39,34 @@
 
   let rowHeight = 0; // Will be calculated
   let totalAvailableHeight = 0;
+
+  // Add this function to determine the message state
+  function getMessageState(message) {
+    if (message.type === "acknowledged_message") {
+      return "acknowledged";
+    } else if (
+      message.deliver_count > 0 &&
+      new Date(message.not_visible_until) > new Date()
+    ) {
+      return "delivered";
+    } else {
+      return "pending";
+    }
+  }
+
+  // Add this function to get the appropriate color for the state
+  function getStateColor(state) {
+    switch (state) {
+      case "pending":
+        return "bg-gray-200";
+      case "delivered":
+        return "bg-blue-200";
+      case "acknowledged":
+        return "bg-green-200";
+      default:
+        return "bg-gray-200";
+    }
+  }
 
   onMount(() => {
     // Calculate row height after the component is mounted
@@ -239,6 +269,33 @@
 <div class="flex flex-col flex-1">
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
+    <!-- Header Div -->
+    <div class="flex items-center justify-between mb-4 messages-header">
+      <h1 class="text-2xl font-bold">Messages</h1>
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <Switch
+            checked={showAcked}
+            onCheckedChange={(checked) => {
+              showAcked = checked;
+              live.pushEvent("toggle_show_acked", { show_acked: checked });
+            }}
+          />
+          <span class="text-sm">Show Acked</span>
+        </div>
+        <Button
+          variant={paused ? "default" : "outline"}
+          size="sm"
+          on:click={togglePause}
+        >
+          {#if paused}
+            <Play class="h-4 w-4 mr-1" /> Resume Updates
+          {:else}
+            <Pause class="h-4 w-4 mr-1" /> Pause Updates
+          {/if}
+        </Button>
+      </div>
+    </div>
     {#if loading}
       <div
         class="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10"
@@ -252,28 +309,16 @@
       >
         <h1 class="text-2xl font-bold">No Messages</h1>
         <h2 class="text-gray-600">
-          Messages will appear here when they are delivered or pending delivery.
-          Acknowledged messages are not displayed.
+          {#if showAcked}
+            Messages will appear here when they are delivered, pending, or
+            acknowledged.
+          {:else}
+            You have no pending messages. Try toggling "Show Acked" to see
+            acknowledged messages.
+          {/if}
         </h2>
       </div>
     {:else}
-      <!-- Header Div -->
-      <div class="flex items-center justify-between mb-4 messages-header">
-        <h1 class="text-2xl font-bold">Messages</h1>
-        <div>
-          <Button
-            variant={paused ? "default" : "outline"}
-            size="sm"
-            on:click={togglePause}
-          >
-            {#if paused}
-              <Play class="h-4 w-4 mr-1" /> Resume Updates
-            {:else}
-              <Pause class="h-4 w-4 mr-1" /> Pause Updates
-            {/if}
-          </Button>
-        </div>
-      </div>
       <table class="w-full bg-white border border-gray-300">
         <thead>
           <tr class="bg-gray-100">
@@ -285,7 +330,7 @@
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              Type
+              State
             </th>
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
@@ -343,9 +388,15 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{message.id}</td
               >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{message.type}</td
-              >
+              <td class="px-2 py-1 whitespace-nowrap text-2xs">
+                <span
+                  class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
+                    getMessageState(message)
+                  )} text-gray-800`}
+                >
+                  {getMessageState(message)}
+                </span>
+              </td>
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
                 {message.record_pks}
               </td>
@@ -459,11 +510,15 @@
                     </div>
                     <div class="flex justify-between items-center">
                       <span class="text-sm font-medium text-gray-500"
-                        >Type:</span
+                        >State:</span
                       >
-                      <span class="text-sm text-gray-900"
-                        >{selectedMessage.type}</span
+                      <span
+                        class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
+                          getMessageState(selectedMessage)
+                        )} text-gray-800`}
                       >
+                        {getMessageState(selectedMessage)}
+                      </span>
                     </div>
                     <div class="flex justify-between items-center">
                       <span class="text-sm font-medium text-gray-500"

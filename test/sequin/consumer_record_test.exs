@@ -99,7 +99,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
       record4 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
 
-      :ok = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id, record3.ack_id])
+      assert {:ok, 3} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id, record3.ack_id])
 
       assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
       assert Repo.get_by(ConsumerRecord, id: record3.id) == nil
@@ -125,7 +125,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       record3 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
 
-      :ok = Consumers.nack_messages(consumer, [record1.ack_id, record2.ack_id])
+      assert {:ok, 2} = Consumers.nack_messages(consumer, [record1.ack_id, record2.ack_id])
 
       updated_record1 = Consumers.reload(record1)
       updated_record2 = Consumers.reload(record2)

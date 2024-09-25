@@ -65,6 +65,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
     |> validate_uri_components()
     |> foreign_key_constraint(:account_id)
     |> validate_no_port_if_local_tunnel_enabled()
+    |> Sequin.Changeset.validate_name()
   end
 
   def update_changeset(http_endpoint, attrs) do
@@ -83,6 +84,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
       :use_local_tunnel
     ])
     |> validate_uri_components()
+    |> Sequin.Changeset.validate_name()
   end
 
   defp validate_uri_components(changeset) do

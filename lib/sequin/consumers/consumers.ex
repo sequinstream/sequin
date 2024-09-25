@@ -3,6 +3,7 @@ defmodule Sequin.Consumers do
   import Ecto.Query
 
   alias Ecto.Type
+  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
@@ -807,11 +808,11 @@ defmodule Sequin.Consumers do
 
   @spec ack_messages(consumer(), [integer()]) :: :ok
   def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
-    {count, trace_ids} =
+    {count, events} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
-      |> select([ce], ce.replication_message_trace_id)
+      |> select([ce], ce)
       |> Repo.delete_all()
 
     send_posthog_ack_event(consumer)
@@ -823,26 +824,36 @@ defmodule Sequin.Consumers do
 
     TracerServer.messages_acked(consumer, ack_ids)
 
-    Enum.each(trace_ids, &Sequin.Logs.log_for_consumer_message(:info, consumer.account_id, &1, "Event acknowledged"))
+    Enum.each(
+      events,
+      &Sequin.Logs.log_for_consumer_message(
+        :info,
+        consumer.account_id,
+        &1.replication_message_trace_id,
+        "Event acknowledged"
+      )
+    )
 
-    :ok
+    AcknowledgedMessages.store_messages(consumer.id, events)
+
+    {:ok, count}
   end
 
   @spec ack_messages(consumer(), [String.t()]) :: :ok
   def ack_messages(%{message_kind: :record} = consumer, ack_ids) do
-    {count_deleted, deleted_trace_ids} =
+    {count_deleted, deleted_records} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> ConsumerRecord.where_state_not(:pending_redelivery)
-      |> select([cr], cr.replication_message_trace_id)
+      |> select([cr], cr)
       |> Repo.delete_all()
 
-    {count_updated, updated_trace_ids} =
+    {count_updated, updated_records} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
-      |> select([cr], cr.replication_message_trace_id)
+      |> select([cr], cr)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
     send_posthog_ack_event(consumer)
@@ -855,16 +866,28 @@ defmodule Sequin.Consumers do
     TracerServer.messages_acked(consumer, ack_ids)
 
     Enum.each(
-      deleted_trace_ids,
-      &Sequin.Logs.log_for_consumer_message(:info, consumer.account_id, &1, "Record acknowledged")
+      deleted_records,
+      &Sequin.Logs.log_for_consumer_message(
+        :info,
+        consumer.account_id,
+        &1.replication_message_trace_id,
+        "Record acknowledged"
+      )
     )
 
     Enum.each(
-      updated_trace_ids,
-      &Sequin.Logs.log_for_consumer_message(:info, consumer.account_id, &1, "Record acknowledged")
+      updated_records,
+      &Sequin.Logs.log_for_consumer_message(
+        :info,
+        consumer.account_id,
+        &1.replication_message_trace_id,
+        "Record acknowledged"
+      )
     )
 
-    :ok
+    AcknowledgedMessages.store_messages(consumer.id, deleted_records ++ updated_records)
+
+    {:ok, count_deleted + count_updated}
   end
 
   defp send_posthog_ack_event(consumer) do
@@ -898,23 +921,23 @@ defmodule Sequin.Consumers do
 
   @spec nack_messages(consumer(), [String.t()]) :: :ok
   def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
-    {_, _} =
+    {count, _} =
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [not_visible_until: nil])
 
-    :ok
+    {:ok, count}
   end
 
   def nack_messages(%{message_kind: :record} = consumer, ack_ids) do
-    {_, _} =
+    {count, _} =
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> ConsumerRecord.where_ack_ids(ack_ids)
       |> Repo.update_all(set: [not_visible_until: nil, state: :available])
 
-    :ok
+    {:ok, count}
   end
 
   @doc """

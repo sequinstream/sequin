@@ -5,6 +5,8 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.ApiTokens
   alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
+  alias Sequin.Consumers.AcknowledgedMessages
+  alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
@@ -16,6 +18,8 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Metrics
   alias Sequin.Repo
   alias SequinWeb.ConsumersLive.Form
+
+  require Logger
 
   # For message management
   @page_size 25
@@ -56,6 +60,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       |> assign_replica_identity()
       |> assign_metrics()
       |> assign(:paused, false)
+      |> assign(:show_acked, true)
       |> assign(:page, 0)
       |> assign(:page_size, @page_size)
       |> assign(:total_count, 0)
@@ -147,7 +152,8 @@ defmodule SequinWeb.ConsumersLive.Show do
                   messages: encode_messages(@messages),
                   totalCount: @total_count,
                   pageSize: @page_size,
-                  paused: @paused
+                  paused: @paused,
+                  showAcked: @show_acked
                 }
               }
             />
@@ -237,6 +243,13 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply,
      socket
      |> assign(:page_size, page_size)
+     |> load_consumer_messages()}
+  end
+
+  def handle_event("toggle_show_acked", %{"show_acked" => show_acked}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_acked, show_acked)
      |> load_consumer_messages()}
   end
 
@@ -407,29 +420,65 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   # Function to load messages for the consumer
-  defp load_consumer_messages(socket) do
-    consumer = socket.assigns.consumer
-    page = socket.assigns.page
-    page_size = socket.assigns.page_size
 
-    params = [
-      order_by: {:asc, :id},
-      limit: page_size,
-      offset: page * page_size
-    ]
+  defp load_consumer_messages(
+         %{assigns: %{consumer: consumer, page: page, page_size: page_size, show_acked: show_acked}} = socket
+       ) do
+    messages = load_consumer_messages(consumer, page_size, page * page_size, show_acked)
 
-    messages =
-      case consumer do
-        %{message_kind: :record} ->
-          Consumers.list_consumer_records_for_consumer(consumer.id, params)
+    db_count = Consumers.fast_count_messages_for_consumer(consumer)
 
-        %{message_kind: :event} ->
-          Consumers.list_consumer_events_for_consumer(consumer.id, params)
+    total_count =
+      if show_acked do
+        {:ok, redis_count} = AcknowledgedMessages.count_messages(consumer.id)
+        db_count + redis_count
+      else
+        db_count
       end
 
     socket
     |> assign(:messages, messages)
-    |> assign(:total_count, Consumers.fast_count_messages_for_consumer(consumer))
+    |> assign(:total_count, total_count)
+  end
+
+  defp load_consumer_messages(consumer, limit, offset, show_acked) do
+    db_messages = load_consumer_messages_from_db(consumer, offset + limit)
+
+    redis_messages =
+      if show_acked do
+        load_consumer_messages_from_redis(consumer, offset + limit)
+      else
+        []
+      end
+
+    (db_messages ++ redis_messages)
+    |> Enum.sort_by(& &1.id, :asc)
+    |> Enum.uniq_by(& &1.id)
+    |> Enum.drop(offset)
+    |> Enum.take(limit)
+  end
+
+  defp load_consumer_messages_from_db(consumer, limit) do
+    params = [order_by: {:asc, :id}, limit: limit]
+
+    case consumer do
+      %{message_kind: :record} ->
+        Consumers.list_consumer_records_for_consumer(consumer.id, params)
+
+      %{message_kind: :event} ->
+        Consumers.list_consumer_events_for_consumer(consumer.id, params)
+    end
+  end
+
+  defp load_consumer_messages_from_redis(consumer, limit) do
+    case Consumers.AcknowledgedMessages.fetch_messages(consumer.id, limit) do
+      {:ok, messages} ->
+        messages
+
+      {:error, error} ->
+        Logger.error("Failed to load messages from Redis: #{inspect(error)}")
+        []
+    end
   end
 
   # Function to fetch message data
@@ -463,6 +512,10 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   defp fetch_message_data(%ConsumerEvent{} = event, %{message_kind: :event}) do
     {:ok, event.data}
+  end
+
+  defp fetch_message_data(%AcknowledgedMessage{}, _) do
+    {:ok, nil}
   end
 
   # Function to schedule periodic message updates
@@ -506,6 +559,23 @@ defmodule SequinWeb.ConsumersLive.Show do
           inserted_at: message.inserted_at,
           data: message.data,
           trace_id: message.replication_message_trace_id
+        }
+
+      %AcknowledgedMessage{} = message ->
+        %{
+          id: message.id,
+          type: "acknowledged_message",
+          consumer_id: message.consumer_id,
+          commit_lsn: message.commit_lsn,
+          ack_id: message.ack_id,
+          deliver_count: message.deliver_count,
+          last_delivered_at: message.last_delivered_at,
+          record_pks: message.record_pks,
+          table_oid: message.table_oid,
+          not_visible_until: message.not_visible_until,
+          inserted_at: message.inserted_at,
+          data: nil,
+          trace_id: message.trace_id
         }
     end)
   end

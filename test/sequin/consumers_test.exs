@@ -2,7 +2,9 @@ defmodule Sequin.ConsumersTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SourceTable.BooleanValue
   alias Sequin.Consumers.SourceTable.DateTimeValue
@@ -193,6 +195,88 @@ defmodule Sequin.ConsumersTest do
       assert length(delivered) == 1
       assert List.first(delivered).id == event.id
       assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+  end
+
+  describe "ack_messages/2" do
+    setup do
+      consumer = ConsumersFactory.insert_consumer!()
+      {:ok, consumer: consumer}
+    end
+
+    test "acknowledges records" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+
+      records =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_record!(
+            consumer_id: consumer.id,
+            state: :delivered
+          )
+        end
+
+      ack_ids = Enum.map(records, & &1.ack_id)
+
+      assert {:ok, 3} = Consumers.ack_messages(consumer, ack_ids)
+
+      assert Repo.all(ConsumerRecord) == []
+    end
+
+    test "acknowledges events" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+
+      events =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_event!(
+            consumer_id: consumer.id,
+            not_visible_until: DateTime.utc_now()
+          )
+        end
+
+      ack_ids = Enum.map(events, & &1.ack_id)
+
+      assert {:ok, 3} = Consumers.ack_messages(consumer, ack_ids)
+
+      assert Repo.all(ConsumerEvent) == []
+    end
+
+    test "silently ignores non-existent ack_ids" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      valid_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      non_existent_ack_id = UUID.uuid4()
+
+      assert {:ok, 1} = Consumers.ack_messages(consumer, [valid_record.ack_id, non_existent_ack_id])
+      assert Repo.all(ConsumerRecord) == []
+    end
+
+    test "handles empty ack_ids list", %{consumer: consumer} do
+      assert {:ok, 0} = Consumers.ack_messages(consumer, [])
+    end
+
+    test "acknowledges only records/events for the given consumer" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      other_consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 100, message_kind: :record)
+
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, state: :delivered)
+
+      assert {:ok, 1} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id])
+
+      assert [ignore] = Repo.all(ConsumerRecord)
+      assert ignore.id == record2.id
+    end
+
+    test "acknowledged messages are stored in redis" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
+
+      assert {:ok, 2} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id])
+
+      assert {:ok, messages} = AcknowledgedMessages.fetch_messages(consumer.id)
+      assert length(messages) == 2
+      assert Enum.all?(messages, &(&1.consumer_id == consumer.id))
     end
   end
 

@@ -1,7 +1,83 @@
 ---
 title: "The Sequin CLI"
-sidebarTitle: "SequinCLI"
-description: "How to install the Sequin CLI and use it to connect your local development environment to Sequin."
+sidebarTitle: "CLI"
+description: "How to install the Sequin CLI and use it to create a tunnel between your local development environment and Sequin."
 icon: "terminal"
 iconType: "solid"
 ---
+
+With the Sequin CLI, you can easily build and test features locally. Use `sequin tunnel` to establish a connection between Sequin's cloud platform and your local development environment. You can use `sequin tunnel` to connect Sequin to either local databases or HTTP endpoints.
+
+<Info>
+At the moment, the only utility command available in the CLI is `tunnel`. More commands will be added in the future.
+</Info>
+
+## Installation
+
+### Install with Homebrew
+
+```bash
+brew tap sequinstream/sequin git@github.com:sequinstream/homebrew-sequin
+brew install sequin
+```
+
+### Install with shell
+
+```bash
+curl -sf https://raw.githubusercontent.com/sequinstream/sequin/main/cli/installer.sh | sh
+```
+
+### Build from source
+
+```bash
+git clone git@github.com:sequinstream/sequin.git
+cd cli && make build
+```
+
+Reload your console and test that it's installed:
+
+```bash
+sequin --help
+```
+
+## Setup
+
+Sequin CLI's **contexts** store settings and account information. The most important property in context is your API token. You can create a new context (called "default") like this:
+
+```bash
+sequin context add default --api-token={{my-token-from-sequinstream.com}} --set-default
+```
+
+After running this command, this API token will be included in future CLI commands by default.
+
+If you have multiple contexts, you can specify a non-default context with a `context` flag:
+
+```bash
+sequin tunnel --ports=5432:my-pg-db --context=staging
+```
+
+## Tunnel
+
+The `tunnel` command creates a secure connection between your local development environment and Sequin's cloud platform. You can use it to connect Sequin to either local databases or HTTP endpoints.
+
+First, you'll need to setup your database or HTTP endpoint on [Sequin's platform](https://sequinstream.com).
+
+Then, to start a tunnel, run the `tunnel` command. The docs for that command:
+
+```bash
+sequin tunnel --help
+usage: sequin tunnel [<flags>]
+
+Create tunnels to Sequin
+
+Flags:
+  --ports=PORTS  Ports to tunnel, in the format <local-port>:<name-or-id>[,<local-port>:<name-or-id>]
+```
+
+So, if you named your Postgres database `my-pg-db` on Sequin, and it's running on port 5432 on your local machine, run:
+
+```bash
+sequin tunnel --ports=5432:my-pg-db
+```
+
+Sequin's cloud servers can now connect to your local Postgres database at `localhost:5432`.

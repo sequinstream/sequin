@@ -49,7 +49,8 @@
         "compare",
         "quickstart",
         "core-concepts",
-        "self-hosting/docker-compose"
+        "self-hosting/docker-compose",
+        "cli"
       ]
     },
     {

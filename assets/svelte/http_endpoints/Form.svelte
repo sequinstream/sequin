@@ -16,7 +16,7 @@
     PopoverTrigger,
   } from "$lib/components/ui/popover";
   import { Switch } from "$lib/components/ui/switch";
-  import { Info } from "lucide-svelte";
+  import { Info, ExternalLinkIcon } from "lucide-svelte";
   import CodeWithSecret from "$lib/components/CodeWithSecret.svelte";
 
   export let httpEndpoint: {
@@ -198,7 +198,16 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                 class="text-sm p-4 text-muted-foreground bg-muted rounded-md"
               >
                 <p class="mb-4">
-                  Install the Sequin CLI and boot up a tunnel now.
+                  Install the Sequin CLI and boot up a tunnel now. See setup
+                  instructions <a
+                    href="https://sequinstream.com/docs/cli"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center text-link hover:underline"
+                  >
+                    in the Sequin docs
+                    <ExternalLinkIcon class="w-3 h-3 ml-1" />
+                  </a>
                 </p>
                 <div>
                   <CodeWithSecret

@@ -25,6 +25,7 @@
     HelpCircle,
     Wand,
     Zap,
+    ExternalLinkIcon,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import {
@@ -384,7 +385,18 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
         {/if}
         {#if form.useLocalTunnel}
           <div class="text-sm p-4 text-muted-foreground bg-muted rounded-md">
-            <p class="mb-4">Install the Sequin CLI and boot up a tunnel now.</p>
+            <p class="mb-4">
+              Install the Sequin CLI and boot up a tunnel now. See setup
+              instructions <a
+                href="https://sequinstream.com/docs/cli"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center text-link hover:underline"
+              >
+                in the Sequin docs
+                <ExternalLinkIcon class="w-3 h-3 ml-1" />
+              </a>
+            </p>
             <div>
               <CodeWithSecret
                 preClass="text-xs bg-muted"

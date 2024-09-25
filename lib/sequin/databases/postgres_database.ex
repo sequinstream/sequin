@@ -89,7 +89,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> validate_required([:database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
-    |> Sequin.Changeset.validate_name()
     |> cast_embed(:tables, with: &tables_changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,

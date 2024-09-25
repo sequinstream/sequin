@@ -536,8 +536,8 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
               or dots.
             </p>
           </div>
-          {#if errors.name}
-            <p class="text-destructive text-sm">{errors.name}</p>
+          {#if databaseErrors.name}
+            <p class="text-destructive text-sm">{databaseErrors.name}</p>
           {/if}
         </div>
 

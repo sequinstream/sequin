@@ -4,6 +4,8 @@
 
   export let tabs;
   export let secret;
+  export let containerClass = "";
+  export let preClass = "";
 
   let tabNames = tabs.map((tab) => tab.name);
   let selectedTabIdx = 0;
@@ -25,7 +27,9 @@
   }
 </script>
 
-<div class="bg-gray-50 rounded-xl border border-border p-2 relative">
+<div
+  class="bg-gray-50 rounded-xl border border-border p-2 relative {containerClass}"
+>
   <div class="flex justify-between items-center pl-2">
     <div class="flex space-x-4">
       <div class="relative">
@@ -65,7 +69,8 @@
     </div>
   </div>
   <div class="border-b-2 border-border mb-2"></div>
-  <pre class="text-sm bg-gray-50 rounded-xl p-4 overflow-x-auto leading-6"><code
+  <pre
+    class="text-sm bg-gray-50 rounded-xl p-4 overflow-x-auto leading-6 {preClass}"><code
       class="text-foreground">{codeForDisplay}</code
     ></pre>
 </div>

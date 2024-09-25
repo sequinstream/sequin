@@ -134,7 +134,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
   on:close={handleClose}
 >
   <form on:submit={handleSubmit} class="space-y-6 max-w-3xl mx-auto">
-    <Card>
+    <Card class="mt-12">
       <CardHeader>
         <CardTitle>HTTP Endpoint Configuration</CardTitle>
       </CardHeader>
@@ -161,36 +161,18 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           </div>
 
           <div class="space-y-2">
-            <Label for="baseUrl">Base URL</Label>
-            {#if isEdit}
-              {#if form.useLocalTunnel}
-                <div class="flex flex-row bg-white">
-                  <div
-                    class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-                  >
-                    localhost (via CLI)
-                  </div>
-                  <Input
-                    id="http-endpoint-baseUrl"
-                    bind:value={form.baseUrl}
-                    placeholder="/api"
-                    class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                    style="border-left: none;"
-                  />
-                </div>
-              {:else}
-                <Input
-                  id="http-endpoint-baseUrl"
-                  bind:value={form.baseUrl}
-                  placeholder="https://api.example.com"
-                />
-              {/if}
-            {:else}
+            <div
+              class="grid grid-cols-[1fr_auto] items-center align-middle gap-2"
+            >
+              <Label for="baseUrl">
+                {form.useLocalTunnel ? "Local path" : "URL"}
+              </Label>
               <div class="flex items-center space-x-2 mb-2">
                 <Switch
                   id="use-localhost"
                   checked={form.useLocalTunnel}
                   onCheckedChange={toggleLocalTunnel}
+                  disabled={isEdit}
                 />
                 <Label for="use-localhost">Use localhost</Label>
                 <Popover>
@@ -203,153 +185,146 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                   </PopoverContent>
                 </Popover>
               </div>
-              {#if form.useLocalTunnel}
-                <div class="flex flex-row bg-white">
-                  <div
-                    class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"
-                  >
-                    localhost (via CLI)
-                  </div>
-                  <Input
-                    id="http-endpoint-baseUrl"
-                    bind:value={form.baseUrl}
-                    placeholder="/api"
-                    class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                    style="border-left: none;"
-                  />
-                </div>
-              {:else}
+            </div>
+            {#if form.useLocalTunnel}
+              <div class="flex flex-row bg-white">
                 <Input
                   id="http-endpoint-baseUrl"
                   bind:value={form.baseUrl}
-                  placeholder="https://api.example.com"
+                  placeholder="/api"
                 />
-              {/if}
+              </div>
+              <div
+                class="text-sm p-4 text-muted-foreground bg-muted rounded-md"
+              >
+                <p class="mb-4">
+                  Install the Sequin CLI and boot up a tunnel now.
+                </p>
+                <div>
+                  <CodeWithSecret
+                    preClass="text-xs bg-muted"
+                    containerClass="bg-muted"
+                    tabs={[
+                      {
+                        name: "Connect",
+                        value: setupTunnelCode,
+                      },
+                    ]}
+                    secret={api_token.token}
+                  />
+                </div>
+              </div>
+            {:else}
+              <Input
+                id="http-endpoint-baseUrl"
+                bind:value={form.baseUrl}
+                placeholder="https://api.example.com"
+              />
             {/if}
+
             <ul>
               {#each Object.entries(baseUrlErrors) as [key, value], index}
                 <li class="text-sm text-destructive">{key}: {value}</li>
               {/each}
             </ul>
-          </div>
 
-          <div class="space-y-2">
-            <Label>Headers</Label>
-            {#each Object.entries(form.headers) as [key, value], index}
-              <div class="grid grid-cols-[1fr_1fr_15px] gap-4 mb-2">
-                <Input
-                  id="http-endpoint-header-key-{index}"
-                  value={key}
-                  on:input={(e) => updateHeaderKey(key, e.currentTarget.value)}
-                  placeholder="Key"
-                />
-                <Input
-                  id="http-endpoint-header-value-{index}"
-                  {value}
-                  on:input={(e) =>
-                    updateHeaderValue(key, e.currentTarget.value)}
-                  placeholder="Value"
-                />
-                <button
+            <div class="space-y-2">
+              <Label>Headers</Label>
+              {#each Object.entries(form.headers) as [key, value], index}
+                <div class="grid grid-cols-[1fr_1fr_15px] gap-4 mb-2">
+                  <Input
+                    id="http-endpoint-header-key-{index}"
+                    value={key}
+                    on:input={(e) =>
+                      updateHeaderKey(key, e.currentTarget.value)}
+                    placeholder="Key"
+                  />
+                  <Input
+                    id="http-endpoint-header-value-{index}"
+                    {value}
+                    on:input={(e) =>
+                      updateHeaderValue(key, e.currentTarget.value)}
+                    placeholder="Value"
+                  />
+                  <button
+                    type="button"
+                    on:click={() => removeHeader(key)}
+                    class="text-muted-foreground hover:text-foreground justify-self-end"
+                  >
+                    <icon class="hero-x-mark w-4 h-4" />
+                  </button>
+                </div>
+              {/each}
+              <div class="grid grid-cols-1 gap-4 max-w-fit">
+                <Button
                   type="button"
-                  on:click={() => removeHeader(key)}
-                  class="text-muted-foreground hover:text-foreground justify-self-end"
+                  variant="outline"
+                  size="sm"
+                  on:click={addHeader}
+                  class="mt-2"
                 >
-                  <icon class="hero-x-mark w-4 h-4" />
-                </button>
+                  <PlusCircle class="w-4 h-4 mr-2" />
+                  Add Header
+                </Button>
               </div>
-            {/each}
-            <div class="grid grid-cols-1 gap-4 max-w-fit">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                on:click={addHeader}
-                class="mt-2"
-              >
-                <PlusCircle class="w-4 h-4 mr-2" />
-                Add Header
-              </Button>
+            </div>
+
+            <div class="space-y-2">
+              <Label>Encrypted Headers</Label>
+              {#each Object.entries(form.encryptedHeaders) as [key, value], index}
+                <div class="grid grid-cols-[1fr_1fr_auto_15px] gap-4 mb-2">
+                  <Input
+                    id="http-endpoint-encrypted-header-key-{index}"
+                    value={key}
+                    on:input={(e) =>
+                      updateEncryptedHeaderKey(key, e.currentTarget.value)}
+                    placeholder="Key"
+                  />
+                  <Input
+                    id="http-endpoint-encrypted-header-value-{index}"
+                    {value}
+                    on:input={(e) =>
+                      updateEncryptedHeaderValue(key, e.currentTarget.value)}
+                    placeholder="Value"
+                    type={showEncryptedValues[key] ? "text" : "password"}
+                  />
+                  <button
+                    type="button"
+                    on:click={() => toggleEncryptedValue(key)}
+                    class="text-muted-foreground hover:text-foreground"
+                  >
+                    {#if showEncryptedValues[key]}
+                      <EyeOff class="w-4 h-4" />
+                    {:else}
+                      <Eye class="w-4 h-4" />
+                    {/if}
+                  </button>
+                  <button
+                    type="button"
+                    on:click={() => removeEncryptedHeader(key)}
+                    class="text-muted-foreground hover:text-foreground justify-self-end"
+                  >
+                    <icon class="hero-x-mark w-4 h-4" />
+                  </button>
+                </div>
+              {/each}
+              <div class="grid grid-cols-1 gap-4 max-w-fit">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  on:click={addEncryptedHeader}
+                  class="mt-2"
+                >
+                  <PlusCircle class="w-4 h-4 mr-2" />
+                  Add Encrypted Header
+                </Button>
+              </div>
             </div>
           </div>
-
-          <div class="space-y-2">
-            <Label>Encrypted Headers</Label>
-            {#each Object.entries(form.encryptedHeaders) as [key, value], index}
-              <div class="grid grid-cols-[1fr_1fr_auto_15px] gap-4 mb-2">
-                <Input
-                  id="http-endpoint-encrypted-header-key-{index}"
-                  value={key}
-                  on:input={(e) =>
-                    updateEncryptedHeaderKey(key, e.currentTarget.value)}
-                  placeholder="Key"
-                />
-                <Input
-                  id="http-endpoint-encrypted-header-value-{index}"
-                  {value}
-                  on:input={(e) =>
-                    updateEncryptedHeaderValue(key, e.currentTarget.value)}
-                  placeholder="Value"
-                  type={showEncryptedValues[key] ? "text" : "password"}
-                />
-                <button
-                  type="button"
-                  on:click={() => toggleEncryptedValue(key)}
-                  class="text-muted-foreground hover:text-foreground"
-                >
-                  {#if showEncryptedValues[key]}
-                    <EyeOff class="w-4 h-4" />
-                  {:else}
-                    <Eye class="w-4 h-4" />
-                  {/if}
-                </button>
-                <button
-                  type="button"
-                  on:click={() => removeEncryptedHeader(key)}
-                  class="text-muted-foreground hover:text-foreground justify-self-end"
-                >
-                  <icon class="hero-x-mark w-4 h-4" />
-                </button>
-              </div>
-            {/each}
-            <div class="grid grid-cols-1 gap-4 max-w-fit">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                on:click={addEncryptedHeader}
-                class="mt-2"
-              >
-                <PlusCircle class="w-4 h-4 mr-2" />
-                Add Encrypted Header
-              </Button>
-            </div>
-          </div>
-        </div>
-      </CardContent>
+        </div></CardContent
+      >
     </Card>
-
-    {#if form.useLocalTunnel}
-      <Card>
-        <CardHeader>
-          <CardTitle>Local Tunnel</CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <p>Install the Sequin CLI and boot up a tunnel now.</p>
-          <div>
-            <CodeWithSecret
-              tabs={[
-                {
-                  name: "Connect",
-                  value: setupTunnelCode,
-                },
-              ]}
-              secret={api_token.token}
-            />
-          </div>
-        </CardContent>
-      </Card>
-    {/if}
 
     <Card>
       <CardHeader>

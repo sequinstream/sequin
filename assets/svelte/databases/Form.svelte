@@ -257,7 +257,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             id="hostname"
             bind:value={form.hostname}
             disabled={form.useLocalTunnel}
-            placeholder={form.useLocalTunnel ? "Handled by Sequin" : ""}
+            placeholder={form.useLocalTunnel ? "Managed by Sequin" : ""}
           />
           {#if databaseErrors.hostname}
             <p class="text-destructive text-sm">{databaseErrors.hostname}</p>
@@ -270,7 +270,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             <Input
               type="number"
               id="port"
-              placeholder="Handled by Sequin"
+              placeholder="Managed by Sequin"
               disabled
             />
           {:else}

@@ -161,7 +161,7 @@ defmodule SequinWeb.DatabasesLive.Form do
           {:reply, %{ok: false}, assign(socket, :submit_error, Exception.message(error))}
 
         {:error, error} ->
-          {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error, params["use_local_tunnel"]))}
+          {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error, params["database"]["use_local_tunnel"]))}
       end
     else
       _ ->

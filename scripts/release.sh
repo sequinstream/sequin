@@ -140,6 +140,33 @@ build_cli() {
     cd ..
 }
 
+# Function to build and push Docker image
+build_and_push_docker() {
+    local version=$1
+    
+    # Check if we're in the correct directory
+    if [ ! -f "Dockerfile" ]; then
+        echo -e "${RED}Error: Dockerfile not found. Make sure you're in the server directory.${RESET}"
+        exit 1
+    fi
+
+    echo "Building and pushing Docker image..."
+    docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg SELF_HOSTED=1 \
+        -t sequin/sequin:latest \
+        -t sequin/sequin:"$version" \
+        . \
+        --push
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Docker image built and pushed successfully.${RESET}"
+    else
+        echo -e "${RED}Error: Docker build or push failed.${RESET}"
+        exit 1
+    fi
+}
+
 if [[ "$DIRTY" == false ]] && [[ -n $(git status --porcelain) ]]; then
     echo -e "${RED}Can't release a dirty repository. Use '--dirty' to override.${RESET}" >&2
     git status
@@ -188,7 +215,8 @@ if [[ "$DRY_RUN" == true ]]; then
     echo -e "${YELLOW}Dry run mode: The following actions were performed locally:${RESET}"
     echo "1. Built CLI binaries for version $new_version"
     echo "2. Updated Homebrew formula with new version and SHA256 checksums"
-
+    echo "3. Build and push Docker image for $new_version"
+    
     echo -e "\n${GREEN}Changes in Homebrew formula:${RESET}"
     if [ -f "$homebrew_dir/sequin.rb" ]; then
         diff -u <(git show HEAD:"$homebrew_dir/sequin.rb") "$homebrew_dir/sequin.rb" || true
@@ -200,6 +228,7 @@ if [[ "$DRY_RUN" == true ]]; then
     echo "1. Create and push git tag $new_version"
     echo "2. Create GitHub release for $new_version and upload assets"
     echo "3. Commit and push changes to Homebrew formula"
+    echo "4. Build and push Docker image for $new_version"
 
     # Revert changes to Homebrew formula
     if [ -f "$homebrew_dir/sequin.rb" ]; then
@@ -218,6 +247,9 @@ git tag "$new_version"
 git push origin "$new_version"
 
 echo "New tag $new_version created and pushed to GitHub"
+
+# Build and push Docker image
+build_and_push_docker "$new_version"
 
 # Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"

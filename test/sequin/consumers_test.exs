@@ -563,7 +563,7 @@ defmodule Sequin.ConsumersTest do
       account = AccountsFactory.insert_account!()
 
       valid_attrs = %{
-        name: "Test Endpoint",
+        name: "TestEndpoint",
         scheme: :https,
         host: "example.com",
         port: 443,
@@ -573,7 +573,7 @@ defmodule Sequin.ConsumersTest do
       }
 
       assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
-      assert http_endpoint.name == "Test Endpoint"
+      assert http_endpoint.name == "TestEndpoint"
       assert http_endpoint.scheme == :https
       assert http_endpoint.host == "example.com"
       assert http_endpoint.port == 443

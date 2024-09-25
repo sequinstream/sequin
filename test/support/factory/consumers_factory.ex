@@ -259,7 +259,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   def http_endpoint(attrs \\ []) do
     merge_attributes(
       %HttpEndpoint{
-        name: "Test Endpoint",
+        name: "Test-Endpoint",
         scheme: :https,
         host: "example.com",
         path: "/webhook",

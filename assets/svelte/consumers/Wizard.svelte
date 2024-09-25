@@ -243,9 +243,19 @@
 
   function handleConsumerSelect(consumer) {
     if (!consumer.comingSoon) {
+      const newConsumerKind =
+        form.consumerKind === consumer.id ? null : consumer.id;
       handleFormUpdate({
-        consumerKind: form.consumerKind === consumer.id ? null : consumer.id,
+        consumerKind: newConsumerKind,
       });
+
+      // Set the form name based on the selected table and consumer kind
+      if (newConsumerKind && selectedTable) {
+        const tableName = selectedTable.name.replace(/_/g, "-");
+        const consumerType = newConsumerKind === "http_push" ? "push" : "pull";
+        const newName = `${tableName}-${consumerType}-consumer`;
+        handleFormUpdate({ name: newName });
+      }
     }
   }
 

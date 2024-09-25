@@ -99,6 +99,11 @@
           updatedFilter.valueType = selectedColumn
             ? selectedColumn.filterType
             : "";
+
+          // Clear the value if the column type changes
+          if (filter.valueType !== updatedFilter.valueType) {
+            updatedFilter.value = "";
+          }
         }
 
         return updatedFilter;

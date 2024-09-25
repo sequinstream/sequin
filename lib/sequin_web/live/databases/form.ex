@@ -75,6 +75,7 @@ defmodule SequinWeb.DatabasesLive.Form do
           replication: Error.errors_on(replication_changeset)
         }
       )
+      |> assign(:encoded_api_token, encode_api_token(assigns.api_token))
 
     ~H"""
     <div id={@parent_id}>
@@ -88,7 +89,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             parent: @parent_id,
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
-            api_token: @api_token
+            api_token: @encoded_api_token
           }
         }
       />
@@ -404,6 +405,13 @@ defmodule SequinWeb.DatabasesLive.Form do
         "publication_name" => form["publication_name"],
         "slot_name" => form["slot_name"]
       }
+    }
+  end
+
+  defp encode_api_token(api_token) do
+    %{
+      name: api_token.name,
+      token: api_token.token
     }
   end
 

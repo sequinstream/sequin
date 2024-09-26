@@ -46,9 +46,9 @@
       "group": "Get started",
       "pages": [
         "introduction",
-        "compare",
         "quickstart",
         "core-concepts",
+        "compare",
         "self-hosting/docker-compose",
         "cli"
       ]
@@ -74,7 +74,13 @@
     },
     {
       "group": "Guides",
-      "pages": ["guides/inngest", "guides/trigger-dev"]
+      "pages": [
+        "guides/cloudflare",
+        "guides/inngest",
+        "guides/lambda",
+        "guides/trigger-dev",
+        "guides/vercel"
+      ]
     },
     {
       "group": "API",

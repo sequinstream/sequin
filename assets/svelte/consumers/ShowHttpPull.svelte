@@ -182,7 +182,7 @@
         </CardContent>
       </Card>
 
-      {#if consumer.message_kind === "event" && replica_identity !== "full" && !consumer.replica_warning_dismissed}
+      {#if consumer.message_kind === "event" && replica_identity !== "full" && replica_identity !== "loading" && !consumer.replica_warning_dismissed}
         <Alert.Root variant="warning">
           <Alert.Title class="flex items-center justify-between">
             <span>Warning: Replica Identity Not Set to Full</span>

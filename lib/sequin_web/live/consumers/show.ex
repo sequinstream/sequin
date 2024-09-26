@@ -2,6 +2,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Phoenix.LiveView.AsyncResult
   alias Sequin.ApiTokens
   alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
@@ -121,7 +122,7 @@ defmodule SequinWeb.ConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  replica_identity: @replica_identity,
+                  replica_identity: encode_replica_identity(@replica_identity),
                   parent: "consumer-show",
                   metrics: @metrics
                 }
@@ -134,7 +135,7 @@ defmodule SequinWeb.ConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  replica_identity: @replica_identity,
+                  replica_identity: encode_replica_identity(@replica_identity),
                   parent: "consumer-show",
                   metrics: @metrics,
                   apiBaseUrl: @api_base_url,
@@ -304,13 +305,15 @@ defmodule SequinWeb.ConsumersLive.Show do
     [source_table] = consumer.source_tables
     source_table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == source_table.oid))
 
-    case Databases.check_replica_identity(consumer.postgres_database, source_table.schema, source_table.name) do
-      {:ok, replica_identity} ->
-        assign(socket, :replica_identity, replica_identity)
+    assign_async(socket, :replica_identity, fn ->
+      case Databases.check_replica_identity(consumer.postgres_database, source_table.schema, source_table.name) do
+        {:ok, replica_identity} ->
+          {:ok, %{replica_identity: replica_identity}}
 
-      {:error, _} ->
-        assign(socket, :replica_identity, nil)
-    end
+        {:error, _} ->
+          {:ok, %{replica_identity: nil}}
+      end
+    end)
   end
 
   defp assign_metrics(socket) do
@@ -391,6 +394,9 @@ defmodule SequinWeb.ConsumersLive.Show do
       column_filters: Enum.map(source_table.column_filters, &encode_column_filter(&1, table))
     }
   end
+
+  defp encode_replica_identity(%AsyncResult{ok?: true, result: result}), do: result
+  defp encode_replica_identity(%AsyncResult{ok?: false}), do: :loading
 
   defp find_table_by_oid(oid, tables) do
     Enum.find(tables, &(&1.oid == oid))

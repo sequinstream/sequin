@@ -219,8 +219,7 @@
             <CodeWithCopy
               maxWidth="750px"
               language="sql"
-              code="alter table {consumer.source_table.schema}.{consumer
-                .source_table.name} replica identity full;"
+              code={`alter table "${consumer.source_table.schema}"."${consumer.source_table.name}" replica identity full;`}
             />
           </Alert.Description>
         </Alert.Root>

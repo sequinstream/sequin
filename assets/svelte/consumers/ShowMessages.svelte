@@ -273,16 +273,18 @@
     <div class="flex items-center justify-between mb-4 messages-header">
       <h1 class="text-2xl font-bold">Messages</h1>
       <div class="flex items-center space-x-4">
-        <div class="flex items-center space-x-2">
-          <Switch
-            checked={showAcked}
-            onCheckedChange={(checked) => {
-              showAcked = checked;
-              live.pushEvent("toggle_show_acked", { show_acked: checked });
-            }}
-          />
-          <span class="text-sm">Show Acked</span>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          class="flex items-center space-x-2"
+          on:click={() => {
+            showAcked = !showAcked;
+            live.pushEvent("toggle_show_acked", { show_acked: showAcked });
+          }}
+        >
+          <Switch checked={showAcked} />
+          <span>Show Acked</span>
+        </Button>
         <Button
           variant={paused ? "default" : "outline"}
           size="sm"
@@ -296,6 +298,7 @@
         </Button>
       </div>
     </div>
+
     {#if loading}
       <div
         class="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center z-10"

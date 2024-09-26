@@ -6,6 +6,189 @@ icon: "lambda"
 iconType: "solid"
 ---
 
-<Card title="Under construction" icon="pen" href="mailto:support@sequin.dev">
-  We're working on this guide right now! Check back in a couple hours for the full guide or send us a message at support@sequin.dev if you need help sooner.
-</Card>
+[AWS Lambda](https://aws.amazon.com/lambda/) is a serverless compute service that lets you run code without provisioning or managing servers. It automatically scales your applications in response to incoming requests.
+
+Often, you want to trigger an AWS Lambda function when a database row changes. For example, you may want to trigger a function as a [side-effect](/use-cases/side-effects) of a database change, or [fan out work](/use-cases/fan-out) to multiple services.
+
+<Frame>
+  <img src="/images/guides/lambda/send-with-sequin.svg" alt="AWS Lambda Function" />
+</Frame>
+
+In this guide, you will learn how to setup Sequin to trigger an AWS Lambda function when a database row changes.
+
+## Prerequisites
+
+You are about to create a simple AWS Lambda function that logs a message to the console. Sequin will trigger this function by sending a HTTP POST request to the function's URL with the payload of the database row that changed.
+
+You'll need the following:
+
+- An AWS account
+- A Sequin account
+- A Postgres database (Sequin works with any Postgres database version 12+ - including [RDS](/guides/rds)) with a basic `users` table containing an `id` column and a `name` column.
+
+## Create a Lambda function
+
+Start by creating a new AWS Lambda function that takes in a Sequin change event as a payload and logs the payload to the console.
+
+<Steps titleSize="h3">
+  <Step title="Create a new Lambda function">
+      1. Open the AWS Lambda console and click "Create function".
+      2. Choose "Author from scratch".
+      3. Give your function a name (e.g., "newUserHandler").
+      4. Select Node.js as the runtime and which ever architecture you want to support (e.g., "arm64").
+      5. Click "Create function":
+
+      <Frame>
+        <img src="/images/guides/lambda/setup-lambda.png" alt="Setup lambda function" />
+      </Frame>
+  </Step>
+  <Step title="Add function code">
+      Replace the default code in the Lambda function editor with the following:
+
+      ```javascript index.mjs
+      export const handler = async (event) => {
+        // Verify the Sequin webhook secret
+        const authHeader = event.headers.authorization;
+        if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
+          return {
+            statusCode: 401,
+            body: JSON.stringify('Unauthorized'),
+          };
+        }
+
+        try {
+          const payload = JSON.parse(event.body);
+          const { record } = payload;
+
+          if (record && record.name) {
+            console.log(`Hello ${record.name}`);
+          } else {
+            console.log('No name found in the payload.');
+          }
+
+          return {
+            statusCode: 200,
+            body: JSON.stringify('Success'),
+          };
+        } catch (error) {
+          console.error('Error processing request:', error);
+          return {
+            statusCode: 500,
+            body: JSON.stringify('Internal Server Error'),
+          };
+        }
+      };
+      ```
+
+      This function first checks the authorization header to make sure the request is coming from Sequin. Then it processes the payload (which contains the database row that changed) and logs the name from the payload to the console.
+
+      Click **Deploy** to save the function.
+  </Step>
+  <Step title="Add the SEQUIN_WEBHOOK_SECRET environment variable">
+      1. In the Lambda function **Configuration** tab, scroll down to the "Environment variables" section.
+      2. Click "Edit" and then "Add environment variable".
+      3. Set the key as `SEQUIN_WEBHOOK_SECRET` and the value to a secure secret of your choice.
+      4. Click "Save".
+
+      You will need to use this secret value in the Sequin dashboard when you create the push consumer.
+  </Step>
+  <Step title="Create a Lambda Function URL">
+      To make your Lambda function accessible via HTTP, you need to create a Function URL:
+
+      1. Go to your Lambda function in the AWS Console.
+      2. In the "Configuration" tab, click on "Function URL" in the left sidebar.
+      3. Click "Create function URL".
+      4. For "Auth type", select "NONE".
+      5. Under "Configure cross-origin resource sharing (CORS)", check "Configure CORS".
+      6. In the "Allowed origins" field, enter "*" (without quotes) to allow all origins for now. You can restrict this later.
+      7. Click "Save".
+
+      After saving, you'll see a Function URL. This is the URL you'll use to configure your Sequin consumer in the next section.
+  </Step>
+</Steps>
+
+<Check>
+You've successfully created an AWS Lambda function that logs a message to the console when Sequin sends a HTTP POST request to the function's URL.
+</Check>
+
+## Create a Sequin Push Consumer
+
+Create a new Sequin push consumer that detects changes to the `users` table and sends a HTTP POST request to the Lambda function's URL.
+
+<Steps titleSize="h3">
+    <Step title="Connect Sequin to your database">
+        1. Login to your Sequin account and click the **Add New Database** button.
+        2. Enter the connection details for your Postgres database.
+        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+
+        ```sql
+        create publication sequin_pub for all tables;
+        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+        ```
+
+        4. Name your database and click the **Connect Database** button.
+
+        Sequin will connect to your database and ensure that it's configured properly.
+    </Step>
+    <Step title="Create a Push Consumer">
+    Create a push consumer that will capture users from your database and deliver them to your Lambda function:
+
+    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
+    2. Select your `users` table (i.e `public.users`).
+    3. For this guide, you want to capture all changes to the `users` table. To do this, select **Changes** and click **Continue**.
+    4. Select to capture `inserts`, `updates`, and `deletes`. No need to add a filter for now. Click **Continue**.
+    4. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
+    5. Now, give your consumer a name (i.e. `users_push_consumer`) and in the **HTTP Endpoint** section, click **New HTTPE Endpoint**.
+    6. Enter the Lambda Function URL you obtained earlier. Then click to **Add Encrypted Header** and add an encryption header with the key `Authorization` and the value `Bearer SEQUIN_WEBHOOK_SECRET`, using the secret value you set in your Lambda function's environment variables. Click **Create Endpoint**.
+    7. Back in the tab where you were creating your consumer, click the refresh button by the **Endpoints** section and select the endpoint you just created. Click **Create Consumer**
+    </Step>
+</Steps>
+
+<Check>
+    Your Sequin consumer is now created and ready to send events to your Lambda function.
+</Check>
+
+## Test end-to-end
+<Steps titleSize="h3">
+    <Step title="Create a new user in your database">
+
+    ```sql
+    insert into
+    users (name)
+    values
+      (
+        'John Doe'
+      );
+    ```
+    </Step>
+    <Step title="Trace the change in the Sequin dashboard">
+    In the Sequin console, open the **Messages** tab on your consumer and confirm that a message was delivered.
+
+    <Frame>
+      <img src="/images/guides/lambda/observe-message.png" alt="Trace message" />
+    </Frame>
+    </Step>
+
+    <Step title="Confirm the event was received by your Lambda function">
+    1. Open the AWS Lambda console and navigate to your function.
+    2. Click on the "Monitor" tab and then "View CloudWatch logs".
+    3. In the most recent log stream, you should see a log entry: `Hello John Doe`:
+
+    <Frame>
+      <img src="/images/guides/lambda/log.png" alt="Confirm message" />
+    </Frame>
+    </Step>
+</Steps>
+
+<Check>
+You've successfully triggered an AWS Lambda function from a database change!
+</Check>
+
+## Next steps
+
+Modify this example to suit your needs:
+
+- Create Lambda functions to perform [side-effects](/use-cases/side-effects), [fan out work](/use-cases/fan-out), and more.
+- If you need to run long-running jobs, consider using [AWS Step Functions](https://aws.amazon.com/step-functions/) in tandem with Lambda functions.
+- Tune your consumer configuration to suit your volume of work.
+- Implement additional security measures, such as [API Gateway request validation](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-method-request-validation.html).

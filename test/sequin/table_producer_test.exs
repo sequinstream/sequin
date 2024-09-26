@@ -11,7 +11,7 @@ defmodule Sequin.TableProducerTest do
     db = DatabasesFactory.insert_configured_postgres_database!(tables: [])
     {:ok, tables} = Databases.tables(db)
 
-    characters_table = Enum.find(tables, &(&1.name == "characters"))
+    characters_table = Enum.find(tables, &(&1.name == "Characters"))
     characters_multi_pk_table = Enum.find(tables, &(&1.name == "characters_multi_pk"))
 
     character_col_attnums = map_column_attnums(characters_table)

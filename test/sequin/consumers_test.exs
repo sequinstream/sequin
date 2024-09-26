@@ -377,7 +377,7 @@ defmodule Sequin.ConsumersTest do
           indifferent_keys: true
         )
 
-        assert record.data.metadata.table_name == "characters"
+        assert record.data.metadata.table_name == "Characters"
         assert record.data.metadata.table_schema == "public"
       end
     end
@@ -477,7 +477,7 @@ defmodule Sequin.ConsumersTest do
       consumer =
         update_in(consumer.postgres_database.tables, fn tables ->
           Enum.map(tables, fn table ->
-            if table.name == "characters", do: %{table | columns: [fake_column | table.columns]}, else: table
+            if table.name == "Characters", do: %{table | columns: [fake_column | table.columns]}, else: table
           end)
         end)
 

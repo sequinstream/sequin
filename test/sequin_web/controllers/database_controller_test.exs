@@ -228,7 +228,7 @@ defmodule SequinWeb.DatabaseControllerTest do
       conn = get(conn, ~p"/api/databases/#{database.id}/schemas/public/tables")
       assert %{"tables" => tables} = json_response(conn, 200)
       assert is_list(tables)
-      assert "characters" in tables
+      assert "Characters" in tables
     end
 
     test "returns 404 if database belongs to another account", %{

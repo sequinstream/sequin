@@ -6,7 +6,7 @@ defmodule Sequin.Test.Support.Models.Character do
 
   alias Sequin.Postgres
 
-  schema "characters" do
+  schema "Characters" do
     field :name, :string
     field :house, :string
     field :planet, :string
@@ -23,7 +23,7 @@ defmodule Sequin.Test.Support.Models.Character do
   def column_attnums do
     from(pg in "pg_attribute",
       # Filter out system columns
-      where: pg.attrelid == fragment("'characters'::regclass") and pg.attnum > 0,
+      where: pg.attrelid == ^table_oid() and pg.attnum > 0,
       select: {pg.attname, pg.attnum}
     )
     |> Sequin.Repo.all()

@@ -3,7 +3,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
   use Ecto.Migration
 
   def change do
-    create table(:characters) do
+    create table(:Characters) do
       add :name, :text
       add :house, :text
       add :planet, :text
@@ -52,7 +52,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
-    execute "create publication characters_publication for table characters, characters_ident_full, characters_multi_pk, characters_detailed",
+    execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed",
             "drop publication characters_publication"
   end
 end

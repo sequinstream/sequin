@@ -139,7 +139,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert is_nil(data.changes)
       assert data.action == :insert
-      assert_maps_equal(data.metadata, %{table_name: "characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
@@ -200,7 +200,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert data.changes == %{}
       assert data.action == :update
-      assert_maps_equal(data.metadata, %{table_name: "characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
@@ -306,7 +306,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert data.changes == nil
       assert data.action == :delete
-      assert_maps_equal(data.metadata, %{table_name: "characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
@@ -484,7 +484,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert fields_equal?(change.fields, record)
 
-      assert change.table_name == "characters"
+      assert change.table_name == "Characters"
       assert change.table_schema == "public"
     end
 

@@ -257,28 +257,28 @@ defmodule Sequin.Extensions.Replication do
     # We can't trust the `flags` when replica identity is set to full - all columns are indicated
     # as primary keys.
     pk_query = """
-    SELECT a.attname
-    FROM pg_index i
-    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-    WHERE i.indrelid = ($1::text || '.' || $2::text)::regclass
-    AND i.indisprimary;
+    select a.attname
+    from pg_index i
+    join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
+    where i.indrelid = $1
+    and i.indisprimary;
     """
 
-    {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [schema, table])
+    {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [id])
     primary_keys = List.flatten(pk_rows)
 
     # Query to get attnums
     # The Relation message does not include the attnums, so we need to query the pg_attribute
     # table to get them.
     attnum_query = """
-    SELECT attname, attnum
-    FROM pg_attribute
-    WHERE attrelid = ($1::text || '.' || $2::text)::regclass
-    AND attnum > 0
-    AND NOT attisdropped;
+    select attname, attnum
+    from pg_attribute
+      where attrelid = $1
+    and attnum > 0
+    and not attisdropped;
     """
 
-    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [schema, table])
+    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [id])
     attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
 
     # Enrich columns with primary key information and attnums

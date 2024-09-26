@@ -1,36 +1,31 @@
 ---
 title: What is Sequin?
-description: Sequin sends Postgres changes to your applications and services. It’s designed to never miss an insert, update, or delete and provide exactly-once processing of all changes.
+description: Sequin is an open source message stream that uses your Postgres tables as the storage layer. This means you can turn existing Postgres tables into streams with exactly-once processing. And compared to other streaming systems like Kafka, Sequin offers a much richer feature-set, like SQL-based routing and rewinds.
 icon: "book-open"
 iconType: "solid"
 ---
 
-You can think of Sequin as a material improvement over native Postgres triggers and LISTEN/NOTIFY with the following features:
+Sequin supports both [pull-based](/core-concepts#pull-consumers) and [push-based](/core-concepts#push-consumers) consumers over a simple HTTP interface with the following features:
 
 - **Never miss a message:** Sequin delivers messages from your database to consumers until they are acknowledged (i.e. exactly-once processing guarantees).
 - **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
 - **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
-- **Backfills:** Consumers can queue up records from this moment forward or for the entire table.
-- **Simple HTTP API:** Messages are delivered via a simple HTTP push or pull interface for easy integration.
+- **Start anywhere:** Consumers can start processing records from any point in a table.
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12+.
 - **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
-
-Changes are sent as messages via HTTP [push](/core-concepts#push-consumers) (webhooks) or [pull](/core-concepts#pull-consumers) (SQS-like). This means it's easy to integrate Sequin into your application or another service (like Lambdas, Inngest, Vercel, etc).
-
-Messages in Sequin are durable and persistent, so you can also use Sequin to replace other queues and streaming systems like SQS and Kafka.
 
 ## How Sequin works
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
-Sequin connects to your Postgres database. It captures changes to your Postgres tables, turning them into a stream of messages. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks. You can even turn historical data in Postgres into a stream of messages.
+Sequin connects to your Postgres database. It makes it easy to stream rows from tables and deliver them to downstream consumers with exactly-once processing guarantees. Consumers can read data over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks. Consumers can start wherever in the table they want, meaning you can turn historical data in Postgres into a stream of messages.
 
 Sequin is open source. You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
 Sequin comes with a web console/UI for configuration:
 
-1. Connect any Postgres database to Sequin (Sequin uses logical replication to detect changes).
+1. Connect any Postgres database to Sequin (Sequin uses primarily logical replication to detect changes).
 2. Select the tables, actions, and SQL filters that publish messages to your consumers.
 3. Consume messages using HTTP pull and push interfaces.
 

@@ -1,5 +1,5 @@
 ---
-title: 'Sequin Cloud Quickstart'
+title: 'Sequin cloud Quickstart'
 sidebarTitle: 'Quickstart'
 description: 'Connect Sequin to your Postgres database and send changes to your application.'
 icon: "rocket"
@@ -13,13 +13,13 @@ iconType: "solid"
     <Note>If you're looking to self-host Sequin, start with our [self-hosting guide](/self-hosting/docker-compose).</Note>
   </Step>
   <Step title="Connect your database">
-    In the Sequin Console, click on the **Connect Database** button. Enter the connection details for your Postgres database (i.e. host, port, database name, username, and password).
+    In the Sequin console, click on the **Connect Database** button. Enter the connection details for your Postgres database (i.e. host, port, database name, username, and password).
 
     <Frame>
       <img src="/images/cloud-getting-started/connect-database.png" alt="Connect Database" />
     </Frame>
 
-    With your database connected, you'll now create a replication slot. This allows Sequin to efficiently capture changes from your database using the WAL (Write-Ahead Log)
+    With your database connected, create a replication slot. This allows Sequin to efficiently capture changes from your database using the WAL (Write-Ahead Log)
 
     In your database, run the following SQL command to create a replication slot:
 
@@ -44,10 +44,6 @@ iconType: "solid"
     Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
 
     Your database is now connected to Sequin!
-
-    <Note>
-    You may see that the database status is `waiting` until Sequin sees a change come through the replication slot. This is completely normal.
-    </Note>
 
     <Frame>
       <img src="/images/cloud-getting-started/successful-database-connection.png" alt="Database connected page" />
@@ -77,8 +73,8 @@ iconType: "solid"
       <img src="/images/cloud-getting-started/rows-or-changes.png" alt="Select consumer type" />
     </Frame>
 
-    * **Rows**: Process rows to capture the latest state of records. Sequin delivers messages to the consumer whenever a row is inserted or updated. Learn more about rows [here](/core-concepts#rows-and-changes).
-    * **Changes**: Process changes to capture every `insert`, `update`, and `delete`. This includes `OLD` values for updates and deletes. Learn more about changes [here](/core-concepts#rows-and-changes).
+    * **Rows**: Process rows to capture the latest state of records. Sequin delivers messages to the consumer whenever a row is inserted or updated. [Learn more about rows](/core-concepts#rows-and-changes).
+    * **Changes**: Process changes to capture every `insert`, `update`, and `delete`. This includes `OLD` values for updates and deletes. [Learn more about changes](/core-concepts#rows-and-changes).
 
     Next, select whether you want to recieve changes via HTTP Push (i.e. Webhooks) or HTTP Pull (i.e. SQS). For this quickstart, we'll select HTTP Push:
 
@@ -119,12 +115,10 @@ iconType: "solid"
 
 ## Next steps
 
-You've now walked through the basics of connecting your database, creating a consumer, and capturing changes. Now, you can write the business logic for your application to react to the changes.
+You've now walked through the basics of connecting your database, creating a consumer, and capturing changes. Now you can write the business logic in your application to react to the changes.
 
 From here, you might want to:
 
 * Learn more about [rows](/core-concepts#rows-and-changes) and [changes](/core-concepts#rows-and-changes).
 * Explore the advanced configurations for push consumers and pull consumers.
-* Star the repository to follow the latest updates.
-
-
+* Star the repository to stay on top of the latest updates.

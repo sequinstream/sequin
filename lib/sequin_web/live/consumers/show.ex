@@ -250,6 +250,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply,
      socket
      |> assign(:show_acked, show_acked)
+     |> assign(:page, 0)
      |> load_consumer_messages()}
   end
 

@@ -133,7 +133,6 @@
       loading = true;
       live.pushEvent("change_page", { page: page }, (reply) => {
         loading = false;
-        // Handle the reply if needed
       });
     }
   }
@@ -280,6 +279,7 @@
           on:click={() => {
             showAcked = !showAcked;
             live.pushEvent("toggle_show_acked", { show_acked: showAcked });
+            changePage(0);
           }}
         >
           <Switch checked={showAcked} />

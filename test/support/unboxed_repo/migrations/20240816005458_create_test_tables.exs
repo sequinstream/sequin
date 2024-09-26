@@ -23,7 +23,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
-    execute "alter table characters_ident_full replica identity full"
+    execute "alter table characters_ident_full replica identity full",
+            "alter table characters_ident_full replica identity default"
 
     # New table with multiple primary keys of different types
     create table(:characters_multi_pk, primary_key: false) do
@@ -52,7 +53,29 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
-    execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed",
+    execute "create schema if not exists restricted", "drop schema if exists restricted"
+
+    create table(:characters_restricted, prefix: "restricted") do
+      add :name, :text
+
+      timestamps()
+    end
+
+    # Create the replication_user role if it doesn't exist
+    execute """
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'replication_user') THEN
+                CREATE ROLE replication_user WITH REPLICATION LOGIN PASSWORD 'postgres';
+              END IF;
+            END
+            $$;
+            """,
+            "DROP ROLE IF EXISTS replication_user"
+
+    execute "REVOKE USAGE ON SCHEMA restricted FROM replication_user;", ""
+
+    execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed, restricted.characters_restricted",
             "drop publication characters_publication"
   end
 end

@@ -9,6 +9,7 @@ if Mix.env() == :test do
     alias Sequin.Test.Support.Models.CharacterDetailed
     alias Sequin.Test.Support.Models.CharacterIdentFull
     alias Sequin.Test.Support.Models.CharacterMultiPK
+    alias Sequin.Test.Support.Models.CharactersRestricted
 
     def character(attrs \\ []) do
       attrs = Map.new(attrs)
@@ -136,6 +137,32 @@ if Mix.env() == :test do
 
       %CharacterDetailed{}
       |> CharacterDetailed.changeset(attrs)
+      |> repo.insert!()
+    end
+
+    def characters_restricted(attrs \\ []) do
+      attrs = Map.new(attrs)
+
+      merge_attributes(
+        %CharactersRestricted{
+          name: Faker.Person.name()
+        },
+        attrs
+      )
+    end
+
+    def characters_restricted_attrs(attrs \\ []) do
+      attrs
+      |> characters_restricted()
+      |> Sequin.Map.from_ecto()
+    end
+
+    def insert_characters_restricted!(attrs \\ [], opts \\ []) do
+      repo = Keyword.get(opts, :repo, Repo)
+      attrs = characters_restricted_attrs(attrs)
+
+      %CharactersRestricted{}
+      |> CharactersRestricted.changeset(attrs)
       |> repo.insert!()
     end
   end

@@ -264,9 +264,6 @@ defmodule Sequin.Extensions.Replication do
     and i.indisprimary;
     """
 
-    {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [id])
-    primary_keys = List.flatten(pk_rows)
-
     # Query to get attnums
     # The Relation message does not include the attnums, so we need to query the pg_attribute
     # table to get them.
@@ -278,17 +275,36 @@ defmodule Sequin.Extensions.Replication do
     and not attisdropped;
     """
 
-    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [id])
-    attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
+    with {:ok, %{rows: pk_rows}} <- Postgres.query(conn, pk_query, [id]),
+         {:ok, %{rows: attnum_rows}} <- Postgres.query(conn, attnum_query, [id]) do
+      primary_keys = List.flatten(pk_rows)
+      attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
 
-    # Enrich columns with primary key information and attnums
-    enriched_columns =
-      Enum.map(columns, fn %{name: name} = column ->
-        %{column | pk?: name in primary_keys, attnum: Map.get(attnum_map, name)}
-      end)
+      # Enrich columns with primary key information and attnums
+      enriched_columns =
+        Enum.map(columns, fn %{name: name} = column ->
+          %{column | pk?: name in primary_keys, attnum: Map.get(attnum_map, name)}
+        end)
 
-    updated_schemas = Map.put(state.schemas, id, {enriched_columns, schema, table})
-    %{state | schemas: updated_schemas}
+      updated_schemas = Map.put(state.schemas, id, {enriched_columns, schema, table})
+      %{state | schemas: updated_schemas}
+    else
+      {:error, %Postgrex.Error{postgres: %{code: :insufficient_privilege}}} ->
+        if state.test_pid do
+          send(state.test_pid, {__MODULE__, :insufficient_privilege, [schema, table]})
+        end
+
+        Logger.info("Insufficient privilege: #{schema}.#{table}")
+        state
+
+      {:error, error} when is_exception(error) ->
+        Logger.error("Error processing relation message: #{Exception.message(error)}")
+        state
+
+      {:error, error} ->
+        Logger.error("Error processing relation message: #{inspect(error)}")
+        state
+    end
   end
 
   defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{accumulated_messages: []} = state) do
@@ -329,23 +345,27 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp process_message(%Insert{} = msg, state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    case Map.get(state.schemas, msg.relation_id) do
+      nil ->
+        state
 
-    record = %Message{
-      action: :insert,
-      commit_timestamp: state.current_commit_ts,
-      errors: nil,
-      ids: data_tuple_to_ids(columns, msg.tuple_data),
-      table_schema: schema,
-      table_name: table,
-      table_oid: msg.relation_id,
-      fields: data_tuple_to_fields(columns, msg.tuple_data),
-      trace_id: UUID.uuid4()
-    }
+      {columns, schema, table} ->
+        record = %Message{
+          action: :insert,
+          commit_timestamp: state.current_commit_ts,
+          errors: nil,
+          ids: data_tuple_to_ids(columns, msg.tuple_data),
+          table_schema: schema,
+          table_name: table,
+          table_oid: msg.relation_id,
+          fields: data_tuple_to_fields(columns, msg.tuple_data),
+          trace_id: UUID.uuid4()
+        }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+        TracerServer.message_replicated(state.postgres_database, record)
 
-    %{state | accumulated_messages: [record | state.accumulated_messages]}
+        %{state | accumulated_messages: [record | state.accumulated_messages]}
+    end
   end
 
   defp process_message(%Update{} = msg, %State{} = state) do

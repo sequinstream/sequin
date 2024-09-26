@@ -48,7 +48,9 @@ defmodule Sequin.PostgresReplicationTest do
     setup do
       # Create source database
       account_id = AccountsFactory.insert_account!().id
-      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+
+      source_db =
+        DatabasesFactory.insert_configured_postgres_database!(account_id: account_id, username: "replication_user")
 
       # Create PostgresReplicationSlot entity
       pg_replication =
@@ -115,6 +117,18 @@ defmodule Sequin.PostgresReplicationTest do
         event_consumer: event_consumer,
         record_consumer: record_consumer
       }
+    end
+
+    test "restricted table is not included in replication state", %{pg_replication: pg_replication} do
+      # Insert a character and wait for the message to be handled
+      CharacterFactory.insert_characters_restricted!([], repo: UnboxedRepo)
+      assert_receive {ReplicationExt, :insufficient_privilege, ["restricted", "characters_restricted"]}, 500
+
+      # Check the replication state
+      {:no_state, %Postgrex.ReplicationConnection{state: {Sequin.Extensions.Replication, state}}} =
+        :sys.get_state(ReplicationExt.via_tuple(pg_replication.id))
+
+      refute Enum.any?(state.schemas, fn {_, {_, _, table}} -> table == "restricted_table" end)
     end
 
     test "inserts are replicated to consumer events", %{event_consumer: consumer} do

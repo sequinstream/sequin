@@ -8,7 +8,7 @@ iconType: "solid"
 
 [Trigger.dev](https://trigger.dev) makes it easy to write and run long-running tasks. You write and test tasks locally in your project, and then deploy them to Trigger.dev where they reliably invoke the tasks. Trigger.dev handles the infrastructure, observability, and execution.
 
-Often, you want to trigger a task when a record in your database is created, updated, or deleted. For instance, you might want to send a welcome email to a user as soon as they are inserted into the database:
+Often, you want to trigger a task when a record in your database is created, updated, or deleted. For instance, you might want to use a Trigger.dev task to generate an embedding for each new post in your database:
 
 <Frame>
   <img src="/images/guides/trigger-dev/send-with-sequin.svg" alt="Trigger.dev Overview" />
@@ -18,7 +18,7 @@ In this guide, you'll learn how to use Sequin to trigger Trigger.dev tasks from 
 
 ## Prerequisites
 
-You are about to create a [regular Trigger.dev task](https://trigger.dev/docs/tasks-regular) that you will execute when a new user is inserted into your database. Sequin will detect the `insert` operation on the `users` table and then send an HTTP request to an API endpoint that will then process the request by calling `tasks.trigger()`.
+You are about to create a [regular Trigger.dev task](https://trigger.dev/docs/tasks-regular) that you will execute when ever a post is inserted or updated in your database. Sequin will detect all the changes on the `posts` table and then send the payload of the post to an API endpoint that will call `tasks.trigger()` to create the embedding and update the database.
 
 As long as you create an HTTP endpoint that Sequin can deliver webhooks to, you can use any web framework or edge function (e.g. Supabase Edge Functions, Vercel Functions, Cloudflare Workers, etc.) to invoke your Trigger.dev task. In this guide, we'll show you how to setup Trigger.dev tasks using Next.js API Routes.
 
@@ -29,108 +29,121 @@ You'll need the following to follow this guide:
 If you don't have one already, follow [Trigger.dev's Next.js setup guide](https://trigger.dev/docs/guides/frameworks/nextjs) to setup your project. You can return to this guide when you're ready to write your first Trigger.dev task.
 </Info>
 - A [Sequin](https://console.sequinstream.com/register) account
-- A Postgres database (Sequin works with any Postgres database version 12 and up)
+- A Postgres database (Sequin works with any Postgres database version 12 and up) with a `posts` table.
 
 ## Create a Trigger.dev task
 
-Start by creating a new Trigger.dev task that takes in a Sequin change event as a payload and sends a welcome email to the user:
+Start by creating a new Trigger.dev task that takes in a Sequin change event as a payload, creates an embedding, and then inserts the embedding into the database:
 
 <Steps titleSize="h3">
-  <Step title="Create a `send-welcome-email` task">
-  In your `src/trigger/tasks` directory, create a new file called `send-welcome-email.ts` and add the following code:
+  <Step title="Create a `create-embedding-for-post` task">
+  In your `src/trigger/tasks` directory, create a new file called `create-embedding-for-post.ts` and add the following code:
 
-  ```ts
+  <CodeGroup>
+  ```ts trigger/create-embedding-for-post.ts
   import { task } from "@trigger.dev/sdk/v3";
+  import { OpenAI } from "openai";
+  import { upsertEmbedding } from "../util";
 
-  export const sendWelcomeEmail = task({
-    id: "send-welcome-email",
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  export const createEmbeddingForPost = task({
+    id: "create-embedding-for-post",
     run: async (payload: {
-    record: {
-      id: number;
-      name: string;
-      email: string;
-    };
-    changes: string | null;
-    action: string;
-    metadata: {
-      table_schema: string;
-      table_name: string;
-      commit_timestamp: string;
+      record: {
+        id: number;
+        title: string;
+        body: string;
+        author: string;
+        createdAt: string;
+        embedding: string | null;
+      },
+      metadata: {
+        table_schema: string,
+        table_name: string,
         consumer: {
           id: string;
           name: string;
         };
       };
     }) => {
-    const user = payload.record;
-    console.log(`Start email sequence for user ${user.id}`, user);
-        //function to send welcome email
+      // Create an embedding using the title and body of payload.record
+      const content = `${payload.record.title}\n\n${payload.record.body}`;
+      const embedding = (await openai.embeddings.create({
+        model: "text-embedding-ada-002",
+        input: content,
+      })).data[0].embedding;
+
+      // Upsert the embedding in the database. See utils.ts for the implementation -> ->
+      await upsertEmbedding(embedding, payload.record.id);
+
+      // Return the updated record
+      return {
+        ...payload.record,
+        embedding: JSON.stringify(embedding),
+      };
     }
   });
   ```
 
-  This task takes in a Sequin change event as a payload and mocks up the steps to send a welcome email to the user.
+  ```ts utils.ts
+  import pg from "pg";
+
+  export async function upsertEmbedding(embedding: number[], id: number) {
+    const client = new pg.Client({
+      connectionString: process.env.DATABASE_URL,
+    });
+    await client.connect();
+
+    try {
+      const query = `
+        INSERT INTO post_embeddings (id, embedding)
+        VALUES ($2, $1)
+        ON CONFLICT (id)
+        DO UPDATE SET embedding = $1
+      `;
+      const values = [JSON.stringify(embedding), id];
+
+      const result = await client.query(query, values);
+      console.log(`Updated record in database. Rows affected: ${result.rowCount}`);
+
+      return result.rowCount;
+    } catch (error) {
+      console.error("Error updating record in database:", error);
+      throw error;
+    } finally {
+      await client.end();
+    }
+  }
+  ```
+  </CodeGroup>
+
+  This task takes in a Sequin record event, creates an embedding, and then uppserts the embedding into a `post_embeddings` table.
   </Step>
   <Step title="Add the task to your Trigger.dev project">
-  Register the `send-welcome-email` task to your Trigger.dev cloud project by running the following command:
+  Register the `create-embedding-for-post` task to your Trigger.dev cloud project by running the following command:
 
   ```bash
   npx trigger.dev@latest dev
   ```
 
-  In the Trigger.dev dashboard, you should now see the `send-welcome-email` task:
+  In the Trigger.dev dashboard, you should now see the `create-embedding-for-post` task:
 
   <Frame>
     <img src="/images/guides/trigger-dev/register-task.png" alt="Task added" />
   </Frame>
   </Step>
-  <Step title="Test the task">
-  Now that you've registered the task, you can test it by navigating to the **Test** tab and selecting the `send-welcome-email` task. Paste in a Sequin change event as a payload:
-
-  ```json
-  {
-    "record": {
-        "id": 1,
-        "name": "John Doe",
-        "email": "john.doe@example.com"
-    },
-    "changes": null,
-    "action": "insert",
-    "metadata": {
-        "table_schema": "public",
-        "table_name": "users",
-        "commit_timestamp": "2024-02-20T14:30:00Z",
-        "consumer": {
-            "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-            "name": "new_user_consumer"
-        }
-    }
-  }
-  ```
-
-  Click the **Run test** button:
-
-  <Frame>
-    <img src="/images/guides/trigger-dev/run-test.png" alt="Run test" />
-  </Frame>
-
-   Back in your terminal you should see logs indicating the payload is being processed and the welcome email is being sent:
-
-  ```bash
-  ○ Sep 23, 14:43:15.064 ->  20240923.7 | send-welcome-email | run_627u472k64qx5f5s62drx.1
-  ○ Sep 23, 14:43:15.277 run_627u472k64qx5f5s62drx.1 Start email sequence for user 1 { id: 1, name: 'John Doe', email: 'john.doe@example.com' }
-  ○ Sep 23, 14:43:15.719 ->  20240923.7 | send-welcome-email | run_627u472k64qx5f5s62drx.1 | Success (621.8ms)
-  ```
-  </Step>
 </Steps>
 
 <Check>
-    You've successfully created a Trigger.dev task that sends a welcome email to a user when Sequin delivers a change payload with a new user. In the next step, you'll create an API endpoint that Sequin can deliver change payloads to.
+    You've successfully created a Trigger.dev task that will create an embedding for each post in your database. In the next step, you'll create an API endpoint that Sequin can deliver records to.
 </Check>
 
-## Setup an API endpoint to trigger the task
+## Setup API route
 
-You'll now create an API endpoint that will receive change payloads from Sequin and then trigger the `send-welcome-email` task.
+You'll now create an API endpoint that will receive posts from Sequin and then trigger the `create-embedding-for-post` task.
 
 <Info>
 This guide covers how to setup an API endpoint using the Next.js App Router. You can find examples for Next.js Server Actions and Pages Router in the [Trigger.dev documentation](https://trigger.dev/docs/guides/frameworks/nextjs).
@@ -138,17 +151,21 @@ This guide covers how to setup an API endpoint using the Next.js App Router. You
 
 <Steps titleSize="h3">
   <Step title="Create a route handler">
-  Add a route handler by creating a new `route.ts` file in a `/app/api/send-welcome-email` directory:
+  Add a route handler by creating a new `route.ts` file in a `/app/api/create-embedding-for-post` directory:
 
-  ```ts app/api/send-welcome-email/route.ts
-  import type { sendWelcomeEmail } from "@/trigger/send-welcome-email";
+  ```ts app/api/create-embedding-for-post/route.ts
+  import type { createEmbeddingForPost } from "@/trigger/create-embedding-for-post";
   import { tasks } from "@trigger.dev/sdk/v3";
   import { NextResponse } from "next/server";
 
   export async function POST(req: Request) {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const payload = await req.json();
-    const handle = await tasks.trigger<typeof sendWelcomeEmail>(
-      "send-welcome-email",
+    const handle = await tasks.trigger<typeof createEmbeddingForPost>(
+      "create-embedding-for-post",
       payload
     );
 
@@ -156,88 +173,48 @@ This guide covers how to setup an API endpoint using the Next.js App Router. You
   }
   ```
 
-  This route handler will receive change payloads from Sequin, parse them, and then trigger the `send-welcome-email` task.
+  This route handler will receive records from Sequin, parse them, and then trigger the `create-embedding-for-post` task.
   </Step>
   <Step title="Set secret keys">
-  For security, you'll need to set two secret keys in a `.env.local` file:
+  You'll need to set four secret keys in a `.env.local` file:
 
   ```bash
   SEQUIN_WEBHOOK_SECRET=your-secret-key
   TRIGGER_SECRET_KEY=secret-from-trigger-dev
+  OPENAI_API_KEY=sk-proj-asdfasdfasdf
+  DATABASE_URL=postgresql://
   ```
 
-  The `SEQUIN_WEBHOOK_SECRET` is optional, but will help you ensure that only Sequin can deliver change payloads to your endpoint. You can add verification to your endpoint easily:
-
-  ```ts
-  if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  ```
+  The `SEQUIN_WEBHOOK_SECRET` ensures that only Sequin can access your APIendpoint.
 
   The `TRIGGER_SECRET_KEY` is used to authenticate requests to Trigger.dev and can be found in the **API keys** tab of the Trigger.dev dashboard.
-  </Step>
-  <Step title="Test the endpoint">
-  Ensure your Next.js app is running:
 
-  ```bash
-  npm run dev
- ```
-
- And ensure your Trigger.dev server is running:
-
-  ```bash
-  npx trigger.dev@latest dev
-  ```
-
-  Then make a request to your endpoint:
-
- ```curl
-  curl -X POST http://localhost:3001/api/send-welcome-email \
-   -H "Content-Type: application/json" \
-   -H "Authorization: Bearer your_secret_token_here" \
-   -d '{
-     "record": {
-       "id": 1,
-       "name": "John Doe",
-       "email": "john.doe@example.com"
-     },
-     "changes": null,
-     "action": "insert",
-     "metadata": {
-       "table_schema": "public",
-       "table_name": "users",
-       "commit_timestamp": "2024-02-20T14:30:00Z",
-       "consumer": {
-         "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-         "name": "new_user_consumer"
-       }
-     }
-    }'
-
-  {"id":"run_ykmz5mr23anagm1j3o6sq"}
-  ```
-
-  If everything is setup correctly, the CURL request will return a run ID and you should see the task run in both your dev server and the Trigger.dev dashboard.
+  The `OPENAI_API_KEY` and `DATABASE_URL` are used to create an embedding using OpenAI and connect to your database. Be sure to add these as [environment variables](https://trigger.dev/docs/deploy-environment-variables) in Trigger.dev as well.
   </Step>
 </Steps>
 
 <Check>
-  You've successfully created an API endpoint that can receive change payloads from Sequin and trigger a Trigger.dev task. In the next step, you'll setup Sequin to trigger the endpoint.
+  You've successfully created an API endpoint that can receive record payloads from Sequin and trigger a Trigger.dev task. In the next step, you'll setup Sequin to trigger the endpoint.
 </Check>
 
-## Setup Sequin to trigger your task
+## Create Sequin consumer
 
-You'll now configure Sequin to capture every new user in your `users` table and send an event to the API endpoint you created above.
+You'll now configure Sequin to send every row in your `posts` table to your Trigger.dev task.
 
 <Steps titleSize="h3">
     <Step title="Connect Sequin to your database">
         1. Login to your Sequin account and click the **Add New Database** button.
-        2. Enter the connection details for your Postgres database. If you need to connect to a local dev database, create a tunnel using the Sequin CLI.
+        2. Enter the connection details for your Postgres database.
+        <Info>
+        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/cli).
+        </Info>
         3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+
         ```sql
         create publication sequin_pub for all tables;
         select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
         ```
+
         4. Name your database and click the **Connect Database** button.
 
         Sequin will connect to your database and ensure that it's configured properly.
@@ -250,28 +227,34 @@ You'll now configure Sequin to capture every new user in your `users` table and 
     Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
 
     1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
-    2. Enter a name for your endpoint (i.e. `local-endpoint`) and check the **Local tunnel** option.
-    3. Now, click **Add encryption header** and set the key to `authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`.
+    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/cli), then run:
+
+      ```bash
+      sequin tunnel --ports=3001:local-endpoint
+      ```
+
+    3. Now, click **Add encryption header** and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`.
     4. Click **Create HTTP Endpoint**.
-
-    Now, [install the Sequin CLI](/cli) and run:
-
-    ```bash
-    sequin tunnel --ports=3001:local-endpoint
-    ```
-
-    This will create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API.
     </Step>
     <Step title="Create a Push Consumer">
-    Create a push consumer that will capture events from your database and deliver them to your local endpoint:
+    Create a push consumer that will capture posts from your database and deliver them to your local endpoint:
 
     1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
-    2. Select your users table (i.e `public.users`).
-    3. Select to process **changes** and click **Continue**.
-    4. Configure which kinds of changes you want to capture and apply filters (for instance, ignore internal emails). Since you just want to email all new users, you'll capture just the `insert` changes and apply no additional filters
+    2. Select your `posts` table (i.e `public.posts`).
+    3. You want to ensure that every post receives an embedding - and that embeddings are updated as posts are updated. To do this, select to process **Rows** and click **Continue**.
+    <Note>
+    You can also use **changes** for this particular use case, but **rows** comes with some nice replay and backfill features.
+    </Note>
+    4. You'll now set the sort and filter for the consumer. For this guide, we'll sort by `updated_at` and start at the beginning of the table. We won't apply any filters:
+      <Frame>
+        <img src="/images/guides/trigger-dev/sort-and-filter.png" alt="Consumer Sort and Filter" />
+      </Frame>
     5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `new_user_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above.
-    7. Click the **Create Consumer** button. Sequin will verify your database is set up properly and may give you another SQL command to run to ensure every new user is captured.
+    6. Now, give your consumer a name (i.e. `posts_push_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/create-embedding-for-post`):
+      <Frame>
+        <img src="/images/guides/trigger-dev/consumer-config.png" alt="Consumer Endpoint" />
+      </Frame>
+    7. Click the **Create Consumer** button.
     </Step>
 </Steps>
 
@@ -287,11 +270,17 @@ You'll now configure Sequin to capture every new user in your `users` table and 
     2. The Trigger.dev dev server is running `npx trigger.dev@latest dev`
     3. The Sequin tunnel is running: `sequin tunnel --ports=3001:local-endpoint`
     </Step>
-    <Step title="Create a new user in your database">
-    Insert a new user into your database:
+    <Step title="Create a new post in your database">
 
     ```sql
-    insert into users (name, email) values ('Eric Goldman', 'eric@sequinstream.com');
+    insert into
+    posts (title, body, author)
+    values
+      (
+        'The Future of AI',
+        'An insightful look into how artificial intelligence is shaping the future of technology and society.',
+        'Alice H Johnson'
+      );
     ```
     </Step>
     <Step title="Trace the change in the Sequin dashboard">
@@ -305,11 +294,11 @@ You'll now configure Sequin to capture every new user in your `users` table and 
     In your local terminal, you should see a `200` response in your Next.js app:
 
     ```bash
-    POST /api/send-welcome-email 200 in 372ms
+    POST /api/create-embedding-for-post 200 in 262ms
     ```
     </Step>
     <Step title="Observe the task run in the Trigger.dev dashboard">
-    Finally, in the Trigger.dev dashboard, navigate to the [**Runs**](https://trigger.dev/runs) tab and confirm that the task run was created:
+    Finally, in the Trigger.dev dashboard, navigate to the [**Runs**](https://trigger.dev/runs) tab and confirm that the task run completed successfully:
 
     <Frame>
         <img src="/images/guides/trigger-dev/final-run.png" alt="Task run" />
@@ -318,15 +307,14 @@ You'll now configure Sequin to capture every new user in your `users` table and 
 </Steps>
 
 <Check>
-    Every new user will now trigger a Trigger.dev task that sends a welcome email!
+    Every time a post is created or updated, Sequin will deliver the row payload to your API endpoint and Trigger.dev will run the `create-embedding-for-post` task.
 </Check>
 
 ## Next steps
 
-Each new user in your database will now trigger a Trigger.dev task that sends a welcome email. This is a simple example, but Sequin can deliver change payloads for any database event to Trigger.dev tasks.
+With Sequin and Trigger.dev, every post in your database will now have an embedding. This is a simple example of how you can trigger long-running tasks on database changes.
 
 From here, add error handling and deploy to production:
 
-- Add error handling so your API endpoint only returns a `200` when you know the task run has been received. Sequin will retry sending the payload if you don't return a `200` status to provide exactly-once processing guarantees.
 - Add [retries](https://trigger.dev/docs/errors-retrying) to your Trigger.dev task to ensure that any errors are captured and logged.
 - Deploy to [production](https://trigger.dev/docs/guides/frameworks/nextjs#deploying-your-task-to-trigger-dev) and update your Sequin consumer to point to your production database and endpoint.

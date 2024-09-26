@@ -9,6 +9,8 @@ defmodule Sequin.Postgres do
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
 
+  require Logger
+
   @doc """
   Executes a SQL query against a database connection.
 
@@ -320,19 +322,29 @@ defmodule Sequin.Postgres do
     end
   end
 
-  def check_replica_identity(conn, schema, table) when is_binary(schema) and is_binary(table) do
+  def check_replica_identity(conn, oid) do
     query = """
     SELECT relreplident
     FROM pg_class
-    WHERE oid = '#{schema}.#{table}'::regclass;
+    WHERE oid = $1;
     """
 
-    case query(conn, query) do
-      {:ok, %{rows: [["f"]]}} -> {:ok, :full}
-      {:ok, %{rows: [["d"]]}} -> {:ok, :default}
-      {:ok, %{rows: [["n"]]}} -> {:ok, :nothing}
-      {:ok, %{rows: [["i"]]}} -> {:ok, :index}
-      {:error, _} = error -> error
+    case query(conn, query, [oid]) do
+      {:ok, %{rows: [["f"]]}} ->
+        {:ok, :full}
+
+      {:ok, %{rows: [["d"]]}} ->
+        {:ok, :default}
+
+      {:ok, %{rows: [["n"]]}} ->
+        {:ok, :nothing}
+
+      {:ok, %{rows: [["i"]]}} ->
+        {:ok, :index}
+
+      {:error, error} ->
+        Logger.error("Failed to check replica identity for oid #{oid}: #{inspect(error)}")
+        {:error, error}
     end
   end
 

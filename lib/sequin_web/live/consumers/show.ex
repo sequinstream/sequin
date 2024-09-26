@@ -303,10 +303,9 @@ defmodule SequinWeb.ConsumersLive.Show do
   defp assign_replica_identity(socket) do
     consumer = socket.assigns.consumer
     [source_table] = consumer.source_tables
-    source_table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == source_table.oid))
 
     assign_async(socket, :replica_identity, fn ->
-      case Databases.check_replica_identity(consumer.postgres_database, source_table.schema, source_table.name) do
+      case Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
         {:ok, replica_identity} ->
           {:ok, %{replica_identity: replica_identity}}
 

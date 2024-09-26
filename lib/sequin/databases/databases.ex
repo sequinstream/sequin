@@ -283,9 +283,9 @@ defmodule Sequin.Databases do
     end
   end
 
-  def check_replica_identity(%PostgresDatabase{} = db, schema, table) do
+  def check_replica_identity(%PostgresDatabase{} = db, oid) do
     with_connection(db, fn conn ->
-      Postgres.check_replica_identity(conn, schema, table)
+      Postgres.check_replica_identity(conn, oid)
     end)
   end
 

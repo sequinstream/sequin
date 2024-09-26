@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Send Postgres changes anywhere
+### Stream Postgres anywhere
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
@@ -18,21 +18,20 @@
 
 ## What is Sequin?
 
-Sequin sends Postgres records and changes to your applications and services. It’s designed to never miss an insert, update, or delete and provide exactly-once processing of all changes.
+Sequin is an open source message stream that uses your Postgres tables as the storage layer. This means you can turn existing Postgres tables into streams with exactly-once processing. And compared to other streaming systems like Kafka, Sequin offers a much richer feature-set, like SQL-based routing and rewinds.
 
-You can receive changes via HTTP push (webhooks) or pull (think SQS).
+You can pull changes (think SQS) or receive them via push (webhooks).
 
-Use Sequin to add [async triggers](#use-cases) to your existing Postgres tables to reliably trigger side effects. Or, Sequin can add streaming mechanics to Postgres to do the work of SQS / Kafka without the operational overhead.
+Use Sequin to process database changes in your application, replicate data, create audit logs, feed search indexes, trigger side effects, fan-out to microservices, and more.
 
 ## Killer features
 
 - **Never miss a message:** Sequin delivers messages from your database to consumers until they are acknowledged (i.e. exactly-once processing guarantees).
 - **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
 - **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
-- **Backfills:** Consumers can queue up records from this moment forward or for the entire table.
-- **Simple HTTP API:** Messages are delivered via a simple HTTP push or pull interface for easy integration.
+- **Start anywhere:** Consumers can start processing records from any point in a table.
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12+.
-- **No plpgsql:** Define business logic in the language of your choice and in your application.
+- **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
 ## Cloud
@@ -45,7 +44,7 @@ Use Sequin to add [async triggers](#use-cases) to your existing Postgres tables 
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
-Sequin connects to any Postgres database via the Write Ahead Log (WAL). It captures changes to your Postgres tables, turning them into a stream of messages. Sequin buffers messages to ensure they are delivered and allow for replays and rewinds. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.
+Sequin connects to any Postgres database via the Write Ahead Log (WAL). Consumers can start processing rows at any point in the table. Sequin turns the table's rows and changes into a stream of messages. Sequin buffers messages to ensure they are delivered and allow for replays and rewinds. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.
 
 Sequin is open source. You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
@@ -76,6 +75,8 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ## Compare Sequin
 
+### Quick compare
+
 | Feature             | Sequin                   | [PG triggers](#pg-triggers)       | [LISTEN / NOTIFY](#listen--notify)  | [Supabase Webhooks](#supabase-webhooks)  | [Amazon SQS](#amazon-sqs)   | [PGMQ](#pgmq)  |
 | ------------------- | ------------------------ | ----------------- | ---------------- | ------------------ | ------------ | -------------- |
 | Trigger guarantees  | Transactional            | Transactional     | Transactional    | Transactional      | N/A          | Transactional  |
@@ -92,6 +93,25 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 <sub>\* **PG logging:** You can configure logging in your database, but nothing is built in. Generally hard to see the state of any given side-effect.</sub>
 
 <sub>^ **Serial ops / row:** Postgres triggers (which power Supabase Webhooks) run serially within each transaction (and block) and can add significant overhead.</sub>
+
+### Details
+
+<details>
+
+<summary>Kafka v Sequin</summary>
+
+### Kafka
+
+Apache Kafka is a distributed event streaming platform. Kafka is designed for very high throughput and horizontal scalability.
+
+You can use Sequin to turn a Postgres table into something that behaves like a Kafka topic. You can create new consumers that process messages in order, starting at any offset in the table you specify. Because all your data lives at rest in Postgres, the data model is easy to understand and work with.
+
+Sequin's consumer pattern is simpler than Kafka's. Kafka uses partitions and offsets for concurrency, whereas Sequin uses a message queue pattern similar to SQS. This means concurrency is flexible and you can scale workers up and down without making any configuration changes.
+
+While Kafka may be necessary for very high throughput use cases (logs or metrics, millions of messages per second), Postgres and Sequin are able to handle a lot of use cases with a lot less complexity (even modest Postgres instances can handle tens of thousands of messages per second).
+
+</details>
+
 
 <details>
 
@@ -134,9 +154,11 @@ Sequin adds retries and message persistence to provide exactly-once processing g
 
 ### Amazon SQS
 
-Amazon SQS is a simple queue with an HTTP interface. It can be configured to provide a highly durable, redundant FIFO queue with exactly one processing.
+Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
 
-Sequin provides this same functionality with a transactional enqueue guarantee. Sequin also provide an HTTP push interface to enable easy integration with other services.
+Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, Sequin isn't really a queue; it's better thought of as a stream. Because Sequin is streaming your Postgres tables, messages aren't deleted after they're processed.
+
+So, Sequin is kind of like combining your Postgres table with SQS, like you might do with a system like Debezium.
 
 </details>
 
@@ -146,9 +168,10 @@ Sequin provides this same functionality with a transactional enqueue guarantee. 
 
 ### PGMQ
 
-PGMQ is a Postgres extension that provides a durable message queue with a SQL interface that mimics SQS methods. It offers exactly-once processing like SQS, but runs entirely in Postgres. You can add message persistence to PGMQ by archiving (instead of deleting) messages - giving you the ability to replay through the queue. However, PGMQ does not provide any order guarantees.
+PGMQ is a Postgres extension that provides a durable message queue with a SQL interface that mimics SQS methods. It offers exactly-once processing like SQS, but runs entirely in Postgres.
 
-Like PGMQ, Sequin leverages Postgres for persistence and to provide transactional enqueueing. Importantly, Sequin provides both change data captures and durable stream replay and backfill from existing tables in your database. Sequin comes with an HTTP pull and push interface, filtering, transformation, built in observability, and strict ordering guarantees.
+Unlike PGMQ, Sequin is a stream not a queue. PGMQ owns a table you publish messages to, and when you process the messages they are deleted. By contrast, Sequin turns your existing tables into a stream. They're useful for different use cases.
+
 </details>
 
 ## Documentation

@@ -230,7 +230,7 @@ You'll now configure Sequin to send every row in your `posts` table to your Trig
     2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/cli), then run:
 
       ```bash
-      sequin tunnel --ports=3001:local-endpoint
+      sequin tunnel --ports=3001:local_endpoint
       ```
 
     3. Now, click **Add encryption header** and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`.
@@ -250,7 +250,7 @@ You'll now configure Sequin to send every row in your `posts` table to your Trig
         <img src="/images/guides/trigger-dev/sort-and-filter.png" alt="Consumer Sort and Filter" />
       </Frame>
     5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `posts_push_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/create-embedding-for-post`):
+    6. Now, give your consumer a name (i.e. `posts_push_consumer`) and in the **HTTP Endpoint** section select the `local_endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/create-embedding-for-post`):
       <Frame>
         <img src="/images/guides/trigger-dev/consumer-config.png" alt="Consumer Endpoint" />
       </Frame>
@@ -268,7 +268,7 @@ You'll now configure Sequin to send every row in your `posts` table to your Trig
     <Step title="Spin up you dev environment">
     1. The Next.js app is running: `npm run dev`
     2. The Trigger.dev dev server is running `npx trigger.dev@latest dev`
-    3. The Sequin tunnel is running: `sequin tunnel --ports=3001:local-endpoint`
+    3. The Sequin tunnel is running: `sequin tunnel --ports=3001:local_endpoint`
     </Step>
     <Step title="Create a new post in your database">
 

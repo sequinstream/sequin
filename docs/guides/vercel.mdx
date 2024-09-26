@@ -8,14 +8,243 @@ iconType: "sharp-solid"
 
 [Vercel Functions](https://vercel.com/docs/functions) are on-demand, serverless functions that run on Vercel's global, edge network. They are executed in a variety of runtimes including Node.js, Edge, GO, Python and Ruby.
 
-You are already using Vercel Functions if your using api routes in Next.js, or using the Vercel API. Often times, you trigger Vercel Functions from your application when a user takes an action - but Sequin allows you to trigger
+Often, you want to trigger a Vercel Function when a database row changes. For example, you may want to trigger a function as a [side-effect](/use-cases/side-effects) of a database change, or [fan out work](/use-cases/fan-out) to multiple services.
+
+<Frame>
+  <img src="/images/guides/vercel/send-with-sequin.svg" alt="Vercel Function" />
+</Frame>
+
+In this guide, you will learn how to setup Sequin to trigger a Vercel Function when a database row changes.
 
 ## Prerequisites
 
+You are about to create a simple Vercel Function that logs a message to the console. Sequin will trigger this function by sending a HTTP POST request to the function's URL with the payload of the database row that changed.
+
+You'll need the following:
+
+- A Next.js project
+<Info>
+You can create a new Next.js project with the following terminal command:
+
+```bash
+npx create-next-app@latest --typescript
+```
+
+Learn more in the [Vercel Functions Quickstart](https://vercel.com/docs/functions/quickstart).
+</Info>
+
+- A Sequin account
+- A Postgres database (Sequin works with any Postgres database version 12+ - including [Neon](/guides/neon)) with a basic `users` table containing an `id` column and a `name` column.
+
 ## Create a Vercel Edge Function
+
+Start by creating a new Vercel Function that takes in a Sequin change event as a payload and logs the payload to the console.
+
+<Steps titleSize="h3">
+<Step title="Create a new Vercel Function">
+    Add a new API route to your project. For example, create a new file called `api/hello.ts` and add the following code:
+
+    <Info>
+    If you're using Next.js, you all add the route in your `app` directory: `app/api/hello/route.ts`.
+    </Info>
+
+    ```ts
+    export const dynamic = 'force-dynamic';
+
+    export async function POST(request: Request) {
+      const authHeader = request.headers.get('authorization');
+      if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
+        return new Response('Unauthorized', { status: 401 });
+      }
+
+      try {
+        const payload = await request.json();
+        const { record } = payload;
+
+        if (record && record.name) {
+          console.log(`Hello ${record.name}`);
+        } else {
+          console.log('No name found in the payload.');
+        }
+
+        return new Response('Success', { status: 200 });
+      } catch (error) {
+        console.error('Error processing request:', error);
+        return new Response('Internal Server Error', { status: 500 });
+      }
+    }
+    ```
+
+    This function first checks the authorization header to make sure the request is coming from Sequin. Then it processes the payload (which contains the database row that changed) and logs the name from the payload to the console.
+</Step>
+<Step title="Add the SEQUIN_WEBHOOK_SECRET environment variable">
+    Add the `SEQUIN_WEBHOOK_SECRET` environment variable to a `.env.local` file in your project root. You can create any secret value here, but make sure to keep it secure.
+
+    ```bash
+    SEQUIN_WEBHOOK_SECRET=your-secret-value
+    ```
+
+    You will need to set this secret value in the Sequin dashboard when you create the push consumer.
+</Step>
+<Step title="Start your local development server">
+    Start your local development server with the following command:
+
+    ```bash
+    npm run dev
+    ```
+
+    This will typically start the development server on `http://localhost:3000`.
+</Step>
+</Steps>
+
+<Check>
+You've successfully created a Vercel Function that logs a message to the console when Sequin sends a HTTP POST request to the function's URL.
+</Check>
 
 ## Create a Sequin Push Consumer
 
-## Test the setup
+Create a new Sequin push consumer that detects changes to the `users` table and sends a HTTP POST request to the Vercel Function's URL.
 
-## Next steps: deploy to Vercel
+<Steps titleSize="h3">
+    <Step title="Connect Sequin to your database">
+        1. Login to your Sequin account and click the **Add New Database** button.
+        2. Enter the connection details for your Postgres database.
+        <Info>
+        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/cli).
+        </Info>
+        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+
+        ```sql
+        create publication sequin_pub for all tables;
+        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+        ```
+
+        4. Name your database and click the **Connect Database** button.
+
+        Sequin will connect to your database and ensure that it's configured properly.
+
+        <Note>
+        If you need step-by-step connection instructions to connect Sequin to your database, check out our [quickstart guide](/quickstart).
+        </Note>
+    </Step>
+    <Step title="Tunnel to your local endpoint">
+    Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
+
+    1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
+    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/cli), then run:
+
+      ```bash
+      sequin tunnel --ports=3000:local-endpoint
+      ```
+
+    3. Now, click **Add encryption header** and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET` using the secret value you created above.
+    4. Click **Create HTTP Endpoint**.
+    </Step>
+    <Step title="Create a Push Consumer">
+    Create a push consumer that will capture users from your database and deliver them to your local endpoint:
+
+    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
+    2. Select your `users` table (i.e `public.users`).
+    3. For this guide, you want to capture all changes to the `users` table. To do this, select **Changes** and click **Continue**.
+    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
+    6. Now, give your consumer a name (i.e. `users_push_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/hello`):
+
+    <Frame>
+      <img src="/images/guides/vercel/consumer-config.png" alt="Create Consumer" />
+    </Frame>
+
+    7. Click the **Create Consumer** button.
+    </Step>
+</Steps>
+
+<Check>
+    Your Sequin consumer is now created and ready to send events to your function
+</Check>
+
+## Test end-to-end
+<Steps titleSize="h3">
+    <Step title="Spin up you dev environment">
+    1. The Next.js app is running: `npm run dev`
+    3. The Sequin tunnel is running: `sequin tunnel --ports=3000:local_endpoint`
+    </Step>
+    <Step title="Create a new post in your database">
+
+    ```sql
+    insert into
+    users (name)
+    values
+      (
+        'John Doe'
+      );
+    ```
+    </Step>
+    <Step title="Trace the change in the Sequin dashboard">
+    In the Sequin console, open the **Messages** tab on your consumer and confirm that a message was delivered:
+    <Frame>
+      <img src="/images/guides/vercel/message-delivered.png" alt="Message Delivered" />
+    </Frame>
+    </Step>
+
+    <Step title="Confirm the event was received by your endpoint">
+    In your local terminal, you should see a `200` response in your Next.js app:
+
+    ```bash
+    POST /api/hello 200 in 242ms
+    ```
+    </Step>
+</Steps>
+
+<Check>
+You've successfully triggerd a Vercel Function from a database change!
+</Check>
+
+## Deploy to Vercel
+<Steps titleSize="h3">
+    <Step title="Deploy your Next.js app to Vercel">
+    1. If you haven't already, install the Vercel CLI:
+
+    ```bash
+    npm install -g vercel
+    ```
+
+    2. Run the following command to deploy your Next.js app to Vercel:
+
+    ```bash
+    vercel
+    ```
+
+    Follow the prompts to link your project to a Vercel account and deploy your app. Vercel will provide you with a deployment URL once the process is complete.
+    </Step>
+
+    <Step title="Set production environment variables">
+    1. In the Vercel dashboard, navigate to your project and click on the **Settings** tab.
+    2. Under the **Environment Variables** section, click the **Add** button.
+    3. Add a new environment variable with the following details:
+        - **Environment**: Select **Production** (and optionally **Preview** and **Development** if you want to use the same secret in those environments)
+        - **Key**: `SEQUIN_WEBHOOK_SECRET`
+        - **Value**: your-secret-value (use the same value you set in your `.env.local` file)
+
+    4. Click **Save** to add the environment variable.
+    </Step>
+
+    <Step title="Create a production consumer">
+    In the Sequin console, create a new Push consumer that points to your Vercel Function's HTTP endpoint.
+    </Step>
+
+    <Step title="Verify your deployment">
+    1. After setting the environment variable, trigger a database change (e.g., insert a new user) to ensure that Sequin can successfully send events to your deployed Vercel Function.
+    2. Check the logs in the Vercel dashboard to confirm that your function is receiving the events and processing them correctly.
+    </Step>
+</Steps>
+
+<Check>
+You've successfully deployed your Next.js app to Vercel and configured it to trigger Vercel Functions from database changes!
+</Check>
+
+## Next steps
+
+Modify this example to suit your needs:
+
+- Create Vercel Functions to perform [side-effects](/use-cases/side-effects), [fan out work](/use-cases/fan-out), and more.
+- If you need to run long-running jobs, consider using [Trigger.dev](/guides/trigger-dev) or [Inngest](/guides/inngest) in tandem with Vercel Functions.
+- Tune your consumer configuration to suit your volume of work.

@@ -16,6 +16,7 @@ defmodule Sequin.Health do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health.Check
+  alias Sequin.Health.CheckHistory
   alias Sequin.JSON
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
@@ -25,7 +26,6 @@ defmodule Sequin.Health do
           | HttpPushConsumer.t()
           | PostgresDatabase.t()
 
-  @derive Jason.Encoder
   typedstruct do
     field :org_id, String.t()
     field :entity_id, String.t()
@@ -38,7 +38,7 @@ defmodule Sequin.Health do
           | :postgres_database
 
     field :status, status()
-    field :checks, [Check.t()]
+    field :checks, [Check.t() | CheckHistory.t()]
     field :last_healthy_at, DateTime.t() | nil
     field :erroring_since, DateTime.t() | nil
     field :consecutive_errors, non_neg_integer()
@@ -52,9 +52,46 @@ defmodule Sequin.Health do
     |> JSON.decode_atom("entity_kind")
     |> JSON.decode_timestamp("last_healthy_at")
     |> JSON.decode_timestamp("erroring_since")
-    |> JSON.decode_list_of_structs("checks", Check)
+    |> Map.update!("checks", fn checks ->
+      Enum.map(checks, &JSON.decode_struct_with_type/1)
+    end)
     |> JSON.struct(Health)
+    |> case do
+      # Temporary conversion for http_push_consumer checks
+      %Health{entity_kind: :http_push_consumer} = health ->
+        push_check = Enum.find(health.checks, &(&1.id == :push))
+        push_check = maybe_convert_to_history(push_check)
+        checks = replace_check_in_list(health.checks, push_check)
+        %{health | checks: checks}
+
+      health ->
+        health
+    end
   end
+
+  defimpl Jason.Encoder do
+    def encode(%Health{} = health, opts) do
+      health
+      |> Map.from_struct()
+      |> Map.update!(:checks, fn checks ->
+        Enum.map(checks, &JSON.encode_struct_with_type/1)
+      end)
+      |> Jason.Encode.map(opts)
+    end
+  end
+
+  defp maybe_convert_to_history(%CheckHistory{id: :push} = check), do: check
+
+  defp maybe_convert_to_history(%Check{id: :push} = check) do
+    %CheckHistory{
+      id: :push,
+      name: check.name,
+      checks: [check],
+      created_at: check.created_at
+    }
+  end
+
+  defp maybe_convert_to_history(check), do: check
 
   defguard is_entity(entity)
            when is_struct(entity, HttpEndpoint) or
@@ -196,8 +233,13 @@ defmodule Sequin.Health do
         %Check{id: :receive} = check ->
           %{check | message: "Whether the consumer is producing messages."}
 
-        %Check{id: :push} = check ->
-          %{check | message: "Pushing messages to your endpoint via HTTP."}
+        %Check{id: :push} ->
+          %CheckHistory{
+            id: :push,
+            name: "Push",
+            message: "Pushing messages to your endpoint via HTTP.",
+            created_at: DateTime.utc_now()
+          }
 
         %Check{} = check ->
           check
@@ -282,7 +324,7 @@ defmodule Sequin.Health do
   ##############
 
   defp update_health_with_check(%Health{} = health, %Check{} = check) do
-    new_checks = replace_check_in_list(health.checks, check)
+    new_checks = update_check_in_list(health.checks, check)
     new_status = calculate_overall_status(new_checks)
 
     %Health{
@@ -297,7 +339,13 @@ defmodule Sequin.Health do
 
   defp calculate_overall_status(checks) do
     checks
-    |> Enum.map(& &1.status)
+    |> Enum.map(fn
+      %CheckHistory{} = history ->
+        CheckHistory.current_status(history)
+
+      check ->
+        check.status
+    end)
     |> Enum.min_by(&status_priority/1)
   end
 
@@ -311,9 +359,30 @@ defmodule Sequin.Health do
     end
   end
 
+  defp update_check_in_list(checks, new_check) do
+    new_check_id = new_check.id
+
+    Enum.map(checks, fn
+      %CheckHistory{id: ^new_check_id} = history ->
+        CheckHistory.add_check(history, new_check)
+
+      %Check{id: ^new_check_id} ->
+        new_check
+
+      check ->
+        check
+    end)
+  end
+
   defp replace_check_in_list(checks, new_check) do
-    Enum.map(checks, fn check ->
-      if check.id == new_check.id, do: new_check, else: check
+    new_check_id = new_check.id
+
+    Enum.map(checks, fn
+      %{id: ^new_check_id} ->
+        new_check
+
+      check ->
+        check
     end)
   end
 

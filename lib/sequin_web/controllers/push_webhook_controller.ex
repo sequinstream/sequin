@@ -25,6 +25,13 @@ defmodule SequinWeb.PushWebhookController do
     end
   end
 
+  def nack(conn, _params) do
+    delay = :rand.uniform(500) + 1000
+    Process.sleep(delay)
+
+    send_resp(conn, 400, "NACK")
+  end
+
   def timeout(conn, _params) do
     Process.sleep(:infinity)
     send_resp(conn, 200, "TIMEOUT")

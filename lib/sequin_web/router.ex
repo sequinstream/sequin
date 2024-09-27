@@ -178,6 +178,7 @@ defmodule SequinWeb.Router do
     scope "/push-webhook" do
       post "/ack", SequinWeb.PushWebhookController, :ack
       post "/maybe-ack", SequinWeb.PushWebhookController, :maybe_ack
+      post "/nack", SequinWeb.PushWebhookController, :nack
       post "/timeout", SequinWeb.PushWebhookController, :timeout
     end
   end

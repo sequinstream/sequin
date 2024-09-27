@@ -15,6 +15,7 @@
   import { slide, fade } from "svelte/transition";
 
   // Receive necessary props
+  export let consumer: { ack_wait_ms: number };
   export let messages: any[];
   export let totalCount: number = 0;
   export let pageSize: number;
@@ -39,29 +40,17 @@
   let rowHeight = 0; // Will be calculated
   let totalAvailableHeight = 0;
 
-  // Add this function to determine the message state
-  function getMessageState(message) {
-    if (message.type === "acknowledged_message") {
-      return "acknowledged";
-    } else if (
-      message.deliver_count > 0 &&
-      new Date(message.not_visible_until) > new Date()
-    ) {
-      return "delivered";
-    } else {
-      return "pending";
-    }
-  }
-
-  // Add this function to get the appropriate color for the state
+  // Update this function to get the appropriate color for the state
   function getStateColor(state) {
     switch (state) {
-      case "pending":
+      case "available":
         return "bg-gray-200";
       case "delivered":
         return "bg-blue-200";
       case "acknowledged":
         return "bg-green-200";
+      case "not visible":
+        return "bg-yellow-200";
       default:
         return "bg-gray-200";
     }
@@ -395,10 +384,10 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
                 <span
                   class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                    getMessageState(message)
+                    message.state
                   )} text-gray-800`}
                 >
-                  {getMessageState(message)}
+                  {message.state}
                 </span>
               </td>
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
@@ -518,10 +507,10 @@
                       >
                       <span
                         class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                          getMessageState(selectedMessage)
+                          selectedMessage.state
                         )} text-gray-800`}
                       >
-                        {getMessageState(selectedMessage)}
+                        {selectedMessage.state}
                       </span>
                     </div>
                     <div class="flex justify-between items-center">
@@ -548,29 +537,6 @@
                         >{selectedMessage.deliver_count}</span
                       >
                     </div>
-                  </div>
-
-                  <!-- Message Data Section -->
-                  <div>
-                    <h3 class="text-lg font-semibold mb-4">Message Data</h3>
-                    {#if isLoadingMessageData}
-                      <div class="flex justify-center items-center h-32">
-                        <Loader2 class="h-8 w-8 animate-spin text-gray-500" />
-                      </div>
-                    {:else if messageDataError}
-                      <div
-                        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
-                        role="alert"
-                      >
-                        <strong class="font-bold">Error:</strong>
-                        <span class="block sm:inline">{messageDataError}</span>
-                      </div>
-                    {:else if messageData}
-                      <pre
-                        class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
-                          >{JSON.stringify(messageData, null, 2)}</code
-                        ></pre>
-                    {/if}
                   </div>
 
                   <!-- Timestamps Section -->
@@ -606,6 +572,33 @@
                         >
                       </div>
                     </div>
+                  </div>
+
+                  <!-- Message Data Section -->
+                  <div>
+                    <h3 class="text-lg font-semibold mb-4">Message Data</h3>
+                    {#if isLoadingMessageData}
+                      <div class="flex justify-center items-center h-32">
+                        <Loader2 class="h-8 w-8 animate-spin text-gray-500" />
+                      </div>
+                    {:else if messageDataError}
+                      <div
+                        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
+                        role="alert"
+                      >
+                        <strong class="font-bold">Error:</strong>
+                        <span class="block sm:inline">{messageDataError}</span>
+                      </div>
+                    {:else if selectedMessage.state == "acknowledged"}
+                      <div class="text-sm text-gray-500">
+                        Message data is not retained for acknowledged messages.
+                      </div>
+                    {:else if messageData}
+                      <pre
+                        class="bg-gray-100 p-4 rounded-lg overflow-x-auto"><code
+                          >{JSON.stringify(messageData, null, 2)}</code
+                        ></pre>
+                    {/if}
                   </div>
 
                   <!-- Logs Section -->

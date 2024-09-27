@@ -158,7 +158,8 @@ defmodule SequinWeb.ConsumersLive.Show do
               name="consumers/ShowMessages"
               props={
                 %{
-                  messages: encode_messages(@messages),
+                  consumer: encode_consumer(@consumer),
+                  messages: encode_messages(@consumer, @messages),
                   totalCount: @total_count,
                   pageSize: @page_size,
                   paused: @paused,
@@ -533,7 +534,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   # Function to encode messages for the Svelte component
-  defp encode_messages(messages) do
+  defp encode_messages(consumer, messages) do
     Enum.map(messages, fn
       %ConsumerRecord{} = message ->
         %{
@@ -549,7 +550,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           not_visible_until: message.not_visible_until,
           inserted_at: message.inserted_at,
           data: message.data,
-          trace_id: message.replication_message_trace_id
+          trace_id: message.replication_message_trace_id,
+          state: get_message_state(consumer, message)
         }
 
       %ConsumerEvent{} = message ->
@@ -566,7 +568,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           not_visible_until: message.not_visible_until,
           inserted_at: message.inserted_at,
           data: message.data,
-          trace_id: message.replication_message_trace_id
+          trace_id: message.replication_message_trace_id,
+          state: get_message_state(consumer, message)
         }
 
       %AcknowledgedMessage{} = message ->
@@ -583,8 +586,28 @@ defmodule SequinWeb.ConsumersLive.Show do
           not_visible_until: message.not_visible_until,
           inserted_at: message.inserted_at,
           data: nil,
-          trace_id: message.trace_id
+          trace_id: message.trace_id,
+          state: get_message_state(consumer, message)
         }
     end)
+  end
+
+  defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "acknowledged"
+  defp get_message_state(_consumer, %{deliver_count: 0}), do: "available"
+
+  defp get_message_state(%{ack_wait_ms: ack_wait_ms}, %{
+         last_delivered_at: last_delivered_at,
+         not_visible_until: not_visible_until
+       }) do
+    cond do
+      DateTime.after?(DateTime.add(last_delivered_at, ack_wait_ms, :millisecond), DateTime.utc_now()) ->
+        "delivered"
+
+      DateTime.after?(not_visible_until, DateTime.utc_now()) ->
+        "not visible"
+
+      true ->
+        "available"
+    end
   end
 end

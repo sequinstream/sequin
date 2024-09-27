@@ -18,6 +18,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
+  alias Sequin.TOML
   alias SequinWeb.ConsumersLive.Form
 
   require Logger
@@ -84,15 +85,19 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   defp apply_action(socket, :show, _params) do
-    assign(socket, :page_title, "Show Consumer")
+    assign(socket, :page_title, "#{socket.assigns.consumer.name} | Sequin")
   end
 
   defp apply_action(socket, :edit, _params) do
-    assign(socket, :page_title, "Edit Consumer")
+    assign(socket, :page_title, "Edit #{socket.assigns.consumer.name} | Sequin")
   end
 
   defp apply_action(socket, :messages, _params) do
-    assign(socket, :page_title, "Messages")
+    assign(socket, :page_title, "Messages | #{socket.assigns.consumer.name} | Sequin")
+  end
+
+  defp apply_action(socket, :toml, _params) do
+    assign(socket, :page_title, "TOML config | #{socket.assigns.consumer.name} | Sequin")
   end
 
   @impl Phoenix.LiveView
@@ -163,6 +168,16 @@ defmodule SequinWeb.ConsumersLive.Show do
                   pageSize: @page_size,
                   paused: @paused,
                   showAcked: @show_acked
+                }
+              }
+            />
+          <% {:toml, _consumer} -> %>
+            <!-- ShowToml component -->
+            <.svelte
+              name="consumers/ShowToml"
+              props={
+                %{
+                  consumer_toml: TOML.encode!(%{"http_push_consumer.#{@consumer.name}" => @consumer})
                 }
               }
             />

@@ -5,7 +5,6 @@
     Webhook,
     ExternalLink,
     ArrowUpRight,
-    ArrowRight,
     ArrowRightToLine,
     HelpCircle,
     SquareStack,

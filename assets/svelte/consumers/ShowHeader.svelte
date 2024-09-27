@@ -50,7 +50,12 @@
     : `/consumers/${consumer.id}/messages`;
 
   onMount(() => {
-    activeTab = live_action === "messages" ? "messages" : "overview";
+    activeTab =
+      live_action === "messages"
+        ? "messages"
+        : live_action === "toml"
+          ? "toml"
+          : "overview";
   });
 </script>
 
@@ -132,6 +137,18 @@
         {#if messages_failing}
           <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
         {/if}
+      </a>
+      <a
+        href="/consumers/{consumer.id}/toml"
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
+          activeTab === "toml"
+            ? "text-black border-black"
+            : "text-gray-500 hover:text-gray-700 border-transparent"
+        }`}
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        TOML
       </a>
     </div>
   </div>

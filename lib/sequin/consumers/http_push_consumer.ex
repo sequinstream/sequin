@@ -57,6 +57,28 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     timestamps()
   end
 
+  defimpl Sequin.TOML.Encoder, for: Sequin.Consumers.HttpPushConsumer do
+    def encode(%Sequin.Consumers.HttpPushConsumer{} = consumer, opts) do
+      messages_kind =
+        case consumer.message_kind do
+          :event -> "changes"
+          :record -> "rows"
+        end
+
+      map = %{
+        ack_wait_ms: consumer.ack_wait_ms,
+        max_ack_pending: consumer.max_ack_pending,
+        max_deliver: consumer.max_deliver,
+        max_waiting: consumer.max_waiting,
+        message_kinds: messages_kind,
+        name: consumer.name,
+        http_endpoint_id: consumer.http_endpoint_id
+      }
+
+      Sequin.TOML.Encode.map(map, opts)
+    end
+  end
+
   def create_changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [

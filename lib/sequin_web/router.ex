@@ -86,6 +86,7 @@ defmodule SequinWeb.Router do
       live "/consumers/new", ConsumersLive.Index, :new
       live "/consumers/:id", ConsumersLive.Show, :show
       live "/consumers/:id/messages", ConsumersLive.Show, :messages
+      live "/consumers/:id/toml", ConsumersLive.Show, :toml
       live "/consumers/:id/edit", ConsumersLive.Show, :edit
 
       live "/databases", DatabasesLive.Index, :index

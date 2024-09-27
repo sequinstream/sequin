@@ -3,7 +3,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import {
-    ArrowUpRight,
     ChevronLeft,
     ChevronRight,
     Loader2,

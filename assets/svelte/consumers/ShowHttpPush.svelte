@@ -5,6 +5,7 @@
     Webhook,
     ExternalLink,
     ArrowUpRight,
+    ArrowRight,
     ArrowRightToLine,
     HelpCircle,
     SquareStack,
@@ -32,7 +33,11 @@
   export let consumer;
   export let live;
   export let parent;
-  export let metrics;
+  export let metrics = {
+    messages_processed_count: 0,
+    messages_processed_throughput: 0,
+    messages_failing_count: 0,
+  };
   export let replica_identity;
 
   let refreshReplicaWarningLoading = false;
@@ -60,16 +65,33 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500"
-              >Messages Processed</span
-            >
-            <CheckCircle2 class="h-5 w-5 text-green-500" />
+            <span class="text-sm font-medium text-gray-500">Messages</span>
+            {#if metrics.messages_failing_count > 0}
+              <XCircle class="h-5 w-5 text-red-500" />
+            {:else}
+              <CheckCircle2 class="h-5 w-5 text-green-500" />
+            {/if}
           </div>
-          <span class="text-2xl font-bold"
-            >{metrics.messages_processed_count
-              ? formatNumberWithCommas(metrics.messages_processed_count)
-              : "N/A"}</span
-          >
+          <div class="flex justify-between items-center space-x-4">
+            <span>
+              <span class="text-2xl font-bold">
+                {metrics.messages_processed_count
+                  ? formatNumberWithCommas(metrics.messages_processed_count)
+                  : "0"}
+              </span>
+              <span class="font-medium ml-1">acked</span>
+            </span>
+            <span>
+              <span
+                class="text-2xl font-bold {metrics.messages_failing_count > 0
+                  ? 'text-red-500'
+                  : 'text-black'}"
+              >
+                {formatNumberWithCommas(metrics.messages_failing_count)}
+              </span>
+              <span class="font-medium ml-1">failing</span>
+            </span>
+          </div>
         </CardContent>
       </Card>
       <Card>
@@ -79,8 +101,9 @@
             <ArrowUpRight class="h-5 w-5 text-blue-500" />
           </div>
           <span class="text-2xl font-bold"
-            >{metrics.messages_processed_throughput ?? "N/A"}/min</span
+            >{metrics.messages_processed_throughput ?? "N/A"}</span
           >
+          <span class="font-medium ml-1">/min</span>
         </CardContent>
       </Card>
     </div>

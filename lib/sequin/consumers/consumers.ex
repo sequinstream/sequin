@@ -384,8 +384,8 @@ defmodule Sequin.Consumers do
   @fast_count_threshold 50_000
   def fast_count_threshold, do: @fast_count_threshold
 
-  def fast_count_messages_for_consumer(consumer) do
-    query = consumer_messages_query(consumer)
+  def fast_count_messages_for_consumer(consumer, params \\ []) do
+    query = consumer_messages_query(consumer, params)
 
     # This number can be pretty inaccurate
     result = Ecto.Adapters.SQL.explain(Repo, :all, query)
@@ -400,17 +400,23 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp consumer_messages_query(%{message_kind: :record} = consumer) do
-    ConsumerRecord.where_consumer_id(consumer.id)
+  defp consumer_messages_query(%{message_kind: :record} = consumer, params) do
+    Enum.reduce(params, ConsumerRecord.where_consumer_id(consumer.id), fn
+      {:delivery_count_gte, delivery_count}, query ->
+        ConsumerRecord.where_delivery_count_gte(query, delivery_count)
+    end)
   end
 
-  defp consumer_messages_query(%{message_kind: :event} = consumer) do
-    ConsumerEvent.where_consumer_id(consumer.id)
+  defp consumer_messages_query(%{message_kind: :event} = consumer, params) do
+    Enum.reduce(params, ConsumerEvent.where_consumer_id(consumer.id), fn
+      {:delivery_count_gte, delivery_count}, query ->
+        ConsumerEvent.where_delivery_count_gte(query, delivery_count)
+    end)
   end
 
-  def count_messages_for_consumer(consumer) do
+  def count_messages_for_consumer(consumer, params \\ []) do
     consumer
-    |> consumer_messages_query()
+    |> consumer_messages_query(params)
     |> Repo.aggregate(:count, :id)
   end
 

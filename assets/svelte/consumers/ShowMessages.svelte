@@ -15,7 +15,6 @@
   import { slide, fade } from "svelte/transition";
 
   // Receive necessary props
-  export let consumer: { id: string };
   export let messages: any[];
   export let totalCount: number = 0;
   export let pageSize: number;
@@ -262,6 +261,12 @@
     );
   }
 
+  function toggleShowAcked() {
+    showAcked = !showAcked;
+    live.pushEvent("toggle_show_acked", { show_acked: showAcked });
+    changePage(0);
+  }
+
   $: pageCount = Math.ceil(totalCount / pageSize);
 </script>
 
@@ -276,11 +281,7 @@
           variant="outline"
           size="sm"
           class="flex items-center space-x-2"
-          on:click={() => {
-            showAcked = !showAcked;
-            live.pushEvent("toggle_show_acked", { show_acked: showAcked });
-            changePage(0);
-          }}
+          on:click={toggleShowAcked}
         >
           <Switch checked={showAcked} />
           <span>Show Acked</span>
@@ -607,22 +608,6 @@
                     </div>
                   </div>
 
-                  <!-- Consumer Section -->
-                  <div>
-                    <h3 class="text-lg font-semibold mb-4">Consumer</h3>
-                    <div
-                      class="bg-gray-100 p-4 rounded-lg flex justify-between items-center"
-                    >
-                      <h4 class="font-medium">{consumer.id}</h4>
-                      <a href={`/consumers/${consumer.id}`}>
-                        <Button variant="outline" size="sm">
-                          View Consumer
-                          <ArrowUpRight class="h-4 w-4 ml-2" />
-                        </Button>
-                      </a>
-                    </div>
-                  </div>
-
                   <!-- Logs Section -->
                   <div>
                     <div class="flex justify-between items-center mb-4">
@@ -678,6 +663,24 @@
                             {/each}
                           </tbody>
                         </table>
+                      </div>
+                    {:else if isLoadingMessageLogs}
+                      <div class="space-y-2 animate-pulse">
+                        {#each Array(3) as _}
+                          <div
+                            class="flex border border-gray-200 rounded overflow-hidden"
+                          >
+                            <div class="w-1 bg-gray-200"></div>
+                            <div class="flex-grow p-2">
+                              <div
+                                class="w-1/3 h-2 my-2 bg-gray-200 rounded-full"
+                              ></div>
+                              <div
+                                class="w-2/3 h-3 my-2 bg-gray-200 rounded-full"
+                              ></div>
+                            </div>
+                          </div>
+                        {/each}
                       </div>
                     {:else}
                       <div class="text-sm text-gray-500">

@@ -131,6 +131,10 @@ defmodule Sequin.Consumers.ConsumerRecord do
     )
   end
 
+  def where_delivery_count_gte(query \\ base_query(), delivery_count) do
+    from([consumer_record: cr] in query, where: cr.deliver_count >= ^delivery_count)
+  end
+
   def count(query \\ base_query()) do
     from([consumer_record: cr] in query, select: count(cr.id))
   end

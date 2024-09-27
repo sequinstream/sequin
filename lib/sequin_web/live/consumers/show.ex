@@ -26,7 +26,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   @page_size 25
 
   @impl Phoenix.LiveView
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     consumer = Consumers.get_consumer_for_account(current_account_id(socket), id)
     {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
 
@@ -61,7 +61,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       |> assign_replica_identity()
       |> assign_metrics()
       |> assign(:paused, false)
-      |> assign(:show_acked, true)
+      |> assign(:show_acked, params["showAcked"] == "true")
       |> assign(:page, 0)
       |> assign(:page_size, @page_size)
       |> assign(:total_count, 0)
@@ -72,6 +72,14 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_params(params, _url, socket) do
+    show_acked =
+      case Map.get(params, "showAcked", "true") do
+        "true" -> true
+        "false" -> false
+        _ -> true
+      end
+
+    socket = assign(socket, :show_acked, show_acked)
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -99,7 +107,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           %{
             consumer: encode_consumer(@consumer),
             parent: "consumer-show",
-            live_action: @live_action
+            live_action: @live_action,
+            messages_failing: @metrics.messages_failing_count > 0
           }
         }
       />
@@ -149,7 +158,6 @@ defmodule SequinWeb.ConsumersLive.Show do
               name="consumers/ShowMessages"
               props={
                 %{
-                  consumer: encode_consumer(@consumer),
                   messages: encode_messages(@messages),
                   totalCount: @total_count,
                   pageSize: @page_size,
@@ -252,7 +260,8 @@ defmodule SequinWeb.ConsumersLive.Show do
      socket
      |> assign(:show_acked, show_acked)
      |> assign(:page, 0)
-     |> load_consumer_messages()}
+     |> load_consumer_messages()
+     |> push_patch(to: ~p"/consumers/#{socket.assigns.consumer.id}/messages?showAcked=#{show_acked}")}
   end
 
   defp handle_edit_finish(updated_consumer) do
@@ -320,10 +329,12 @@ defmodule SequinWeb.ConsumersLive.Show do
 
     {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
     {:ok, messages_processed_throughput} = Metrics.get_consumer_messages_processed_throughput(consumer)
+    messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 2)
 
     metrics = %{
       messages_processed_count: messages_processed_count,
-      messages_processed_throughput: Float.round(messages_processed_throughput * 60, 1)
+      messages_processed_throughput: Float.round(messages_processed_throughput * 60, 1),
+      messages_failing_count: messages_failing_count
     }
 
     assign(socket, :metrics, metrics)
@@ -345,12 +356,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       http_endpoint_path: consumer.http_endpoint_path,
       source_table: encode_source_table(List.first(consumer.source_tables), consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
-      # FIXME: Implement health calculation
       health: Health.to_external(consumer.health),
-      # FIXME: Implement messages processed count
-      messages_processed: 1_234_567,
-      # FIXME: Implement average latency calculation
-      avg_latency: 45,
       replica_warning_dismissed: consumer.replica_warning_dismissed
     }
   end
@@ -369,11 +375,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       updated_at: consumer.updated_at,
       source_table: encode_source_table(List.first(consumer.source_tables), consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
-      health: Health.to_external(consumer.health),
-      # FIXME: Implement messages processed count
-      messages_processed: 1_234_567,
-      # FIXME: Implement average latency calculation
-      avg_latency: 45
+      health: Health.to_external(consumer.health)
     }
   end
 

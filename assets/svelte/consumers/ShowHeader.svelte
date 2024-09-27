@@ -7,6 +7,7 @@
     CirclePlay,
     CircleStop,
     Radio,
+    AlertCircle, // Import the red radar icon
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
@@ -17,6 +18,7 @@
   export let live_action;
   export let live;
   export let parent;
+  export let messages_failing;
 
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
@@ -42,6 +44,10 @@
   }
 
   let activeTab: string;
+
+  $: messageUrl = messages_failing
+    ? `/consumers/${consumer.id}/messages?showAcked=false`
+    : `/consumers/${consumer.id}/messages`;
 
   onMount(() => {
     activeTab = live_action === "messages" ? "messages" : "overview";
@@ -113,8 +119,8 @@
         Overview
       </a>
       <a
-        href="/consumers/{consumer.id}/messages"
-        class={`py-2 px-4 font-medium border-b-2 ${
+        href={messageUrl}
+        class={`py-2 px-4 flex items-center font-medium border-b-2 ${
           activeTab === "messages"
             ? "text-black border-black"
             : "text-gray-500 hover:text-gray-700 border-transparent"
@@ -123,6 +129,9 @@
         data-phx-link-state="push"
       >
         Messages
+        {#if messages_failing}
+          <AlertCircle class="h-4 w-4 text-red-600 ml-1" />
+        {/if}
       </a>
     </div>
   </div>

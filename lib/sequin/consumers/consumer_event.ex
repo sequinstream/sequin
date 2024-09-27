@@ -135,6 +135,10 @@ defmodule Sequin.Consumers.ConsumerEvent do
     )
   end
 
+  def where_delivery_count_gte(query \\ base_query(), delivery_count) do
+    from([consumer_event: ce] in query, where: ce.deliver_count >= ^delivery_count)
+  end
+
   def count(query \\ base_query()) do
     from([consumer_event: ce] in query, select: count(ce.id))
   end

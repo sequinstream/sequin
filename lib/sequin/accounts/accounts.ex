@@ -112,6 +112,7 @@ defmodule Sequin.Accounts do
   def register_user(:identity, attrs) do
     Repo.transact(fn ->
       {:ok, account} = create_account(%{})
+      {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
 
       result =
         %User{account_id: account.id}

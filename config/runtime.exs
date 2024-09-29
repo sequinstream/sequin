@@ -144,6 +144,9 @@ if config_env() == :prod do
 
   config :redix, url: System.fetch_env!("REDIS_URL")
 
+  config :sentry,
+    dsn: System.fetch_env!("SENTRY_DSN")
+
   config :sequin, Sequin.Vault,
     ciphers: [
       # In AES.GCM, it is important to specify 12-byte IV length for

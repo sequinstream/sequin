@@ -56,6 +56,8 @@ defmodule SequinWeb do
       use Phoenix.LiveView,
         layout: {SequinWeb.Layouts, :app}
 
+      on_mount Sentry.LiveViewHook
+
       unquote(html_helpers())
     end
   end

@@ -23,6 +23,12 @@ config :phoenix, :json_library, Jason
 config :redix,
   url: "redis://localhost:6379"
 
+config :sentry,
+  enable_source_code_context: true,
+  environment_name: Mix.env(),
+  root_source_code_paths: [File.cwd!()],
+  client: Sequin.Sentry.FinchClient
+
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [default: 10],

@@ -17,6 +17,8 @@ defmodule Sequin.Application do
 
     :ets.new(Sequin.Consumers.posthog_ets_table(), [:set, :public, :named_table])
 
+    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sequin.Supervisor]

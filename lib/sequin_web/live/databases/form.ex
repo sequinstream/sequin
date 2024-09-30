@@ -416,7 +416,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   defp detect_supabase_pooled(%{"username" => username, "hostname" => hostname}) do
-    username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase.com")
+    username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase")
   end
 
   defp detect_supabase_pooled(_), do: false

@@ -11,6 +11,12 @@
     CardHeader,
     CardTitle,
   } from "$lib/components/ui/card";
+  import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+  } from "$lib/components/ui/accordion";
   import CodeWithCopy from "../components/CodeWithCopy.svelte";
   import CopyIcon from "../components/CopyIcon.svelte";
   import {
@@ -419,67 +425,85 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       <CardHeader>
         <CardTitle>Replication configuration</CardTitle>
       </CardHeader>
-      <CardContent class="space-y-4">
+      <CardContent>
         <div class="space-y-2">
-          <Label for="slot_name">Slot name</Label>
-          <Input type="text" id="slot_name" bind:value={form.slot_name} />
-          {#if replicationErrors.slot_name}
-            <p class="text-destructive text-sm">
-              {replicationErrors.slot_name}
-            </p>
-          {/if}
+          <div class="space-y-2">
+            <Label for="slot_name">Slot name</Label>
+            <Input type="text" id="slot_name" bind:value={form.slot_name} />
+            {#if replicationErrors.slot_name}
+              <p class="text-destructive text-sm">
+                {replicationErrors.slot_name}
+              </p>
+            {/if}
+          </div>
+
+          <div class="space-y-2">
+            <Label for="publication_name">Publication name</Label>
+            <Input
+              type="text"
+              id="publication_name"
+              bind:value={form.publication_name}
+            />
+            {#if replicationErrors.publication_name}
+              <p class="text-destructive text-sm">
+                {replicationErrors.publication_name}
+              </p>
+            {/if}
+          </div>
         </div>
 
-        <div class="space-y-2">
-          <Label for="publication_name">Publication name</Label>
-          <Input
-            type="text"
-            id="publication_name"
-            bind:value={form.publication_name}
-          />
-          {#if replicationErrors.publication_name}
-            <p class="text-destructive text-sm">
-              {replicationErrors.publication_name}
-            </p>
-          {/if}
-        </div>
-        <h3 class="text-md font-semibold mb-2">Step 1: Create a publication</h3>
-        <div class="pl-6 space-y-2">
+        <div class="mt-8">
+          <h3 class="text-md font-semibold">Step 1: Create a publication</h3>
           <p class="text-sm text-muted-foreground">
-            Choose from one of the following examples to create a publication:
+            Create a publication in your database using <strong>one</strong> of the
+            following commands:
           </p>
-          <p class="text-sm font-medium">
-            Create a publication for all tables:
-          </p>
-          <CodeWithCopy
-            language="sql"
-            code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
-          />
-
-          <p class="text-sm font-medium">
-            Create a publication for certain tables:
-          </p>
-          <CodeWithCopy
-            language="sql"
-            code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
-          />
-
-          <p class="text-sm font-medium">
-            Create a publication for all tables in a schema:
-          </p>
-          <CodeWithCopy
-            language="sql"
-            code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
-          />
         </div>
-        <h3 class="text-md font-semibold mb-2">
-          Step 2: Create a replication slot
-        </h3>
-        <div class="pl-6 space-y-2">
+        <Accordion class="pl-6 space-y-2" value="all_tables">
+          <AccordionItem value="all_tables">
+            <AccordionTrigger class="text-sm font-medium">
+              Create a publication for all tables
+            </AccordionTrigger>
+            <AccordionContent>
+              <CodeWithCopy
+                language="sql"
+                code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
+              />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="certain_tables">
+            <AccordionTrigger class="text-sm font-medium">
+              OR create a publication for certain tables
+            </AccordionTrigger>
+            <AccordionContent>
+              <CodeWithCopy
+                language="sql"
+                code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
+              />
+            </AccordionContent>
+          </AccordionItem>
+          <AccordionItem value="all_tables_in_schema">
+            <AccordionTrigger class="text-sm font-medium">
+              OR create a publication for all tables in a schema
+            </AccordionTrigger>
+            <AccordionContent>
+              <CodeWithCopy
+                language="sql"
+                code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+              />
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+        <div class="mt-8 mb-6">
+          <h3 class="text-md font-semibold">
+            Step 2: Create a replication slot
+          </h3>
           <p class="text-sm text-muted-foreground">
-            Run the following command on your database to create a replication
-            slot:
+            Create a replication slot in your database using the following
+            command:
           </p>
+        </div>
+        <div class="pl-6 space-y-2">
           <CodeWithCopy
             language="sql"
             code={`select pg_create_logical_replication_slot('${form.slot_name || "my_slot"}', 'pgoutput');`}
@@ -491,26 +515,20 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
     <Card>
       <CardHeader>
         <CardTitle>IP addresses</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p class="text-sm text-muted-foreground mb-2">
+        <p class="text-sm text-muted-foreground">
           Ensure your database and/or firewall allows connections from the
           following IPs:
         </p>
-        <ul class="list-disc list-inside space-y-2 text-sm">
-          <li>
-            <div class="inline-flex items-center">
-              <span class="mr-2">3.221.69.77</span>
-              <CopyIcon class="h-4 w-4" content="3.221.69.77" />
-            </div>
-          </li>
-          <li>
-            <div class="inline-flex items-center">
-              <span class="mr-2">54.210.150.114</span>
-              <CopyIcon class="h-4 w-4" content="54.210.150.114" />
-            </div>
-          </li>
-        </ul>
+      </CardHeader>
+      <CardContent>
+        <div class="pl-6 flex flex-row space-x-2">
+          <CodeWithCopy maxWidth="200px" language="bash" code={`3.221.69.77`} />
+          <CodeWithCopy
+            maxWidth="200px"
+            language="bash"
+            code={`54.210.150.114`}
+          />
+        </div>
       </CardContent>
     </Card>
 

@@ -144,10 +144,15 @@ defmodule SequinWeb.DatabasesLive.Show do
   defp assign_metrics(socket) do
     database = socket.assigns.database
 
-    {:ok, avg_latency} = Metrics.get_database_avg_latency(database)
+    avg_latency =
+      case Metrics.get_database_avg_latency(database) do
+        {:ok, nil} -> nil
+        {:ok, avg_latency} -> round(avg_latency)
+        {:error, _} -> nil
+      end
 
     metrics = %{
-      avg_latency: round(avg_latency)
+      avg_latency: avg_latency
     }
 
     assign(socket, :metrics, metrics)

@@ -34,15 +34,6 @@ defmodule Sequin.Metrics do
     Store.get_throughput("consumer_messages_processed_throughput:#{id}")
   end
 
-  # Consumer Average Latency
-  def incr_consumer_avg_latency(%{id: id}, latency) do
-    Store.incr_avg("consumer_avg_latency:#{id}", latency)
-  end
-
-  def get_consumer_avg_latency(%{id: id}) do
-    Store.get_avg("consumer_avg_latency:#{id}")
-  end
-
   # Database Average Latency
   def incr_database_avg_latency(%PostgresDatabase{id: id}, latency) do
     Store.incr_avg("database_avg_latency:#{id}", latency)

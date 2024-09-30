@@ -179,7 +179,14 @@
             <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
             <Clock class="h-5 w-5 text-blue-500" />
           </div>
-          <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
+          {#if metrics.avg_latency}
+            <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
+          {:else}
+            <div class="flex items-center">
+              <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+              <span class="text-4xl font-bold text-gray-500">ms</span>
+            </div>
+          {/if}
         </CardContent>
       </Card>
     </div>

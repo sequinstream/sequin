@@ -48,7 +48,7 @@ defmodule Sequin.Metrics.Store do
         {:ok, String.to_integer(total) / String.to_integer(count)}
 
       {:ok, _} ->
-        {:ok, 0}
+        {:ok, nil}
 
       error ->
         error

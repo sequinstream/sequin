@@ -111,7 +111,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   defp validate_not_supabase_pooled(%Ecto.Changeset{valid?: true} = changeset) do
     hostname = get_field(changeset, :hostname)
 
-    if not is_nil(hostname) and String.contains?(hostname, "pooler.supabase.com") do
+    if not is_nil(hostname) and String.contains?(hostname, "pooler.supabase") do
       add_error(
         changeset,
         :hostname,

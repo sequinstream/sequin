@@ -15,6 +15,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Databases
+  alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
@@ -27,47 +28,62 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
-    consumer = Consumers.get_consumer_for_account(current_account_id(socket), id)
-    {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
+    case load_consumer(id, socket) do
+      {:ok, consumer} ->
+        {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
 
-    consumer =
-      case consumer do
-        %HttpPushConsumer{} ->
-          Repo.preload(consumer, [:http_endpoint, :postgres_database])
+        if connected?(socket) do
+          Process.send_after(self(), :update_health, 1000)
+          Process.send_after(self(), :update_metrics, 1000)
+          # Start message updates
+          Process.send_after(self(), :update_messages, 100)
+        end
 
-        %HttpPullConsumer{} ->
-          Repo.preload(consumer, [:postgres_database])
-      end
+        api_base_url = Application.get_env(:sequin, :api_base_url, SequinWeb.Endpoint.url())
 
-    # Attempt to get existing health, fallback to initializing
-    {:ok, health} = Health.get(consumer)
-    consumer = %{consumer | health: health}
+        consumer =
+          case consumer do
+            %HttpPushConsumer{} ->
+              Repo.preload(consumer, [:http_endpoint, :postgres_database])
 
-    if connected?(socket) do
-      Process.send_after(self(), :update_health, 1000)
-      Process.send_after(self(), :update_metrics, 1000)
-      # Start message updates
-      Process.send_after(self(), :update_messages, 100)
+            %HttpPullConsumer{} ->
+              Repo.preload(consumer, [:postgres_database])
+          end
+
+        # Attempt to get existing health, fallback to initializing
+        {:ok, health} = Health.get(consumer)
+        consumer = %{consumer | health: health}
+
+        # Initialize message-related assigns
+        socket =
+          socket
+          |> assign(:consumer, consumer)
+          |> assign(:api_token, api_token)
+          |> assign(:api_base_url, api_base_url)
+          |> assign_replica_identity()
+          |> assign_metrics()
+          |> assign(:paused, false)
+          |> assign(:show_acked, params["showAcked"] == "true")
+          |> assign(:page, 0)
+          |> assign(:page_size, @page_size)
+          |> assign(:total_count, 0)
+          |> load_consumer_messages()
+
+        {:ok, socket}
+
+      {:error, _error} ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Consumer not found")
+         |> push_navigate(to: ~p"/consumers")}
     end
+  end
 
-    api_base_url = Application.get_env(:sequin, :api_base_url, SequinWeb.Endpoint.url())
-
-    # Initialize message-related assigns
-    socket =
-      socket
-      |> assign(:consumer, consumer)
-      |> assign(:api_token, api_token)
-      |> assign(:api_base_url, api_base_url)
-      |> assign_replica_identity()
-      |> assign_metrics()
-      |> assign(:paused, false)
-      |> assign(:show_acked, params["showAcked"] == "true")
-      |> assign(:page, 0)
-      |> assign(:page_size, @page_size)
-      |> assign(:total_count, 0)
-      |> load_consumer_messages()
-
-    {:ok, socket}
+  defp load_consumer(id, socket) do
+    case Consumers.get_consumer_for_account(current_account_id(socket), id) do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
   end
 
   @impl Phoenix.LiveView

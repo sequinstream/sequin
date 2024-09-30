@@ -106,6 +106,9 @@ if config_env() == :prod and not self_hosted do
   host = System.get_env("PHX_HOST") || "console.sequinstream.com"
   port = String.to_integer(System.get_env("PORT") || "7376")
 
+  config :sentry,
+    dsn: System.fetch_env!("SENTRY_DSN")
+
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
     api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
@@ -143,9 +146,6 @@ if config_env() == :prod do
   vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
 
   config :redix, url: System.fetch_env!("REDIS_URL")
-
-  config :sentry,
-    dsn: System.fetch_env!("SENTRY_DSN")
 
   config :sequin, Sequin.Vault,
     ciphers: [

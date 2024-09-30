@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Stream Postgres anywhere
+### Stream Postgres tables
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
@@ -18,11 +18,22 @@
 
 ## What is Sequin?
 
-Sequin is an open source message stream that uses your Postgres tables as the storage layer. This means you can turn existing Postgres tables into streams with exactly-once processing. And compared to other streaming systems like Kafka, Sequin offers a much richer feature-set, like SQL-based routing and rewinds.
+Sequin adds streaming capabilities to Postgres. For maximum compatibility and a rich feature-set, Sequin is not an extension. It's a Docker container you connect to your Postgres database.
 
-You can pull changes (think SQS) or receive them via push (webhooks).
+Sequin adds a stateful consumer layer to Postgres. Sequin's consumers let you stream rows and changes with exactly-once processing. Sequin handles turning your Postgres tables into streams: detecting changes, delivering messages in real-time, retries, and more. It's like having SQS or Kafka fused to your Postgres database.
 
-Use Sequin to process database changes in your application, replicate data, create audit logs, feed search indexes, trigger side effects, fan-out to microservices, and more.
+At the moment, Sequin offers two HTTP interfaces for consuming messages. You can pull changes (SQS-inspired interface), or push changes via HTTP (webhooks).
+
+Sequin is built for **change data capture** (CDC) use cases, like replicating data, feeding search indexes, creating audit logs, triggering side effects, fan-out to microservices, and more.
+
+Sequin also **eliminates the need for Kafka** in many situations. If your data already exists in Postgres, why copy data into Kafka when you can just stream it directly from your tables? Unlike Kafka, with Sequin your Postgres table is the storage layer and remains the source of truth.
+
+To operate, Sequin has two major components:
+
+1. An extraction pipeline: Sequin connects to your Postgres tables and uses a combination of reading from your table and reading from your WAL to turn your table into a stream.
+2. A delivery pipeline: Sequin delivers messages to consumers via a HTTP pull interface or webhooks. It keeps consumer state in Sequin-managed Postgres tables.
+
+Sequin is open source/MIT. We can't wait to see what you build.
 
 ## Killer features
 
@@ -44,7 +55,7 @@ Use Sequin to process database changes in your application, replicate data, crea
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
-Sequin connects to any Postgres database via the Write Ahead Log (WAL). Consumers can start processing rows at any point in the table. Sequin turns the table's rows and changes into a stream of messages. Sequin buffers messages to ensure they are delivered and allow for replays and rewinds. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.
+Sequin connects to any Postgres database via both direct table reads (i.e. `select`) and the Write Ahead Log (WAL). Consumers can start processing rows at any point in the table. Sequin turns the table's rows and changes into a stream of messages. Sequin buffers messages to ensure they are delivered and allow for replays and rewinds. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.
 
 Sequin is open source. You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
@@ -77,18 +88,18 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ### Quick compare
 
-| Feature             | Sequin                   | [PG triggers](#pg-triggers)       | [LISTEN / NOTIFY](#listen--notify)  | [Supabase Webhooks](#supabase-webhooks)  | [Amazon SQS](#amazon-sqs)   | [PGMQ](#pgmq)  |
-| ------------------- | ------------------------ | ----------------- | ---------------- | ------------------ | ------------ | -------------- |
-| Trigger guarantees  | Transactional            | Transactional     | Transactional    | Transactional      | N/A          | Transactional  |
-| Processing guarantees | Exactly-once             | Exactly-once      | At-most-once     | At-least-once      | Exactly-once | Exactly-once |
-| Order guarantees    | FIFO, strict by PK       | FIFO              | ❌ No            | ❌ No              | FIFO option  | ❌ No          |
-| Replay              | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        | ✅ Yes         |
-| Filtering           | ✅ Yes                   | ✅ Yes            | ✅ Yes           | ✅ PG triggers     | N/A          | ❌ No          |
-| Transformation      | ✅ LUA                   | ❌ No             | ❌ No            | ❌ No              | ❌ No        | ❌ No          |
-| Backfills           | ✅ Yes                   | ❌ No             | ❌ No            | ❌ No              | N/A          | N/A            |
-| Interface           | HTTP pull<br />HTTP push | plpgsql           | Postgres client  | HTTP push          | HTTP pull    | SQL functions  |
-| Observability       | Sequin console           | PG logging\*      | PG logging\*     | Supabase dashboard | AWS console  | PG logging\*   |
-| Performance         | WAL, minimal overhead    | Serial ops / row^ | Minimal overhead | Serial ops / row^  | N/A          | PG table limits|
+| Feature               | Sequin                   | [PG triggers](#pg-triggers) | [LISTEN / NOTIFY](#listen--notify) | [Supabase Webhooks](#supabase-webhooks) | [Amazon SQS](#amazon-sqs) | [PGMQ](#pgmq)   |
+| --------------------- | ------------------------ | --------------------------- | ---------------------------------- | --------------------------------------- | ------------------------- | --------------- |
+| Trigger guarantees    | Transactional            | Transactional               | Transactional                      | Transactional                           | N/A                       | Transactional   |
+| Processing guarantees | Exactly-once             | Exactly-once                | At-most-once                       | At-least-once                           | Exactly-once              | Exactly-once    |
+| Order guarantees      | FIFO, strict by PK       | FIFO                        | ❌ No                              | ❌ No                                   | FIFO option               | ❌ No           |
+| Replay                | ✅ Yes                   | ❌ No                       | ❌ No                              | ❌ No                                   | ❌ No                     | ✅ Yes          |
+| Filtering             | ✅ Yes                   | ✅ Yes                      | ✅ Yes                             | ✅ PG triggers                          | N/A                       | ❌ No           |
+| Transformation        | ✅ LUA                   | ❌ No                       | ❌ No                              | ❌ No                                   | ❌ No                     | ❌ No           |
+| Backfills             | ✅ Yes                   | ❌ No                       | ❌ No                              | ❌ No                                   | N/A                       | N/A             |
+| Interface             | HTTP pull<br />HTTP push | plpgsql                     | Postgres client                    | HTTP push                               | HTTP pull                 | SQL functions   |
+| Observability         | Sequin console           | PG logging\*                | PG logging\*                       | Supabase dashboard                      | AWS console               | PG logging\*    |
+| Performance           | WAL, minimal overhead    | Serial ops / row^           | Minimal overhead                   | Serial ops / row^                       | N/A                       | PG table limits |
 
 <sub>\* **PG logging:** You can configure logging in your database, but nothing is built in. Generally hard to see the state of any given side-effect.</sub>
 
@@ -112,7 +123,6 @@ While Kafka may be necessary for very high throughput use cases (logs or metrics
 
 </details>
 
-
 <details>
 
 <summary>PG Triggers v Sequin</summary>
@@ -134,6 +144,7 @@ Sequin extends this guarantee outside of your database with a simple HTTP interf
 [`NOTIFY`](https://www.postgresql.org/docs/current/sql-notify.html) delivers a message to any channel listening for changes. It's a simple pub/sub model with at-most once delivery guarantees. If a change happens and no channel is available to hear it - it's gone forever.
 
 Sequin adds a HTTP interface and persistent, durable messaging to provide exactly-once processing guarantees to the NOTIFY implementation. Paired with filtering, transforms, and observability - Sequin is easier to use and monitor.
+
 </details>
 
 <details>

@@ -76,11 +76,17 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
     http_endpoint = socket.assigns.http_endpoint
 
     {:ok, throughput} = Metrics.get_http_endpoint_throughput(http_endpoint)
-    {:ok, avg_latency} = Metrics.get_http_endpoint_avg_latency(http_endpoint)
+
+    avg_latency =
+      case Metrics.get_http_endpoint_avg_latency(http_endpoint) do
+        {:ok, nil} -> nil
+        {:ok, avg_latency} -> round(avg_latency)
+        {:error, _} -> nil
+      end
 
     metrics = %{
       throughput: Float.round(throughput * 60, 1),
-      avg_latency: round(avg_latency)
+      avg_latency: avg_latency
     }
 
     assign(socket, :metrics, metrics)

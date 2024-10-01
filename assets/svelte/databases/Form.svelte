@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { slide } from "svelte/transition";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -83,12 +84,62 @@
     }
   }
 
+  const STORAGE_KEY = "sequin_database_form";
+  const STORAGE_EXPIRY = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+
+  let formLoadedFromLocalStorage = false;
+
+  onMount(() => {
+    const storedForm = localStorage.getItem(STORAGE_KEY);
+    if (storedForm) {
+      try {
+        const parsedForm = JSON.parse(storedForm);
+        const storedTimestamp = parsedForm._timestamp;
+
+        delete parsedForm._timestamp;
+
+        const currentTime = new Date().getTime();
+        const isExpired = currentTime - storedTimestamp > STORAGE_EXPIRY;
+
+        if (!isExpired) {
+          form = { ...form, ...parsedForm };
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch (error) {
+        console.error("Error parsing stored form:", error);
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    formLoadedFromLocalStorage = true;
+  });
+
+  function saveFormToStorage() {
+    if (!formLoadedFromLocalStorage) {
+      return;
+    }
+
+    const formToSave = {
+      ...form,
+      _timestamp: new Date().getTime(),
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(formToSave));
+  }
+
+  function clearFormStorage() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
   function pushEvent(
     event: string,
     payload = {},
     callback: (reply?: any) => void = () => {}
   ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
+    if (event === "form_updated") {
+      saveFormToStorage();
+    }
   }
 
   let dialogOpen = true;
@@ -108,6 +159,8 @@
       if (reply?.ok !== true) {
         validating = false;
         progress.set(0);
+      } else {
+        clearFormStorage();
       }
     });
   }
@@ -115,6 +168,7 @@
   $: pushEvent("form_updated", { form });
 
   function handleClose() {
+    clearFormStorage();
     pushEvent("form_closed");
   }
 
@@ -171,6 +225,24 @@ sequin context add default --api-token={{secret}} --set-default
 # every time you want to boot the tunnel
 # Replace [your-local-port] with the local port you want Sequin to connect to
 sequin tunnel --ports=[your-local-port]:${form.name}`;
+
+  function clearForm() {
+    form = {
+      id: form.id, // Preserve the id if it exists
+      name: "",
+      database: "",
+      hostname: "",
+      port: 5432,
+      username: "",
+      password: "",
+      ssl: true,
+      publication_name: "",
+      slot_name: "",
+      useLocalTunnel: false,
+    };
+    clearFormStorage();
+    pushEvent("form_updated", { form });
+  }
 </script>
 
 <FullPageModal
@@ -565,14 +637,19 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
 
-        <Button type="submit" loading={validating} variant="default">
-          <span slot="loading"> Validating... </span>
-          {#if isEdit}
-            Update Database
-          {:else}
-            Connect Database
-          {/if}
-        </Button>
+        <div class="flex justify-between items-center">
+          <Button type="button" variant="outline" on:click={clearForm}>
+            Clear Form
+          </Button>
+          <Button type="submit" loading={validating} variant="default">
+            <span slot="loading"> Validating... </span>
+            {#if isEdit}
+              Update Database
+            {:else}
+              Connect Database
+            {/if}
+          </Button>
+        </div>
 
         {#if validating}
           <Progress class="mt-4" value={$progress} />

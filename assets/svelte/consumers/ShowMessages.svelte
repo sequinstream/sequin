@@ -11,6 +11,7 @@
     Play,
     Pause,
     RefreshCw,
+    RotateCw,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
 
@@ -39,6 +40,7 @@
 
   let rowHeight = 0; // Will be calculated
   let totalAvailableHeight = 0;
+  let resettingMessageVisibility = false;
 
   // Update this function to get the appropriate color for the state
   function getStateColor(state) {
@@ -195,6 +197,7 @@
     selectedMessage = null;
     messageData = null;
     messageDataError = null;
+    resettingMessageVisibility = false;
 
     // Reset log variables
     messageLogs = null;
@@ -254,6 +257,25 @@
     showAcked = !showAcked;
     live.pushEvent("toggle_show_acked", { show_acked: showAcked });
     changePage(0);
+  }
+
+  function resetMessageVisibility(messageId) {
+    live.pushEvent(
+      "reset_message_visibility",
+      { message_id: messageId },
+      (reply) => {
+        resettingMessageVisibility = false;
+
+        if (reply.error) {
+          // Handle error (e.g., show a toast notification)
+          console.error("Failed to reset message visibility:", reply.error);
+        } else {
+          // Optionally, update the message state locally or refresh the drawer
+          selectedMessage = reply.updated_message;
+          refreshLogs();
+        }
+      }
+    );
   }
 
   $: pageCount = Math.ceil(totalCount / pageSize);
@@ -538,6 +560,35 @@
                       >
                     </div>
                   </div>
+
+                  <!-- Add this block for the "Redeliver now" button -->
+                  {#if selectedMessage.state === "not visible"}
+                    <div>
+                      <h3 class="text-lg font-semibold mb-2">Redeliver</h3>
+                      <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+                        <p class="text-sm text-gray-700">
+                          This message is not visible due to consecutive
+                          failures. The push consumer will not attempt to
+                          redeliver it until the visibility window has passed.
+                          Reset the visibility window to immediately redeliver
+                          the message.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          on:click={() => {
+                            resettingMessageVisibility = true;
+                            resetMessageVisibility(selectedMessage.id);
+                          }}
+                          disabled={resettingMessageVisibility}
+                          class="flex items-center space-x-2"
+                        >
+                          <RotateCw class="h-4 w-4" />
+                          <span>Redeliver now</span>
+                        </Button>
+                      </div>
+                    </div>
+                  {/if}
 
                   <!-- Timestamps Section -->
                   <div>

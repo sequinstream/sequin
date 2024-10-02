@@ -210,11 +210,41 @@
 
 <div class="container mx-auto p-4">
   <div class="flex justify-between items-center mb-6">
-    <h1 class="text-3xl font-bold flex items-center gap-2">
-      <Activity class="text-gray-800 animate-pulse" />
-      Trace
-    </h1>
-    <div class="flex items-center gap-4">
+    <div class="flex flex-wrap gap-4">
+      <select
+        bind:value={selectedConsumer}
+        on:change={updateFilters}
+        class="select-filter text-sm"
+      >
+        <option value="">All Consumers</option>
+        {#each consumers as consumer}
+          <option value={consumer.id}>{consumer.name}</option>
+        {/each}
+      </select>
+
+      <select
+        bind:value={selectedTable}
+        on:change={updateFilters}
+        class="select-filter text-sm"
+      >
+        <option value="">All Tables</option>
+        {#each tables as table}
+          <option value={table.name}>{table.name}</option>
+        {/each}
+      </select>
+
+      <select
+        bind:value={selectedState}
+        on:change={updateFilters}
+        class="select-filter text-sm"
+      >
+        <option value="">All States</option>
+        {#each states as state}
+          <option value={state.backend}>{state.frontend}</option>
+        {/each}
+      </select>
+    </div>
+    <div class="">
       <Button variant="outline" on:click={togglePause}>
         {#if paused}
           <Play class="h-4 w-4" />
@@ -223,41 +253,6 @@
         {/if}
       </Button>
     </div>
-  </div>
-
-  <div class="mb-6 flex flex-wrap gap-4">
-    <select
-      bind:value={selectedConsumer}
-      on:change={updateFilters}
-      class="select-filter text-sm"
-    >
-      <option value="">All Consumers</option>
-      {#each consumers as consumer}
-        <option value={consumer.id}>{consumer.name}</option>
-      {/each}
-    </select>
-
-    <select
-      bind:value={selectedTable}
-      on:change={updateFilters}
-      class="select-filter text-sm"
-    >
-      <option value="">All Tables</option>
-      {#each tables as table}
-        <option value={table.name}>{table.name}</option>
-      {/each}
-    </select>
-
-    <select
-      bind:value={selectedState}
-      on:change={updateFilters}
-      class="select-filter text-sm"
-    >
-      <option value="">All States</option>
-      {#each states as state}
-        <option value={state.backend}>{state.frontend}</option>
-      {/each}
-    </select>
   </div>
 
   {#if trace_state && trace_state.message_traces.length > 0}

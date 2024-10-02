@@ -38,21 +38,38 @@ defmodule Sequin.Posthog do
   defp build_event(event, properties, timestamp) do
     {distinct_id, other_properties} = Map.pop(properties, :distinct_id)
 
+    # If self-hosted, remove PII from properties
+    properties =
+      if Application.get_env(:sequin, :self_hosted, false) do
+        Map.delete(other_properties.properties, "email")
+      else
+        other_properties.properties
+      end
+
     %{
       event: to_string(event),
       distinct_id: distinct_id,
-      properties: other_properties.properties,
+      properties: properties,
       timestamp: timestamp
     }
   end
 
   defp async_post(path, body, config) do
-    url = config |> Keyword.get(:api_url) |> URI.merge(path) |> URI.to_string()
-    body = Map.put(body, :api_key, Keyword.get(config, :api_key))
+    unless is_disabled() do
+      url = config |> Keyword.get(:api_url) |> URI.merge(path) |> URI.to_string()
+      body = Map.put(body, :api_key, Keyword.get(config, :api_key))
 
-    Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
-      Req.post(url, json: body)
-    end)
+      Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
+        Req.post(url, json: body)
+      end)
+    end
+  end
+
+  defp is_disabled do
+    case config() do
+      {:ok, config} -> Keyword.get(config, :is_disabled, false)
+      {:error, :not_configured} -> false
+    end
   end
 
   defp config do

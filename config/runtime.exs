@@ -67,6 +67,11 @@ if config_env() == :prod and self_hosted do
   host = System.get_env("PHX_HOST")
   port = String.to_integer(System.get_env("PORT") || "7376")
 
+  config :sequin, Sequin.Posthog,
+    api_url: "https://us.i.posthog.com",
+    api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
+    is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
+
   config :sequin, Sequin.Repo,
     ssl: System.get_env("PG_SSL") in ~w(true 1),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
@@ -139,7 +144,7 @@ if config_env() == :prod and not self_hosted do
   config :sequin,
     api_base_url: "https://api.sequinstream.com",
     # this is a public token
-    posthog_token: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
+    frontend_posthog_api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
 end
 
 if config_env() == :prod do

@@ -17,7 +17,10 @@
     </script>
     <!-- END WISTIA EMBED SCRIPTS-->
   </head>
-  <body class="bg-white antialiased" data-ph-token={Application.get_env(:sequin, :posthog_token)}>
+  <body
+    class="bg-white antialiased"
+    data-ph-token={Application.get_env(:sequin, :frontend_posthog_api_key)}
+  >
     <.svelte name="components/Toaster" />
     <%= if @current_user && @current_user.impersonating_account do %>
       <div class="w-full bg-red-300 text-black-600 py-2 font-bold flex items-center px-4">

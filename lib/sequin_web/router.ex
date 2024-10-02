@@ -92,6 +92,7 @@ defmodule SequinWeb.Router do
       live "/databases/new", DatabasesLive.Form, :new
       live "/databases/:id", DatabasesLive.Show, :show
       live "/databases/:id/edit", DatabasesLive.Form, :edit
+      live "/databases/:id/messages", DatabasesLive.Show, :messages
 
       live "/http-endpoints", HttpEndpointsLive.Index, :index
       live "/http-endpoints/new", HttpEndpointsLive.Form, :new
@@ -102,7 +103,6 @@ defmodule SequinWeb.Router do
 
       get "/easter-egg", EasterEggController, :home
 
-      live "/trace", TracerLive, :index
       live "/outbox", OutboxLive, :index
     end
 

@@ -41,7 +41,7 @@ defmodule Sequin.Posthog do
     # If self-hosted, remove PII from properties
     properties =
       if Application.get_env(:sequin, :self_hosted, false) do
-        Map.delete(other_properties.properties, "email")
+        Map.delete(other_properties.properties, :email)
       else
         other_properties.properties
       end

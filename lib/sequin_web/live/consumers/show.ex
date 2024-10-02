@@ -281,6 +281,18 @@ defmodule SequinWeb.ConsumersLive.Show do
      |> push_patch(to: ~p"/consumers/#{socket.assigns.consumer.id}/messages?showAcked=#{show_acked}")}
   end
 
+  def handle_event("reset_message_visibility", %{"message_id" => message_id}, socket) do
+    consumer = socket.assigns.consumer
+
+    case Consumers.reset_message_visibility(consumer, message_id) do
+      {:ok, updated_message} ->
+        {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
+
+      {:error, reason} ->
+        {:reply, %{error: reason}, socket}
+    end
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end
@@ -551,7 +563,11 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   # Function to encode messages for the Svelte component
   defp encode_messages(consumer, messages) do
-    Enum.map(messages, fn
+    Enum.map(messages, &encode_message(consumer, &1))
+  end
+
+  defp encode_message(consumer, message) do
+    case message do
       %ConsumerRecord{} = message ->
         %{
           id: message.id,
@@ -605,7 +621,7 @@ defmodule SequinWeb.ConsumersLive.Show do
           trace_id: message.trace_id,
           state: get_message_state(consumer, message)
         }
-    end)
+    end
   end
 
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "acknowledged"

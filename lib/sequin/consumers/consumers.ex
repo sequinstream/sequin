@@ -994,6 +994,39 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  @doc """
+  Resets the not_visible_until field to the current time for a given consumer and record/event ID.
+  """
+  @spec reset_message_visibility(consumer(), String.t()) :: {:ok, integer()} | {:error, term()}
+  def reset_message_visibility(consumer, id) do
+    now = DateTime.utc_now()
+
+    query =
+      case consumer.message_kind do
+        :event ->
+          from(ce in ConsumerEvent,
+            where: ce.consumer_id == ^consumer.id and ce.id == ^id,
+            update: [set: [not_visible_until: ^now]],
+            select: ce
+          )
+
+        :record ->
+          from(cr in ConsumerRecord,
+            where: cr.consumer_id == ^consumer.id and cr.id == ^id,
+            update: [set: [not_visible_until: ^now, state: :available]],
+            select: cr
+          )
+      end
+
+    case Repo.update_all(query, []) do
+      {1, [updated_message]} ->
+        {:ok, updated_message}
+
+      {0, _} ->
+        {:error, Error.not_found(entity: consumer.message_kind)}
+    end
+  end
+
   # HttpEndpoint
 
   def get_http_endpoint(id) do

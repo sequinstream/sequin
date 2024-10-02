@@ -15,11 +15,10 @@
   export let live: any;
   export let trace_state: any;
   export let consumers: any;
-  export let databases: any;
+  export let database: { id: string; name: string };
   export let tables: any;
   export let paused: boolean = false;
 
-  let selectedDatabase = "";
   let selectedConsumer = "";
   let selectedTable = "";
   let selectedState = "";
@@ -138,12 +137,6 @@
   function updateFilters() {
     const searchParams = new URLSearchParams(window.location.search);
 
-    if (selectedDatabase) {
-      searchParams.set("database", selectedDatabase);
-    } else {
-      searchParams.delete("database");
-    }
-
     if (selectedConsumer) {
       searchParams.set("consumer", selectedConsumer);
     } else {
@@ -182,7 +175,6 @@
 
   onMount(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    selectedDatabase = searchParams.get("database") || "";
     selectedConsumer = searchParams.get("consumer") || "";
     selectedTable = searchParams.get("table") || "";
     selectedState = searchParams.get("state") || "";
@@ -235,17 +227,6 @@
 
   <div class="mb-6 flex flex-wrap gap-4">
     <select
-      bind:value={selectedDatabase}
-      on:change={updateFilters}
-      class="select-filter text-sm"
-    >
-      <option value="">All Databases</option>
-      {#each databases as database}
-        <option value={database.id}>{database.name}</option>
-      {/each}
-    </select>
-
-    <select
       bind:value={selectedConsumer}
       on:change={updateFilters}
       class="select-filter text-sm"
@@ -295,10 +276,6 @@
             >
             <th
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >Database</th
-            >
-            <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >Table</th
             >
             <th
@@ -331,9 +308,6 @@
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{trace.consumer.name}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{trace.database.name}</td
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{trace.table}</td
@@ -394,50 +368,10 @@
   {:else}
     <div class="w-full flex items-center justify-center min-h-[400px]">
       <div class="w-full max-w-4xl bg-white pt-6 pb-8 rounded-lg text-center">
-        {#if databases.length === 0}
-          <div class="text-center py-8 w-2/3 mx-auto">
-            <h2 class="text-2xl font-bold mb-4">No database connected</h2>
-            <p class="text-gray-600 mb-4">
-              You need to connect a database to Sequin before tracing can occur.
-            </p>
-            <p class="text-gray-600 mb-6">
-              Once connected, you'll be able to trace every change from your
-              database, through consumers, to your application.
-            </p>
-            <a href="/databases/new" class="inline-block">
-              <Button variant="default" class="mb-4">
-                Create Database
-                <ArrowUpRight class="h-4 w-4 ml-2" />
-              </Button>
-            </a>
-          </div>
-          <div
-            class="mb-6 drop-shadow-lg relative pb-[56.25%] overflow-hidden max-w-full"
-          >
-            <div
-              class="wistia_responsive_padding"
-              style="padding:59.38% 0 0 0;position:relative;"
-            >
-              <div
-                class="wistia_responsive_wrapper"
-                style="height:100%;left:0;position:absolute;top:0;width:100%;"
-              >
-                <div
-                  class="wistia_embed wistia_async_hw5rdi12ss seo=false videoFoam=true"
-                  style="height:100%;position:relative;width:100%"
-                >
-                  &nbsp;
-                </div>
-              </div>
-            </div>
-          </div>
-        {:else}
-          <h2 class="text-2xl font-bold mb-4">Trace started</h2>
-          <p class="text-gray-600">
-            As soon as a change is detected in your database, it will appear
-            here.
-          </p>
-        {/if}
+        <h2 class="text-2xl font-bold mb-4">Trace started</h2>
+        <p class="text-gray-600">
+          As soon as a change is detected in your database, it will appear here.
+        </p>
       </div>
     </div>
   {/if}
@@ -576,29 +510,6 @@
                           <ArrowUpRight class="h-4 w-4 ml-2" />
                         </Button>
                       </a>
-                    </div>
-                  </div>
-
-                  <!-- Database Section -->
-                  <div>
-                    <h3 class="text-lg font-semibold mb-4">Database</h3>
-                    <div
-                      class="bg-gray-100 p-4 rounded-lg flex flex-col space-y-2"
-                    >
-                      <div class="flex justify-between items-center">
-                        <h4 class="font-medium">
-                          {selectedTrace.database.name}
-                        </h4>
-                        <a href={`/databases/${selectedTrace.database.id}`}>
-                          <Button variant="outline" size="sm">
-                            View Database
-                            <ArrowUpRight class="h-4 w-4 ml-2" />
-                          </Button>
-                        </a>
-                      </div>
-                      <div class="text-sm text-gray-600">
-                        Table: {selectedTrace.table}
-                      </div>
                     </div>
                   </div>
                 </div>

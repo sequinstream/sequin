@@ -90,3 +90,11 @@ Click the "Setup" button to provision a user and an account. On the login page, 
 
 - email: `admin@sequinstream.com`
 - password: `sequinpassword!`
+
+## Telemetry
+
+By default, the Sequin sends telemetry data to our servers. This data is anonymous and used to improve the product. If you would like to opt-out of this, you can set the `SEQUIN_TELEMETRY_DISABLED` environment variable in your `.env` file to `true`. For example:
+
+```bash
+SEQUIN_TELEMETRY_DISABLED=true
+```

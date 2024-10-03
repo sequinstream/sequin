@@ -5,10 +5,19 @@ defmodule Sequin.Accounts.User do
   import Ecto.Changeset
   import Ecto.Query, only: [from: 2]
 
-  alias Sequin.Accounts.Account
+  alias Sequin.Accounts.AccountUser
+  alias Sequin.Accounts.User
 
   @derive {Jason.Encoder,
-           only: [:id, :name, :email, :auth_provider, :account_id, :auth_provider_id, :inserted_at, :updated_at]}
+           only: [
+             :id,
+             :name,
+             :email,
+             :auth_provider,
+             :auth_provider_id,
+             :inserted_at,
+             :updated_at
+           ]}
 
   @type id :: String.t()
 
@@ -23,14 +32,35 @@ defmodule Sequin.Accounts.User do
     field :auth_provider_id, :string
     field :extra, :map
 
-    belongs_to :account, Account
+    has_many :accounts_users, AccountUser
+    has_many :accounts, through: [:accounts_users, :account]
     field :impersonating_account, :map, virtual: true
 
     timestamps(type: :utc_datetime)
   end
 
   def where_account_id(query \\ base_query(), account_id) do
-    from([user: u] in query, where: u.account_id == ^account_id)
+    from([user: u] in query,
+      join: ua in AccountUser,
+      on: ua.user_id == u.id,
+      where: ua.account_id == ^account_id
+    )
+  end
+
+  def current_account(%User{} = user) do
+    user = Sequin.Repo.preload(user, [:accounts_users, :accounts])
+
+    user.accounts_users
+    |> Enum.find(& &1.current)
+    |> case do
+      nil ->
+        user.accounts
+        |> Enum.sort_by(& &1.inserted_at, {:asc, DateTime})
+        |> List.first()
+
+      account_user ->
+        account_user.account
+    end
   end
 
   defp base_query(query \\ __MODULE__) do
@@ -179,7 +209,7 @@ defmodule Sequin.Accounts.User do
   If there is no user or the user doesn't have a password, we call
   `Argon2.no_user_verify/0` to avoid timing attacks.
   """
-  def valid_password?(%Sequin.Accounts.User{hashed_password: hashed_password}, password)
+  def valid_password?(%User{hashed_password: hashed_password}, password)
       when is_binary(hashed_password) and byte_size(password) > 0 do
     Argon2.verify_pass(password, hashed_password)
   end

@@ -4,6 +4,7 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Accounts
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserToken
+  alias Sequin.Error.NotFoundError
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ApiTokensFactory
   alias Sequin.Factory.ConsumersFactory
@@ -105,7 +106,7 @@ defmodule Sequin.AccountsTest do
   end
 
   describe "deprovisioning accounts" do
-    test "deprovision_account/1 removes all associated resources" do
+    test "delete_account_and_account_resources/2 removes all associated resources" do
       account = AccountsFactory.insert_account!()
       AccountsFactory.insert_user!(account_id: account.id)
       ApiTokensFactory.insert_token!(account_id: account.id)
@@ -116,7 +117,7 @@ defmodule Sequin.AccountsTest do
 
       ConsumersFactory.insert_http_pull_consumer!(account_id: account.id, replication_slot_id: replication_slot.id)
 
-      assert {:ok, _} = Accounts.deprovision_account(account, :i_am_responsible_for_my_actions)
+      assert {:ok, _} = Accounts.delete_account_and_account_resources(account, delete_users: true)
 
       refute Enum.any?(Repo.all(Accounts.Account))
       refute Enum.any?(Repo.all(Accounts.User))
@@ -632,6 +633,112 @@ defmodule Sequin.AccountsTest do
       attrs = AccountsFactory.user_attrs(%{auth_provider: :github, auth_provider_id: "123"})
       changeset = User.provider_registration_changeset(%User{}, attrs)
       assert changeset.valid?
+    end
+  end
+
+  describe "current_account/1 for the User module" do
+    test "returns the current account for the user" do
+      user = AccountsFactory.insert_user!()
+      account = user.id |> Accounts.list_accounts_for_user() |> List.first()
+      assert Accounts.get_account!(account.id) == User.current_account(user)
+    end
+
+    test "returns the oldest account for the user if no current account is set" do
+      # Creates a user with 1 account, and then associates them with 2 more accounts
+
+      user = AccountsFactory.insert_user!()
+
+      account_2 = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account_2)
+      Accounts.set_current_account_for_user(user.id, account_2.id)
+
+      account_3 = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account_3)
+      Accounts.set_current_account_for_user(user.id, account_3.id)
+      # Delete the newest account, to set all accounts to current === false
+      Accounts.delete_account_and_account_resources(account_3)
+
+      user = Repo.preload(user, [:accounts_users, :accounts])
+
+      oldest_account =
+        user.accounts
+        |> Enum.sort_by(& &1.inserted_at)
+        |> List.first()
+
+      assert oldest_account == User.current_account(user)
+    end
+  end
+
+  describe "set_current_account_for_user/2 for the Accounts module" do
+    test "sets the current account for the user" do
+      user = AccountsFactory.insert_user!()
+      account_2 = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account_2)
+      Accounts.set_current_account_for_user(user.id, account_2.id)
+
+      assert {:ok, user} = Accounts.set_current_account_for_user(user.id, account_2.id)
+      assert Accounts.get_account!(account_2.id) == User.current_account(user)
+    end
+
+    test "returns an error if the account is is not associated to the user" do
+      user_1 = AccountsFactory.insert_user!()
+      user_2 = AccountsFactory.insert_user!()
+
+      account_for_user_2 = user_2.id |> Accounts.list_accounts_for_user() |> List.first()
+
+      assert {:error, %NotFoundError{entity: :account_user}} =
+               Accounts.set_current_account_for_user(user_1.id, account_for_user_2.id)
+    end
+  end
+
+  describe "associate_user_with_account/2 for the Accounts module" do
+    test "associates a user with an account" do
+      user = AccountsFactory.insert_user!()
+      account_2 = AccountsFactory.insert_account!()
+      assert {:ok, _} = Accounts.associate_user_with_account(user, account_2)
+      user = Repo.preload(user, [:accounts_users, :accounts])
+      assert Enum.member?(user.accounts, account_2)
+    end
+
+    test "returns an error if the account is not found" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      # Delete the account
+      Accounts.delete_account(account)
+      assert {:error, %NotFoundError{entity: :account}} = Accounts.associate_user_with_account(user, account)
+    end
+  end
+
+  describe "remove_user_from_account/2 for the Accounts module" do
+    test "removes a user from an account" do
+      user = AccountsFactory.insert_user!()
+      account_2 = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account_2)
+      assert {:ok, _} = Accounts.remove_user_from_account(user, account_2)
+
+      user = Repo.preload(user, [:accounts_users, :accounts])
+      refute Enum.member?(user.accounts, account_2)
+    end
+
+    test "returns an error if the account is not found" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      assert {:error, %NotFoundError{entity: :account_user}} = Accounts.remove_user_from_account(user, account)
+    end
+  end
+
+  describe "get_account_for_user/2 for the Accounts module" do
+    test "returns the account for the user" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account)
+      assert {:ok, ^account} = Accounts.get_account_for_user(user.id, account.id)
+    end
+
+    test "returns nil if the user is not associated with the account provided" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      assert {:error, %NotFoundError{entity: :account}} = Accounts.get_account_for_user(user.id, account.id)
     end
   end
 end

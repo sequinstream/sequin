@@ -48,7 +48,6 @@ defmodule Sequin.Factory.AccountsFactory do
         name: "User #{:rand.uniform(1000)}",
         email: email(),
         password: password(),
-        account_id: Factory.uuid(),
         auth_provider: auth_provider,
         auth_provider_id: auth_provider_id,
         inserted_at: Factory.utc_datetime(),
@@ -76,10 +75,10 @@ defmodule Sequin.Factory.AccountsFactory do
 
     changeset =
       if attrs.auth_provider in [:identity, "identity"] do
-        User.registration_changeset(%User{account_id: account_id}, attrs, hash_password: true)
+        User.registration_changeset(%User{}, attrs, hash_password: true)
       else
         User.provider_registration_changeset(
-          %User{account_id: account_id},
+          %User{},
           attrs
         )
       end
@@ -88,5 +87,8 @@ defmodule Sequin.Factory.AccountsFactory do
     |> Repo.insert!()
     # Some tests need to then use the password
     |> Map.put(:password, attrs.password)
+    |> tap(fn user ->
+      Sequin.Accounts.associate_user_with_account(user, %Sequin.Accounts.Account{id: account_id})
+    end)
   end
 end

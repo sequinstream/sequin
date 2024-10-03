@@ -6,6 +6,7 @@ defmodule Sequin.Accounts do
   import Ecto.Query, warn: false
 
   alias Sequin.Accounts.Account
+  alias Sequin.Accounts.AccountUser
   alias Sequin.Accounts.AllocatedBastionPort
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserNotifier
@@ -92,6 +93,12 @@ defmodule Sequin.Accounts do
   """
   def get_user!(id), do: Repo.get!(User, id)
 
+  def get_user_with_preloads!(user_id) do
+    User
+    |> Repo.get!(user_id)
+    |> Repo.preload([:accounts_users, :accounts])
+  end
+
   ## User registration
 
   @doc """
@@ -111,54 +118,40 @@ defmodule Sequin.Accounts do
   """
   def register_user(:identity, attrs) do
     Repo.transact(fn ->
-      {:ok, account} = create_account(%{})
-      {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
-
-      result =
-        %User{account_id: account.id}
-        |> User.registration_changeset(attrs)
-        |> Repo.insert()
-
-      case result do
-        {:ok, user} ->
-          broadcast_signup(user)
-          {:ok, user}
-
-        error ->
-          error
+      with {:ok, account} <- create_account(%{}),
+           {:ok, user} <-
+             %User{}
+             |> User.registration_changeset(attrs)
+             |> Repo.insert(),
+           {:ok, _user_account} <- associate_user_with_account(user, account) do
+        broadcast_signup(user, account)
+        {:ok, user}
       end
     end)
   end
 
   def register_user(auth_provider, attrs) do
     Repo.transact(fn ->
-      {:ok, account} = create_account(%{})
-      {:ok, _} = ApiTokens.create_for_account(account.id, %{name: "Default"})
-
-      result =
-        %User{account_id: account.id}
-        |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
-        |> Repo.insert()
-
-      case result do
-        {:ok, user} ->
-          broadcast_signup(user)
-          {:ok, user}
-
-        error ->
-          error
+      with {:ok, account} <- create_account(%{}),
+           {:ok, user} <-
+             %User{}
+             |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
+             |> Repo.insert(),
+           {:ok, _user_account} <- associate_user_with_account(user, account) do
+        broadcast_signup(user, account)
+        {:ok, user}
       end
     end)
   end
 
-  defp broadcast_signup(user) do
+  defp broadcast_signup(user, account) do
     # Record "User Signed Up" event in PostHog
     Posthog.capture("User Signed Up", %{
       distinct_id: user.id,
       properties: %{
         email: user.email,
         auth_provider: user.auth_provider,
-        "$groups": %{account: user.account_id}
+        "$groups": %{account: account.id}
       }
     })
 
@@ -167,7 +160,7 @@ defmodule Sequin.Accounts do
       "https://api.tryretool.com/v1/workflows/45a5dd7c-6517-4c0b-8c42-1a9388959e8c/startTrigger",
       json: %{
         type: "user_registration",
-        data: user
+        data: [user, account]
       },
       headers: [
         {"X-Workflow-Api-Key", Application.fetch_env!(:sequin, :retool_workflow_key)},
@@ -336,7 +329,7 @@ defmodule Sequin.Accounts do
     query
     |> Repo.one()
     |> case do
-      {user, _} -> Repo.preload(user, :account)
+      {user, _} -> Repo.preload(user, [:accounts_users, :accounts])
       nil -> nil
     end
   end
@@ -378,9 +371,6 @@ defmodule Sequin.Accounts do
           {%User{id: ^user_id}, account_id} -> {:ok, account_id}
           _ -> :error
         end
-
-      :error ->
-        :error
     end
   end
 
@@ -506,18 +496,67 @@ defmodule Sequin.Accounts do
 
   def list_accounts, do: Repo.all(Account)
 
-  def create_account(attrs) do
-    %Account{}
-    |> Account.changeset(attrs)
-    |> Repo.insert()
+  def list_accounts_for_user(user_id) do
+    Account
+    |> Account.where_user_id(user_id)
+    |> Repo.all()
   end
 
-  def deprovision_account(%Account{} = account, :i_am_responsible_for_my_actions) do
+  def get_account_for_user(user_id, account_id) do
+    account_id
+    |> Account.where_id()
+    |> Account.where_user_id(user_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :account, params: %{user_id: user_id, account_id: account_id})}
+      account -> {:ok, account}
+    end
+  end
+
+  def create_account(attrs) do
     Repo.transact(fn ->
-      # Delete associated users
+      changeset = Account.changeset(%Account{}, attrs)
+
+      case Repo.insert(changeset) do
+        {:ok, account} ->
+          case ApiTokens.create_for_account(account.id, %{name: "Default"}) do
+            {:ok, _api_token} -> {:ok, account}
+            error -> error
+          end
+
+        {:error, changeset} ->
+          {:error, changeset}
+      end
+    end)
+  end
+
+  def update_account(%Account{} = account, attrs) do
+    account
+    |> Account.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_account(%Account{} = account) do
+    affected_users =
       account.id
       |> list_users_for_account()
-      |> Enum.each(&delete_user/1)
+      |> Repo.preload([:accounts_users, :accounts])
+
+    if Enum.any?(affected_users, &(length(&1.accounts) == 1)) do
+      {:error, Error.invariant(message: "Cannot delete the only account for a user")}
+    else
+      Repo.delete(account)
+    end
+  end
+
+  def delete_account_and_account_resources(%Account{} = account, opts \\ [delete_users: false]) do
+    Repo.transact(fn ->
+      if Keyword.get(opts, :delete_users, true) do
+        # Delete associated users
+        account.id
+        |> list_users_for_account()
+        |> Enum.each(&delete_user/1)
+      end
 
       # Delete associated API keys
       account.id
@@ -545,8 +584,71 @@ defmodule Sequin.Accounts do
       |> Enum.each(&Replication.delete_pg_replication_with_lifecycle/1)
 
       # Finally, delete the account
-      Repo.delete(account)
+      delete_account(account)
     end)
+  end
+
+  # AccountUser functions
+
+  @doc """
+  Associates a user with an account.
+  """
+  def associate_user_with_account(%User{} = user, %Account{} = account) do
+    # First, check if the account still exists
+    case get_account(account.id) do
+      {:error, %Sequin.Error.NotFoundError{}} ->
+        {:error, Error.not_found(entity: :account)}
+
+      {:ok, _account} ->
+        # If the account exists, proceed with the association
+        %AccountUser{user_id: user.id, account_id: account.id}
+        |> AccountUser.changeset(%{current: false})
+        |> Repo.insert()
+        |> case do
+          {:ok, account_user} -> {:ok, account_user}
+          {:error, _} -> {:error, Error.not_found(entity: :account_user)}
+        end
+    end
+  end
+
+  def set_current_account_for_user(user_id, account_id) do
+    # First, check if the user has access to the account
+    case Repo.get_by(AccountUser, user_id: user_id, account_id: account_id) do
+      nil ->
+        {:error, Error.not_found(entity: :account_user)}
+
+      _account_user ->
+        Repo.transact(fn ->
+          # Clear current flag for all user's accounts
+          Repo.update_all(
+            from(au in AccountUser, where: au.user_id == ^user_id),
+            set: [current: false]
+          )
+
+          # Set current flag for the selected account
+          AccountUser
+          |> Repo.get_by(user_id: user_id, account_id: account_id)
+          |> Ecto.Changeset.change(%{current: true})
+          |> Repo.update!()
+
+          # Fetch and return the updated user with accounts_users preloaded
+          user = get_user_with_preloads!(user_id)
+          {:ok, user}
+        end)
+    end
+  end
+
+  @doc """
+  Removes a user from an account.
+  """
+  def remove_user_from_account(%User{} = user, %Account{} = account) do
+    case Repo.get_by(AccountUser, user_id: user.id, account_id: account.id) do
+      nil ->
+        {:error, Error.not_found(entity: :account_user)}
+
+      account_user ->
+        Repo.delete(account_user)
+    end
   end
 
   # User functions

@@ -5,9 +5,11 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalProjection
   alias Sequin.Repo
 
   def postgres_replication(attrs \\ []) do
@@ -171,5 +173,66 @@ defmodule Sequin.Factory.ReplicationFactory do
       },
       attrs
     )
+  end
+
+  def wal_projection(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %WalProjection{
+        name: "wal_projection_#{Factory.sequence()}",
+        seq: Factory.sequence(),
+        source_tables: [ConsumersFactory.source_table()],
+        replication_slot_id: Factory.uuid(),
+        destination_oid: Factory.unique_integer(),
+        destination_database_id: Factory.uuid(),
+        account_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def wal_projection_attrs(attrs \\ []) do
+    attrs
+    |> wal_projection()
+    |> Sequin.Map.from_ecto()
+    |> Map.update!(:source_tables, fn source_tables ->
+      Enum.map(source_tables, fn source_table ->
+        source_table
+        |> Sequin.Map.from_ecto()
+        |> Map.update!(:column_filters, fn column_filters ->
+          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
+        end)
+      end)
+    end)
+  end
+
+  def insert_wal_projection!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn ->
+        AccountsFactory.insert_account!().id
+      end)
+
+    {replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :replication_slot_id, fn ->
+        insert_postgres_replication!(account_id: account_id).id
+      end)
+
+    {destination_database_id, attrs} =
+      Map.pop_lazy(attrs, :destination_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
+    attrs =
+      attrs
+      |> Map.put(:replication_slot_id, replication_slot_id)
+      |> Map.put(:destination_database_id, destination_database_id)
+      |> wal_projection_attrs()
+
+    %WalProjection{account_id: account_id}
+    |> WalProjection.create_changeset(attrs)
+    |> Repo.insert!()
   end
 end

@@ -7,6 +7,7 @@ defmodule Sequin.Replication do
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalProjection
   alias Sequin.ReplicationRuntime
   alias Sequin.Repo
 
@@ -155,4 +156,75 @@ defmodule Sequin.Replication do
          Error.validation(summary: "Error connecting to the database to verify the existence of the publication.")}
     end
   end
+
+  # WAL Projection
+
+  def list_wal_projections do
+    Repo.all(WalProjection)
+  end
+
+  def list_wal_projections_for_replication_slot(replication_slot_id) do
+    replication_slot_id
+    |> WalProjection.where_replication_slot_id()
+    |> Repo.all()
+  end
+
+  def get_wal_projection(id) do
+    case Repo.get(WalProjection, id) do
+      nil -> {:error, Error.not_found(entity: :wal_projection)}
+      wal_projection -> {:ok, wal_projection}
+    end
+  end
+
+  def get_wal_projection!(id) do
+    case get_wal_projection(id) do
+      {:ok, wal_projection} -> wal_projection
+      {:error, _} -> raise Error.not_found(entity: :wal_projection)
+    end
+  end
+
+  def create_wal_projection(attrs) do
+    %WalProjection{}
+    |> WalProjection.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def create_wal_projection_with_lifecycle(account_id, attrs) do
+    with {:ok, wal_projection} <-
+           %WalProjection{account_id: account_id}
+           |> WalProjection.create_changeset(attrs)
+           |> Repo.insert(),
+         :ok <- notify_wal_projection_create(wal_projection) do
+      {:ok, wal_projection}
+    end
+  end
+
+  def update_wal_projection(%WalProjection{} = wal_projection, attrs) do
+    wal_projection
+    |> WalProjection.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def update_wal_projection_with_lifecycle(%WalProjection{} = wal_projection, attrs) do
+    with {:ok, updated_wal_projection} <- update_wal_projection(wal_projection, attrs),
+         :ok <- notify_wal_projection_update(updated_wal_projection) do
+      {:ok, updated_wal_projection}
+    end
+  end
+
+  def delete_wal_projection(%WalProjection{} = wal_projection) do
+    Repo.delete(wal_projection)
+  end
+
+  def delete_wal_projection_with_lifecycle(%WalProjection{} = wal_projection) do
+    with {:ok, deleted_wal_projection} <- delete_wal_projection(wal_projection),
+         :ok <- notify_wal_projection_delete(deleted_wal_projection) do
+      {:ok, deleted_wal_projection}
+    end
+  end
+
+  # Lifecycle notifications (placeholders for now)
+  defp notify_wal_projection_create(_wal_projection), do: :ok
+  defp notify_wal_projection_update(_wal_projection), do: :ok
+  defp notify_wal_projection_delete(_wal_projection), do: :ok
 end

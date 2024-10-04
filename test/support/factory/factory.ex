@@ -50,6 +50,7 @@ defmodule Sequin.Factory do
   def port, do: Faker.random_between(5000, 9999)
   def postgres_object, do: Faker.Internet.domain_word()
   def name, do: to_string(Faker.Lorem.characters(10))
+  def sequence, do: :erlang.unique_integer([:positive])
   def time, do: Time.utc_now()
   def timestamp, do: Faker.DateTime.backward(365)
 

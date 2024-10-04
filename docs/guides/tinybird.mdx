@@ -1,0 +1,142 @@
+---
+title: "Stream Postgres changes to Tinybird"
+sidebarTitle: "Tinybird"
+description: "How to use Sequin to capture Postgres changes and stream them to Tinybird in real-time."
+icon: "feather"
+iconType: "solid"
+---
+
+<iframe
+  width="560"
+  height="315"
+  src="https://www.youtube.com/embed/m4N6qKSIa0s"
+  title="YouTube video player"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowfullscreen
+></iframe>
+
+[Tinybird](https://www.tinybird.co/) is a powerful real-time analytics platform built on ClickHouse. It allows you to ingest, transform, and query large volumes of data with low latency.
+
+Often, you want to stream changes from your Postgres database to Tinybird for real-time analytics. For instance, you might want to analyze order data as it's created or updated in your database:
+
+<Frame>
+  <img src="/images/guides/tinybird/send-with-sequin.svg" alt="Tinybird Overview" />
+</Frame>
+
+In this guide, you'll learn how to use Sequin to stream Postgres changes to Tinybird in real-time.
+
+## Prerequisites
+
+To follow this guide, you'll need:
+
+- A [Sequin](https://console.sequinstream.com/register) account
+- A [Tinybird](https://www.tinybird.co/) account
+- A Postgres database (Sequin works with any Postgres database version 12 and up)
+
+## Connect Sequin to your database
+
+First, you'll need to connect Sequin to your Postgres database:
+
+<Steps titleSize="h3">
+  <Step title="Add a new database in Sequin">
+    1. Log in to your Sequin account and click the **Add New Database** button.
+    2. Enter the connection details for your Postgres database.
+    3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+    ```sql
+    create publication sequin_pub for all tables;
+    select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+    4. Name your database and click the **Connect Database** button.
+
+    Sequin will connect to your database and ensure that it's configured properly.
+  </Step>
+</Steps>
+
+<Check>
+  You've successfully connected Sequin to your Postgres database. In the next step, you'll set up Tinybird to receive data from Sequin.
+</Check>
+
+## Setup a Tinybird Event URL
+
+Now, you'll create a Data Source in Tinybird that will receive the data from Sequin:
+
+<Steps titleSize="h3">
+  <Step title="Create a Data Source in Tinybird">
+    1. Log in to your Tinybird account and open the **Data Sources** tab.
+    2. Click on **Create Data Source**.
+    3. Choose **Events API** as the source type.
+    5. Copy the endpoint URL and Authorization header. You'll need this in the next step.
+
+    <Frame>
+      <img src="/images/guides/tinybird/events-api-config.png" alt="Tinybird Event URL" />
+    </Frame>
+  </Step>
+</Steps>
+
+<Check>
+  You've created a Data Source in Tinybird that's ready to receive data. Next, you'll configure Sequin to send data to this endpoint.
+</Check>
+
+## Create Sequin HTTP Endpoint
+
+Now, you'll create an HTTP endpoint in Sequin that will send data to the Tinybird Event URL you created in the previous step:
+
+<Steps titleSize="h3">
+  <Step title="Create an HTTP Endpoint in Sequin">
+    1. In the Sequin console, navigate to the **HTTP Endpoints** tab.
+    2. Click on **Create HTTP Endpoint**.
+    3. Name your endpoint (e.g., "tinybird_endpoint").
+    4. Paste the Tinybird endpoint URL you copied earlier into the **Base URL** field.
+    5. Add an encrypted header:
+       - Key: `Authorization`
+       - Value: `Bearer YOUR_TINYBIRD_TOKEN`
+    6. Click **Create HTTP Endpoint**.
+  </Step>
+</Steps>
+
+<Check>
+  You've set up an HTTP endpoint in Sequin that will securely send data to Tinybird. In the final step, you'll create a consumer to capture database changes and send them to this endpoint.
+</Check>
+
+## Create Sequin Consumer
+
+Finally, you'll create a Sequin consumer to capture changes from your database and send them to Tinybird:
+
+<Steps titleSize="h3">
+  <Step title="Create a Push Consumer in Sequin">
+    1. In the Sequin console, navigate to the **Consumers** tab.
+    2. Click on **Create Consumer**.
+    3. Select the table you want to stream (e.g., "orders").
+    4. Choose to process **Rows**. This will capture all inserts and updates.
+    <Info>
+      You can also choose to process **Changes** instead of rows. This will capture changes to the table, such as inserts, updates, and deletes.
+    </Info>
+    5. Select a column to sort by.
+    6. Choose **Push** as the consumer type.
+    7. Select the HTTP endpoint you created in the previous step.
+    8. Name your consumer and click **Create Consumer**.
+  </Step>
+</Steps>
+
+<Check>
+  Congratulations! You've set up a complete pipeline to stream changes from your Postgres database to Tinybird in real-time.
+</Check>
+
+## Test the Integration
+
+To test your integration:
+
+1. Insert or update some data in your Postgres database.
+2. Check the Sequin **Trace** tab to confirm that the changes were captured and sent to Tinybird.
+3. In Tinybird, query your Data Source to see the new data.
+
+## Next Steps
+
+Now that you have real-time data flowing from Postgres to Tinybird, you can:
+
+- Create Pipes in Tinybird to transform and analyze your data.
+- Set up API endpoints in Tinybird to query your data.
+- Use Tinybird's dashboard features to visualize your data in real-time.
+
+By combining the transactional power of Postgres with the analytical capabilities of Tinybird, you've created a powerful real-time data pipeline for your application.

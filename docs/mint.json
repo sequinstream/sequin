@@ -78,6 +78,7 @@
         "guides/cloudflare",
         "guides/inngest",
         "guides/lambda",
+        "guides/tinybird",
         "guides/trigger-dev",
         "guides/vercel"
       ]

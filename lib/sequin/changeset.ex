@@ -3,6 +3,7 @@ defmodule Sequin.Changeset do
   import Ecto.Changeset
 
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Replication.WalProjection
 
   def validate_name(%Ecto.Changeset{} = changeset) do
     name = Ecto.Changeset.get_field(changeset, :name)
@@ -24,6 +25,10 @@ defmodule Sequin.Changeset do
   end
 
   def cast_embed(%Ecto.Changeset{valid?: false} = changeset, :source_tables), do: changeset
+
+  def cast_embed(%Ecto.Changeset{data: %WalProjection{}} = changeset, :source_tables) do
+    cast_embed(changeset, :source_tables, with: &SourceTable.event_changeset(&1, &2))
+  end
 
   def cast_embed(%Ecto.Changeset{} = changeset, :source_tables) do
     case get_field(changeset, :message_kind) do

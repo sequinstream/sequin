@@ -213,7 +213,7 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "inserts wal_event for wal_projection with matching source table and no filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+      message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_projections: [wal_projection]}
@@ -238,7 +238,7 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "inserts wal_event for projection with matching source table and passing filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+      message = ReplicationFactory.postgres_message(table_oid: 123)
 
       column_filter =
         ConsumersFactory.column_filter(
@@ -251,7 +251,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
 
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
-      message = %{message | fields: [test_field | message.fields]}
+      message = %{message | fields: [test_field | message.fields], old_fields: [test_field | message.old_fields]}
 
       context = %MessageHandler.Context{wal_projections: [wal_projection]}
 

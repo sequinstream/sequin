@@ -1,8 +1,6 @@
 defmodule Sequin.Health do
   @moduledoc """
   This module tracks the health of various entities in the system.
-
-  Notably, this module does not track the health of `%Resource{}` entities. See `Ix.SyncHealth`.
   """
 
   use TypedStruct

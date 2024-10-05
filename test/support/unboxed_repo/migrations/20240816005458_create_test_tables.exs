@@ -52,7 +52,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
-    create table(:test_event_logs) do
+    create table(:test_event_logs, primary_key: false) do
+      add :id, :serial, primary_key: true
       add :seq, :bigint, null: false
       add :source_database_id, :uuid, null: false
       add :source_table_oid, :bigint, null: false
@@ -65,6 +66,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
     end
 
     create unique_index(:test_event_logs, [:seq, :source_database_id])
+    create index(:test_event_logs, [:seq])
     create index(:test_event_logs, [:source_table_oid])
     create index(:test_event_logs, [:committed_at])
 

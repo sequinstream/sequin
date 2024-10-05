@@ -7,8 +7,12 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Extensions.MessageHandlerBehaviour
   alias Sequin.Health
+  alias Sequin.Replication
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalEvent
+  alias Sequin.Replication.WalEventData
+  alias Sequin.Replication.WalProjection
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -19,13 +23,18 @@ defmodule Sequin.Replication.MessageHandler do
     use TypedStruct
 
     typedstruct do
-      field :consumers, [Sequin.Consumers.consumer()]
+      field :consumers, [Sequin.Consumers.consumer()], default: []
+      field :wal_projections, [WalProjection.t()], default: []
     end
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers])
-    %Context{consumers: pr.http_pull_consumers ++ pr.http_push_consumers}
+    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers, :wal_projections])
+
+    %Context{
+      consumers: pr.http_pull_consumers ++ pr.http_push_consumers,
+      wal_projections: pr.wal_projections
+    }
   end
 
   @impl MessageHandlerBehaviour
@@ -57,10 +66,20 @@ defmodule Sequin.Replication.MessageHandler do
         |> Enum.reject(&is_nil/1)
       end)
 
+    wal_events =
+      Enum.flat_map(messages, fn message ->
+        ctx.wal_projections
+        |> Enum.filter(&Consumers.matches_message?(&1, message))
+        |> Enum.map(fn projection ->
+          wal_event(projection, message)
+        end)
+      end)
+
     {messages, consumers} = Enum.unzip(messages_by_consumer)
 
-    case insert_or_delete_consumer_messages(messages) do
-      {:ok, count} ->
+    Repo.transact(fn ->
+      with {:ok, count} <- insert_or_delete_consumer_messages(messages),
+           {:ok, wal_event_count} <- Replication.insert_wal_events(wal_events) do
         # Update Consumer Health
         consumers
         |> Enum.uniq_by(& &1.id)
@@ -79,11 +98,9 @@ defmodule Sequin.Replication.MessageHandler do
           {{:delete, _consumer}, _messages} -> :ok
         end)
 
-        {:ok, count}
-
-      error ->
-        error
-    end
+        {:ok, count + wal_event_count}
+      end
+    end)
   end
 
   defp consumer_event(consumer, message) do
@@ -192,5 +209,56 @@ defmodule Sequin.Replication.MessageHandler do
         {:ok, event_count + record_count + delete_count}
       end
     end)
+  end
+
+  defp wal_event(projection, message) do
+    %WalEvent{
+      wal_projection_id: projection.id,
+      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+      record_pks: Enum.map(message.ids, &to_string/1),
+      data: wal_event_data_from_message(message, projection),
+      replication_message_trace_id: message.trace_id
+    }
+  end
+
+  defp wal_event_data_from_message(%Message{action: :insert} = message, projection) do
+    %WalEventData{
+      record: fields_to_map(message.fields),
+      changes: nil,
+      action: :insert,
+      metadata: wal_event_metadata(message, projection)
+    }
+  end
+
+  defp wal_event_data_from_message(%Message{action: :update} = message, projection) do
+    changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
+
+    %WalEventData{
+      record: fields_to_map(message.fields),
+      changes: changes,
+      action: :update,
+      metadata: wal_event_metadata(message, projection)
+    }
+  end
+
+  defp wal_event_data_from_message(%Message{action: :delete} = message, projection) do
+    %WalEventData{
+      record: fields_to_map(message.old_fields),
+      changes: nil,
+      action: :delete,
+      metadata: wal_event_metadata(message, projection)
+    }
+  end
+
+  defp wal_event_metadata(%Message{} = message, projection) do
+    %WalEventData.Metadata{
+      table_name: message.table_name,
+      table_schema: message.table_schema,
+      commit_timestamp: message.commit_timestamp,
+      wal_projection: %{
+        id: projection.id,
+        name: projection.name
+      }
+    }
   end
 end

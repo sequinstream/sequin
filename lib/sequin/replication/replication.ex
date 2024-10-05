@@ -238,11 +238,10 @@ defmodule Sequin.Replication do
 
   # WAL Event
 
-  def get_wal_event(source_replication_slot_id, source_table_oid, commit_lsn) do
+  def get_wal_event(wal_projection_id, commit_lsn) do
     wal_event =
-      source_replication_slot_id
-      |> WalEvent.where_source_replication_slot_id()
-      |> WalEvent.where_source_table_oid(source_table_oid)
+      wal_projection_id
+      |> WalEvent.where_wal_projection_id()
       |> WalEvent.where_commit_lsn(commit_lsn)
       |> Repo.one()
 
@@ -252,18 +251,15 @@ defmodule Sequin.Replication do
     end
   end
 
-  def get_wal_event!(source_replication_slot_id, source_table_oid, commit_lsn) do
-    case get_wal_event(source_replication_slot_id, source_table_oid, commit_lsn) do
+  def get_wal_event!(wal_projection_id, commit_lsn) do
+    case get_wal_event(wal_projection_id, commit_lsn) do
       {:ok, wal_event} -> wal_event
       {:error, _} -> raise Error.not_found(entity: :wal_event)
     end
   end
 
-  def list_wal_events_for_projection(source_replication_slot_id, source_table_oid, params \\ []) do
-    base_query =
-      source_replication_slot_id
-      |> WalEvent.where_source_replication_slot_id()
-      |> WalEvent.where_source_table_oid(source_table_oid)
+  def list_wal_events(wal_projection_id, params \\ []) do
+    base_query = WalEvent.where_wal_projection_id(wal_projection_id)
 
     query =
       Enum.reduce(params, base_query, fn
@@ -292,7 +288,6 @@ defmodule Sequin.Replication do
           updated_at: now,
           inserted_at: now
         })
-        |> WalEvent.from_map()
         |> Sequin.Map.from_ecto()
       end)
 

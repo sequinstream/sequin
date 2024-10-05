@@ -31,7 +31,7 @@ defmodule Sequin.Replication.WalEvent do
 
     belongs_to :wal_projection, WalProjection
 
-    timestamps(type: :utc_datetime_usec)
+    timestamps()
   end
 
   def create_changeset(wal_event, attrs) do
@@ -103,6 +103,10 @@ defmodule Sequin.Replication.WalEvent do
 
   def where_wal_projection_id(query \\ base_query(), wal_projection_id) do
     from([wal_event: we] in query, where: we.wal_projection_id == ^wal_projection_id)
+  end
+
+  def where_wal_projection_id_in(query \\ base_query(), wal_projection_ids) do
+    from([wal_event: we] in query, where: we.wal_projection_id in ^wal_projection_ids)
   end
 
   defp base_query(query \\ __MODULE__) do

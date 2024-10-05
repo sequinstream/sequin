@@ -10,7 +10,8 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
   require Logger
 
   @default_batch_size 1000
-  @default_delay_ms 5_000
+  @default_interval_ms 5_000
+  @max_backoff_ms :timer.minutes(5)
 
   # Client API
 
@@ -57,7 +58,9 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
       field :test_pid, pid()
       field :successive_failure_count, integer(), default: 0
       field :batch_size, integer()
-      field :delay_ms, integer()
+      field :interval_ms, integer()
+      field :wal_events, list()
+      field :events_pending?, boolean(), default: false
     end
   end
 
@@ -72,7 +75,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
 
     database = Databases.get_db!(destination_database_id)
-    tables = Databases.tables(database)
+    {:ok, tables} = Databases.tables(database)
     table = Sequin.Enum.find!(tables, &(&1.oid == destination_oid))
     replication_slot = Replication.get_pg_replication!(replication_slot_id)
 
@@ -83,17 +86,27 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
       wal_projection_ids: Keyword.fetch!(opts, :wal_projection_ids),
       test_pid: test_pid,
       batch_size: Keyword.get(opts, :batch_size, @default_batch_size),
-      delay_ms: Keyword.get(opts, :delay_ms, @default_delay_ms)
+      interval_ms: Keyword.get(opts, :interval_ms, @default_interval_ms),
+      events_pending?: false
     }
 
     actions = [
-      {:next_event, :internal, :fetch_wal_events}
+      {:state_timeout, 0, :fetch_wal_events},
+      {:next_event, :internal, :subscribe_to_pubsub}
     ]
 
-    {:ok, :fetching_wal_events, state, actions}
+    {:ok, :idle, state, actions}
   end
 
   @impl GenStateMachine
+  def handle_event(:enter, _, :idle, _) do
+    :keep_state_and_data
+  end
+
+  def handle_event(:state_timeout, :fetch_wal_events, :idle, state) do
+    {:next_state, :fetching_wal_events, state}
+  end
+
   def handle_event(:enter, _old_state, :fetching_wal_events, state) do
     task =
       Task.Supervisor.async_nolink(
@@ -105,23 +118,32 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
         timeout: 60_000
       )
 
-    {:keep_state, %{state | task_ref: task.ref}}
+    {:keep_state, %{state | task_ref: task.ref, events_pending?: false}}
   end
 
   def handle_event(:info, {ref, wal_events}, :fetching_wal_events, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
     state = %{state | task_ref: nil, successive_failure_count: 0}
 
-    {:next_state, {:writing_to_destination, wal_events}, state}
+    if wal_events == [] do
+      if state.test_pid do
+        send(state.test_pid, {__MODULE__, :no_events})
+      end
+
+      {:next_state, :idle, state, [fetch_timeout(state)]}
+    else
+      state = %{state | wal_events: wal_events}
+      {:next_state, :writing_to_destination, state}
+    end
   end
 
-  def handle_event(:enter, _old_state, {:writing_to_destination, wal_events}, state) do
+  def handle_event(:enter, _old_state, :writing_to_destination, state) do
     task =
       Task.Supervisor.async_nolink(
         Sequin.TaskSupervisor,
         fn ->
           maybe_setup_allowances(state.test_pid)
-          write_to_destination(state, wal_events)
+          write_to_destination(state, state.wal_events)
         end,
         timeout: 60_000
       )
@@ -131,9 +153,27 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   def handle_event(:info, {ref, :ok}, :writing_to_destination, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    state = %{state | task_ref: nil}
+    state = %{state | task_ref: nil, successive_failure_count: 0}
 
     {:next_state, :deleting_wal_events, state}
+  end
+
+  def handle_event(:info, {ref, {:error, reason}}, :writing_to_destination, %State{task_ref: ref} = state) do
+    Process.demonitor(ref, [:flush])
+    Logger.error("[WalEventServer] Failed to write to destination: #{inspect(reason)}")
+
+    state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
+    backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, @max_backoff_ms)
+
+    actions = [
+      {:state_timeout, backoff, :retry_write}
+    ]
+
+    {:next_state, :awaiting_retry, state, actions}
+  end
+
+  def handle_event(:state_timeout, :retry_write, :awaiting_retry, state) do
+    {:next_state, :writing_to_destination, state}
   end
 
   def handle_event(:enter, _old_state, :deleting_wal_events, state) do
@@ -152,20 +192,24 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   def handle_event(:info, {ref, {:ok, _count}}, :deleting_wal_events, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
+    has_more? = length(state.wal_events) == state.batch_size
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :wrote_events, length(state.wal_events)})
+    end
+
     state = %{state | task_ref: nil, wal_events: nil}
 
-    if length(state.wal_events) == state.batch_size do
-      {:next_state, :fetching_wal_events, state, [{:next_event, :internal, :fetch_wal_events}]}
+    if has_more? do
+      {:next_state, :fetching_wal_events, state}
     else
-      # Random value between -0.2 and 0.2
-      padding = :rand.uniform() * 0.4 - 0.2
-      delay = trunc(state.delay_ms * (1 + padding))
-      {:keep_state, state, [{:state_timeout, delay, :fetch_wal_events}]}
+      {:next_state, :idle, state, [fetch_timeout(state)]}
     end
   end
 
-  def handle_event(:state_timeout, :fetch_wal_events, _state_name, state) do
-    {:next_state, :fetching_wal_events, state, [{:next_event, :internal, :fetch_wal_events}]}
+  # Handle the retry after backoff
+  def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
+    {:next_state, state_name, state}
   end
 
   # Implement retry logic in case of task failure
@@ -173,7 +217,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     Logger.error("[WalEventServer] Task for #{state_name} failed with reason #{inspect(reason)}")
 
     state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
-    backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
+    backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, @max_backoff_ms)
 
     actions = [
       {:state_timeout, backoff, :retry}
@@ -182,31 +226,68 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     {:next_state, {:awaiting_retry, state_name}, state, actions}
   end
 
-  # Handle the retry after backoff
-  def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
-    {:next_state, state_name, state}
+  def handle_event(:internal, :subscribe_to_pubsub, _state, %State{wal_projection_ids: wal_projection_ids}) do
+    Enum.each(wal_projection_ids, fn wal_projection_id ->
+      Phoenix.PubSub.subscribe(Sequin.PubSub, "wal_event_inserted:#{wal_projection_id}")
+    end)
+
+    :keep_state_and_data
+  end
+
+  def handle_event(:info, {:wal_event_inserted, _wal_projection_id}, :idle, data) do
+    {:next_state, :fetching_wal_events, data}
+  end
+
+  def handle_event(:info, {:wal_event_inserted, _wal_projection_id}, _state, data) do
+    {:keep_state, %{data | events_pending?: true}}
+  end
+
+  defp fetch_timeout(%State{events_pending?: true}), do: {:state_timeout, 0, :fetch_wal_events}
+
+  defp fetch_timeout(%State{} = state) do
+    padding = :rand.uniform() * 0.4 - 0.2
+    delay = trunc(state.interval_ms * (1 + padding))
+    {:state_timeout, delay, :fetch_wal_events}
   end
 
   defp write_to_destination(%State{} = state, wal_events) do
     Logger.info("[WalEventServer] Writing #{length(wal_events)} events to destination")
 
+    table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
+
     # Prepare the data for insertion
     {columns, values} = prepare_insert_data(wal_events, state)
 
-    # Craft the SQL query
+    # Craft the SQL query with explicit type casts
     sql = """
-    INSERT INTO test_event_logs (#{Enum.join(columns, ", ")})
-    SELECT #{Enum.join(columns, ", ")}
-    FROM unnest(#{Postgres.parameterized_tuple(length(columns))})
-    AS t(#{Enum.join(columns, ", ")})
+    INSERT INTO #{table} (#{Enum.join(columns, ", ")})
+    SELECT *
+    FROM unnest(
+      $1::bigint[],
+      $2::uuid[],
+      $3::bigint[],
+      $4::text[],
+      $5::jsonb[],
+      $6::jsonb[],
+      $7::text[],
+      $8::timestamp with time zone[],
+      $9::timestamp with time zone[]
+    ) AS t(#{Enum.join(columns, ", ")})
     ON CONFLICT (seq, source_database_id) DO NOTHING
     """
 
+    dest =
+      if env() == :test do
+        Sequin.Repo
+      else
+        state.destination_database
+      end
+
     # Execute the query on the destination database
-    case Postgres.query(state.destination_database.id, sql, List.flatten(values)) do
+    case Postgres.query(dest, sql, values) do
       {:ok, result} ->
         Logger.info("[WalEventServer] Successfully wrote #{result.num_rows} rows to destination")
-        {:ok, result.num_rows}
+        :ok
 
       {:error, error} ->
         Logger.error("[WalEventServer] Failed to write to destination: #{inspect(error)}")
@@ -218,8 +299,8 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     columns = [
       "seq",
       "source_database_id",
-      "source_oid",
-      "source_pk",
+      "source_table_oid",
+      "record_pk",
       "record",
       "changes",
       "action",
@@ -228,19 +309,22 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     ]
 
     values =
-      Enum.map(wal_events, fn wal_event ->
+      wal_events
+      |> Enum.map(fn wal_event ->
         [
           wal_event.commit_lsn,
-          state.replication_slot.postgres_database_id,
-          state.destination_table.oid,
+          UUID.string_to_binary!(state.replication_slot.postgres_database_id),
+          wal_event.source_table_oid,
           Enum.join(wal_event.record_pks, ","),
-          Jason.encode!(wal_event.data.record),
-          Jason.encode!(wal_event.data.changes),
-          Atom.to_string(wal_event.data.action),
-          wal_event.data.metadata.commit_timestamp,
-          NaiveDateTime.utc_now()
+          wal_event.record,
+          wal_event.changes,
+          Atom.to_string(wal_event.action),
+          wal_event.committed_at,
+          DateTime.utc_now()
         ]
       end)
+      |> Enum.zip()
+      |> Enum.map(&Tuple.to_list/1)
 
     {columns, values}
   end
@@ -249,5 +333,9 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

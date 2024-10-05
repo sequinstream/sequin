@@ -265,8 +265,13 @@ defmodule Sequin.Replication do
     end
   end
 
-  def list_wal_events(wal_projection_id, params \\ []) do
-    base_query = WalEvent.where_wal_projection_id(wal_projection_id)
+  def list_wal_events(wal_projection_id_or_ids, params \\ []) do
+    base_query =
+      if is_list(wal_projection_id_or_ids) do
+        WalEvent.where_wal_projection_id_in(wal_projection_id_or_ids)
+      else
+        WalEvent.where_wal_projection_id(wal_projection_id_or_ids)
+      end
 
     query =
       Enum.reduce(params, base_query, fn
@@ -286,7 +291,8 @@ defmodule Sequin.Replication do
   def insert_wal_events([]), do: {:ok, 0}
 
   def insert_wal_events(wal_events) do
-    now = DateTime.utc_now()
+    now = DateTime.truncate(DateTime.utc_now(), :second)
+    wal_projection_id = hd(wal_events).wal_projection_id
 
     events =
       Enum.map(wal_events, fn event ->
@@ -299,6 +305,12 @@ defmodule Sequin.Replication do
       end)
 
     {count, _} = Repo.insert_all(WalEvent, events)
+
+    Phoenix.PubSub.broadcast(
+      Sequin.PubSub,
+      "wal_event_inserted:#{wal_projection_id}",
+      {:wal_event_inserted, wal_projection_id}
+    )
 
     {:ok, count}
   end

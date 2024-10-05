@@ -52,6 +52,22 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
+    create table(:test_event_logs) do
+      add :seq, :bigint, null: false
+      add :source_database_id, :uuid, null: false
+      add :source_oid, :bigint, null: false
+      add :source_pk, :text, null: false
+      add :record, :map, null: false
+      add :changes, :map
+      add :action, :string, null: false
+      add :committed_at, :utc_datetime_usec, null: false
+      add :inserted_at, :utc_datetime_usec, null: false, default: fragment("NOW()")
+    end
+
+    create unique_index(:test_event_logs, [:seq, :source_database_id])
+    create index(:test_event_logs, [:source_oid])
+    create index(:test_event_logs, [:committed_at])
+
     execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed",
             "drop publication characters_publication"
   end

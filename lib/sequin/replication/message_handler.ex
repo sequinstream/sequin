@@ -11,7 +11,6 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
-  alias Sequin.Replication.WalEventData
   alias Sequin.Replication.WalProjection
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
@@ -216,49 +215,18 @@ defmodule Sequin.Replication.MessageHandler do
       wal_projection_id: projection.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
-      data: wal_event_data_from_message(message, projection),
-      replication_message_trace_id: message.trace_id
-    }
-  end
-
-  defp wal_event_data_from_message(%Message{action: :insert} = message, projection) do
-    %WalEventData{
       record: fields_to_map(message.fields),
-      changes: nil,
-      action: :insert,
-      metadata: wal_event_metadata(message, projection)
+      changes: get_changes(message),
+      action: message.action,
+      committed_at: message.commit_timestamp,
+      replication_message_trace_id: message.trace_id,
+      source_table_oid: message.table_oid
     }
   end
 
-  defp wal_event_data_from_message(%Message{action: :update} = message, projection) do
-    changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
-
-    %WalEventData{
-      record: fields_to_map(message.fields),
-      changes: changes,
-      action: :update,
-      metadata: wal_event_metadata(message, projection)
-    }
+  defp get_changes(%Message{action: :update} = message) do
+    if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
   end
 
-  defp wal_event_data_from_message(%Message{action: :delete} = message, projection) do
-    %WalEventData{
-      record: fields_to_map(message.old_fields),
-      changes: nil,
-      action: :delete,
-      metadata: wal_event_metadata(message, projection)
-    }
-  end
-
-  defp wal_event_metadata(%Message{} = message, projection) do
-    %WalEventData.Metadata{
-      table_name: message.table_name,
-      table_schema: message.table_schema,
-      commit_timestamp: message.commit_timestamp,
-      wal_projection: %{
-        id: projection.id,
-        name: projection.name
-      }
-    }
-  end
+  defp get_changes(_), do: nil
 end

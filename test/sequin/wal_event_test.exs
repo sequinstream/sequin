@@ -23,8 +23,17 @@ defmodule Sequin.WalEventTest do
       assert length(inserted_events) == 3
 
       assert_lists_equal(inserted_events, events, fn e1, e2 ->
-        assert_maps_equal(e1, e2, [:wal_projection_id, :commit_lsn]) and
-          assert_maps_equal(e1.data, e2.data, [:record_pks, :changes, :action])
+        assert_maps_equal(e1, e2, [
+          :wal_projection_id,
+          :commit_lsn,
+          :record_pks,
+          :replication_message_trace_id,
+          :source_table_oid,
+          :record,
+          :changes,
+          :action,
+          :committed_at
+        ])
       end)
     end
 

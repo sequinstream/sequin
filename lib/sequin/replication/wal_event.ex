@@ -5,7 +5,6 @@ defmodule Sequin.Replication.WalEvent do
   import Ecto.Changeset
   import Ecto.Query
 
-  alias Sequin.Replication.WalEventData
   alias Sequin.Replication.WalProjection
 
   @derive {Jason.Encoder,
@@ -14,15 +13,22 @@ defmodule Sequin.Replication.WalEvent do
              :wal_projection_id,
              :commit_lsn,
              :record_pks,
-             :data,
+             :record,
+             :changes,
+             :action,
+             :committed_at,
              :inserted_at
            ]}
   schema "wal_events" do
+    field :action, Ecto.Enum, values: [:insert, :update, :delete]
+    field :changes, :map
     field :commit_lsn, :integer
+    field :committed_at, :utc_datetime_usec
     field :record_pks, {:array, :string}
+    field :record, :map
     field :replication_message_trace_id, Ecto.UUID
+    field :source_table_oid, :integer
 
-    embeds_one :data, WalEventData
     belongs_to :wal_projection, WalProjection
 
     timestamps(type: :utc_datetime_usec)
@@ -36,15 +42,22 @@ defmodule Sequin.Replication.WalEvent do
       :wal_projection_id,
       :commit_lsn,
       :record_pks,
-      :replication_message_trace_id
+      :replication_message_trace_id,
+      :source_table_oid,
+      :record,
+      :changes,
+      :action,
+      :committed_at
     ])
-    |> cast_embed(:data, required: true)
     |> validate_required([
       :wal_projection_id,
       :commit_lsn,
       :record_pks,
-      :data,
-      :replication_message_trace_id
+      :replication_message_trace_id,
+      :source_table_oid,
+      :record,
+      :action,
+      :committed_at
     ])
   end
 
@@ -66,22 +79,10 @@ defmodule Sequin.Replication.WalEvent do
   end
 
   def from_map(attrs) do
-    attrs =
-      attrs
-      |> Sequin.Map.atomize_keys()
-      |> Map.update!(:record_pks, &stringify_record_pks/1)
-      |> Map.update!(:data, fn data ->
-        data = Sequin.Map.atomize_keys(data)
-        metadata = Sequin.Map.atomize_keys(data.metadata)
-        data = Map.put(data, :metadata, struct!(WalEventData.Metadata, metadata))
-        struct!(WalEventData, data)
-      end)
-
-    struct!(__MODULE__, attrs)
-  end
-
-  def where_source_replication_slot_id(query \\ base_query(), source_replication_slot_id) do
-    from([wal_event: we] in query, where: we.source_replication_slot_id == ^source_replication_slot_id)
+    attrs
+    |> Sequin.Map.atomize_keys()
+    |> Map.update!(:record_pks, &stringify_record_pks/1)
+    |> then(&struct!(__MODULE__, &1))
   end
 
   def where_source_table_oid(query \\ base_query(), source_table_oid) do

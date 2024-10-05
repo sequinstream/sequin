@@ -43,6 +43,10 @@ defmodule Sequin.Databases do
     end
   end
 
+  def get_db!(id) do
+    Repo.get!(PostgresDatabase, id)
+  end
+
   def get_db_for_account(account_id, id_or_name) do
     query =
       account_id

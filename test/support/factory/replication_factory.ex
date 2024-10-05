@@ -187,7 +187,8 @@ defmodule Sequin.Factory.ReplicationFactory do
         replication_slot_id: Factory.uuid(),
         destination_oid: Factory.unique_integer(),
         destination_database_id: Factory.uuid(),
-        account_id: Factory.uuid()
+        account_id: Factory.uuid(),
+        status: Factory.one_of([:active, :disabled])
       },
       attrs
     )

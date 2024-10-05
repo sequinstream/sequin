@@ -37,6 +37,13 @@ defmodule Sequin.Replication do
     end
   end
 
+  def get_pg_replication!(id) do
+    case get_pg_replication(id) do
+      {:ok, pg_replication} -> pg_replication
+      {:error, _} -> raise Error.not_found(entity: :pg_replication)
+    end
+  end
+
   def get_pg_replication_for_account(account_id, id) do
     case Repo.get_by(PostgresReplicationSlot, id: id, account_id: account_id) do
       nil -> {:error, Error.not_found(entity: :pg_replication)}

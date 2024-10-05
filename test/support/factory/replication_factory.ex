@@ -10,7 +10,6 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
-  alias Sequin.Replication.WalEventData
   alias Sequin.Replication.WalProjection
   alias Sequin.Repo
 
@@ -251,51 +250,21 @@ defmodule Sequin.Factory.ReplicationFactory do
         wal_projection_id: Factory.uuid(),
         commit_lsn: Factory.integer(),
         record_pks: record_pks,
-        data: wal_event_data(action: action),
-        replication_message_trace_id: Factory.uuid()
-      },
-      attrs
-    )
-  end
-
-  def wal_event_data(attrs \\ []) do
-    attrs = Map.new(attrs)
-    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
-
-    record = %{"column" => Factory.word()}
-    changes = if action == :update, do: %{"column" => Factory.word()}
-
-    merge_attributes(
-      %WalEventData{
-        record: record,
-        changes: changes,
+        record: %{"column" => Factory.word()},
+        changes: if(action == :update, do: %{"column" => Factory.word()}),
         action: action,
-        metadata: %WalEventData.Metadata{
-          table_schema: Factory.postgres_object(),
-          table_name: Factory.postgres_object(),
-          commit_timestamp: Factory.timestamp(),
-          wal_projection: %{}
-        }
+        committed_at: Factory.timestamp(),
+        replication_message_trace_id: Factory.uuid(),
+        source_table_oid: Factory.unique_integer()
       },
       attrs
     )
-  end
-
-  def wal_event_data_attrs(attrs \\ []) do
-    attrs
-    |> Map.new()
-    |> wal_event_data()
-    |> Map.update!(:metadata, &Sequin.Map.from_ecto/1)
-    |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
   def wal_event_attrs(attrs \\ []) do
     attrs
     |> Map.new()
     |> wal_event()
-    |> Map.update!(:data, fn data ->
-      data |> Map.from_struct() |> wal_event_data_attrs()
-    end)
     |> Sequin.Map.from_ecto()
   end
 

@@ -9,6 +9,8 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalEvent
+  alias Sequin.Replication.WalEventData
   alias Sequin.Replication.WalProjection
   alias Sequin.Repo
 
@@ -233,6 +235,84 @@ defmodule Sequin.Factory.ReplicationFactory do
 
     %WalProjection{account_id: account_id}
     |> WalProjection.create_changeset(attrs)
+    |> Repo.insert!()
+  end
+
+  def wal_event(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
+
+    {record_pks, attrs} = Map.pop_lazy(attrs, :record_pks, fn -> [Faker.UUID.v4()] end)
+    record_pks = Enum.map(record_pks, &to_string/1)
+
+    merge_attributes(
+      %WalEvent{
+        source_replication_slot_id: Factory.uuid(),
+        source_table_oid: Factory.integer(),
+        commit_lsn: Factory.integer(),
+        record_pks: record_pks,
+        data: wal_event_data(action: action),
+        replication_message_trace_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def wal_event_data(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
+
+    record = %{"column" => Factory.word()}
+    changes = if action == :update, do: %{"column" => Factory.word()}
+
+    merge_attributes(
+      %WalEventData{
+        record: record,
+        changes: changes,
+        action: action,
+        metadata: %{
+          table_schema: Factory.postgres_object(),
+          table_name: Factory.postgres_object(),
+          commit_timestamp: Factory.timestamp(),
+          wal_projection: %{}
+        }
+      },
+      attrs
+    )
+  end
+
+  def wal_event_data_attrs(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> wal_event_data()
+    |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  def wal_event_attrs(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> wal_event()
+    |> Map.update!(:data, fn data ->
+      data |> Map.from_struct() |> wal_event_data_attrs()
+    end)
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_wal_event!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {source_replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :source_replication_slot_id, fn -> insert_postgres_replication!().id end)
+
+    {source_table_oid, attrs} =
+      Map.pop_lazy(attrs, :source_table_oid, fn -> Factory.unique_integer() end)
+
+    attrs
+    |> Map.put(:source_replication_slot_id, source_replication_slot_id)
+    |> Map.put(:source_table_oid, source_table_oid)
+    |> wal_event_attrs()
+    |> then(&WalEvent.create_changeset(%WalEvent{}, &1))
     |> Repo.insert!()
   end
 end

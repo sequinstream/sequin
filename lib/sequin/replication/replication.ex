@@ -12,6 +12,7 @@ defmodule Sequin.Replication do
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalProjection
   alias Sequin.ReplicationRuntime
+  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
 
   require Logger
@@ -208,7 +209,7 @@ defmodule Sequin.Replication do
            %WalProjection{account_id: account_id}
            |> WalProjection.create_changeset(attrs)
            |> Repo.insert(),
-         :ok <- notify_wal_projection_create(wal_projection) do
+         :ok <- notify_wal_projection_changed(wal_projection) do
       {:ok, wal_projection}
     end
   end
@@ -221,7 +222,7 @@ defmodule Sequin.Replication do
 
   def update_wal_projection_with_lifecycle(%WalProjection{} = wal_projection, attrs) do
     with {:ok, updated_wal_projection} <- update_wal_projection(wal_projection, attrs),
-         :ok <- notify_wal_projection_update(updated_wal_projection) do
+         :ok <- notify_wal_projection_changed(updated_wal_projection) do
       {:ok, updated_wal_projection}
     end
   end
@@ -232,16 +233,22 @@ defmodule Sequin.Replication do
 
   def delete_wal_projection_with_lifecycle(%WalProjection{} = wal_projection) do
     with {:ok, deleted_wal_projection} <- delete_wal_projection(wal_projection),
-         :ok <- notify_wal_projection_delete(deleted_wal_projection) do
+         :ok <- notify_wal_projection_changed(deleted_wal_projection) do
       {:ok, deleted_wal_projection}
     end
   end
 
   # Lifecycle Notifications
 
-  defp notify_wal_projection_create(_wal_projection), do: :ok
-  defp notify_wal_projection_update(_wal_projection), do: :ok
-  defp notify_wal_projection_delete(_wal_projection), do: :ok
+  defp notify_wal_projection_changed(%WalProjection{} = projection) do
+    projection = Repo.preload(projection, :replication_slot)
+
+    unless env() == :test do
+      ReplicationSupervisor.restart_wal_event_servers(projection.replication_slot)
+    end
+
+    ReplicationSupervisor.refresh_message_handler_ctx(projection.replication_slot_id)
+  end
 
   # WAL Event
 
@@ -319,5 +326,9 @@ defmodule Sequin.Replication do
     query = from(we in WalEvent, where: we.id in ^wal_event_ids)
     {count, _} = Repo.delete_all(query)
     {:ok, count}
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

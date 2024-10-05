@@ -5,8 +5,11 @@ defmodule Sequin.Repo.Migrations.CreateWalProjections do
 
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
   def up do
+    execute "CREATE TYPE #{@config_schema}.wal_projection_status AS ENUM ('active', 'disabled');"
+
     create table(:wal_projections, prefix: @config_schema) do
       add :name, :string, null: false
+      add :status, :"#{@config_schema}.wal_projection_status", null: false
       add :seq, :integer, null: false
       add :source_tables, {:array, :jsonb}, null: false, default: "{}"
       add :destination_oid, :bigint

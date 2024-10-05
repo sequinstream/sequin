@@ -13,7 +13,7 @@ defmodule Sequin.MutexOwner do
   defmodule State do
     @moduledoc """
     lock_expiry - how long to hold the mutex for when acquired
-    mutex_key/mutex_token - see Ix.Mutex
+    mutex_key/mutex_token - see Sequin.Mutex
     on_acquired - callback that is called when the mutex is acquired
     """
     use TypedStruct
@@ -41,7 +41,7 @@ defmodule Sequin.MutexOwner do
 
   @impl GenStateMachine
   def init(opts) do
-    Logger.metadata(sha: Application.get_env(:ix, :sha))
+    Logger.metadata(sha: Application.get_env(:sequin, :sha), mutex_key: Keyword.fetch!(opts, :mutex_key))
 
     actions = [
       {{:timeout, :acquire_mutex}, 0, nil}
@@ -73,7 +73,7 @@ defmodule Sequin.MutexOwner do
     case acquire_mutex(data) do
       :ok ->
         # just acquired lock
-        Logger.info("MutexOwner just acquired mutex")
+        Logger.info("MutexOwner just acquired mutex for #{data.mutex_key}")
         data.on_acquired.()
 
         actions = [

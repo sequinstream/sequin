@@ -215,7 +215,7 @@ defmodule Sequin.Replication.MessageHandler do
       wal_projection_id: projection.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
-      record: fields_to_map(message.fields),
+      record: fields_to_map(get_fields(message)),
       changes: get_changes(message),
       action: message.action,
       committed_at: message.commit_timestamp,
@@ -229,4 +229,8 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   defp get_changes(_), do: nil
+
+  defp get_fields(%Message{action: :insert} = message), do: message.fields
+  defp get_fields(%Message{action: :update} = message), do: message.fields
+  defp get_fields(%Message{action: :delete} = message), do: message.old_fields
 end

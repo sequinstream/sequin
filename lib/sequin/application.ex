@@ -5,6 +5,7 @@ defmodule Sequin.Application do
   use Application
 
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.MutexedSupervisor
 
   @impl true
   def start(_type, _args) do
@@ -32,6 +33,7 @@ defmodule Sequin.Application do
   defp children(_) do
     base_children() ++
       [
+        MutexedSupervisor.child_spec(Sequin.ReplicationRuntime.MutexedSupervisor, [Sequin.ReplicationRuntime.Supervisor]),
         Sequin.ReplicationRuntime.Supervisor,
         Sequin.ConsumersRuntime.Supervisor,
         Sequin.DatabasesRuntime.Supervisor,

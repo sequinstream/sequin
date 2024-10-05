@@ -37,7 +37,10 @@ defmodule Sequin.ReplicationRuntime.Starter do
   end
 
   defp start do
-    Enum.each(Replication.all_active_pg_replications(), &Supervisor.start_replication(&1.id))
+    Enum.each(Replication.all_active_pg_replications(), fn pg_replication ->
+      Supervisor.start_replication(pg_replication.id)
+      Supervisor.start_wal_event_servers(pg_replication)
+    end)
   end
 
   defp logger_info(msg) do

@@ -8,6 +8,7 @@ defmodule Sequin.Replication.WalProjection do
   alias Sequin.Consumers.SourceTable
 
   schema "wal_projections" do
+    field :status, Ecto.Enum, values: [:active, :disabled], default: :active
     field :name, :string
     field :seq, :integer
     field :destination_oid, :integer
@@ -32,7 +33,7 @@ defmodule Sequin.Replication.WalProjection do
 
   defp changeset(wal_projection, attrs) do
     wal_projection
-    |> cast(attrs, [:name, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
+    |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> validate_required([:name, :replication_slot_id, :destination_oid, :destination_database_id])
     |> unique_constraint([:replication_slot_id, :name])

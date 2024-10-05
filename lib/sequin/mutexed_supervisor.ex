@@ -54,7 +54,7 @@ defmodule Sequin.MutexedSupervisor do
   end
 
   def child_spec(id, children) do
-    Supervisor.child_spec({Ix.MutexedSupervisor, name: id, child_specs: children}, id: id)
+    Supervisor.child_spec({Sequin.MutexedSupervisor, name: id, child_specs: children}, id: id)
   end
 
   defp start_children(child_specs, child_supervisor) do

@@ -6,7 +6,9 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
 
   alias Sequin.Postgres
 
+  @primary_key false
   schema "test_event_logs" do
+    field :id, :integer, primary_key: true
     field :seq, :integer
     field :source_database_id, Ecto.UUID
     field :source_table_oid, :integer

@@ -1,5 +1,7 @@
 defmodule Sequin.Replication do
   @moduledoc false
+  import Ecto.Query
+
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -7,9 +9,12 @@ defmodule Sequin.Replication do
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalProjection
   alias Sequin.ReplicationRuntime
   alias Sequin.Repo
+
+  require Logger
 
   # PostgresReplicationSlot
 
@@ -103,6 +108,8 @@ defmodule Sequin.Replication do
     %{pg_replication | info: info}
   end
 
+  # Helper Functions
+
   defp get_or_build_postgres_database(account_id, attrs) do
     case attrs do
       %{postgres_database_id: id} ->
@@ -126,7 +133,7 @@ defmodule Sequin.Replication do
   end
 
   defp validate_slot(conn, slot_name) do
-    query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"
+    query = "select 1 from pg_replication_slots where slot_name = $1"
 
     case Postgres.query(conn, query, [slot_name]) do
       {:ok, %{num_rows: 1}} ->
@@ -142,7 +149,7 @@ defmodule Sequin.Replication do
   end
 
   defp validate_publication(conn, publication_name) do
-    query = "SELECT 1 FROM pg_publication WHERE pubname = $1"
+    query = "select 1 from pg_publication where pubname = $1"
 
     case Postgres.query(conn, query, [publication_name]) do
       {:ok, %{num_rows: 1}} ->
@@ -223,8 +230,80 @@ defmodule Sequin.Replication do
     end
   end
 
-  # Lifecycle notifications (placeholders for now)
+  # Lifecycle Notifications
+
   defp notify_wal_projection_create(_wal_projection), do: :ok
   defp notify_wal_projection_update(_wal_projection), do: :ok
   defp notify_wal_projection_delete(_wal_projection), do: :ok
+
+  # WAL Event
+
+  def get_wal_event(source_replication_slot_id, source_table_oid, commit_lsn) do
+    wal_event =
+      source_replication_slot_id
+      |> WalEvent.where_source_replication_slot_id()
+      |> WalEvent.where_source_table_oid(source_table_oid)
+      |> WalEvent.where_commit_lsn(commit_lsn)
+      |> Repo.one()
+
+    case wal_event do
+      nil -> {:error, Error.not_found(entity: :wal_event)}
+      wal_event -> {:ok, wal_event}
+    end
+  end
+
+  def get_wal_event!(source_replication_slot_id, source_table_oid, commit_lsn) do
+    case get_wal_event(source_replication_slot_id, source_table_oid, commit_lsn) do
+      {:ok, wal_event} -> wal_event
+      {:error, _} -> raise Error.not_found(entity: :wal_event)
+    end
+  end
+
+  def list_wal_events_for_projection(source_replication_slot_id, source_table_oid, params \\ []) do
+    base_query =
+      source_replication_slot_id
+      |> WalEvent.where_source_replication_slot_id()
+      |> WalEvent.where_source_table_oid(source_table_oid)
+
+    query =
+      Enum.reduce(params, base_query, fn
+        {:limit, limit}, query ->
+          limit(query, ^limit)
+
+        {:offset, offset}, query ->
+          offset(query, ^offset)
+
+        {:order_by, order_by}, query ->
+          order_by(query, ^order_by)
+      end)
+
+    Repo.all(query)
+  end
+
+  def insert_wal_events([]), do: {:ok, 0}
+
+  def insert_wal_events(wal_events) do
+    now = DateTime.utc_now()
+
+    events =
+      Enum.map(wal_events, fn event ->
+        event
+        |> Map.merge(%{
+          updated_at: now,
+          inserted_at: now
+        })
+        |> WalEvent.from_map()
+        |> Sequin.Map.from_ecto()
+      end)
+
+    {count, _} = Repo.insert_all(WalEvent, events)
+
+    {:ok, count}
+  end
+
+  def delete_wal_events(wal_event_ids) when is_list(wal_event_ids) do
+    query = from(we in WalEvent, where: we.id in ^wal_event_ids)
+    {count, _} = Repo.delete_all(query)
+    {:ok, count}
+  end
 end

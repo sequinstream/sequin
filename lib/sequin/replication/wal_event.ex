@@ -6,27 +6,24 @@ defmodule Sequin.Replication.WalEvent do
   import Ecto.Query
 
   alias Sequin.Replication.WalEventData
+  alias Sequin.Replication.WalProjection
 
-  @primary_key false
   @derive {Jason.Encoder,
            only: [
-             :source_replication_slot_id,
-             :source_table_oid,
+             :id,
+             :wal_projection_id,
              :commit_lsn,
              :record_pks,
              :data,
              :inserted_at
            ]}
-  typed_schema "wal_events" do
-    field :source_replication_slot_id, Ecto.UUID, primary_key: true
-    field :source_table_oid, :integer, primary_key: true
-    field :id, :integer, primary_key: true, read_after_writes: true
+  schema "wal_events" do
     field :commit_lsn, :integer
     field :record_pks, {:array, :string}
-
     field :replication_message_trace_id, Ecto.UUID
 
     embeds_one :data, WalEventData
+    belongs_to :wal_projection, WalProjection
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -36,16 +33,14 @@ defmodule Sequin.Replication.WalEvent do
 
     wal_event
     |> cast(attrs, [
-      :source_replication_slot_id,
-      :source_table_oid,
+      :wal_projection_id,
       :commit_lsn,
       :record_pks,
       :replication_message_trace_id
     ])
     |> cast_embed(:data, required: true)
     |> validate_required([
-      :source_replication_slot_id,
-      :source_table_oid,
+      :wal_projection_id,
       :commit_lsn,
       :record_pks,
       :data,
@@ -103,6 +98,10 @@ defmodule Sequin.Replication.WalEvent do
 
   def count(query \\ base_query()) do
     from([wal_event: we] in query, select: count(we.id))
+  end
+
+  def where_wal_projection_id(query \\ base_query(), wal_projection_id) do
+    from([wal_event: we] in query, where: we.wal_projection_id == ^wal_projection_id)
   end
 
   defp base_query(query \\ __MODULE__) do

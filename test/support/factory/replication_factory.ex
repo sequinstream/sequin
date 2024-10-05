@@ -248,8 +248,7 @@ defmodule Sequin.Factory.ReplicationFactory do
 
     merge_attributes(
       %WalEvent{
-        source_replication_slot_id: Factory.uuid(),
-        source_table_oid: Factory.integer(),
+        wal_projection_id: Factory.uuid(),
         commit_lsn: Factory.integer(),
         record_pks: record_pks,
         data: wal_event_data(action: action),
@@ -271,7 +270,7 @@ defmodule Sequin.Factory.ReplicationFactory do
         record: record,
         changes: changes,
         action: action,
-        metadata: %{
+        metadata: %WalEventData.Metadata{
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
@@ -286,6 +285,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     attrs
     |> Map.new()
     |> wal_event_data()
+    |> Map.update!(:metadata, &Sequin.Map.from_ecto/1)
     |> Sequin.Map.from_ecto(keep_nils: true)
   end
 
@@ -302,15 +302,11 @@ defmodule Sequin.Factory.ReplicationFactory do
   def insert_wal_event!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {source_replication_slot_id, attrs} =
-      Map.pop_lazy(attrs, :source_replication_slot_id, fn -> insert_postgres_replication!().id end)
-
-    {source_table_oid, attrs} =
-      Map.pop_lazy(attrs, :source_table_oid, fn -> Factory.unique_integer() end)
+    {wal_projection_id, attrs} =
+      Map.pop_lazy(attrs, :wal_projection_id, fn -> insert_wal_projection!().id end)
 
     attrs
-    |> Map.put(:source_replication_slot_id, source_replication_slot_id)
-    |> Map.put(:source_table_oid, source_table_oid)
+    |> Map.put(:wal_projection_id, wal_projection_id)
     |> wal_event_attrs()
     |> then(&WalEvent.create_changeset(%WalEvent{}, &1))
     |> Repo.insert!()

@@ -3,6 +3,7 @@ defmodule Sequin.Repo.Migrations.CreateWalProjections do
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
 
+  @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
   def up do
     create table(:wal_projections, prefix: @config_schema) do
       add :name, :string, null: false
@@ -35,9 +36,23 @@ defmodule Sequin.Repo.Migrations.CreateWalProjections do
     create unique_index(:wal_projections, [:replication_slot_id, :name], prefix: @config_schema)
 
     execute "alter table #{@config_schema}.wal_projections alter column seq set default nextval('#{@config_schema}.consumer_seq');"
+
+    create table(:wal_events, prefix: @stream_schema) do
+      add :wal_projection_id, :uuid, null: false
+
+      add :commit_lsn, :bigint, null: false
+      add :record_pks, {:array, :text}, null: false
+      add :data, :jsonb, null: false
+      add :replication_message_trace_id, :uuid, null: false
+
+      timestamps(type: :utc_datetime_usec)
+    end
+
+    create index(:wal_events, [:wal_projection_id, :commit_lsn], prefix: @stream_schema)
   end
 
   def down do
+    drop table(:wal_events, prefix: @stream_schema)
     drop table(:wal_projections, prefix: @config_schema)
   end
 end

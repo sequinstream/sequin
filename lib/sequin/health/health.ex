@@ -17,6 +17,7 @@ defmodule Sequin.Health do
   alias Sequin.Error
   alias Sequin.Health.Check
   alias Sequin.JSON
+  alias Sequin.Replication.WalProjection
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
   @type entity ::
@@ -24,6 +25,7 @@ defmodule Sequin.Health do
           | HttpPullConsumer.t()
           | HttpPushConsumer.t()
           | PostgresDatabase.t()
+          | WalProjection.t()
 
   @derive Jason.Encoder
   typedstruct do
@@ -36,6 +38,7 @@ defmodule Sequin.Health do
           | :http_pull_consumer
           | :http_push_consumer
           | :postgres_database
+          | :wal_projection
 
     field :status, status()
     field :checks, [Check.t()]
@@ -60,7 +63,8 @@ defmodule Sequin.Health do
            when is_struct(entity, HttpEndpoint) or
                   is_struct(entity, HttpPullConsumer) or
                   is_struct(entity, HttpPushConsumer) or
-                  is_struct(entity, PostgresDatabase)
+                  is_struct(entity, PostgresDatabase) or
+                  is_struct(entity, WalProjection)
 
   @subject_prefix "sequin-health"
   @debounce_window :timer.seconds(10)
@@ -185,6 +189,20 @@ defmodule Sequin.Health do
     end
   end
 
+  @wal_projection_checks [:filters, :ingestion, :projection]
+  defp expected_check(%WalProjection{}, check_id, status, error) when check_id in @wal_projection_checks do
+    case check_id do
+      :filters ->
+        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :ingestion ->
+        %Check{id: :ingestion, name: "Ingestion", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :projection ->
+        %Check{id: :projection, name: "Projection", status: status, error: error, created_at: DateTime.utc_now()}
+    end
+  end
+
   #####################
   ## Initial Health ##
   #####################
@@ -273,6 +291,31 @@ defmodule Sequin.Health do
     }
   end
 
+  defp initial_health(%WalProjection{} = entity) do
+    checks =
+      @wal_projection_checks
+      |> Enum.map(&expected_check(entity, &1, :initializing))
+      |> Enum.map(fn
+        %Check{id: :ingestion} = check ->
+          %{check | message: "Ingesting changes from the source table."}
+
+        %Check{id: :projection} = check ->
+          %{check | message: "Projecting changes to the destination table."}
+
+        %Check{} = check ->
+          check
+      end)
+
+    %Health{
+      name: "WAL Projection health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
+  end
+
   defp initial_health(entity) when is_entity(entity) do
     raise "Not implemented for #{entity_kind(entity)}"
   end
@@ -321,6 +364,7 @@ defmodule Sequin.Health do
   defp entity_kind(%HttpPullConsumer{}), do: :http_pull_consumer
   defp entity_kind(%HttpPushConsumer{}), do: :http_push_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
+  defp entity_kind(%WalProjection{}), do: :wal_projection
 
   defp get_health(%{id: nil} = entity) when is_entity(entity) do
     raise ArgumentError, "entity_id cannot be nil"

@@ -14,8 +14,8 @@ if Mix.env() == :test do
         %TestEventLog{
           seq: Factory.integer(),
           source_database_id: Faker.UUID.v4(),
-          source_oid: Factory.integer(),
-          source_pk: Faker.UUID.v4(),
+          source_table_oid: Factory.integer(),
+          record_pk: Faker.UUID.v4(),
           record: %{
             "field1" => Faker.Lorem.word(),
             "field2" => Faker.Lorem.sentence()

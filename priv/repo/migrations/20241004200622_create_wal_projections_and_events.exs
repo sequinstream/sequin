@@ -50,7 +50,7 @@ defmodule Sequin.Repo.Migrations.CreateWalProjections do
       add :replication_message_trace_id, :uuid, null: false
       add :source_table_oid, :bigint, null: false
 
-      timestamps(type: :utc_datetime_usec)
+      timestamps()
     end
 
     create index(:wal_events, [:wal_projection_id, :commit_lsn], prefix: @stream_schema)

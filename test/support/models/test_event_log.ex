@@ -9,21 +9,21 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
   schema "test_event_logs" do
     field :seq, :integer
     field :source_database_id, Ecto.UUID
-    field :source_oid, :integer
-    field :source_pk, :string
+    field :source_table_oid, :integer
+    field :record_pk, :string
     field :record, :map
     field :changes, :map
     field :action, :string
-    field :committed_at, :utc_datetime_usec
-    field :inserted_at, :utc_datetime_usec
+    field :committed_at, :utc_datetime
+    field :inserted_at, :utc_datetime
   end
 
   def where_seq(query \\ base_query(), seq) do
     from(tel in query, where: tel.seq == ^seq)
   end
 
-  def where_source_oid(query \\ base_query(), source_oid) do
-    from(tel in query, where: tel.source_oid == ^source_oid)
+  def where_source_table_oid(query \\ base_query(), source_table_oid) do
+    from(tel in query, where: tel.source_table_oid == ^source_table_oid)
   end
 
   def column_attnums do
@@ -51,8 +51,8 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
     Ecto.Changeset.cast(test_event_log, attrs, [
       :seq,
       :source_database_id,
-      :source_oid,
-      :source_pk,
+      :source_table_oid,
+      :record_pk,
       :record,
       :changes,
       :action,

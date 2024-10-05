@@ -1136,11 +1136,9 @@ defmodule Sequin.Consumers do
 
   # Source Table Matching
 
-  def matches_message?(consumer, message) do
-    Logger.info("[Consumers] Matching message to consumer #{consumer.id}")
-
+  def matches_message?(consumer_or_wal_projection, message) do
     matches? =
-      Enum.any?(consumer.source_tables, fn source_table ->
+      Enum.any?(consumer_or_wal_projection.source_tables, fn source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
@@ -1152,8 +1150,8 @@ defmodule Sequin.Consumers do
         #     action_matches: #{action_matches}
         #     column_filters_match: #{column_filters_match}
 
-        #   consumer:
-        #     #{inspect(consumer, pretty: true)}
+        #   consumer_or_wal_projection:
+        #     #{inspect(consumer_or_wal_projection, pretty: true)}
 
         #   message:
         #     #{inspect(message, pretty: true)}
@@ -1162,13 +1160,13 @@ defmodule Sequin.Consumers do
         table_matches && action_matches && column_filters_match
       end)
 
-    Health.update(consumer, :filters, :healthy)
+    Health.update(consumer_or_wal_projection, :filters, :healthy)
 
     matches?
   rescue
     error in [ArgumentError] ->
       Health.update(
-        consumer,
+        consumer_or_wal_projection,
         :filters,
         :error,
         Error.service(

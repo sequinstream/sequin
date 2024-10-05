@@ -36,6 +36,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
     has_many :http_pull_consumers, Sequin.Consumers.HttpPullConsumer, foreign_key: :replication_slot_id
     has_many :http_push_consumers, Sequin.Consumers.HttpPushConsumer, foreign_key: :replication_slot_id
+    has_many :wal_projections, Sequin.Replication.WalProjection, foreign_key: :replication_slot_id
 
     field :info, :map, virtual: true
 

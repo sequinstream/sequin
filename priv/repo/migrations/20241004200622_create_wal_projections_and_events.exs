@@ -38,12 +38,17 @@ defmodule Sequin.Repo.Migrations.CreateWalProjections do
     execute "alter table #{@config_schema}.wal_projections alter column seq set default nextval('#{@config_schema}.consumer_seq');"
 
     create table(:wal_events, prefix: @stream_schema) do
-      add :wal_projection_id, :uuid, null: false
+      add :wal_projection_id, references(:wal_projections, prefix: @config_schema, type: :uuid),
+        null: false
 
+      add :action, :string, null: false
+      add :changes, :map
       add :commit_lsn, :bigint, null: false
-      add :record_pks, {:array, :text}, null: false
-      add :data, :jsonb, null: false
+      add :committed_at, :utc_datetime_usec, null: false
+      add :record_pks, {:array, :string}, null: false
+      add :record, :map, null: false
       add :replication_message_trace_id, :uuid, null: false
+      add :source_table_oid, :bigint, null: false
 
       timestamps(type: :utc_datetime_usec)
     end

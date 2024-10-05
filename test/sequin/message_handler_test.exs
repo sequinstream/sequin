@@ -204,14 +204,12 @@ defmodule Sequin.MessageHandlerTest do
       assert wal_event.wal_projection_id == wal_projection.id
       assert wal_event.commit_lsn == DateTime.to_unix(message.commit_timestamp, :microsecond)
       assert wal_event.record_pks == Enum.map(message.ids, &to_string/1)
-      assert wal_event.data.action == :insert
-      assert wal_event.data.record == fields_to_map(message.fields)
-      assert wal_event.data.changes == nil
-      assert wal_event.data.metadata.table_name == message.table_name
-      assert wal_event.data.metadata.table_schema == message.table_schema
-      assert wal_event.data.metadata.commit_timestamp == message.commit_timestamp
-      assert wal_event.data.metadata.wal_projection["id"] == to_string(wal_projection.id)
-      assert wal_event.data.metadata.wal_projection["name"] == wal_projection.name
+      assert wal_event.replication_message_trace_id == message.trace_id
+      assert wal_event.source_table_oid == message.table_oid
+      assert wal_event.record == fields_to_map(message.fields)
+      assert wal_event.changes == nil
+      assert wal_event.action == :insert
+      assert wal_event.committed_at == message.commit_timestamp
     end
 
     test "inserts wal_event for wal_projection with matching source table and no filters" do

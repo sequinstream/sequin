@@ -184,6 +184,13 @@ defmodule Sequin.Replication do
     |> Repo.all()
   end
 
+  def get_wal_projection_for_account(account_id, id_or_name) do
+    account_id
+    |> WalProjection.where_account_id()
+    |> WalProjection.where_id_or_name(id_or_name)
+    |> Repo.one()
+  end
+
   def get_wal_projection(id) do
     case Repo.get(WalProjection, id) do
       nil -> {:error, Error.not_found(entity: :wal_projection)}

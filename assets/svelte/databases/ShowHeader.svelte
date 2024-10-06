@@ -11,7 +11,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
 
   export let database;
-  export let live_action;
+  export let activeTab;
   export let live;
   export let parent;
 
@@ -48,8 +48,6 @@
   function handleDelete() {
     showDeleteConfirmDialog = true;
   }
-  // Determine the active tab based on the current URL
-  $: activeTab = live_action === "messages" ? "messages" : "overview";
 </script>
 
 <div class="bg-white border-b sticky top-0 z-10">

@@ -166,14 +166,23 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    active_tab =
+      case assigns.live_action do
+        :messages -> "messages"
+        :wal_projections -> "wal_projections"
+        _ -> "overview"
+      end
+
     assigns =
-      assign(assigns, :parent, "database-show")
+      assigns
+      |> assign(:parent, "database-show")
+      |> assign(:active_tab, active_tab)
 
     ~H"""
     <div id={@parent}>
       <.svelte
         name="databases/ShowHeader"
-        props={%{database: encode_database(@database), parent: @parent, live_action: @live_action}}
+        props={%{database: encode_database(@database), parent: @parent, activeTab: @active_tab}}
       />
       <%= case @live_action do %>
         <% :edit -> %>

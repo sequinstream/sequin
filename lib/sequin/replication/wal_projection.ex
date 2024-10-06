@@ -15,6 +15,7 @@ defmodule Sequin.Replication.WalProjection do
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :replication_slot, Sequin.Replication.PostgresReplicationSlot
+    has_one :source_database, through: [:replication_slot, :postgres_database]
     belongs_to :destination_database, Sequin.Databases.PostgresDatabase
     belongs_to :account, Sequin.Accounts.Account
 

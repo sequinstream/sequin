@@ -58,12 +58,8 @@
   export let metrics: {
     avg_latency: number;
   };
-  export let live_action: string;
 
   let refreshingTables = writable(false);
-
-  // Determine the active tab based on the current URL
-  $: activeTab = $live_action === "messages" ? "messages" : "overview";
 
   function pushEvent(event: string, params = {}, callback: any = () => {}) {
     live.pushEventTo("#" + parent, event, params, callback);
@@ -79,192 +75,182 @@
 
 <div class="min-h-screen font-sans">
   <main class="container mx-auto px-4 py-8">
-    {#if activeTab === "overview"}
-      <!-- Existing overview content -->
-      <div class="grid gap-6 md:grid-cols-3 mb-6">
-        <HealthComponent health={database.health} />
+    <!-- Existing overview content -->
+    <div class="grid gap-6 md:grid-cols-3 mb-6">
+      <HealthComponent health={database.health} />
 
-        <Card>
-          <CardContent class="p-6">
-            <div class="flex justify-between items-center mb-4">
-              <span class="text-sm font-medium text-gray-500">Tables</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                on:click={handleRefreshTables}
-                disabled={$refreshingTables}
-              >
-                {#if $refreshingTables}
-                  <span class="sr-only">Refreshing tables</span>
-                  <Loader2 class="h-4 w-4 animate-spin" />
-                {:else}
-                  <span class="sr-only">Refresh tables</span>
-                  <RefreshCw class="h-4 w-4 text-gray-500" />
-                {/if}
-              </Button>
-            </div>
-            <div class="text-4xl font-bold">{database.tables.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent class="p-6">
-            <div class="flex justify-between items-center mb-4">
-              <span class="text-sm font-medium text-gray-500">Avg. Latency</span
-              >
-              <Clock class="h-5 w-5 text-blue-500" />
-            </div>
-            {#if metrics.avg_latency}
-              <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
-            {:else}
-              <div class="flex items-center">
-                <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
-                <span class="text-4xl font-bold text-gray-500">ms</span>
-              </div>
-            {/if}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card class="mb-6">
+      <Card>
         <CardContent class="p-6">
-          <h2 class="text-lg font-semibold mb-4">Configuration</h2>
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <p class="text-sm text-gray-500">Hostname</p>
-              <p class="font-medium text-wrap break-all">{database.hostname}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500">Port</p>
-              <p class="font-medium">{database.port}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500">Database</p>
-              <p class="font-medium">{database.database}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500">Username</p>
-              <p class="font-medium">{database.username}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500">SSL</p>
-              <p class="font-medium">{database.ssl ? "Enabled" : "Disabled"}</p>
-            </div>
-            <div>
-              <p class="text-sm text-gray-500">Pool Size</p>
-              <p class="font-medium">{database.pool_size}</p>
-            </div>
-            <!-- <div>
-              <p class="text-sm text-gray-500">Queue Interval</p>
-              <p class="font-medium">{database.queue_interval} ms</p>
-            </div> -->
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-sm font-medium text-gray-500">Tables</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              on:click={handleRefreshTables}
+              disabled={$refreshingTables}
+            >
+              {#if $refreshingTables}
+                <span class="sr-only">Refreshing tables</span>
+                <Loader2 class="h-4 w-4 animate-spin" />
+              {:else}
+                <span class="sr-only">Refresh tables</span>
+                <RefreshCw class="h-4 w-4 text-gray-500" />
+              {/if}
+            </Button>
           </div>
+          <div class="text-4xl font-bold">{database.tables.length}</div>
         </CardContent>
       </Card>
 
-      <Card class="mb-6">
+      <Card>
         <CardContent class="p-6">
-          <h2 class="text-lg font-semibold mb-4">Consumers</h2>
-          {#if database.consumers && database.consumers.length > 0}
-            <div class="flex flex-wrap gap-4">
-              {#each database.consumers as consumer}
-                <Card class="w-full">
-                  <CardContent class="p-4">
-                    <div class="flex items-center justify-between mb-6">
-                      <div class="flex items-center">
-                        <Radio class="h-4 w-4 mr-2" />
-                        <span class="font-medium">{consumer.name}</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        href={`/consumers/${consumer.id}`}
-                      >
-                        <ExternalLink class="h-4 w-4 mr-2" />
-                        View Consumer
-                      </Button>
-                    </div>
-                    <div
-                      class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-3 mb-2 auto-rows-fr items-center"
-                    >
-                      <p class="text-sm text-gray-500 justify-self-end">
-                        Tables:
-                      </p>
-                      <div class="flex flex-wrap align-center">
-                        {#each consumer.source_tables as table}
-                          <div
-                            class="inline-flex items-center text-sm font-medium text-black"
-                          >
-                            <icon
-                              class="hero-table-cells w-5 h-5 mr-1 rounded {getColorFromName(
-                                `${table.schema_name}.${table.table_name}`
-                              )}"
-                            ></icon>
-
-                            <pre
-                              class="font-medium">{table.schema_name}.{table.table_name}</pre>
-                          </div>
-                        {/each}
-                      </div>
-                      <p class="text-sm text-gray-500 justify-self-end">
-                        Stream type:
-                      </p>
-                      <div class="flex flex-wrap align-center">
-                        {#if consumer.message_kind === "event"}
-                          <Badge variant="default">
-                            <SquareStack class="h-4 w-4 mr-1" />
-                            Changes
-                          </Badge>
-                        {:else if consumer.message_kind === "record"}
-                          <Badge variant="default">
-                            <SquareStack class="h-4 w-4 mr-1" />
-                            Rows
-                          </Badge>
-                        {/if}
-                      </div>
-                      <p class="text-sm text-gray-500 justify-self-end">
-                        Consumer type:
-                      </p>
-                      <div class="flex flex-wrap align-center">
-                        {#if consumer.consumer_kind === "http_push"}
-                          <Badge variant="default">
-                            <ArrowRightToLine class="h-4 w-4 mr-1" />
-                            Push consumer
-                          </Badge>
-                        {:else if consumer.consumer_kind === "http_pull"}
-                          <Badge variant="default">
-                            <ArrowLeftFromLine class="h-4 w-4 mr-1" />
-                            Pull consumer
-                          </Badge>
-                        {/if}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              {/each}
-            </div>
+          <div class="flex justify-between items-center mb-4">
+            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
+            <Clock class="h-5 w-5 text-blue-500" />
+          </div>
+          {#if metrics.avg_latency}
+            <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
           {:else}
-            <div
-              class="bg-gray-100 p-6 rounded-lg flex flex-col items-center justify-center"
-            >
-              <Radio class="h-12 w-12 mb-4 text-gray-400" />
-              <p class="text-sm font-medium text-gray-900 mb-3">
-                No consumers attached to database
-              </p>
-              <Button href="/consumers/new" variant="outline"
-                >Add a consumer</Button
-              >
+            <div class="flex items-center">
+              <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+              <span class="text-4xl font-bold text-gray-500">ms</span>
             </div>
           {/if}
         </CardContent>
       </Card>
-    {:else if activeTab === "messages"}
-      <!-- New Messages content -->
-      <div class="bg-white rounded-lg shadow">
-        <h2 class="text-lg font-semibold p-4 border-b">Database Messages</h2>
-        <!-- Add your messages content here -->
-        <p class="p-4">Messages for this database will be displayed here.</p>
-      </div>
-    {/if}
+    </div>
+
+    <Card class="mb-6">
+      <CardContent class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Configuration</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <p class="text-sm text-gray-500">Hostname</p>
+            <p class="font-medium text-wrap break-all">{database.hostname}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Port</p>
+            <p class="font-medium">{database.port}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Database</p>
+            <p class="font-medium">{database.database}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Username</p>
+            <p class="font-medium">{database.username}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">SSL</p>
+            <p class="font-medium">{database.ssl ? "Enabled" : "Disabled"}</p>
+          </div>
+          <div>
+            <p class="text-sm text-gray-500">Pool Size</p>
+            <p class="font-medium">{database.pool_size}</p>
+          </div>
+          <!-- <div>
+              <p class="text-sm text-gray-500">Queue Interval</p>
+              <p class="font-medium">{database.queue_interval} ms</p>
+            </div> -->
+        </div>
+      </CardContent>
+    </Card>
+
+    <Card class="mb-6">
+      <CardContent class="p-6">
+        <h2 class="text-lg font-semibold mb-4">Consumers</h2>
+        {#if database.consumers && database.consumers.length > 0}
+          <div class="flex flex-wrap gap-4">
+            {#each database.consumers as consumer}
+              <Card class="w-full">
+                <CardContent class="p-4">
+                  <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center">
+                      <Radio class="h-4 w-4 mr-2" />
+                      <span class="font-medium">{consumer.name}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      href={`/consumers/${consumer.id}`}
+                    >
+                      <ExternalLink class="h-4 w-4 mr-2" />
+                      View Consumer
+                    </Button>
+                  </div>
+                  <div
+                    class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-3 mb-2 auto-rows-fr items-center"
+                  >
+                    <p class="text-sm text-gray-500 justify-self-end">
+                      Tables:
+                    </p>
+                    <div class="flex flex-wrap align-center">
+                      {#each consumer.source_tables as table}
+                        <div
+                          class="inline-flex items-center text-sm font-medium text-black"
+                        >
+                          <icon
+                            class="hero-table-cells w-5 h-5 mr-1 rounded {getColorFromName(
+                              `${table.schema_name}.${table.table_name}`
+                            )}"
+                          ></icon>
+
+                          <pre
+                            class="font-medium">{table.schema_name}.{table.table_name}</pre>
+                        </div>
+                      {/each}
+                    </div>
+                    <p class="text-sm text-gray-500 justify-self-end">
+                      Stream type:
+                    </p>
+                    <div class="flex flex-wrap align-center">
+                      {#if consumer.message_kind === "event"}
+                        <Badge variant="default">
+                          <SquareStack class="h-4 w-4 mr-1" />
+                          Changes
+                        </Badge>
+                      {:else if consumer.message_kind === "record"}
+                        <Badge variant="default">
+                          <SquareStack class="h-4 w-4 mr-1" />
+                          Rows
+                        </Badge>
+                      {/if}
+                    </div>
+                    <p class="text-sm text-gray-500 justify-self-end">
+                      Consumer type:
+                    </p>
+                    <div class="flex flex-wrap align-center">
+                      {#if consumer.consumer_kind === "http_push"}
+                        <Badge variant="default">
+                          <ArrowRightToLine class="h-4 w-4 mr-1" />
+                          Push consumer
+                        </Badge>
+                      {:else if consumer.consumer_kind === "http_pull"}
+                        <Badge variant="default">
+                          <ArrowLeftFromLine class="h-4 w-4 mr-1" />
+                          Pull consumer
+                        </Badge>
+                      {/if}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            {/each}
+          </div>
+        {:else}
+          <div
+            class="bg-gray-100 p-6 rounded-lg flex flex-col items-center justify-center"
+          >
+            <Radio class="h-12 w-12 mb-4 text-gray-400" />
+            <p class="text-sm font-medium text-gray-900 mb-3">
+              No consumers attached to database
+            </p>
+            <Button href="/consumers/new" variant="outline"
+              >Add a consumer</Button
+            >
+          </div>
+        {/if}
+      </CardContent>
+    </Card>
   </main>
 </div>

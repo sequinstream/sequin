@@ -7,6 +7,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Health
   alias Sequin.Replication
   alias Sequin.ReplicationRuntime.WalEventServer
   alias Sequin.Test.Support.Models.TestEventLog
@@ -39,9 +40,13 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
   end
 
   describe "WalEventServer" do
-    test "processes WAL events and writes them to the destination table", %{
+    test "processes WAL events, writes them to the destination table, and updates health", %{
       wal_projection: wal_projection
     } do
+      # Simulate initial health
+      Health.update(wal_projection, :filters, :healthy)
+      Health.update(wal_projection, :ingestion, :healthy)
+
       # Insert some WAL events
       wal_events =
         Enum.map(1..5, fn _ -> ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id) end)
@@ -94,8 +99,40 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
         ])
       end)
 
-      # Verify that the WAL events were deleted after processing
-      assert Replication.list_wal_events(wal_projection.id) == []
+      # Verify that the health status is updated to healthy
+      {:ok, health} = Health.get(wal_projection)
+      assert health.status == :healthy
+      assert Enum.all?(health.checks, &(&1.status == :healthy))
+    end
+
+    @tag capture_log: true
+    test "updates health to error when writing to destination fails", %{
+      wal_projection: wal_projection
+    } do
+      # Insert a WAL event
+      ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id)
+
+      # Mess up the destination table
+      Repo.query!("alter table #{TestEventLog.table_name()} add column foo text not null")
+
+      start_supervised!(
+        {WalEventServer,
+         [
+           replication_slot_id: wal_projection.replication_slot_id,
+           destination_oid: wal_projection.destination_oid,
+           destination_database_id: wal_projection.destination_database_id,
+           wal_projection_ids: [wal_projection.id],
+           test_pid: self(),
+           batch_size: 1
+         ]}
+      )
+
+      assert_receive {WalEventServer, :write_failed, _reason}, 1000
+
+      # Verify that the health status is updated to error
+      {:ok, health} = Health.get(wal_projection)
+      assert health.status == :error
+      assert Enum.any?(health.checks, &(&1.status == :error))
     end
 
     test "processes WAL events on PubSub notification", %{

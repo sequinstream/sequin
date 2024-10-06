@@ -463,4 +463,13 @@ defmodule Sequin.Health do
     new_status = calculate_overall_status(updated_checks)
     %{health | status: new_status, checks: updated_checks}
   end
+
+  @doc """
+  Resets the health for the given entity to initializing.
+  """
+  @spec reset(entity()) :: {:ok, Health.t()} | {:error, Error.t()}
+  def reset(entity) when is_entity(entity) do
+    new_health = initial_health(entity)
+    set_health(entity.id, new_health)
+  end
 end

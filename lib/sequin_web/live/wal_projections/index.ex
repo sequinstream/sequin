@@ -4,6 +4,7 @@ defmodule SequinWeb.WalProjectionsLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Databases
+  alias Sequin.Health
   alias Sequin.Repo
 
   @impl Phoenix.LiveView
@@ -16,7 +17,13 @@ defmodule SequinWeb.WalProjectionsLive.Index do
         Repo.preload(database, wal_projections: [:destination_database, :source_database]).wal_projections
       end)
 
-    {:ok, assign(socket, :wal_projections, wal_projections)}
+    socket = assign_wal_projections_health(socket, wal_projections)
+
+    if connected?(socket) do
+      Process.send_after(self(), :update_health, 1000)
+    end
+
+    {:ok, socket}
   end
 
   @impl Phoenix.LiveView
@@ -33,6 +40,24 @@ defmodule SequinWeb.WalProjectionsLive.Index do
       />
     </div>
     """
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info(:update_health, socket) do
+    Process.send_after(self(), :update_health, 10_000)
+    {:noreply, assign_wal_projections_health(socket, socket.assigns.wal_projections)}
+  end
+
+  defp assign_wal_projections_health(socket, wal_projections) do
+    wal_projections_with_health =
+      Enum.map(wal_projections, fn projection ->
+        case Health.get(projection) do
+          {:ok, health} -> %{projection | health: health}
+          {:error, _} -> projection
+        end
+      end)
+
+    assign(socket, :wal_projections, wal_projections_with_health)
   end
 
   defp encode_wal_projections(wal_projections) do
@@ -59,7 +84,7 @@ defmodule SequinWeb.WalProjectionsLive.Index do
         source_table: source_table,
         destination_table: destination_table,
         inserted_at: projection.inserted_at,
-        health: %{status: :healthy}
+        health: Health.to_external(projection.health)
       }
     end)
   end

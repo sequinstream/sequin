@@ -12,8 +12,7 @@
     LogOut,
     ChevronLeft,
     ChevronRight,
-    Activity,
-    Inbox,
+    Logs,
   } from "lucide-svelte";
 
   export let currentPath: string;
@@ -23,6 +22,7 @@
     { path: "/consumers", text: "Consumers", icon: Radio },
     { path: "/databases", text: "Databases", icon: Database },
     { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
+    { path: "/wal-projections", text: "WAL Projections", icon: Logs },
   ];
 
   function navLink(path: string) {

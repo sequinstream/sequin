@@ -13,6 +13,8 @@ defmodule Sequin.Replication.WalProjection do
     field :seq, :integer
     field :destination_oid, :integer
 
+    field :health, :map, virtual: true
+
     embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :replication_slot, Sequin.Replication.PostgresReplicationSlot
     has_one :source_database, through: [:replication_slot, :postgres_database]
@@ -40,6 +42,26 @@ defmodule Sequin.Replication.WalProjection do
     |> unique_constraint([:replication_slot_id, :name])
     |> foreign_key_constraint(:replication_slot_id)
     |> foreign_key_constraint(:destination_database_id)
+  end
+
+  def where_account_id(query \\ base_query(), account_id) do
+    from([wal_projection: wp] in query, where: wp.account_id == ^account_id)
+  end
+
+  def where_id_or_name(query \\ base_query(), id_or_name) do
+    if Sequin.String.is_uuid?(id_or_name) do
+      where_id(query, id_or_name)
+    else
+      where_name(query, id_or_name)
+    end
+  end
+
+  def where_id(query \\ base_query(), id) do
+    from([wal_projection: wp] in query, where: wp.id == ^id)
+  end
+
+  def where_name(query \\ base_query(), name) do
+    from([wal_projection: wp] in query, where: wp.name == ^name)
   end
 
   def base_query(query \\ __MODULE__) do

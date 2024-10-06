@@ -28,6 +28,10 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
     from(tel in query, where: tel.source_table_oid == ^source_table_oid)
   end
 
+  def table_name do
+    "test_event_logs"
+  end
+
   def column_attnums do
     from(pg in "pg_attribute",
       where: pg.attrelid == ^table_oid() and pg.attnum > 0,

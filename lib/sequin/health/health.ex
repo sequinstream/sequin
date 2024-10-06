@@ -187,7 +187,7 @@ defmodule Sequin.Health do
     end
   end
 
-  @wal_projection_checks [:filters, :ingestion, :projection]
+  @wal_projection_checks [:filters, :ingestion, :destination_insert]
   defp expected_check(%WalProjection{}, check_id, status, error) when check_id in @wal_projection_checks do
     case check_id do
       :filters ->
@@ -196,8 +196,14 @@ defmodule Sequin.Health do
       :ingestion ->
         %Check{id: :ingestion, name: "Ingestion", status: status, error: error, created_at: DateTime.utc_now()}
 
-      :projection ->
-        %Check{id: :projection, name: "Projection", status: status, error: error, created_at: DateTime.utc_now()}
+      :destination_insert ->
+        %Check{
+          id: :destination_insert,
+          name: "Destination insert",
+          status: status,
+          error: error,
+          created_at: DateTime.utc_now()
+        }
     end
   end
 
@@ -297,8 +303,8 @@ defmodule Sequin.Health do
         %Check{id: :ingestion} = check ->
           %{check | message: "Ingesting changes from the source table."}
 
-        %Check{id: :projection} = check ->
-          %{check | message: "Projecting changes to the destination table."}
+        %Check{id: :destination_insert} = check ->
+          %{check | message: "Inserting changes to the destination table."}
 
         %Check{} = check ->
           check

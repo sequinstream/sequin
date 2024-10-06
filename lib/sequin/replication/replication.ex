@@ -280,6 +280,12 @@ defmodule Sequin.Replication do
   end
 
   def list_wal_events(wal_projection_id_or_ids, params \\ []) do
+    wal_projection_id_or_ids
+    |> list_wal_events_query(params)
+    |> Repo.all()
+  end
+
+  def list_wal_events_query(wal_projection_id_or_ids, params \\ []) do
     base_query =
       if is_list(wal_projection_id_or_ids) do
         WalEvent.where_wal_projection_id_in(wal_projection_id_or_ids)
@@ -287,19 +293,16 @@ defmodule Sequin.Replication do
         WalEvent.where_wal_projection_id(wal_projection_id_or_ids)
       end
 
-    query =
-      Enum.reduce(params, base_query, fn
-        {:limit, limit}, query ->
-          limit(query, ^limit)
+    Enum.reduce(params, base_query, fn
+      {:limit, limit}, query ->
+        limit(query, ^limit)
 
-        {:offset, offset}, query ->
-          offset(query, ^offset)
+      {:offset, offset}, query ->
+        offset(query, ^offset)
 
-        {:order_by, order_by}, query ->
-          order_by(query, ^order_by)
-      end)
-
-    Repo.all(query)
+      {:order_by, order_by}, query ->
+        order_by(query, ^order_by)
+    end)
   end
 
   def insert_wal_events([]), do: {:ok, 0}
@@ -333,6 +336,58 @@ defmodule Sequin.Replication do
     query = from(we in WalEvent, where: we.id in ^wal_event_ids)
     {count, _} = Repo.delete_all(query)
     {:ok, count}
+  end
+
+  def wal_events_metrics(wal_projection_id) do
+    tasks = [
+      Task.async(fn ->
+        query =
+          from we in WalEvent,
+            where: we.wal_projection_id == ^wal_projection_id,
+            select: %{
+              min: min(we.committed_at),
+              max: max(we.committed_at)
+            }
+
+        Repo.one(query)
+      end),
+      Task.async(fn ->
+        fast_count_events_for_wal_projection(wal_projection_id)
+      end)
+    ]
+
+    [%{min: min, max: max}, count] = Task.await_many(tasks)
+
+    %{
+      min: min,
+      max: max,
+      count: count
+    }
+  end
+
+  @fast_count_threshold 50_000
+  def fast_count_threshold, do: @fast_count_threshold
+
+  def fast_count_events_for_wal_projection(wal_projection_id, params \\ []) do
+    query = list_wal_events_query(wal_projection_id, params)
+
+    # This number can be pretty inaccurate
+    result = Ecto.Adapters.SQL.explain(Repo, :all, query)
+    [_, rows] = Regex.run(~r/rows=(\d+)/, result)
+
+    case String.to_integer(rows) do
+      count when count > @fast_count_threshold ->
+        count
+
+      _ ->
+        count_wal_events_for_wal_projection(wal_projection_id)
+    end
+  end
+
+  def count_wal_events_for_wal_projection(wal_projection_id) do
+    wal_projection_id
+    |> list_wal_events_query()
+    |> Repo.aggregate(:count, :id)
   end
 
   defp env do

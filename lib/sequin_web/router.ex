@@ -99,6 +99,11 @@ defmodule SequinWeb.Router do
       live "/http-endpoints/:id", HttpEndpointsLive.Show, :show
       live "/http-endpoints/:id/edit", HttpEndpointsLive.Form, :edit
 
+      live "/wal-projections", WalProjectionsLive.Index, :index
+      live "/wal-projections/new", WalProjectionsLive.Form, :new
+      live "/wal-projections/:id", WalProjectionsLive.Show, :show
+      live "/wal-projections/:id/edit", WalProjectionsLive.Form, :edit
+
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home
@@ -137,21 +142,6 @@ defmodule SequinWeb.Router do
     get("/http_pull_consumers/:id_or_name/receive", PullController, :receive)
     post("/http_pull_consumers/:id_or_name/ack", PullController, :ack)
     post("/http_pull_consumers/:id_or_name/nack", PullController, :nack)
-    post("/streams/:stream_id_or_name/messages", MessageController, :publish)
-    get("/streams/:stream_id_or_name/messages", MessageController, :stream_list)
-    get("/streams/:stream_id_or_name/messages/:key", MessageController, :stream_get)
-
-    get(
-      "/streams/:stream_id_or_name/messages/:key/consumer_info",
-      MessageController,
-      :message_consumer_info
-    )
-
-    get(
-      "/streams/:stream_id_or_name/consumers/:consumer_id_or_name/messages",
-      MessageController,
-      :consumer_list
-    )
   end
 
   # Other scopes may use custom stacks.

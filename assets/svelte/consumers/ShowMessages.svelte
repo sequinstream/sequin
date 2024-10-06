@@ -97,7 +97,6 @@
 
       if (rowHeight > 0) {
         const calculatedPageSize = Math.floor(totalAvailableHeight / rowHeight);
-        console.log("calculatedPageSize", calculatedPageSize);
         if (calculatedPageSize !== pageSize) {
           pageSize = calculatedPageSize;
           // Send new pageSize to backend

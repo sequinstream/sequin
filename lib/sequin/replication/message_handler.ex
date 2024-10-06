@@ -74,6 +74,8 @@ defmodule Sequin.Replication.MessageHandler do
         end)
       end)
 
+    matching_projection_ids = wal_events |> Enum.map(& &1.wal_projection_id) |> Enum.uniq()
+
     {messages, consumers} = Enum.unzip(messages_by_consumer)
 
     Repo.transact(fn ->
@@ -84,6 +86,13 @@ defmodule Sequin.Replication.MessageHandler do
         |> Enum.uniq_by(& &1.id)
         |> Enum.each(fn consumer ->
           Health.update(consumer, :ingestion, :healthy)
+        end)
+
+        # Update WAL Projection Health
+        ctx.wal_projections
+        |> Enum.filter(&(&1.id in matching_projection_ids))
+        |> Enum.each(fn projection ->
+          Health.update(projection, :ingestion, :healthy)
         end)
 
         # Trace Messages

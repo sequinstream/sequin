@@ -61,7 +61,7 @@
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center">
       <HealthIcon status={health.status} />
-      <h2 class="text-lg font-medium ml-2">{health.name}</h2>
+      <h2 class="text-lg font-medium ml-2">Health</h2>
     </div>
     <Popover.Root>
       <Popover.Trigger asChild let:builder>

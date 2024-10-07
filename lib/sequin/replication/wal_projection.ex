@@ -26,17 +26,20 @@ defmodule Sequin.Replication.WalProjection do
 
   @doc false
   def create_changeset(wal_projection, attrs) do
-    changeset(wal_projection, attrs)
+    wal_projection
+    |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
+    |> changeset()
   end
 
   @doc false
   def update_changeset(wal_projection, attrs) do
-    changeset(wal_projection, attrs)
+    wal_projection
+    |> cast(attrs, [:name, :status, :seq])
+    |> changeset()
   end
 
-  defp changeset(wal_projection, attrs) do
+  defp changeset(wal_projection) do
     wal_projection
-    |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> validate_required([:name, :replication_slot_id, :destination_oid, :destination_database_id])
     |> unique_constraint([:replication_slot_id, :name])

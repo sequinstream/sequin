@@ -32,10 +32,6 @@
   let deleteConfirmDialogLoading = false;
   let deleteErrorMessage: string | null = null;
 
-  function handleEdit() {
-    // TODO: Implement edit functionality
-  }
-
   function handleDelete() {
     showDeleteConfirmDialog = true;
   }
@@ -95,8 +91,13 @@
               >
             </div>
           </div>
-          <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button
+          <a
+            href="/wal-projections/{walProjection.id}/edit"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
           >
+            <Button variant="outline" size="sm">Edit</Button>
+          </a>
           <Button
             variant="outline"
             size="sm"

@@ -60,7 +60,7 @@
       selectedDatabase?.tables.filter((table) =>
         `${table.schema}.${table.name}`
           .toLowerCase()
-          .includes(searchQuery.toLowerCase())
+          .includes((searchQuery || "").toLowerCase())
       ) || [];
   }
 

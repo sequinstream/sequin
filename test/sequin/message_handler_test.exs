@@ -193,23 +193,36 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "handles wal_projections correctly" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+      insert_message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+
+      update_message =
+        ReplicationFactory.postgres_message(
+          table_oid: 123,
+          action: :update,
+          old_fields: [ReplicationFactory.field(column_name: "name", value: "old_name")]
+        )
+
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_projections: [wal_projection]}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
-      [wal_event] = Replication.list_wal_events(wal_projection.id)
-      assert wal_event.wal_projection_id == wal_projection.id
-      assert wal_event.commit_lsn == DateTime.to_unix(message.commit_timestamp, :microsecond)
-      assert wal_event.record_pks == Enum.map(message.ids, &to_string/1)
-      assert wal_event.replication_message_trace_id == message.trace_id
-      assert wal_event.source_table_oid == message.table_oid
-      assert wal_event.record == fields_to_map(message.fields)
-      assert wal_event.changes == nil
-      assert wal_event.action == :insert
-      assert wal_event.committed_at == message.commit_timestamp
+      {[insert_event], [update_event]} =
+        wal_projection.id |> Replication.list_wal_events() |> Enum.split_with(&(&1.action == :insert))
+
+      assert insert_event.action == :insert
+      assert insert_event.wal_projection_id == wal_projection.id
+      assert insert_event.commit_lsn == DateTime.to_unix(insert_message.commit_timestamp, :microsecond)
+      assert insert_event.record_pks == Enum.map(insert_message.ids, &to_string/1)
+      assert insert_event.replication_message_trace_id == insert_message.trace_id
+      assert insert_event.source_table_oid == insert_message.table_oid
+      assert insert_event.record == fields_to_map(insert_message.fields)
+      assert insert_event.changes == nil
+      assert insert_event.committed_at == insert_message.commit_timestamp
+
+      assert update_event.action == :update
+      assert update_event.changes == %{"name" => "old_name"}
     end
 
     test "inserts wal_event for wal_projection with matching source table and no filters" do

@@ -20,8 +20,6 @@
   export let live: any;
   export let parent: string;
 
-  console.log(walProjections);
-
   function pushEvent(event: string, params = {}) {
     live.pushEventTo("#" + parent, event, params);
   }
@@ -32,7 +30,7 @@
     <h2 class="text-2xl font-semibold">WAL Projections</h2>
     <Button on:click={() => pushEvent("new_wal_projection", {})}>
       <Plus class="h-4 w-4 mr-2" />
-      New WAL Projection
+      Create WAL Projection
     </Button>
   </div>
 

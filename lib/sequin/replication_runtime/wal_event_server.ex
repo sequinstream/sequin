@@ -279,6 +279,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   defp write_to_destination(%State{} = state, wal_events) do
     Logger.info("[WalEventServer] Writing #{length(wal_events)} events to destination")
+    wal_events = Enum.sort_by(wal_events, & &1.commit_lsn)
 
     table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
 
@@ -300,7 +301,14 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
       $8::timestamp with time zone[],
       $9::timestamp with time zone[]
     ) AS t(#{Enum.join(columns, ", ")})
-    ON CONFLICT (seq, source_database_id) DO NOTHING
+    ON CONFLICT (seq, source_database_id, record_pk)
+      DO UPDATE SET
+        source_table_oid = EXCLUDED.source_table_oid,
+        record = EXCLUDED.record,
+        changes = EXCLUDED.changes,
+        action = EXCLUDED.action,
+        committed_at = EXCLUDED.committed_at,
+        inserted_at = EXCLUDED.inserted_at
     """
 
     dest =

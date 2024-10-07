@@ -13,6 +13,8 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Replication.WalProjection
   alias Sequin.Repo
 
+  def commit_lsn, do: Factory.unique_integer()
+
   def postgres_replication(attrs \\ []) do
     attrs = Map.new(attrs)
 
@@ -249,7 +251,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     merge_attributes(
       %WalEvent{
         wal_projection_id: Factory.uuid(),
-        commit_lsn: Factory.integer(),
+        commit_lsn: Factory.unique_integer(),
         record_pks: record_pks,
         record: %{"column" => Factory.word()},
         changes: if(action == :update, do: %{"column" => Factory.word()}),

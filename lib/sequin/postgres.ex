@@ -11,6 +11,56 @@ defmodule Sequin.Postgres do
 
   require Logger
 
+  @event_table_columns [
+    %{name: "id", type: "serial"},
+    %{name: "seq", type: "bigint"},
+    %{name: "source_database_id", type: "uuid"},
+    %{name: "source_table_oid", type: "bigint"},
+    %{name: "record_pk", type: "text"},
+    %{name: "record", type: "jsonb"},
+    %{name: "changes", type: "jsonb"},
+    %{name: "action", type: "text"},
+    %{name: "committed_at", type: "timestamp with time zone"},
+    %{name: "inserted_at", type: "timestamp with time zone"}
+  ]
+
+  @doc """
+  Checks if the given table is an event table by verifying it has all the required columns.
+  """
+  @spec is_event_table?(PostgresDatabase.Table.t()) :: boolean()
+  def is_event_table?(%PostgresDatabase.Table{} = table) do
+    required_column_names = MapSet.new(@event_table_columns, & &1.name)
+    table_column_names = MapSet.new(table.columns, & &1.name)
+    MapSet.subset?(required_column_names, table_column_names)
+  end
+
+  @doc """
+  Compares the given table with the expected event table structure and returns a list of errors.
+  """
+  @spec event_table_errors(PostgresDatabase.Table.t()) :: [String.t()]
+  def event_table_errors(%PostgresDatabase.Table{} = table) do
+    table_columns = Map.new(table.columns, &{&1.name, &1})
+
+    @event_table_columns
+    |> Enum.reduce([], fn expected_column, errors ->
+      case Map.get(table_columns, expected_column.name) do
+        nil ->
+          ["Missing column: #{expected_column.name}" | errors]
+
+        actual_column ->
+          if String.downcase(actual_column.type) == String.downcase(expected_column.type) do
+            errors
+          else
+            [
+              "Column type mismatch for #{expected_column.name}: expected #{expected_column.type}, got #{actual_column.type}"
+              | errors
+            ]
+          end
+      end
+    end)
+    |> Enum.reverse()
+  end
+
   @doc """
   Executes a SQL query against a database connection.
 

@@ -65,7 +65,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
     end
 
-    create unique_index(:test_event_logs, [:seq, :source_database_id])
+    create unique_index(:test_event_logs, [:source_database_id, :seq, :record_pk])
     create index(:test_event_logs, [:seq])
     create index(:test_event_logs, [:source_table_oid])
     create index(:test_event_logs, [:committed_at])

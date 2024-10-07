@@ -324,11 +324,13 @@ defmodule Sequin.Replication do
 
     {count, _} = Repo.insert_all(WalEvent, events)
 
-    Phoenix.PubSub.broadcast(
-      Sequin.PubSub,
-      "wal_event_inserted:#{wal_projection_id}",
-      {:wal_event_inserted, wal_projection_id}
-    )
+    unless Repo.in_transaction?() do
+      Phoenix.PubSub.broadcast(
+        Sequin.PubSub,
+        "wal_event_inserted:#{wal_projection_id}",
+        {:wal_event_inserted, wal_projection_id}
+      )
+    end
 
     {:ok, count}
   end

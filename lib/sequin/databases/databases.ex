@@ -329,6 +329,13 @@ defmodule Sequin.Databases do
     end
   end
 
+  def update_tables!(%PostgresDatabase{} = db) do
+    case update_tables(db) do
+      {:ok, db} -> db
+      {:error, error} -> raise error
+    end
+  end
+
   def list_schemas(%PostgresDatabase{} = database) do
     with_connection(database, &list_schemas/1)
   end

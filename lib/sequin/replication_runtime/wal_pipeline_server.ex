@@ -1,4 +1,4 @@
-defmodule Sequin.ReplicationRuntime.WalEventServer do
+defmodule Sequin.ReplicationRuntime.WalPipelineServer do
   @moduledoc false
   use GenStateMachine, callback_mode: [:handle_event_function, :state_enter]
 
@@ -55,7 +55,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
       field :replication_slot, Replication.PostgresReplicationSlot.t()
       field :destination_table, PostgresDatabase.Table.t()
       field :destination_database, PostgresDatabase.t()
-      field :wal_projections, [Replication.WalProjection.t()]
+      field :wal_pipelines, [Replication.WalPipeline.t()]
       field :task_ref, reference()
       field :test_pid, pid()
       field :successive_failure_count, integer(), default: 0
@@ -76,8 +76,8 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     destination_database_id = Keyword.fetch!(opts, :destination_database_id)
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
 
-    wal_projection_ids = Keyword.fetch!(opts, :wal_projection_ids)
-    wal_projections = Enum.map(wal_projection_ids, &Replication.get_wal_projection!(&1))
+    wal_pipeline_ids = Keyword.fetch!(opts, :wal_pipeline_ids)
+    wal_pipelines = Enum.map(wal_pipeline_ids, &Replication.get_wal_pipeline!(&1))
     database = Databases.get_db!(destination_database_id)
     {:ok, tables} = Databases.tables(database)
     table = Sequin.Enum.find!(tables, &(&1.oid == destination_oid))
@@ -87,7 +87,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
       replication_slot: replication_slot,
       destination_table: table,
       destination_database: database,
-      wal_projections: wal_projections,
+      wal_pipelines: wal_pipelines,
       test_pid: test_pid,
       batch_size: Keyword.get(opts, :batch_size, @default_batch_size),
       interval_ms: Keyword.get(opts, :interval_ms, @default_interval_ms),
@@ -112,14 +112,14 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
   end
 
   def handle_event(:enter, _old_state, :fetching_wal_events, %State{} = state) do
-    wal_projection_ids = Enum.map(state.wal_projections, & &1.id)
+    wal_pipeline_ids = Enum.map(state.wal_pipelines, & &1.id)
 
     task =
       Task.Supervisor.async_nolink(
         Sequin.TaskSupervisor,
         fn ->
           maybe_setup_allowances(state.test_pid)
-          Replication.list_wal_events(wal_projection_ids, limit: state.batch_size, order_by: [asc: :commit_lsn])
+          Replication.list_wal_events(wal_pipeline_ids, limit: state.batch_size, order_by: [asc: :commit_lsn])
         end,
         timeout: 60_000
       )
@@ -161,8 +161,8 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     Process.demonitor(ref, [:flush])
     state = %{state | task_ref: nil, successive_failure_count: 0}
 
-    Enum.each(state.wal_projections, fn wal_projection ->
-      Health.update(wal_projection, :destination_insert, :healthy)
+    Enum.each(state.wal_pipelines, fn wal_pipeline ->
+      Health.update(wal_pipeline, :destination_insert, :healthy)
     end)
 
     {:next_state, :deleting_wal_events, state}
@@ -170,10 +170,10 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   def handle_event(:info, {ref, {:error, reason}}, :writing_to_destination, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    Logger.error("[WalEventServer] Failed to write to destination: #{inspect(reason)}")
+    Logger.error("[WalPipelineServer] Failed to write to destination: #{inspect(reason)}")
 
-    Enum.each(state.wal_projections, fn wal_projection ->
-      Health.update(wal_projection, :destination_insert, :error, Error.ServiceError.from_postgrex(reason))
+    Enum.each(state.wal_pipelines, fn wal_pipeline ->
+      Health.update(wal_pipeline, :destination_insert, :error, Error.ServiceError.from_postgrex(reason))
     end)
 
     if state.test_pid do
@@ -232,11 +232,11 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
 
   # Implement retry logic in case of task failure
   def handle_event(:info, {:DOWN, ref, _, _, reason}, state_name, %State{task_ref: ref} = state) do
-    Logger.error("[WalEventServer] Task for #{state_name} failed with reason #{inspect(reason)}")
+    Logger.error("[WalPipelineServer] Task for #{state_name} failed with reason #{inspect(reason)}")
 
-    Enum.each(state.wal_projections, fn wal_projection ->
+    Enum.each(state.wal_pipelines, fn wal_pipeline ->
       Health.update(
-        wal_projection,
+        wal_pipeline,
         :destination_insert,
         :error,
         Error.service(service: __MODULE__, message: "Unknown error")
@@ -253,19 +253,19 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     {:next_state, {:awaiting_retry, state_name}, state, actions}
   end
 
-  def handle_event(:internal, :subscribe_to_pubsub, _state, %State{wal_projections: wal_projections}) do
-    Enum.each(wal_projections, fn wal_projection ->
-      Phoenix.PubSub.subscribe(Sequin.PubSub, "wal_event_inserted:#{wal_projection.id}")
+  def handle_event(:internal, :subscribe_to_pubsub, _state, %State{wal_pipelines: wal_pipelines}) do
+    Enum.each(wal_pipelines, fn wal_pipeline ->
+      Phoenix.PubSub.subscribe(Sequin.PubSub, "wal_event_inserted:#{wal_pipeline.id}")
     end)
 
     :keep_state_and_data
   end
 
-  def handle_event(:info, {:wal_event_inserted, _wal_projection_id}, :idle, data) do
+  def handle_event(:info, {:wal_event_inserted, _wal_pipeline_id}, :idle, data) do
     {:next_state, :fetching_wal_events, data}
   end
 
-  def handle_event(:info, {:wal_event_inserted, _wal_projection_id}, _state, data) do
+  def handle_event(:info, {:wal_event_inserted, _wal_pipeline_id}, _state, data) do
     {:keep_state, %{data | events_pending?: true}}
   end
 
@@ -278,7 +278,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
   end
 
   defp write_to_destination(%State{} = state, wal_events) do
-    Logger.info("[WalEventServer] Writing #{length(wal_events)} events to destination")
+    Logger.info("[WalPipelineServer] Writing #{length(wal_events)} events to destination")
     wal_events = Enum.sort_by(wal_events, & &1.commit_lsn)
 
     table = Postgres.quote_name(state.destination_table.schema, state.destination_table.name)
@@ -321,11 +321,11 @@ defmodule Sequin.ReplicationRuntime.WalEventServer do
     # Execute the query on the destination database
     case Postgres.query(dest, sql, values) do
       {:ok, result} ->
-        Logger.info("[WalEventServer] Successfully wrote #{result.num_rows} rows to destination")
+        Logger.info("[WalPipelineServer] Successfully wrote #{result.num_rows} rows to destination")
         :ok
 
       {:error, error} ->
-        Logger.error("[WalEventServer] Failed to write to destination: #{inspect(error)}")
+        Logger.error("[WalPipelineServer] Failed to write to destination: #{inspect(error)}")
         {:error, error}
     end
   end

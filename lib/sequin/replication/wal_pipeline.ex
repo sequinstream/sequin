@@ -1,4 +1,4 @@
-defmodule Sequin.Replication.WalProjection do
+defmodule Sequin.Replication.WalPipeline do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -7,7 +7,7 @@ defmodule Sequin.Replication.WalProjection do
 
   alias Sequin.Consumers.SourceTable
 
-  schema "wal_projections" do
+  schema "wal_pipelines" do
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
     field :name, :string
     field :seq, :integer
@@ -25,21 +25,21 @@ defmodule Sequin.Replication.WalProjection do
   end
 
   @doc false
-  def create_changeset(wal_projection, attrs) do
-    wal_projection
+  def create_changeset(wal_pipeline, attrs) do
+    wal_pipeline
     |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
     |> changeset()
   end
 
   @doc false
-  def update_changeset(wal_projection, attrs) do
-    wal_projection
+  def update_changeset(wal_pipeline, attrs) do
+    wal_pipeline
     |> cast(attrs, [:name, :status, :seq])
     |> changeset()
   end
 
-  defp changeset(wal_projection) do
-    wal_projection
+  defp changeset(wal_pipeline) do
+    wal_pipeline
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> validate_required([:name, :replication_slot_id, :destination_oid, :destination_database_id])
     |> unique_constraint([:replication_slot_id, :name])
@@ -48,7 +48,7 @@ defmodule Sequin.Replication.WalProjection do
   end
 
   def where_account_id(query \\ base_query(), account_id) do
-    from([wal_projection: wp] in query, where: wp.account_id == ^account_id)
+    from([wal_pipeline: wp] in query, where: wp.account_id == ^account_id)
   end
 
   def where_id_or_name(query \\ base_query(), id_or_name) do
@@ -60,18 +60,18 @@ defmodule Sequin.Replication.WalProjection do
   end
 
   def where_id(query \\ base_query(), id) do
-    from([wal_projection: wp] in query, where: wp.id == ^id)
+    from([wal_pipeline: wp] in query, where: wp.id == ^id)
   end
 
   def where_name(query \\ base_query(), name) do
-    from([wal_projection: wp] in query, where: wp.name == ^name)
+    from([wal_pipeline: wp] in query, where: wp.name == ^name)
   end
 
   def base_query(query \\ __MODULE__) do
-    from(wp in query, as: :wal_projection)
+    from(wp in query, as: :wal_pipeline)
   end
 
   def where_replication_slot_id(query \\ base_query(), replication_slot_id) do
-    from([wal_projection: wp] in query, where: wp.replication_slot_id == ^replication_slot_id)
+    from([wal_pipeline: wp] in query, where: wp.replication_slot_id == ^replication_slot_id)
   end
 end

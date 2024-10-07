@@ -10,7 +10,7 @@ defmodule Sequin.Replication do
   alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
   alias Sequin.ReplicationRuntime
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
@@ -172,98 +172,98 @@ defmodule Sequin.Replication do
     end
   end
 
-  # WAL Projection
+  # WAL Pipeline
 
-  def list_wal_projections do
-    Repo.all(WalProjection)
+  def list_wal_pipelines do
+    Repo.all(WalPipeline)
   end
 
-  def list_wal_projections_for_replication_slot(replication_slot_id) do
+  def list_wal_pipelines_for_replication_slot(replication_slot_id) do
     replication_slot_id
-    |> WalProjection.where_replication_slot_id()
+    |> WalPipeline.where_replication_slot_id()
     |> Repo.all()
   end
 
-  def get_wal_projection_for_account(account_id, id_or_name, preloads \\ []) do
+  def get_wal_pipeline_for_account(account_id, id_or_name, preloads \\ []) do
     account_id
-    |> WalProjection.where_account_id()
-    |> WalProjection.where_id_or_name(id_or_name)
+    |> WalPipeline.where_account_id()
+    |> WalPipeline.where_id_or_name(id_or_name)
     |> preload(^preloads)
     |> Repo.one()
   end
 
-  def get_wal_projection(id) do
-    case Repo.get(WalProjection, id) do
-      nil -> {:error, Error.not_found(entity: :wal_projection)}
-      wal_projection -> {:ok, wal_projection}
+  def get_wal_pipeline(id) do
+    case Repo.get(WalPipeline, id) do
+      nil -> {:error, Error.not_found(entity: :wal_pipeline)}
+      wal_pipeline -> {:ok, wal_pipeline}
     end
   end
 
-  def get_wal_projection!(id) do
-    case get_wal_projection(id) do
-      {:ok, wal_projection} -> wal_projection
-      {:error, _} -> raise Error.not_found(entity: :wal_projection)
+  def get_wal_pipeline!(id) do
+    case get_wal_pipeline(id) do
+      {:ok, wal_pipeline} -> wal_pipeline
+      {:error, _} -> raise Error.not_found(entity: :wal_pipeline)
     end
   end
 
-  def create_wal_projection(attrs) do
-    %WalProjection{}
-    |> WalProjection.create_changeset(attrs)
+  def create_wal_pipeline(attrs) do
+    %WalPipeline{}
+    |> WalPipeline.create_changeset(attrs)
     |> Repo.insert()
   end
 
-  def create_wal_projection_with_lifecycle(account_id, attrs) do
-    with {:ok, wal_projection} <-
-           %WalProjection{account_id: account_id}
-           |> WalProjection.create_changeset(attrs)
+  def create_wal_pipeline_with_lifecycle(account_id, attrs) do
+    with {:ok, wal_pipeline} <-
+           %WalPipeline{account_id: account_id}
+           |> WalPipeline.create_changeset(attrs)
            |> Repo.insert(),
-         :ok <- notify_wal_projection_changed(wal_projection) do
-      {:ok, wal_projection}
+         :ok <- notify_wal_pipeline_changed(wal_pipeline) do
+      {:ok, wal_pipeline}
     end
   end
 
-  def update_wal_projection(%WalProjection{} = wal_projection, attrs) do
-    wal_projection
-    |> WalProjection.update_changeset(attrs)
+  def update_wal_pipeline(%WalPipeline{} = wal_pipeline, attrs) do
+    wal_pipeline
+    |> WalPipeline.update_changeset(attrs)
     |> Repo.update()
   end
 
-  def update_wal_projection_with_lifecycle(%WalProjection{} = wal_projection, attrs) do
-    with {:ok, updated_wal_projection} <- update_wal_projection(wal_projection, attrs),
-         :ok <- notify_wal_projection_changed(updated_wal_projection) do
-      {:ok, updated_wal_projection}
+  def update_wal_pipeline_with_lifecycle(%WalPipeline{} = wal_pipeline, attrs) do
+    with {:ok, updated_wal_pipeline} <- update_wal_pipeline(wal_pipeline, attrs),
+         :ok <- notify_wal_pipeline_changed(updated_wal_pipeline) do
+      {:ok, updated_wal_pipeline}
     end
   end
 
-  def delete_wal_projection(%WalProjection{} = wal_projection) do
-    Repo.delete(wal_projection)
+  def delete_wal_pipeline(%WalPipeline{} = wal_pipeline) do
+    Repo.delete(wal_pipeline)
   end
 
-  def delete_wal_projection_with_lifecycle(%WalProjection{} = wal_projection) do
-    with {:ok, deleted_wal_projection} <- delete_wal_projection(wal_projection),
-         :ok <- notify_wal_projection_changed(deleted_wal_projection) do
-      {:ok, deleted_wal_projection}
+  def delete_wal_pipeline_with_lifecycle(%WalPipeline{} = wal_pipeline) do
+    with {:ok, deleted_wal_pipeline} <- delete_wal_pipeline(wal_pipeline),
+         :ok <- notify_wal_pipeline_changed(deleted_wal_pipeline) do
+      {:ok, deleted_wal_pipeline}
     end
   end
 
   # Lifecycle Notifications
 
-  defp notify_wal_projection_changed(%WalProjection{} = projection) do
-    projection = Repo.preload(projection, :replication_slot)
+  defp notify_wal_pipeline_changed(%WalPipeline{} = pipeline) do
+    pipeline = Repo.preload(pipeline, :replication_slot)
 
     unless env() == :test do
-      ReplicationSupervisor.restart_wal_event_servers(projection.replication_slot)
+      ReplicationSupervisor.restart_wal_pipeline_servers(pipeline.replication_slot)
     end
 
-    ReplicationSupervisor.refresh_message_handler_ctx(projection.replication_slot_id)
+    ReplicationSupervisor.refresh_message_handler_ctx(pipeline.replication_slot_id)
   end
 
   # WAL Event
 
-  def get_wal_event(wal_projection_id, commit_lsn) do
+  def get_wal_event(wal_pipeline_id, commit_lsn) do
     wal_event =
-      wal_projection_id
-      |> WalEvent.where_wal_projection_id()
+      wal_pipeline_id
+      |> WalEvent.where_wal_pipeline_id()
       |> WalEvent.where_commit_lsn(commit_lsn)
       |> Repo.one()
 
@@ -273,25 +273,25 @@ defmodule Sequin.Replication do
     end
   end
 
-  def get_wal_event!(wal_projection_id, commit_lsn) do
-    case get_wal_event(wal_projection_id, commit_lsn) do
+  def get_wal_event!(wal_pipeline_id, commit_lsn) do
+    case get_wal_event(wal_pipeline_id, commit_lsn) do
       {:ok, wal_event} -> wal_event
       {:error, _} -> raise Error.not_found(entity: :wal_event)
     end
   end
 
-  def list_wal_events(wal_projection_id_or_ids, params \\ []) do
-    wal_projection_id_or_ids
+  def list_wal_events(wal_pipeline_id_or_ids, params \\ []) do
+    wal_pipeline_id_or_ids
     |> list_wal_events_query(params)
     |> Repo.all()
   end
 
-  def list_wal_events_query(wal_projection_id_or_ids, params \\ []) do
+  def list_wal_events_query(wal_pipeline_id_or_ids, params \\ []) do
     base_query =
-      if is_list(wal_projection_id_or_ids) do
-        WalEvent.where_wal_projection_id_in(wal_projection_id_or_ids)
+      if is_list(wal_pipeline_id_or_ids) do
+        WalEvent.where_wal_pipeline_id_in(wal_pipeline_id_or_ids)
       else
-        WalEvent.where_wal_projection_id(wal_projection_id_or_ids)
+        WalEvent.where_wal_pipeline_id(wal_pipeline_id_or_ids)
       end
 
     Enum.reduce(params, base_query, fn
@@ -310,7 +310,7 @@ defmodule Sequin.Replication do
 
   def insert_wal_events(wal_events) do
     now = DateTime.truncate(DateTime.utc_now(), :second)
-    wal_projection_id = hd(wal_events).wal_projection_id
+    wal_pipeline_id = hd(wal_events).wal_pipeline_id
 
     events =
       Enum.map(wal_events, fn event ->
@@ -327,8 +327,8 @@ defmodule Sequin.Replication do
     unless Repo.in_transaction?() do
       Phoenix.PubSub.broadcast(
         Sequin.PubSub,
-        "wal_event_inserted:#{wal_projection_id}",
-        {:wal_event_inserted, wal_projection_id}
+        "wal_event_inserted:#{wal_pipeline_id}",
+        {:wal_event_inserted, wal_pipeline_id}
       )
     end
 
@@ -341,12 +341,12 @@ defmodule Sequin.Replication do
     {:ok, count}
   end
 
-  def wal_events_metrics(wal_projection_id) do
+  def wal_events_metrics(wal_pipeline_id) do
     tasks = [
       Task.async(fn ->
         query =
           from we in WalEvent,
-            where: we.wal_projection_id == ^wal_projection_id,
+            where: we.wal_pipeline_id == ^wal_pipeline_id,
             select: %{
               min: min(we.committed_at),
               max: max(we.committed_at)
@@ -355,7 +355,7 @@ defmodule Sequin.Replication do
         Repo.one(query)
       end),
       Task.async(fn ->
-        fast_count_events_for_wal_projection(wal_projection_id)
+        fast_count_events_for_wal_pipeline(wal_pipeline_id)
       end)
     ]
 
@@ -371,8 +371,8 @@ defmodule Sequin.Replication do
   @fast_count_threshold 50_000
   def fast_count_threshold, do: @fast_count_threshold
 
-  def fast_count_events_for_wal_projection(wal_projection_id, params \\ []) do
-    query = list_wal_events_query(wal_projection_id, params)
+  def fast_count_events_for_wal_pipeline(wal_pipeline_id, params \\ []) do
+    query = list_wal_events_query(wal_pipeline_id, params)
 
     # This number can be pretty inaccurate
     result = Ecto.Adapters.SQL.explain(Repo, :all, query)
@@ -383,12 +383,12 @@ defmodule Sequin.Replication do
         count
 
       _ ->
-        count_wal_events_for_wal_projection(wal_projection_id)
+        count_wal_events_for_wal_pipeline(wal_pipeline_id)
     end
   end
 
-  def count_wal_events_for_wal_projection(wal_projection_id) do
-    wal_projection_id
+  def count_wal_events_for_wal_pipeline(wal_pipeline_id) do
+    wal_pipeline_id
     |> list_wal_events_query()
     |> Repo.aggregate(:count, :id)
   end

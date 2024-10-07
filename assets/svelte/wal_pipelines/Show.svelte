@@ -24,7 +24,7 @@
   } from "$lib/components/ui/table";
   import * as Popover from "$lib/components/ui/popover";
 
-  export let walProjection;
+  export let walPipeline;
   export let live;
   export let metrics;
 
@@ -39,7 +39,7 @@
   function confirmDelete() {
     deleteConfirmDialogLoading = true;
     deleteErrorMessage = null;
-    live.pushEvent("delete_wal_projection", {}, (res: any) => {
+    live.pushEvent("delete_wal_pipeline", {}, (res: any) => {
       deleteConfirmDialogLoading = false;
       if (res.error) {
         deleteErrorMessage = res.error;
@@ -60,14 +60,14 @@
     <div class="container mx-auto px-4 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <a href="/wal-projections">
+          <a href="/wal-pipelines">
             <Button variant="ghost" size="sm">
               <ArrowLeft class="h-4 w-4" />
             </Button>
           </a>
           <div class="flex items-center">
             <Logs class="h-6 w-6 mr-2" />
-            <h1 class="text-xl font-semibold">{walProjection.name}</h1>
+            <h1 class="text-xl font-semibold">{walPipeline.name}</h1>
           </div>
         </div>
         <div class="flex items-center space-x-4">
@@ -78,21 +78,19 @@
               <Clock class="h-4 w-4" />
               <span
                 >Created {formatRelativeTimestamp(
-                  walProjection.inserted_at
+                  walPipeline.inserted_at
                 )}</span
               >
             </div>
             <div class="flex items-center gap-2">
               <RefreshCw class="h-4 w-4" />
               <span
-                >Updated {formatRelativeTimestamp(
-                  walProjection.updated_at
-                )}</span
+                >Updated {formatRelativeTimestamp(walPipeline.updated_at)}</span
               >
             </div>
           </div>
           <a
-            href="/wal-projections/{walProjection.id}/edit"
+            href="/wal-pipelines/{walPipeline.id}/edit"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
@@ -113,7 +111,7 @@
 
   <main class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-2 mb-6">
-      <HealthComponent health={walProjection.health} />
+      <HealthComponent health={walPipeline.health} />
 
       <Card>
         <CardContent class="p-6">
@@ -150,7 +148,7 @@
               <span class="text-sm text-gray-500">Pending events</span>
               <div
                 class="text-lg font-bold"
-                class:text-green-500={walProjection.health.status === "healthy"}
+                class:text-green-500={walPipeline.health.status === "healthy"}
               >
                 {metrics.count}
               </div>
@@ -166,19 +164,19 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <p class="text-sm text-gray-500">Source Database</p>
-            <p class="font-medium">{walProjection.source_database.name}</p>
+            <p class="font-medium">{walPipeline.source_database.name}</p>
           </div>
           <div>
             <p class="text-sm text-gray-500">Source Table</p>
-            <p class="font-medium">{walProjection.source_table}</p>
+            <p class="font-medium">{walPipeline.source_table}</p>
           </div>
           <div>
             <p class="text-sm text-gray-500">Destination Database</p>
-            <p class="font-medium">{walProjection.destination_database.name}</p>
+            <p class="font-medium">{walPipeline.destination_database.name}</p>
           </div>
           <div>
             <p class="text-sm text-gray-500">Destination Table</p>
-            <p class="font-medium">{walProjection.destination_table}</p>
+            <p class="font-medium">{walPipeline.destination_table}</p>
           </div>
         </div>
       </CardContent>
@@ -189,7 +187,7 @@
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-lg font-semibold">Source table</h2>
           <a
-            href="/databases/{walProjection.source_database.id}"
+            href="/databases/{walPipeline.source_database.id}"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
@@ -201,19 +199,19 @@
         </div>
         <div class="mb-4 flex items-center space-x-2">
           <Database class="h-5 w-5 text-gray-400" />
-          <pre class="font-medium">{walProjection.source_database.name}</pre>
+          <pre class="font-medium">{walPipeline.source_database.name}</pre>
         </div>
         <div class="mb-4 flex items-center space-x-2">
           <icon
             class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-              walProjection.source_table
+              walPipeline.source_table
             )}"
           ></icon>
-          <pre class="font-medium">{walProjection.source_table}</pre>
+          <pre class="font-medium">{walPipeline.source_table}</pre>
         </div>
         <div class="mb-4">
           <h3 class="text-md font-semibold mb-2">Filters</h3>
-          {#if walProjection.source_filters.length > 0}
+          {#if walPipeline.source_filters.length > 0}
             <Table>
               <TableHeader>
                 <TableRow>
@@ -223,7 +221,7 @@
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {#each walProjection.source_filters as filter}
+                {#each walPipeline.source_filters as filter}
                   <TableRow>
                     <TableCell><code>{filter.column}</code></TableCell>
                     <TableCell><code>{filter.operator}</code></TableCell>
@@ -240,7 +238,7 @@
                 No filters applied
               </h4>
               <p class="text-sm text-gray-500 mb-4">
-                This WAL Projection will process all data from the source table.
+                This WAL Pipeline will process all data from the source table.
               </p>
             </div>
           {/if}
@@ -254,7 +252,7 @@
   <Dialog.Content>
     <Dialog.Header>
       <Dialog.Title
-        >Are you sure you want to delete this WAL Projection?</Dialog.Title
+        >Are you sure you want to delete this WAL Pipeline?</Dialog.Title
       >
       <Dialog.Description>This action cannot be undone.</Dialog.Description>
     </Dialog.Header>

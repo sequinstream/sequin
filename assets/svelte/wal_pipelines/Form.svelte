@@ -32,7 +32,7 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
 
-  export let walProjection: any;
+  export let walPipeline: any;
   export let databases: any[];
   export let errors: any = {};
   export let parent: string;
@@ -44,18 +44,18 @@
   };
 
   let form = {
-    name: walProjection.name || "",
-    status: walProjection.status || "active",
-    postgresDatabaseId: walProjection.postgresDatabaseId || "",
-    destinationDatabaseId: walProjection.destinationDatabaseId || "",
-    tableOid: walProjection.tableOid || "",
-    destinationTableOid: walProjection.destinationTableOid || "",
-    sourceTableActions: walProjection.sourceTableActions || [
+    name: walPipeline.name || "",
+    status: walPipeline.status || "active",
+    postgresDatabaseId: walPipeline.postgresDatabaseId || "",
+    destinationDatabaseId: walPipeline.destinationDatabaseId || "",
+    tableOid: walPipeline.tableOid || "",
+    destinationTableOid: walPipeline.destinationTableOid || "",
+    sourceTableActions: walPipeline.sourceTableActions || [
       "insert",
       "update",
       "delete",
     ],
-    sourceTableFilters: walProjection.sourceTableFilters || [],
+    sourceTableFilters: walPipeline.sourceTableFilters || [],
   };
 
   let selectedSourceDatabase: any;
@@ -87,10 +87,10 @@
   }
 
   function handleSubmit() {
-    pushEvent("save", { wal_projection: form });
+    pushEvent("save", { wal_pipeline: form });
   }
 
-  $: pushEvent("validate", { wal_projection: form });
+  $: pushEvent("validate", { wal_pipeline: form });
 
   let dialogOpen = true;
   let showConfirmDialog = false;
@@ -101,7 +101,7 @@
 </script>
 
 <FullPageModal
-  title={isEdit ? "Edit WAL Projection" : "Create WAL Projection"}
+  title={isEdit ? "Edit WAL Pipeline" : "Create WAL Pipeline"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -116,7 +116,7 @@
       </CardHeader>
       <CardContent>
         <p class="mb-4 text-secondary-foreground text-sm" class:hidden={isEdit}>
-          With a WAL Projection, you can capture every insert, update, or delete
+          With a WAL Pipeline, you can capture every insert, update, or delete
           that happens to one or more tables into another table in your
           database. Then, you can stream these events with Sequin.
         </p>
@@ -246,7 +246,7 @@
       <CardContent>
         <div class="space-y-4 my-4">
           <div class="space-y-2">
-            <Label for="name">WAL Projection name</Label>
+            <Label for="name">WAL Pipeline name</Label>
             <Input id="name" bind:value={form.name} />
             {#if errors.name}
               <p class="text-red-500 text-sm">{errors.name}</p>
@@ -257,7 +257,7 @@
               type="submit"
               disabled={!form.tableOid || !form.destinationTableOid}
             >
-              {walProjection.id ? "Update" : "Create"} WAL Projection
+              {walPipeline.id ? "Update" : "Create"} WAL Pipeline
             </Button>
           </div>
         </div>

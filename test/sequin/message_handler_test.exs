@@ -45,7 +45,7 @@ defmodule Sequin.MessageHandlerTest do
       assert record.state == :available
     end
 
-    test "fans out messages correctly for mixed message_kind consumers and wal_projections" do
+    test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
       message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       message2 = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
 
@@ -55,11 +55,11 @@ defmodule Sequin.MessageHandlerTest do
       consumer1 = ConsumersFactory.insert_consumer!(message_kind: :event, source_tables: [source_table1])
       consumer2 = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table2])
       consumer3 = ConsumersFactory.insert_consumer!(message_kind: :event, source_tables: [source_table1, source_table2])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table1, source_table2])
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table1, source_table2])
 
       context = %MessageHandler.Context{
         consumers: [consumer1, consumer2, consumer3],
-        wal_projections: [wal_projection]
+        wal_pipelines: [wal_pipeline]
       }
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
@@ -67,7 +67,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
       consumer3_messages = list_messages(consumer3.id)
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 1
       assert hd(consumer1_messages).table_oid == 123
@@ -82,24 +82,24 @@ defmodule Sequin.MessageHandlerTest do
       assert length(wal_events) == 2
     end
 
-    test "two messages with two consumers and one wal_projection are fanned out to each" do
+    test "two messages with two consumers and one wal_pipeline are fanned out to each" do
       message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       message2 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       consumer1 = ConsumersFactory.insert_consumer!(source_tables: [source_table])
       consumer2 = ConsumersFactory.insert_consumer!(source_tables: [source_table])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       context = %MessageHandler.Context{
         consumers: [consumer1, consumer2],
-        wal_projections: [wal_projection]
+        wal_pipelines: [wal_pipeline]
       }
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 2
       assert Enum.all?(consumer1_messages, &(&1.consumer_id == consumer1.id))
@@ -192,7 +192,7 @@ defmodule Sequin.MessageHandlerTest do
       assert Enum.empty?(messages)
     end
 
-    test "handles wal_projections correctly" do
+    test "handles wal_pipelines correctly" do
       insert_message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
 
       update_message =
@@ -203,16 +203,16 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_projections: [wal_projection]}
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
       {[insert_event], [update_event]} =
-        wal_projection.id |> Replication.list_wal_events() |> Enum.split_with(&(&1.action == :insert))
+        wal_pipeline.id |> Replication.list_wal_events() |> Enum.split_with(&(&1.action == :insert))
 
       assert insert_event.action == :insert
-      assert insert_event.wal_projection_id == wal_projection.id
+      assert insert_event.wal_pipeline_id == wal_pipeline.id
       assert insert_event.commit_lsn == DateTime.to_unix(insert_message.commit_timestamp, :microsecond)
       assert insert_event.record_pks == Enum.map(insert_message.ids, &to_string/1)
       assert insert_event.replication_message_trace_id == insert_message.trace_id
@@ -225,32 +225,32 @@ defmodule Sequin.MessageHandlerTest do
       assert update_event.changes == %{"name" => "old_name"}
     end
 
-    test "inserts wal_event for wal_projection with matching source table and no filters" do
+    test "inserts wal_event for wal_pipeline with matching source table and no filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_projections: [wal_projection]}
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
-      assert hd(wal_events).wal_projection_id == wal_projection.id
+      assert hd(wal_events).wal_pipeline_id == wal_pipeline.id
     end
 
-    test "does not insert wal_event for wal_projection with non-matching source table" do
+    test "does not insert wal_event for wal_pipeline with non-matching source table" do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_projections: [wal_projection]}
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
     end
 
-    test "inserts wal_event for projection with matching source table and passing filters" do
+    test "inserts wal_event for pipeline with matching source table and passing filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123)
 
       column_filter =
@@ -261,21 +261,21 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields], old_fields: [test_field | message.old_fields]}
 
-      context = %MessageHandler.Context{wal_projections: [wal_projection]}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
-      assert hd(wal_events).wal_projection_id == wal_projection.id
+      assert hd(wal_events).wal_pipeline_id == wal_pipeline.id
     end
 
-    test "does not insert wal_event for projection with matching source table but failing filters" do
+    test "does not insert wal_event for pipeline with matching source table but failing filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
 
       column_filter =
@@ -286,16 +286,16 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      wal_projection = ReplicationFactory.insert_wal_projection!(source_tables: [source_table])
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       # Ensure the message has a non-matching field for the filter
       message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
 
-      context = %MessageHandler.Context{wal_projections: [wal_projection]}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
-      wal_events = Replication.list_wal_events(wal_projection.id)
+      wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
     end
   end

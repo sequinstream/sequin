@@ -10,7 +10,7 @@ defmodule Sequin.Factory.ReplicationFactory do
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
   def commit_lsn, do: Factory.unique_integer()
@@ -178,12 +178,12 @@ defmodule Sequin.Factory.ReplicationFactory do
     )
   end
 
-  def wal_projection(attrs \\ []) do
+  def wal_pipeline(attrs \\ []) do
     attrs = Map.new(attrs)
 
     merge_attributes(
-      %WalProjection{
-        name: "wal_projection_#{Factory.sequence()}",
+      %WalPipeline{
+        name: "wal_pipeline_#{Factory.sequence()}",
         seq: Factory.sequence(),
         source_tables: [ConsumersFactory.source_table()],
         replication_slot_id: Factory.uuid(),
@@ -196,9 +196,9 @@ defmodule Sequin.Factory.ReplicationFactory do
     )
   end
 
-  def wal_projection_attrs(attrs \\ []) do
+  def wal_pipeline_attrs(attrs \\ []) do
     attrs
-    |> wal_projection()
+    |> wal_pipeline()
     |> Sequin.Map.from_ecto()
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
@@ -211,7 +211,7 @@ defmodule Sequin.Factory.ReplicationFactory do
     end)
   end
 
-  def insert_wal_projection!(attrs \\ []) do
+  def insert_wal_pipeline!(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {account_id, attrs} =
@@ -233,10 +233,10 @@ defmodule Sequin.Factory.ReplicationFactory do
       attrs
       |> Map.put(:replication_slot_id, replication_slot_id)
       |> Map.put(:destination_database_id, destination_database_id)
-      |> wal_projection_attrs()
+      |> wal_pipeline_attrs()
 
-    %WalProjection{account_id: account_id}
-    |> WalProjection.create_changeset(attrs)
+    %WalPipeline{account_id: account_id}
+    |> WalPipeline.create_changeset(attrs)
     |> Repo.insert!()
   end
 
@@ -250,7 +250,7 @@ defmodule Sequin.Factory.ReplicationFactory do
 
     merge_attributes(
       %WalEvent{
-        wal_projection_id: Factory.uuid(),
+        wal_pipeline_id: Factory.uuid(),
         commit_lsn: Factory.unique_integer(),
         record_pks: record_pks,
         record: %{"column" => Factory.word()},
@@ -274,11 +274,11 @@ defmodule Sequin.Factory.ReplicationFactory do
   def insert_wal_event!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    {wal_projection_id, attrs} =
-      Map.pop_lazy(attrs, :wal_projection_id, fn -> insert_wal_projection!().id end)
+    {wal_pipeline_id, attrs} =
+      Map.pop_lazy(attrs, :wal_pipeline_id, fn -> insert_wal_pipeline!().id end)
 
     attrs
-    |> Map.put(:wal_projection_id, wal_projection_id)
+    |> Map.put(:wal_pipeline_id, wal_pipeline_id)
     |> wal_event_attrs()
     |> then(&WalEvent.create_changeset(%WalEvent{}, &1))
     |> Repo.insert!()

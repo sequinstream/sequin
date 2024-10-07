@@ -11,7 +11,7 @@ defmodule Sequin.Replication.MessageHandler do
   alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -23,16 +23,16 @@ defmodule Sequin.Replication.MessageHandler do
 
     typedstruct do
       field :consumers, [Sequin.Consumers.consumer()], default: []
-      field :wal_projections, [WalProjection.t()], default: []
+      field :wal_pipelines, [WalPipeline.t()], default: []
     end
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers, :wal_projections])
+    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers, :wal_pipelines])
 
     %Context{
       consumers: pr.http_pull_consumers ++ pr.http_push_consumers,
-      wal_projections: pr.wal_projections
+      wal_pipelines: pr.wal_pipelines
     }
   end
 
@@ -67,14 +67,14 @@ defmodule Sequin.Replication.MessageHandler do
 
     wal_events =
       Enum.flat_map(messages, fn message ->
-        ctx.wal_projections
+        ctx.wal_pipelines
         |> Enum.filter(&Consumers.matches_message?(&1, message))
-        |> Enum.map(fn projection ->
-          wal_event(projection, message)
+        |> Enum.map(fn pipeline ->
+          wal_event(pipeline, message)
         end)
       end)
 
-    matching_projection_ids = wal_events |> Enum.map(& &1.wal_projection_id) |> Enum.uniq()
+    matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
     {messages, consumers} = Enum.unzip(messages_by_consumer)
 
@@ -89,11 +89,11 @@ defmodule Sequin.Replication.MessageHandler do
             Health.update(consumer, :ingestion, :healthy)
           end)
 
-          # Update WAL Projection Health
-          ctx.wal_projections
-          |> Enum.filter(&(&1.id in matching_projection_ids))
-          |> Enum.each(fn projection ->
-            Health.update(projection, :ingestion, :healthy)
+          # Update WAL Pipeline Health
+          ctx.wal_pipelines
+          |> Enum.filter(&(&1.id in matching_pipeline_ids))
+          |> Enum.each(fn pipeline ->
+            Health.update(pipeline, :ingestion, :healthy)
           end)
 
           # Trace Messages
@@ -111,11 +111,11 @@ defmodule Sequin.Replication.MessageHandler do
         end
       end)
 
-    Enum.each(matching_projection_ids, fn wal_projection_id ->
+    Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
       Phoenix.PubSub.broadcast(
         Sequin.PubSub,
-        "wal_event_inserted:#{wal_projection_id}",
-        {:wal_event_inserted, wal_projection_id}
+        "wal_event_inserted:#{wal_pipeline_id}",
+        {:wal_event_inserted, wal_pipeline_id}
       )
     end)
 
@@ -230,9 +230,9 @@ defmodule Sequin.Replication.MessageHandler do
     end)
   end
 
-  defp wal_event(projection, message) do
+  defp wal_event(pipeline, message) do
     %WalEvent{
-      wal_projection_id: projection.id,
+      wal_pipeline_id: pipeline.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
       record: fields_to_map(get_fields(message)),

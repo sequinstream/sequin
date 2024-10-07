@@ -1,4 +1,4 @@
-defmodule SequinWeb.WalProjectionsLive.Form do
+defmodule SequinWeb.WalPipelinesLive.Form do
   @moduledoc false
   use SequinWeb, :live_view
 
@@ -10,28 +10,28 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   alias Sequin.Postgres
   alias Sequin.Posthog
   alias Sequin.Replication
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
 
   require Logger
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
-    wal_projection_id = Map.get(params, "id")
-    is_edit = not is_nil(wal_projection_id)
+    wal_pipeline_id = Map.get(params, "id")
+    is_edit = not is_nil(wal_pipeline_id)
     socket = assign_databases(socket)
 
-    case fetch_or_build_wal_projection(socket, wal_projection_id) do
-      {:ok, wal_projection} ->
+    case fetch_or_build_wal_pipeline(socket, wal_pipeline_id) do
+      {:ok, wal_pipeline} ->
         {:ok,
          socket
-         |> assign(wal_projection: wal_projection)
+         |> assign(wal_pipeline: wal_pipeline)
          |> assign(is_edit: is_edit)
          |> assign(show_errors?: false)
          |> assign(submit_error: nil)
          |> assign_changeset(%{})}
 
       {:error, _reason} ->
-        {:ok, push_navigate(socket, to: ~p"/wal-projections")}
+        {:ok, push_navigate(socket, to: ~p"/wal-pipelines")}
     end
   end
 
@@ -47,15 +47,15 @@ defmodule SequinWeb.WalProjectionsLive.Form do
     assigns = assign(assigns, :encoded_errors, encoded_errors)
 
     ~H"""
-    <div id="wal-projection-form">
+    <div id="wal-pipeline-form">
       <.svelte
-        name="wal_projections/Form"
+        name="wal_pipelines/Form"
         props={
           %{
-            walProjection: encode_wal_projection(assigns),
+            walPipeline: encode_wal_pipeline(assigns),
             databases: Enum.map(assigns.databases, &encode_database/1),
             errors: @encoded_errors,
-            parent: "wal-projection-form",
+            parent: "wal-pipeline-form",
             isEdit: @is_edit
           }
         }
@@ -65,7 +65,7 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("validate", %{"wal_projection" => params}, socket) do
+  def handle_event("validate", %{"wal_pipeline" => params}, socket) do
     params =
       params
       |> decode_params()
@@ -75,7 +75,7 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("save", %{"wal_projection" => params}, socket) do
+  def handle_event("save", %{"wal_pipeline" => params}, socket) do
     params =
       params
       |> decode_params()
@@ -84,12 +84,12 @@ defmodule SequinWeb.WalProjectionsLive.Form do
     socket = assign_changeset(socket, params)
 
     if socket.assigns.changeset.valid? do
-      case create_or_update_wal_projection(socket, socket.assigns.wal_projection, params) do
-        {:ok, wal_projection} ->
+      case create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
+        {:ok, wal_pipeline} ->
           {:noreply,
            socket
-           |> put_flash(:toast, %{kind: :info, title: "WAL Projection saved successfully"})
-           |> push_navigate(to: ~p"/wal-projections/#{wal_projection.id}")}
+           |> put_flash(:toast, %{kind: :info, title: "WAL Pipeline saved successfully"})
+           |> push_navigate(to: ~p"/wal-pipelines/#{wal_pipeline.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, changeset: changeset, show_errors?: true)}
@@ -123,9 +123,9 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   def handle_event("form_closed", _params, socket) do
     socket =
       if socket.assigns.is_edit do
-        push_navigate(socket, to: ~p"/wal-projections/#{socket.assigns.wal_projection.id}")
+        push_navigate(socket, to: ~p"/wal-pipelines/#{socket.assigns.wal_pipeline.id}")
       else
-        push_navigate(socket, to: ~p"/wal-projections")
+        push_navigate(socket, to: ~p"/wal-pipelines")
       end
 
     {:noreply, socket}
@@ -136,57 +136,57 @@ defmodule SequinWeb.WalProjectionsLive.Form do
     assign(socket, databases: databases)
   end
 
-  defp fetch_or_build_wal_projection(%{assigns: %{databases: []}} = socket, nil) do
-    {:ok, %WalProjection{account_id: current_account_id(socket)}}
+  defp fetch_or_build_wal_pipeline(%{assigns: %{databases: []}} = socket, nil) do
+    {:ok, %WalPipeline{account_id: current_account_id(socket)}}
   end
 
-  defp fetch_or_build_wal_projection(%{assigns: %{databases: [db | _rest]}} = socket, nil) do
+  defp fetch_or_build_wal_pipeline(%{assigns: %{databases: [db | _rest]}} = socket, nil) do
     {:ok,
-     %WalProjection{
+     %WalPipeline{
        account_id: current_account_id(socket),
        replication_slot: db.replication_slot,
        destination_database_id: db.id
      }}
   end
 
-  defp fetch_or_build_wal_projection(socket, wal_projection_id) do
+  defp fetch_or_build_wal_pipeline(socket, wal_pipeline_id) do
     {:ok,
-     Replication.get_wal_projection_for_account(current_account_id(socket), wal_projection_id, [
+     Replication.get_wal_pipeline_for_account(current_account_id(socket), wal_pipeline_id, [
        :replication_slot,
        :source_database
      ])}
   end
 
-  defp create_or_update_wal_projection(socket, wal_projection, params) do
+  defp create_or_update_wal_pipeline(socket, wal_pipeline, params) do
     account_id = current_account_id(socket)
 
     case_result =
-      if wal_projection.id do
-        Replication.update_wal_projection_with_lifecycle(wal_projection, params)
+      if wal_pipeline.id do
+        Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params)
       else
-        Replication.create_wal_projection_with_lifecycle(account_id, params)
+        Replication.create_wal_pipeline_with_lifecycle(account_id, params)
       end
 
     case case_result do
-      {:ok, updated_wal_projection} ->
-        action = if wal_projection.id, do: "Updated", else: "Created"
+      {:ok, updated_wal_pipeline} ->
+        action = if wal_pipeline.id, do: "Updated", else: "Created"
 
-        Posthog.capture("WAL Projection #{action}", %{
+        Posthog.capture("WAL Pipeline #{action}", %{
           distinct_id: current_user_id(socket),
           properties: %{
-            wal_projection_id: updated_wal_projection.id,
-            wal_projection_name: updated_wal_projection.name,
-            "$groups": %{account: updated_wal_projection.account_id}
+            wal_pipeline_id: updated_wal_pipeline.id,
+            wal_pipeline_name: updated_wal_pipeline.name,
+            "$groups": %{account: updated_wal_pipeline.account_id}
           }
         })
 
-        {:ok, updated_wal_projection}
+        {:ok, updated_wal_pipeline}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error, changeset}
 
       {:error, error} ->
-        Logger.error("Error creating/updating WAL Projection: #{inspect(error)}")
+        Logger.error("Error creating/updating WAL Pipeline: #{inspect(error)}")
         {:error, "An unexpected error occurred. Please try again."}
     end
   end
@@ -224,20 +224,20 @@ defmodule SequinWeb.WalProjectionsLive.Form do
     end
   end
 
-  defp encode_wal_projection(assigns) do
-    wal_projection = assigns.wal_projection
-    source_table = List.first(wal_projection.source_tables || [])
+  defp encode_wal_pipeline(assigns) do
+    wal_pipeline = assigns.wal_pipeline
+    source_table = List.first(wal_pipeline.source_tables || [])
     replication_slot = Ecto.Changeset.get_field(assigns.changeset, :replication_slot)
 
     %{
-      "id" => wal_projection.id,
-      "name" => wal_projection.name || Name.generate(999),
-      "status" => wal_projection.status,
+      "id" => wal_pipeline.id,
+      "name" => wal_pipeline.name || Name.generate(999),
+      "status" => wal_pipeline.status,
       # Called tableOid and postgresDatabaseId in the form to match expectations of existing components
       "postgresDatabaseId" => replication_slot && replication_slot.postgres_database_id,
       "tableOid" => source_table && source_table.oid,
-      "destinationDatabaseId" => wal_projection.destination_database_id,
-      "destinationTableOid" => wal_projection.destination_oid,
+      "destinationDatabaseId" => wal_pipeline.destination_database_id,
+      "destinationTableOid" => wal_pipeline.destination_oid,
       "sourceTableActions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "sourceTableFilters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "retentionDays" => 30
@@ -276,13 +276,13 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   end
 
   defp assign_changeset(socket, params) do
-    wal_projection = socket.assigns.wal_projection
+    wal_pipeline = socket.assigns.wal_pipeline
 
     changeset =
       if socket.assigns.is_edit do
-        WalProjection.update_changeset(wal_projection, params)
+        WalPipeline.update_changeset(wal_pipeline, params)
       else
-        WalProjection.create_changeset(wal_projection, params)
+        WalPipeline.create_changeset(wal_pipeline, params)
       end
 
     assign(socket, :changeset, changeset)

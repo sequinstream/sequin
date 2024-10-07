@@ -65,7 +65,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
-    has_many(:wal_projections, through: [:replication_slot, :wal_projections])
+    has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
 
     timestamps()
   end

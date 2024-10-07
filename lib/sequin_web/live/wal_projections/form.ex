@@ -122,7 +122,7 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   @impl Phoenix.LiveView
   def handle_event("form_closed", _params, socket) do
     socket =
-      if socket.assigns.is_edit? do
+      if socket.assigns.is_edit do
         push_navigate(socket, to: ~p"/wal-projections/#{socket.assigns.wal_projection.id}")
       else
         push_navigate(socket, to: ~p"/wal-projections")
@@ -150,10 +150,11 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   end
 
   defp fetch_or_build_wal_projection(socket, wal_projection_id) do
-    Replication.get_wal_projection_for_account(current_account_id(socket), wal_projection_id, [
-      :replication_slot,
-      :source_database
-    ])
+    {:ok,
+     Replication.get_wal_projection_for_account(current_account_id(socket), wal_projection_id, [
+       :replication_slot,
+       :source_database
+     ])}
   end
 
   defp create_or_update_wal_projection(socket, wal_projection, params) do

@@ -30,6 +30,7 @@
   } from "$lib/components/ui/accordion";
   import { Info } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import { cn } from "$lib/utils";
 
   export let walProjection: any;
   export let databases: any[];
@@ -47,14 +48,14 @@
     status: walProjection.status || "active",
     postgresDatabaseId: walProjection.postgresDatabaseId || "",
     destinationDatabaseId: walProjection.destinationDatabaseId || "",
-    tableOid: walProjection.sourceTables?.[0]?.oid || "",
-    destinationTableOid: walProjection.destinationOid || "",
-    sourceTableActions: walProjection.sourceTables?.[0]?.actions || [
+    tableOid: walProjection.tableOid || "",
+    destinationTableOid: walProjection.destinationTableOid || "",
+    sourceTableActions: walProjection.sourceTableActions || [
       "insert",
       "update",
       "delete",
     ],
-    sourceTableFilters: walProjection.sourceTables?.[0]?.columnFilters || [],
+    sourceTableFilters: walProjection.sourceTableFilters || [],
   };
 
   let selectedSourceDatabase: any;
@@ -78,6 +79,11 @@
         (table) => table.oid === form.tableOid
       );
     }
+    if (form.destinationTableOid) {
+      selectedDestinationTable = selectedDestinationDatabase.tables.find(
+        (table) => table.oid === form.destinationTableOid
+      );
+    }
   }
 
   function handleSubmit() {
@@ -95,7 +101,7 @@
 </script>
 
 <FullPageModal
-  title="Create WAL Projection"
+  title={isEdit ? "Edit WAL Projection" : "Create WAL Projection"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -117,16 +123,51 @@
 
         <div class="space-y-4">
           <Label>Source table</Label>
-          <TableSelector
-            {pushEvent}
-            {databases}
-            onSelect={({ databaseId, tableOid }) => {
-              form.postgresDatabaseId = databaseId;
-              form.tableOid = tableOid;
-            }}
-            selectedDatabaseId={form.postgresDatabaseId}
-            selectedTableOid={form.tableOid}
-          />
+          {#if isEdit}
+            <Select
+              disabled
+              selected={{
+                value: form.postgresDatabaseId,
+                label: selectedSourceDatabase?.name || "Selected database",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected database" />
+              </SelectTrigger>
+            </Select>
+            <Select
+              disabled
+              selected={{
+                value: form.tableOid,
+                label: selectedSourceTable?.name || "Selected table",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected table" />
+              </SelectTrigger>
+            </Select>
+          {:else}
+            <TableSelector
+              {pushEvent}
+              {databases}
+              onSelect={({ databaseId, tableOid }) => {
+                form.postgresDatabaseId = databaseId;
+                form.tableOid = tableOid;
+              }}
+              selectedDatabaseId={form.postgresDatabaseId}
+              selectedTableOid={form.tableOid}
+            />
+          {/if}
 
           {#if selectedSourceTable}
             <SortAndFilterCard
@@ -151,17 +192,52 @@
       <CardContent>
         <div class="space-y-4">
           <Label>Destination table</Label>
-          <TableSelector
-            {pushEvent}
-            {databases}
-            onSelect={({ databaseId, tableOid }) => {
-              form.destinationDatabaseId = databaseId;
-              form.destinationTableOid = tableOid;
-            }}
-            selectedDatabaseId={form.destinationDatabaseId}
-            selectedTableOid={form.destinationTableOid}
-            onlyEventTables
-          />
+          {#if isEdit}
+            <Select
+              disabled
+              selected={{
+                value: form.destinationDatabaseId,
+                label: selectedDestinationDatabase?.name || "Selected database",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected database" />
+              </SelectTrigger>
+            </Select>
+            <Select
+              disabled
+              selected={{
+                value: form.destinationTableOid,
+                label: selectedDestinationTable?.name || "Selected table",
+              }}
+            >
+              <SelectTrigger
+                class={cn(
+                  "w-full",
+                  "bg-muted text-muted-foreground opacity-100"
+                )}
+              >
+                <SelectValue placeholder="Selected table" />
+              </SelectTrigger>
+            </Select>
+          {:else}
+            <TableSelector
+              {pushEvent}
+              {databases}
+              onSelect={({ databaseId, tableOid }) => {
+                form.destinationDatabaseId = databaseId;
+                form.destinationTableOid = tableOid;
+              }}
+              selectedDatabaseId={form.destinationDatabaseId}
+              selectedTableOid={form.destinationTableOid}
+              onlyEventTables
+            />
+          {/if}
         </div>
       </CardContent>
     </Card>

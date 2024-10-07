@@ -184,10 +184,11 @@ defmodule Sequin.Replication do
     |> Repo.all()
   end
 
-  def get_wal_projection_for_account(account_id, id_or_name) do
+  def get_wal_projection_for_account(account_id, id_or_name, preloads \\ []) do
     account_id
     |> WalProjection.where_account_id()
     |> WalProjection.where_id_or_name(id_or_name)
+    |> preload(^preloads)
     |> Repo.one()
   end
 

@@ -44,10 +44,7 @@ defmodule SequinWeb.WalProjectionsLive.Form do
         %{}
       end
 
-    assigns =
-      assign(assigns, :encoded_errors, encoded_errors)
-
-    dbg(assigns.databases)
+    assigns = assign(assigns, :encoded_errors, encoded_errors)
 
     ~H"""
     <div id="wal-projection-form">
@@ -144,7 +141,12 @@ defmodule SequinWeb.WalProjectionsLive.Form do
   end
 
   defp fetch_or_build_wal_projection(%{assigns: %{databases: [db | _rest]}} = socket, nil) do
-    {:ok, %WalProjection{account_id: current_account_id(socket), replication_slot: db.replication_slot}}
+    {:ok,
+     %WalProjection{
+       account_id: current_account_id(socket),
+       replication_slot: db.replication_slot,
+       destination_database_id: db.id
+     }}
   end
 
   defp fetch_or_build_wal_projection(socket, wal_projection_id) do
@@ -194,12 +196,12 @@ defmodule SequinWeb.WalProjectionsLive.Form do
     %{
       "name" => form["name"],
       "status" => form["status"],
-      "source_database_id" => form["sourceDatabaseId"],
+      "source_database_id" => form["postgresDatabaseId"],
       "destination_database_id" => form["destinationDatabaseId"],
       "destination_oid" => form["destinationTableOid"],
       "source_tables" => [
         %{
-          "oid" => form["sourceTableOid"],
+          "oid" => form["tableOid"],
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => source_table_actions
         }
@@ -230,8 +232,9 @@ defmodule SequinWeb.WalProjectionsLive.Form do
       "id" => wal_projection.id,
       "name" => wal_projection.name || Name.generate(999),
       "status" => wal_projection.status,
-      "sourceDatabaseId" => replication_slot && replication_slot.postgres_database_id,
-      "sourceTableOid" => source_table && source_table.oid,
+      # Called tableOid and postgresDatabaseId in the form to match expectations of existing components
+      "postgresDatabaseId" => replication_slot && replication_slot.postgres_database_id,
+      "tableOid" => source_table && source_table.oid,
       "destinationDatabaseId" => wal_projection.destination_database_id,
       "destinationTableOid" => wal_projection.destination_oid,
       "sourceTableActions" => (source_table && source_table.actions) || [:insert, :update, :delete],
@@ -250,6 +253,8 @@ defmodule SequinWeb.WalProjectionsLive.Form do
             "oid" => table.oid,
             "schema" => table.schema,
             "name" => table.name,
+            "isEventTable" => Postgres.is_event_table?(table),
+            "eventTableErrors" => if(Postgres.is_event_table?(table), do: Postgres.event_table_errors(table)),
             "columns" =>
               Enum.map(table.columns, fn %Table.Column{} = column ->
                 %{

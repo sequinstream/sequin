@@ -78,37 +78,48 @@ defmodule Sequin.Replication.MessageHandler do
 
     {messages, consumers} = Enum.unzip(messages_by_consumer)
 
-    Repo.transact(fn ->
-      with {:ok, count} <- insert_or_delete_consumer_messages(messages),
-           {:ok, wal_event_count} <- Replication.insert_wal_events(wal_events) do
-        # Update Consumer Health
-        consumers
-        |> Enum.uniq_by(& &1.id)
-        |> Enum.each(fn consumer ->
-          Health.update(consumer, :ingestion, :healthy)
-        end)
+    res =
+      Repo.transact(fn ->
+        with {:ok, count} <- insert_or_delete_consumer_messages(messages),
+             {:ok, wal_event_count} <- Replication.insert_wal_events(wal_events) do
+          # Update Consumer Health
+          consumers
+          |> Enum.uniq_by(& &1.id)
+          |> Enum.each(fn consumer ->
+            Health.update(consumer, :ingestion, :healthy)
+          end)
 
-        # Update WAL Projection Health
-        ctx.wal_projections
-        |> Enum.filter(&(&1.id in matching_projection_ids))
-        |> Enum.each(fn projection ->
-          Health.update(projection, :ingestion, :healthy)
-        end)
+          # Update WAL Projection Health
+          ctx.wal_projections
+          |> Enum.filter(&(&1.id in matching_projection_ids))
+          |> Enum.each(fn projection ->
+            Health.update(projection, :ingestion, :healthy)
+          end)
 
-        # Trace Messages
-        messages_by_consumer
-        |> Enum.group_by(
-          fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
-          fn {{_action, event_or_record}, _consumer} -> event_or_record end
-        )
-        |> Enum.each(fn
-          {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
-          {{:delete, _consumer}, _messages} -> :ok
-        end)
+          # Trace Messages
+          messages_by_consumer
+          |> Enum.group_by(
+            fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
+            fn {{_action, event_or_record}, _consumer} -> event_or_record end
+          )
+          |> Enum.each(fn
+            {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
+            {{:delete, _consumer}, _messages} -> :ok
+          end)
 
-        {:ok, count + wal_event_count}
-      end
+          {:ok, count + wal_event_count}
+        end
+      end)
+
+    Enum.each(matching_projection_ids, fn wal_projection_id ->
+      Phoenix.PubSub.broadcast(
+        Sequin.PubSub,
+        "wal_event_inserted:#{wal_projection_id}",
+        {:wal_event_inserted, wal_projection_id}
+      )
     end)
+
+    res
   end
 
   defp consumer_event(consumer, message) do

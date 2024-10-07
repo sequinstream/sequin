@@ -37,7 +37,7 @@ defmodule SequinWeb.WalProjectionsLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("delete_wal_projection", _, socket) do
-    case Replication.delete_wal_projection(socket.assigns.wal_projection) do
+    case Replication.delete_wal_projection_with_lifecycle(socket.assigns.wal_projection) do
       {:ok, _} ->
         {:noreply, push_navigate(socket, to: ~p"/wal-projections")}
 

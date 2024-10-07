@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@intercom/messenger-js-sdk": "^0.0.13",
-    "bits-ui": "^0.21.13",
+    "bits-ui": "^0.21.16",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "live_svelte": "file:../deps/live_svelte",

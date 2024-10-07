@@ -34,7 +34,6 @@
 
   function handleEdit() {
     // TODO: Implement edit functionality
-    console.log("Edit WAL Projection");
   }
 
   function handleDelete() {

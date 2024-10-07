@@ -47,9 +47,13 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
       Health.update(wal_projection, :filters, :healthy)
       Health.update(wal_projection, :ingestion, :healthy)
 
+      commit_lsn = ReplicationFactory.commit_lsn()
+
       # Insert some WAL events
       wal_events =
-        Enum.map(1..5, fn _ -> ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id) end)
+        Enum.map(1..5, fn _ ->
+          ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id, commit_lsn: commit_lsn)
+        end)
 
       start_supervised!(
         {WalEventServer,

@@ -6,49 +6,49 @@ defmodule Sequin.ReplicationTest do
 
   describe "list_wal_events/2" do
     setup do
-      wal_projection = ReplicationFactory.insert_wal_projection!()
-      {:ok, wal_projection: wal_projection}
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!()
+      {:ok, wal_pipeline: wal_pipeline}
     end
 
     test "returns events sorted by commit_lsn in ascending order", %{
-      wal_projection: wal_projection
+      wal_pipeline: wal_pipeline
     } do
       event3 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 300
         )
 
       event1 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 100
         )
 
       event2 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 200
         )
 
       events =
-        Replication.list_wal_events(wal_projection.id, order_by: [asc: :commit_lsn])
+        Replication.list_wal_events(wal_pipeline.id, order_by: [asc: :commit_lsn])
 
       assert length(events) == 3
       assert Enum.map(events, & &1.id) == [event1.id, event2.id, event3.id]
       assert Enum.map(events, & &1.commit_lsn) == [100, 200, 300]
     end
 
-    test "respects limit parameter", %{wal_projection: wal_projection} do
+    test "respects limit parameter", %{wal_pipeline: wal_pipeline} do
       for lsn <- 1..5 do
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: lsn * 100
         )
       end
 
       events =
-        Replication.list_wal_events(wal_projection.id,
+        Replication.list_wal_events(wal_pipeline.id,
           order_by: [asc: :commit_lsn],
           limit: 3
         )
@@ -57,16 +57,16 @@ defmodule Sequin.ReplicationTest do
       assert Enum.map(events, & &1.commit_lsn) == [100, 200, 300]
     end
 
-    test "respects offset parameter", %{wal_projection: wal_projection} do
+    test "respects offset parameter", %{wal_pipeline: wal_pipeline} do
       for lsn <- 1..5 do
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: lsn * 100
         )
       end
 
       events =
-        Replication.list_wal_events(wal_projection.id,
+        Replication.list_wal_events(wal_pipeline.id,
           order_by: [asc: :commit_lsn],
           offset: 2
         )
@@ -86,23 +86,23 @@ defmodule Sequin.ReplicationTest do
 
   describe "delete_wal_events/1" do
     test "deletes multiple wal events by their ids" do
-      wal_projection = ReplicationFactory.insert_wal_projection!()
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!()
 
       event1 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 100
         )
 
       event2 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 200
         )
 
       event3 =
         ReplicationFactory.insert_wal_event!(
-          wal_projection_id: wal_projection.id,
+          wal_pipeline_id: wal_pipeline.id,
           commit_lsn: 300
         )
 
@@ -110,7 +110,7 @@ defmodule Sequin.ReplicationTest do
 
       assert deleted_count == 2
 
-      remaining_events = Replication.list_wal_events(wal_projection.id)
+      remaining_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(remaining_events) == 1
       assert hd(remaining_events).id == event3.id

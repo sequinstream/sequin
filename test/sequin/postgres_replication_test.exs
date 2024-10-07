@@ -702,7 +702,12 @@ defmodule Sequin.PostgresReplicationTest do
     record_fields = Enum.map(record, fn {key, value} -> %{column_name: key, value: value} end)
 
     assert_lists_equal(fields, record_fields, fn field1, field2 ->
-      field1.column_name == field2.column_name && field1.value == field2.value
+      if field1.column_name == "updated_at" and field2.column_name == "updated_at" do
+        # updated_at timestamp may not be exactly the same
+        NaiveDateTime.diff(field1.value, field2.value, :second) < 2
+      else
+        field1.column_name == field2.column_name && field1.value == field2.value
+      end
     end)
   end
 

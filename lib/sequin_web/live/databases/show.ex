@@ -169,7 +169,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     active_tab =
       case assigns.live_action do
         :messages -> "messages"
-        :wal_projections -> "wal_projections"
+        :wal_pipelines -> "wal_pipelines"
         _ -> "overview"
       end
 

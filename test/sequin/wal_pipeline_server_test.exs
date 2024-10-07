@@ -1,6 +1,6 @@
-# test/sequin/wal_event_server_test.exs
+# test/sequin/wal_pipeline_server_test.exs
 
-defmodule Sequin.ReplicationRuntime.WalEventServerTest do
+defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
@@ -9,7 +9,7 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
-  alias Sequin.ReplicationRuntime.WalEventServer
+  alias Sequin.ReplicationRuntime.WalPipelineServer
   alias Sequin.Test.Support.Models.TestEventLog
 
   setup do
@@ -23,8 +23,8 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
         postgres_database_id: source_database.id
       )
 
-    wal_projection =
-      ReplicationFactory.insert_wal_projection!(
+    wal_pipeline =
+      ReplicationFactory.insert_wal_pipeline!(
         account_id: account.id,
         replication_slot_id: replication_slot.id,
         destination_database_id: destination_database.id,
@@ -35,42 +35,42 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
      %{
        destination_database: destination_database,
        replication_slot: replication_slot,
-       wal_projection: wal_projection
+       wal_pipeline: wal_pipeline
      }}
   end
 
-  describe "WalEventServer" do
+  describe "WalPipelineServer" do
     test "processes WAL events, writes them to the destination table, and updates health", %{
-      wal_projection: wal_projection
+      wal_pipeline: wal_pipeline
     } do
       # Simulate initial health
-      Health.update(wal_projection, :filters, :healthy)
-      Health.update(wal_projection, :ingestion, :healthy)
+      Health.update(wal_pipeline, :filters, :healthy)
+      Health.update(wal_pipeline, :ingestion, :healthy)
 
       commit_lsn = ReplicationFactory.commit_lsn()
 
       # Insert some WAL events
       wal_events =
         Enum.map(1..5, fn _ ->
-          ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id, commit_lsn: commit_lsn)
+          ReplicationFactory.insert_wal_event!(wal_pipeline_id: wal_pipeline.id, commit_lsn: commit_lsn)
         end)
 
       start_supervised!(
-        {WalEventServer,
+        {WalPipelineServer,
          [
-           replication_slot_id: wal_projection.replication_slot_id,
-           destination_oid: wal_projection.destination_oid,
-           destination_database_id: wal_projection.destination_database_id,
-           wal_projection_ids: [wal_projection.id],
+           replication_slot_id: wal_pipeline.replication_slot_id,
+           destination_oid: wal_pipeline.destination_oid,
+           destination_database_id: wal_pipeline.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline.id],
            test_pid: self(),
            batch_size: 2
          ]}
       )
 
-      # Wait for the WalEventServer to process events
-      assert_receive {WalEventServer, :wrote_events, 2}, 1000
-      assert_receive {WalEventServer, :wrote_events, 2}, 1000
-      assert_receive {WalEventServer, :wrote_events, 1}, 1000
+      # Wait for the WalPipelineServer to process events
+      assert_receive {WalPipelineServer, :wrote_events, 2}, 1000
+      assert_receive {WalPipelineServer, :wrote_events, 2}, 1000
+      assert_receive {WalPipelineServer, :wrote_events, 1}, 1000
 
       # Verify that the events were written to the destination table
       logs = Repo.all(TestEventLog)
@@ -104,50 +104,50 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
       end)
 
       # Verify that the health status is updated to healthy
-      {:ok, health} = Health.get(wal_projection)
+      {:ok, health} = Health.get(wal_pipeline)
       assert health.status == :healthy
       assert Enum.all?(health.checks, &(&1.status == :healthy))
     end
 
     @tag capture_log: true
     test "updates health to error when writing to destination fails", %{
-      wal_projection: wal_projection
+      wal_pipeline: wal_pipeline
     } do
       # Insert a WAL event
-      ReplicationFactory.insert_wal_event!(wal_projection_id: wal_projection.id)
+      ReplicationFactory.insert_wal_event!(wal_pipeline_id: wal_pipeline.id)
 
       # Mess up the destination table
       Repo.query!("alter table #{TestEventLog.table_name()} add column foo text not null")
 
       start_supervised!(
-        {WalEventServer,
+        {WalPipelineServer,
          [
-           replication_slot_id: wal_projection.replication_slot_id,
-           destination_oid: wal_projection.destination_oid,
-           destination_database_id: wal_projection.destination_database_id,
-           wal_projection_ids: [wal_projection.id],
+           replication_slot_id: wal_pipeline.replication_slot_id,
+           destination_oid: wal_pipeline.destination_oid,
+           destination_database_id: wal_pipeline.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline.id],
            test_pid: self(),
            batch_size: 1
          ]}
       )
 
-      assert_receive {WalEventServer, :write_failed, _reason}, 1000
+      assert_receive {WalPipelineServer, :write_failed, _reason}, 1000
 
       # Verify that the health status is updated to error
-      {:ok, health} = Health.get(wal_projection)
+      {:ok, health} = Health.get(wal_pipeline)
       assert health.status == :error
       assert Enum.any?(health.checks, &(&1.status == :error))
     end
 
     test "processes WAL events on PubSub notification", %{
-      wal_projection: wal_projection
+      wal_pipeline: wal_pipeline
     } do
-      start_supervised!({WalEventServer,
+      start_supervised!({WalPipelineServer,
        [
-         replication_slot_id: wal_projection.replication_slot_id,
-         destination_oid: wal_projection.destination_oid,
-         destination_database_id: wal_projection.destination_database_id,
-         wal_projection_ids: [wal_projection.id],
+         replication_slot_id: wal_pipeline.replication_slot_id,
+         destination_oid: wal_pipeline.destination_oid,
+         destination_database_id: wal_pipeline.destination_database_id,
+         wal_pipeline_ids: [wal_pipeline.id],
          test_pid: self(),
          batch_size: 2,
          # arbitrary delay
@@ -155,21 +155,21 @@ defmodule Sequin.ReplicationRuntime.WalEventServerTest do
        ]})
 
       # Assert that we get :no_events initially
-      assert_receive {WalEventServer, :no_events}, 1000
+      assert_receive {WalPipelineServer, :no_events}, 1000
 
       # Insert a WAL event
-      wal_event = ReplicationFactory.wal_event_attrs(wal_projection_id: wal_projection.id)
+      wal_event = ReplicationFactory.wal_event_attrs(wal_pipeline_id: wal_pipeline.id)
       Replication.insert_wal_events([wal_event])
 
-      # Wait for the WalEventServer to process events
-      assert_receive {WalEventServer, :wrote_events, 1}, 1000
+      # Wait for the WalPipelineServer to process events
+      assert_receive {WalPipelineServer, :wrote_events, 1}, 1000
 
       # Verify that the event was written to the destination table
       logs = Repo.all(TestEventLog)
       assert length(logs) == 1
 
       # Verify that the WAL event was deleted after processing
-      assert Replication.list_wal_events(wal_projection.id) == []
+      assert Replication.list_wal_events(wal_pipeline.id) == []
     end
   end
 end

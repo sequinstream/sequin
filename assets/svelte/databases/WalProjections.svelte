@@ -4,7 +4,7 @@
   import { Plus } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
 
-  export let walProjections: Array<{
+  export let walPipelines: Array<{
     id: string;
     name: string;
     source_table: {
@@ -27,18 +27,18 @@
 
 <div class="container mx-auto px-4 py-8">
   <div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-semibold">WAL Projections</h2>
-    <Button on:click={() => pushEvent("new_wal_projection", {})}>
+    <h2 class="text-2xl font-semibold">WAL Pipelines</h2>
+    <Button on:click={() => pushEvent("new_wal_pipeline", {})}>
       <Plus class="h-4 w-4 mr-2" />
-      Create WAL Projection
+      Create WAL Pipeline
     </Button>
   </div>
 
-  {#if walProjections.length === 0}
+  {#if walPipelines.length === 0}
     <div class="text-center py-12">
-      <p class="text-gray-600 mb-4">No WAL Projections found</p>
-      <Button on:click={() => pushEvent("new_wal_projection", {})}>
-        Create your first WAL Projection
+      <p class="text-gray-600 mb-4">No WAL Pipelines found</p>
+      <Button on:click={() => pushEvent("new_wal_pipeline", {})}>
+        Create your first WAL Pipeline
       </Button>
     </div>
   {:else}
@@ -52,27 +52,27 @@
         </Table.Row>
       </Table.Header>
       <Table.Body>
-        {#each walProjections as projection}
+        {#each walPipelines as pipeline}
           <Table.Row>
-            <Table.Cell>{projection.name}</Table.Cell>
+            <Table.Cell>{pipeline.name}</Table.Cell>
             <Table.Cell>
-              {#if projection.source_table}
-                {projection.source_table.schema_name}.{projection.source_table
+              {#if pipeline.source_table}
+                {pipeline.source_table.schema_name}.{pipeline.source_table
                   .table_name}
               {:else}
                 Error - N/A
               {/if}
             </Table.Cell>
             <Table.Cell>
-              {#if projection.destination_table}
-                {projection.destination_table.schema_name}.{projection
+              {#if pipeline.destination_table}
+                {pipeline.destination_table.schema_name}.{pipeline
                   .destination_table.table_name}
               {:else}
                 Error - N/A
               {/if}
             </Table.Cell>
             <Table.Cell
-              >{formatRelativeTimestamp(projection.inserted_at)}</Table.Cell
+              >{formatRelativeTimestamp(pipeline.inserted_at)}</Table.Cell
             >
           </Table.Row>
         {/each}

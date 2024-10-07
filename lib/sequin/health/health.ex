@@ -15,7 +15,7 @@ defmodule Sequin.Health do
   alias Sequin.Error
   alias Sequin.Health.Check
   alias Sequin.JSON
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
   @type entity ::
@@ -23,7 +23,7 @@ defmodule Sequin.Health do
           | HttpPullConsumer.t()
           | HttpPushConsumer.t()
           | PostgresDatabase.t()
-          | WalProjection.t()
+          | WalPipeline.t()
 
   @derive Jason.Encoder
   typedstruct do
@@ -36,7 +36,7 @@ defmodule Sequin.Health do
           | :http_pull_consumer
           | :http_push_consumer
           | :postgres_database
-          | :wal_projection
+          | :wal_pipeline
 
     field :status, status()
     field :checks, [Check.t()]
@@ -62,7 +62,7 @@ defmodule Sequin.Health do
                   is_struct(entity, HttpPullConsumer) or
                   is_struct(entity, HttpPushConsumer) or
                   is_struct(entity, PostgresDatabase) or
-                  is_struct(entity, WalProjection)
+                  is_struct(entity, WalPipeline)
 
   @subject_prefix "sequin-health"
   @debounce_window :timer.seconds(10)
@@ -187,8 +187,8 @@ defmodule Sequin.Health do
     end
   end
 
-  @wal_projection_checks [:filters, :ingestion, :destination_insert]
-  defp expected_check(%WalProjection{}, check_id, status, error) when check_id in @wal_projection_checks do
+  @wal_pipeline_checks [:filters, :ingestion, :destination_insert]
+  defp expected_check(%WalPipeline{}, check_id, status, error) when check_id in @wal_pipeline_checks do
     case check_id do
       :filters ->
         %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
@@ -295,9 +295,9 @@ defmodule Sequin.Health do
     }
   end
 
-  defp initial_health(%WalProjection{} = entity) do
+  defp initial_health(%WalPipeline{} = entity) do
     checks =
-      @wal_projection_checks
+      @wal_pipeline_checks
       |> Enum.map(&expected_check(entity, &1, :initializing))
       |> Enum.map(fn
         %Check{id: :ingestion} = check ->
@@ -311,7 +311,7 @@ defmodule Sequin.Health do
       end)
 
     %Health{
-      name: "WAL Projection health",
+      name: "WAL Pipeline health",
       entity_id: entity.id,
       entity_kind: entity_kind(entity),
       status: :initializing,
@@ -368,7 +368,7 @@ defmodule Sequin.Health do
   defp entity_kind(%HttpPullConsumer{}), do: :http_pull_consumer
   defp entity_kind(%HttpPushConsumer{}), do: :http_push_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
-  defp entity_kind(%WalProjection{}), do: :wal_projection
+  defp entity_kind(%WalPipeline{}), do: :wal_pipeline
 
   defp get_health(%{id: nil} = entity) when is_entity(entity) do
     raise ArgumentError, "entity_id cannot be nil"

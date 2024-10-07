@@ -5,12 +5,12 @@ defmodule Sequin.Replication.WalEvent do
   import Ecto.Changeset
   import Ecto.Query
 
-  alias Sequin.Replication.WalProjection
+  alias Sequin.Replication.WalPipeline
 
   @derive {Jason.Encoder,
            only: [
              :id,
-             :wal_projection_id,
+             :wal_pipeline_id,
              :commit_lsn,
              :record_pks,
              :record,
@@ -29,7 +29,7 @@ defmodule Sequin.Replication.WalEvent do
     field :replication_message_trace_id, Ecto.UUID
     field :source_table_oid, :integer
 
-    belongs_to :wal_projection, WalProjection
+    belongs_to :wal_pipeline, WalPipeline
 
     timestamps()
   end
@@ -39,7 +39,7 @@ defmodule Sequin.Replication.WalEvent do
 
     wal_event
     |> cast(attrs, [
-      :wal_projection_id,
+      :wal_pipeline_id,
       :commit_lsn,
       :record_pks,
       :replication_message_trace_id,
@@ -50,7 +50,7 @@ defmodule Sequin.Replication.WalEvent do
       :committed_at
     ])
     |> validate_required([
-      :wal_projection_id,
+      :wal_pipeline_id,
       :commit_lsn,
       :record_pks,
       :replication_message_trace_id,
@@ -101,12 +101,12 @@ defmodule Sequin.Replication.WalEvent do
     from([wal_event: we] in query, select: count(we.id))
   end
 
-  def where_wal_projection_id(query \\ base_query(), wal_projection_id) do
-    from([wal_event: we] in query, where: we.wal_projection_id == ^wal_projection_id)
+  def where_wal_pipeline_id(query \\ base_query(), wal_pipeline_id) do
+    from([wal_event: we] in query, where: we.wal_pipeline_id == ^wal_pipeline_id)
   end
 
-  def where_wal_projection_id_in(query \\ base_query(), wal_projection_ids) do
-    from([wal_event: we] in query, where: we.wal_projection_id in ^wal_projection_ids)
+  def where_wal_pipeline_id_in(query \\ base_query(), wal_pipeline_ids) do
+    from([wal_event: we] in query, where: we.wal_pipeline_id in ^wal_pipeline_ids)
   end
 
   defp base_query(query \\ __MODULE__) do

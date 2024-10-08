@@ -150,6 +150,8 @@ create table ${destinationTableName} (
   seq bigint not null,
   source_database_id uuid not null,
   source_table_oid bigint not null,
+  source_table_schema text not null,
+  source_table_name text not null,
   record_pk text not null,
   record jsonb not null,
   changes jsonb,

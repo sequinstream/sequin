@@ -14,6 +14,8 @@ if Mix.env() == :test do
         %TestEventLog{
           seq: Factory.integer(),
           source_database_id: Faker.UUID.v4(),
+          source_table_schema: Factory.postgres_object(),
+          source_table_name: Factory.postgres_object(),
           source_table_oid: Factory.integer(),
           record_pk: Faker.UUID.v4(),
           record: %{

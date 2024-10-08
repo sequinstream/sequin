@@ -16,6 +16,8 @@ defmodule Sequin.Postgres do
     %{name: "seq", type: "bigint"},
     %{name: "source_database_id", type: "uuid"},
     %{name: "source_table_oid", type: "bigint"},
+    %{name: "source_table_schema", type: "text"},
+    %{name: "source_table_name", type: "text"},
     %{name: "record_pk", type: "text"},
     %{name: "record", type: "jsonb"},
     %{name: "changes", type: "jsonb"},

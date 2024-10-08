@@ -28,6 +28,8 @@ defmodule Sequin.Replication.WalEvent do
     field :record, :map
     field :replication_message_trace_id, Ecto.UUID
     field :source_table_oid, :integer
+    field :source_table_schema, :string
+    field :source_table_name, :string
 
     belongs_to :wal_pipeline, WalPipeline
 
@@ -44,6 +46,8 @@ defmodule Sequin.Replication.WalEvent do
       :record_pks,
       :replication_message_trace_id,
       :source_table_oid,
+      :source_table_schema,
+      :source_table_name,
       :record,
       :changes,
       :action,

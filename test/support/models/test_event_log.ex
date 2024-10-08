@@ -12,6 +12,8 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
     field :seq, :integer
     field :source_database_id, Ecto.UUID
     field :source_table_oid, :integer
+    field :source_table_schema, :string
+    field :source_table_name, :string
     field :record_pk, :string
     field :record, :map
     field :changes, :map
@@ -58,6 +60,8 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
       :seq,
       :source_database_id,
       :source_table_oid,
+      :source_table_schema,
+      :source_table_name,
       :record_pk,
       :record,
       :changes,

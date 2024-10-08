@@ -81,6 +81,8 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
           %{
             seq: wal_event.commit_lsn,
             source_table_oid: wal_event.source_table_oid,
+            source_table_schema: wal_event.source_table_schema,
+            source_table_name: wal_event.source_table_name,
             record_pk: hd(wal_event.record_pks),
             action: to_string(wal_event.action),
             changes: wal_event.changes,
@@ -96,10 +98,12 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
           :record_pk,
           :action,
           :changes,
+          :source_table_oid,
+          :source_table_schema,
+          :source_table_name,
           # Inscrutable timezone/dt issue
           # :committed_at,
-          :record,
-          :source_table_oid
+          :record
         ])
       end)
 

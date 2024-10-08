@@ -295,15 +295,19 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
       $2::uuid[],
       $3::bigint[],
       $4::text[],
-      $5::jsonb[],
-      $6::jsonb[],
-      $7::text[],
-      $8::timestamp with time zone[],
-      $9::timestamp with time zone[]
+      $5::text[],
+      $6::text[],
+      $7::jsonb[],
+      $8::jsonb[],
+      $9::text[],
+      $10::timestamp with time zone[],
+      $11::timestamp with time zone[]
     ) AS t(#{Enum.join(columns, ", ")})
     ON CONFLICT (seq, source_database_id, record_pk)
       DO UPDATE SET
         source_table_oid = EXCLUDED.source_table_oid,
+        source_table_schema = EXCLUDED.source_table_schema,
+        source_table_name = EXCLUDED.source_table_name,
         record = EXCLUDED.record,
         changes = EXCLUDED.changes,
         action = EXCLUDED.action,
@@ -335,6 +339,8 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
       "seq",
       "source_database_id",
       "source_table_oid",
+      "source_table_schema",
+      "source_table_name",
       "record_pk",
       "record",
       "changes",
@@ -350,6 +356,8 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
           wal_event.commit_lsn,
           UUID.string_to_binary!(state.replication_slot.postgres_database_id),
           wal_event.source_table_oid,
+          wal_event.source_table_schema,
+          wal_event.source_table_name,
           Enum.join(wal_event.record_pks, ","),
           wal_event.record,
           wal_event.changes,

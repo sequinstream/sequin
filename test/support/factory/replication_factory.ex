@@ -258,7 +258,9 @@ defmodule Sequin.Factory.ReplicationFactory do
         action: action,
         committed_at: Factory.timestamp(),
         replication_message_trace_id: Factory.uuid(),
-        source_table_oid: Factory.unique_integer()
+        source_table_oid: Factory.unique_integer(),
+        source_table_schema: Factory.postgres_object(),
+        source_table_name: Factory.postgres_object()
       },
       attrs
     )

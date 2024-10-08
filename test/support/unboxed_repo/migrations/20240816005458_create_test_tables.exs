@@ -57,6 +57,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :seq, :bigint, null: false
       add :source_database_id, :uuid, null: false
       add :source_table_oid, :bigint, null: false
+      add :source_table_schema, :text, null: false
+      add :source_table_name, :text, null: false
       add :record_pk, :text, null: false
       add :record, :map, null: false
       add :changes, :map

@@ -240,7 +240,9 @@ defmodule Sequin.Replication.MessageHandler do
       action: message.action,
       committed_at: message.commit_timestamp,
       replication_message_trace_id: message.trace_id,
-      source_table_oid: message.table_oid
+      source_table_oid: message.table_oid,
+      source_table_schema: message.table_schema,
+      source_table_name: message.table_name
     }
   end
 

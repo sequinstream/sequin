@@ -7,7 +7,7 @@
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <a href="https://console.sequinstream.com">Sequin Cloud</a>
+  <a href="https://console.sequinstream.com">Sequinstream.com</a>
   ·
   <a href="https://sequinstream.com/docs">Documentation</a>
   ·
@@ -18,7 +18,7 @@
 
 ## What is Sequin?
 
-Sequin streams data out of your Postgres database. You can use it to **replicate data** in your existing tables to other apps, databases, caches, materialized views, or frontend clients. Or you can use it to build **event processing workflows**, such as triggering side effects when data in Postgres changes.
+Sequin streams data out of your Postgres database. You can use it to **replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients. Or you can use it to build **event processing workflows**, such as triggering side effects when data in Postgres changes.
 
 Sequin itself is built on Postgres. It uses the Write Ahead Log (WAL) to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like Debezium and Kafka.
 
@@ -38,7 +38,7 @@ Sequin is open source/MIT. We can't wait to see what you build.
 
 ## Cloud
 
-[**Try Sequin Cloud now →**](https://console.sequinstream.com/register)
+[**Try Sequinstream.com now →**](https://console.sequinstream.com/register)
 
 ## How Sequin works
 
@@ -71,17 +71,13 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 ## Use cases
 
 **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
-![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_3.svg?)
+![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-replication.svg?)
 
 **Trigger side-effects:** Never miss a change in your database for processing by other systems.
-![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_1.svg?)
+![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-side-effect.svg?)
 
 **Fan out:** Broadcast events, distribute workloads, and decouple services.
-![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use_case_2.svg?)
-
-## WAL Pipelines
-
-Sequin streams rows from your Postgres tables. To capture and stream discrete changes to your tables – including `OLD` values for updates and hard-deletes – you can use **WAL Pipelines**. WAL Pipelines insert WAL records into an append-only event log table in your database. You can then stream these changes with Sequin.
+![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-fan-out.svg?)
 
 ## Sequin vs Kafka
 
@@ -124,6 +120,10 @@ Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactl
 Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, Sequin isn't really a queue; it's better thought of as a stream. Because Sequin is streaming your Postgres tables, messages aren't deleted after they're processed. This means consumers can rewind and replay records, or start anywhere in the table.
 
 So, Sequin is kind of like combining your Postgres table with SQS, like you might do with a system like Debezium.
+
+## WAL Pipelines
+
+Sequin streams rows from your Postgres tables. To capture and stream discrete changes to your tables – including `OLD` values for updates and hard-deletes – you can use **WAL Pipelines**. WAL Pipelines insert WAL records into an append-only event log table in your database. You can then stream these changes with Sequin.
 
 ## Documentation
 

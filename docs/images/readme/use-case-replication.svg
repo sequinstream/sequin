@@ -1,0 +1,44 @@
+<svg width="800" height="140" viewBox="0 0 800 140" fill="none"
+  xmlns="http://www.w3.org/2000/svg">
+  <g id="use_case_3">
+    <g id="insert">
+      <rect x="249.5" y="20" width="100" height="100" rx="10" fill="#16181F"/>
+      <rect x="248.5" y="19" width="102" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
+      <path id="Vector" d="M278.5 33.7308C278.5 36.0672 274.694 37.9615 270 37.9615C265.306 37.9615 261.5 36.0672 261.5 33.7308M278.5 33.7308C278.5 31.3944 274.694 29.5 270 29.5C265.306 29.5 261.5 31.3944 261.5 33.7308M278.5 33.7308V45.2692C278.5 47.6056 274.694 49.5 270 49.5C265.306 49.5 261.5 47.6056 261.5 45.2692V33.7308M278.5 33.7308V37.5769M261.5 33.7308V37.5769M278.5 37.5769V41.4231C278.5 43.7595 274.694 45.6538 270 45.6538C265.306 45.6538 261.5 43.7595 261.5 41.4231V37.5769M278.5 37.5769C278.5 39.9133 274.694 41.8077 270 41.8077C265.306 41.8077 261.5 39.9133 261.5 37.5769" stroke="#919CF9" stroke-linecap="round" stroke-linejoin="round"/>
+      <g id="Code snippet">
+        <text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="15" letter-spacing="0em">
+          <tspan x="261.5" y="76.115">Update&#10;</tspan>
+        </text>
+        <text fill="#F8F8F2" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+          <tspan x="285.484" y="91.115"></tspan>
+          <tspan x="261.5" y="106.115">products</tspan>
+        </text>
+        <text fill="#FF79C6" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+          <tspan x="261.5" y="91.115">set</tspan>
+        </text>
+      </g>
+    </g>
+    <path id="Arrow 9" d="M416.207 70.7071C416.598 70.3166 416.598 69.6834 416.207 69.2929L409.843 62.9289C409.453 62.5384 408.819 62.5384 408.429 62.9289C408.038 63.3195 408.038 63.9526 408.429 64.3431L414.086 70L408.429 75.6569C408.038 76.0474 408.038 76.6805 408.429 77.0711C408.819 77.4616 409.453 77.4616 409.843 77.0711L416.207 70.7071ZM359.5 71H415.5V69H359.5V71Z" class="arrow-path"/>
+    <g id="event">
+      <g id="insert_2">
+        <rect x="425.5" y="20" width="125" height="100" rx="10" fill="#16181F"/>
+        <rect x="424.5" y="19" width="127" height="102" rx="11" stroke="#919CF9" stroke-opacity="0.3" stroke-width="2"/>
+        <path id="Vector_2" d="M452.5 49.625V47C452.5 46.1049 452.144 45.2465 451.511 44.6135C450.879 43.9806 450.02 43.625 449.125 43.625H447.625C447.327 43.625 447.04 43.5065 446.83 43.2955C446.619 43.0845 446.5 42.7984 446.5 42.5V41C446.5 40.1049 446.144 39.2464 445.511 38.6135C444.879 37.9806 444.02 37.625 443.125 37.625H441.25M446.481 51.106L448 52.625M446.481 51.106C446.725 50.8622 446.918 50.573 447.05 50.2545C447.182 49.9361 447.25 49.5947 447.25 49.25C447.25 48.5538 446.973 47.8861 446.481 47.3938C445.989 46.9016 445.321 46.625 444.625 46.625C443.929 46.625 443.261 46.9016 442.769 47.3938C442.277 47.8861 442 48.5538 442 49.25C442 49.5947 442.068 49.9361 442.2 50.2545C442.332 50.573 442.525 50.8624 442.769 51.1062C443.013 51.3499 443.302 51.5433 443.62 51.6752C443.939 51.8071 444.28 51.875 444.625 51.875C444.97 51.875 445.311 51.8071 445.63 51.6752C445.948 51.5433 446.237 51.3498 446.481 51.106ZM443.5 37.625H438.625C438.004 37.625 437.5 38.129 437.5 38.75V55.25C437.5 55.871 438.004 56.375 438.625 56.375H451.375C451.996 56.375 452.5 55.871 452.5 55.25V46.625C452.5 44.2381 451.552 41.9489 449.864 40.261C448.176 38.5732 445.887 37.625 443.5 37.625Z" stroke="#BD93F9" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <g id="Code snippet_2">
+          <text fill="#BD93F9" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="10" letter-spacing="0em">
+            <tspan x="437.5" y="97.99">search cache</tspan>
+          </text>
+          <text fill="#BD93F9" xml:space="preserve" style="white-space: pre" font-family="'Courier New', Courier, monospace" font-size="15" letter-spacing="0em">
+            <tspan x="437.5" y="82.99">Invalidate&#10;</tspan>
+          </text>
+        </g>
+      </g>
+    </g>
+  </g>
+  <style>
+  .arrow-path { fill: black; }
+  @media (prefers-color-scheme: dark) {
+    .arrow-path { fill: white; }
+  }
+  </style>
+</svg>

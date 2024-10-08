@@ -20,7 +20,7 @@
 
 Sequin streams data out of your Postgres database. You can use it to **replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients. Or you can use it to build **event processing workflows**, such as triggering side effects when data in Postgres changes.
 
-Sequin itself is built on Postgres. It uses the Write Ahead Log (WAL) to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like Debezium and Kafka.
+Sequin itself is built on Postgres. It uses the Write Ahead Log (WAL) to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like [Debezium](#sequin-vs-debezium--kafka) and [Kafka](#sequin-vs-kafka).
 
 Sequin is a standalone Docker container that you can deploy in front of your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 

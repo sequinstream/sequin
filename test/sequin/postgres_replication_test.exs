@@ -657,6 +657,55 @@ defmodule Sequin.PostgresReplicationTest do
     end
   end
 
+  describe "toast columns" do
+    test "unchanged toast values are loaded" do
+      test_pid = self()
+
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+      end)
+
+      start_replication!(message_handler_module: MessageHandlerMock)
+
+      # Create a large text field that will be stored as TOAST
+      large_text = String.duplicate("Lorem ipsum ", 100_000)
+
+      # Insert a character with the large text field
+      character =
+        CharacterFactory.insert_character!(
+          [name: "TOAST Test", house: large_text],
+          repo: UnboxedRepo
+        )
+
+      # Wait for the insert message
+      assert_receive {:changes, [insert_change]}, :timer.seconds(1)
+      assert is_action(insert_change, :insert)
+
+      # Update a non-TOAST field to trigger a change
+      UnboxedRepo.update!(Ecto.Changeset.change(character, name: "Updated TOAST Test"))
+
+      # Wait for the update message
+      assert_receive {:changes, [update_change]}, :timer.seconds(1)
+      assert is_action(update_change, :update)
+
+      # Check that the description field is present and matches the original large text
+      house_field = Enum.find(update_change.fields, &(&1.column_name == "house"))
+      assert house_field, "House field should be present"
+
+      assert house_field.value == large_text,
+             "House should match the original large text, found: #{inspect(house_field.value)}"
+
+      # Verify that the description field was not marked as changed
+      assert update_change.old_fields == nil ||
+               Enum.find(update_change.old_fields, &(&1.column_name == "house")) == nil,
+             "House field should not be in old_fields"
+
+      # Check that the name field was updated
+      name_field = Enum.find(update_change.fields, &(&1.column_name == "name"))
+      assert name_field.value == "Updated TOAST Test", "Name should be updated"
+    end
+  end
+
   defp start_replication!(opts) do
     opts =
       Keyword.merge(

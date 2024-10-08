@@ -233,6 +233,99 @@ defmodule Sequin.Extensions.Replication do
     {:noreply, state}
   end
 
+  def load_unchanged_toasts(%State{} = state) do
+    conn = get_cached_conn(state)
+    messages = state.accumulated_messages
+
+    # Identify messages with unchanged TOAST values
+    messages_with_toast = Enum.filter(messages, &has_unchanged_toast?/1)
+
+    # Group those messages by table
+    grouped_messages = Enum.group_by(messages_with_toast, & &1.table_oid)
+
+    # Process each table group
+    toast_value_map =
+      Enum.reduce(grouped_messages, %{}, fn {table_oid, table_messages}, acc ->
+        {columns, schema, table} = Map.get(state.schemas, table_oid)
+        pk_columns = Enum.filter(columns, & &1.pk?)
+
+        # Build query to fetch full tuple data
+        query = build_fetch_query(schema, table, pk_columns)
+
+        # Extract primary key values
+        pk_values = Enum.map(table_messages, &extract_pk_values(&1, pk_columns))
+
+        # Execute query
+        {:ok, result} = Postgres.query(conn, query, List.flatten(pk_values))
+
+        # Update accumulator with fetched toast values
+        Map.merge(acc, process_query_result(result, table_oid, columns))
+      end)
+
+    # Update messages and return
+    Enum.map(messages, &update_message_toast_values(&1, toast_value_map))
+  end
+
+  defp has_unchanged_toast?(%Message{fields: nil}), do: false
+
+  defp has_unchanged_toast?(%Message{fields: fields}) do
+    Enum.any?(fields, fn %Message.Field{value: value} ->
+      value == :unchanged_toast
+    end)
+  end
+
+  defp build_fetch_query(schema, table, pk_columns) do
+    pk_conditions = Enum.map_join(pk_columns, " AND ", &"#{&1.name} = $#{&1.attnum}")
+    table = Postgres.quote_name(schema, table)
+    "SELECT * FROM #{table} WHERE #{pk_conditions}"
+  end
+
+  defp extract_pk_values(message, pk_columns) do
+    Enum.map(pk_columns, fn pk_col ->
+      Enum.find_value(message.fields, fn %Message.Field{column_name: name, value: value} ->
+        if name == pk_col.name, do: value
+      end)
+    end)
+  end
+
+  defp process_query_result(result, table_oid, columns) do
+    result.rows
+    |> Enum.map(fn row ->
+      pk_values = row |> Enum.take(length(Enum.filter(columns, & &1.pk?))) |> Enum.map(&to_string/1)
+      column_value_map = columns |> Enum.zip(row) |> Map.new(fn {col, val} -> {col.name, val} end)
+      {table_oid, pk_values, column_value_map}
+    end)
+    |> Map.new(fn {table_oid, pk_values, column_value_map} -> {{table_oid, pk_values}, column_value_map} end)
+  end
+
+  defp update_message_toast_values(message, toast_value_map) do
+    if has_unchanged_toast?(message) do
+      pk_values = message.ids
+      key = {message.table_oid, pk_values}
+
+      case Map.get(toast_value_map, key) do
+        nil ->
+          message
+
+        column_value_map ->
+          updated_fields = update_fields_with_toast(message.fields, column_value_map)
+          %{message | fields: updated_fields}
+      end
+    else
+      message
+    end
+  end
+
+  defp update_fields_with_toast(fields, column_value_map) do
+    Enum.map(fields, fn %Message.Field{column_name: name, value: value} = field ->
+      if value == :unchanged_toast do
+        %{field | value: Map.get(column_value_map, name)}
+      else
+        field
+      end
+    end)
+  end
+
   defp ack_message(lsn) when is_integer(lsn) do
     lsn = lsn + 1
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
@@ -308,11 +401,14 @@ defmodule Sequin.Extensions.Replication do
 
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
+    messages =
+      state
+      |> load_unchanged_toasts()
+      # Reverse the messages because we accumulate them with list prepending
+      |> Enum.reverse()
+
     # Flush accumulated messages
-    state.message_handler_module.handle_messages(
-      state.message_handler_ctx,
-      Enum.reverse(state.accumulated_messages)
-    )
+    state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
     if state.test_pid do
       send(state.test_pid, {__MODULE__, :flush_messages})

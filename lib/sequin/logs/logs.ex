@@ -147,4 +147,18 @@ defmodule Sequin.Logs do
   defp default_query do
     Application.fetch_env!(:sequin, :datadog)[:default_query] || ""
   end
+
+  def trim_log_file do
+    log_file = log_file_path()
+
+    case File.write(log_file, "", [:write]) do
+      :ok ->
+        Logger.info("Cleared consumer messages log file: #{log_file}")
+        :ok
+
+      {:error, reason} ->
+        Logger.error("Failed to clear consumer messages log file: #{log_file}, reason: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
 end

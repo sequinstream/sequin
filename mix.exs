@@ -91,7 +91,11 @@ defmodule Sequin.MixProject do
     [
       setup: ["deps.get", "ecto.setup", "cmd npm install --prefix assets"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
-      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      "ecto.reset": [
+        "ecto.drop",
+        "ecto.setup",
+        &remove_consumer_messages_log/1
+      ],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["tailwind sequin", "esbuild sequin"],
@@ -101,5 +105,9 @@ defmodule Sequin.MixProject do
         "phx.digest"
       ]
     ]
+  end
+
+  defp remove_consumer_messages_log(_) do
+    Sequin.Logs.trim_log_file()
   end
 end

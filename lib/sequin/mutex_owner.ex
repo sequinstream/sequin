@@ -124,6 +124,6 @@ defmodule Sequin.MutexOwner do
   end
 
   defp env do
-    Application.get_env(:ix, :env)
+    Application.get_env(:sequin, :env)
   end
 end

@@ -376,17 +376,26 @@ defmodule Sequin.Health do
 
   defp get_health(entity) when is_entity(entity) do
     :redix
-    |> Redix.command(["GET", "ix:health:v0:#{entity.id}"])
+    |> Redix.command(["GET", key(entity.id)])
     |> case do
-      {:ok, nil} -> {:ok, initial_health(entity)}
-      {:ok, json} -> {:ok, Health.from_json!(json)}
-      {:error, error} -> {:error, to_service_error(error)}
+      {:ok, nil} ->
+        {:ok, initial_health(entity)}
+
+      {:ok, json} ->
+        health = Health.from_json!(json)
+        {:ok, compute_derived_fields(health)}
+
+      {:error, error} ->
+        {:error, to_service_error(error)}
     end
   end
 
-  defp set_health(entity_id, %Health{} = health) do
+  @doc """
+  Public for testing
+  """
+  def set_health(entity_id, %Health{} = health) do
     :redix
-    |> Redix.command(["SET", "ix:health:v0:#{entity_id}", Jason.encode!(health)])
+    |> Redix.command(["SET", key(entity_id), Jason.encode!(health)])
     |> case do
       {:ok, "OK"} -> {:ok, health}
       {:error, error} -> {:error, to_service_error(error)}
@@ -415,18 +424,15 @@ defmodule Sequin.Health do
   """
   @spec to_external(t()) :: map()
   def to_external(%Health{} = health) do
-    {transformed_checks, updated_health} =
-      health.checks
-      |> Enum.reject(&(&1.status == :waiting))
-      |> Enum.map_reduce(health, &transform_check_for_external/2)
+    checks = Enum.reject(health.checks, &(&1.status == :waiting))
 
     %{
-      entity_kind: updated_health.entity_kind,
-      entity_id: updated_health.entity_id,
-      status: updated_health.status,
-      name: updated_health.name,
+      entity_kind: health.entity_kind,
+      entity_id: health.entity_id,
+      status: health.status,
+      name: health.name,
       checks:
-        Enum.map(transformed_checks, fn check ->
+        Enum.map(checks, fn check ->
           %{
             name: check.name,
             status: check.status,
@@ -437,7 +443,13 @@ defmodule Sequin.Health do
     }
   end
 
-  defp transform_check_for_external(
+  defp compute_derived_fields(%Health{} = health) do
+    {_checks, health} = Enum.map_reduce(health.checks, health, &compute_derived_fields/2)
+
+    health
+  end
+
+  defp compute_derived_fields(
          %Check{id: :replication_connected, status: :initializing} = check,
          %Health{entity_kind: :postgres_database} = health
        ) do
@@ -452,7 +464,7 @@ defmodule Sequin.Health do
     end
   end
 
-  defp transform_check_for_external(check, health), do: {check, health}
+  defp compute_derived_fields(check, health), do: {check, health}
 
   defp update_health_status(health, updated_check) do
     updated_checks =
@@ -471,5 +483,42 @@ defmodule Sequin.Health do
   def reset(entity) when is_entity(entity) do
     new_health = initial_health(entity)
     set_health(entity.id, new_health)
+  end
+
+  defp key(entity_id) do
+    env = if env() in [:dev, :test], do: "#{env()}:", else: ""
+    "ix:#{env}health:v0:#{entity_id}"
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
+  end
+
+  @doc """
+  Deletes all health-related Redis keys for the test environment.
+  """
+  @spec clean_test_keys() :: {:ok, integer()} | {:error, Error.t()}
+  def clean_test_keys do
+    case env() do
+      :test ->
+        pattern = "ix:test:health:*"
+
+        case Redix.command(:redix, ["KEYS", pattern]) do
+          {:ok, []} ->
+            {:ok, 0}
+
+          {:ok, keys} ->
+            case Redix.command(:redix, ["DEL" | keys]) do
+              {:ok, deleted_count} -> {:ok, deleted_count}
+              {:error, error} -> {:error, to_service_error(error)}
+            end
+
+          {:error, error} ->
+            {:error, to_service_error(error)}
+        end
+
+      _ ->
+        {:error, Error.invariant("clean_test_keys can only be called in the test environment")}
+    end
   end
 end

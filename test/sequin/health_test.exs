@@ -107,6 +107,9 @@ defmodule Sequin.HealthTest do
           end)
         end)
 
+      Health.set_health(health.entity_id, health)
+
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert external = Health.to_external(health)
       assert external.status == :error
     end

@@ -113,10 +113,13 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Map.put(:account_id, account_id)
       |> http_push_consumer_attrs()
 
-    {:ok, consumer} =
-      Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs)
+    case Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs) do
+      {:ok, consumer} ->
+        consumer
 
-    consumer
+      {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
+        insert_http_push_consumer!(attrs)
+    end
   end
 
   def http_pull_consumer(attrs \\ []) do

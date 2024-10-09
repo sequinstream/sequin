@@ -190,14 +190,16 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           action: :insert,
-          deliver_count: deliver_count1
+          deliver_count: deliver_count1,
+          not_visible_until: nil
         )
 
       event2 =
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
           action: :insert,
-          deliver_count: deliver_count2
+          deliver_count: deliver_count2,
+          not_visible_until: nil
         )
 
       # Capture the current time before the push attempt

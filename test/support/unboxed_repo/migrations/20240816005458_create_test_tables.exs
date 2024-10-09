@@ -31,6 +31,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :id_string, :string, primary_key: true
       add :id_uuid, :uuid, primary_key: true
       add :name, :text
+      add :house, :text
 
       timestamps()
     end

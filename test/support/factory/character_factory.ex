@@ -77,9 +77,10 @@ if Mix.env() == :test do
 
       merge_attributes(
         %CharacterMultiPK{
-          id_string: Faker.UUID.v4(),
+          id_string: "string-" <> Faker.UUID.v4(),
           id_uuid: Faker.UUID.v4(),
-          name: Faker.Person.name()
+          name: Faker.Person.name(),
+          house: Faker.Team.name()
         },
         attrs
       )

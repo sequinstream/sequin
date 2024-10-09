@@ -47,6 +47,12 @@ defmodule Sequin.String do
     end
   end
 
+  def binary_to_string(uuid) when is_binary(uuid) do
+    UUID.binary_to_string!(uuid)
+  rescue
+    ArgumentError -> uuid
+  end
+
   @doc """
   Checks if all strings in a list are valid UUIDs.
 

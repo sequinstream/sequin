@@ -12,6 +12,7 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
     field :id_string, :string, primary_key: true
     field :id_uuid, Ecto.UUID, primary_key: true
     field :name, :string
+    field :house, :string
 
     timestamps()
   end
@@ -29,6 +30,6 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
   end
 
   def changeset(character, attrs) do
-    Ecto.Changeset.cast(character, attrs, [:id_integer, :id_string, :id_uuid, :name])
+    Ecto.Changeset.cast(character, attrs, [:id_integer, :id_string, :id_uuid, :name, :house])
   end
 end

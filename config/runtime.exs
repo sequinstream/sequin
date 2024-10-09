@@ -122,7 +122,13 @@ if config_env() == :prod and not self_hosted do
     ssl: AwsRdsCAStore.ssl_opts(database_url),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
     socket_options: maybe_ipv6,
-    url: database_url
+    url: database_url,
+    datadog_req_opts: [
+      headers: [
+        {"DD-API-KEY", System.fetch_env!("DATADOG_API_KEY")},
+        {"DD-APPLICATION-KEY", System.fetch_env!("DATADOG_APP_KEY")}
+      ]
+    ]
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Stream Postgres tables
+### Stream Postgres
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 

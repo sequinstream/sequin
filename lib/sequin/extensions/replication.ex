@@ -233,7 +233,7 @@ defmodule Sequin.Extensions.Replication do
     {:noreply, state}
   end
 
-  def load_unchanged_toasts(%State{} = state) do
+  defp load_unchanged_toasts(%State{} = state) do
     conn = get_cached_conn(state)
     messages = state.accumulated_messages
 
@@ -250,13 +250,13 @@ defmodule Sequin.Extensions.Replication do
         pk_columns = Enum.filter(columns, & &1.pk?)
 
         # Build query to fetch full tuple data
-        query = build_fetch_query(schema, table, pk_columns)
+        query = build_fetch_query(schema, table, pk_columns, length(table_messages))
 
         # Extract primary key values
-        pk_values = Enum.map(table_messages, &extract_pk_values(&1, pk_columns))
+        pk_values = Enum.flat_map(table_messages, &extract_pk_values(&1, pk_columns))
 
         # Execute query
-        {:ok, result} = Postgres.query(conn, query, List.flatten(pk_values))
+        {:ok, result} = Postgres.query(conn, query, pk_values)
 
         # Update accumulator with fetched toast values
         Map.merge(acc, process_query_result(result, table_oid, columns))
@@ -274,24 +274,41 @@ defmodule Sequin.Extensions.Replication do
     end)
   end
 
-  defp build_fetch_query(schema, table, pk_columns) do
-    pk_conditions = Enum.map_join(pk_columns, " AND ", &"#{&1.name} = $#{&1.attnum}")
+  defp build_fetch_query(schema, table, pk_columns, record_count) do
+    pk_condition =
+      Enum.map_join(1..record_count, " OR ", fn i ->
+        start_index = (i - 1) * length(pk_columns) + 1
+
+        pk_columns
+        |> Enum.with_index(start_index)
+        |> Enum.map_join(" AND ", fn {col, index} -> "#{col.name} = $#{index}" end)
+        |> then(fn condition -> "(#{condition})" end)
+      end)
+
     table = Postgres.quote_name(schema, table)
-    "SELECT * FROM #{table} WHERE #{pk_conditions}"
+    "SELECT * FROM #{table} WHERE #{pk_condition}"
   end
 
   defp extract_pk_values(message, pk_columns) do
     Enum.map(pk_columns, fn pk_col ->
-      Enum.find_value(message.fields, fn %Message.Field{column_name: name, value: value} ->
-        if name == pk_col.name, do: value
-      end)
+      value =
+        Enum.find_value(message.fields, fn %Message.Field{column_name: name, value: value} ->
+          if name == pk_col.name, do: value
+        end)
+
+      if is_binary(value) and Sequin.String.is_uuid?(value), do: UUID.string_to_binary!(value), else: value
     end)
   end
 
   defp process_query_result(result, table_oid, columns) do
     result.rows
     |> Enum.map(fn row ->
-      pk_values = row |> Enum.take(length(Enum.filter(columns, & &1.pk?))) |> Enum.map(&to_string/1)
+      pk_values =
+        row
+        |> Enum.take(length(Enum.filter(columns, & &1.pk?)))
+        |> Enum.map(&to_string/1)
+        |> Enum.map(&Sequin.String.binary_to_string/1)
+
       column_value_map = columns |> Enum.zip(row) |> Map.new(fn {col, val} -> {col.name, val} end)
       {table_oid, pk_values, column_value_map}
     end)

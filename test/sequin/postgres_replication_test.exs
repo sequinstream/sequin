@@ -704,6 +704,131 @@ defmodule Sequin.PostgresReplicationTest do
       name_field = Enum.find(update_change.fields, &(&1.column_name == "name"))
       assert name_field.value == "Updated TOAST Test", "Name should be updated"
     end
+
+    test "loads toasts values for multi pk records" do
+      test_pid = self()
+
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+      end)
+
+      start_replication!(message_handler_module: MessageHandlerMock)
+
+      # Create a large text field that will be stored as TOAST
+      large_text = String.duplicate("Lorem ipsum ", 100_000)
+
+      # Insert a character with the large text field
+      character = CharacterFactory.insert_character_multi_pk!([name: "TOAST Test", house: large_text], repo: UnboxedRepo)
+
+      # Wait for the insert message
+      assert_receive {:changes, [insert_change]}, :timer.seconds(1)
+      assert is_action(insert_change, :insert)
+
+      # Update a non-TOAST field to trigger a change
+      UnboxedRepo.update!(Ecto.Changeset.change(character, name: "Updated TOAST Test"))
+
+      # Wait for the update message
+      assert_receive {:changes, [update_change]}, :timer.seconds(1)
+      assert is_action(update_change, :update)
+
+      # Check that the house field is present and matches the original large text
+      house_field = Enum.find(update_change.fields, &(&1.column_name == "house"))
+      assert house_field, "House field should be present"
+
+      assert house_field.value == large_text,
+             "House should match the original large text, found: #{inspect(house_field.value)}"
+
+      # Check that the name field was updated
+      name_field = Enum.find(update_change.fields, &(&1.column_name == "name"))
+      assert name_field.value == "Updated TOAST Test", "Name should be updated"
+    end
+
+    test "multiple toast values are loaded in one transaction" do
+      test_pid = self()
+
+      stub(MessageHandlerMock, :handle_messages, fn _ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+      end)
+
+      start_replication!(message_handler_module: MessageHandlerMock)
+
+      # Create large text fields that will be stored as TOAST
+      large_text1 = String.duplicate("Lorem ipsum ", 100_000)
+      large_text2 = String.duplicate("Dolor sit amet ", 100_000)
+
+      # Insert characters with large text fields
+      character1 =
+        CharacterFactory.insert_character!(
+          [name: "TOAST Test 1", house: large_text1],
+          repo: UnboxedRepo
+        )
+
+      character2 =
+        CharacterFactory.insert_character!(
+          [name: "TOAST Test 2", house: large_text2],
+          repo: UnboxedRepo
+        )
+
+      # Insert characters with full identity and large text fields
+      character_ident1 =
+        CharacterFactory.insert_character_ident_full!(
+          [name: "TOAST Ident 1", house: large_text1],
+          repo: UnboxedRepo
+        )
+
+      character_ident2 =
+        CharacterFactory.insert_character_ident_full!(
+          [name: "TOAST Ident 2", house: large_text2],
+          repo: UnboxedRepo
+        )
+
+      character_multi_pk_1 =
+        CharacterFactory.insert_character_multi_pk!(
+          [name: "TOAST Multi PK 1", house: large_text1],
+          repo: UnboxedRepo
+        )
+
+      character_multi_pk_2 =
+        CharacterFactory.insert_character_multi_pk!(
+          [name: "TOAST Multi PK 2", house: large_text2],
+          repo: UnboxedRepo
+        )
+
+      # Wait for all insert messages
+      for _ <- 1..6 do
+        assert_receive {:changes, [insert_change]}, :timer.seconds(1)
+        assert is_action(insert_change, :insert)
+      end
+
+      # Update non-TOAST fields to trigger changes
+      UnboxedRepo.transaction(fn ->
+        UnboxedRepo.update!(Ecto.Changeset.change(character1, name: "Updated TOAST Test 1"))
+        UnboxedRepo.update!(Ecto.Changeset.change(character2, name: "Updated TOAST Test 2"))
+        UnboxedRepo.update!(Ecto.Changeset.change(character_ident1, name: "Updated TOAST Ident 1"))
+        UnboxedRepo.update!(Ecto.Changeset.change(character_ident2, name: "Updated TOAST Ident 2"))
+        UnboxedRepo.update!(Ecto.Changeset.change(character_multi_pk_1, name: "Updated TOAST Multi PK 1"))
+        UnboxedRepo.update!(Ecto.Changeset.change(character_multi_pk_2, name: "Updated TOAST Multi PK 2"))
+      end)
+
+      # Wait for all update messages and verify TOAST fields
+      assert_receive {:changes, changes}, :timer.seconds(1)
+      assert length(changes) == 6
+
+      for change <- changes do
+        assert is_action(change, :update)
+
+        # Check that the house field is present and matches one of the large texts
+        house_field = Enum.find(change.fields, &(&1.column_name == "house"))
+        assert house_field, "House field should be present"
+
+        assert house_field.value in [large_text1, large_text2],
+               "House should match one of the original large texts"
+
+        # Check that the name field was updated
+        name_field = Enum.find(change.fields, &(&1.column_name == "name"))
+        assert name_field.value =~ "Updated TOAST", "Name should be updated"
+      end
+    end
   end
 
   defp start_replication!(opts) do

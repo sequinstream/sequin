@@ -673,11 +673,20 @@ defmodule Sequin.AccountsTest do
     test "sets the current account for the user" do
       user = AccountsFactory.insert_user!()
       account_2 = AccountsFactory.insert_account!()
-      Accounts.associate_user_with_account(user, account_2)
-      Accounts.set_current_account_for_user(user.id, account_2.id)
+      {:ok, _} = Accounts.associate_user_with_account(user, account_2)
+      {:ok, user} = Accounts.set_current_account_for_user(user.id, account_2.id)
 
-      assert {:ok, user} = Accounts.set_current_account_for_user(user.id, account_2.id)
       assert Accounts.get_account!(account_2.id) == User.current_account(user)
+    end
+
+    test "has no effect when account_user is already set to current=true" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      {:ok, _} = Accounts.associate_user_with_account(user, account)
+      {:ok, user} = Accounts.set_current_account_for_user(user.id, account.id)
+      assert account == User.current_account(user)
+      {:ok, user} = Accounts.set_current_account_for_user(user.id, account.id)
+      assert account == User.current_account(user)
     end
 
     test "returns an error if the account is is not associated to the user" do

@@ -611,7 +611,7 @@ defmodule Sequin.Accounts do
         Repo.transact(fn ->
           # Clear current flag for all user's accounts
           Repo.update_all(
-            from(au in AccountUser, where: au.user_id == ^user_id),
+            from(au in AccountUser, where: au.user_id == ^user_id and au.account_id != ^account_id),
             set: [current: false]
           )
 

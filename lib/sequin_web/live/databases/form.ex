@@ -193,6 +193,13 @@ defmodule SequinWeb.DatabasesLive.Form do
     {:noreply, socket |> assign(:allocated_bastion_port, abp) |> assign(:update_allocated_bastion_port_timer, nil)}
   end
 
+  def handle_info({:EXIT, pid, :normal}, socket) do
+    # We are still tracing down why we receive EXIT messages, seemed to happen when the Repo.transact
+    # in this LiveView timed out
+    Logger.warning("Received EXIT message with :normal from #{inspect(pid)}")
+    {:noreply, socket}
+  end
+
   defp put_changesets(socket, params) do
     is_edit? = socket.assigns.is_edit?
     database = socket.assigns.database
@@ -297,25 +304,28 @@ defmodule SequinWeb.DatabasesLive.Form do
 
     replication_params = params["replication_slot"]
 
-    Repo.transact(fn ->
-      res =
-        if socket.assigns.is_edit? do
-          update_database(socket.assigns.database, db_params, replication_params)
-        else
-          create_database(account_id, db_params, replication_params)
-        end
+    Repo.transact(
+      fn ->
+        res =
+          if socket.assigns.is_edit? do
+            update_database(socket.assigns.database, db_params, replication_params)
+          else
+            create_database(account_id, db_params, replication_params)
+          end
 
-      with {:ok, db} <- res,
-           :ok <- Databases.test_tcp_reachability(db),
-           :ok <- Databases.test_connect(db, 10_000),
-           :ok <- Databases.test_permissions(db),
-           :ok <- Databases.test_slot_permissions(db, db.replication_slot) do
-        # Safe to update health here because we just validated that the database is reachable
-        # TODO: Implement background health updates for reachability
-        Health.update(db, :reachable, :healthy)
-        {:ok, db}
-      end
-    end)
+        with {:ok, db} <- res,
+             :ok <- Databases.test_tcp_reachability(db),
+             :ok <- Databases.test_connect(db, 10_000),
+             :ok <- Databases.test_permissions(db),
+             :ok <- Databases.test_slot_permissions(db, db.replication_slot) do
+          # Safe to update health here because we just validated that the database is reachable
+          # TODO: Implement background health updates for reachability
+          Health.update(db, :reachable, :healthy)
+          {:ok, db}
+        end
+      end,
+      timeout: :timer.seconds(30)
+    )
   end
 
   defp put_ipv6(%{"use_local_tunnel" => true} = db_params), do: db_params

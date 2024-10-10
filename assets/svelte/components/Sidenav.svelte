@@ -179,8 +179,8 @@
           {#if !$isNavCollapsed}
             <Button
               builders={[builder]}
-              variant="settings"
-              size="settings"
+              variant="menu"
+              size="menu"
               role="combobox"
               aria-expanded={settingsCommandOpen}
             >
@@ -192,8 +192,8 @@
           {:else}
             <Button
               builders={[builder]}
-              variant="settings"
-              size="settings"
+              variant="menu"
+              size="menu"
               role="combobox"
               aria-expanded={settingsCommandOpen}
             >

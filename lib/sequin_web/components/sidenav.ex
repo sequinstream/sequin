@@ -39,7 +39,7 @@ defmodule SequinWeb.Components.Sidenav do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         error = Error.validation(changeset: changeset)
-        {:reply, %{error: Error.ValidationError.message(error)}, socket}
+        {:reply, %{error: Exception.message(error)}, socket}
 
       {:error, _} ->
         {:reply, %{error: "Failed to create account"}, socket}
@@ -50,9 +50,6 @@ defmodule SequinWeb.Components.Sidenav do
     with {:ok, account} <- Accounts.create_account(%{name: account_name}),
          {:ok, _account_user} <- Accounts.associate_user_with_account(user, account) do
       Accounts.set_current_account_for_user(user.id, account.id)
-    else
-      {:error, %Ecto.Changeset{} = changeset} -> {:error, changeset}
-      error -> error
     end
   end
 

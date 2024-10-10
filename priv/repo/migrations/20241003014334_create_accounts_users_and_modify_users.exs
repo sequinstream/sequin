@@ -1,4 +1,4 @@
-defmodule Sequin.Repo.Migrations.CreateUsersAccountsAndModifyUsers do
+defmodule Sequin.Repo.Migrations.CreateAccountsUsersAndModifyUsers do
   use Ecto.Migration
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
@@ -19,7 +19,7 @@ defmodule Sequin.Repo.Migrations.CreateUsersAccountsAndModifyUsers do
 
     create unique_index(:accounts_users, [:user_id, :account_id], prefix: @config_schema)
 
-    create unique_index(:accounts_users, [:user_id, :current],
+    create unique_index(:accounts_users, [:user_id],
              prefix: @config_schema,
              where: "current = true",
              name: "idx_users_current"

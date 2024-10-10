@@ -220,7 +220,7 @@
                 >
                   <SelectValue placeholder="Select a column" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent class="max-h-80 overflow-y-auto">
                   {#each selectedTable?.columns || [] as column}
                     <SelectItem value={column.attnum}>{column.name}</SelectItem>
                   {/each}
@@ -342,7 +342,7 @@
             <SelectTrigger class="border-carbon-100">
               <SelectValue placeholder="Column" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent class="max-h-64 overflow-y-auto">
               {#each selectedTable?.columns || [] as column}
                 <SelectItem value={column.attnum}>{column.name}</SelectItem>
               {/each}

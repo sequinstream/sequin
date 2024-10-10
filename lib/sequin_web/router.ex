@@ -72,7 +72,8 @@ defmodule SequinWeb.Router do
     delete "/logout", UserSessionController, :delete
 
     live_session :current_user,
-      on_mount: [{SequinWeb.UserAuth, :mount_current_user}] do
+      on_mount: [{SequinWeb.UserAuth, :mount_current_user}],
+      layout: {SequinWeb.Layouts, :app_no_sidenav} do
       live "/users/confirm/:token", UserConfirmationLive, :edit
       live "/users/confirm", UserConfirmationInstructionsLive, :new
     end
@@ -109,6 +110,8 @@ defmodule SequinWeb.Router do
       get "/easter-egg", EasterEggController, :home
 
       live "/outbox", OutboxLive, :index
+
+      live "/settings/accounts", Settings.AccountSettingsLive, :index
     end
 
     get "/admin/impersonate/:secret", UserSessionController, :impersonate

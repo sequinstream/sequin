@@ -1,9 +1,13 @@
 <div class="flex min-h-screen">
-  <SequinWeb.Components.Sidenav.render
-    :if={@show_nav}
-    current_path={@current_path}
-    account_name={@account_name}
-  />
+  <%= if @show_nav do %>
+    <.live_component
+      module={SequinWeb.Components.Sidenav}
+      id="sidenav"
+      current_path={@current_path}
+      current_user={@current_user}
+    />
+  <% end %>
+
   <%= if @no_main do %>
     <.flash_group flash={@flash} />
     <%= @inner_content %>

@@ -1,22 +1,40 @@
 <script lang="ts">
   import { isNavCollapsed } from "../stores/Sidenav";
   import { Button } from "./ui/button";
-  import * as DropdownMenu from "./ui/dropdown-menu";
+  import * as Command from "$lib/components/ui/command";
+  import * as Popover from "$lib/components/ui/popover";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import { Label } from "$lib/components/ui/label";
+  import { Input } from "$lib/components/ui/input";
+  import { cn } from "$lib/utils";
   import {
     Radio,
     Database,
     Webhook,
     FileText,
     LifeBuoy,
-    CircleUserRound,
     LogOut,
     ChevronLeft,
     ChevronRight,
+    Check,
+    PlusCircle,
+    Cog,
+    Loader2,
     Logs,
   } from "lucide-svelte";
 
+  export let live;
   export let currentPath: string;
-  export let accountName: string;
+  export let currentUser: { id: string; email: string };
+  export let currentAccountId: string;
+  export let accountList: { id: string; name: string }[];
+  export let parent: string;
+
+  let settingsCommandOpen = false;
+  let form = { name: "" };
+  let showCreateAccount = false;
+  let createAccountLoading = false;
+  let createAccountError: string | null = null;
 
   const navItems = [
     { path: "/consumers", text: "Consumers", icon: Radio },
@@ -33,6 +51,39 @@
 
   function toggleCollapse() {
     $isNavCollapsed = !$isNavCollapsed;
+  }
+
+  $: selected_account_name =
+    accountList.find((a) => a.id === currentAccountId)?.name ??
+    "Select an account...";
+
+  function handleAccountSelect(accountId: string) {
+    live.pushEventTo(`#${parent}`, "change_selected_account", { accountId });
+  }
+
+  function handleCreateAccount(event: Event) {
+    event.preventDefault();
+    createAccountLoading = true;
+    live.pushEventTo(
+      `#${parent}`,
+      "create_account",
+      {
+        accountName: form.name,
+      },
+      (res: any) => {
+        createAccountLoading = false;
+        if (res.error) {
+          createAccountError = res.error;
+        } else {
+          showCreateAccount = false;
+        }
+      }
+    );
+  }
+
+  function openCreateAccount() {
+    showCreateAccount = true;
+    settingsCommandOpen = false;
   }
 </script>
 
@@ -123,32 +174,126 @@
         </div>
       </a>
       <div class="border-t border-solid my-2"></div>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger class="w-full cursor-pointer ring-0 p-0">
-          <div
-            class="flex w-full flex-row items-center rounded p-1 justify-start hover:bg-canvasSubtle text-muted"
-          >
-            <CircleUserRound class="h-4 w-4 flex-shrink-0" />
-            {#if !$isNavCollapsed}
-              <div
-                class="ml-2 flex flex-col items-start justify-start overflow-hidden"
+      <Popover.Root bind:open={settingsCommandOpen}>
+        <Popover.Trigger asChild let:builder class="w-full">
+          {#if !$isNavCollapsed}
+            <Button
+              builders={[builder]}
+              variant="settings"
+              size="settings"
+              role="combobox"
+              aria-expanded={settingsCommandOpen}
+            >
+              <Cog class="h-4 w-4 flex-shrink-0 mr-2" />
+              <span class="text-sm leading-tight truncate"
+                >{selected_account_name}</span
               >
-                <div class="text-subtle text-xs leading-4 truncate w-full">
-                  {accountName}
-                </div>
-              </div>
-            {/if}
-          </div>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content class="w-[200px]">
-          <a href="/logout" data-phx-link="redirect" data-phx-link-state="push">
-            <DropdownMenu.Item class="cursor-pointer">
-              <LogOut class="mr-2 h-4 w-4" />
-              Log out
-            </DropdownMenu.Item>
-          </a>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+            </Button>
+          {:else}
+            <Button
+              builders={[builder]}
+              variant="settings"
+              size="settings"
+              role="combobox"
+              aria-expanded={settingsCommandOpen}
+            >
+              <Cog class=" h-4 w-4 flex-shrink-0" />
+            </Button>
+          {/if}
+        </Popover.Trigger>
+        <Popover.Content class="w-fit p-0" side="right">
+          <Command.Root>
+            <Command.Group heading="Switch account">
+              {#each accountList as account}
+                <Command.Item
+                  value={account.id}
+                  onSelect={() => handleAccountSelect(account.id)}
+                >
+                  <Check
+                    class={cn(
+                      "mr-2 h-4 w-4",
+                      currentAccountId !== account.id && "text-transparent"
+                    )}
+                  />
+                  {account.name}
+                </Command.Item>
+              {/each}
+            </Command.Group>
+            <Command.Separator />
+            <Command.Group heading="Account settings">
+              <Command.Item
+                onSelect={() => openCreateAccount()}
+                class="cursor-pointer"
+              >
+                <PlusCircle class="mr-2 h-4 w-4" />
+                <span>Create account</span>
+              </Command.Item>
+              <a
+                href="/settings/accounts"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Command.Item class="cursor-pointer">
+                  <Cog class="mr-2 h-4 w-4" />
+                  <span>Manage account</span>
+                </Command.Item>
+              </a>
+            </Command.Group>
+            <Command.Separator />
+            <Command.Group heading={currentUser.email}>
+              <a
+                href="/logout"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Command.Item class="cursor-pointer">
+                  <LogOut class="mr-2 h-4 w-4" />
+                  Log out
+                </Command.Item>
+              </a>
+            </Command.Group>
+          </Command.Root>
+        </Popover.Content>
+      </Popover.Root>
     </div>
   </div>
 </nav>
+
+<Dialog.Root bind:open={showCreateAccount}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Create a new account</Dialog.Title>
+    </Dialog.Header>
+    <form on:submit={handleCreateAccount}>
+      <div class="grid gap-4 py-4 my-4">
+        <div class="grid grid-cols-4 items-center gap-4">
+          <Label for="name" class="text-right">Account name</Label>
+          <Input
+            id="name"
+            bind:value={form.name}
+            placeholder="My new project"
+            class="col-span-3"
+          />
+        </div>
+        {#if createAccountError}
+          <p class="text-destructive text-sm mt-2 mb-4 col-span-4">
+            {createAccountError}
+          </p>
+        {/if}
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" on:click={() => (showCreateAccount = false)}>
+          Cancel
+        </Button>
+        <Button
+          variant="default"
+          type="submit"
+          disabled={createAccountLoading}
+          loading={createAccountLoading}
+        >
+          Create
+        </Button>
+      </Dialog.Footer>
+    </form>
+  </Dialog.Content>
+</Dialog.Root>

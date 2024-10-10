@@ -15,12 +15,14 @@ const buttonVariants = tv({
       ghost: "hover:bg-accent hover:text-accent-foreground",
       link: "text-primary underline-offset-4 hover:underline",
       magic: "border-input text-blue-600 border-blue-600 bg-background hover:bg-blue-100 hover:text-blue-800 border",
+      settings: "w-full flex flex-row justify-start text-muted hover:text-basis hover:bg-canvasSubtle",
     },
     size: {
       default: "h-10 px-4 py-2",
       sm: "h-9 rounded-md px-3",
       lg: "h-11 rounded-md px-8",
       icon: "h-10 w-10",
+      settings: "h-8 px-1.5 py-2",
     },
   },
   defaultVariants: {

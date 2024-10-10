@@ -332,6 +332,12 @@ defmodule Sequin.Consumers do
 
     {count, _} = Repo.insert_all(ConsumerEvent, events)
 
+    # Broadcast messages ingested to consumers for ie. push consumers
+    consumer_events
+    |> Stream.map(& &1.consumer_id)
+    |> Enum.uniq()
+    |> Enum.each(&Phoenix.PubSub.broadcast(Sequin.PubSub, "messages_ingested:#{&1}", :messages_ingested))
+
     {:ok, count}
   end
 
@@ -467,6 +473,12 @@ defmodule Sequin.Consumers do
         on_conflict: on_conflict,
         conflict_target: conflict_target
       )
+
+    # Broadcast messages ingested to consumers for ie. push consumers
+    consumer_records
+    |> Stream.map(& &1.consumer_id)
+    |> Enum.uniq()
+    |> Enum.each(&Phoenix.PubSub.broadcast(Sequin.PubSub, "messages_ingested:#{&1}", :messages_ingested))
 
     {:ok, count}
   end

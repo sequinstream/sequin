@@ -26,7 +26,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: 10
+          max_demand: 1
         ]
       ],
       context: %{

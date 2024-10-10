@@ -81,7 +81,9 @@ defmodule Sequin.Time do
       max
     else
       backoff = if count <= 1, do: base, else: base * :math.pow(2, count - 1)
-      trunc(backoff)
+      # Random value between 0.85 and 1.15
+      jitter = :rand.uniform() * 0.3 + 0.85
+      trunc(backoff * jitter)
     end
   end
 end

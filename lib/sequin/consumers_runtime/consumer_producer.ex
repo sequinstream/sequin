@@ -23,25 +23,37 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       consumer: consumer,
       receive_timer: nil,
       batch_size: Keyword.get(opts, :batch_size, 10),
-      batch_timeout: Keyword.get(opts, :batch_timeout, 1000),
+      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid
     }
+
+    # Subscribe to PubSub
+    Phoenix.PubSub.subscribe(Sequin.PubSub, "messages_ingested:#{consumer.id}")
+
+    state = schedule_receive_messages(state)
 
     {:producer, state}
   end
 
   @impl GenStage
   def handle_demand(incoming_demand, %{demand: demand} = state) do
-    handle_receive_messages(%{state | demand: demand + incoming_demand})
+    new_state = %{state | demand: demand + incoming_demand}
+    handle_receive_messages(new_state)
   end
 
   @impl GenStage
   def handle_info(:receive_messages, state) do
-    handle_receive_messages(%{state | receive_timer: nil})
+    new_state = schedule_receive_messages(state)
+    handle_receive_messages(new_state)
+  end
+
+  @impl GenStage
+  def handle_info(:messages_ingested, state) do
+    handle_receive_messages(state)
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    messages_to_fetch = min(demand, state.batch_size)
+    messages_to_fetch = demand
     {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: messages_to_fetch)
 
     broadway_messages =
@@ -54,22 +66,16 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     new_demand = demand - length(broadway_messages)
 
-    receive_timer =
-      case {broadway_messages, new_demand} do
-        {[], _} -> schedule_receive_messages(state.batch_timeout)
-        {_, 0} -> nil
-        _ -> schedule_receive_messages(0)
-      end
-
-    {:noreply, broadway_messages, %{state | demand: new_demand, receive_timer: receive_timer}}
+    {:noreply, broadway_messages, %{state | demand: new_demand}}
   end
 
   defp handle_receive_messages(state) do
     {:noreply, [], state}
   end
 
-  defp schedule_receive_messages(timeout) do
-    Process.send_after(self(), :receive_messages, timeout)
+  defp schedule_receive_messages(state) do
+    receive_timer = Process.send_after(self(), :receive_messages, state.batch_timeout)
+    %{state | receive_timer: receive_timer}
   end
 
   @impl Broadway.Producer

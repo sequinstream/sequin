@@ -221,7 +221,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
       assert_receive :sent, 1_000
-      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
+      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1]}, 2_000
+      assert_receive {ConsumerProducer, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
       updated_event1 = Consumers.reload(event1)

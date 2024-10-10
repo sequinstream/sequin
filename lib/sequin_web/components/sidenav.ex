@@ -76,6 +76,7 @@ defmodule SequinWeb.Components.Sidenav do
           }
         }
         socket={@socket}
+        class="h-screen sticky top-0 z-[49]"
       />
     </div>
     """

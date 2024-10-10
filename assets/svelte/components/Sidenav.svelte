@@ -90,7 +90,7 @@
 <nav
   class="bg-canvasBase top-0 flex h-screen flex-col justify-start {$isNavCollapsed
     ? 'w-[64px]'
-    : 'w-[224px]'} sticky z-[49] shrink-0 overflow-visible border-r border-solid transition-all duration-300"
+    : 'w-[224px]'}shrink-0 overflow-visible border-r border-solid transition-all duration-300"
 >
   <div class="mx-2 mt-4 flex h-[28px] flex-row items-center justify-between">
     <a

@@ -458,6 +458,74 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_event.table_oid == consumer_record.table_oid
       assert consumer_event.record_pks == consumer_record.record_pks
     end
+
+    test "empty array fields are replicated correctly", %{event_consumer: consumer} do
+      # Insert a character with an empty array field
+      character = CharacterFactory.insert_character!([tags: []], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      assert consumer_event.consumer_id == consumer.id
+      assert consumer_event.table_oid == Character.table_oid()
+      assert consumer_event.record_pks == [to_string(character.id)]
+      %{data: data} = consumer_event
+
+      # Check that the tags field is an empty list, not [""]
+      assert data.record["tags"] == [], "Expected empty array, got: #{inspect(data.record["tags"])}"
+    end
+
+    # Postgres quirk - the logical decoding process does not distinguish between an empty array and an array with an empty string.
+    # https://chatgpt.com/share/6707334f-0978-8006-8358-ec2300d759a4
+    test "array fields with empty string are returned as empty list", %{event_consumer: consumer} do
+      # Insert a character with an array containing an empty string
+      CharacterFactory.insert_character!([tags: [""]], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      %{data: data} = consumer_event
+
+      # Check that the tags field contains an empty string
+      # Postgres quirk - the logical decoding slot will return `{}` for both `{}` and `{""}`.
+      assert data.record["tags"] == [], "Expected array with empty string, got: #{inspect(data.record["tags"])}"
+    end
+
+    test "array fields are updated correctly from non-empty to empty", %{event_consumer: consumer} do
+      # Insert a character with a non-empty array field
+      character = CharacterFactory.insert_character_ident_full!([tags: ["tag1", "tag2"]], repo: UnboxedRepo)
+
+      # Wait for the insert message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Update the character with an empty array
+      UnboxedRepo.update!(Ecto.Changeset.change(character, tags: []))
+
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [_insert_event, update_event] =
+        Consumers.list_consumer_events_for_consumer(consumer.id, order_by: [asc: :inserted_at])
+
+      # Assert the consumer event details
+      %{data: data} = update_event
+
+      # Check that the changes field shows the previous non-empty array
+      assert data.changes["tags"] == ["tag1", "tag2"],
+             "Expected non-empty array in changes, got: #{inspect(data.changes["tags"])}"
+
+      # Check that the record field shows the new empty array
+      assert data.record["tags"] == [], "Expected empty array in record, got: #{inspect(data.record["tags"])}"
+    end
   end
 
   @server_id __MODULE__

@@ -214,7 +214,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   def handle_event({:timeout, :reload_consumer}, _evt, _state_name, state) do
-    case Repo.reload(state.consumer, preload: [replication_slot: :postgres_database]) do
+    case Repo.reload(state.consumer) do
       nil ->
         Logger.info("[TableProducerServer] Consumer #{state.consumer.id} not found, shutting down")
         {:stop, :normal}
@@ -224,6 +224,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         {:stop, :normal}
 
       consumer ->
+        consumer = Repo.preload(consumer, replication_slot: :postgres_database)
         actions = [reload_consumer_timeout()]
 
         {:keep_state, %{state | consumer: consumer}, actions}

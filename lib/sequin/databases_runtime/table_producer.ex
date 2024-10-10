@@ -14,10 +14,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
         :error
 
       {:ok, result} ->
-        r =
-          result
-          |> Enum.chunk_every(2)
-          |> Map.new(fn [k, v] -> {k, decode_cursor(v)} end)
+        r = result |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, decode_cursor(v)} end)
 
         {:ok, r}
 

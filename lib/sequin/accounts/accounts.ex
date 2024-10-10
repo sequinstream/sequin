@@ -549,9 +549,9 @@ defmodule Sequin.Accounts do
     end
   end
 
-  def delete_account_and_account_resources(%Account{} = account, opts \\ [delete_users: false]) do
+  def delete_account_and_account_resources(%Account{} = account, opts \\ []) do
     Repo.transact(fn ->
-      if Keyword.get(opts, :delete_users, true) do
+      if opts[:delete_users] do
         # Delete associated users
         account.id
         |> list_users_for_account()
@@ -594,20 +594,10 @@ defmodule Sequin.Accounts do
   Associates a user with an account.
   """
   def associate_user_with_account(%User{} = user, %Account{} = account) do
-    # First, check if the account still exists
-    case get_account(account.id) do
-      {:error, %Sequin.Error.NotFoundError{}} ->
-        {:error, Error.not_found(entity: :account)}
-
-      {:ok, _account} ->
-        # If the account exists, proceed with the association
-        %AccountUser{user_id: user.id, account_id: account.id}
-        |> AccountUser.changeset(%{current: false})
-        |> Repo.insert()
-        |> case do
-          {:ok, account_user} -> {:ok, account_user}
-          {:error, _} -> {:error, Error.not_found(entity: :account_user)}
-        end
+    with {:ok, account} <- get_account(account.id) do
+      %AccountUser{user_id: user.id, account_id: account.id}
+      |> AccountUser.changeset(%{current: false})
+      |> Repo.insert()
     end
   end
 
@@ -617,7 +607,7 @@ defmodule Sequin.Accounts do
       nil ->
         {:error, Error.not_found(entity: :account_user)}
 
-      _account_user ->
+      account_user ->
         Repo.transact(fn ->
           # Clear current flag for all user's accounts
           Repo.update_all(
@@ -626,8 +616,7 @@ defmodule Sequin.Accounts do
           )
 
           # Set current flag for the selected account
-          AccountUser
-          |> Repo.get_by(user_id: user_id, account_id: account_id)
+          account_user
           |> Ecto.Changeset.change(%{current: true})
           |> Repo.update!()
 

@@ -649,20 +649,20 @@ defmodule Sequin.AccountsTest do
       user = AccountsFactory.insert_user!()
 
       account_2 = AccountsFactory.insert_account!()
-      Accounts.associate_user_with_account(user, account_2)
-      Accounts.set_current_account_for_user(user.id, account_2.id)
+      {:ok, _} = Accounts.associate_user_with_account(user, account_2)
+      {:ok, _} = Accounts.set_current_account_for_user(user.id, account_2.id)
 
       account_3 = AccountsFactory.insert_account!()
-      Accounts.associate_user_with_account(user, account_3)
-      Accounts.set_current_account_for_user(user.id, account_3.id)
+      {:ok, _} = Accounts.associate_user_with_account(user, account_3)
+      {:ok, _} = Accounts.set_current_account_for_user(user.id, account_3.id)
       # Delete the newest account, to set all accounts to current === false
-      Accounts.delete_account_and_account_resources(account_3)
+      {:ok, _} = Accounts.delete_account_and_account_resources(account_3)
 
       user = Repo.preload(user, [:accounts_users, :accounts])
 
       oldest_account =
         user.accounts
-        |> Enum.sort_by(& &1.inserted_at)
+        |> Enum.sort_by(& &1.inserted_at, DateTime)
         |> List.first()
 
       assert oldest_account == User.current_account(user)

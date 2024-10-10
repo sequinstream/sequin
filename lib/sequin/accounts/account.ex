@@ -26,8 +26,7 @@ defmodule Sequin.Accounts.Account do
     |> cast(attrs, [:name])
     |> maybe_put_name()
     |> validate_required([:name])
-    |> validate_length(:name, max: 80, message: "Account name cannot be longer than 80 characters")
-    |> validate_account_name()
+    |> validate_length(:name, max: 80)
   end
 
   defp maybe_put_name(changeset) do
@@ -35,16 +34,6 @@ defmodule Sequin.Accounts.Account do
       changeset
     else
       put_change(changeset, :name, "Personal")
-    end
-  end
-
-  defp validate_account_name(changeset) do
-    name = get_field(changeset, :name)
-
-    if is_nil(name) || String.trim(name) == "" do
-      add_error(changeset, :name, "Account name cannot be blank")
-    else
-      changeset
     end
   end
 

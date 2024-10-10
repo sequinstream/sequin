@@ -41,7 +41,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
 
       {:error, changeset} ->
         error = Error.validation(changeset: changeset)
-        {:reply, %{error: Error.ValidationError.message(error)}, socket}
+        {:reply, %{error: Exception.message(error)}, socket}
     end
   end
 
@@ -54,17 +54,19 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
         {:reply, %{ok: true}, push_navigate(socket, to: socket.assigns.current_path)}
 
       {:error, %Error.InvariantError{} = error} ->
-        {:reply, %{error: error.message}, socket}
+        {:reply, %{error: Exception.message(error)}, socket}
 
       {:error, changeset} ->
         error = Error.validation(changeset: changeset)
-        {:reply, %{error: Error.ValidationError.message(error)}, socket}
+        {:reply, %{error: Exception.message(error)}, socket}
     end
   end
 
   def render(assigns) do
-    assigns = assign(assigns, :parent_id, "account_settings")
-    assigns = assign(assigns, :current_account, User.current_account(assigns.current_user))
+    assigns =
+      assigns
+      |> assign(:parent_id, "account_settings")
+      |> assign(:current_account, User.current_account(assigns.current_user))
 
     ~H"""
     <div id={@parent_id}>

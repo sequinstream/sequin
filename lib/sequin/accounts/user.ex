@@ -54,9 +54,7 @@ defmodule Sequin.Accounts.User do
     |> Enum.find(& &1.current)
     |> case do
       nil ->
-        user.accounts
-        |> Enum.sort_by(& &1.inserted_at, {:asc, DateTime})
-        |> List.first()
+        Enum.min_by(user.accounts, & &1.inserted_at, DateTime)
 
       account_user ->
         account_user.account

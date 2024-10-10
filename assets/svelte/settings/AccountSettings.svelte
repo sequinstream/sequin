@@ -101,13 +101,7 @@
         resources. Coming by the end of October 2024 - send us a note if you
         want this right away.
       </p>
-      <a
-        href="/http-endpoints/new"
-        data-phx-link="redirect"
-        data-phx-link-state="push"
-      >
-        <Button disabled>Add a team member</Button>
-      </a>
+      <Button disabled>Add a team member</Button>
     </div>
   </div>
 

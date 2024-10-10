@@ -36,16 +36,11 @@ defmodule SequinWeb.LiveHelpers do
   def current_account_id(socket) do
     user = current_user(socket)
 
-    cond do
-      user && user.impersonating_account ->
-        user.impersonating_account.id
-
-      user ->
-        current_account = User.current_account(user)
-        current_account && current_account.id
-
-      true ->
-        nil
+    if user && user.impersonating_account do
+      user.impersonating_account.id
+    else
+      current_account = User.current_account(user)
+      current_account && current_account.id
     end
   end
 

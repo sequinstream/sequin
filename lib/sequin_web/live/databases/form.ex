@@ -15,6 +15,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Posthog
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
 
   require Logger
@@ -318,6 +319,8 @@ defmodule SequinWeb.DatabasesLive.Form do
              :ok <- Databases.test_connect(db, 10_000),
              :ok <- Databases.test_permissions(db),
              :ok <- Databases.test_slot_permissions(db, db.replication_slot) do
+          # It's now safe to start the replication slot
+          ReplicationSupervisor.start_replication(db.replication_slot)
           # Safe to update health here because we just validated that the database is reachable
           # TODO: Implement background health updates for reachability
           Health.update(db, :reachable, :healthy)

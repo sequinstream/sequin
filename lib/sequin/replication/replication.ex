@@ -65,7 +65,9 @@ defmodule Sequin.Replication do
 
       case pg_replication do
         {:ok, pg_replication} ->
-          unless Application.get_env(:sequin, :env) == :test do
+          # We skip the start when creating the replication slot inside a transaction, because
+          # the transaction might be rolled back, leaving a zombie process.
+          unless Application.get_env(:sequin, :env) == :test or Repo.in_transaction?() do
             ReplicationRuntime.Supervisor.start_replication(pg_replication)
           end
 

@@ -249,7 +249,8 @@ defmodule Sequin.Postgres do
         :ok
 
       {:ok, %{num_rows: 0}} ->
-        {:error, Error.validation(summary: "Replication slot '#{slot_name}' does not exist")}
+        {:error,
+         Error.validation(summary: "Replication slot '#{slot_name}' does not exist", code: :replication_slot_not_found)}
 
       {:error, %Postgrex.Error{} = error} ->
         {:error, ValidationError.from_postgrex("Failed to check replication slot: ", error)}
@@ -454,5 +455,40 @@ defmodule Sequin.Postgres do
     end
 
     to_string([?", name, ?"])
+  end
+
+  @doc """
+  Creates a logical replication slot if it doesn't already exist.
+  """
+  @spec create_replication_slot(Postgrex.Connection.t(), String.t()) :: :ok | {:error, Errorr.t()}
+  def create_replication_slot(conn, slot_name) do
+    check_query = "select 1 from pg_replication_slots where slot_name = $1"
+
+    case query(conn, check_query, [slot_name]) do
+      {:ok, %{num_rows: 0}} ->
+        create_query = "select pg_create_logical_replication_slot($1, 'pgoutput')::text"
+
+        case query(conn, create_query, [slot_name]) do
+          {:ok, _} ->
+            :ok
+
+          {:error, error} ->
+            Sequin.Error.service(
+              service: :postgres,
+              message: "Failed to create replication slot",
+              details: error
+            )
+        end
+
+      {:ok, _} ->
+        :ok
+
+      {:error, error} ->
+        Sequin.Error.service(
+          service: :postgres,
+          message: "Failed to check for existing replication slot",
+          details: error
+        )
+    end
   end
 end

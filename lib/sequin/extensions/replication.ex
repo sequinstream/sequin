@@ -28,6 +28,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Replication.Message
   alias Sequin.ReplicationRuntime
   alias Sequin.Tracer.Server, as: TracerServer
+  alias Sequin.Workers.CreateReplicationSlotWorker
 
   require Logger
 
@@ -134,8 +135,15 @@ defmodule Sequin.Extensions.Replication do
 
     error_msg =
       case Postgres.check_replication_slot_exists(conn, state.slot_name) do
-        :ok -> "Failed to connect to replication slot after 5 attempts"
-        {:error, error} -> Exception.message(error)
+        :ok ->
+          "Failed to connect to replication slot after 5 attempts"
+
+        {:error, %Error.ValidationError{code: :replication_slot_not_found} = error} ->
+          maybe_recreate_slot(state)
+          Exception.message(error)
+
+        {:error, error} ->
+          Exception.message(error)
       end
 
     Health.update(
@@ -231,6 +239,15 @@ defmodule Sequin.Extensions.Replication do
     # Need to manually send reply
     GenServer.reply(from, :ok)
     {:noreply, state}
+  end
+
+  defp maybe_recreate_slot(%State{connection: connection} = state) do
+    # Neon databases have ephemeral replication slots. At time of writing, this
+    # happens after 45min of inactivity.
+    # In the future, we will want to "rewind" the slot on create to last known good LSN
+    if String.ends_with?(connection[:hostname], ".aws.neon.tech") do
+      CreateReplicationSlotWorker.enqueue(state.id)
+    end
   end
 
   defp load_unchanged_toasts(%State{} = state) do

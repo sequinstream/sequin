@@ -14,7 +14,11 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
         :error
 
       {:ok, result} ->
-        r = result |> Enum.chunk_every(2) |> Map.new(fn [k, v] -> {k, Jason.decode!(v)} end)
+        r =
+          result
+          |> Enum.chunk_every(2)
+          |> Map.new(fn [k, v] -> {k, decode_cursor(v)} end)
+
         {:ok, r}
 
       error ->
@@ -25,7 +29,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   def cursor(consumer_id, type) when type in [:min, :max] do
     case Redix.command(:redix, ["HGET", cursor_key(consumer_id), type]) do
       {:ok, nil} -> nil
-      {:ok, cursor} -> Jason.decode!(cursor)
+      {:ok, cursor} -> decode_cursor(cursor)
     end
   end
 
@@ -35,11 +39,18 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
+  defp decode_cursor(json) do
+    json
+    |> Jason.decode!()
+    |> Map.new(fn {k, v} -> {String.to_integer(k), v} end)
+  end
+
   def delete_cursor(consumer_id) do
     case fetch_cursors(consumer_id) do
       {:ok, cursors} ->
         Logger.info("[TableProducer] Deleting cursors for consumer #{consumer_id}", cursors)
-        Redix.command(:redix, ["DEL", cursor_key(consumer_id)])
+        {:ok, _} = Redix.command(:redix, ["DEL", cursor_key(consumer_id)])
+        :ok
 
       :error ->
         :ok

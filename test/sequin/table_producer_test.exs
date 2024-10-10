@@ -4,6 +4,7 @@ defmodule Sequin.TableProducerTest do
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.TableProducer
+  alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
 
@@ -27,14 +28,62 @@ defmodule Sequin.TableProducerTest do
 
     ConnectionCache.cache_connection(db, Repo)
 
+    consumer_id = "test_consumer_#{Factory.unique_integer()}"
+
     %{
       db: db,
+      consumer_id: consumer_id,
       tables: tables,
       characters_table: characters_table,
       characters_multi_pk_table: characters_multi_pk_table,
       character_col_attnums: character_col_attnums,
       character_multi_pk_attnums: character_multi_pk_attnums
     }
+  end
+
+  describe "cursor operations" do
+    test "fetch_cursors returns :error when no cursors exist", %{consumer_id: consumer_id} do
+      assert :error == TableProducer.fetch_cursors(consumer_id)
+    end
+
+    test "update_cursor and fetch_cursors work correctly", %{consumer_id: consumer_id} do
+      min_cursor = %{1 => "2023-01-01", 2 => 123}
+      max_cursor = %{1 => "2023-01-31", 2 => 456}
+
+      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+
+      assert {:ok, %{"min" => ^min_cursor, "max" => ^max_cursor}} = TableProducer.fetch_cursors(consumer_id)
+    end
+
+    test "cursor retrieves individual cursors", %{consumer_id: consumer_id} do
+      min_cursor = %{1 => "2023-02-01", 2 => 789}
+      max_cursor = %{1 => "2023-02-28", 2 => 1011}
+
+      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+
+      assert ^min_cursor = TableProducer.cursor(consumer_id, :min)
+      assert ^max_cursor = TableProducer.cursor(consumer_id, :max)
+    end
+
+    test "cursor returns nil for non-existent cursor", %{consumer_id: consumer_id} do
+      assert nil == TableProducer.cursor(consumer_id, :min)
+      assert nil == TableProducer.cursor(consumer_id, :max)
+    end
+
+    test "delete_cursor removes all cursors", %{consumer_id: consumer_id} do
+      min_cursor = %{1 => "2023-03-01", 2 => 1213}
+      max_cursor = %{1 => "2023-03-31", 2 => 1415}
+
+      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+
+      assert {:ok, _} = TableProducer.fetch_cursors(consumer_id)
+
+      assert :ok == TableProducer.delete_cursor(consumer_id)
+      assert :error == TableProducer.fetch_cursors(consumer_id)
+    end
   end
 
   describe "fetch_max_cursor/4" do

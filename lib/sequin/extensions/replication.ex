@@ -543,6 +543,10 @@ defmodule Sequin.Extensions.Replication do
   defp cast_value("bool", "t"), do: true
   defp cast_value("bool", "f"), do: false
 
+  defp cast_value("_" <> _type, "{}") do
+    []
+  end
+
   defp cast_value("_" <> type, array_string) when is_binary(array_string) do
     array_string
     |> String.trim("{")

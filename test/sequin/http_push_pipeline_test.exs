@@ -3,13 +3,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Time
 
   describe "events are sent to the HTTP endpoint" do
     setup do
@@ -171,21 +171,21 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert json["metadata"]["table_name"] == "users"
       assert json["metadata"]["table_schema"] == "public"
 
-      assert_receive {:ack, [_successful], []}, 5_000
+      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
       refute Consumers.reload(consumer_event)
     end
 
     @tag capture_log: true
-    test "failed messages are nacked with correct not_visible_until using exponential backoff", %{consumer: consumer} do
+    test "failed messages are nacked with correct not_visible_until using exponential backoff with jitter", %{
+      consumer: consumer
+    } do
       test_pid = self()
       deliver_count1 = 3
       deliver_count2 = 5
-      base_backoff = 1000
-      max_backoff = :timer.minutes(5)
 
-      # Insert a consumer_event with a specific deliver_count
+      # Insert consumer_events with specific deliver_counts
       event1 =
         ConsumersFactory.insert_consumer_event!(
           consumer_id: consumer.id,
@@ -214,37 +214,33 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       # Start the pipeline with the failing adapter
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
-      # Send the test event
-      ref1 = send_test_event(consumer, event1)
-      ref2 = send_test_event(consumer, event2)
+      # Send the test events
+      send_test_event(consumer, event1)
+      send_test_event(consumer, event2)
 
-      # Assert that the ack receives the failed event
-      assert_receive {:ack, ^ref1, [], [_failed]}, 2_000
+      # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
-      assert_receive {:ack, ^ref2, [], [_failed]}, 2_000
       assert_receive :sent, 1_000
+      assert_receive {ConsumerProducer, :ack_finished, [], [_failed1, _failed2]}, 2_000
 
-      # Reload the event from the database to check not_visible_until
+      # Reload the events from the database to check not_visible_until
       updated_event1 = Consumers.reload(event1)
       updated_event2 = Consumers.reload(event2)
 
-      assert updated_event1.not_visible_until != nil
+      assert updated_event1.not_visible_until
+      assert updated_event2.not_visible_until
 
-      # Calculate expected backoff time
-      expected_backoff1 = Time.exponential_backoff(base_backoff, deliver_count1 + 1, max_backoff)
-      expected_backoff2 = Time.exponential_backoff(base_backoff, deliver_count2 + 1, max_backoff)
-      expected_seconds1 = div(expected_backoff1, 1000)
-      expected_seconds2 = div(expected_backoff2, 1000)
+      refute updated_event1.not_visible_until == event1.not_visible_until
+      refute updated_event2.not_visible_until == event2.not_visible_until
 
       # Calculate the difference between initial_time and not_visible_until
-      diff_seconds1 = DateTime.diff(updated_event1.not_visible_until, initial_time, :second)
-      diff_seconds2 = DateTime.diff(updated_event2.not_visible_until, initial_time, :second)
+      diff_ms1 = DateTime.diff(updated_event1.not_visible_until, initial_time, :millisecond)
+      diff_ms2 = DateTime.diff(updated_event2.not_visible_until, initial_time, :millisecond)
 
-      # Allow a margin of +/- 1 second
-      assert diff_seconds1 >= expected_seconds1
-      assert diff_seconds1 <= expected_seconds1 + 1
-      assert diff_seconds2 >= expected_seconds2
-      assert diff_seconds2 <= expected_seconds2 + 1
+      refute updated_event1.not_visible_until == updated_event2.not_visible_until
+
+      # Ensure the backoff is increasing
+      assert diff_ms2 > diff_ms1
     end
   end
 

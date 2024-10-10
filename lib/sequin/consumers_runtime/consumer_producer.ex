@@ -106,7 +106,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     end)
 
     if test_pid do
-      send(test_pid, {:ack, successful_ids, failed_ids})
+      send(test_pid, {__MODULE__, :ack_finished, successful_ids, failed_ids})
     end
 
     :ok

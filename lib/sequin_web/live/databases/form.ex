@@ -41,6 +41,8 @@ defmodule SequinWeb.DatabasesLive.Form do
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
+          |> check_for_existing_databases()
+          |> dbg()
 
         {:ok, socket}
 
@@ -58,6 +60,11 @@ defmodule SequinWeb.DatabasesLive.Form do
     with {:ok, database} <- Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, Repo.preload(database, :replication_slot)}
     end
+  end
+
+  defp check_for_existing_databases(socket) do
+    has_databases? = socket |> current_account_id() |> Databases.list_dbs_for_account() |> Enum.any?()
+    assign(socket, :existing_database_check, has_databases?)
   end
 
   @parent_id "databases_form"
@@ -90,7 +97,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             parent: @parent_id,
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
-            api_token: @encoded_api_token
+            api_token: @encoded_api_token,
+            existingDatabaseCheck: @existing_database_check
           }
         }
       />

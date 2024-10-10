@@ -66,6 +66,7 @@
   export let live;
   export let showSupabasePoolerPrompt: boolean = false;
   export let api_token: { name: string; token: string };
+  export let existingDatabaseCheck: boolean;
 
   let form = { ...database, ssl: true }; // Set default SSL to true
 
@@ -281,30 +282,32 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
               </div>
             </PopoverContent>
           </Popover>
-          <Popover>
-            <PopoverTrigger>
-              <Button variant="secondary">
-                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database?
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-80">
-              <div class="space-y-2">
-                <h4 class="font-medium">Need a test database?</h4>
-                <p class="text-sm text-muted-foreground">
-                  We recommend setting up a free database with Supabase to get
-                  started.
-                </p>
-                <Button
-                  variant="outline"
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Go to Supabase Dashboard
+          {#if !existingDatabaseCheck}
+            <Popover>
+              <PopoverTrigger>
+                <Button variant="secondary">
+                  <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database?
                 </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </PopoverTrigger>
+              <PopoverContent class="w-80">
+                <div class="space-y-2">
+                  <h4 class="font-medium">Need a test database?</h4>
+                  <p class="text-sm text-muted-foreground">
+                    We recommend setting up a free database with Supabase to get
+                    started.
+                  </p>
+                  <Button
+                    variant="outline"
+                    href="https://supabase.com/dashboard"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Go to Supabase Dashboard
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          {/if}
         </div>
         <div class="space-y-2">
           <div

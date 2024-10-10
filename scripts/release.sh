@@ -198,6 +198,13 @@ if [ -z "$homebrew_dir" ]; then
     exit 1
 fi
 
+# Change to homebrew_dir and pull latest changes
+echo "Updating Homebrew formula repository..."
+current_dir=$(pwd)
+cd "$homebrew_dir" || exit
+git pull origin main
+cd "$current_dir" || exit
+
 # Get the latest tag
 latest_tag=$(get_latest_tag)
 echo "Current version: $latest_tag"

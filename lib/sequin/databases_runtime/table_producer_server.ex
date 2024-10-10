@@ -208,6 +208,24 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     {:next_state, {:awaiting_retry, state_name}, state, actions}
   end
 
+  def handle_event(:info, {ref, {:error, error}}, state_name, %State{task_ref: ref} = state) do
+    Process.demonitor(ref, [:flush])
+    Logger.error("[TableProducerServer] Task for #{state_name} failed with reason #{inspect(error)}", error: error)
+
+    state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
+    backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
+
+    actions = [
+      {:state_timeout, backoff, :retry}
+    ]
+
+    {:next_state, {:awaiting_retry, state_name}, state, actions}
+  end
+
+  def handle_event(:enter, _old_state, {:awaiting_retry, _state_name}, _state) do
+    :keep_state_and_data
+  end
+
   # Handle the retry after backoff
   def handle_event(:state_timeout, :retry, {:awaiting_retry, state_name}, state) do
     {:next_state, state_name, state}

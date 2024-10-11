@@ -9,4 +9,5 @@ Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterDetailed)
 Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterMultiPK)
 
 # Clean out health redis keys
-{:ok, _} = Sequin.Health.clean_test_keys()
+:ok = Sequin.Health.clean_test_keys()
+:ok = Sequin.DatabasesRuntime.TableProducer.clean_test_keys()

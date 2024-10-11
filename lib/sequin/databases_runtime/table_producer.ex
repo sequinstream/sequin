@@ -54,8 +54,25 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
+  def clean_test_keys do
+    if env() == :test do
+      pattern = "sequin:test:table_producer:cursor:*"
+
+      case Redix.command(:redix, ["KEYS", pattern]) do
+        {:ok, []} ->
+          :ok
+
+        {:ok, keys} ->
+          case Redix.command(:redix, ["DEL" | keys]) do
+            {:ok, _} -> :ok
+            {:error, error} -> raise error
+          end
+      end
+    end
+  end
+
   defp cursor_key(consumer_id) do
-    "table_producer:cursor:#{consumer_id}"
+    "sequin:#{env()}:table_producer:cursor:#{consumer_id}"
   end
 
   # Queries
@@ -186,5 +203,9 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
           {:ok, row, KeysetCursor.cursor_from_result(table, result)}
       end
     end
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

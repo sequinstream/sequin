@@ -497,7 +497,7 @@ defmodule Sequin.Health do
   @doc """
   Deletes all health-related Redis keys for the test environment.
   """
-  @spec clean_test_keys() :: {:ok, integer()} | {:error, Error.t()}
+  @spec clean_test_keys() :: :ok | {:error, Error.t()}
   def clean_test_keys do
     case env() do
       :test ->
@@ -505,16 +505,13 @@ defmodule Sequin.Health do
 
         case Redix.command(:redix, ["KEYS", pattern]) do
           {:ok, []} ->
-            {:ok, 0}
+            :ok
 
           {:ok, keys} ->
             case Redix.command(:redix, ["DEL" | keys]) do
-              {:ok, deleted_count} -> {:ok, deleted_count}
-              {:error, error} -> {:error, to_service_error(error)}
+              {:ok, _} -> :ok
+              {:error, error} -> raise error
             end
-
-          {:error, error} ->
-            {:error, to_service_error(error)}
         end
 
       _ ->

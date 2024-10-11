@@ -97,7 +97,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   end
 
   defp cast_value(%Table.Column{type: "uuid"}, val) do
-    UUID.string_to_binary!(val)
+    Sequin.String.string_to_binary!(val)
   end
 
   defp cast_value(%Table.Column{type: "timestamp without time zone"}, val) when is_binary(val) do
@@ -124,17 +124,18 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     cursor_columns = cursor_columns(table)
     result = result |> Postgres.result_to_maps() |> List.first()
 
-    Map.new(cursor_columns, fn %Table.Column{} = column ->
-      value = Map.fetch!(result, column.name)
+    Map.new(cursor_columns, fn
+      %Table.Column{type: "uuid"} = column ->
+        value = Map.fetch!(result, column.name)
 
-      value =
-        if column.type == "uuid" do
-          UUID.binary_to_string!(value)
-        else
-          value
-        end
+        # Cursor column shouldn't be nil, this guard may be unnecessary
+        value = value && Sequin.String.binary_to_string!(value)
+        {column.attnum, value}
 
-      {column.attnum, value}
+      %Table.Column{} = column ->
+        value = Map.fetch!(result, column.name)
+
+        {column.attnum, value}
     end)
   end
 

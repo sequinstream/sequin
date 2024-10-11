@@ -98,7 +98,7 @@ defmodule Sequin.Streams.Message do
 
   def where_key_and_stream_id_in(query \\ base_query(), key_stream_id_pairs) do
     {keys, stream_ids} = Enum.unzip(key_stream_id_pairs)
-    stream_ids = Enum.map(stream_ids, &UUID.string_to_binary!/1)
+    stream_ids = Enum.map(stream_ids, &Sequin.String.string_to_binary!/1)
 
     from([message: m] in query,
       where:

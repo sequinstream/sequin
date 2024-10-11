@@ -274,6 +274,7 @@ defmodule Sequin.Extensions.Replication do
 
         # Execute query
         {:ok, result} = Postgres.query(conn, query, pk_values)
+        result = Postgres.result_to_maps(result)
 
         # Update accumulator with fetched toast values
         Map.merge(acc, process_query_result(result, table_oid, columns))
@@ -313,23 +314,33 @@ defmodule Sequin.Extensions.Replication do
           if name == pk_col.name, do: value
         end)
 
-      if is_binary(value) and Sequin.String.is_uuid?(value), do: UUID.string_to_binary!(value), else: value
+      if pk_col.type == "uuid" do
+        Sequin.String.string_to_binary!(value)
+      else
+        value
+      end
     end)
   end
 
   defp process_query_result(result, table_oid, columns) do
-    result.rows
+    result
     |> Enum.map(fn row ->
-      pk_values =
-        row
-        |> Enum.take(length(Enum.filter(columns, & &1.pk?)))
-        |> Enum.map(&to_string/1)
-        |> Enum.map(&Sequin.String.binary_to_string/1)
+      pk_columns = Enum.filter(columns, & &1.pk?)
 
-      column_value_map = columns |> Enum.zip(row) |> Map.new(fn {col, val} -> {col.name, val} end)
-      {table_oid, pk_values, column_value_map}
+      pk_values =
+        Enum.map(pk_columns, fn %Relation.Column{} = col ->
+          value = row |> Map.fetch!(col.name) |> to_string()
+
+          if col.type == "uuid" do
+            Sequin.String.binary_to_string!(value)
+          else
+            value
+          end
+        end)
+
+      {table_oid, pk_values, row}
     end)
-    |> Map.new(fn {table_oid, pk_values, column_value_map} -> {{table_oid, pk_values}, column_value_map} end)
+    |> Map.new(fn {table_oid, pk_values, row} -> {{table_oid, pk_values}, row} end)
   end
 
   defp update_message_toast_values(message, toast_value_map) do

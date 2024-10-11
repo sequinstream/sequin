@@ -14,6 +14,7 @@ defmodule Sequin.TableProducerTest do
 
     characters_table = Enum.find(tables, &(&1.name == "Characters"))
     characters_multi_pk_table = Enum.find(tables, &(&1.name == "characters_multi_pk"))
+    characters_detailed_table = Enum.find(tables, &(&1.name == "characters_detailed"))
 
     character_col_attnums = map_column_attnums(characters_table)
     character_multi_pk_attnums = map_column_attnums(characters_multi_pk_table)
@@ -24,6 +25,11 @@ defmodule Sequin.TableProducerTest do
     characters_multi_pk_table = %{
       characters_multi_pk_table
       | sort_column_attnum: character_multi_pk_attnums["updated_at"]
+    }
+
+    characters_detailed_table = %{
+      characters_detailed_table
+      | sort_column_attnum: character_col_attnums["updated_at"]
     }
 
     ConnectionCache.cache_connection(db, Repo)
@@ -37,7 +43,8 @@ defmodule Sequin.TableProducerTest do
       characters_table: characters_table,
       characters_multi_pk_table: characters_multi_pk_table,
       character_col_attnums: character_col_attnums,
-      character_multi_pk_attnums: character_multi_pk_attnums
+      character_multi_pk_attnums: character_multi_pk_attnums,
+      characters_detailed_table: characters_detailed_table
     }
   end
 
@@ -307,6 +314,43 @@ defmodule Sequin.TableProducerTest do
 
       # Fetch the first row
       assert {:ok, nil, nil} = TableProducer.fetch_first_row(db, table)
+    end
+  end
+
+  describe "fetch_records_in_range/5 with UUID columns" do
+    test "correctly handles nil and populated UUID fields", %{
+      db: db,
+      characters_detailed_table: table
+    } do
+      # Insert two characters, one with nil house_id and one with populated house_id
+      char1 = CharacterFactory.insert_character_detailed!(house_id: nil)
+      char2 = CharacterFactory.insert_character_detailed!(house_id: UUID.uuid4())
+
+      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, max_cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: 10)
+
+      {:ok, results} =
+        TableProducer.fetch_records_in_range(
+          db,
+          table,
+          initial_min_cursor,
+          max_cursor,
+          limit: 10,
+          include_min: true
+        )
+
+      assert length(results) == 2
+
+      # Find the results corresponding to our inserted characters
+      result1 = Enum.find(results, &(&1["id"] == char1.id))
+      result2 = Enum.find(results, &(&1["id"] == char2.id))
+
+      # Verify that the house_id is correctly nil for the first character
+      refute result1["house_id"]
+
+      # Verify that the house_id is a valid UUID for the second character
+      assert {:ok, _} = UUID.info(result2["house_id"])
+      assert result2["house_id"] == char2.house_id
     end
   end
 

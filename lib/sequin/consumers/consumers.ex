@@ -573,7 +573,7 @@ defmodule Sequin.Consumers do
         {:ok, events} =
           Query.receive_consumer_events(
             batch_size: batch_size,
-            consumer_id: UUID.string_to_binary!(consumer.id),
+            consumer_id: Sequin.String.string_to_binary!(consumer.id),
             not_visible_until: not_visible_until,
             now: now
           )
@@ -621,7 +621,7 @@ defmodule Sequin.Consumers do
         {:ok, records} =
           Query.receive_consumer_records(
             batch_size: batch_size,
-            consumer_id: UUID.string_to_binary!(consumer.id),
+            consumer_id: Sequin.String.string_to_binary!(consumer.id),
             not_visible_until: not_visible_until,
             now: now
           )
@@ -808,7 +808,7 @@ defmodule Sequin.Consumers do
   end
 
   # Helper function to cast values using Ecto's type system
-  defp cast_value(value, "uuid"), do: UUID.string_to_binary!(value)
+  defp cast_value(value, "uuid"), do: Sequin.String.string_to_binary!(value)
 
   defp cast_value(value, pg_type) do
     ecto_type = Postgres.pg_type_to_ecto_type(pg_type)

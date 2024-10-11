@@ -48,9 +48,21 @@ defmodule Sequin.String do
   end
 
   def binary_to_string(uuid) when is_binary(uuid) do
-    UUID.binary_to_string!(uuid)
-  rescue
-    ArgumentError -> uuid
+    Ecto.UUID.load(uuid)
+  end
+
+  def binary_to_string!(uuid) when is_binary(uuid) do
+    case binary_to_string(uuid) do
+      {:ok, uuid} ->
+        uuid
+
+      :error ->
+        raise "Invalid UUID: #{inspect(uuid)}"
+    end
+  end
+
+  def string_to_binary!(uuid) when is_binary(uuid) do
+    UUID.string_to_binary!(uuid)
   end
 
   @doc """

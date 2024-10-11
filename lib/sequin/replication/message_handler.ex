@@ -206,28 +206,37 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   defp insert_or_delete_consumer_messages(messages) do
-    Repo.transact(fn ->
-      groups =
-        Enum.group_by(
-          messages,
-          fn
-            {:insert, %ConsumerEvent{}} -> :events
-            {:insert, %ConsumerRecord{}} -> :record_inserts
-            {:delete, %ConsumerRecord{}} -> :record_deletes
-          end,
-          &elem(&1, 1)
-        )
-
-      events = Enum.map(Map.get(groups, :events, []), &Sequin.Map.from_ecto/1)
-      records = Enum.map(Map.get(groups, :record_inserts, []), &Sequin.Map.from_ecto/1)
-      record_deletes = Enum.map(Map.get(groups, :record_deletes, []), &Sequin.Map.from_ecto/1)
-
-      with {:ok, event_count} <- Consumers.insert_consumer_events(events),
-           {:ok, record_count} <- Consumers.insert_consumer_records(records),
-           {:ok, delete_count} <- Consumers.delete_consumer_records(record_deletes) do
-        {:ok, event_count + record_count + delete_count}
+    messages
+    |> Enum.chunk_every(1000)
+    |> Enum.reduce_while({:ok, 0}, fn batch, {:ok, acc} ->
+      case insert_or_delete_consumer_message_batch(batch) do
+        {:ok, count} -> {:cont, {:ok, acc + count}}
+        error -> {:halt, error}
       end
     end)
+  end
+
+  defp insert_or_delete_consumer_message_batch(messages) do
+    groups =
+      Enum.group_by(
+        messages,
+        fn
+          {:insert, %ConsumerEvent{}} -> :events
+          {:insert, %ConsumerRecord{}} -> :record_inserts
+          {:delete, %ConsumerRecord{}} -> :record_deletes
+        end,
+        &elem(&1, 1)
+      )
+
+    events = Enum.map(Map.get(groups, :events, []), &Sequin.Map.from_ecto/1)
+    records = Enum.map(Map.get(groups, :record_inserts, []), &Sequin.Map.from_ecto/1)
+    record_deletes = Enum.map(Map.get(groups, :record_deletes, []), &Sequin.Map.from_ecto/1)
+
+    with {:ok, event_count} <- Consumers.insert_consumer_events(events),
+         {:ok, record_count} <- Consumers.insert_consumer_records(records),
+         {:ok, delete_count} <- Consumers.delete_consumer_records(record_deletes) do
+      {:ok, event_count + record_count + delete_count}
+    end
   end
 
   defp wal_event(pipeline, message) do

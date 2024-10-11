@@ -42,7 +42,6 @@ defmodule SequinWeb.DatabasesLive.Form do
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
           |> check_for_existing_databases()
-          |> dbg()
 
         {:ok, socket}
 

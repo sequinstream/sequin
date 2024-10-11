@@ -145,15 +145,19 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     uuid_columns = Enum.filter(columns, &(&1.type == "uuid"))
 
     Enum.reduce(uuid_columns, map, fn column, acc ->
-      Map.update(acc, column.name, nil, fn uuid_string ->
-        case Ecto.UUID.load(uuid_string) do
-          {:ok, uuid} ->
-            uuid
+      Map.update(acc, column.name, nil, fn
+        nil ->
+          nil
 
-          :error ->
-            Logger.error("[TableProducer] Invalid UUID: #{inspect(uuid_string)}", column: column, columns: columns)
-            raise "Got invalid UUID: #{inspect(uuid_string)} for column: #{column.name}"
-        end
+        uuid_string ->
+          case Sequin.String.binary_to_string(uuid_string) do
+            {:ok, uuid} ->
+              uuid
+
+            :error ->
+              Logger.error("[TableProducer] Invalid UUID: #{inspect(uuid_string)}", column: column, columns: columns)
+              raise "Got invalid UUID: #{inspect(uuid_string)} for column: #{column.name}"
+          end
       end)
     end)
   end

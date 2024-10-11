@@ -149,8 +149,14 @@ defmodule Sequin.Databases.PostgresDatabase do
   def cast_rows(%Table{} = table, rows) do
     Enum.map(rows, fn row ->
       Map.new(table.columns, fn col ->
+        value = row[col.name]
+
         casted_val =
-          if col.type == "uuid", do: UUID.binary_to_string!(row[col.name]), else: row[col.name]
+          if col.type == "uuid" do
+            value && Sequin.String.binary_to_string!(value)
+          else
+            value
+          end
 
         {col.name, casted_val}
       end)

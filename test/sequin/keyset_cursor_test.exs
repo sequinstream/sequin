@@ -81,7 +81,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursorTest do
 
       result = KeysetCursor.casted_cursor_values(table, cursor)
 
-      assert result == ["2023-01-01", 123, UUID.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]
+      assert result == ["2023-01-01", 123, Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]
     end
   end
 
@@ -91,7 +91,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursorTest do
 
       result = %Postgrex.Result{
         columns: ["updated_at", "id1", "id2"],
-        rows: [["2023-01-01", 123, UUID.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]],
+        rows: [["2023-01-01", 123, Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]],
         num_rows: 1
       }
 

@@ -119,7 +119,8 @@ if Mix.env() == :test do
             "alignment" => Factory.one_of(["good", "neutral", "evil"])
           },
           rating: Decimal.from_float(Factory.float(max: 10)),
-          avatar: :crypto.strong_rand_bytes(16)
+          avatar: :crypto.strong_rand_bytes(16),
+          house_id: UUID.uuid4()
         },
         attrs
       )

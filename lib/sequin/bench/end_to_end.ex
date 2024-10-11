@@ -264,7 +264,7 @@ defmodule Sequin.Bench.EndToEnd do
       ON CONFLICT (stream_id, key) DO NOTHING
       """
 
-      Repo.query!(query, [UUID.string_to_binary!(stream_id), batch_size], timeout: :timer.minutes(2))
+      Repo.query!(query, [Sequin.String.string_to_binary!(stream_id), batch_size], timeout: :timer.minutes(2))
     end)
 
     Logger.info("Seeded database with #{count} messages")

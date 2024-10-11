@@ -565,24 +565,7 @@ defmodule Sequin.Consumers do
       |> ConsumerEvent.count()
       |> Repo.one()
 
-    batch_size =
-      case min(batch_size, max_ack_pending - outstanding_count) do
-        batch_size when batch_size < 0 ->
-          Logger.warning(
-            "Consumer #{consumer.id} has negative batch size: #{batch_size}",
-            consumer_id: consumer.id,
-            batch_size: Keyword.get(opts, :batch_size, 100),
-            max_ack_pending: max_ack_pending,
-            outstanding_count: outstanding_count
-          )
-
-          0
-
-        batch_size ->
-          batch_size
-      end
-
-    case batch_size do
+    case receive_batch_size(consumer, batch_size, max_ack_pending, outstanding_count) do
       0 ->
         {:ok, []}
 
@@ -630,7 +613,7 @@ defmodule Sequin.Consumers do
       |> ConsumerRecord.count()
       |> Repo.one()
 
-    case min(batch_size, max_ack_pending - outstanding_count) do
+    case receive_batch_size(consumer, batch_size, max_ack_pending, outstanding_count) do
       0 ->
         {:ok, []}
 
@@ -665,6 +648,24 @@ defmodule Sequin.Consumers do
 
           {:ok, fetched_records}
         end
+    end
+  end
+
+  defp receive_batch_size(consumer, batch_size, max_ack_pending, outstanding_count) do
+    batch_size = min(batch_size, max_ack_pending - outstanding_count)
+
+    if batch_size < 0 do
+      Logger.warning(
+        "Consumer #{consumer.id} has negative batch size: #{batch_size}",
+        consumer_id: consumer.id,
+        batch_size: batch_size,
+        max_ack_pending: max_ack_pending,
+        outstanding_count: outstanding_count
+      )
+
+      0
+    else
+      batch_size
     end
   end
 

@@ -53,8 +53,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    messages_to_fetch = demand
-    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: messages_to_fetch)
+    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand)
 
     broadway_messages =
       Enum.map(messages, fn message ->
@@ -65,6 +64,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       end)
 
     new_demand = demand - length(broadway_messages)
+    new_demand = if new_demand < 0, do: 0, else: new_demand
 
     {:noreply, broadway_messages, %{state | demand: new_demand}}
   end

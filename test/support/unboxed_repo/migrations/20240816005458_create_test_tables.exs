@@ -36,6 +36,8 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       timestamps()
     end
 
+    execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+
     # New table with all possible column types
     create table(:characters_detailed) do
       add :name, :string
@@ -43,6 +45,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :height, :float
       add :is_hero, :boolean
       add :biography, :text
+      add :biography_tsv, :tsvector, generated: "ALWAYS AS (to_tsvector('english', coalesce(biography, ''))) STORED"
       add :birth_date, :date
       add :last_seen, :time
       add :powers, {:array, :string}

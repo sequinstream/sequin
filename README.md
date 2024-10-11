@@ -12,6 +12,8 @@
   <a href="https://sequinstream.com/docs">Documentation</a>
   ·
   <a href="https://sequinstream.com">Website</a>
+  ·
+  <a href="https://discord.gg/BV8wFXvNtY">Discord</a>
 </p>
 
 </div>

@@ -32,16 +32,10 @@ The response is an object with a `data` property that contains a list of message
 <ResponseField name="data" type="list">
   <Expandable title="properties">
     <ResponseField name="record" type="Record">
-    A [record](/core-concepts#records) containing the message data with a key for each column in the associated table.
+    A [row](/how-sequin-works#rows) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="ack_token" type="string">
     You'll use the `ack_token` in follow-up requests to either [ack](/management-api/http-pull-consumers/ack) or [nack](/management-api/http-pull-consumers/nack) this specific message.
-    </ResponseField>
-    <ResponseField name="changes" type="object">
-    If the consumer is processing changes, a [changes](/core-concepts#changes) object will be returned.
-    </ResponseField>
-    <ResponseField name="action" type="string">
-    If the consumer is processing [changes](/core-concepts#changes), the action that was performed on the record as `insert`, `update`, or `delete`.
     </ResponseField>
   </Expandable>
 </ResponseField>

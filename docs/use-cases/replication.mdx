@@ -32,8 +32,8 @@ This is a common replication pattern. This guide shows you how to implement repl
     </Check>
 
   </Step>
-  <Step title="Create a consumer to capture row changes" icon="signal-stream">
-       Create a [consumers](/core-concepts#consumers) that captures every [row](/core-concepts#rows-and-changes) in your `products` table:
+  <Step title="Create a webhook subscription to capture row changes" icon="signal-stream">
+       Create a [webhook subscription](/how-sequin-works#webhooks) that captures every [row](/how-sequin-works#rows) in your `products` table:
 
     1. Click the **Create Consumer** button and then select the `users` table.
     2. Because you want to capture every row change you can leave the **Filter** field blank.
@@ -124,4 +124,4 @@ Sequin captures every change in your `products` table via the WAL and then ensur
 To add a fan out pattern to your application, you might want to:
 
 * Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
-* Learn more about how Sequin works under the hood in the [Core concepts](/core-concepts) section.
+* Learn more about [how Sequin works](/how-sequin-works).

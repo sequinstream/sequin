@@ -47,7 +47,7 @@
       "pages": [
         "introduction",
         "quickstart",
-        "core-concepts",
+        "how-sequin-works",
         "compare",
         "self-hosting/docker-compose",
         "cli"
@@ -108,5 +108,12 @@
       "name": "Authorization"
     }
   },
-  "footerSocials": {}
+  "footerSocials": {},
+  "redirects": [
+    {
+      "source": "/core-concepts",
+      "destination": "/how-sequin-works",
+      "permanent": true
+    }
+  ]
 }

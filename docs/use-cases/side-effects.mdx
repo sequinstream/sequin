@@ -33,7 +33,7 @@ This is a common "side effect" pattern. This guide shows you how to implement si
 
   </Step>
   <Step title="Create a consumer to captures `inserts` on the `users` table" icon="signal-stream">
-       Create a [push consumer](/core-concepts#consumers) that captures [changes](/core-concepts#rows-and-changes) from the `users` table. It'll then send an HTTP request to your application with the new user's information (which you'll handle in the next step).
+       Create a [webhook subscription](/how-sequin-works#webhooks) that captures changes from the `users` table. It'll then send an HTTP request to your application with the new user's information (which you'll handle in the next step).
 
     1. Click the **Create Consumer** button and then select the `users` table.
     2. Because you want to capture every `insert` you can leave the **Filter** field blank.
@@ -119,4 +119,4 @@ Sequin handles the hard parts for you:
 To add a side effect to your application, you might want to:
 
 * Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
-* Learn more about how Sequin works under the hood in the [Core concepts](/core-concepts) section.
+* Learn more about [how Sequin works](/how-sequin-works).

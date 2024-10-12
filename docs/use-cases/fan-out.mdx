@@ -36,8 +36,8 @@ This is a common "fan out" pattern. This guide shows you how to implement fan ou
     </Check>
 
   </Step>
-  <Step title="Create three consumers to fan out messages" icon="signal-stream">
-       Create three [consumers](/core-concepts#consumers) (one for inventory, one for shipping, and one for invoicing) that captures [changes](/core-concepts#rows-and-changes) from the `orders` table and delivers them to the relevant service:
+  <Step title="Create three webhook subscriptions to fan out messages" icon="signal-stream">
+       Create three [webhook subscriptions](/how-sequin-works#webhooks) (one for inventory, one for shipping, and one for invoicing) that capture changes from the `orders` table and delivers them to the relevant service:
 
     1. Click the **Create Consumer** button and then select the `users` table.
     2. Because you want to capture every `insert` you can leave the **Filter** field blank.
@@ -124,4 +124,4 @@ Sequin handles the hard parts for you:
 To add a fan out pattern to your application, you might want to:
 
 * Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
-* Learn more about how Sequin works under the hood in the [Core concepts](/core-concepts) section.
+* Learn more about [how Sequin works](/how-sequin-works).

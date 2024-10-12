@@ -230,27 +230,11 @@
             {#if form.messageKind === "event"}
               By consuming from the table's WAL, this consumer will receive
               every create, update, and delete that happens to rows and includes
-              both new and old values. Replays and backfills are limited. <a
-                href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center text-link hover:underline"
-              >
-                Learn more
-                <ExternalLinkIcon class="w-3 h-3 ml-1" />
-              </a>
+              both new and old values. Replays and backfills are limited.
             {:else if form.messageKind === "record"}
               By consuming directly from the table, this consumer will receive
               the latest version of rows whenever they change. Messages will not
-              include old values and the consumer will not receive deletes. <a
-                href="https://sequinstream.com/docs/core-concepts#rows-and-changes"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center text-link hover:underline"
-              >
-                Learn more
-                <ExternalLinkIcon class="w-3 h-3 ml-1" />
-              </a>
+              include old values and the consumer will not receive deletes.
             {/if}
           </p>
           {#if errors.message_kind}

@@ -188,7 +188,7 @@
                 the sort column whenever a row is updated. A good example of a
                 sort column is <code>updated_at</code>.
                 <a
-                  href="https://sequinstream.com/docs/core-concepts#sorting-row-consumers-only"
+                  href="https://sequinstream.com/docs/how-sequin-works#creating-a-table-stream"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center text-link hover:underline"

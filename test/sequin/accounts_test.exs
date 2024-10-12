@@ -750,4 +750,40 @@ defmodule Sequin.AccountsTest do
       assert {:error, %NotFoundError{entity: :account}} = Accounts.get_account_for_user(user.id, account.id)
     end
   end
+
+  describe "feature flags" do
+    test "has_feature?/2 correctly checks for features" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a", "feature_b"]})
+
+      assert Accounts.has_feature?(account, "feature_a")
+      assert Accounts.has_feature?(account, "feature_b")
+      refute Accounts.has_feature?(account, "feature_c")
+    end
+
+    test "add_feature/2 adds a new feature" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a"]})
+
+      {:ok, updated_account} = Accounts.add_feature(account, "feature_b")
+      assert "feature_b" in updated_account.features
+      assert "feature_b" in Repo.reload(updated_account).features
+      assert length(updated_account.features) == 2
+
+      # Adding an existing feature doesn't duplicate it
+      {:ok, updated_account} = Accounts.add_feature(updated_account, "feature_a")
+      assert_lists_equal(updated_account.features, ["feature_a", "feature_b"])
+    end
+
+    test "remove_feature/2 removes an existing feature" do
+      account = AccountsFactory.insert_account!(%{features: ["feature_a", "feature_b"]})
+
+      {:ok, updated_account} = Accounts.remove_feature(account, "feature_a")
+      refute "feature_a" in updated_account.features
+      refute "feature_a" in Repo.reload(updated_account).features
+      assert length(updated_account.features) == 1
+
+      # Removing a non-existent feature doesn't affect the list
+      {:ok, updated_account} = Accounts.remove_feature(updated_account, "feature_c")
+      assert length(updated_account.features) == 1
+    end
+  end
 end

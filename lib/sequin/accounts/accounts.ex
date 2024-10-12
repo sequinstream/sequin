@@ -716,4 +716,24 @@ defmodule Sequin.Accounts do
         {:ok, abp}
     end
   end
+
+  ## Features
+
+  def has_feature?(%Account{} = account, feature) do
+    Enum.any?(account.features, &(&1 == feature))
+  end
+
+  def add_feature(%Account{} = account, feature) do
+    if has_feature?(account, feature) do
+      {:ok, account}
+    else
+      update_account(account, %{features: [feature | account.features]})
+    end
+  end
+
+  def remove_feature(%Account{} = account, feature) do
+    features = Enum.filter(account.features, &(&1 != feature))
+
+    update_account(account, %{features: features})
+  end
 end

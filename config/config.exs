@@ -32,7 +32,13 @@ config :sentry,
 config :sequin, Oban,
   prefix: sequin_config_schema,
   queues: [default: 10],
-  repo: Sequin.Repo
+  repo: Sequin.Repo,
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 */6 * * *", Sequin.Databases.EnqueueDatabaseUpdateWorker}
+     ]}
+  ]
 
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 

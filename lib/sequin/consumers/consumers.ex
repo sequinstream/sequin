@@ -757,7 +757,7 @@ defmodule Sequin.Consumers do
       # Convert result to map
       rows = Postgres.result_to_maps(result)
 
-      rows = PostgresDatabase.cast_rows(table, rows)
+      rows = Postgres.load_rows(table, rows)
 
       # Match the results with the original records
       updated_records =

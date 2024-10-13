@@ -5,6 +5,7 @@ defmodule Sequin.Postgres do
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
@@ -401,6 +402,16 @@ defmodule Sequin.Postgres do
     end
   end
 
+  @doc """
+  For crafting a `select *`, but only selecting columns that are considered "safe"
+  (i.e. we have a Postgrex encoder available)
+  """
+  def safe_select_columns(%Table{} = table) do
+    table.columns
+    |> Enum.filter(&has_encoder?/1)
+    |> Enum.map_join(", ", &quote_name(&1.name))
+  end
+
   def sequence_nextval(sequence_name) do
     # Reason for casting explicitly: https://github.com/elixir-ecto/postgrex#oid-type-encoding
     with %{rows: [[val]]} <- Repo.query!("SELECT nextval($1::text::regclass)", [sequence_name]) do
@@ -489,6 +500,67 @@ defmodule Sequin.Postgres do
           message: "Failed to check for existing replication slot",
           details: error
         )
+    end
+  end
+
+  @safe_types [
+    "array",
+    "bigint",
+    "bit",
+    "bool",
+    "boolean",
+    "box",
+    "bytea",
+    "char",
+    "character varying",
+    "cidr",
+    "circle",
+    "date",
+    "double precision",
+    "float4",
+    "float8",
+    "hstore",
+    "inet",
+    "int2",
+    "int4",
+    "int8",
+    "integer",
+    "interval",
+    "json",
+    "jsonb",
+    "line",
+    "lseg",
+    "macaddr",
+    "name",
+    "numeric",
+    "oid",
+    "path",
+    "point",
+    "polygon",
+    "real",
+    "smallint",
+    "text",
+    "tid",
+    "tsvector",
+    "uuid",
+    "varchar",
+    "varbit",
+    "void"
+  ]
+
+  # Catch-all for time formats
+  defp has_encoder?(%Table.Column{type: "time" <> _rest}) do
+    true
+  end
+
+  defp has_encoder?(%Table.Column{type: type} = column) do
+    type = String.trim_trailing(type, "[]")
+
+    if type in @safe_types do
+      true
+    else
+      Logger.info("Unsupported column type (type=#{inspect(type)}, col=#{column.name})")
+      false
     end
   end
 end

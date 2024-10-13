@@ -1,6 +1,7 @@
 defmodule Sequin.PostgresTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Postgres
   alias Sequin.Test.UnboxedRepo
 
@@ -100,6 +101,78 @@ defmodule Sequin.PostgresTest do
     test "quotes identifiers correctly" do
       assert to_string(Postgres.quote_name("table_name")) == "\"table_name\""
       assert to_string(Postgres.quote_name(:column_name)) == "\"column_name\""
+    end
+  end
+
+  describe "load_rows/2" do
+    test "correctly loads and formats rows" do
+      table =
+        DatabasesFactory.table(
+          columns: [
+            %{name: "id", type: "uuid", is_pk?: true},
+            %{name: "index", type: "int4"},
+            %{name: "name", type: "text"},
+            %{name: "age", type: "integer"},
+            %{name: "optional_uuid", type: "uuid"},
+            %{name: "complex_type", type: "complex"}
+          ]
+        )
+
+      uuid_string = UUID.uuid4()
+      uuid = UUID.string_to_binary!(uuid_string)
+      optional_uuid_string = UUID.uuid4()
+      optional_uuid = UUID.string_to_binary!(optional_uuid_string)
+      non_encodable = {:a, :b}
+
+      rows = [
+        %{
+          "index" => 1,
+          "id" => uuid,
+          "name" => "Alice",
+          "age" => 30,
+          "optional_uuid" => optional_uuid,
+          "complex_type" => "some value"
+        },
+        %{
+          "index" => 2,
+          "id" => uuid,
+          "name" => "Bob",
+          "age" => 25,
+          "optional_uuid" => nil,
+          "complex_type" => non_encodable
+        }
+      ]
+
+      loaded_rows = Postgres.load_rows(table, rows)
+
+      assert [
+               %{
+                 "index" => 1,
+                 "id" => ^uuid_string,
+                 "name" => "Alice",
+                 "age" => 30,
+                 "optional_uuid" => ^optional_uuid_string,
+                 "complex_type" => "some value"
+               },
+               %{
+                 "index" => 2,
+                 "id" => ^uuid_string,
+                 "name" => "Bob",
+                 "age" => 25,
+                 "optional_uuid" => nil,
+                 "complex_type" => nil
+               }
+             ] = Enum.sort_by(loaded_rows, & &1["index"])
+
+      # Ensure UUIDs are converted to strings
+      assert is_binary(hd(loaded_rows)["id"])
+      assert is_binary(hd(loaded_rows)["optional_uuid"])
+
+      # Ensure nil UUID is passed through as nil
+      assert is_nil(List.last(loaded_rows)["optional_uuid"])
+
+      # Ensure non-JSON encodable value is converted to nil
+      assert is_nil(List.last(loaded_rows)["complex_type"])
     end
   end
 end

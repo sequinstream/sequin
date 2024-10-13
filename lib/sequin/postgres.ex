@@ -514,6 +514,39 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def tables_to_map(tables) do
+    Enum.map(tables, fn table ->
+      table
+      |> Sequin.Map.from_ecto()
+      |> Map.update!(:columns, fn columns ->
+        Enum.map(columns, &Sequin.Map.from_ecto/1)
+      end)
+    end)
+  end
+
+  def load_rows(%Table{} = table, rows) do
+    Enum.map(rows, fn row ->
+      Map.new(table.columns, fn col ->
+        value = row[col.name]
+
+        casted_val =
+          cond do
+            # This is the catch-all when encode is not implemented
+            Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
+              nil
+
+            col.type == "uuid" and not is_nil(value) ->
+              Sequin.String.binary_to_string!(value)
+
+            true ->
+              value
+          end
+
+        {col.name, casted_val}
+      end)
+    end)
+  end
+
   @safe_types [
     "array",
     "bigint",

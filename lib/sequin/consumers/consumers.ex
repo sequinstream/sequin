@@ -747,7 +747,10 @@ defmodule Sequin.Consumers do
         "where (#{pk_column_names}) in (#{value_params})"
       end
 
-    query = "select * from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
+    select_columns = Postgres.safe_select_columns(table)
+
+    query =
+      "select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
 
     # Execute the query
     with {:ok, result} <- Postgres.query(postgres_db, query, casted_pks) do

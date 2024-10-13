@@ -467,7 +467,7 @@ defmodule Sequin.ConsumersTest do
                Consumers.put_source_data(consumer, [record])
     end
 
-    test "handles when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer} do
+    test "returns error when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer} do
       character = CharacterFactory.insert_character!()
       record = build_consumer_record(consumer, character)
 
@@ -481,9 +481,7 @@ defmodule Sequin.ConsumersTest do
           end)
         end)
 
-      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
-
-      assert fetched_record.data.record["non_existent_column"] == nil
+      {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = Consumers.put_source_data(consumer, [record])
     end
 
     @tag capture_log: true

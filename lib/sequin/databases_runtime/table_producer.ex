@@ -94,9 +94,11 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
 
     limit = Keyword.get(opts, :limit, 1000)
 
+    select_columns = Postgres.safe_select_columns(table)
+
     sql =
       """
-      select * from #{Postgres.quote_name(table.schema, table.name)}
+      select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)}
       where #{min_where_clause} and #{max_where_clause}
       order by #{order_by_clause}
       limit ?
@@ -185,8 +187,10 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   def fetch_first_row(%PostgresDatabase{} = db, %Table{} = table) do
     order_by = KeysetCursor.order_by_sql(table, "asc")
 
+    select_columns = Postgres.safe_select_columns(table)
+
     sql = """
-    select * from #{Postgres.quote_name(table.schema, table.name)}
+    select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)}
     order by #{order_by}
     limit 1
     """

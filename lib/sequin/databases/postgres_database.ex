@@ -7,7 +7,6 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   alias __MODULE__
   alias Ecto.Queryable
-  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
@@ -134,33 +133,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     column
     |> cast(attrs, [:attnum, :name, :type, :is_pk?])
     |> validate_required([:attnum, :name, :type, :is_pk?])
-  end
-
-  def tables_to_map(tables) do
-    Enum.map(tables, fn table ->
-      table
-      |> Sequin.Map.from_ecto()
-      |> Map.update!(:columns, fn columns ->
-        Enum.map(columns, &Sequin.Map.from_ecto/1)
-      end)
-    end)
-  end
-
-  def cast_rows(%Table{} = table, rows) do
-    Enum.map(rows, fn row ->
-      Map.new(table.columns, fn col ->
-        value = row[col.name]
-
-        casted_val =
-          if col.type == "uuid" do
-            value && Sequin.String.binary_to_string!(value)
-          else
-            value
-          end
-
-        {col.name, casted_val}
-      end)
-    end)
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()

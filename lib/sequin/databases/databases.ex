@@ -330,7 +330,7 @@ defmodule Sequin.Databases do
   defp update_tables(conn, %PostgresDatabase{} = db) do
     with {:ok, schemas} <- list_schemas(conn),
          {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
-      tables = PostgresDatabase.tables_to_map(tables)
+      tables = Postgres.tables_to_map(tables)
 
       db
       |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})

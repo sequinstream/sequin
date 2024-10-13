@@ -4,6 +4,7 @@ defmodule Sequin.Postgres do
 
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
@@ -95,7 +96,17 @@ defmodule Sequin.Postgres do
   def query(%PostgresDatabase{} = db, query, params, opts) do
     case ConnectionCache.connection(db) do
       {:ok, conn_or_mod} ->
-        query(conn_or_mod, query, params, opts)
+        case query(conn_or_mod, query, params, opts) do
+          {:ok, result} ->
+            {:ok, result}
+
+          {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = error ->
+            DatabaseUpdateWorker.enqueue(db.id)
+            error
+
+          error ->
+            error
+        end
 
       {:error, _} = error ->
         error

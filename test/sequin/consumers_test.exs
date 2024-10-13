@@ -14,6 +14,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SourceTable.StringValue
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -482,6 +483,8 @@ defmodule Sequin.ConsumersTest do
         end)
 
       {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = Consumers.put_source_data(consumer, [record])
+
+      assert_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: consumer.postgres_database.id})
     end
 
     @tag capture_log: true

@@ -533,6 +533,7 @@ defmodule Sequin.Postgres do
           cond do
             # This is the catch-all when encode is not implemented
             Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
+              Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
               nil
 
             col.type == "uuid" and not is_nil(value) ->
@@ -603,7 +604,7 @@ defmodule Sequin.Postgres do
     if type in @safe_types do
       true
     else
-      Logger.info("Unsupported column type (type=#{inspect(type)}, col=#{column.name})")
+      Logger.info("[Postgres] Unsupported column type (type=#{inspect(type)}, col=#{column.name})")
       false
     end
   end

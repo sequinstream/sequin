@@ -5,6 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Cog } from "lucide-svelte";
+  import { Label } from "$lib/components/ui/label";
 
   interface Account {
     id: string;
@@ -23,6 +24,9 @@
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
   let deleteErrorMessage: string | null = null;
+  let showInviteMember = false;
+  let inviteMemberLoading = false;
+  let inviteMemberError: string | null = null;
   $: renameDisabled = selectedAccount.name === form.name;
 
   function handleAccountSelect(accountId: string) {
@@ -62,10 +66,32 @@
       (res: any) => {
         deleteConfirmDialogLoading = false;
         if (res.error) {
-          console.error(res.error);
           deleteErrorMessage = res.error;
         } else {
           showDeleteConfirmDialog = false;
+        }
+      }
+    );
+  }
+
+  function handleInviteMember(event: Event) {
+    event.preventDefault();
+    inviteMemberLoading = true;
+    inviteMemberError = null;
+    live.pushEventTo(
+      `#${parent}`,
+      "invite_member",
+      {
+        accountId: selectedAccount.id,
+        email: form.email,
+      },
+      (res: any) => {
+        res;
+        inviteMemberLoading = false;
+        if (res.error) {
+          inviteMemberError = res.error;
+        } else {
+          showInviteMember = false;
         }
       }
     );
@@ -93,18 +119,6 @@
     </Select.Root>
   </div>
 
-  <div class="w-full rounded-lg border-2 border-dashed border-gray-300 mb-6">
-    <div class="text-center py-12 w-1/2 mx-auto my-auto">
-      <h2 class="text-xl font-semibold mb-4">Invite your team</h2>
-      <p class="text-gray-600 mb-6">
-        Invite your team to your account to allow them to access your Sequin
-        resources. Coming by the end of October 2024 - send us a note if you
-        want this right away.
-      </p>
-      <Button disabled>Add a team member</Button>
-    </div>
-  </div>
-
   <Card.Root class="mb-6">
     <Card.Header>
       <Card.Title>Rename Account</Card.Title>
@@ -113,17 +127,43 @@
       {#if renameErrorMessage}
         <p class="text-destructive text-sm mt-2 mb-4">{renameErrorMessage}</p>
       {/if}
-      <form on:submit={handleRenameAccount} class="flex space-x-4">
-        <Input type="text" bind:value={form.name} />
+      <form
+        on:submit={handleRenameAccount}
+        class="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-4 sm:space-y-0"
+      >
+        <Input type="text" bind:value={form.name} class="flex-grow" />
         <Button
           variant="default"
           type="submit"
           disabled={renameDisabled}
           loading={renameLoading}
+          class="w-full sm:w-auto"
         >
           Rename
         </Button>
       </form>
+    </Card.Content>
+  </Card.Root>
+
+  <Card.Root class="mb-6">
+    <Card.Header>
+      <Card.Title>Invite your team</Card.Title>
+    </Card.Header>
+    <Card.Content>
+      <div
+        class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 sm:space-x-4"
+      >
+        <p>
+          Invite your team to your account to allow them to access your Sequin
+          resources.
+        </p>
+        <Button
+          on:click={() => (showInviteMember = true)}
+          class="w-full sm:w-auto"
+        >
+          Add team member
+        </Button>
+      </div>
     </Card.Content>
   </Card.Root>
 
@@ -132,7 +172,9 @@
       <Card.Title>Delete this account</Card.Title>
     </Card.Header>
     <Card.Content>
-      <div class="flex items-center justify-between space-x-4">
+      <div
+        class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0 sm:space-x-4"
+      >
         <p>
           Permanently delete this account ({selectedAccount.name}). There is no
           going back.
@@ -140,6 +182,7 @@
         <Button
           variant="destructive"
           on:click={() => (showDeleteConfirmDialog = true)}
+          class="w-full sm:w-auto"
         >
           Delete Account
         </Button>
@@ -173,5 +216,44 @@
         Delete
       </Button>
     </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showInviteMember}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Invite a team member</Dialog.Title>
+    </Dialog.Header>
+    <form on:submit={handleInviteMember}>
+      <div class="grid gap-4 py-4 my-4">
+        <div class="grid grid-cols-4 items-center gap-4">
+          <Label for="email" class="text-right">Email</Label>
+          <Input
+            id="email"
+            bind:value={form.email}
+            placeholder="Email"
+            class="col-span-3"
+          />
+        </div>
+        {#if inviteMemberError}
+          <p class="text-destructive text-sm mt-2 mb-4 col-span-4">
+            {inviteMemberError}
+          </p>
+        {/if}
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" on:click={() => (showInviteMember = false)}>
+          Cancel
+        </Button>
+        <Button
+          variant="default"
+          type="submit"
+          disabled={inviteMemberLoading}
+          loading={inviteMemberLoading}
+        >
+          Invite
+        </Button>
+      </Dialog.Footer>
+    </form>
   </Dialog.Content>
 </Dialog.Root>

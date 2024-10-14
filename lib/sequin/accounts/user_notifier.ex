@@ -81,4 +81,21 @@ defmodule Sequin.Accounts.UserNotifier do
     ==============================
     """)
   end
+
+  def deliver_invite_to_account_instructions(user_email, account_name, url) do
+    deliver(user_email, "Invite to account instructions", """
+
+    ==============================
+
+    Hi #{user_email},
+
+    You have been invited to join an account on #{account_name}. To accept the invite, please visit the URL below:
+
+    #{url}
+
+    If you don't want to join this account, please ignore this email.
+
+    ==============================
+    """)
+  end
 end

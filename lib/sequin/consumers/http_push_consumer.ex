@@ -9,7 +9,9 @@ defmodule Sequin.Consumers.HttpPushConsumer do
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   @derive {Jason.Encoder,
@@ -45,6 +47,10 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     embeds_many :source_tables, SourceTable, on_replace: :delete
     embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
 
+    # Sequences
+    belongs_to :sequence, Sequence
+    embeds_one :sequence_filter, SequenceFilter, on_replace: :delete
+
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
@@ -69,7 +75,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :replication_slot_id,
-      :status
+      :status,
+      :sequence_id
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])
     |> validate_required([:name, :status, :replication_slot_id])
@@ -81,8 +88,11 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       end
     )
     |> cast_embed(:record_consumer_state)
+    |> cast_embed(:sequence_filter)
     |> foreign_key_constraint(:http_endpoint_id)
+    |> foreign_key_constraint(:sequence_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
+    |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> Sequin.Changeset.validate_name()
   end
@@ -104,6 +114,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
     |> cast_embed(:record_consumer_state)
+    |> cast_embed(:sequence_filter)
     |> Sequin.Changeset.cast_embed(:source_tables)
   end
 

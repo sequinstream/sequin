@@ -16,7 +16,6 @@
   import { slide, fade } from "svelte/transition";
 
   // Receive necessary props
-  export let consumer: { ack_wait_ms: number };
   export let messages: any[];
   export let totalCount: number = 0;
   export let pageSize: number;

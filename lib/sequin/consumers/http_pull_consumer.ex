@@ -8,7 +8,9 @@ defmodule Sequin.Consumers.HttpPullConsumer do
   alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   @derive {Jason.Encoder,
@@ -40,6 +42,10 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     embeds_many :source_tables, SourceTable, on_replace: :delete
     embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
 
+    # Sequence
+    belongs_to :sequence, Sequence
+    embeds_one :sequence_filter, SequenceFilter, on_replace: :delete
+
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
 
@@ -61,12 +67,17 @@ defmodule Sequin.Consumers.HttpPullConsumer do
       :name,
       :backfill_completed_at,
       :replication_slot_id,
-      :status
+      :status,
+      :sequence_id
     ])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
+    |> cast_embed(:sequence_filter)
+    # TODO: add sequence_id requirement
     |> validate_required([:name, :status])
+    |> foreign_key_constraint(:sequence_id, name: "postgres_databases_account_id_fkey")
     |> unique_constraint([:account_id, :name], error_key: :name)
+    |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> Sequin.Changeset.validate_name()
   end
 
@@ -82,6 +93,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     ])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
+    |> cast_embed(:sequence_filter)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

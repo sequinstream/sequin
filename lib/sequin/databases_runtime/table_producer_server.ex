@@ -27,8 +27,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   # Convenience function
   def via_tuple(consumer_id) do
-    consumer = Consumers.get_consumer!(consumer_id)
-    table_oid = consumer.source_tables |> List.first() |> Map.fetch!(:oid)
+    consumer =
+      consumer_id
+      |> Consumers.get_consumer!()
+      |> Repo.preload(:sequence)
+
+    table_oid = consumer.sequence.table_oid
     via_tuple({consumer.id, table_oid})
   end
 
@@ -67,7 +71,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   def init(opts) do
     test_pid = Keyword.get(opts, :test_pid)
     maybe_setup_allowances(test_pid)
-    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload(replication_slot: :postgres_database)
+    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload([:sequence, replication_slot: :postgres_database])
 
     state = %State{
       consumer: consumer,
@@ -260,8 +264,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   defp table(%State{} = state) do
     database = database(state)
     db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
-    source_table = Sequin.Enum.find!(state.consumer.source_tables, &(&1.oid == state.table_oid))
-    %{db_table | sort_column_attnum: source_table.sort_column_attnum}
+    %{db_table | sort_column_attnum: state.consumer.sequence.sort_column_attnum}
   end
 
   # Message handling
@@ -302,10 +305,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   defp generate_group_id(consumer, table, record) do
-    source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table.oid))
-
-    if source_table.group_column_attnums do
-      Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
+    if consumer.sequence_filter.group_column_attnums do
+      Enum.map_join(consumer.sequence_filter.group_column_attnums, ",", fn attnum ->
         column = Sequin.Enum.find!(table.columns, &(&1.attnum == attnum))
         to_string(Map.get(record, column.name))
       end)

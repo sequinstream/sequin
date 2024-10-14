@@ -12,10 +12,8 @@
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
 
-  export let live: any;
   export let trace_state: any;
   export let consumers: any;
-  export let database: { id: string; name: string };
   export let tables: any;
   export let paused: boolean = false;
 

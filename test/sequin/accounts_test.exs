@@ -115,7 +115,11 @@ defmodule Sequin.AccountsTest do
       replication_slot =
         ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
 
-      ConsumersFactory.insert_http_pull_consumer!(account_id: account.id, replication_slot_id: replication_slot.id)
+      ConsumersFactory.insert_http_pull_consumer!(
+        account_id: account.id,
+        postgres_database_id: db.id,
+        replication_slot_id: replication_slot.id
+      )
 
       assert {:ok, _} = Accounts.delete_account_and_account_resources(account, delete_users: true)
 

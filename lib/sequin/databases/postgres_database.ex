@@ -7,6 +7,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   alias __MODULE__
   alias Ecto.Queryable
+  alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
@@ -65,6 +66,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     belongs_to(:account, Sequin.Accounts.Account)
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
     has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
+    has_many(:sequences, Sequence)
 
     timestamps()
   end
@@ -96,6 +98,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       error_key: :name
     )
     |> Sequin.Changeset.validate_name()
+    |> foreign_key_constraint(:account_id, name: "postgres_databases_account_id_fkey")
   end
 
   def create_changeset(pd, attrs) do

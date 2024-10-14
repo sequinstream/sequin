@@ -5,6 +5,7 @@ defmodule Sequin.Databases do
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.NetworkUtils
@@ -97,10 +98,11 @@ defmodule Sequin.Databases do
 
   def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
     Repo.transact(fn ->
-      db = Repo.preload(db, :replication_slot)
+      db = Repo.preload(db, [:replication_slot, :sequences])
       # Check for related entities that need to be removed first
       with :ok <- check_related_entities(db),
            {:ok, _} <- Replication.delete_pg_replication_with_lifecycle(db.replication_slot),
+           {:ok, _} <- delete_sequences(db),
            {:ok, _} <- Repo.delete(db) do
         :ok
       end
@@ -127,6 +129,43 @@ defmodule Sequin.Databases do
 
       true ->
         :ok
+    end
+  end
+
+  # Sequences
+
+  def get_sequence_for_account(account_id, sequence_id) do
+    account_id
+    |> Sequence.where_account()
+    |> Sequence.where_id(sequence_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :sequence)}
+      sequence -> {:ok, sequence}
+    end
+  end
+
+  def list_sequences_for_account(account_id) do
+    account_id
+    |> Sequence.where_account()
+    |> Repo.all()
+  end
+
+  def create_sequence(attrs) do
+    %Sequence{}
+    |> Sequence.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def delete_sequence(%Sequence{} = sequence) do
+    Repo.delete(sequence)
+  end
+
+  def delete_sequences(%PostgresDatabase{} = db) do
+    Sequence
+    |> Repo.delete_all(where: [postgres_database_id: db.id])
+    |> case do
+      {num_deleted, nil} -> {:ok, num_deleted}
     end
   end
 

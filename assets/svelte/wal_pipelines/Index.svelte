@@ -2,8 +2,24 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import { Logs } from "lucide-svelte";
+  import {
+    Logs,
+    AlertCircle,
+    Database,
+    Zap,
+    ArrowUpRight,
+  } from "lucide-svelte";
   import HealthPill from "../health/HealthPill.svelte";
+  import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+  } from "$lib/components/ui/alert";
+  import {
+    Popover,
+    PopoverTrigger,
+    PopoverContent,
+  } from "$lib/components/ui/popover";
 
   export let walPipelines: Array<{
     id: string;
@@ -21,15 +37,72 @@
       status: "healthy" | "warning" | "error" | "initializing";
     };
   }>;
+
+  export let hasDatabases: boolean;
 </script>
 
 <div class="container mx-auto py-10">
+  {#if !hasDatabases}
+    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
+      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
+        <AlertCircle class="h-5 w-5 text-carbon-600" />
+        <AlertTitle class="text-lg font-semibold text-carbon-900">
+          First, you need to connect to a database
+        </AlertTitle>
+        <AlertDescription class="text-carbon-600 col-start-2">
+          Sequin must be connected to at least one Postgres database before you
+          can create a WAL pipeline.
+        </AlertDescription>
+
+        <div class="flex mt-2 gap-4 col-start-2">
+          <a
+            href="/databases/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button
+              variant="default"
+              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+            >
+              <Database class="inline-block h-4 w-4 mr-2" />
+              Connect database
+            </Button>
+          </a>
+          <Popover>
+            <PopoverTrigger>
+              <Button variant="magic">
+                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-80">
+              <div class="space-y-2">
+                <h4 class="font-medium">Need a test database?</h4>
+                <p class="text-sm text-muted-foreground">
+                  We recommend setting up a free database with Supabase to get
+                  started.
+                </p>
+                <Button
+                  variant="outline"
+                  href="https://supabase.com/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Go to Supabase Dashboard
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+    </Alert>
+  {/if}
+
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Logs class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">WAL Pipelines</h1>
     </div>
-    {#if walPipelines.length > 0}
+    {#if walPipelines.length > 0 && hasDatabases}
       <a
         href="/wal-pipelines/new"
         data-phx-link="redirect"
@@ -48,13 +121,21 @@
           WAL Pipelines allow you to replicate data from one table to another
           using the WAL.
         </p>
-        <a
-          href="/wal-pipelines/new"
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          <Button>Create your first WAL Pipeline</Button>
-        </a>
+        {#if hasDatabases}
+          <a
+            href="/wal-pipelines/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button>Create your first WAL Pipeline</Button>
+          </a>
+        {:else}
+          <Button disabled>Create your first WAL Pipeline</Button>
+          <p class="text-gray-600 mt-4">
+            You need to connect a database to Sequin before you can create a WAL
+            pipeline.
+          </p>
+        {/if}
       </div>
     </div>
   {:else}
@@ -99,3 +180,20 @@
     </Table.Root>
   {/if}
 </div>
+
+<style>
+  :global(.alert) {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>

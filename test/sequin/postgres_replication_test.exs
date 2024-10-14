@@ -78,7 +78,8 @@ defmodule Sequin.PostgresReplicationTest do
               oid: CharacterMultiPK.table_oid(),
               column_filters: []
             )
-          ]
+          ],
+          sequence_id: nil
         )
 
       # Create a consumer for this replication slot (record)
@@ -100,7 +101,8 @@ defmodule Sequin.PostgresReplicationTest do
               oid: CharacterMultiPK.table_oid(),
               column_filters: []
             )
-          ]
+          ],
+          sequence_id: nil
         )
 
       # Start replication
@@ -899,6 +901,344 @@ defmodule Sequin.PostgresReplicationTest do
       end
     end
   end
+
+  describe "PostgresReplicationSlot end-to-end with sequences" do
+    setup do
+      # Create source database
+      account_id = AccountsFactory.insert_account!().id
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+
+      # Create PostgresReplicationSlot entity
+      pg_replication =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: source_db.id,
+          slot_name: replication_slot(),
+          publication_name: @publication,
+          account_id: account_id
+        )
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: source_db.id,
+          table_oid: Character.table_oid()
+        )
+
+      # Create a consumer for this replication slot (event)
+      event_consumer =
+        ConsumersFactory.insert_consumer!(
+          message_kind: :event,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: sequence.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+        )
+
+      # Create a consumer for this replication slot (record)
+      record_consumer =
+        ConsumersFactory.insert_consumer!(
+          message_kind: :record,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: sequence.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+        )
+
+      # Start replication
+      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+
+      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+
+      %{
+        pg_replication: pg_replication,
+        source_db: source_db,
+        event_consumer: event_consumer,
+        record_consumer: record_consumer
+      }
+    end
+
+    test "inserts are replicated to consumer events", %{event_consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      assert consumer_event.consumer_id == consumer.id
+      assert consumer_event.table_oid == Character.table_oid()
+      assert consumer_event.record_pks == [to_string(character.id)]
+      %{data: data} = consumer_event
+
+      assert_maps_equal(data.record, Map.from_struct(character), ["id", "name", "house", "planet", "is_active", "tags"],
+        indifferent_keys: true
+      )
+
+      assert is_nil(data.changes)
+      assert data.action == :insert
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
+
+    test "inserts are replicated to consumer records", %{record_consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer records
+      [consumer_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Assert the consumer record details
+      assert consumer_record.consumer_id == consumer.id
+      assert consumer_record.table_oid == Character.table_oid()
+      assert consumer_record.record_pks == [to_string(character.id)]
+      assert consumer_record.group_id == to_string(character.id)
+    end
+
+    test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
+      # Insert a character
+      character =
+        CharacterFactory.insert_character!([name: "Leto Atreides", house: "Atreides", planet: "Caladan"],
+          repo: UnboxedRepo
+        )
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Update the character
+      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
+
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [_insert_event, update_event] =
+        Consumers.list_consumer_events_for_consumer(consumer.id, order_by: [asc: :inserted_at])
+
+      # Assert the consumer event details
+      assert update_event.consumer_id == consumer.id
+      assert update_event.table_oid == Character.table_oid()
+      assert update_event.record_pks == [to_string(character.id)]
+      %{data: data} = update_event
+
+      character = Repo.reload(character)
+
+      assert data.record == %{
+               "id" => character.id,
+               "name" => character.name,
+               "house" => character.house,
+               "planet" => "Arrakis",
+               "is_active" => character.is_active,
+               "tags" => character.tags,
+               "inserted_at" => NaiveDateTime.to_iso8601(character.inserted_at),
+               "updated_at" => NaiveDateTime.to_iso8601(character.updated_at)
+             }
+
+      assert data.changes == %{}
+      assert data.action == :update
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
+
+    test "updates are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+      # Insert a character
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Update the character
+      UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
+
+      # Wait for the update message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer records
+      [update_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      # Assert the consumer record details
+      assert update_record.consumer_id == consumer.id
+      assert update_record.table_oid == Character.table_oid()
+      assert update_record.record_pks == [to_string(character.id)]
+      assert DateTime.compare(insert_record.inserted_at, update_record.inserted_at) == :eq
+      refute DateTime.compare(insert_record.updated_at, update_record.updated_at) == :eq
+    end
+
+    test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      UnboxedRepo.delete!(character)
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      %{data: data} = delete_event
+
+      assert data.record == %{
+               "house" => nil,
+               "id" => character.id,
+               "is_active" => nil,
+               "name" => nil,
+               "planet" => nil,
+               "tags" => nil,
+               "inserted_at" => nil,
+               "updated_at" => nil
+             }
+
+      assert data.changes == nil
+      assert data.action == :delete
+      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
+      assert is_struct(data.metadata.commit_timestamp, DateTime)
+    end
+
+    @tag skip: true
+    test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [_insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+
+      UnboxedRepo.delete!(character)
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      [] = Consumers.list_consumer_records_for_consumer(consumer.id)
+    end
+
+    test "consumer with column filter only receives relevant messages", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Randomly select a consumer
+      consumer = Enum.random([event_consumer, record_consumer])
+
+      # Create a consumer with a column filter
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          actions: [:insert, :update],
+          column_filters: [
+            ConsumersFactory.sequence_filter_column_filter_attrs(
+              column_attnum: Character.column_attnum("is_active"),
+              column_name: "is_active",
+              operator: :==,
+              value_type: :boolean,
+              value: %{__type__: :boolean, value: true}
+            )
+          ]
+        )
+
+      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{sequence_filter: sequence_filter})
+
+      # Insert a character that doesn't match the filter
+      CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Verify no consumer message was created
+      assert list_messages(consumer) == []
+
+      # Insert a character that matches the filter
+      matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer messages
+      [consumer_message] = list_messages(consumer)
+
+      # Assert the consumer message details
+      assert consumer_message.consumer_id == consumer.id
+
+      # Update the matching character (should not trigger a message)
+      UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Verify no new consumer message was created
+      assert length(list_messages(consumer)) == 1
+    end
+
+    test "inserts are fanned out to both events and records", %{
+      event_consumer: event_consumer,
+      record_consumer: record_consumer
+    } do
+      # Insert a character
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(event_consumer.id)
+
+      # Fetch consumer records
+      [consumer_record] = Consumers.list_consumer_records_for_consumer(record_consumer.id)
+
+      # Assert both event and record were created
+      assert consumer_event.consumer_id == event_consumer.id
+      assert consumer_record.consumer_id == record_consumer.id
+
+      # Assert both have the same data
+      assert consumer_event.table_oid == consumer_record.table_oid
+      assert consumer_event.record_pks == consumer_record.record_pks
+    end
+
+    test "empty array fields are replicated correctly", %{event_consumer: consumer} do
+      # Insert a character with an empty array field
+      character = CharacterFactory.insert_character!([tags: []], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      assert consumer_event.consumer_id == consumer.id
+      assert consumer_event.table_oid == Character.table_oid()
+      assert consumer_event.record_pks == [to_string(character.id)]
+      %{data: data} = consumer_event
+
+      # Check that the tags field is an empty list, not [""]
+      assert data.record["tags"] == [], "Expected empty array, got: #{inspect(data.record["tags"])}"
+    end
+
+    # Postgres quirk - the logical decoding process does not distinguish between an empty array and an array with an empty string.
+    # https://chatgpt.com/share/6707334f-0978-8006-8358-ec2300d759a4
+    test "array fields with empty string are returned as empty list", %{event_consumer: consumer} do
+      # Insert a character with an array containing an empty string
+      CharacterFactory.insert_character!([tags: [""]], repo: UnboxedRepo)
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+
+      # Assert the consumer event details
+      %{data: data} = consumer_event
+
+      # Check that the tags field contains an empty string
+      # Postgres quirk - the logical decoding slot will return `{}` for both `{}` and `{""}`.
+      assert data.record["tags"] == [], "Expected array with empty string, got: #{inspect(data.record["tags"])}"
+    end
+  end
+
+  @server_id __MODULE__
+  @server_via ReplicationExt.via_tuple(@server_id)
 
   defp start_replication!(opts) do
     opts =

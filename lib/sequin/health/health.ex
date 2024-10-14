@@ -515,7 +515,7 @@ defmodule Sequin.Health do
         end
 
       _ ->
-        {:error, Error.invariant("clean_test_keys can only be called in the test environment")}
+        {:error, Error.invariant(message: "clean_test_keys/0 can only be called in the test environment")}
     end
   end
 end

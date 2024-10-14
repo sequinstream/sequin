@@ -5,14 +5,13 @@ defmodule Sequin.Logs do
 
   require Logger
 
-  defp env, do: Application.fetch_env!(:sequin, :env)
-  defp self_hosted, do: Application.fetch_env!(:sequin, :self_hosted)
+  def datadog_enabled, do: Application.get_env(:sequin, :datadog)[:configured]
 
   def get_logs_for_consumer_message(account_id, trace_id) do
-    if env() in [:dev, :test] or self_hosted() do
-      get_logs_from_file(account_id, trace_id)
-    else
+    if datadog_enabled() do
       get_logs_from_datadog(account_id, trace_id)
+    else
+      get_logs_from_file(account_id, trace_id)
     end
   end
 
@@ -48,6 +47,9 @@ defmodule Sequin.Logs do
 
         {:ok, logs}
 
+      {:ok, %{"errors" => [error | _]}} ->
+        {:error, error}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -64,10 +66,10 @@ defmodule Sequin.Logs do
   def log_for_consumer_message(_, _, _, nil), do: raise(ArgumentError, "Invalid message: nil")
 
   def log_for_consumer_message(level, account_id, trace_id, message) do
-    if env() in [:dev, :test] do
-      log_to_file(level, account_id, trace_id, message)
-    else
+    if datadog_enabled() do
       log_to_logger(level, account_id, trace_id, message)
+    else
+      log_to_file(level, account_id, trace_id, message)
     end
   end
 
@@ -101,11 +103,10 @@ defmodule Sequin.Logs do
   end
 
   def search_logs(params \\ []) do
-    if env() in [:dev, :test] do
-      # Implement file-based log search if needed
-      {:error, "Log search not implemented for file-based logs."}
-    else
+    if datadog_enabled() do
       search_logs_in_datadog(params)
+    else
+      raise "Log search not implemented for file-based logs. See Logs.get_logs_from_file/2."
     end
   end
 

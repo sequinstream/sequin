@@ -36,7 +36,8 @@ config :sequin, Oban,
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 */6 * * *", Sequin.Databases.EnqueueDatabaseUpdateWorker}
+       {"0 */6 * * *", Sequin.Databases.EnqueueDatabaseUpdateWorker},
+       {"0 * * * *", Sequin.Logs.RotateLogsWorker}
      ]}
   ]
 
@@ -85,7 +86,8 @@ config :sequin,
   self_hosted: true,
   retool_workflow_key: "dummy_retool_workflow_key",
   portal_hostname: "localhost",
-  datadog_req_opts: []
+  datadog_req_opts: [],
+  datadog: [configured: false]
 
 # Configure tailwind (the version is required)
 config :tailwind,

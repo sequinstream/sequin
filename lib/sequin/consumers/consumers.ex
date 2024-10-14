@@ -11,11 +11,14 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
+  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SourceTable.DateTimeValue
   alias Sequin.Consumers.SourceTable.NullValue
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Health
@@ -1151,10 +1154,23 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
+  def matches_message?(
+        %HttpPullConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        message
+      ) do
+    matches_message?(sequence, sequence_filter, message)
+  end
+
+  def matches_message?(
+        %HttpPushConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        message
+      ) do
+    matches_message?(sequence, sequence_filter, message)
+  end
 
   def matches_message?(consumer_or_wal_pipeline, message) do
     matches? =
-      Enum.any?(consumer_or_wal_pipeline.source_tables, fn source_table ->
+      Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
@@ -1192,6 +1208,23 @@ defmodule Sequin.Consumers do
       )
 
       reraise error, __STACKTRACE__
+  end
+
+  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, message) do
+    table_matches? = sequence.table_oid == message.table_oid
+    actions_match? = action_matches?(sequence_filter.actions, message.action)
+    column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
+    table_matches? and actions_match? and column_filters_match?
+  end
+
+  def matches_record?(
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        table_oid,
+        record
+      ) do
+    table_matches? = sequence.table_oid == table_oid
+    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
+    table_matches? and column_filters_match?
   end
 
   def matches_record?(consumer, table_oid, record) do

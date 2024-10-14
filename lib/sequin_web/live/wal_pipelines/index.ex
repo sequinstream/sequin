@@ -23,7 +23,7 @@ defmodule SequinWeb.WalPipelinesLive.Index do
       Process.send_after(self(), :update_health, 1000)
     end
 
-    {:ok, socket}
+    {:ok, assign(socket, wal_pipelines: wal_pipelines, databases: databases)}
   end
 
   @impl Phoenix.LiveView
@@ -34,7 +34,8 @@ defmodule SequinWeb.WalPipelinesLive.Index do
         name="wal_pipelines/Index"
         props={
           %{
-            walPipelines: encode_wal_pipelines(@wal_pipelines)
+            walPipelines: encode_wal_pipelines(@wal_pipelines),
+            hasDatabases: length(@databases) > 0
           }
         }
       />

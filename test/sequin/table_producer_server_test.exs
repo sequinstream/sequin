@@ -3,6 +3,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   use ExUnit.Case
 
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
   # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.Databases.ConnectionCache
@@ -31,12 +32,14 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
     table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
     table = %{table | sort_column_attnum: Character.column_attnum("updated_at")}
 
-    source_table =
-      ConsumersFactory.source_table(
-        oid: table_oid,
-        sort_column_attnum: Character.column_attnum("updated_at"),
-        column_filters: []
+    sequence =
+      DatabasesFactory.insert_sequence!(
+        postgres_database_id: database.id,
+        table_oid: table_oid,
+        sort_column_attnum: Character.column_attnum("updated_at")
       )
+
+    sequence_filter = ConsumersFactory.sequence_filter(column_filters: [])
 
     # Insert initial 8 records
     characters =
@@ -57,8 +60,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         message_kind: :record,
         record_consumer_state:
           ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: initial_min_cursor, producer: :table_and_wal),
-        source_tables: [source_table],
-        account_id: database.account_id
+        account_id: database.account_id,
+        sequence_id: sequence.id,
+        sequence_filter: Map.from_struct(sequence_filter)
       )
 
     {:ok,
@@ -67,7 +71,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
      table_oid: table_oid,
      database: database,
      characters: characters,
-     source_table: source_table}
+     sequence_filter: sequence_filter}
   end
 
   describe "TableProducerServer" do
@@ -131,13 +135,13 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
     test "sets group_id based on PKs when group_column_attnums is nil", %{
       consumer: consumer,
       table_oid: table_oid,
-      source_table: source_table
+      sequence_filter: sequence_filter
     } do
       page_size = 3
 
-      source_table = %{source_table | group_column_attnums: nil}
+      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: nil}
 
-      consumer = %{consumer | source_tables: [source_table]}
+      consumer = %{consumer | sequence_filter: sequence_filter}
 
       pid =
         start_supervised!(
@@ -166,13 +170,13 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       consumer: consumer,
       table_oid: table_oid,
       characters: characters,
-      source_table: source_table
+      sequence_filter: sequence_filter
     } do
       page_size = 3
 
-      source_table = %{source_table | group_column_attnums: [Character.column_attnum("name")]}
+      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
 
-      consumer = %{consumer | source_tables: [source_table]}
+      consumer = %{consumer | sequence_filter: sequence_filter}
 
       pid =
         start_supervised!(

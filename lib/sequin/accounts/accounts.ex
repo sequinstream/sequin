@@ -737,4 +737,98 @@ defmodule Sequin.Accounts do
 
     update_account(account, %{features: features})
   end
+
+  def invite_user(%User{} = inviting_user, %Account{} = account, send_to, url_fun) when is_function(url_fun, 1) do
+    {encoded_token, user_token} = UserToken.build_account_invite_token(inviting_user, account.id, send_to)
+
+    Repo.transact(fn ->
+      case verify_account_ownership(account, inviting_user) do
+        {:error, _} ->
+          {:error, Error.invariant(message: "Cannot invite user to account")}
+
+        _ ->
+          case verify_account_user(account, send_to) do
+            {:error, _} ->
+              Repo.delete_all(UserToken.account_invite_token_query(account.id, send_to))
+
+              with {:ok, _} <- Repo.insert(user_token) do
+                UserNotifier.deliver_invite_to_account_instructions(
+                  send_to,
+                  inviting_user.email,
+                  account.name,
+                  url_fun.(encoded_token)
+                )
+              end
+
+            _ ->
+              {:error, Error.invariant(message: "User already invited to account")}
+          end
+      end
+    end)
+  end
+
+  def accept_invite(%User{} = user, token) do
+    user
+    |> UserToken.accept_invite_query(token)
+    |> Repo.one()
+    |> case do
+      nil ->
+        {:error, Error.not_found(entity: :user_token)}
+
+      %UserToken{annotations: %{"account_id" => account_id}} = user_token ->
+        Repo.transaction(fn ->
+          Repo.delete!(user_token)
+
+          %AccountUser{account_id: account_id, user_id: user.id}
+          |> AccountUser.changeset(%{current: true})
+          |> Repo.insert()
+          |> case do
+            {:ok, _} ->
+              :ok
+
+            {:error, changeset} ->
+              Logger.error("Error accepting invite for user #{user.id} to account #{account_id}: #{inspect(changeset)}")
+              {:error, Error.invariant(message: "Error accepting invite")}
+          end
+        end)
+    end
+  end
+
+  def verify_account_ownership(account, user) do
+    account.id
+    |> AccountUser.where_account_id()
+    |> AccountUser.where_user_id(user.id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :account_user)}
+      _ -> :ok
+    end
+  end
+
+  def verify_account_user(account, email) do
+    account.id
+    |> AccountUser.where_account_id()
+    |> AccountUser.where_user_email(email)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :account_user)}
+      _ -> :ok
+    end
+  end
+
+  def list_pending_invites_for_account(%Account{} = account) do
+    account.id
+    |> UserToken.pending_invites_query()
+    |> Repo.all()
+  end
+
+  def revoke_account_invite(%User{} = user, invite_id) when is_binary(invite_id) do
+    case Repo.one(UserToken.account_invite_by_user_query(user.id, invite_id)) do
+      nil ->
+        {:error, Error.not_found(entity: :user_token)}
+
+      user_token ->
+        Repo.delete(user_token)
+    end
+  end
 end

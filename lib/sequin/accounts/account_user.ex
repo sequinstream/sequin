@@ -5,6 +5,7 @@ defmodule Sequin.Accounts.AccountUser do
   use Sequin.ConfigSchema
 
   import Ecto.Changeset
+  import Ecto.Query, only: [from: 2]
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
@@ -24,5 +25,21 @@ defmodule Sequin.Accounts.AccountUser do
   """
   def changeset(account_user, attrs) do
     cast(account_user, attrs, [:current])
+  end
+
+  def where_account_id(query \\ base_query(), account_id) do
+    from([account_user: au] in query, where: au.account_id == ^account_id)
+  end
+
+  def where_user_id(query \\ base_query(), user_id) do
+    from([account_user: au] in query, where: au.user_id == ^user_id)
+  end
+
+  def where_user_email(query \\ base_query(), email) do
+    from([account_user: au] in query, join: u in assoc(au, :user), where: u.email == ^email)
+  end
+
+  defp base_query(query \\ __MODULE__) do
+    from(au in query, as: :account_user)
   end
 end

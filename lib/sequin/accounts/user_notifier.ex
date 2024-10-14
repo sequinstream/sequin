@@ -48,4 +48,12 @@ defmodule Sequin.Accounts.UserNotifier do
       "update_email_url" => url
     })
   end
+
+  def deliver_invite_to_account_instructions(send_to, inviting_user_email, account_name, url) do
+    deliver(send_to, "Invite to account instructions", "cm2kxr1ef01l0nud10r8f7io8", %{
+      "inviting_user_email" => inviting_user_email,
+      "account_name" => account_name,
+      "url" => url
+    })
+  end
 end

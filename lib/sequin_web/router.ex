@@ -126,6 +126,8 @@ defmodule SequinWeb.Router do
       live "/outbox", OutboxLive, :index
 
       live "/settings/accounts", Settings.AccountSettingsLive, :index
+
+      live "/accept-invite/:token", AcceptInviteLive, :index
     end
 
     get "/admin/impersonate/:secret", UserSessionController, :impersonate

@@ -736,4 +736,44 @@ defmodule Sequin.Accounts do
 
     update_account(account, %{features: features})
   end
+
+  def invite_user(%User{} = inviting_user, %Account{} = account, send_to, url_fun) when is_function(url_fun, 1) do
+    {encoded_token, user_token} = UserToken.build_account_invite_token(inviting_user, account.id, send_to)
+
+    Repo.transact(fn ->
+      case Repo.one(AccountUser.verify_account_ownership_query(account, inviting_user)) do
+        nil ->
+          {:error, Error.invariant(message: "Cannot invite user to account")}
+
+        _ ->
+          case Repo.one(AccountUser.verify_account_user_query(account, send_to)) do
+            nil ->
+              Repo.delete_all(UserToken.account_invite_token_query(account.id, send_to))
+
+              with {:ok, _} <- Repo.insert(user_token) do
+                UserNotifier.deliver_invite_to_account_instructions(send_to, account.name, url_fun.(encoded_token))
+              end
+
+            _ ->
+              {:error, Error.invariant(message: "User already invited to account")}
+          end
+      end
+    end)
+  end
+
+  def list_pending_invites_for_account(%Account{} = account) do
+    account.id
+    |> UserToken.pending_invites_query()
+    |> Repo.all()
+  end
+
+  def revoke_account_invite(%User{} = user, invite_id) when is_binary(invite_id) do
+    case Repo.one(UserToken.account_invite_by_user_query(user.id, invite_id)) do
+      nil ->
+        {:error, Error.not_found(entity: :user_token)}
+
+      user_token ->
+        Repo.delete(user_token)
+    end
+  end
 end

@@ -21,6 +21,7 @@ defmodule Sequin.Accounts.UserToken do
     field :token, :binary
     field :context, :string
     field :sent_to, :string
+    field :annotations, :map, default: %{}
     belongs_to :user, Sequin.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)
@@ -191,5 +192,31 @@ defmodule Sequin.Accounts.UserToken do
   def build_impersonation_token(user, account_id) do
     token = :crypto.strong_rand_bytes(@rand_size)
     {token, %UserToken{token: token, context: "impersonate", user_id: user.id, sent_to: account_id}}
+  end
+
+  def build_account_invite_token(user, account_id, sent_to) do
+    {encoded_token, user_token} = build_hashed_token(user, "account-invite", sent_to)
+    {encoded_token, %{user_token | annotations: %{account_id: account_id}}}
+  end
+
+  def account_invite_token_query(account_id, sent_to) do
+    from t in UserToken,
+      where: t.context == "account-invite",
+      where: fragment("? @> ?", t.annotations, ^%{"account_id" => account_id}),
+      where: t.sent_to == ^sent_to
+  end
+
+  def pending_invites_query(account_id) do
+    from ut in UserToken,
+      where: ut.context == "account-invite",
+      where: fragment("? @> ?", ut.annotations, ^%{"account_id" => account_id}),
+      select: %{sent_to: ut.sent_to, inserted_at: ut.inserted_at, id: ut.id}
+  end
+
+  def account_invite_by_user_query(user_id, user_token_id) do
+    from ut in UserToken,
+      where: ut.context == "account-invite",
+      where: ut.user_id == ^user_id,
+      where: ut.id == ^user_token_id
   end
 end

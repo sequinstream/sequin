@@ -6,9 +6,10 @@ defmodule Sequin.Logs do
   require Logger
 
   defp env, do: Application.fetch_env!(:sequin, :env)
+  defp self_hosted, do: Application.fetch_env!(:sequin, :self_hosted)
 
   def get_logs_for_consumer_message(account_id, trace_id) do
-    if env() in [:dev, :test] do
+    if env() in [:dev, :test] or self_hosted() do
       get_logs_from_file(account_id, trace_id)
     else
       get_logs_from_datadog(account_id, trace_id)

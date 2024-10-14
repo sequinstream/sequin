@@ -736,4 +736,66 @@ defmodule Sequin.Accounts do
 
     update_account(account, %{features: features})
   end
+
+  def invite_user(%User{} = user, %Account{} = account, sent_to, url_fun) when is_function(url_fun, 1) do
+    {encoded_token, user_token} = UserToken.build_account_invite_token(user, account.id, sent_to)
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.run(:verify_account_ownership, fn repo, _ ->
+      query =
+        from au in AccountUser,
+          where: au.account_id == ^account.id and au.user_id == ^user.id
+
+      case repo.one(query) do
+        nil -> {:error, Error.invariant(message: "Cannot invite user to account")}
+        _ -> {:ok, nil}
+      end
+    end)
+    |> Ecto.Multi.run(:verify_account_user, fn repo, _ ->
+      query =
+        from au in AccountUser,
+          join: u in assoc(au, :user),
+          where: au.account_id == ^account.id and u.email == ^sent_to
+
+      case repo.one(query) do
+        nil -> {:ok, nil}
+        _ -> {:error, Error.invariant(message: "User already invited to account")}
+      end
+    end)
+    |> Ecto.Multi.delete_all(:delete_existing_user_tokens, UserToken.account_invite_token_query(account.id, sent_to))
+    |> Ecto.Multi.insert(:user_token, user_token)
+    |> Repo.transaction()
+    |> case do
+      {:ok, _} ->
+        UserNotifier.deliver_invite_to_account_instructions(sent_to, account.name, url_fun.(encoded_token))
+
+      {:error, :user_token, changeset, _changes} ->
+        {:error, changeset}
+
+      {:error, :verify_account_user, reason, _changes} ->
+        {:error, reason}
+
+      {:error, :verify_account_ownership, reason, _changes} ->
+        {:error, reason}
+    end
+  end
+
+  def accept_account_invite(%User{} = user, token) when is_binary(token) do
+    with {:ok, user_token} <- verify_account_invite_token(user, token),
+         {:ok, account} <- get_account(user_token.annotations["account_id"]) do
+      Repo.transact(fn ->
+        Repo.delete!(user_token)
+        associate_user_with_account(user, account)
+      end)
+    end
+  end
+
+  defp verify_account_invite_token(user, token) do
+    with {:ok, query} <- UserToken.verify_account_invite_token_query(user, token) do
+      case Repo.one(query) do
+        nil -> {:error, Error.invariant(message: "User token not found")}
+        user_token -> {:ok, user_token}
+      end
+    end
+  end
 end

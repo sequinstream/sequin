@@ -156,6 +156,9 @@ end
 if config_env() == :prod do
   vault_key = System.get_env("VAULT_KEY") || raise("VAULT_KEY is not set")
 
+  datadog_api_key = get_env.("DATADOG_API_KEY")
+  datadog_app_key = get_env.("DATADOG_APP_KEY")
+
   config :redix, url: System.fetch_env!("REDIS_URL")
 
   config :sequin, Sequin.Vault,
@@ -180,8 +183,9 @@ if config_env() == :prod do
 
   config :sequin,
     datadog: [
-      api_key: get_env.("DATADOG_API_KEY"),
-      app_key: get_env.("DATADOG_APP_KEY"),
+      configured: is_binary(datadog_api_key) and is_binary(datadog_app_key),
+      api_key: datadog_api_key,
+      app_key: datadog_app_key,
       default_query: "service:sequin"
     ]
 

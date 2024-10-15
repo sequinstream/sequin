@@ -176,6 +176,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       updated_attrs = %{
         consumer_id: existing_record.consumer_id,
         record_pks: existing_record.record_pks,
+        group_id: existing_record.group_id,
         table_oid: existing_record.table_oid,
         commit_lsn: existing_record.commit_lsn + 1,
         state: :available,
@@ -198,6 +199,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       updated_attrs = %{
         consumer_id: existing_record.consumer_id,
         record_pks: existing_record.record_pks,
+        group_id: existing_record.group_id,
         table_oid: existing_record.table_oid,
         commit_lsn: existing_record.commit_lsn + 1,
         state: :available,
@@ -227,6 +229,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
           %{
             consumer_id: record.consumer_id,
             record_pks: record.record_pks,
+            group_id: record.group_id,
             table_oid: record.table_oid,
             commit_lsn: record.commit_lsn + 1,
             state: :available,

@@ -217,6 +217,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         oid: Factory.unique_integer(),
         actions: [:insert, :update, :delete],
         column_filters: [column_filter()],
+        group_column_attnums: nil,
         sort_column_attnum: Factory.unique_integer()
       },
       attrs

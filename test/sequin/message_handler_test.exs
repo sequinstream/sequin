@@ -299,6 +299,41 @@ defmodule Sequin.MessageHandlerTest do
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
     end
+
+    test "sets group_id based on PKs when group_column_attnums is nil" do
+      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [1, 2])
+      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: nil)
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table])
+      context = %MessageHandler.Context{consumers: [consumer]}
+
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+
+      [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+      assert record.group_id == "1,2"
+    end
+
+    test "sets group_id based on group_column_attnums when it's set" do
+      message =
+        ReplicationFactory.postgres_message(
+          table_oid: 123,
+          action: :insert,
+          ids: [1, 2],
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, column_name: "id", value: 1),
+            ReplicationFactory.field(column_attnum: 2, column_name: "group", value: "A"),
+            ReplicationFactory.field(column_attnum: 3, column_name: "name", value: "Test")
+          ]
+        )
+
+      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: [2])
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table])
+      context = %MessageHandler.Context{consumers: [consumer]}
+
+      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+
+      [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+      assert record.group_id == "A"
+    end
   end
 
   defp list_messages(consumer_id) do

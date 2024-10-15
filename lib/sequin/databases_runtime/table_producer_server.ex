@@ -276,7 +276,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
           consumer_id: consumer.id,
           table_oid: table.oid,
           record_pks: record_pks(table, record),
-          group_id: Enum.join(record_pks(table, record), ","),
+          group_id: generate_group_id(consumer, table, record),
           replication_message_trace_id: UUID.uuid4()
         })
       end)
@@ -299,6 +299,19 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     |> Enum.filter(& &1.is_pk?)
     |> Enum.sort_by(& &1.attnum)
     |> Enum.map(&Map.fetch!(map, &1.name))
+  end
+
+  defp generate_group_id(consumer, table, record) do
+    source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table.oid))
+
+    if source_table.group_column_attnums do
+      Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
+        column = Sequin.Enum.find!(table.columns, &(&1.attnum == attnum))
+        to_string(Map.get(record, column.name))
+      end)
+    else
+      table |> record_pks(record) |> Enum.join(",")
+    end
   end
 
   defp maybe_setup_allowances(nil), do: :ok

@@ -46,17 +46,28 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
     ConnectionCache.cache_connection(database, Repo)
 
+    initial_min_cursor = %{
+      Character.column_attnum("updated_at") => ~U[1970-01-01 00:00:00Z],
+      Character.column_attnum("id") => 0
+    }
+
     consumer =
       ConsumersFactory.insert_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
         record_consumer_state:
-          ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: nil, producer: :table_and_wal),
+          ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: initial_min_cursor, producer: :table_and_wal),
         source_tables: [source_table],
         account_id: database.account_id
       )
 
-    {:ok, consumer: consumer, table: table, table_oid: table_oid, database: database, characters: characters}
+    {:ok,
+     consumer: consumer,
+     table: table,
+     table_oid: table_oid,
+     database: database,
+     characters: characters,
+     source_table: source_table}
   end
 
   describe "TableProducerServer" do
@@ -115,6 +126,77 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       # Verify that the consumer's producer state has been updated
       consumer = Repo.reload(consumer)
       assert consumer.record_consumer_state.producer == :wal
+    end
+
+    test "sets group_id based on PKs when group_column_attnums is nil", %{
+      consumer: consumer,
+      table_oid: table_oid,
+      source_table: source_table
+    } do
+      page_size = 3
+
+      source_table = %{source_table | group_column_attnums: nil}
+
+      consumer = %{consumer | source_tables: [source_table]}
+
+      pid =
+        start_supervised!(
+          {TableProducerServer,
+           [
+             consumer: consumer,
+             page_size: page_size,
+             table_oid: table_oid,
+             test_pid: self()
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+
+      consumer_records =
+        consumer.id
+        |> ConsumerRecord.where_consumer_id()
+        |> Repo.all()
+
+      assert Enum.all?(consumer_records, &(&1.group_id == Enum.join(&1.record_pks, ",")))
+    end
+
+    test "sets group_id based on group_column_attnums when it's set", %{
+      consumer: consumer,
+      table_oid: table_oid,
+      characters: characters,
+      source_table: source_table
+    } do
+      page_size = 3
+
+      source_table = %{source_table | group_column_attnums: [Character.column_attnum("name")]}
+
+      consumer = %{consumer | source_tables: [source_table]}
+
+      pid =
+        start_supervised!(
+          {TableProducerServer,
+           [
+             consumer: consumer,
+             page_size: page_size,
+             table_oid: table_oid,
+             test_pid: self()
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+
+      consumer_records =
+        consumer.id
+        |> ConsumerRecord.where_consumer_id()
+        |> Repo.all()
+
+      assert_lists_equal(consumer_records, characters, fn record, character ->
+        [to_string(character.id)] == record.record_pks and character.name == record.group_id
+      end)
     end
   end
 end

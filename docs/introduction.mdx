@@ -5,7 +5,9 @@ icon: "book-open"
 iconType: "solid"
 ---
 
-Sequin is a tool for capturing changes and streaming data out of your Postgres database. You can use Sequin to setup **HTTP endpoints** that you can use to stream rows from your database in real-time. Or, you can receive rows as they change via **webhooks**.
+Sequin is a tool for capturing changes and streaming data out of your Postgres database.
+
+To stream data, you'll create [sequences](/how-sequin-works#sequences) for each table you want to stream. Then, you'll consume rows from the sequence using Sequin's [Consume API](/how-sequin-works#consume-api), [webhooks](/how-sequin-works#webhooks), or the [Sync API](/how-sequin-works#sync-api).
 
 Sequin is great for:
 
@@ -47,7 +49,7 @@ With Sequin, you can:
 
 1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/how-sequin-works#consume-api).
 2. Receive [webhooks](/how-sequin-works#webhooks) whenever rows change, with retries and backoff.
-3. [Capture changes](/how-sequin-works#wal-pipelines) to Postgres tables as a series of events in an event log table.
+3. [Capture changes](/how-sequin-works#wal-pipelines) to Postgres tables as a series of events.
 
 ## Watch
 

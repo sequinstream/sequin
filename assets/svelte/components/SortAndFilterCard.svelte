@@ -18,9 +18,10 @@
   import { getColorFromName } from "$lib/utils";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import { PlusCircle } from "lucide-svelte";
+  import { PlusCircle, Info } from "lucide-svelte";
   import Datetime from "./Datetime.svelte";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let messageKind: string;
   export let selectedTable: any;
@@ -50,6 +51,7 @@
     operator: string | null;
     value: string;
     valueType: string | null;
+    fieldPath?: string;
   };
 
   const operators = [
@@ -103,6 +105,7 @@
           // Clear the value if the column type changes
           if (filter.valueType !== updatedFilter.valueType) {
             updatedFilter.value = "";
+            updatedFilter.fieldPath = "";
           }
         }
 
@@ -157,10 +160,10 @@
       {/if}
     </CardTitle>
   </CardHeader>
-  <CardContent class="space-y-6">
+  <CardContent class="flex flex-col gap-6">
     {#if showTableInfo && selectedTable}
-      <div class="mb-6">
-        <div class="grid grid-cols-[auto_1fr] gap-4 mb-2 items-center">
+      <div class="flex items-center gap-4">
+        <div class="grid grid-cols-[auto_1fr] gap-4 items-center">
           <icon
             class="hero-table-cells w-6 h-6 rounded {getColorFromName(
               `${selectedTable.schema}.${selectedTable.name}`
@@ -174,16 +177,16 @@
     {/if}
 
     {#if messageKind === "record"}
-      <div class="space-y-6">
-        <div>
-          <h4 class="text-lg font-semibold mb-2">Sort and start</h4>
+      <div class="flex flex-col gap-6">
+        <div class="flex flex-col gap-4">
+          <h4 class="text-lg font-semibold">Sort and start</h4>
 
-          <div class="space-y-4">
-            <div>
+          <div class="flex flex-col gap-4">
+            <div class="flex flex-col gap-2">
               <Label for="sortColumn" class="text-base font-medium"
                 >Sort column</Label
               >
-              <p class="text-sm text-muted-foreground mt-1 mb-2">
+              <p class="text-sm text-muted-foreground">
                 Select the sort column for the table. Your system should update
                 the sort column whenever a row is updated. A good example of a
                 sort column is <code>updated_at</code>.
@@ -236,11 +239,11 @@
         </div>
 
         {#if showStartPositionForm && sortColumn}
-          <div>
+          <div class="flex flex-col gap-2">
             <Label for="startPosition" class="text-base font-medium">
               Where should the consumer start?
             </Label>
-            <p class="text-sm text-muted-foreground mt-1 mb-2">
+            <p class="text-sm text-muted-foreground">
               Indicate where in the table you want the consumer to start.
             </p>
             <RadioGroup bind:value={startPosition}>
@@ -259,9 +262,9 @@
             </RadioGroup>
 
             {#if startPosition === "specific"}
-              <div class="grid grid-cols-[auto_1fr] gap-4 mt-4 content-center">
+              <div class="grid grid-cols-[auto_1fr] gap-4 content-center">
                 <div
-                  class="flex content-center items-center space-x-2 text-sm font-mono"
+                  class="flex items-center space-x-2 text-sm font-mono"
                   class:mt-8={sortColumn?.type.startsWith("timestamp")}
                 >
                   <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
@@ -295,9 +298,9 @@
     {/if}
 
     {#if messageKind === "event"}
-      <div class="space-y-2 mb-6">
+      <div class="flex flex-col gap-4">
         <Label>Operations to capture</Label>
-        <div class="flex items-center space-x-4">
+        <div class="flex items-center gap-4">
           {#each switches as { id, label }}
             <div class="flex items-center space-x-2">
               <Label for={id} class="cursor-pointer">{label}</Label>
@@ -323,72 +326,117 @@
       </div>
     {/if}
 
-    <div>
-      <h4 class="text-lg font-semibold mb-4">Filters</h4>
-      {#each form.sourceTableFilters as filter, index}
-        <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
-          <Select
-            selected={{
-              value: filter.columnAttnum,
-              label:
-                selectedTable?.columns.find(
-                  (col) => col.attnum === filter.columnAttnum
-                )?.name || "Column",
-            }}
-            onSelectedChange={(e) =>
-              updateFilter(index, "columnAttnum", e.value)}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
+    <div class="flex flex-col gap-6">
+      <h4 class="text-lg font-semibold">Filters</h4>
+
+      {#if form.sourceTableFilters.length > 0}
+        {#each form.sourceTableFilters as filter, index}
+          <div
+            class="grid gap-4 {filter.valueType === 'jsonb'
+              ? 'grid-cols-[1fr_auto_1fr_1fr_15px]'
+              : 'grid-cols-[1fr_1fr_1fr_15px]'}"
           >
-            <SelectTrigger class="border-carbon-100">
-              <SelectValue placeholder="Column" />
-            </SelectTrigger>
-            <SelectContent class="max-h-64 overflow-y-auto">
-              {#each selectedTable?.columns || [] as column}
-                <SelectItem value={column.attnum}>{column.name}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
-          <Select
-            selected={{
-              value: filter.operator,
-              label: filter.operator || "Operator",
-            }}
-            onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-          >
-            <SelectTrigger class="border-carbon-100">
-              <SelectValue placeholder="Operator" />
-            </SelectTrigger>
-            <SelectContent>
-              {#each operators as operator}
-                <SelectItem value={operator}>{operator}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
-          <Input
-            type="text"
-            placeholder="Value"
-            value={filter.value}
-            on:input={(e) =>
-              updateFilter(index, "value", e.currentTarget.value)}
-            disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-              ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
-          />
-          <button
-            on:click={() => removeFilter(index)}
-            class="text-carbon-400 hover:text-carbon-600 justify-self-end"
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-          >
-            <icon class="hero-x-mark w-4 h-4" />
-          </button>
-        </div>
-        {#if filterErrorMessages[index]}
-          <p class="text-destructive text-sm mt-1 mb-2">
-            {filterErrorMessages[index]}
-          </p>
-        {/if}
-      {/each}
-      <div class="grid grid-cols-1 gap-4 max-w-fit">
+            <Label>Column</Label>
+            {#if filter.valueType === "jsonb"}
+              <div class="flex items-center gap-2">
+                <Label>Field path</Label>
+                <Tooltip.Root>
+                  <Tooltip.Trigger>
+                    <Info class="w-4 h-4 text-muted-foreground" />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="w-64">
+                    <p class="text-sm">
+                      For JSONB columns, specify the JSON path to filter on. Use
+                      dot notation for nested objects, e.g., <code
+                        >user.name</code
+                      >.
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
+              </div>
+            {/if}
+            <Label>Operator</Label>
+            <Label>Value</Label>
+            <div></div>
+            <Select
+              selected={{
+                value: filter.columnAttnum,
+                label:
+                  selectedTable?.columns.find(
+                    (col) => col.attnum === filter.columnAttnum
+                  )?.name || "Column",
+              }}
+              onSelectedChange={(e) =>
+                updateFilter(index, "columnAttnum", e.value)}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <SelectTrigger class="border-carbon-100">
+                <SelectValue placeholder="Column" />
+              </SelectTrigger>
+              <SelectContent class="max-h-64 overflow-y-auto">
+                {#each selectedTable?.columns || [] as column}
+                  <SelectItem value={column.attnum}>{column.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+
+            {#if filter.valueType === "jsonb"}
+              <Input
+                type="text"
+                placeholder="Field path"
+                value={filter.fieldPath || ""}
+                on:input={(e) =>
+                  updateFilter(index, "fieldPath", e.currentTarget.value)}
+                disabled={!form.postgresDatabaseId && !form.tableOid}
+                class="w-full"
+              />
+            {/if}
+
+            <Select
+              selected={{
+                value: filter.operator,
+                label: filter.operator || "Operator",
+              }}
+              onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <SelectTrigger class="border-carbon-100">
+                <SelectValue placeholder="Operator" />
+              </SelectTrigger>
+              <SelectContent>
+                {#each operators as operator}
+                  <SelectItem value={operator}>{operator}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+
+            <Input
+              type="text"
+              placeholder="Value"
+              value={filter.value}
+              on:input={(e) =>
+                updateFilter(index, "value", e.currentTarget.value)}
+              disabled={(!form.postgresDatabaseId && !form.tableOid) ||
+                ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
+            />
+
+            <button
+              on:click={() => removeFilter(index)}
+              class="text-carbon-400 hover:text-carbon-600 justify-self-end"
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <icon class="hero-x-mark w-4 h-4" />
+            </button>
+          </div>
+          {#if filterErrorMessages[index]}
+            <p class="text-destructive text-sm mt-1 mb-2">
+              {filterErrorMessages[index]}
+            </p>
+          {/if}
+        {/each}
+      {/if}
+
+      <div class="flex flex-col gap-4 max-w-fit">
         <Button
           variant="outline"
           size="sm"

@@ -232,7 +232,8 @@ defmodule Sequin.Consumers.SourceTable do
           "columnAttnum" => column_attnum,
           "operator" => operator,
           "valueType" => value_type,
-          "value" => value
+          "value" => value,
+          "fieldPath" => field_path
         }) do
       operator = from_external_operator(operator)
 
@@ -268,7 +269,8 @@ defmodule Sequin.Consumers.SourceTable do
       %{
         column_attnum: column_attnum,
         operator: operator,
-        value: %{value: value, __type__: value_type}
+        value: %{value: value, __type__: value_type},
+        field_path: field_path
       }
     end
 
@@ -276,13 +278,15 @@ defmodule Sequin.Consumers.SourceTable do
             column_attnum: integer,
             column_name: String.t(),
             operator: atom(),
-            value: %{value: any()}
+            value: %{value: any()},
+            field_path: String.t() | nil
           }
 
     embedded_schema do
       field :column_attnum, :integer
       field :column_name, :string, virtual: true
       field :operator, Ecto.Enum, values: @operators
+      field :field_path, :string
 
       polymorphic_embeds_one(:value,
         types: [
@@ -299,7 +303,7 @@ defmodule Sequin.Consumers.SourceTable do
 
     def changeset(column_filter, attrs) do
       column_filter
-      |> cast(attrs, [:column_attnum, :column_name, :operator])
+      |> cast(attrs, [:column_attnum, :column_name, :operator, :field_path])
       |> cast_polymorphic_embed(:value)
       |> validate_required([:column_attnum, :operator, :value])
       |> validate_inclusion(:operator, @operators)
@@ -322,7 +326,8 @@ defmodule Sequin.Consumers.SourceTable do
         "columnAttnum" => column_filter.column_attnum,
         "operator" => to_external_operator(column_filter.operator),
         "value" => to_external_value(column_filter.value),
-        "valueType" => get_value_type(column_filter.value)
+        "valueType" => get_value_type(column_filter.value),
+        "fieldPath" => column_filter.field_path
       }
     end
 

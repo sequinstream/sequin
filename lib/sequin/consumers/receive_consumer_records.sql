@@ -2,7 +2,7 @@ with deliverable_records as (
   select
     cr.id,
     cr.commit_lsn,
-    cr.record_pks,
+    cr.group_id,
     cr.table_oid
   from
     sequin_streams.consumer_records cr
@@ -19,7 +19,7 @@ with deliverable_records as (
       where
         outstanding.consumer_id = :consumer_id
         and outstanding.not_visible_until > :now
-        and outstanding.record_pks = cr.record_pks
+        and outstanding.group_id = cr.group_id
         and outstanding.table_oid = cr.table_oid)
     order by
       cr.id asc

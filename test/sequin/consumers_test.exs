@@ -389,6 +389,61 @@ defmodule Sequin.ConsumersTest do
       assert delivered_record.data.metadata.table_name == "Characters"
       assert delivered_record.data.metadata.table_schema == "public"
     end
+
+    test "delivers record when it does not share a group_id with outstanding records", %{consumer: consumer} do
+      # Insert an outstanding record
+      insert_consumer_record!(consumer,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "group_1"
+      )
+
+      # Insert a deliverable record with a different group_id
+      deliverable_record =
+        insert_consumer_record!(consumer,
+          state: :available,
+          group_id: "group_2"
+        )
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.id == deliverable_record.id
+      assert delivered_record.group_id == "group_2"
+    end
+
+    test "does not deliver record when it shares a group_id with an outstanding record", %{consumer: consumer} do
+      table = Enum.random([:default, :multi_pk, :detailed])
+      # Insert an outstanding record
+      insert_consumer_record!(consumer,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "shared_group",
+        table: table
+      )
+
+      # Insert a deliverable record with the same group_id
+      insert_consumer_record!(consumer,
+        state: :available,
+        group_id: "shared_group",
+        table: table
+      )
+
+      # Insert another deliverable record with a different group_id
+      different_group_record =
+        insert_consumer_record!(consumer,
+          state: :available,
+          group_id: "different_group"
+        )
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.id == different_group_record.id
+      assert delivered_record.group_id == "different_group"
+
+      # Verify that the record with the shared group_id was not delivered
+      records = ConsumerRecord |> Repo.all() |> Enum.filter(&(&1.group_id == "shared_group"))
+      assert length(records) == 2
+      assert Enum.any?(records, &(&1.state == :available))
+    end
   end
 
   describe "ack_messages/2" do
@@ -2656,7 +2711,9 @@ defmodule Sequin.ConsumersTest do
   end
 
   defp insert_consumer_record!(consumer, attrs) do
-    case Enum.random([:default, :multi_pk, :detailed]) do
+    {table, attrs} = Keyword.pop_lazy(attrs, :table, fn -> Enum.random([:default, :multi_pk, :detailed]) end)
+
+    case table do
       :default ->
         char = CharacterFactory.insert_character!()
 

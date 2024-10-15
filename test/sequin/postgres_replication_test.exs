@@ -157,6 +157,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_record.consumer_id == consumer.id
       assert consumer_record.table_oid == Character.table_oid()
       assert consumer_record.record_pks == [to_string(character.id)]
+      assert consumer_record.group_id == to_string(character.id)
     end
 
     test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do

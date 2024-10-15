@@ -276,6 +276,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
           consumer_id: consumer.id,
           table_oid: table.oid,
           record_pks: record_pks(table, record),
+          group_id: Enum.join(record_pks(table, record), ","),
           replication_message_trace_id: UUID.uuid4()
         })
       end)

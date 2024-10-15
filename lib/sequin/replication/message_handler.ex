@@ -139,6 +139,7 @@ defmodule Sequin.Replication.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
+      group_id: Enum.join(message.ids, ","),
       table_oid: message.table_oid,
       deliver_count: 0,
       replication_message_trace_id: message.trace_id

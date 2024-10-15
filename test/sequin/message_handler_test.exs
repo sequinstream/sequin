@@ -42,6 +42,7 @@ defmodule Sequin.MessageHandlerTest do
       assert record.table_oid == 456
       assert record.commit_lsn == DateTime.to_unix(message.commit_timestamp, :microsecond)
       assert record.record_pks == Enum.map(message.ids, &to_string/1)
+      assert record.group_id == Enum.join(message.ids, ",")
       assert record.state == :available
     end
 

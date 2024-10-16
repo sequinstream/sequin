@@ -81,20 +81,15 @@ defmodule SequinWeb.SequencesLive.Index do
     # It's okay if this raises on 404, because the form doesn't let you select a database that doesn't exist
     {:ok, database} = Databases.get_db_for_account(account_id, sequence_params["postgres_database_id"])
 
-    # Find the selected table and column based on the OIDs
-    selected_table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence_params["table_oid"]))
-    selected_column = Sequin.Enum.find!(selected_table.columns, &(&1.attnum == sequence_params["sort_column_attnum"]))
-
     # Update sequence_params with the required fields
-    sequence_params =
-      sequence_params
-      |> Map.put("postgres_database_id", database.id)
-      |> Map.put("table_schema", selected_table.schema)
-      |> Map.put("table_name", selected_table.name)
-      |> Map.put("sort_column_name", selected_column.name)
+    # Use placeholder values for table and column names
+    sequence_params = Map.put(sequence_params, "postgres_database_id", database.id)
 
     case Databases.create_sequence(sequence_params) do
-      {:ok, _sequence} ->
+      {:ok, sequence} ->
+        # This will populate the sequence with the correct table and column names
+        Databases.update_sequence_from_db(sequence, database)
+
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :success, title: "Sequence created successfully"})

@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
+  import { ExternalLinkIcon } from "lucide-svelte";
   import {
     Card,
     CardContent,
@@ -184,7 +183,21 @@
 
         {#if selectedTable}
           <div class="space-y-2">
-            <Label for="sort_column_attnum">Sort Column</Label>
+            <Label for="sort_column_attnum">Sort and start</Label>
+            <p class="text-sm text-muted-foreground mt-1 mb-2">
+              Select the sort column for the table. Your system should update
+              the sort column whenever a row is updated. A good example of a
+              sort column is <code>updated_at</code>.
+              <a
+                href="https://sequinstream.com/docs/how-sequin-works#creating-a-table-stream"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center text-link hover:underline"
+              >
+                Learn more
+                <ExternalLinkIcon class="w-3 h-3 ml-1" />
+              </a>
+            </p>
             <Select
               selected={{
                 value: form.sort_column_attnum,

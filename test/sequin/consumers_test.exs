@@ -6,12 +6,12 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.SourceTable.BooleanValue
-  alias Sequin.Consumers.SourceTable.DateTimeValue
-  alias Sequin.Consumers.SourceTable.ListValue
-  alias Sequin.Consumers.SourceTable.NullValue
-  alias Sequin.Consumers.SourceTable.NumberValue
-  alias Sequin.Consumers.SourceTable.StringValue
+  alias Sequin.Consumers.SequenceFilter.BooleanValue
+  alias Sequin.Consumers.SequenceFilter.DateTimeValue
+  alias Sequin.Consumers.SequenceFilter.ListValue
+  alias Sequin.Consumers.SequenceFilter.NullValue
+  alias Sequin.Consumers.SequenceFilter.NumberValue
+  alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker

@@ -6,7 +6,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
-  alias Sequin.Consumers.SourceTable.ColumnFilter
+  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
@@ -80,7 +80,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       socket
       |> assign(assigns)
       |> assign(
-        consumer: consumer,
+        consumer: Repo.preload(consumer, :sequence),
         show_errors?: false,
         submit_error: nil,
         changeset: nil,
@@ -265,7 +265,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     postgres_database_id =
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
-    source_table = List.first(consumer.source_tables)
+    source_table = Consumers.source_table(consumer)
 
     base = %{
       "id" => consumer.id,

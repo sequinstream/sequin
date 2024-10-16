@@ -12,9 +12,9 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.DateTimeValue
+  alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SourceTable
-  alias Sequin.Consumers.SourceTable.DateTimeValue
-  alias Sequin.Consumers.SourceTable.NullValue
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -46,6 +46,31 @@ defmodule Sequin.Consumers do
 
   # Consumers
 
+  def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
+    %SequenceFilter{} = filter = consumer.sequence_filter
+
+    %SourceTable{
+      actions: filter.actions,
+      group_column_attnums: filter.group_column_attnums,
+      sort_column_attnum: sequence.sort_column_attnum,
+      oid: sequence.table_oid,
+      schema_name: sequence.table_schema,
+      table_name: sequence.table_name,
+      column_filters:
+        Enum.map(consumer.sequence_filter.column_filters, fn filter_column ->
+          %SequenceFilter.ColumnFilter{
+            column_attnum: filter_column.column_attnum,
+            operator: filter_column.operator,
+            value: filter_column.value
+          }
+        end)
+    }
+  end
+
+  def source_table(%{source_tables: [source_table]}) do
+    source_table
+  end
+
   def get_consumer(consumer_id) do
     with {:error, _} <- get_http_pull_consumer(consumer_id),
          {:error, _} <- get_http_push_consumer(consumer_id) do
@@ -65,6 +90,7 @@ defmodule Sequin.Consumers do
       account_id
       |> HttpPullConsumer.where_account_id()
       |> HttpPullConsumer.where_id_or_name(consumer_id)
+      |> preload(:sequence)
       |> Repo.one()
 
     if pull_consumer do
@@ -73,6 +99,7 @@ defmodule Sequin.Consumers do
       account_id
       |> HttpPushConsumer.where_account_id()
       |> HttpPushConsumer.where_id_or_name(consumer_id)
+      |> preload(:sequence)
       |> Repo.one()
     end
   end

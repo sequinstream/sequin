@@ -34,6 +34,7 @@ defmodule Sequin.Databases.Sequence do
       :sort_column_attnum,
       :postgres_database_id
     ])
+    |> unique_constraint([:postgres_database_id, :table_oid], error_key: :table_oid)
   end
 
   def where_id(query \\ base_query(), id) do

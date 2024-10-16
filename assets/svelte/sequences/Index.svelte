@@ -8,8 +8,9 @@
     Database,
     Zap,
     ArrowUpRight,
+    MoreHorizontal,
+    Trash2,
   } from "lucide-svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
   import NewSequenceForm from "./Form.svelte";
   import {
     Alert,
@@ -21,7 +22,12 @@
     PopoverTrigger,
     PopoverContent,
   } from "$lib/components/ui/popover";
-  import { createEventDispatcher } from "svelte";
+  import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+  } from "$lib/components/ui/dropdown-menu";
 
   export let live;
   export let live_action: string;
@@ -59,38 +65,25 @@
   function closeDialog() {
     dialogOpen = false;
     window.history.pushState({}, "", "/sequences");
-    dispatchEvent(new PopStateEvent("popstate"));
   }
 
-  let newSequence = {
-    table_name: "",
-    table_schema: "",
-    sort_column_name: "",
-    postgres_database_id: "",
-  };
-
   function handleFormSubmit(event: CustomEvent) {
-    console.log("Form submitted:", event.detail);
     closeDialog();
   }
 
-  export let hasDatabases = databases.length > 0;
-
-  const dispatch = createEventDispatcher();
+  let hasDatabases = databases.length > 0;
 
   function pushEvent(event, payload = {}, callback = (reply: any) => {}) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
   function handleDelete(sequenceId) {
-    if (confirm("Are you sure you want to delete this sequence?")) {
+    if (confirm("Are you sure you want to remove this sequence?")) {
       pushEvent("delete_sequence", { id: sequenceId }, (reply) => {
         if (reply.ok) {
-          console.log("Sequence deleted successfully");
           sequences = sequences.filter((seq) => seq.id !== sequenceId);
         } else {
-          console.error("Failed to delete sequence. Please try again.");
-          alert("Failed to delete sequence. Please try again.");
+          alert("Failed to remove sequence. Please try again.");
         }
       });
     }
@@ -199,11 +192,11 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Table</Table.Head>
-          <Table.Head>Sort Column</Table.Head>
-          <Table.Head>Consumer Count</Table.Head>
+          <Table.Head>Sort column</Table.Head>
+          <Table.Head>Consumer count</Table.Head>
           <Table.Head>Database</Table.Head>
           <Table.Head>Created at</Table.Head>
-          <Table.Head class="text-right">Actions</Table.Head>
+          <Table.Head></Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -221,37 +214,51 @@
                 href="/databases/{sequence.postgres_database.id}"
                 data-phx-link="redirect"
                 data-phx-link-state="push"
+                class="text-black underline hover:text-gray-700 transition-colors duration-200 flex items-center"
               >
-                <Button variant="outline" size="sm" class="w-full">
-                  {sequence.postgres_database.name}
-                  <ArrowUpRight class="h-4 w-4 ml-2" />
-                </Button>
+                {sequence.postgres_database.name}
+                <ArrowUpRight class="h-3 w-3 ml-1" />
               </a>
             </Table.Cell>
             <Table.Cell>
               {formatRelativeTimestamp(sequence.inserted_at)}
             </Table.Cell>
             <Table.Cell class="text-right">
-              <Popover>
-                <PopoverTrigger>
-                  <Button
-                    variant="destructive"
-                    size="sm"
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild let:builder>
+                  <Button variant="ghost" builders={[builder]}>
+                    <MoreHorizontal class="h-4 w-4" />
+                    <span class="sr-only"
+                      >Sequence Menu for {sequence.table_schema}.{sequence.table_name}</span
+                    >
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    class="cursor-pointer flex gap-2 items-center"
                     on:click={() => handleDelete(sequence.id)}
                     disabled={sequence.consumer_count > 0}
                   >
-                    Delete
-                  </Button>
-                </PopoverTrigger>
-                {#if sequence.consumer_count > 0}
+                    <Trash2 class="h-4 w-4" />
+                    Remove Sequence
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {#if sequence.consumer_count > 0}
+                <Popover>
+                  <PopoverTrigger>
+                    <Button variant="ghost" size="sm" class="ml-2">
+                      <AlertCircle class="h-4 w-4" />
+                    </Button>
+                  </PopoverTrigger>
                   <PopoverContent class="w-60">
                     <p class="text-sm text-muted-foreground">
-                      This sequence cannot be deleted because it has active
+                      This sequence cannot be removed because it has active
                       consumers.
                     </p>
                   </PopoverContent>
-                {/if}
-              </Popover>
+                </Popover>
+              {/if}
             </Table.Cell>
           </Table.Row>
         {/each}

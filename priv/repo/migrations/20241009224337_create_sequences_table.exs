@@ -10,10 +10,10 @@ defmodule Sequin.Repo.Migrations.CreateSequencesTable do
           null: false
 
       add :table_oid, :integer, null: false
-      add :table_schema, :string, null: false
-      add :table_name, :string, null: false
+      add :table_schema, :string, null: true
+      add :table_name, :string, null: true
       add :sort_column_attnum, :integer, null: false
-      add :sort_column_name, :string, null: false
+      add :sort_column_name, :string, null: true
 
       timestamps()
     end

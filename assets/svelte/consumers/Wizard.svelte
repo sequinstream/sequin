@@ -36,19 +36,19 @@
 
   import HttpPushVisual from "./HttpPushVisual.svelte";
   import HttpPullVisual from "./HttpPullVisual.svelte";
-  import TableSelector from "../components/TableSelector.svelte";
+  import SequenceSelector from "../components/SequenceSelector.svelte";
   import { toast } from "svelte-sonner";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tabs from "$lib/components/ui/tabs";
   import { truncateMiddle } from "$lib/utils";
-  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
+  import FilterCard from "../components/FilterCard.svelte";
 
   let step = "select_table";
   export let live;
   export let parent;
   let form: {
     postgresDatabaseId: string;
-    tableOid: number | null;
+    sequenceId: string | null;
     sourceTableFilters: {
       columnAttnum: number | null;
       operator: string | null;
@@ -77,7 +77,7 @@
     };
   } = {
     postgresDatabaseId: null,
-    tableOid: null,
+    sequenceId: null,
     sourceTableFilters: [],
     sourceTableActions: ["insert", "update", "delete"],
     messageKind: null,
@@ -104,6 +104,12 @@
   export let databases: Array<{
     id: string;
     name: string;
+    sequences: Array<{
+      id: string;
+      table_name: string;
+      table_schema: string;
+      sort_column_name: string;
+    }>;
     tables: Array<{
       oid: number;
       schema: string;
@@ -137,7 +143,7 @@
   $: {
     switch (step) {
       case "select_table":
-        continueDisabled = !form.postgresDatabaseId || !form.tableOid;
+        continueDisabled = !form.postgresDatabaseId || !form.sequenceId;
         break;
       case "select_message_kind":
         continueDisabled = !form.messageKind;
@@ -150,9 +156,6 @@
             (!filter.value &&
               !["IS NULL", "IS NOT NULL"].includes(filter.operator))
         );
-        if (form.messageKind === "record") {
-          continueDisabled = continueDisabled || !form.sortColumnAttnum;
-        }
         break;
 
       case "select_consumer":
@@ -250,8 +253,8 @@
       });
 
       // Set the form name based on the selected table and consumer kind
-      if (newConsumerKind && selectedTable) {
-        const tableName = selectedTable.name;
+      if (newConsumerKind && selectedSequence) {
+        const tableName = selectedSequence.table_name;
         const consumerType = newConsumerKind === "http_push" ? "push" : "pull";
         const newName = `${tableName}_${consumerType}_consumer`;
         handleFormUpdate({ name: newName });
@@ -260,7 +263,7 @@
   }
 
   let selectedDatabase: any;
-  let selectedTable: any;
+  let selectedSequence: any;
 
   $: {
     if (form.postgresDatabaseId && form.tableOid) {
@@ -268,8 +271,8 @@
         (db) => db.id === form.postgresDatabaseId
       );
       if (selectedDatabase) {
-        selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid
+        selectedSequence = selectedDatabase.sequences.find(
+          (sequence) => sequence.id === form.sequenceId
         );
       }
     }
@@ -310,10 +313,13 @@
     ],
   };
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleSequenceSelect(event: {
+    databaseId: string;
+    sequenceId: string;
+  }) {
     handleFormUpdate({
       postgresDatabaseId: event.databaseId,
-      tableOid: event.tableOid,
+      sequenceId: event.sequenceId,
     });
   }
 
@@ -630,17 +636,17 @@
           class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
         >
           <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Select a table</h2>
+            <h2 class="text-xl font-semibold">Select a Sequence</h2>
           </div>
         </div>
         <div class="p-8 max-w-5xl mx-auto">
           <div class="flex justify-end mb-4"></div>
-          <TableSelector
+          <SequenceSelector
             {databases}
-            onSelect={handleTableSelect}
+            onSelect={handleSequenceSelect}
             {pushEvent}
             selectedDatabaseId={form.postgresDatabaseId}
-            selectedTableOid={form.tableOid}
+            selectedSequenceId={form.sequenceId}
           />
         </div>
       {/if}
@@ -740,15 +746,15 @@
           class="flex w-full h-20 bg-canvas-subtle justify-center sticky top-0"
         >
           <div class="flex items-center container">
-            <h2 class="text-xl font-semibold">Configure filters and sorting</h2>
+            <h2 class="text-xl font-semibold">Configure filters</h2>
           </div>
         </div>
         <div class="p-8 max-w-5xl mx-auto">
-          <SortAndFilterCard
+          <FilterCard
             showCardTitle={false}
             showTableInfo
             messageKind={form.messageKind}
-            {selectedTable}
+            {selectedSequence}
             bind:form
             {errors}
             isEditMode={false}

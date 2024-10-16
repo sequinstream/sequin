@@ -13,7 +13,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Consumers.SourceTable.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory

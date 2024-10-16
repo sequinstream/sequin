@@ -3,7 +3,7 @@
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
-    Table as TableIcon,
+    ListOrdered,
     AlertCircle,
     Database,
     Zap,
@@ -28,6 +28,7 @@
     DropdownMenuContent,
     DropdownMenuItem,
   } from "$lib/components/ui/dropdown-menu";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let live;
   export let live_action: string;
@@ -148,7 +149,7 @@
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
-      <TableIcon class="h-6 w-6 mr-2" />
+      <ListOrdered class="h-6 w-6 mr-2" />
       <h1 class="text-2xl font-bold">Sequences</h1>
     </div>
     {#if sequences.length > 0 && hasDatabases}
@@ -228,37 +229,36 @@
                 <DropdownMenuTrigger asChild let:builder>
                   <Button variant="ghost" builders={[builder]}>
                     <MoreHorizontal class="h-4 w-4" />
-                    <span class="sr-only"
-                      >Sequence Menu for {sequence.table_schema}.{sequence.table_name}</span
-                    >
+                    <span class="sr-only">
+                      Sequence Menu for {sequence.table_schema}.{sequence.table_name}
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    class="cursor-pointer flex gap-2 items-center"
-                    on:click={() => handleDelete(sequence.id)}
-                    disabled={sequence.consumer_count > 0}
-                  >
-                    <Trash2 class="h-4 w-4" />
-                    Remove Sequence
-                  </DropdownMenuItem>
+                  <Tooltip.Root>
+                    <Tooltip.Trigger>
+                      <div>
+                        <DropdownMenuItem
+                          class="cursor-pointer flex gap-2 items-center"
+                          on:click={() => handleDelete(sequence.id)}
+                          disabled={sequence.consumer_count > 0}
+                        >
+                          <Trash2 class="h-4 w-4" />
+                          Remove Sequence
+                        </DropdownMenuItem>
+                      </div>
+                    </Tooltip.Trigger>
+                    {#if sequence.consumer_count > 0}
+                      <Tooltip.Content>
+                        <p class="text-sm text-muted-foreground">
+                          This sequence cannot be removed because it has active
+                          consumers.
+                        </p>
+                      </Tooltip.Content>
+                    {/if}
+                  </Tooltip.Root>
                 </DropdownMenuContent>
               </DropdownMenu>
-              {#if sequence.consumer_count > 0}
-                <Popover>
-                  <PopoverTrigger>
-                    <Button variant="ghost" size="sm" class="ml-2">
-                      <AlertCircle class="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent class="w-60">
-                    <p class="text-sm text-muted-foreground">
-                      This sequence cannot be removed because it has active
-                      consumers.
-                    </p>
-                  </PopoverContent>
-                </Popover>
-              {/if}
             </Table.Cell>
           </Table.Row>
         {/each}

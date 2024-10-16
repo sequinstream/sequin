@@ -6,7 +6,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Health
   alias Sequin.Repo
@@ -32,7 +34,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       |> Consumers.get_consumer!()
       |> Repo.preload(:sequence)
 
-    table_oid = consumer.sequence.table_oid
+    table_oid = table_oid(consumer)
     via_tuple({consumer.id, table_oid})
   end
 
@@ -261,10 +263,21 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     consumer.replication_slot.postgres_database
   end
 
+  defp table_oid(%{sequence: %Sequence{table_oid: table_oid}}), do: table_oid
+  defp table_oid(%{source_tables: [source_table | _]}), do: source_table.table_oid
+
+  defp sort_column_attnum(%{sequence: %Sequence{sort_column_attnum: sort_column_attnum}}), do: sort_column_attnum
+  defp sort_column_attnum(%{source_tables: [source_table | _]}), do: source_table.sort_column_attnum
+
+  defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}),
+    do: group_column_attnums
+
+  defp group_column_attnums(%{source_tables: [source_table | _]}), do: source_table.group_column_attnums
+
   defp table(%State{} = state) do
     database = database(state)
     db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
-    %{db_table | sort_column_attnum: state.consumer.sequence.sort_column_attnum}
+    %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
   end
 
   # Message handling
@@ -305,8 +318,10 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   defp generate_group_id(consumer, table, record) do
-    if consumer.sequence_filter.group_column_attnums do
-      Enum.map_join(consumer.sequence_filter.group_column_attnums, ",", fn attnum ->
+    group_column_attnums = group_column_attnums(consumer)
+
+    if group_column_attnums do
+      Enum.map_join(group_column_attnums, ",", fn attnum ->
         column = Sequin.Enum.find!(table.columns, &(&1.attnum == attnum))
         to_string(Map.get(record, column.name))
       end)

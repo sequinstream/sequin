@@ -181,6 +181,47 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def update_sequences_from_db(%PostgresDatabase{} = db) do
+    Enum.reduce(Repo.preload(db, :sequences).sequences, {0, 0}, fn %Sequence{} = sequence, {ok_count, error_count} ->
+      case update_sequence_from_db(sequence, db) do
+        {:ok, _} ->
+          {ok_count + 1, error_count}
+
+        {:error, error} ->
+          Logger.error("Failed to update sequence #{sequence.id} from database: #{inspect(error)}", error: error)
+          {ok_count, error_count + 1}
+      end
+    end)
+  end
+
+  @doc """
+  Updates a sequence given a database's table schema. Adds names for table_schema, table_name, and sort_column_name.
+  These can drift if the customer migrates the database.
+  """
+  def update_sequence_from_db(%Sequence{} = sequence, %PostgresDatabase{} = db) do
+    with {:ok, tables} <- tables(db) do
+      table = Enum.find(tables, fn t -> t.oid == sequence.table_oid end)
+      column = table && Enum.find(table.columns, fn c -> c.attnum == sequence.sort_column_attnum end)
+
+      case {table, column} do
+        {nil, _} ->
+          {:error, Error.not_found(entity: :table, params: %{oid: sequence.table_oid})}
+
+        {_, nil} ->
+          {:error, Error.not_found(entity: :column, params: %{attnum: sequence.sort_column_attnum})}
+
+        {table, column} ->
+          sequence
+          |> Sequence.changeset(%{
+            table_schema: table.schema,
+            table_name: table.name,
+            sort_column_name: column.name
+          })
+          |> Repo.update()
+      end
+    end
+  end
+
   # PostgresDatabase runtime
 
   @spec start_link(%PostgresDatabase{}) :: {:ok, pid()} | {:error, Postgrex.Error.t()}
@@ -383,9 +424,20 @@ defmodule Sequin.Databases do
          {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
       tables = Postgres.tables_to_map(tables)
 
-      db
-      |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
-      |> Repo.update()
+      res =
+        db
+        |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
+        |> Repo.update()
+
+      case res do
+        {:ok, db} ->
+          update_sequences_from_db(db)
+
+          {:ok, db}
+
+        error ->
+          error
+      end
     end
   end
 

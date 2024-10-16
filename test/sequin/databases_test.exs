@@ -6,6 +6,7 @@ defmodule Sequin.DatabasesTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Test.Support.Models.Character
 
   describe "tables/1" do
     test "returns tables for a database with existing tables" do
@@ -33,6 +34,12 @@ defmodule Sequin.DatabasesTest do
       assert length(updated_db.tables) > 0
       assert %PostgresDatabase.Table{} = hd(updated_db.tables)
       assert updated_db.tables_refreshed_at != nil
+
+      # Verify that the Characters table is present
+      characters_table = Enum.find(updated_db.tables, &(&1.name == "Characters"))
+      assert characters_table
+      assert characters_table.schema == "public"
+      assert characters_table.oid == Character.table_oid()
     end
 
     test "updates tables and columns for a database" do
@@ -40,12 +47,43 @@ defmodule Sequin.DatabasesTest do
 
       assert {:ok, updated_db} = Databases.update_tables(db)
       assert length(updated_db.tables) > 0
-      table = hd(updated_db.tables)
-      assert %PostgresDatabase.Table{} = table
-      assert length(table.columns) > 0
-      column = hd(table.columns)
-      assert %PostgresDatabase.Table.Column{} = column
-      assert is_boolean(column.is_pk?)
+
+      characters_table = Enum.find(updated_db.tables, &(&1.name == "Characters"))
+      assert characters_table
+      assert length(characters_table.columns) > 0
+
+      expected_columns = ["id", "name", "house", "planet", "is_active", "tags", "inserted_at", "updated_at"]
+      actual_columns = Enum.map(characters_table.columns, & &1.name)
+      assert Enum.all?(expected_columns, &(&1 in actual_columns))
+
+      id_column = Enum.find(characters_table.columns, &(&1.name == "id"))
+      assert id_column.is_pk?
+      assert id_column.type == "bigint"
+    end
+  end
+
+  describe "update_sequences_from_db/1" do
+    test "updates sequence information from the database" do
+      db = DatabasesFactory.insert_configured_postgres_database!()
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: db.id,
+          table_oid: Character.table_oid(),
+          table_schema: "wrong_schema",
+          table_name: "wrong_table",
+          sort_column_attnum: Character.column_attnum("id"),
+          sort_column_name: "wrong_column"
+        )
+
+      assert {:ok, _updated_db} = Databases.update_tables(db)
+
+      updated_sequence = Repo.reload!(sequence)
+      assert updated_sequence.table_oid == Character.table_oid()
+      assert updated_sequence.table_schema == "public"
+      assert updated_sequence.table_name == "Characters"
+      assert updated_sequence.sort_column_attnum == Character.column_attnum("id")
+      assert updated_sequence.sort_column_name == "id"
     end
   end
 

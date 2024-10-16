@@ -5,10 +5,10 @@ icon: "wrench"
 iconType: "solid"
 ---
 
-With Sequin, you create [**sequences**](#sequences) which present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume a table's rows by:
+With Sequin, you can stream Postgres by creating [**sequences**](#sequences). Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume a table's rows by:
 
 1. Using the [Consume API](#consume-api)
-2. [Receiving webhooks](#receiving-webhooks)
+2. [Receiving webhooks](#webhooks)
 3. Using the [Sync API](#sync-api) (coming soon)
 
 Whether you're pulling rows or having them pushed to you, Sequin always delivers the latest version of rows in order. When new rows are inserted or when rows are updated, they're re-delivered to you.
@@ -249,18 +249,53 @@ create table your_event_log (
 );
 ```
 
-- `id`: Auto-generated, auto-incrementing ID for the event entry.
-- `seq`: (internal) A Sequin sequence for the event entry.
-- `source_database_id`: (internal) The Sequin ID for your source database.
-- `source_table_oid`: The OID for the source table.
-- `source_table_schema`: The schema of the source table.
-- `source_table_name`: The name of the source table.
-- `record_pk`: The primary key for the source row. It's `text`, regardless of the type of the source's primary key type.
-- `record`: For inserts and updates, this contains all the latest field values for the row (i.e. `new`). For deletes, this contains all the field values prior to deletion (i.e. `old`).
-- `changes`: For updates, this is a JSON of all the `old` fields _that changed_ in this update. `changes` does not include unchanged values. So, to get the entire `old` row, just merge `changes` on top of `record`. (`null` for insert and upate operations.)
-- `action`: One of `insert`, `update`, or `delete`.
-- `committed_at`: The time the change was committed.
-- `inserted_at` The time this event was inserted into the event table.
+<ResponseField name="id" type="integer" required>
+  Auto-generated, auto-incrementing ID for the event entry.
+</ResponseField>
+
+<ResponseField name="seq" type="bigint" required>
+  (internal) A Sequin sequence for the event entry.
+</ResponseField>
+
+<ResponseField name="source_database_id" type="uuid" required>
+  (internal) The Sequin ID for your source database.
+</ResponseField>
+
+<ResponseField name="source_table_oid" type="bigint" required>
+  The OID for the source table.
+</ResponseField>
+
+<ResponseField name="source_table_schema" type="text" required>
+  The schema of the source table.
+</ResponseField>
+
+<ResponseField name="source_table_name" type="text" required>
+  The name of the source table.
+</ResponseField>
+
+<ResponseField name="record_pk" type="text" required>
+  The primary key for the source row. It's `text`, regardless of the type of the source's primary key type.
+</ResponseField>
+
+<ResponseField name="record" type="jsonb" required>
+  For inserts and updates, this contains all the latest field values for the row (i.e. `new`). For deletes, this contains all the field values prior to deletion (i.e. `old`).
+</ResponseField>
+
+<ResponseField name="changes" type="jsonb">
+  For updates, this is a JSON of all the `old` fields _that changed_ in this update. `changes` does not include unchanged values. So, to get the entire `old` row, just merge `changes` on top of `record`. (`null` for insert and delete operations.)
+</ResponseField>
+
+<ResponseField name="action" type="text" required>
+  One of `insert`, `update`, or `delete`.
+</ResponseField>
+
+<ResponseField name="committed_at" type="timestamp with time zone" required>
+  The time the change was committed.
+</ResponseField>
+
+<ResponseField name="inserted_at" type="timestamp with time zone" required>
+  The time this event was inserted into the event table.
+</ResponseField>
 
 When setting up a WAL Pipeline, Sequin will walk you through the full instructions for creating the table. You can also view those instructions here:
 

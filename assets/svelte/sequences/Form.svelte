@@ -16,6 +16,7 @@
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
+  import TableSelector from "../components/TableSelector.svelte";
 
   export let databases: Array<{
     id: string;
@@ -48,37 +49,17 @@
   let selectedDatabase = null;
   let selectedTable = null;
 
-  function updateSelectedDatabase() {
-    if (form.postgres_database_id) {
-      selectedDatabase = databases.find(
-        (db) => db.id === form.postgres_database_id
-      );
+  function updateSelectedDatabase(event) {
+    if (event.value) {
+      selectedDatabase = databases.find((db) => db.id === event.value);
     } else {
       selectedDatabase = null;
     }
-
-    console.log("selectedDatabase", selectedDatabase);
 
     // Reset table and sort column when database changes
     form.table_oid = null;
     form.sort_column_attnum = null;
   }
-
-  function updateSelectedTable() {
-    if (selectedDatabase && form.table_oid) {
-      selectedTable = selectedDatabase.tables.find(
-        (table) => table.oid === form.table_oid
-      );
-    } else {
-      selectedTable = null;
-    }
-
-    // Reset sort column when table changes
-    form.sort_column_attnum = null;
-  }
-
-  $: updateSelectedDatabase();
-  $: updateSelectedTable();
 
   function pushEvent(
     event: string,
@@ -103,6 +84,33 @@
   function handleClose() {
     pushEvent("form_closed");
   }
+
+  function handleTableSelect(event) {
+    form.postgres_database_id = event.databaseId;
+
+    if (event.databaseId) {
+      selectedDatabase = databases.find((db) => db.id === event.databaseId);
+    } else {
+      selectedDatabase = null;
+    }
+
+    form.table_oid = event.tableOid;
+
+    if (selectedDatabase && form.table_oid) {
+      selectedTable = selectedDatabase.tables.find(
+        (table) => table.oid === form.table_oid
+      );
+    } else {
+      selectedTable = null;
+    }
+
+    // Reset sort column when table changes
+    form.sort_column_attnum = null;
+  }
+
+  function pushEventToParent(event, payload, callback) {
+    pushEvent(event, payload, callback);
+  }
 </script>
 
 <FullPageModal
@@ -114,71 +122,25 @@
   <form on:submit={handleSubmit} class="space-y-6 max-w-4xl mx-auto mt-6">
     <Card>
       <CardHeader>
-        <CardTitle>Sequence Details</CardTitle>
+        <CardTitle>Sequence details</CardTitle>
       </CardHeader>
       <CardContent class="space-y-6">
-        <div class="space-y-2">
-          <Label for="postgres_database_id">Database</Label>
-          <Select
-            selected={{
-              value: form.postgres_database_id,
-              label:
-                databases.find((db) => db.id === form.postgres_database_id)
-                  ?.name || "Select a database",
-            }}
-            onSelectedChange={(event) => {
-              form.postgres_database_id = event.value;
-              updateSelectedDatabase();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select a database" />
-            </SelectTrigger>
-            <SelectContent>
-              {#each databases as database}
-                <SelectItem value={database.id}>{database.name}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
-          {#if errors.postgres_database_id}
-            <p class="text-destructive text-sm">
-              {errors.postgres_database_id}
-            </p>
-          {/if}
-        </div>
+        <TableSelector
+          {databases}
+          onSelect={handleTableSelect}
+          pushEvent={pushEventToParent}
+          selectedDatabaseId={form.postgres_database_id}
+          selectedTableOid={form.table_oid}
+        />
 
-        {#if selectedDatabase}
-          <div class="space-y-2">
-            <Label for="table_oid">Table</Label>
-            <Select
-              selected={{
-                value: form.table_oid,
-                label: selectedDatabase.tables.find(
-                  (table) => table.oid === form.table_oid
-                )
-                  ? `${selectedDatabase.tables.find((table) => table.oid === form.table_oid).schema}.${selectedDatabase.tables.find((table) => table.oid === form.table_oid).name}`
-                  : "Select a table",
-              }}
-              onSelectedChange={(event) => {
-                form.table_oid = event.value;
-                updateSelectedTable();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a table" />
-              </SelectTrigger>
-              <SelectContent>
-                {#each selectedDatabase.tables as table}
-                  <SelectItem value={table.oid}
-                    >{table.schema}.{table.name}</SelectItem
-                  >
-                {/each}
-              </SelectContent>
-            </Select>
-            {#if errors.table_oid}
-              <p class="text-destructive text-sm">{errors.table_oid}</p>
-            {/if}
-          </div>
+        {#if errors.postgres_database_id}
+          <p class="text-destructive text-sm">
+            {errors.postgres_database_id}
+          </p>
+        {/if}
+
+        {#if errors.table_oid}
+          <p class="text-destructive text-sm">{errors.table_oid}</p>
         {/if}
 
         {#if selectedTable}

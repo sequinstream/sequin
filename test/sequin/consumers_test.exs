@@ -593,7 +593,7 @@ defmodule Sequin.ConsumersTest do
       ]
 
       consumer =
-        ConsumersFactory.insert_http_push_consumer!(
+        ConsumersFactory.insert_consumer!(
           message_kind: :record,
           account_id: database.account_id,
           replication_slot_id: slot.id,

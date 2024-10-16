@@ -3,7 +3,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
-  alias Sequin.Consumers.SourceTable.ColumnFilter
+  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Replication

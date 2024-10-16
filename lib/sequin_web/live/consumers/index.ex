@@ -15,6 +15,7 @@ defmodule SequinWeb.ConsumersLive.Index do
     account = current_account(socket)
     consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
+    has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
     consumers = load_consumer_health(consumers)
 
     socket =
@@ -38,6 +39,7 @@ defmodule SequinWeb.ConsumersLive.Index do
       |> assign(:consumers, consumers)
       |> assign(:form_errors, %{})
       |> assign(:has_databases?, has_databases?)
+      |> assign(:has_sequences?, has_sequences?)
 
     {:ok, socket}
   end
@@ -68,7 +70,8 @@ defmodule SequinWeb.ConsumersLive.Index do
           %{
             consumers: @encoded_consumers,
             formErrors: @form_errors,
-            hasDatabases: @has_databases?
+            hasDatabases: @has_databases?,
+            hasSequences: @has_sequences?
           }
         }
         socket={@socket}

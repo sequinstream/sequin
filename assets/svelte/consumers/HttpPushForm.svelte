@@ -14,7 +14,7 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-  import TableSelector from "../components/TableSelector.svelte";
+  import SequenceSelector from "../components/SequenceSelector.svelte";
   import {
     Card,
     CardContent,
@@ -33,7 +33,7 @@
     CheckIcon,
   } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
-  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
+  import FilterCard from "../components/FilterCard.svelte";
 
   export let live;
   export let parent;
@@ -43,7 +43,7 @@
   export let errors: any = {};
   export let submitError;
 
-  let form = {
+  let initialForm = {
     messageKind: consumer.message_kind || "event",
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
@@ -52,15 +52,24 @@
     name: consumer.name || "",
     ackWaitMs: consumer.ack_wait_ms || 30000,
     maxAckPending: consumer.max_ack_pending || 10000,
-    maxWaiting: consumer.max_waiting,
+    maxWaiting: consumer.max_waiting || 20,
     httpEndpointId: consumer.http_endpoint_id,
     httpEndpointPath: consumer.http_endpoint_path || "",
     sortColumnAttnum: consumer.sort_column_attnum || null,
     recordConsumerState: consumer.record_consumer_state || {
       initialMinSortCol: null,
     },
+    sequenceId: consumer.sequence_id || null,
   };
+
+  let form = { ...initialForm };
+  let isDirty = false;
   let isSubmitting = false;
+
+  $: {
+    isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
+    pushEvent("form_updated", { form });
+  }
 
   const pushEvent = (event, payload = {}, cb = (result?: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
@@ -68,31 +77,33 @@
 
   $: pushEvent("form_updated", { form });
 
-  let selectedDatabase = form.postgresDatabaseId
-    ? databases.find((db) => db.id === form.postgresDatabaseId)
-    : null;
-  let selectedTable =
-    form.tableOid && selectedDatabase
-      ? selectedDatabase.tables.find((table) => table.oid === form.tableOid)
-      : null;
+  let selectedDatabase: any;
+  let selectedSequence: any;
+  let selectedTable: any;
+
+  $: {
+    if (form.postgresDatabaseId && form.sequenceId) {
+      selectedDatabase = databases.find(
+        (db) => db.id === form.postgresDatabaseId
+      );
+      if (selectedDatabase) {
+        selectedSequence = selectedDatabase.sequences.find(
+          (sequence) => sequence.id === form.sequenceId
+        );
+      }
+      if (selectedSequence) {
+        selectedTable = selectedDatabase.tables.find(
+          (table) => table.oid === selectedSequence.table_oid
+        );
+      }
+    }
+  }
+
   let selectedHttpEndpoint = form.httpEndpointId
     ? httpEndpoints.find((endpoint) => endpoint.id === form.httpEndpointId)
     : null;
 
   const isEditMode = !!consumer.id;
-
-  $: {
-    if (isEditMode || (form.postgresDatabaseId && form.tableOid)) {
-      selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
-      );
-      if (selectedDatabase) {
-        selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid
-        );
-      }
-    }
-  }
 
   $: {
     if (form.httpEndpointId) {
@@ -146,21 +157,24 @@
     });
   }
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleSequenceSelect(event: {
+    databaseId: string;
+    sequenceId: string;
+  }) {
     form.postgresDatabaseId = event.databaseId;
-    form.tableOid = event.tableOid;
+    form.sequenceId = event.sequenceId;
 
-    // Set the form name based on the selected table
-    if (form.tableOid) {
+    // Set the form name based on the selected sequence
+    if (form.sequenceId) {
       const selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId
       );
       if (selectedDatabase) {
-        const selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid
+        const selectedSequence = selectedDatabase.sequences.find(
+          (sequence) => sequence.id === form.sequenceId
         );
-        if (selectedTable) {
-          const tableName = selectedTable.name;
+        if (selectedSequence) {
+          const tableName = selectedSequence.table_name;
           const newName = `${tableName}_push_consumer`;
           form.name = newName;
         }
@@ -178,7 +192,7 @@
     pushEvent("form_closed");
   }
 
-  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.sequenceId;
 
   $: fullUrl =
     selectedHttpEndpoint?.baseUrl && form.httpEndpointPath
@@ -192,6 +206,7 @@
     : "Create an HTTP push consumer"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
+  showConfirmOnExit={isDirty}
   on:close={handleClose}
 >
   <form
@@ -239,12 +254,12 @@
               </SelectTrigger>
             </Select>
           {:else}
-            <TableSelector
+            <SequenceSelector
               {pushEvent}
               {databases}
               selectedDatabaseId={form.postgresDatabaseId}
-              selectedTableOid={form.tableOid}
-              onSelect={handleTableSelect}
+              selectedSequenceId={form.sequenceId}
+              onSelect={handleSequenceSelect}
             />
           {/if}
           {#if errors.postgres_database_id || errors.table_oid}
@@ -304,7 +319,7 @@
       </CardContent>
     </Card>
 
-    <SortAndFilterCard
+    <FilterCard
       messageKind={form.messageKind}
       showStartPositionForm={!isEditMode}
       {selectedTable}

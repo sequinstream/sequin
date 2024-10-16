@@ -20,7 +20,7 @@
     PlusCircle,
     Cog,
     Logs,
-    Table,
+    ListOrdered,
   } from "lucide-svelte";
 
   export let live;
@@ -37,11 +37,11 @@
   let createAccountError: string | null = null;
 
   const navItems = [
+    { path: "/sequences", text: "Sequences", icon: ListOrdered },
     { path: "/consumers", text: "Consumers", icon: Radio },
     { path: "/databases", text: "Databases", icon: Database },
     { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
     { path: "/wal-pipelines", text: "WAL Pipelines", icon: Logs },
-    { path: "/sequences", text: "Sequences", icon: Table },
   ];
 
   function navLink(path: string) {

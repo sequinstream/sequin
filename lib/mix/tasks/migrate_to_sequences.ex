@@ -78,8 +78,9 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
     {:ok, tables} = Databases.tables(consumer.replication_slot.postgres_database)
 
     table = Sequin.Enum.find!(tables, fn t -> t.oid == source_table.oid end)
-    # temporarily set
-    sort_column = Sequin.Enum.find!(table.columns, fn c -> c.is_pk? end)
+
+    # Find primary key column, or fall back to first column
+    sort_column = Enum.find(table.columns, fn c -> c.is_pk? end) || List.first(table.columns)
 
     attrs = %Sequence{
       postgres_database_id: consumer.replication_slot.postgres_database_id,

@@ -32,6 +32,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import CodeWithCopy from "./CodeWithCopy.svelte";
   import { Label } from "$lib/components/ui/label";
+  import * as Tabs from "$lib/components/ui/tabs";
 
   export let databases: Array<{
     id: string;
@@ -169,7 +170,18 @@ create index on ${destinationTableName} (committed_at);
 comment on table ${destinationTableName} is '$sequin-events$';
 `;
 
-  $: retentionPolicyDDL = `
+  let retentionPolicyPgCronDDL = `
+-- create required extension
+create extension if not exists pg_cron;
+
+-- setup cron job to run every 10 minutes and delete old data
+select cron.schedule('retention_policy_10min', '*/10 * * * *', $$
+  delete from ${destinationTableName}
+  where committed_at < now() - interval '${retentionDays} days';
+$$);
+`;
+
+  $: retentionPolicyPgPartmanDDL = `
 -- create required extensions
 create extension if not exists pg_partman;
 create extension if not exists pg_cron;
@@ -360,21 +372,21 @@ $$);
         Set up your event table with the correct schema and retention policy.
       </Dialog.Description>
     </Dialog.Header>
-    <div class="space-y-4 flex-grow overflow-y-auto">
-      <div class="space-y-2">
+    <div class="flex flex-col gap-4 flex-grow overflow-y-auto">
+      <div class="flex flex-col gap-2">
         <Label for="destinationTableName">Desired table name</Label>
         <Input id="destinationTableName" bind:value={destinationTableName} />
       </div>
 
-      <div class="space-y-2">
+      <div class="flex flex-col gap-4">
         <Label for="retentionDays">Desired retention period (days)</Label>
         <Input type="number" id="retentionDays" bind:value={retentionDays} />
       </div>
 
       {#if destinationTableName}
-        <div class="mt-4">
-          <p class="mb-2"><strong>Create your event table</strong></p>
-          <p class="mb-2">
+        <div class="flex flex-col gap-4">
+          <p><strong>Create your event table</strong></p>
+          <p>
             Create an event table with the following DDL, including indexes:
           </p>
           <CodeWithCopy
@@ -383,18 +395,36 @@ $$);
             copyIconPosition="top"
           />
         </div>
-        <div class="mt-4">
-          <p class="mb-2"><strong>Create your retention policy</strong></p>
-          <p class="mb-2">
-            We recommend using the pg_partman extension to enforce a retention
-            policy. Here's what it looks like to enforce a retention of {retentionDays}
-            days:
+        <div class="flex flex-col gap-4">
+          <p><strong>Create your retention policy</strong></p>
+          <p>
+            We recommend either the <code>pg_cron</code> or
+            <code>pg_partman</code>
+            extensions for enforcing a retention policy. <code>pg_cron</code> is
+            fine if your change volume will rarely exceed 10 writes/sec or 1M
+            writes/day. For higher volumes, we recommend
+            <code>pg_partman</code>:
           </p>
-          <CodeWithCopy
-            language="sql"
-            code={retentionPolicyDDL}
-            copyIconPosition="top"
-          />
+          <Tabs.Root value="pg_cron" class="w-full">
+            <Tabs.List>
+              <Tabs.Trigger value="pg_cron">pg_cron</Tabs.Trigger>
+              <Tabs.Trigger value="pg_partman">pg_partman</Tabs.Trigger>
+            </Tabs.List>
+            <Tabs.Content value="pg_cron">
+              <CodeWithCopy
+                language="sql"
+                code={retentionPolicyPgCronDDL}
+                copyIconPosition="top"
+              />
+            </Tabs.Content>
+            <Tabs.Content value="pg_partman">
+              <CodeWithCopy
+                language="sql"
+                code={retentionPolicyPgPartmanDDL}
+                copyIconPosition="top"
+              />
+            </Tabs.Content>
+          </Tabs.Root>
         </div>
       {/if}
     </div>

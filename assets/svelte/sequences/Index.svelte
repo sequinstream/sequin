@@ -78,7 +78,7 @@
 
   const dispatch = createEventDispatcher();
 
-  function pushEvent(event, payload = {}, callback = () => {}) {
+  function pushEvent(event, payload = {}, callback = (reply: any) => {}) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
@@ -260,13 +260,7 @@
   {/if}
 
   {#if dialogOpen}
-    <NewSequenceForm
-      {databases}
-      on:submit={handleFormSubmit}
-      {live_action}
-      {live}
-      {parent}
-    />
+    <NewSequenceForm {databases} on:submit={handleFormSubmit} {live} {parent} />
   {/if}
 </div>
 

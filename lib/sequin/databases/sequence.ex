@@ -31,10 +31,7 @@ defmodule Sequin.Databases.Sequence do
     ])
     |> validate_required([
       :table_oid,
-      :table_schema,
-      :table_name,
       :sort_column_attnum,
-      :sort_column_name,
       :postgres_database_id
     ])
   end

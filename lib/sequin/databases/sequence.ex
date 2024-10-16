@@ -50,6 +50,10 @@ defmodule Sequin.Databases.Sequence do
     )
   end
 
+  def where_postgres_database_id(query \\ base_query(), postgres_database_id) do
+    from(s in query, where: s.postgres_database_id == ^postgres_database_id)
+  end
+
   defp base_query do
     from(s in __MODULE__, as: :sequence)
   end

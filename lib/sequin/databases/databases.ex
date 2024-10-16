@@ -158,15 +158,27 @@ defmodule Sequin.Databases do
   end
 
   def delete_sequence(%Sequence{} = sequence) do
-    Repo.delete(sequence)
+    case Consumers.list_consumers_for_sequence(sequence.id) do
+      [] ->
+        Repo.delete(sequence)
+
+      _ ->
+        {:error, Error.invariant(message: "Cannot delete sequence that's used by consumers")}
+    end
   end
 
   def delete_sequences(%PostgresDatabase{} = db) do
-    Sequence
-    |> Repo.delete_all(where: [postgres_database_id: db.id])
-    |> case do
-      {num_deleted, nil} -> {:ok, num_deleted}
-    end
+    Repo.transact(fn ->
+      db.id
+      |> Sequence.where_postgres_database_id()
+      |> Repo.all()
+      |> Enum.reduce_while({:ok, 0}, fn sequence, {:ok, count} ->
+        case delete_sequence(sequence) do
+          {:ok, _} -> {:cont, {:ok, count + 1}}
+          error -> {:halt, error}
+        end
+      end)
+    end)
   end
 
   # PostgresDatabase runtime

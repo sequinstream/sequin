@@ -112,6 +112,10 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     from([consumer: c] in query, where: c.name == ^name)
   end
 
+  def where_sequence_id(query \\ base_query(), sequence_id) do
+    from([consumer: c] in query, where: c.sequence_id == ^sequence_id)
+  end
+
   def where_id_or_name(query \\ base_query(), id_or_name) do
     if Sequin.String.is_uuid?(id_or_name) do
       where_id(query, id_or_name)

@@ -83,9 +83,10 @@ defmodule Sequin.Factory.DatabasesFactory do
       :password,
       :pool_size
     ])
-    |> Map.merge(attrs)
-    # Set very low for tests, for any tests that are testing erroneous queries against a bad db connection
+    # Set low for tests
+    # If you want to test an erroneous connection, set queue_target and queue_interval to 1
     |> Map.merge(%{queue_target: 150, queue_interval: 1000, pool_size: 2})
+    |> Map.merge(attrs)
     |> Map.put(:ssl, false)
     |> postgres_database_attrs()
   end

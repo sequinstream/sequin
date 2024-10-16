@@ -118,6 +118,13 @@ defmodule Sequin.Consumers do
     Repo.all(pull) ++ Repo.all(push)
   end
 
+  def list_consumers_for_sequence(sequence_id) do
+    pull = HttpPullConsumer.where_sequence_id(sequence_id)
+    push = HttpPushConsumer.where_sequence_id(sequence_id)
+
+    Repo.all(pull) ++ Repo.all(push)
+  end
+
   def list_consumers_for_http_endpoint(http_endpoint_id) do
     http_endpoint_id
     |> HttpPushConsumer.where_http_endpoint_id()

@@ -134,6 +134,10 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     from([consumer: c] in query, where: c.id == ^id)
   end
 
+  def where_sequence_id(query \\ base_query(), sequence_id) do
+    from([consumer: c] in query, where: c.sequence_id == ^sequence_id)
+  end
+
   def where_name(query \\ base_query(), name) do
     from([consumer: c] in query, where: c.name == ^name)
   end

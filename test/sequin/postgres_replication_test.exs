@@ -313,7 +313,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    @tag skip: true
     test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
@@ -1102,7 +1101,6 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    @tag skip: true
     test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 

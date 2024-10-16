@@ -45,7 +45,7 @@ defmodule SequinWeb.SequencesLive.Index do
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(:page_title, "Listing Sequences")
+    |> assign(:page_title, "Sequences")
     |> assign(:sequence, nil)
   end
 
@@ -82,8 +82,8 @@ defmodule SequinWeb.SequencesLive.Index do
     {:ok, database} = Databases.get_db_for_account(account_id, sequence_params["postgres_database_id"])
 
     # Find the selected table and column based on the OIDs
-    selected_table = Enum.find(database.tables, &(&1.oid == sequence_params["table_oid"]))
-    selected_column = Enum.find(selected_table.columns, &(&1.attnum == sequence_params["sort_column_attnum"]))
+    selected_table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence_params["table_oid"]))
+    selected_column = Sequin.Enum.find!(selected_table.columns, &(&1.attnum == sequence_params["sort_column_attnum"]))
 
     # Update sequence_params with the required fields
     sequence_params =
@@ -97,7 +97,7 @@ defmodule SequinWeb.SequencesLive.Index do
       {:ok, _sequence} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Sequence created successfully")
+         |> put_flash(:toast, %{kind: :success, title: "Sequence created successfully"})
          |> push_navigate(to: "/sequences")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -115,15 +115,15 @@ defmodule SequinWeb.SequencesLive.Index do
           {:ok, _} ->
             {:noreply,
              socket
-             |> put_flash(:info, "Sequence deleted successfully")
+             |> put_flash(:toast, %{kind: :success, title: "Sequence deleted successfully"})
              |> assign(:sequences, list_sequences(account_id))}
 
           {:error, _} ->
-            {:noreply, put_flash(socket, :error, "Failed to delete sequence")}
+            {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to delete sequence"})}
         end
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Sequence not found")}
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Sequence not found"})}
     end
   end
 

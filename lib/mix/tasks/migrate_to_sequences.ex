@@ -60,7 +60,7 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
     case consumer.source_tables do
       [source_table | _] ->
         sequence = fetch_sequence(consumer, source_table) || create_sequence(consumer, source_table)
-        update_consumer(consumer, consumer_module, sequence)
+        if sequence, do: update_consumer(consumer, consumer_module, sequence)
 
       _ ->
         Logger.info("Skipping consumer #{consumer.id} - no source table found")
@@ -77,24 +77,31 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
   defp create_sequence(consumer, source_table) do
     {:ok, tables} = Databases.tables(consumer.replication_slot.postgres_database)
 
-    table = Sequin.Enum.find!(tables, fn t -> t.oid == source_table.oid end)
+    with table when not is_nil(table) <- Enum.find(tables, fn t -> t.oid == source_table.oid end),
+         sort_column when not is_nil(sort_column) <-
+           Enum.find(table.columns, fn c -> c.is_pk? end) || List.first(table.columns) do
+      attrs = %Sequence{
+        postgres_database_id: consumer.replication_slot.postgres_database_id,
+        table_oid: source_table.oid,
+        table_schema: table.schema,
+        table_name: table.name,
+        sort_column_attnum: sort_column.attnum,
+        sort_column_name: sort_column.name
+      }
 
-    # Find primary key column, or fall back to first column
-    sort_column = Enum.find(table.columns, fn c -> c.is_pk? end) || List.first(table.columns)
+      attrs = Map.from_struct(attrs)
 
-    attrs = %Sequence{
-      postgres_database_id: consumer.replication_slot.postgres_database_id,
-      table_oid: source_table.oid,
-      table_schema: table.schema,
-      table_name: table.name,
-      sort_column_attnum: sort_column.attnum,
-      sort_column_name: sort_column.name
-    }
+      {:ok, sequence} = %Sequence{} |> Sequence.changeset(attrs) |> Repo.insert()
+      sequence
+    else
+      _ ->
+        Logger.warning(
+          "No table found for consumer #{consumer.id} - source table #{source_table.oid}",
+          tables: tables
+        )
 
-    attrs = Map.from_struct(attrs)
-
-    {:ok, sequence} = %Sequence{} |> Sequence.changeset(attrs) |> Repo.insert()
-    sequence
+        nil
+    end
   end
 
   defp update_consumer(consumer, consumer_module, sequence) do

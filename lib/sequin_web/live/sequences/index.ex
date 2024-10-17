@@ -5,6 +5,7 @@ defmodule SequinWeb.SequencesLive.Index do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Error.NotFoundError
+  alias Sequin.Postgres
   alias Sequin.Repo
 
   @impl Phoenix.LiveView
@@ -191,11 +192,19 @@ defmodule SequinWeb.SequencesLive.Index do
   end
 
   defp encode_table(table) do
+    fixed_sort_column_attnum =
+      if Postgres.is_event_table?(table) do
+        table.columns
+        |> Sequin.Enum.find!(&(&1.name == "seq"))
+        |> Map.fetch!(:attnum)
+      end
+
     %{
       oid: table.oid,
       schema: table.schema,
       name: table.name,
-      columns: Enum.map(table.columns, &encode_column/1)
+      columns: Enum.map(table.columns, &encode_column/1),
+      fixed_sort_column_attnum: fixed_sort_column_attnum
     }
   end
 

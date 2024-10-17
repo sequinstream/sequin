@@ -29,7 +29,7 @@
   export let errors: any;
   export let showTitle: boolean = true;
   export let showStartPositionForm = true;
-  // export let isEditMode: boolean;
+  export let isEditMode: boolean;
   export let onFilterChange: (newFilters: any) => void;
 
   $: actions = form.sourceTableActions || [];
@@ -421,7 +421,7 @@
       <p class="text-sm text-muted-foreground mt-1 mb-2">
         Indicate where in the table you want the consumer to start.
       </p>
-      <RadioGroup bind:value={startPosition}>
+      <RadioGroup bind:value={startPosition} disabled={isEditMode}>
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="beginning" id="beginning" />
           <Label for="beginning">At the beginning of the table</Label>

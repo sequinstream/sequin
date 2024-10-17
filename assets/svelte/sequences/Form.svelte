@@ -104,8 +104,12 @@
       selectedTable = null;
     }
 
-    // Reset sort column when table changes
-    form.sort_column_attnum = null;
+    if (selectedTable && selectedTable.fixed_sort_column_attnum) {
+      form.sort_column_attnum = selectedTable.fixed_sort_column_attnum;
+    } else {
+      // Reset sort column when table changes
+      form.sort_column_attnum = null;
+    }
   }
 
   function pushEventToParent(event, payload, callback) {
@@ -171,6 +175,7 @@
               onSelectedChange={(event) => {
                 form.sort_column_attnum = event.value;
               }}
+              disabled={selectedTable?.fixed_sort_column_attnum}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select a sort column" />

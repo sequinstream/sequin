@@ -53,6 +53,7 @@
       oid: number;
       schema: string;
       name: string;
+      fixed_sort_column_attnum: number;
       columns: Array<{
         attnum: number;
         name: string;

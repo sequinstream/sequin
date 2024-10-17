@@ -56,6 +56,7 @@
   export let selectedDatabaseId: string | undefined;
   export let selectedTableOid: number | null;
   export let onlyEventTables: boolean = false;
+  export let excludeEventTables: boolean = false;
 
   let selectedDatabase;
   let autoRefreshedDatabaseTables = [];
@@ -76,6 +77,8 @@
 
     if (onlyEventTables) {
       filteredTables = filteredTables.filter((table) => table.isEventTable);
+    } else if (excludeEventTables) {
+      filteredTables = filteredTables.filter((table) => !table.isEventTable);
     }
   }
 
@@ -300,6 +303,24 @@ $$);
                         <Tooltip.Content>
                           <p class="text-xs">
                             Filtered down to source tables that look like Sequin
+                            events tables.
+                          </p>
+                        </Tooltip.Content>
+                      </Tooltip.Root>
+                    </div>
+                  {:else if excludeEventTables}
+                    <div class="flex items-center justify-between gap-2">
+                      Non-event tables
+                      <Tooltip.Root>
+                        <Tooltip.Trigger>
+                          <Badge variant="default">
+                            <Info class="mr-1 h-4 w-4" />
+                            Filtered
+                          </Badge>
+                        </Tooltip.Trigger>
+                        <Tooltip.Content>
+                          <p class="text-xs">
+                            Filtered to exclude tables that look like Sequin
                             events tables.
                           </p>
                         </Tooltip.Content>

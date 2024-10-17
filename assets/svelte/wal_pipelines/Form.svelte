@@ -168,6 +168,7 @@
               }}
               selectedDatabaseId={form.postgresDatabaseId}
               selectedTableOid={form.tableOid}
+              excludeEventTables
             />
           {/if}
 

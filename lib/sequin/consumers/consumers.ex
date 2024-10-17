@@ -1193,17 +1193,27 @@ defmodule Sequin.Consumers do
 
   # Source Table Matching
   def matches_message?(
-        %HttpPullConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         message
       ) do
-    matches_message?(sequence, sequence_filter, message)
-  end
+    matches? = matches_message?(sequence, sequence_filter, message)
 
-  def matches_message?(
-        %HttpPushConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
-        message
-      ) do
-    matches_message?(sequence, sequence_filter, message)
+    Health.update(consumer, :filters, :healthy)
+
+    matches?
+  rescue
+    error in [ArgumentError] ->
+      Health.update(
+        consumer,
+        :filters,
+        :error,
+        Error.service(
+          code: :argument_error,
+          message: Exception.message(error)
+        )
+      )
+
+      reraise error, __STACKTRACE__
   end
 
   def matches_message?(consumer_or_wal_pipeline, message) do
@@ -1252,6 +1262,7 @@ defmodule Sequin.Consumers do
     table_matches? = sequence.table_oid == message.table_oid
     actions_match? = action_matches?(sequence_filter.actions, message.action)
     column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
+
     table_matches? and actions_match? and column_filters_match?
   end
 

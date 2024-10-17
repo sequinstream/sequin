@@ -156,6 +156,7 @@ defmodule Sequin.Postgres do
       "uuid" -> :string
       "numeric" -> :number
       "date" -> :datetime
+      "jsonb" -> :jsonb
       _ -> :string
     end
   end

@@ -61,7 +61,9 @@ defmodule Sequin.Consumers do
           %SequenceFilter.ColumnFilter{
             column_attnum: filter_column.column_attnum,
             operator: filter_column.operator,
-            value: filter_column.value
+            value: filter_column.value,
+            is_jsonb: filter_column.is_jsonb,
+            jsonb_path: filter_column.jsonb_path
           }
         end)
     }
@@ -1282,7 +1284,7 @@ defmodule Sequin.Consumers do
     Enum.all?(column_filters, fn filter ->
       fields = if message.action == :delete, do: message.old_fields, else: message.fields
       field = Enum.find(fields, &(&1.column_attnum == filter.column_attnum))
-      field && apply_filter(filter.operator, field.value, filter.value)
+      field && apply_filter(filter.operator, get_field_value(field.value, filter.jsonb_path), filter.value)
     end)
   end
 
@@ -1291,8 +1293,19 @@ defmodule Sequin.Consumers do
   defp column_filters_match_record?(column_filters, record) do
     Enum.all?(column_filters, fn filter ->
       field = Enum.find(record, fn {key, _value} -> key == filter.column_name end)
-      field && apply_filter(filter.operator, elem(field, 1), filter.value)
+      field && apply_filter(filter.operator, get_field_value(elem(field, 1), filter.jsonb_path), filter.value)
     end)
+  end
+
+  defp get_field_value(value, jsonb_path) when jsonb_path in [nil, ""], do: value
+
+  defp get_field_value(value, jsonb_path) do
+    path = String.split(jsonb_path, ".")
+    get_in(value, path)
+  rescue
+    ArgumentError ->
+      # Will happen when traversal hits an unsupported value type, like an array or a string.
+      nil
   end
 
   defp apply_filter(operator, %Date{} = field_value, %DateTimeValue{} = filter_value) do

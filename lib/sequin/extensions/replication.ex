@@ -583,6 +583,10 @@ defmodule Sequin.Extensions.Replication do
     |> Enum.map(&cast_value(type, &1))
   end
 
+  defp cast_value(type, value) when type in ["json", "jsonb"] and is_binary(value) do
+    Jason.decode!(value)
+  end
+
   defp cast_value(type, value) do
     case Ecto.Type.cast(string_to_ecto_type(type), value) do
       {:ok, casted_value} -> casted_value

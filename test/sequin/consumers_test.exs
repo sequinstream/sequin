@@ -2689,6 +2689,163 @@ defmodule Sequin.ConsumersTest do
       assert Consumers.matches_message?(consumer, matching_message)
       refute Consumers.matches_message?(consumer, non_matching_message)
     end
+
+    test "matches JSONB top-level field" do
+      table_oid = Sequin.Factory.unique_integer()
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          id: Factory.uuid(),
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: table_oid,
+              actions: [:insert, :update, :delete],
+              column_filters: [
+                ConsumersFactory.column_filter(
+                  column_attnum: 1,
+                  operator: :==,
+                  value: %StringValue{value: "test_value"},
+                  jsonb_path: "top_level_key"
+                )
+              ]
+            )
+          ]
+        )
+
+      matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"top_level_key" => "test_value"})
+          ]
+        )
+
+      non_matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"top_level_key" => "wrong_value"})
+          ]
+        )
+
+      assert Consumers.matches_message?(consumer, matching_message)
+      refute Consumers.matches_message?(consumer, non_matching_message)
+    end
+
+    test "matches JSONB nested field" do
+      table_oid = Sequin.Factory.unique_integer()
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          id: Factory.uuid(),
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: table_oid,
+              actions: [:insert, :update, :delete],
+              column_filters: [
+                ConsumersFactory.column_filter(
+                  column_attnum: 1,
+                  operator: :>,
+                  value: %NumberValue{value: 10},
+                  jsonb_path: "nested.field"
+                )
+              ]
+            )
+          ]
+        )
+
+      matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"nested" => %{"field" => 15}})
+          ]
+        )
+
+      non_matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"nested" => %{"field" => 5}})
+          ]
+        )
+
+      assert Consumers.matches_message?(consumer, matching_message)
+      refute Consumers.matches_message?(consumer, non_matching_message)
+    end
+
+    test "handles missing JSONB nested field" do
+      table_oid = Sequin.Factory.unique_integer()
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          id: Factory.uuid(),
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: table_oid,
+              actions: [:insert, :update, :delete],
+              column_filters: [
+                ConsumersFactory.column_filter(
+                  column_attnum: 1,
+                  operator: :==,
+                  value: %StringValue{value: "test_value"},
+                  jsonb_path: "nested.non_existent"
+                )
+              ]
+            )
+          ]
+        )
+
+      non_matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"nested" => %{"other_field" => "test_value"}})
+          ]
+        )
+
+      refute Consumers.matches_message?(consumer, non_matching_message)
+    end
+
+    test "does not support traversing JSONB array elements" do
+      table_oid = Sequin.Factory.unique_integer()
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          id: Factory.uuid(),
+          source_tables: [
+            ConsumersFactory.source_table(
+              oid: table_oid,
+              actions: [:insert, :update, :delete],
+              column_filters: [
+                ConsumersFactory.column_filter(
+                  column_attnum: 1,
+                  operator: :in,
+                  value: %ListValue{value: ["value1", "value2"]},
+                  jsonb_path: "array.0"
+                )
+              ]
+            )
+          ]
+        )
+
+      non_matching_message =
+        ReplicationFactory.postgres_message(
+          action: :insert,
+          table_oid: table_oid,
+          fields: [
+            ReplicationFactory.field(column_attnum: 1, value: %{"array" => ["value1", "other"]}),
+            ReplicationFactory.field(column_attnum: 2, value: "other")
+          ]
+        )
+
+      refute Consumers.matches_message?(consumer, non_matching_message)
+    end
   end
 
   # Helper function to create a consumer record from a character

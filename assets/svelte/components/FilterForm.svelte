@@ -14,13 +14,14 @@
     SelectValue,
   } from "$lib/components/ui/select";
   import { Switch } from "$lib/components/ui/switch";
-  import { ExternalLinkIcon } from "lucide-svelte";
+  import { ExternalLinkIcon, HelpCircle } from "lucide-svelte";
   import { getColorFromName } from "$lib/utils";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { PlusCircle } from "lucide-svelte";
   import Datetime from "./Datetime.svelte";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let messageKind: string;
   export let selectedTable: any;
@@ -37,12 +38,22 @@
     { id: "delete", label: "Delete" },
   ];
 
+  const fieldTypes = [
+    { value: "string", label: "Text" },
+    { value: "number", label: "Number" },
+    { value: "boolean", label: "Boolean" },
+    { value: "datetime", label: "Datetime" },
+    { value: "list", label: "List" },
+  ];
+
   // TableFilters component logic
   type Filter = {
     columnAttnum: number | null;
+    isJsonb: boolean | null;
     operator: string | null;
     value: string;
     valueType: string | null;
+    jsonbPath: string | null;
   };
 
   const operators = [
@@ -61,9 +72,11 @@
   function addFilter() {
     const newFilter: Filter = {
       columnAttnum: null,
+      isJsonb: null,
       operator: "=",
       value: "",
       valueType: null,
+      jsonbPath: null,
     };
     form.sourceTableFilters = [...form.sourceTableFilters, newFilter];
     onFilterChange(form.sourceTableFilters);
@@ -81,17 +94,28 @@
       if (i === index) {
         const updatedFilter = { ...filter, [key]: value };
 
+        // Side effects
+        // Clear value when operator is IS NULL or IS NOT NULL
         if (key === "operator" && ["IS NULL", "IS NOT NULL"].includes(value)) {
           updatedFilter.value = "";
         }
 
+        // Update column type and value type when column changes
         if (key === "columnAttnum") {
           const selectedColumn = selectedTable?.columns.find(
             (col) => col.attnum === value
           );
-          updatedFilter.valueType = selectedColumn
-            ? selectedColumn.filterType
-            : "";
+          if (selectedColumn) {
+            // The `columnType` of the filter always maps to the column's filter type
+            updatedFilter.isJsonb = selectedColumn.filterType === "jsonb";
+
+            // But the valueType may be different than the column's filter type if JSONB.
+            // That's because JSONB columns embed many value types.
+            // So, we'll prompt the user to select the value type.
+            if (!updatedFilter.isJsonb) {
+              updatedFilter.valueType = selectedColumn.filterType;
+            }
+          }
 
           // Clear the value if the column type changes
           if (filter.valueType !== updatedFilter.valueType) {
@@ -105,6 +129,10 @@
     });
     onFilterChange(form.sourceTableFilters);
   }
+
+  const getFieldTypeLabel = (value: string) => {
+    return fieldTypes.find((type) => type.value === value)?.label || value;
+  };
 
   $: filterErrorMessages = (
     errors.source_tables?.[0]?.column_filters || []
@@ -168,9 +196,18 @@
     {/if}
     {#each form.sourceTableFilters as filter, index}
       <div class="bg-blue-50 border-bg-blue-100 rounded-lg p-4">
-        <div class="flex flex-col gap-2">
-          <div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4">
+        <div class="grid grid-cols-[2fr_1fr_2fr_auto] gap-4 items-start">
+          <!-- Column 1: Column selection (and JSONB fields if applicable) -->
+          <div class="flex flex-col gap-2">
+            <Label for={`column-${index}`}
+              >Column
+              <!-- Unused help circle, helps align inputs -->
+              <HelpCircle
+                class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"
+              />
+            </Label>
             <Select
+              id={`column-${index}`}
               selected={{
                 value: filter.columnAttnum,
                 label:
@@ -191,7 +228,92 @@
                 {/each}
               </SelectContent>
             </Select>
+          </div>
+
+          {#if filter.isJsonb}
+            <div class="flex flex-col gap-2 col-start-1">
+              <Label for={`field-path-${index}`} class="flex items-center">
+                Field path
+                <Tooltip.Root openDelay={200}>
+                  <Tooltip.Trigger>
+                    <HelpCircle
+                      class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help"
+                    />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="max-w-xs">
+                    <p class="text-xs text-gray-500">
+                      Specify the path to the JSONB field you want to filter on.
+                      Use dot notation for nested fields (e.g., "address.city").
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
+              </Label>
+              <Input
+                id={`field-path-${index}`}
+                type="text"
+                placeholder="path.to.value"
+                value={filter.jsonbPath}
+                on:input={(e) =>
+                  updateFilter(index, "jsonbPath", e.currentTarget.value)}
+                disabled={!form.postgresDatabaseId && !form.tableOid}
+                class="bg-surface-base border-carbon-100"
+              />
+            </div>
+
+            <div class="flex flex-col gap-2 col-start-1">
+              <Label for={`field-type-${index}`} class="flex items-center">
+                Field type
+                <Tooltip.Root openDelay={200}>
+                  <Tooltip.Trigger>
+                    <HelpCircle
+                      class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help"
+                    />
+                  </Tooltip.Trigger>
+                  <Tooltip.Content class="max-w-xs">
+                    <p class="text-xs text-gray-500">
+                      Select the data type of the JSONB field you're filtering
+                      on. This helps ensure proper comparison and filtering.
+                    </p>
+                  </Tooltip.Content>
+                </Tooltip.Root>
+              </Label>
+              <Select
+                id={`field-type-${index}`}
+                selected={{
+                  value: filter.valueType,
+                  label: getFieldTypeLabel(filter.valueType) || "Field type",
+                }}
+                onSelectedChange={(e) =>
+                  updateFilter(index, "valueType", e.value)}
+                disabled={!form.postgresDatabaseId && !form.tableOid}
+              >
+                <SelectTrigger class="border-carbon-100 bg-surface-base">
+                  <SelectValue placeholder="Field type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {#each fieldTypes as { value, label }}
+                    <SelectItem {value}>{label}</SelectItem>
+                  {/each}
+                </SelectContent>
+              </Select>
+            </div>
+          {/if}
+
+          <!-- Column 2: Operator -->
+          <div
+            class="flex flex-col gap-2 {filter.isJsonb
+              ? 'row-start-2 col-start-2'
+              : ''}"
+          >
+            <Label for={`operator-${index}`}
+              >Operator
+              <!-- Unused help circle, helps align inputs -->
+              <HelpCircle
+                class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"
+              />
+            </Label>
             <Select
+              id={`operator-${index}`}
               selected={{
                 value: filter.operator,
                 label: filter.operator || "Operator",
@@ -208,7 +330,23 @@
                 {/each}
               </SelectContent>
             </Select>
+          </div>
+
+          <!-- Column 3: Comparand -->
+          <div
+            class="flex flex-col gap-2 {filter.isJsonb
+              ? 'row-start-2 col-start-3'
+              : ''}"
+          >
+            <Label for={`value-${index}`}
+              >Comparand
+              <!-- Unused help circle, helps align inputs -->
+              <HelpCircle
+                class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"
+              />
+            </Label>
             <Input
+              id={`value-${index}`}
               type="text"
               placeholder="Value"
               value={filter.value}
@@ -218,20 +356,25 @@
                 ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
               class="bg-surface-base border-carbon-100"
             />
-            <button
-              on:click={() => removeFilter(index)}
-              class="text-carbon-400 hover:text-carbon-600 justify-self-end p-2 transition-colors hover:scale-110"
-              disabled={!form.postgresDatabaseId && !form.tableOid}
-            >
-              <icon class="hero-x-mark w-4 h-4" />
-            </button>
           </div>
-          {#if filterErrorMessages[index]}
-            <p class="text-destructive text-sm mt-2">
-              {filterErrorMessages[index]}
-            </p>
-          {/if}
+
+          <!-- Column 4: Remove button -->
+          <button
+            on:click={() => removeFilter(index)}
+            class="text-carbon-400 hover:text-carbon-600 justify-self-end p-2 transition-colors hover:scale-110 self-start mt-6 {filter.isJsonb
+              ? 'row-start-2 col-start-4'
+              : ''}"
+            disabled={!form.postgresDatabaseId && !form.tableOid}
+          >
+            <icon class="hero-x-mark w-4 h-4" />
+          </button>
         </div>
+
+        {#if filterErrorMessages[index]}
+          <p class="text-destructive text-sm mt-2">
+            {filterErrorMessages[index]}
+          </p>
+        {/if}
       </div>
     {/each}
     <div class="flex justify-start mt-2">

@@ -447,7 +447,9 @@ defmodule SequinWeb.ConsumersLive.Show do
     %{
       column: column.name,
       operator: ColumnFilter.to_external_operator(column_filter.operator),
-      value: column_filter.value.value
+      value: column_filter.value.value,
+      is_jsonb: column_filter.is_jsonb,
+      jsonb_path: column_filter.jsonb_path
     }
   end
 

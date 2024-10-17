@@ -359,7 +359,14 @@
                 <TableBody>
                   {#each consumer.source_table.column_filters as filter}
                     <TableRow>
-                      <TableCell><code>{filter.column}</code></TableCell>
+                      <TableCell>
+                        <code>
+                          {filter.column}
+                          {#if filter.is_jsonb && filter.jsonb_path}
+                            -> {filter.jsonb_path}
+                          {/if}
+                        </code>
+                      </TableCell>
                       <TableCell><code>{filter.operator}</code></TableCell>
                       <TableCell><code>{filter.value}</code></TableCell>
                     </TableRow>

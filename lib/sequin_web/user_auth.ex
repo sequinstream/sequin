@@ -6,6 +6,7 @@ defmodule SequinWeb.UserAuth do
   import Plug.Conn
 
   alias Sequin.Accounts
+  alias Sequin.Repo
 
   # Make the remember me cookie valid for 60 days.
   # If you want bump or reduce this value, also change
@@ -87,9 +88,9 @@ defmodule SequinWeb.UserAuth do
     |> redirect(to: ~p"/login")
   end
 
-  def log_in_user_with_impersonation(conn, user, impersonated_account_id) do
-    user_token = Accounts.generate_user_session_token(user)
-    impersonation_token = Accounts.generate_impersonation_token(user, impersonated_account_id)
+  def log_in_user_with_impersonation(conn, impersonating_user, impersonated_user) do
+    user_token = Accounts.generate_user_session_token(impersonating_user)
+    impersonation_token = Accounts.generate_impersonation_token(impersonating_user, impersonated_user)
 
     conn
     |> renew_session()
@@ -109,9 +110,14 @@ defmodule SequinWeb.UserAuth do
 
     if user = user_token && Accounts.get_user_by_session_token(user_token) do
       if impersonation_token do
-        case Accounts.get_impersonated_account_id(user, impersonation_token) do
-          {:ok, account_id} ->
-            assign(conn, :current_user, %{user | impersonating_account: Accounts.get_account!(account_id)})
+        case Accounts.get_impersonated_user_id(user, impersonation_token) do
+          {:ok, impersonated_user_id} ->
+            impersonated_user =
+              impersonated_user_id
+              |> Accounts.get_user!()
+              |> Repo.preload([:accounts, :accounts_users])
+
+            assign(conn, :current_user, %{user | impersonating_user: impersonated_user})
 
           _ ->
             assign(conn, :current_user, user)
@@ -225,9 +231,14 @@ defmodule SequinWeb.UserAuth do
         user = Accounts.get_user_by_session_token(user_token)
 
         if impersonation_token = session["impersonation_token"] do
-          case Accounts.get_impersonated_account_id(user, impersonation_token) do
-            {:ok, account_id} ->
-              %{user | impersonating_account: Accounts.get_account!(account_id)}
+          case Accounts.get_impersonated_user_id(user, impersonation_token) do
+            {:ok, impersonated_user_id} ->
+              impersonated_user =
+                impersonated_user_id
+                |> Accounts.get_user!()
+                |> Repo.preload([:accounts, :accounts_users])
+
+              %{user | impersonating_user: impersonated_user}
 
             _ ->
               user

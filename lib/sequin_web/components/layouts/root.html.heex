@@ -22,10 +22,10 @@
     data-ph-token={Application.get_env(:sequin, :frontend_posthog_api_key)}
   >
     <.svelte name="components/Toaster" />
-    <%= if @current_user && @current_user.impersonating_account do %>
+    <%= if @current_user && @current_user.impersonating_user do %>
       <div class="w-full bg-red-300 text-black-600 py-2 font-bold flex items-center px-4">
         <div class="flex-grow text-center">
-          Impersonating account: <%= @current_user.impersonating_account.name %> (<%= @current_user.impersonating_account.id %>)
+          Impersonating user: <%= @current_user.impersonating_user.name %> (<%= @current_user.impersonating_user.id %>)
         </div>
         <a
           href={~p"/admin/unimpersonate"}

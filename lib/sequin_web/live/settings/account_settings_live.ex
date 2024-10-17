@@ -9,19 +9,22 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
   alias Sequin.Error
 
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    {:ok, assign(socket, :accounts, accounts(socket))}
   end
 
   def handle_event("change_selected_account", %{"accountId" => account_id}, socket) do
-    user = current_user(socket)
-    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+    account = Sequin.Enum.find!(accounts(socket), &(&1.id == account_id))
 
-    case Accounts.set_current_account_for_user(user.id, account.id) do
+    case Accounts.set_current_account_for_user(current_user_id(socket), account.id) do
       {:ok, updated_user} ->
-        {:noreply,
-         socket
-         |> assign(current_user: updated_user)
-         |> push_navigate(to: socket.assigns.current_path)}
+        if impersonating?(socket) do
+          {:noreply, push_navigate(socket, to: socket.assigns.current_path)}
+        else
+          {:noreply,
+           socket
+           |> assign(current_user: updated_user)
+           |> push_navigate(to: socket.assigns.current_path)}
+        end
 
       {:error, _changeset} ->
         {:noreply, socket}
@@ -74,7 +77,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
         name="settings/AccountSettings"
         props={
           %{
-            accounts: Enum.sort_by(@current_user.accounts, & &1.inserted_at, DateTime),
+            accounts: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
             selectedAccount: @current_account,
             parent: @parent_id
           }

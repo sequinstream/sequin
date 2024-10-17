@@ -1303,8 +1303,11 @@ defmodule Sequin.Consumers do
     path = String.split(jsonb_path, ".")
     get_in(value, path)
   rescue
+    # Errors will happen when traversal hits an unsupported value type, like an array or a string.
     ArgumentError ->
-      # Will happen when traversal hits an unsupported value type, like an array or a string.
+      nil
+
+    FunctionClauseError ->
       nil
   end
 

@@ -21,6 +21,7 @@ defmodule Sequin.Accounts.UserToken do
     field :token, :binary
     field :context, :string
     field :sent_to, :string
+    field :annotations, :map, default: %{}
     belongs_to :user, Sequin.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)

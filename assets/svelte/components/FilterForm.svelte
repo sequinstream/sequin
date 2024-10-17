@@ -167,76 +167,80 @@
       <Label>Column filters</Label>
     {/if}
     {#each form.sourceTableFilters as filter, index}
-      <div class="flex flex-col gap-2">
-        <div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4">
-          <Select
-            selected={{
-              value: filter.columnAttnum,
-              label:
-                selectedTable?.columns.find(
-                  (col) => col.attnum === filter.columnAttnum
-                )?.name || "Column",
-            }}
-            onSelectedChange={(e) =>
-              updateFilter(index, "columnAttnum", e.value)}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-          >
-            <SelectTrigger class="border-carbon-100">
-              <SelectValue placeholder="Column" />
-            </SelectTrigger>
-            <SelectContent class="max-h-64 overflow-y-auto">
-              {#each selectedTable?.columns || [] as column}
-                <SelectItem value={column.attnum}>{column.name}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
-          <Select
-            selected={{
-              value: filter.operator,
-              label: filter.operator || "Operator",
-            }}
-            onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-          >
-            <SelectTrigger class="border-carbon-100">
-              <SelectValue placeholder="Operator" />
-            </SelectTrigger>
-            <SelectContent>
-              {#each operators as operator}
-                <SelectItem value={operator}>{operator}</SelectItem>
-              {/each}
-            </SelectContent>
-          </Select>
-          <Input
-            type="text"
-            placeholder="Value"
-            value={filter.value}
-            on:input={(e) =>
-              updateFilter(index, "value", e.currentTarget.value)}
-            disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-              ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
-          />
-          <button
-            on:click={() => removeFilter(index)}
-            class="text-carbon-400 hover:text-carbon-600 justify-self-end"
-            disabled={!form.postgresDatabaseId && !form.tableOid}
-          >
-            <icon class="hero-x-mark w-4 h-4" />
-          </button>
+      <div class="bg-blue-50 border-bg-blue-100 rounded-lg p-4">
+        <div class="flex flex-col gap-2">
+          <div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4">
+            <Select
+              selected={{
+                value: filter.columnAttnum,
+                label:
+                  selectedTable?.columns.find(
+                    (col) => col.attnum === filter.columnAttnum
+                  )?.name || "Column",
+              }}
+              onSelectedChange={(e) =>
+                updateFilter(index, "columnAttnum", e.value)}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <SelectTrigger class="border-carbon-100 bg-surface-base">
+                <SelectValue placeholder="Column" />
+              </SelectTrigger>
+              <SelectContent class="max-h-64 overflow-y-auto">
+                {#each selectedTable?.columns || [] as column}
+                  <SelectItem value={column.attnum}>{column.name}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+            <Select
+              selected={{
+                value: filter.operator,
+                label: filter.operator || "Operator",
+              }}
+              onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <SelectTrigger class="border-carbon-100 bg-surface-base">
+                <SelectValue placeholder="Operator" />
+              </SelectTrigger>
+              <SelectContent>
+                {#each operators as operator}
+                  <SelectItem value={operator}>{operator}</SelectItem>
+                {/each}
+              </SelectContent>
+            </Select>
+            <Input
+              type="text"
+              placeholder="Value"
+              value={filter.value}
+              on:input={(e) =>
+                updateFilter(index, "value", e.currentTarget.value)}
+              disabled={(!form.postgresDatabaseId && !form.tableOid) ||
+                ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
+              class="bg-surface-base border-carbon-100"
+            />
+            <button
+              on:click={() => removeFilter(index)}
+              class="text-carbon-400 hover:text-carbon-600 justify-self-end p-2 transition-colors hover:scale-110"
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+            >
+              <icon class="hero-x-mark w-4 h-4" />
+            </button>
+          </div>
+          {#if filterErrorMessages[index]}
+            <p class="text-destructive text-sm mt-2">
+              {filterErrorMessages[index]}
+            </p>
+          {/if}
         </div>
-        {#if filterErrorMessages[index]}
-          <p class="text-destructive text-sm">
-            {filterErrorMessages[index]}
-          </p>
-        {/if}
       </div>
     {/each}
-    <div class="flex justify-start">
+    <div class="flex justify-start mt-2">
       <Button
         variant="outline"
         size="sm"
         on:click={addFilter}
         disabled={!form.postgresDatabaseId && !form.tableOid}
+        class="bg-surface-base border-carbon-200 text-carbon-700 hover:bg-carbon-100 transition-colors"
       >
         <PlusCircle class="w-4 h-4 mr-2" />
         Add filter

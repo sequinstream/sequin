@@ -79,7 +79,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :sequence_id
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])
-    |> validate_required([:name, :status, :replication_slot_id])
+    |> validate_required([:name, :status, :replication_slot_id, :http_endpoint_id])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
     |> cast_assoc(:http_endpoint,

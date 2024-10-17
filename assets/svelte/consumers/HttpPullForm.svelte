@@ -25,7 +25,7 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils";
   import { ExternalLinkIcon } from "lucide-svelte";
-  import FilterCard from "../components/FilterCard.svelte";
+  import FilterForm from "../components/FilterForm.svelte";
 
   export let live;
   export let parent;
@@ -257,15 +257,28 @@
       </CardContent>
     </Card>
 
-    <FilterCard
-      messageKind={form.messageKind}
-      showStartPositionForm={!isEditMode}
-      {selectedTable}
-      bind:form
-      {errors}
-      {isEditMode}
-      onFilterChange={handleFilterChange}
-    />
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          {#if form.messageKind === "record"}
+            Records to process
+          {:else}
+            Changes to process
+          {/if}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <FilterForm
+          messageKind={form.messageKind}
+          {selectedTable}
+          bind:form
+          {errors}
+          {isEditMode}
+          onFilterChange={handleFilterChange}
+          showTitle={false}
+        />
+      </CardContent>
+    </Card>
 
     <Card>
       <CardHeader>

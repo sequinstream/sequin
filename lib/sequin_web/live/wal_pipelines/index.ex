@@ -17,13 +17,11 @@ defmodule SequinWeb.WalPipelinesLive.Index do
         Repo.preload(database, wal_pipelines: [:destination_database, :source_database]).wal_pipelines
       end)
 
-    socket = assign_wal_pipelines_health(socket, wal_pipelines)
-
     if connected?(socket) do
       Process.send_after(self(), :update_health, 1000)
     end
 
-    {:ok, assign(socket, wal_pipelines: wal_pipelines, databases: databases)}
+    {:ok, socket |> assign(wal_pipelines: wal_pipelines, databases: databases) |> assign_wal_pipelines_health()}
   end
 
   @impl Phoenix.LiveView
@@ -46,16 +44,14 @@ defmodule SequinWeb.WalPipelinesLive.Index do
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 10_000)
-    {:noreply, assign_wal_pipelines_health(socket, socket.assigns.wal_pipelines)}
+    {:noreply, assign_wal_pipelines_health(socket)}
   end
 
-  defp assign_wal_pipelines_health(socket, wal_pipelines) do
+  defp assign_wal_pipelines_health(socket) do
     wal_pipelines_with_health =
-      Enum.map(wal_pipelines, fn pipeline ->
-        case Health.get(pipeline) do
-          {:ok, health} -> %{pipeline | health: health}
-          {:error, _} -> pipeline
-        end
+      Enum.map(socket.assigns.wal_pipelines, fn pipeline ->
+        health = Health.get!(pipeline)
+        %{pipeline | health: health}
       end)
 
     assign(socket, :wal_pipelines, wal_pipelines_with_health)

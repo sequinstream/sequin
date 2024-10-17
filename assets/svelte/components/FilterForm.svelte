@@ -26,10 +26,9 @@
   export let selectedTable: any;
   export let form: any;
   export let errors: any;
+  export let showTitle: boolean = true;
   // export let isEditMode: boolean;
   export let onFilterChange: (newFilters: any) => void;
-  export let showTableInfo = false;
-  export let showCardTitle = true;
 
   $: actions = form.sourceTableActions || [];
   const switches = [
@@ -123,65 +122,53 @@
   );
 </script>
 
-<Card>
-  <CardHeader>
-    <CardTitle>
-      {#if messageKind === "record" && showCardTitle}
-        Records to process
-      {:else if showCardTitle}
-        Changes to process
+<div class="flex flex-col gap-6">
+  {#if showTitle}
+    <Label class="text-base font-medium">
+      {#if messageKind === "event"}
+        Filters
+      {:else}
+        Column filters
       {/if}
-    </CardTitle>
-  </CardHeader>
-  <CardContent class="space-y-6">
-    {#if showTableInfo && selectedTable}
-      <div class="mb-6">
-        <div class="grid grid-cols-[auto_1fr] gap-4 mb-2 items-center">
-          <icon
-            class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-              `${selectedTable.schema}.${selectedTable.name}`
-            )}"
-          ></icon>
-          <span class="font-medium"
-            >{selectedTable.schema}.{selectedTable.name}</span
-          >
-        </div>
-      </div>
-    {/if}
+    </Label>
+  {/if}
 
+  {#if messageKind === "event"}
+    <div class="flex flex-col gap-4">
+      <Label>Operations to capture</Label>
+      <div class="flex items-center gap-4">
+        {#each switches as { id, label }}
+          <div class="flex items-center gap-2">
+            <Label for={id} class="cursor-pointer">{label}</Label>
+            <Switch
+              {id}
+              disabled={!form.postgresDatabaseId && !form.tableOid}
+              checked={actions.includes(id)}
+              onCheckedChange={(checked) => {
+                const newActions = checked
+                  ? [...actions, id]
+                  : actions.filter((a) => a !== id);
+                form.sourceTableActions = newActions;
+              }}
+            />
+          </div>
+        {/each}
+      </div>
+      {#if errors.source_tables?.[1]?.actions}
+        <p class="text-destructive text-sm">
+          {errors.source_tables[1].actions}
+        </p>
+      {/if}
+    </div>
+  {/if}
+
+  <div class="flex flex-col gap-4">
     {#if messageKind === "event"}
-      <div class="space-y-2 mb-6">
-        <Label>Operations to capture</Label>
-        <div class="flex items-center space-x-4">
-          {#each switches as { id, label }}
-            <div class="flex items-center space-x-2">
-              <Label for={id} class="cursor-pointer">{label}</Label>
-              <Switch
-                {id}
-                disabled={!form.postgresDatabaseId && !form.tableOid}
-                checked={actions.includes(id)}
-                onCheckedChange={(checked) => {
-                  const newActions = checked
-                    ? [...actions, id]
-                    : actions.filter((a) => a !== id);
-                  form.sourceTableActions = newActions;
-                }}
-              />
-            </div>
-          {/each}
-        </div>
-        {#if errors.source_tables?.[1]?.actions}
-          <p class="text-destructive text-sm">
-            {errors.source_tables[1].actions}
-          </p>
-        {/if}
-      </div>
+      <Label>Column filters</Label>
     {/if}
-
-    <div>
-      <h4 class="text-lg font-semibold mb-4">Filters</h4>
-      {#each form.sourceTableFilters as filter, index}
-        <div class="grid grid-cols-[1fr_1fr_1fr_15px] gap-4 mb-2">
+    {#each form.sourceTableFilters as filter, index}
+      <div class="flex flex-col gap-2">
+        <div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-4">
           <Select
             selected={{
               value: filter.columnAttnum,
@@ -238,23 +225,22 @@
           </button>
         </div>
         {#if filterErrorMessages[index]}
-          <p class="text-destructive text-sm mt-1 mb-2">
+          <p class="text-destructive text-sm">
             {filterErrorMessages[index]}
           </p>
         {/if}
-      {/each}
-      <div class="grid grid-cols-1 gap-4 max-w-fit">
-        <Button
-          variant="outline"
-          size="sm"
-          on:click={addFilter}
-          class="mt-2"
-          disabled={!form.postgresDatabaseId && !form.tableOid}
-        >
-          <PlusCircle class="w-4 h-4 mr-2" />
-          Add filter
-        </Button>
       </div>
+    {/each}
+    <div class="flex justify-start">
+      <Button
+        variant="outline"
+        size="sm"
+        on:click={addFilter}
+        disabled={!form.postgresDatabaseId && !form.tableOid}
+      >
+        <PlusCircle class="w-4 h-4 mr-2" />
+        Add filter
+      </Button>
     </div>
-  </CardContent>
-</Card>
+  </div>
+</div>

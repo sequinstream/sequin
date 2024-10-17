@@ -110,6 +110,14 @@ defmodule Sequin.Health do
     get_health(entity)
   end
 
+  @spec get!(entity() | String.t()) :: Health.t() | no_return()
+  def get!(entity) when is_entity(entity) do
+    case get(entity) do
+      {:ok, health} -> health
+      {:error, error} -> raise error
+    end
+  end
+
   #####################
   ## Expected Checks ##
   #####################

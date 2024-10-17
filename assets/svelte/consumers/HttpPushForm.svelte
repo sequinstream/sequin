@@ -219,7 +219,6 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label>Table</Label>
           {#if isEditMode}
             <Select
               disabled

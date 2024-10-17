@@ -39,7 +39,7 @@
   export let parent: string;
   export let isEdit: boolean;
   export let live;
-
+  export let submitError: string;
   const pushEvent = (event, payload = {}, cb = (event: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
@@ -309,6 +309,9 @@
               <p class="text-red-500 text-sm">{errors.name}</p>
             {/if}
           </div>
+          {#if submitError}
+            <p class="text-destructive text-sm">{submitError}</p>
+          {/if}
           <div class="flex justify-end">
             <Button
               type="submit"

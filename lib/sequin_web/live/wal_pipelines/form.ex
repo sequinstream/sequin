@@ -6,6 +6,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Posthog
@@ -56,7 +57,8 @@ defmodule SequinWeb.WalPipelinesLive.Form do
             databases: Enum.map(assigns.databases, &encode_database/1),
             errors: @encoded_errors,
             parent: "wal-pipeline-form",
-            isEdit: @is_edit
+            isEdit: @is_edit,
+            submitError: @submit_error
           }
         }
       />
@@ -81,21 +83,28 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       |> decode_params()
       |> maybe_put_replication_slot_id(socket)
 
+    source_table_oid = List.first(params["source_tables"])["oid"]
+
     socket = assign_changeset(socket, params)
 
     if socket.assigns.changeset.valid? do
-      case create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
-        {:ok, wal_pipeline} ->
-          {:noreply,
-           socket
-           |> put_flash(:toast, %{kind: :info, title: "WAL Pipeline saved successfully"})
-           |> push_navigate(to: ~p"/wal-pipelines/#{wal_pipeline.id}")}
+      database = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == params["source_database_id"]))
 
+      with :ok <- Databases.verify_table_in_publication(database, source_table_oid),
+           {:ok, wal_pipeline} <- create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
+        {:noreply,
+         socket
+         |> put_flash(:toast, %{kind: :info, title: "WAL Pipeline saved successfully"})
+         |> push_navigate(to: ~p"/wal-pipelines/#{wal_pipeline.id}")}
+      else
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, changeset: changeset, show_errors?: true)}
 
-          # {:error, error} ->
-          #   {:noreply, assign(socket, submit_error: error_msg(error), show_errors: true)}
+        {:error, %NotFoundError{entity: :publication_membership}} ->
+          submit_error =
+            "Selected source table is not in your publication, so Sequin won't receive changes from it. Please add it with `alter publication #{database.replication_slot.publication_name} add table {table_name}`"
+
+          {:noreply, assign(socket, submit_error: submit_error)}
       end
     else
       {:noreply, assign(socket, show_errors?: true)}

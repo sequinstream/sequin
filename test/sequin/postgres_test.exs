@@ -1,6 +1,7 @@
 defmodule Sequin.PostgresTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Error.NotFoundError
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Postgres
   alias Sequin.Test.UnboxedRepo
@@ -173,6 +174,38 @@ defmodule Sequin.PostgresTest do
 
       # Ensure non-JSON encodable value is converted to nil
       assert is_nil(List.last(loaded_rows)["complex_type"])
+    end
+  end
+
+  describe "verify_table_in_publication/3" do
+    test "correctly identifies tables in and out of the publication", %{conn: conn} do
+      # Tables that should be in the publication
+      assert :ok ==
+               Postgres.verify_table_in_publication(
+                 conn,
+                 "characters_publication",
+                 Postgres.fetch_table_oid(conn, "public", "Characters")
+               )
+
+      # Tables that should not be in the publication
+      assert {:error, %NotFoundError{}} =
+               Postgres.verify_table_in_publication(
+                 conn,
+                 "characters_publication",
+                 Postgres.fetch_table_oid(conn, "public", "test_event_logs")
+               )
+
+      # Non-existent table
+      assert {:error, %NotFoundError{}} =
+               Postgres.verify_table_in_publication(conn, "characters_publication", 4_294_967_295)
+
+      # Non-existent publication
+      assert {:error, %NotFoundError{}} =
+               Postgres.verify_table_in_publication(
+                 conn,
+                 "non_existent_publication",
+                 Postgres.fetch_table_oid(conn, "public", "Characters")
+               )
     end
   end
 end

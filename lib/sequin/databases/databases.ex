@@ -320,6 +320,15 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def verify_table_in_publication(%PostgresDatabase{} = database, table_oid) do
+    database = Repo.preload(database, :replication_slot)
+    pub_name = database.replication_slot.publication_name
+
+    with_connection(database, fn conn ->
+      Postgres.verify_table_in_publication(conn, pub_name, table_oid)
+    end)
+  end
+
   def setup_replication(%PostgresDatabase{} = database, slot_name, publication_name, tables) do
     with_connection(database, fn conn ->
       Postgrex.transaction(conn, fn t_conn ->

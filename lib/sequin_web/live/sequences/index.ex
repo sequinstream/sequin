@@ -4,6 +4,7 @@ defmodule SequinWeb.SequencesLive.Index do
 
   alias Sequin.Consumers
   alias Sequin.Databases
+  alias Sequin.Error.NotFoundError
   alias Sequin.Repo
 
   @impl Phoenix.LiveView
@@ -20,16 +21,17 @@ defmodule SequinWeb.SequencesLive.Index do
       |> Databases.list_sequences_for_account()
       |> Repo.preload(:postgres_database)
 
-    databases = Databases.list_dbs_for_account(account_id)
+    socket =
+      socket
+      |> assign(
+        sequences: sequences,
+        sequence_frequencies: sequence_frequencies,
+        changeset: Databases.Sequence.changeset(%Databases.Sequence{}, %{}),
+        submit_error: nil
+      )
+      |> assign_databases()
 
-    {:ok,
-     assign(
-       socket,
-       sequences: sequences,
-       sequence_frequencies: sequence_frequencies,
-       databases: databases,
-       changeset: Databases.Sequence.changeset(%Databases.Sequence{}, %{})
-     )}
+    {:ok, socket}
   end
 
   @impl Phoenix.LiveView
@@ -76,31 +78,34 @@ defmodule SequinWeb.SequencesLive.Index do
   end
 
   def handle_event("form_submitted", %{"form" => sequence_params}, socket) do
-    account_id = current_account_id(socket)
-
     # It's okay if this raises on 404, because the form doesn't let you select a database that doesn't exist
-    {:ok, database} = Databases.get_db_for_account(account_id, sequence_params["postgres_database_id"])
+    database = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == sequence_params["postgres_database_id"]))
 
     # Update sequence_params with the required fields
     # Use placeholder values for table and column names
     sequence_params = Map.put(sequence_params, "postgres_database_id", database.id)
 
-    case Databases.create_sequence(sequence_params) do
-      {:ok, sequence} ->
-        # This will populate the sequence with the correct table and column names
-        Databases.update_sequence_from_db(sequence, database)
+    with :ok <- Databases.verify_table_in_publication(database, sequence_params["table_oid"]),
+         {:ok, sequence} <- Databases.create_sequence(sequence_params) do
+      # This will populate the sequence with the correct table and column names
+      Databases.update_sequence_from_db(sequence, database)
 
-        {:noreply,
-         socket
-         |> put_flash(:toast, %{kind: :success, title: "Sequence created successfully"})
-         |> push_navigate(to: "/sequences")}
-
+      {:noreply,
+       socket
+       |> put_flash(:toast, %{kind: :success, title: "Sequence created successfully"})
+       |> push_navigate(to: "/sequences")}
+    else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, changeset: changeset)}
+
+      {:error, %NotFoundError{entity: :publication_membership}} ->
+        submit_error =
+          "Table is not in your publication, so Sequin won't receive changes from it. Please add it with `alter publication #{database.replication_slot.publication_name} add table {table_name}`"
+
+        {:noreply, assign(socket, submit_error: submit_error)}
     end
   end
 
-  @impl Phoenix.LiveView
   def handle_event("delete_sequence", %{"id" => id}, socket) do
     account_id = current_account_id(socket)
 
@@ -122,6 +127,19 @@ defmodule SequinWeb.SequencesLive.Index do
     end
   end
 
+  def handle_event("refresh_databases", _params, socket) do
+    {:noreply, assign_databases(socket)}
+  end
+
+  def handle_event("refresh_tables", %{"database_id" => database_id}, socket) do
+    with {:ok, database} <- Databases.get_db(database_id),
+         {:ok, _updated_database} <- Databases.update_tables(database) do
+      {:noreply, assign_databases(socket)}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   @impl Phoenix.LiveView
   def render(assigns) do
     assigns =
@@ -139,7 +157,8 @@ defmodule SequinWeb.SequencesLive.Index do
             parent: @parent,
             sequences: @encoded_sequences,
             databases: @encoded_databases,
-            live_action: @live_action
+            liveAction: @live_action,
+            submitError: @submit_error
           }
         }
         socket={@socket}
@@ -192,5 +211,16 @@ defmodule SequinWeb.SequencesLive.Index do
     account_id
     |> Databases.list_sequences_for_account()
     |> Repo.preload(:postgres_database)
+  end
+
+  defp assign_databases(socket) do
+    account_id = current_account_id(socket)
+
+    databases =
+      account_id
+      |> Databases.list_dbs_for_account()
+      |> Repo.preload([:sequences, :replication_slot])
+
+    assign(socket, :databases, databases)
   end
 end

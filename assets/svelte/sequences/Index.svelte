@@ -31,8 +31,9 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let live;
-  export let live_action: string;
+  export let liveAction: string;
   export let parent: string;
+  export let submitError: string;
   export let sequences: Array<{
     id: string;
     table_name: string;
@@ -60,8 +61,8 @@
     }>;
   }>;
 
-  let dialogOpen = live_action === "new";
-  $: dialogOpen = live_action === "new";
+  let dialogOpen = liveAction === "new";
+  $: dialogOpen = liveAction === "new";
 
   function closeDialog() {
     dialogOpen = false;
@@ -267,7 +268,13 @@
   {/if}
 
   {#if dialogOpen}
-    <NewSequenceForm {databases} on:submit={handleFormSubmit} {live} {parent} />
+    <NewSequenceForm
+      {databases}
+      on:submit={handleFormSubmit}
+      {live}
+      {parent}
+      {submitError}
+    />
   {/if}
 </div>
 

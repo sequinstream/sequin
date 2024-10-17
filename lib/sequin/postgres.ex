@@ -343,7 +343,7 @@ defmodule Sequin.Postgres do
   end
 
   def fetch_table_oid(conn, schema, table) do
-    case query(conn, "SELECT '#{schema}.#{table}'::regclass::oid") do
+    case query(conn, "SELECT '#{quote_name(schema)}.#{quote_name(table)}'::regclass::oid") do
       {:ok, %{rows: [[oid]]}} -> oid
       _ -> nil
     end
@@ -607,6 +607,46 @@ defmodule Sequin.Postgres do
     else
       Logger.info("[Postgres] Unsupported column type (type=#{inspect(type)}, col=#{column.name})")
       false
+    end
+  end
+
+  @doc """
+  Checks if a table is part of a specified publication.
+
+  ## Parameters
+    - conn: The database connection
+    - publication_name: The name of the publication to check
+    - table_oid: The OID of the table to check
+  """
+  @spec verify_table_in_publication(Postgrex.Connection.t() | PostgresDatabase.t(), String.t(), integer()) ::
+          :ok | {:error, Error.ServiceError.t() | Error.NotFoundError.t()}
+  def verify_table_in_publication(conn, publication_name, table_oid) do
+    query = """
+    select exists (
+      select 1
+      from pg_publication_tables pt
+      join pg_class c on c.relname = pt.tablename
+      join pg_namespace n on n.nspname = pt.schemaname and n.oid = c.relnamespace
+      where pt.pubname = $1
+        and c.oid = $2
+    )
+    """
+
+    case query(conn, query, [publication_name, table_oid]) do
+      {:ok, %{rows: [[true]]}} ->
+        :ok
+
+      {:ok, %{rows: [[false]]}} ->
+        {:error,
+         Error.not_found(entity: :publication_membership, params: %{name: publication_name, table_oid: table_oid})}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to check if table is in publication",
+           details: error
+         )}
     end
   end
 end

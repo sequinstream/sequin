@@ -204,7 +204,9 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
         "columnAttnum" => column_attnum,
         "operator" => operator,
         "valueType" => value_type,
-        "value" => value
+        "value" => value,
+        "isJsonb" => is_jsonb,
+        "jsonbPath" => jsonb_path
       }) do
     operator = from_external_operator(operator)
 
@@ -240,7 +242,9 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
     %{
       column_attnum: column_attnum,
       operator: operator,
-      value: %{value: value, __type__: value_type}
+      value: %{value: value, __type__: value_type},
+      is_jsonb: is_jsonb,
+      jsonb_path: jsonb_path
     }
   end
 
@@ -254,6 +258,8 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
   embedded_schema do
     field :column_attnum, :integer
     field :column_name, :string, virtual: true
+    field :is_jsonb, :boolean, default: false
+    field :jsonb_path, :string
     field :operator, Ecto.Enum, values: @operators
 
     polymorphic_embeds_one(:value,
@@ -271,7 +277,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
 
   def changeset(column_filter, attrs) do
     column_filter
-    |> cast(attrs, [:column_attnum, :column_name, :operator])
+    |> cast(attrs, [:column_attnum, :column_name, :operator, :is_jsonb, :jsonb_path])
     |> cast_polymorphic_embed(:value)
     |> validate_required([:column_attnum, :operator, :value])
     |> validate_inclusion(:operator, @operators)
@@ -294,7 +300,9 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
       "columnAttnum" => column_filter.column_attnum,
       "operator" => to_external_operator(column_filter.operator),
       "value" => to_external_value(column_filter.value),
-      "valueType" => get_value_type(column_filter.value)
+      "valueType" => get_value_type(column_filter.value),
+      "jsonbPath" => column_filter.jsonb_path,
+      "isJsonb" => column_filter.is_jsonb
     }
   end
 

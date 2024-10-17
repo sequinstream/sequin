@@ -27,6 +27,20 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
     Postgres.ecto_model_oid(__MODULE__)
   end
 
+  def column_attnums do
+    from(pg in "pg_attribute",
+      # Filter out system columns
+      where: pg.attrelid == ^table_oid() and pg.attnum > 0,
+      select: {pg.attname, pg.attnum}
+    )
+    |> Sequin.Repo.all()
+    |> Map.new()
+  end
+
+  def column_attnum(column_name) do
+    Map.fetch!(column_attnums(), column_name)
+  end
+
   def where_id(query \\ base_query(), id) do
     from(c in query, where: c.id == ^id)
   end

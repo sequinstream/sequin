@@ -22,10 +22,11 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Mocks.Extensions.MessageHandlerMock
   alias Sequin.Replication.Message
-  # alias Sequin.Replication
-  # alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.ReplicationRuntime
   alias Sequin.Test.Support.Models.Character
+  alias Sequin.Test.Support.Models.CharacterDetailed
+  # alias Sequin.Replication
+  # alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.Support.Models.CharacterIdentFull
   alias Sequin.Test.Support.Models.CharacterMultiPK
   alias Sequin.Test.Support.ReplicationSlots
@@ -1232,6 +1233,113 @@ defmodule Sequin.PostgresReplicationTest do
       # Check that the tags field contains an empty string
       # Postgres quirk - the logical decoding slot will return `{}` for both `{}` and `{""}`.
       assert data.record["tags"] == [], "Expected array with empty string, got: #{inspect(data.record["tags"])}"
+    end
+  end
+
+  describe "PostgresReplicationSlot end-to-end with sequences for characters_detailed" do
+    setup do
+      # Create source database
+      account_id = AccountsFactory.insert_account!().id
+      source_db = DatabasesFactory.insert_configured_postgres_database!(account_id: account_id)
+
+      # Create PostgresReplicationSlot entity
+      pg_replication =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: source_db.id,
+          slot_name: replication_slot(),
+          publication_name: @publication,
+          account_id: account_id
+        )
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: source_db.id,
+          table_oid: CharacterDetailed.table_oid()
+        )
+
+      # Create a consumer for this replication slot (record)
+      consumer =
+        ConsumersFactory.insert_consumer!(
+          message_kind: :record,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: sequence.id,
+          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+        )
+
+      # Start replication
+      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+      start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
+
+      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+
+      %{
+        source_db: source_db,
+        consumer: consumer
+      }
+    end
+
+    test "consumer with JSONB column filter only receives relevant messages", %{
+      consumer: consumer
+    } do
+      # Create a consumer with a JSONB column filter
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          actions: [:insert, :update],
+          column_filters: [
+            ConsumersFactory.sequence_filter_column_filter_attrs(
+              column_attnum: CharacterDetailed.column_attnum("metadata"),
+              column_name: "metadata",
+              operator: :==,
+              value_type: :string,
+              value: %{__type__: :string, value: "good"},
+              is_jsonb: true,
+              jsonb_path: "alignment"
+            )
+          ]
+        )
+
+      {:ok, _} =
+        Consumers.update_consumer_with_lifecycle(consumer, %{
+          sequence_filter: sequence_filter
+        })
+
+      {:ok, matching_character} =
+        UnboxedRepo.transaction(fn ->
+          # Insert a character that doesn't match the filter
+          CharacterFactory.insert_character_detailed!(
+            [metadata: %{"alignment" => "evil"}],
+            repo: UnboxedRepo
+          )
+
+          # Insert a character with null metadata
+          CharacterFactory.insert_character_detailed!(
+            [metadata: nil],
+            repo: UnboxedRepo
+          )
+
+          # Insert a character that matches the filter
+          CharacterFactory.insert_character_detailed!(
+            [metadata: %{"alignment" => "good"}],
+            repo: UnboxedRepo
+          )
+        end)
+
+      # Wait for the messages to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer messages
+      messages = list_messages(consumer)
+
+      # Verify only one message was created (the matching one)
+      assert length(messages) == 1
+      [consumer_message] = messages
+
+      # Assert the consumer message details
+      assert consumer_message.consumer_id == consumer.id
+      assert consumer_message.table_oid == CharacterDetailed.table_oid()
+      assert consumer_message.record_pks == [to_string(matching_character.id)]
     end
   end
 

@@ -519,7 +519,9 @@ defmodule Sequin.Factory.ConsumersFactory do
       %ColumnFilter{
         column_attnum: Factory.unique_integer(),
         operator: generate_operator(value_type),
-        value: %{__type__: value_type, value: generate_value(value_type)}
+        value: %{__type__: value_type, value: generate_value(value_type)},
+        is_jsonb: false,
+        jsonb_path: nil
       },
       Map.delete(attrs, :value_type)
     )

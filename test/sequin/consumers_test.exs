@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.BooleanValue
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
   alias Sequin.Consumers.SequenceFilter.ListValue
@@ -15,6 +16,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
+  alias Sequin.Databases.Sequence
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -783,24 +785,23 @@ defmodule Sequin.ConsumersTest do
     @table_oid 12_345
     setup do
       consumer =
-        ConsumersFactory.consumer(
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: @table_oid,
-              column_filters: [
-                ConsumersFactory.column_filter(
-                  column_name: "column_1",
-                  operator: :==,
-                  value: %StringValue{value: "test_value"}
-                ),
-                ConsumersFactory.column_filter(
-                  column_name: "column_2",
-                  operator: :>,
-                  value: %NumberValue{value: 10}
-                )
-              ]
-            )
-          ]
+        ConsumersFactory.http_push_consumer(
+          sequence: %Sequence{table_oid: @table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: [
+              ConsumersFactory.sequence_filter_column_filter(
+                column_attnum: 1,
+                operator: :==,
+                value: %StringValue{value: "test_value"}
+              ),
+              ConsumersFactory.sequence_filter_column_filter(
+                column_attnum: 2,
+                operator: :>,
+                value: %NumberValue{value: 10}
+              )
+            ]
+          }
         )
 
       {:ok, consumer: consumer}
@@ -808,8 +809,8 @@ defmodule Sequin.ConsumersTest do
 
     test "matches when all column filters match", %{consumer: consumer} do
       record = %{
-        "column_1" => "test_value",
-        "column_2" => 15
+        1 => "test_value",
+        2 => 15
       }
 
       assert Consumers.matches_record?(consumer, @table_oid, record)
@@ -817,13 +818,13 @@ defmodule Sequin.ConsumersTest do
 
     test "does not match when any column filter doesn't match", %{consumer: consumer} do
       record1 = %{
-        "column_1" => "wrong_value",
-        "column_2" => 15
+        1 => "wrong_value",
+        2 => 15
       }
 
       record2 = %{
-        "column_1" => "test_value",
-        "column_2" => 5
+        1 => "test_value",
+        2 => 5
       }
 
       refute Consumers.matches_record?(consumer, @table_oid, record1)
@@ -833,17 +834,16 @@ defmodule Sequin.ConsumersTest do
     test "matches when no column filters are present" do
       consumer =
         ConsumersFactory.http_push_consumer(
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: @table_oid,
-              column_filters: []
-            )
-          ]
+          sequence: %Sequence{table_oid: @table_oid},
+          sequence_filter: %SequenceFilter{
+            actions: [:insert, :update, :delete],
+            column_filters: []
+          }
         )
 
       record = %{
-        "column_1" => "any_value",
-        "column_2" => 100
+        1 => "any_value",
+        2 => 100
       }
 
       assert Consumers.matches_record?(consumer, @table_oid, record)

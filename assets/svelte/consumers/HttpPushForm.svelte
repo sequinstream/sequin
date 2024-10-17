@@ -44,7 +44,7 @@
   export let submitError;
 
   let initialForm = {
-    messageKind: consumer.message_kind || "event",
+    messageKind: consumer.message_kind || "record",
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
     sourceTableFilters: consumer.source_table_filters || [],

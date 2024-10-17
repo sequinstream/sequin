@@ -124,7 +124,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       |> Sequin.Map.reject_nil_values()
 
     res =
-      if socket.assigns.consumer.id do
+      if is_edit?(socket) do
         update_consumer(socket, params)
       else
         create_consumer(socket, params)
@@ -142,7 +142,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   def handle_event("form_closed", _params, socket) do
     socket =
-      if socket.assigns.consumer && socket.assigns.consumer.id do
+      if is_edit?(socket) do
         push_navigate(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
       else
         push_navigate(socket, to: ~p"/consumers")
@@ -181,7 +181,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp decode_params(form, socket) do
-    message_kind = form["messageKind"]
+    message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
 
     %{
       "consumer_kind" => form["consumerKind"],
@@ -212,21 +212,27 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
-    db = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == params["postgres_database_id"]))
-    sequence = Sequin.Enum.find!(db.sequences, &(&1.id == params["sequence_id"]))
-    table = table(socket.assigns.databases, params["postgres_database_id"], sequence)
+    %{"postgres_database_id" => postgres_database_id, "sequence_id" => sequence_id} = params
 
-    initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
-    producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
+    if not is_nil(postgres_database_id) and not is_nil(sequence_id) do
+      db = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == postgres_database_id))
+      sequence = Sequin.Enum.find!(db.sequences, &(&1.id == sequence_id))
+      table = table(socket.assigns.databases, postgres_database_id, sequence)
 
-    initial_min_cursor =
-      cond do
-        producer == "wal" -> nil
-        initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
-        true -> sequence.sort_column_attnum && KeysetCursor.min_cursor(table)
-      end
+      initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
+      producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
 
-    Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
+      initial_min_cursor =
+        cond do
+          producer == "wal" -> nil
+          initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
+          true -> sequence.sort_column_attnum && KeysetCursor.min_cursor(table)
+        end
+
+      Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
+    else
+      params
+    end
   end
 
   defp maybe_put_record_consumer_state(params, _form, _socket) do
@@ -488,5 +494,9 @@ defmodule SequinWeb.ConsumersLive.Form do
       _ ->
         {:error, "Unexpected response from Webhook.site"}
     end
+  end
+
+  defp is_edit?(socket) do
+    not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
   end
 end

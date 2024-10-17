@@ -284,15 +284,17 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   defp handle_records(consumer, table, records) do
     Logger.info("[TableProducerServer] Handling #{length(records)} record(s)")
 
+    records_by_column_attnum = records_by_column_attnum(table, records)
+
     consumer_records =
-      records
+      records_by_column_attnum
       |> Enum.filter(&Consumers.matches_record?(consumer, table.oid, &1))
-      |> Enum.map(fn record ->
+      |> Enum.map(fn record_attnums_to_values ->
         Sequin.Map.from_ecto(%ConsumerRecord{
           consumer_id: consumer.id,
           table_oid: table.oid,
-          record_pks: record_pks(table, record),
-          group_id: generate_group_id(consumer, table, record),
+          record_pks: record_pks(table, record_attnums_to_values),
+          group_id: generate_group_id(consumer, table, record_attnums_to_values),
           replication_message_trace_id: UUID.uuid4()
         })
       end)
@@ -305,28 +307,35 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     Consumers.insert_consumer_records(consumer_records)
   end
 
+  defp records_by_column_attnum(%Table{} = table, records) do
+    Enum.map(records, fn record ->
+      Map.new(table.columns, fn %Table.Column{} = column ->
+        {column.attnum, Map.get(record, column.name)}
+      end)
+    end)
+  end
+
   defp initial_min_cursor(consumer) do
     %{record_consumer_state: %RecordConsumerState{initial_min_cursor: initial_min_cursor}} = consumer
     initial_min_cursor
   end
 
-  defp record_pks(%Table{} = table, map) do
+  defp record_pks(%Table{} = table, record_attnums_to_values) do
     table.columns
     |> Enum.filter(& &1.is_pk?)
     |> Enum.sort_by(& &1.attnum)
-    |> Enum.map(&Map.fetch!(map, &1.name))
+    |> Enum.map(&Map.fetch!(record_attnums_to_values, &1.attnum))
   end
 
-  defp generate_group_id(consumer, table, record) do
+  defp generate_group_id(consumer, table, record_attnums_to_values) do
     group_column_attnums = group_column_attnums(consumer)
 
     if group_column_attnums do
       Enum.map_join(group_column_attnums, ",", fn attnum ->
-        column = Sequin.Enum.find!(table.columns, &(&1.attnum == attnum))
-        to_string(Map.get(record, column.name))
+        to_string(Map.get(record_attnums_to_values, attnum))
       end)
     else
-      table |> record_pks(record) |> Enum.join(",")
+      table |> record_pks(record_attnums_to_values) |> Enum.join(",")
     end
   end
 

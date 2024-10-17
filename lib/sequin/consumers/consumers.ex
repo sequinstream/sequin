@@ -1265,9 +1265,9 @@ defmodule Sequin.Consumers do
     table_matches? and column_filters_match?
   end
 
-  def matches_record?(consumer, table_oid, record) do
+  def matches_record?(consumer, table_oid, record_attnums_to_values) do
     source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table_oid))
-    matches? = column_filters_match_record?(source_table.column_filters, record)
+    matches? = column_filters_match_record?(source_table.column_filters, record_attnums_to_values)
 
     Health.update(consumer, :filters, :healthy)
 
@@ -1290,10 +1290,10 @@ defmodule Sequin.Consumers do
 
   defp column_filters_match_record?([], _message), do: true
 
-  defp column_filters_match_record?(column_filters, record) do
+  defp column_filters_match_record?(column_filters, record_attnums_to_values) do
     Enum.all?(column_filters, fn filter ->
-      field = Enum.find(record, fn {key, _value} -> key == filter.column_name end)
-      field && apply_filter(filter.operator, get_field_value(elem(field, 1), filter.jsonb_path), filter.value)
+      field_value = Map.get(record_attnums_to_values, filter.column_attnum)
+      field_value && apply_filter(filter.operator, get_field_value(field_value, filter.jsonb_path), filter.value)
     end)
   end
 

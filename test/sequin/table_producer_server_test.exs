@@ -41,6 +41,19 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
     sequence_filter = ConsumersFactory.sequence_filter(column_filters: [])
 
+    filtered_sequence_filter =
+      ConsumersFactory.sequence_filter(
+        column_filters: [
+          Map.from_struct(
+            ConsumersFactory.sequence_filter_column_filter(
+              column_attnum: Character.column_attnum("house"),
+              operator: :==,
+              value: %{__type__: :string, value: "Stark"}
+            )
+          )
+        ]
+      )
+
     # Insert initial 8 records
     characters =
       1..8
@@ -65,8 +78,20 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         sequence_filter: Map.from_struct(sequence_filter)
       )
 
+    filtered_consumer =
+      ConsumersFactory.insert_consumer!(
+        replication_slot_id: replication.id,
+        message_kind: :record,
+        record_consumer_state:
+          ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: initial_min_cursor, producer: :table_and_wal),
+        account_id: database.account_id,
+        sequence_id: sequence.id,
+        sequence_filter: Map.from_struct(filtered_sequence_filter)
+      )
+
     {:ok,
      consumer: consumer,
+     filtered_consumer: filtered_consumer,
      table: table,
      table_oid: table_oid,
      database: database,
@@ -201,6 +226,69 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       assert_lists_equal(consumer_records, characters, fn record, character ->
         [to_string(character.id)] == record.record_pks and character.name == record.group_id
       end)
+    end
+
+    test "processes only characters matching the filter", %{
+      filtered_consumer: filtered_consumer,
+      table_oid: table_oid
+    } do
+      # Insert characters that match and don't match the filter
+      matching_characters = [
+        CharacterFactory.insert_character!(house: "Stark"),
+        CharacterFactory.insert_character!(house: "Stark")
+      ]
+
+      non_matching_characters = [
+        CharacterFactory.insert_character!(house: "Lannister"),
+        CharacterFactory.insert_character!(house: "Targaryen")
+      ]
+
+      page_size = 10
+
+      pid =
+        start_supervised!(
+          {TableProducerServer,
+           [
+             consumer: filtered_consumer,
+             page_size: page_size,
+             table_oid: table_oid,
+             test_pid: self()
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      # Wait for the TableProducerServer to finish processing
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+
+      # Fetch ConsumerRecords from the database
+      consumer_records =
+        filtered_consumer.id
+        |> ConsumerRecord.where_consumer_id()
+        |> Repo.all()
+        |> Enum.sort_by(& &1.id)
+
+      # We expect only 2 records (the matching characters)
+      assert length(consumer_records) == 2
+
+      # Verify that the records match only the characters with house "Stark"
+      for {consumer_record, character} <- Enum.zip(consumer_records, matching_characters) do
+        assert consumer_record.table_oid == table_oid
+        assert consumer_record.record_pks == [to_string(character.id)]
+      end
+
+      # Verify that non-matching characters were not processed
+      non_matching_ids = Enum.map(non_matching_characters, & &1.id)
+      processed_ids = Enum.flat_map(consumer_records, & &1.record_pks)
+      assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
+
+      cursor = TableProducer.fetch_cursors(filtered_consumer.id)
+      # Cursor should be nil after completion
+      assert cursor == :error
+
+      # Verify that the consumer's producer state has been updated
+      filtered_consumer = Repo.reload(filtered_consumer)
+      assert filtered_consumer.record_consumer_state.producer == :wal
     end
   end
 end

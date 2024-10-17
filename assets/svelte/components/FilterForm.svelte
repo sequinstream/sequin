@@ -28,6 +28,7 @@
   export let form: any;
   export let errors: any;
   export let showTitle: boolean = true;
+  export let showStartPositionForm = true;
   // export let isEditMode: boolean;
   export let onFilterChange: (newFilters: any) => void;
 
@@ -114,6 +115,8 @@
             // So, we'll prompt the user to select the value type.
             if (!updatedFilter.isJsonb) {
               updatedFilter.valueType = selectedColumn.filterType;
+            } else {
+              updatedFilter.valueType = "string";
             }
           }
 
@@ -149,6 +152,24 @@
     },
     {} as Record<number, string>
   );
+
+  let startPosition = "beginning";
+
+  $: {
+    if (startPosition === "beginning") {
+      form.recordConsumerState = {
+        producer: "table_and_wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "end") {
+      form.recordConsumerState = {
+        producer: "wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "specific") {
+      form.recordConsumerState.producer = "table_and_wal";
+    }
+  }
 </script>
 
 <div class="flex flex-col gap-6">
@@ -391,4 +412,54 @@
       </Button>
     </div>
   </div>
+
+  {#if messageKind === "record" && showStartPositionForm}
+    <div>
+      <Label for="startPosition" class="text-base font-medium">
+        Where should the consumer start?
+      </Label>
+      <p class="text-sm text-muted-foreground mt-1 mb-2">
+        Indicate where in the table you want the consumer to start.
+      </p>
+      <RadioGroup bind:value={startPosition}>
+        <div class="flex items-center space-x-2">
+          <RadioGroupItem value="beginning" id="beginning" />
+          <Label for="beginning">At the beginning of the table</Label>
+        </div>
+        <div class="flex items-center space-x-2">
+          <RadioGroupItem value="end" id="end" />
+          <Label for="end">At the end of the table (now forward)</Label>
+        </div>
+        <div class="flex items-center space-x-2">
+          <RadioGroupItem value="specific" id="specific" />
+          <Label for="specific">At a specific position...</Label>
+        </div>
+      </RadioGroup>
+
+      {#if startPosition === "specific"}
+        <div class="grid grid-cols-[auto_1fr] gap-4 content-center mt-4">
+          <div class="flex items-center space-x-2 text-sm font-mono">
+            <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
+              >{selectedTable.sort_column_name}</span
+            >
+            <span class="bg-secondary-2xSubtle px-2 py-1 rounded">&gt;=</span>
+          </div>
+
+          {#if selectedTable.sort_column_type.startsWith("timestamp")}
+            <Datetime bind:value={form.recordConsumerState.initialMinSortCol} />
+          {:else if ["integer", "bigint", "smallint", "serial"].includes(selectedTable.sort_column_type)}
+            <Input
+              type="number"
+              bind:value={form.recordConsumerState.initialMinSortCol}
+            />
+          {:else}
+            <Input
+              type="text"
+              bind:value={form.recordConsumerState.initialMinSortCol}
+            />
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 </div>

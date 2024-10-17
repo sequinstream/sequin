@@ -6,6 +6,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
   alias Sequin.Name
   alias Sequin.Postgres
@@ -89,8 +90,10 @@ defmodule SequinWeb.WalPipelinesLive.Form do
 
     if socket.assigns.changeset.valid? do
       database = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == params["source_database_id"]))
+      table = Sequin.Enum.find!(database.tables, &(&1.oid == source_table_oid))
 
       with :ok <- Databases.verify_table_in_publication(database, source_table_oid),
+           :ok <- verify_source_not_event_table(table),
            {:ok, wal_pipeline} <- create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
         {:noreply,
          socket
@@ -99,6 +102,9 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       else
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, changeset: changeset, show_errors?: true)}
+
+        {:error, %InvariantError{} = error} ->
+          {:noreply, assign(socket, submit_error: Exception.message(error))}
 
         {:error, %NotFoundError{entity: :publication_membership}} ->
           submit_error =
@@ -138,6 +144,14 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       end
 
     {:noreply, socket}
+  end
+
+  defp verify_source_not_event_table(%Table{} = table) do
+    if Postgres.is_event_table?(table) do
+      {:error, Error.invariant(message: "Source table cannot be an event table.")}
+    else
+      :ok
+    end
   end
 
   defp assign_databases(socket) do

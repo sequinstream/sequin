@@ -28,7 +28,7 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:http_pull_consumers, :http_push_consumers, :wal_pipelines])
+    pr = Repo.preload(pr, [:wal_pipelines, http_pull_consumers: [:sequence], http_push_consumers: [:sequence]])
 
     %Context{
       consumers: pr.http_pull_consumers ++ pr.http_push_consumers,
@@ -139,6 +139,7 @@ defmodule Sequin.Replication.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
+      group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
       deliver_count: 0,
       replication_message_trace_id: message.trace_id
@@ -264,4 +265,19 @@ defmodule Sequin.Replication.MessageHandler do
   defp get_fields(%Message{action: :insert} = message), do: message.fields
   defp get_fields(%Message{action: :update} = message), do: message.fields
   defp get_fields(%Message{action: :delete} = message), do: message.old_fields
+
+  defp generate_group_id(consumer, message) do
+    # This should be way more assertive - we should error if we don't find the source table
+    # We have a lot of tests that do not line up consumer source_tables with the message table oid
+    source_table = Enum.find(consumer.source_tables, &(&1.oid == message.table_oid))
+
+    if source_table && source_table.group_column_attnums do
+      Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
+        field = Sequin.Enum.find!(message.fields, &(&1.column_attnum == attnum))
+        to_string(field.value)
+      end)
+    else
+      Enum.join(message.ids, ",")
+    end
+  end
 end

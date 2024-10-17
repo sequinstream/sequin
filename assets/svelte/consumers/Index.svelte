@@ -45,6 +45,7 @@
   }>;
   export let live: any;
   export let hasDatabases: boolean;
+  export let hasSequences: boolean;
 
   const hasConsumers = consumers.length > 0;
 
@@ -106,6 +107,35 @@
         </div>
       </div>
     </Alert>
+  {:else if !hasSequences}
+    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
+      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
+        <AlertCircle class="h-5 w-5 text-carbon-600" />
+        <AlertTitle class="text-lg font-semibold text-carbon-900">
+          First, you need to create a sequence
+        </AlertTitle>
+        <AlertDescription class="text-carbon-600 col-start-2">
+          Sequin must have at least one sequence before you can create a
+          consumer.
+        </AlertDescription>
+
+        <div class="flex mt-2 gap-4 col-start-2">
+          <a
+            href="/sequences/new"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button
+              variant="default"
+              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
+            >
+              <Database class="inline-block h-4 w-4 mr-2" />
+              Create sequence
+            </Button>
+          </a>
+        </div>
+      </div>
+    </Alert>
   {/if}
 
   <div class="flex justify-between items-center mb-4">
@@ -116,101 +146,92 @@
     {#if hasDatabases}
       {#if hasConsumers}
         <div class="relative inline-block text-left">
-          <div class="inline-flex rounded-md shadow-sm">
-            <a
-              href="/consumers/new"
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <Button class="rounded-r-none" variant="default"
-                >Create Consumer</Button
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild let:builder>
+              <Button
+                variant="default"
+                builders={[builder]}
+                class="inline-flex items-center"
               >
-            </a>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild let:builder>
-                <Button
-                  variant="default"
-                  builders={[builder]}
-                  class="px-2 rounded-l-none border-l border-primary/20"
-                >
-                  <ChevronDown class="h-4 w-4" />
-                  <span class="sr-only">Open options</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <a
-                  href="/consumers/new"
-                  data-phx-link="redirect"
-                  data-phx-link-state="push"
-                >
-                  <DropdownMenuItem class="cursor-pointer">
-                    Create Consumer wizard
-                  </DropdownMenuItem>
-                </a>
-                <a
-                  href="/consumers/new?kind=push"
-                  data-phx-link="redirect"
-                  data-phx-link-state="push"
-                >
-                  <DropdownMenuItem class="cursor-pointer">
-                    Create Push Consumer
-                  </DropdownMenuItem>
-                </a>
-                <a
-                  href="/consumers/new?kind=pull"
-                  data-phx-link="redirect"
-                  data-phx-link-state="push"
-                >
-                  <DropdownMenuItem class="cursor-pointer">
-                    Create Pull Consumer
-                  </DropdownMenuItem>
-                </a>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                Create Consumer
+                <ChevronDown class="h-4 w-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <a
+                href="/consumers/new?kind=push"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Create Push Consumer
+                </DropdownMenuItem>
+              </a>
+              <a
+                href="/consumers/new?kind=pull"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Create Pull Consumer
+                </DropdownMenuItem>
+              </a>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       {/if}
     {/if}
   </div>
 
   {#if !hasConsumers}
-    {#if !hasDatabases}
-      <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
-        <div class="text-center py-12 w-1/2 mx-auto my-auto">
-          <h2 class="text-xl font-semibold mb-4">No consumers</h2>
-          <p class="text-gray-600 mb-6">
-            Consumers filter, transform, and send messages from a table in your
-            database to your application or another service.
-          </p>
-          <p class="text-gray-600 mb-6">
-            You need to connect a database to Sequin before you can create a
-            consumer.
-          </p>
-          <Button disabled={!hasDatabases}>Create consumer</Button>
+    <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
+      <div class="text-center py-12 w-1/2 mx-auto my-auto">
+        <h2 class="text-xl font-semibold mb-4">No consumers</h2>
+        <p class="text-gray-600 mb-6">
+          Consumers filter, transform, and send messages from a table in your
+          database to your application or another service.
+        </p>
+        <p class="text-gray-600 mb-6">
+          You need to connect a database to Sequin before you can create a
+          consumer.
+        </p>
+        <div class="relative inline-block text-left">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild let:builder>
+              <Button
+                variant="default"
+                builders={[builder]}
+                class="inline-flex items-center"
+                disabled={!hasDatabases || !hasSequences}
+              >
+                Create Consumer
+                <ChevronDown class="h-4 w-4 ml-2" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <a
+                href="/consumers/new?kind=push"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Create Push Consumer
+                </DropdownMenuItem>
+              </a>
+              <a
+                href="/consumers/new?kind=pull"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <DropdownMenuItem class="cursor-pointer">
+                  Create Pull Consumer
+                </DropdownMenuItem>
+              </a>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-    {/if}
-    {#if hasDatabases && !hasConsumers}
-      <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
-        <div class="text-center py-12 w-1/2 mx-auto my-auto">
-          <h2 class="text-xl font-semibold mb-4">No consumers</h2>
-          <p class="text-gray-600 mb-6">
-            Consumers filter, transform, and send messages from a table in your
-            database to your application or another service.
-          </p>
-          <p class="text-gray-600 mb-6">
-            Create your first consumer to start capturing changes.
-          </p>
-          <a
-            href="/consumers/new"
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button>Create consumer</Button>
-          </a>
-        </div>
-      </div>
-    {/if}
+    </div>
   {:else}
     <Table.Root>
       <Table.Header>

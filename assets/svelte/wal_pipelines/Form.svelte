@@ -20,7 +20,7 @@
   } from "$lib/components/ui/card";
   import TableSelector from "../components/TableSelector.svelte";
   import CodeWithCopy from "../components/CodeWithCopy.svelte";
-  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
+  import FilterForm from "../components/FilterForm.svelte";
   import FullPageModal from "../components/FullPageModal.svelte";
   import {
     Accordion,
@@ -31,6 +31,7 @@
   import { Info } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
+  import { ExternalLinkIcon } from "lucide-svelte";
 
   export let walPipeline: any;
   export let databases: any[];
@@ -56,6 +57,7 @@
       "delete",
     ],
     sourceTableFilters: walPipeline.sourceTableFilters || [],
+    sortColumnAttnum: walPipeline.sortColumnAttnum || "",
   };
 
   let selectedSourceDatabase: any;
@@ -170,16 +172,71 @@
           {/if}
 
           {#if selectedSourceTable}
-            <SortAndFilterCard
-              showCardTitle={false}
-              showTableInfo
-              messageKind="event"
-              selectedTable={selectedSourceTable}
-              bind:form
-              {errors}
-              isEditMode={isEdit}
-              onFilterChange={(filters) => (form.sourceTableFilters = filters)}
-            />
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-2">
+                <Label for="sortColumn" class="text-base font-medium"
+                  >Sort column</Label
+                >
+                <p class="text-sm text-muted-foreground mt-1 mb-2">
+                  Select the sort column for the table. Your system should
+                  update the sort column whenever a row is updated. A good
+                  example of a sort column is <code>updated_at</code>.
+                  <a
+                    href="https://sequinstream.com/docs/how-sequin-works#creating-a-table-stream"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center text-link hover:underline"
+                  >
+                    Learn more
+                    <ExternalLinkIcon class="w-3 h-3 ml-1" />
+                  </a>
+                </p>
+                <Select
+                  selected={{
+                    value: form.sortColumnAttnum,
+                    label:
+                      selectedSourceTable.columns.find(
+                        (c) => c.attnum === form.sortColumnAttnum
+                      )?.name || "Select a column",
+                  }}
+                  onSelectedChange={(event) => {
+                    form.sortColumnAttnum = event.value;
+                  }}
+                  disabled={isEdit}
+                >
+                  <SelectTrigger
+                    class="w-full {isEdit
+                      ? 'bg-muted text-muted-foreground opacity-100'
+                      : ''}"
+                  >
+                    <SelectValue placeholder="Select a column" />
+                  </SelectTrigger>
+                  <SelectContent class="max-h-80 overflow-y-auto">
+                    {#each selectedSourceTable.columns || [] as column}
+                      <SelectItem value={column.attnum}
+                        >{column.name}</SelectItem
+                      >
+                    {/each}
+                  </SelectContent>
+                </Select>
+                {#if errors.source_tables?.[0]?.sort_column_attnum}
+                  <p class="text-destructive text-sm mt-1">
+                    {errors.source_tables[0].sort_column_attnum[0]}
+                  </p>
+                {/if}
+              </div>
+
+              <FilterForm
+                showTitle={false}
+                showTableInfo
+                messageKind="event"
+                selectedTable={selectedSourceTable}
+                bind:form
+                {errors}
+                onFilterChange={(filters) =>
+                  (form.sourceTableFilters = filters)}
+              />
+            </div>
           {/if}
         </div>
       </CardContent>

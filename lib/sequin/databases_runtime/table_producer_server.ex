@@ -6,7 +6,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Health
   alias Sequin.Repo
@@ -27,8 +29,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   # Convenience function
   def via_tuple(consumer_id) do
-    consumer = Consumers.get_consumer!(consumer_id)
-    table_oid = consumer.source_tables |> List.first() |> Map.fetch!(:oid)
+    consumer =
+      consumer_id
+      |> Consumers.get_consumer!()
+      |> Repo.preload(:sequence)
+
+    table_oid = table_oid(consumer)
     via_tuple({consumer.id, table_oid})
   end
 
@@ -67,7 +73,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   def init(opts) do
     test_pid = Keyword.get(opts, :test_pid)
     maybe_setup_allowances(test_pid)
-    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload(replication_slot: :postgres_database)
+    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload([:sequence, replication_slot: :postgres_database])
 
     state = %State{
       consumer: consumer,
@@ -257,11 +263,21 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     consumer.replication_slot.postgres_database
   end
 
+  defp table_oid(%{sequence: %Sequence{table_oid: table_oid}}), do: table_oid
+  defp table_oid(%{source_tables: [source_table | _]}), do: source_table.table_oid
+
+  defp sort_column_attnum(%{sequence: %Sequence{sort_column_attnum: sort_column_attnum}}), do: sort_column_attnum
+  defp sort_column_attnum(%{source_tables: [source_table | _]}), do: source_table.sort_column_attnum
+
+  defp group_column_attnums(%{sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums}}),
+    do: group_column_attnums
+
+  defp group_column_attnums(%{source_tables: [source_table | _]}), do: source_table.group_column_attnums
+
   defp table(%State{} = state) do
     database = database(state)
     db_table = Sequin.Enum.find!(database.tables, &(&1.oid == state.table_oid))
-    source_table = Sequin.Enum.find!(state.consumer.source_tables, &(&1.oid == state.table_oid))
-    %{db_table | sort_column_attnum: source_table.sort_column_attnum}
+    %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
   end
 
   # Message handling
@@ -276,6 +292,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
           consumer_id: consumer.id,
           table_oid: table.oid,
           record_pks: record_pks(table, record),
+          group_id: generate_group_id(consumer, table, record),
           replication_message_trace_id: UUID.uuid4()
         })
       end)
@@ -298,6 +315,19 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     |> Enum.filter(& &1.is_pk?)
     |> Enum.sort_by(& &1.attnum)
     |> Enum.map(&Map.fetch!(map, &1.name))
+  end
+
+  defp generate_group_id(consumer, table, record) do
+    group_column_attnums = group_column_attnums(consumer)
+
+    if group_column_attnums do
+      Enum.map_join(group_column_attnums, ",", fn attnum ->
+        column = Sequin.Enum.find!(table.columns, &(&1.attnum == attnum))
+        to_string(Map.get(record, column.name))
+      end)
+    else
+      table |> record_pks(record) |> Enum.join(",")
+    end
   end
 
   defp maybe_setup_allowances(nil), do: :ok

@@ -6,10 +6,12 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
-  alias Sequin.Consumers.SourceTable.ColumnFilter
+  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Name
@@ -80,7 +82,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       socket
       |> assign(assigns)
       |> assign(
-        consumer: consumer,
+        consumer: Repo.preload(consumer, :sequence),
         show_errors?: false,
         submit_error: nil,
         changeset: nil,
@@ -155,7 +157,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   @impl Phoenix.LiveComponent
-  def handle_event("refresh_tables", %{"database_id" => database_id}, socket) do
+  def handle_event("refresh_sequences", %{"database_id" => database_id}, socket) do
     with {:ok, database} <- Databases.get_db(database_id),
          {:ok, _updated_database} <- Databases.update_tables(database) do
       {:noreply, assign_databases(socket)}
@@ -181,13 +183,6 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp decode_params(form, socket) do
     message_kind = form["messageKind"]
 
-    source_table_actions =
-      if message_kind == "change" do
-        [:insert, :update, :delete]
-      else
-        form["sourceTableActions"] || []
-      end
-
     %{
       "consumer_kind" => form["consumerKind"],
       "ack_wait_ms" => form["ackWaitMs"],
@@ -198,14 +193,11 @@ defmodule SequinWeb.ConsumersLive.Form do
       "message_kind" => message_kind,
       "name" => form["name"],
       "postgres_database_id" => form["postgresDatabaseId"],
-      "source_tables" => [
-        %{
-          "oid" => form["tableOid"],
-          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-          "actions" => source_table_actions,
-          "sort_column_attnum" => form["sortColumnAttnum"]
-        }
-      ]
+      "sequence_id" => form["sequenceId"],
+      "sequence_filter" => %{
+        "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+        "actions" => form["sourceTableActions"]
+      }
     }
     |> maybe_delete_http_endpoint()
     |> maybe_put_record_consumer_state(form, socket)
@@ -220,8 +212,9 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
-    [source_table] = params["source_tables"]
-    table = table(socket.assigns.databases, params["postgres_database_id"], source_table)
+    db = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == params["postgres_database_id"]))
+    sequence = Sequin.Enum.find!(db.sequences, &(&1.id == params["sequence_id"]))
+    table = table(socket.assigns.databases, params["postgres_database_id"], sequence)
 
     initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
     producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
@@ -230,7 +223,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       cond do
         producer == "wal" -> nil
         initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
-        true -> source_table["sort_column_attnum"] && KeysetCursor.min_cursor(table)
+        true -> sequence.sort_column_attnum && KeysetCursor.min_cursor(table)
       end
 
     Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
@@ -240,11 +233,11 @@ defmodule SequinWeb.ConsumersLive.Form do
     params
   end
 
-  defp table(databases, postgres_database_id, source_table) do
+  defp table(databases, postgres_database_id, %Sequence{} = sequence) do
     if postgres_database_id do
       db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
-      table = Sequin.Enum.find!(db.tables, &(&1.oid == source_table["oid"]))
-      %{table | sort_column_attnum: source_table["sort_column_attnum"]}
+      table = Sequin.Enum.find!(db.tables, &(&1.oid == sequence.table_oid))
+      %{table | sort_column_attnum: sequence.sort_column_attnum}
     end
   end
 
@@ -265,7 +258,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     postgres_database_id =
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
-    source_table = List.first(consumer.source_tables)
+    source_table = Consumers.source_table(consumer)
 
     base = %{
       "id" => consumer.id,
@@ -280,7 +273,9 @@ defmodule SequinWeb.ConsumersLive.Form do
       "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
-      "sort_column_attnum" => source_table && source_table.sort_column_attnum
+      "sort_column_attnum" => source_table && source_table.sort_column_attnum,
+      "sequence_id" => consumer.sequence_id,
+      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter)
     }
 
     case consumer_type do
@@ -295,6 +290,23 @@ defmodule SequinWeb.ConsumersLive.Form do
     end
   end
 
+  defp encode_sequence(%Sequence{} = sequence) do
+    %{
+      "id" => sequence.id,
+      "table_oid" => sequence.table_oid,
+      "table_name" => sequence.table_name,
+      "table_schema" => sequence.table_schema,
+      "sort_column_name" => sequence.sort_column_name
+    }
+  end
+
+  defp encode_sequence_filter(%SequenceFilter{} = sequence_filter) do
+    %{
+      "column_filters" => Enum.map(sequence_filter.column_filters, &ColumnFilter.to_external/1),
+      "actions" => sequence_filter.actions
+    }
+  end
+
   defp encode_errors(%Ecto.Changeset{} = changeset) do
     Error.errors_on(changeset)
   end
@@ -303,6 +315,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     %{
       "id" => database.id,
       "name" => database.name,
+      "sequences" => Enum.map(database.sequences, &encode_sequence/1),
       "tables" =>
         Enum.map(database.tables, fn %Table{} = table ->
           %{
@@ -418,7 +431,12 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   defp assign_databases(socket) do
     account_id = current_account_id(socket)
-    databases = Databases.list_dbs_for_account(account_id)
+
+    databases =
+      account_id
+      |> Databases.list_dbs_for_account()
+      |> Repo.preload(:sequences)
+
     assign(socket, :databases, databases)
   end
 

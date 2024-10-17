@@ -4,5 +4,5 @@
 </script>
 
 <div id="toaster">
-  <Toaster position="top-right" closeButton />
+  <Toaster position="bottom-right" closeButton />
 </div>

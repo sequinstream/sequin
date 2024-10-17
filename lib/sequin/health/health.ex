@@ -110,6 +110,14 @@ defmodule Sequin.Health do
     get_health(entity)
   end
 
+  @spec get!(entity() | String.t()) :: Health.t() | no_return()
+  def get!(entity) when is_entity(entity) do
+    case get(entity) do
+      {:ok, health} -> health
+      {:error, error} -> raise error
+    end
+  end
+
   #####################
   ## Expected Checks ##
   #####################
@@ -515,7 +523,7 @@ defmodule Sequin.Health do
         end
 
       _ ->
-        {:error, Error.invariant("clean_test_keys can only be called in the test environment")}
+        {:error, Error.invariant(message: "clean_test_keys/0 can only be called in the test environment")}
     end
   end
 end

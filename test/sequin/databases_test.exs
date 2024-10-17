@@ -3,7 +3,10 @@ defmodule Sequin.DatabasesTest do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Test.Support.Models.Character
 
   describe "tables/1" do
     test "returns tables for a database with existing tables" do
@@ -31,6 +34,12 @@ defmodule Sequin.DatabasesTest do
       assert length(updated_db.tables) > 0
       assert %PostgresDatabase.Table{} = hd(updated_db.tables)
       assert updated_db.tables_refreshed_at != nil
+
+      # Verify that the Characters table is present
+      characters_table = Enum.find(updated_db.tables, &(&1.name == "Characters"))
+      assert characters_table
+      assert characters_table.schema == "public"
+      assert characters_table.oid == Character.table_oid()
     end
 
     test "updates tables and columns for a database" do
@@ -38,19 +47,56 @@ defmodule Sequin.DatabasesTest do
 
       assert {:ok, updated_db} = Databases.update_tables(db)
       assert length(updated_db.tables) > 0
-      table = hd(updated_db.tables)
-      assert %PostgresDatabase.Table{} = table
-      assert length(table.columns) > 0
-      column = hd(table.columns)
-      assert %PostgresDatabase.Table.Column{} = column
-      assert is_boolean(column.is_pk?)
+
+      characters_table = Enum.find(updated_db.tables, &(&1.name == "Characters"))
+      assert characters_table
+      assert length(characters_table.columns) > 0
+
+      expected_columns = ["id", "name", "house", "planet", "is_active", "tags", "inserted_at", "updated_at"]
+      actual_columns = Enum.map(characters_table.columns, & &1.name)
+      assert Enum.all?(expected_columns, &(&1 in actual_columns))
+
+      id_column = Enum.find(characters_table.columns, &(&1.name == "id"))
+      assert id_column.is_pk?
+      assert id_column.type == "bigint"
+    end
+  end
+
+  describe "update_sequences_from_db/1" do
+    test "updates sequence information from the database" do
+      db = DatabasesFactory.insert_configured_postgres_database!()
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: db.id,
+          table_oid: Character.table_oid(),
+          table_schema: "wrong_schema",
+          table_name: "wrong_table",
+          sort_column_attnum: Character.column_attnum("id"),
+          sort_column_name: "wrong_column"
+        )
+
+      assert {:ok, _updated_db} = Databases.update_tables(db)
+
+      updated_sequence = Repo.reload!(sequence)
+      assert updated_sequence.table_oid == Character.table_oid()
+      assert updated_sequence.table_schema == "public"
+      assert updated_sequence.table_name == "Characters"
+      assert updated_sequence.sort_column_attnum == Character.column_attnum("id")
+      assert updated_sequence.sort_column_name == "id"
     end
   end
 
   describe "tables/1 and update_tables/1 error handling" do
     @tag capture_log: true
     test "returns an error when unable to connect to the database" do
-      db = DatabasesFactory.insert_configured_postgres_database!(hostname: "non_existent_host", tables: [])
+      db =
+        DatabasesFactory.insert_configured_postgres_database!(
+          hostname: "non_existent_host",
+          tables: [],
+          queue_target: 1,
+          queue_interval: 1
+        )
 
       assert {:error, _} = Databases.tables(db)
       assert {:error, _} = Databases.update_tables(db)
@@ -74,6 +120,64 @@ defmodule Sequin.DatabasesTest do
 
       assert Keyword.get(postgrex_opts, :hostname) == db.hostname
       assert Keyword.get(postgrex_opts, :port) == db.port
+    end
+  end
+
+  describe "Sequence CRUD operations" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+      {:ok, account: account, database: database}
+    end
+
+    test "create_sequence/1 creates a new sequence", %{database: database} do
+      attrs = DatabasesFactory.sequence_attrs(postgres_database_id: database.id)
+      assert {:ok, sequence} = Databases.create_sequence(attrs)
+      assert sequence.postgres_database_id == database.id
+      assert sequence.table_oid == attrs.table_oid
+      assert sequence.table_schema == attrs.table_schema
+      assert sequence.table_name == attrs.table_name
+      assert sequence.sort_column_attnum == attrs.sort_column_attnum
+      assert sequence.sort_column_name == attrs.sort_column_name
+    end
+
+    test "get_sequence_for_account/2 retrieves a sequence", %{account: account, database: database} do
+      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      assert {:ok, retrieved_sequence} = Databases.get_sequence_for_account(account.id, sequence.id)
+      assert retrieved_sequence.id == sequence.id
+    end
+
+    test "get_sequence_for_account/2 returns error for non-existent sequence", %{account: account} do
+      assert {:error, _} = Databases.get_sequence_for_account(account.id, Ecto.UUID.generate())
+    end
+
+    test "list_sequences_for_account/1 lists all sequences for an account", %{account: account, database: database} do
+      sequence1 = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      sequence2 = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      sequences = Databases.list_sequences_for_account(account.id)
+      assert length(sequences) == 2
+      assert Enum.any?(sequences, fn s -> s.id == sequence1.id end)
+      assert Enum.any?(sequences, fn s -> s.id == sequence2.id end)
+    end
+
+    test "delete_sequence/1 deletes a sequence", %{database: database} do
+      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      assert {:ok, deleted_sequence} = Databases.delete_sequence(sequence)
+      assert deleted_sequence.id == sequence.id
+      assert {:error, _} = Databases.get_sequence_for_account(database.account_id, sequence.id)
+    end
+
+    test "delete_sequence/1 returns error when sequence is used by consumers", %{database: database} do
+      sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      ConsumersFactory.insert_consumer!(sequence_id: sequence.id)
+      assert {:error, _} = Databases.delete_sequence(sequence)
+    end
+
+    test "delete_sequences/1 deletes all sequences for a database", %{database: database} do
+      DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
+      assert {:ok, 2} = Databases.delete_sequences(database)
+      assert Databases.list_sequences_for_account(database.account_id) == []
     end
   end
 end

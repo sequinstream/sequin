@@ -11,10 +11,12 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.RecordConsumerState
-  alias Sequin.Consumers.SourceTable.ColumnFilter
+  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
 
@@ -51,13 +53,31 @@ defmodule Sequin.Factory.ConsumersFactory do
         ConsumersFactory.insert_http_endpoint!(account_id: account_id).id
       end)
 
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
     {replication_slot_id, attrs} =
       Map.pop_lazy(attrs, :replication_slot_id, fn ->
-        ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account_id,
+          postgres_database_id: postgres_database_id
+        ).id
       end)
 
     {source_tables, attrs} =
       Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
+
+    {sequence_id, attrs} =
+      Map.pop_lazy(attrs, :sequence_id, fn ->
+        DatabasesFactory.insert_sequence!(postgres_database_id: postgres_database_id).id
+      end)
+
+    {sequence_filter, attrs} =
+      Map.pop_lazy(attrs, :sequence_filter, fn ->
+        if sequence_id, do: sequence_filter_attrs()
+      end)
 
     {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
 
@@ -81,7 +101,9 @@ defmodule Sequin.Factory.ConsumersFactory do
         record_consumer_state: record_consumer_state,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
-        status: :active
+        status: :active,
+        sequence_id: sequence_id,
+        sequence_filter: sequence_filter
       },
       attrs
     )
@@ -128,9 +150,17 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
+    {postgres_database_id, attrs} =
+      Map.pop_lazy(attrs, :postgres_database_id, fn ->
+        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
+      end)
+
     {replication_slot_id, attrs} =
       Map.pop_lazy(attrs, :replication_slot_id, fn ->
-        ReplicationFactory.insert_postgres_replication!(account_id: account_id).id
+        ReplicationFactory.insert_postgres_replication!(
+          account_id: account_id,
+          postgres_database_id: postgres_database_id
+        ).id
       end)
 
     {source_tables, attrs} =
@@ -141,6 +171,16 @@ defmodule Sequin.Factory.ConsumersFactory do
     {record_consumer_state, attrs} =
       Map.pop_lazy(attrs, :record_consumer_state, fn ->
         if message_kind == :record, do: record_consumer_state_attrs()
+      end)
+
+    {sequence_id, attrs} =
+      Map.pop_lazy(attrs, :sequence_id, fn ->
+        DatabasesFactory.insert_sequence!(postgres_database_id: postgres_database_id).id
+      end)
+
+    {sequence_filter, attrs} =
+      Map.pop_lazy(attrs, :sequence_filter, fn ->
+        if sequence_id, do: sequence_filter_attrs()
       end)
 
     merge_attributes(
@@ -157,7 +197,9 @@ defmodule Sequin.Factory.ConsumersFactory do
         record_consumer_state: record_consumer_state,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
-        status: :active
+        status: :active,
+        sequence_id: sequence_id,
+        sequence_filter: sequence_filter
       },
       attrs
     )
@@ -217,6 +259,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         oid: Factory.unique_integer(),
         actions: [:insert, :update, :delete],
         column_filters: [column_filter()],
+        group_column_attnums: nil,
         sort_column_attnum: Factory.unique_integer()
       },
       attrs
@@ -389,6 +432,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
         record_pks: record_pks,
+        group_id: Enum.join(record_pks, ","),
         table_oid: Enum.random(1..100_000),
         state: state,
         ack_id: Factory.uuid(),
@@ -442,5 +486,48 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.new()
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
+  end
+
+  def sequence_filter(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %SequenceFilter{
+        actions: [:insert, :update, :delete],
+        column_filters: [sequence_filter_column_filter()],
+        group_column_attnums: nil
+      },
+      attrs
+    )
+  end
+
+  def sequence_filter_attrs(attrs \\ []) do
+    attrs
+    |> sequence_filter()
+    |> Sequin.Map.from_ecto(keep_nils: true)
+    |> Map.update!(:column_filters, fn column_filters ->
+      Enum.map(column_filters, &Sequin.Map.from_ecto/1)
+    end)
+  end
+
+  def sequence_filter_column_filter(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
+
+    merge_attributes(
+      %ColumnFilter{
+        column_attnum: Factory.unique_integer(),
+        operator: generate_operator(value_type),
+        value: %{__type__: value_type, value: generate_value(value_type)}
+      },
+      Map.delete(attrs, :value_type)
+    )
+  end
+
+  def sequence_filter_column_filter_attrs(attrs \\ []) do
+    attrs
+    |> sequence_filter_column_filter()
+    |> Sequin.Map.from_ecto()
   end
 end

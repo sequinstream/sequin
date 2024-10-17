@@ -5,15 +5,15 @@ icon: "wrench"
 iconType: "solid"
 ---
 
-With Sequin, you can consume a table's rows by:
+With Sequin, you can stream Postgres by creating [**sequences**](#sequences). Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume a table's rows by:
 
 1. Using the [Consume API](#consume-api)
-2. [Receiving webhooks](#receiving-webhooks)
+2. [Receiving webhooks](#webhooks)
 3. Using the [Sync API](#sync-api) (coming soon)
 
 Whether you're pulling rows or having them pushed to you, Sequin always delivers the latest version of rows in order. When new rows are inserted or when rows are updated, they're re-delivered to you.
 
-If you want to capture discrete change events to rows, you can use a [WAL Pipeline](#wal-pipeline). With a WAL Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then consume the rows in your event table.
+If you want to capture discrete change events to rows, you can use a [WAL Pipeline](#wal-pipeline). With a WAL Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then create a sequence to consume the rows in your event table.
 
 You can also filter and transform rows before they're delivered to your application:
 
@@ -21,14 +21,24 @@ You can also filter and transform rows before they're delivered to your applicat
   <img src="/images/core/consumer-workflow-diagram.png" alt="Diagram of data flowing from the source table, through filters and transforms, to the consumer for processing."  />
 </Frame>
 
-## Creating a table stream
+## Sequences
 
-When you connect a table to Sequin, you must specify its **sort column**. Sequin will use this sort column to order rows and detect changes.
+Sequin produces a **sequence** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [[1](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/)]. This makes them difficult to stream properly without skipping rows [[2](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/)].
+
+To produce a stricly ordered sequence, Sequin uses a combination of the source table and a replication slot to produce a sequence. This makes it possible to [consume rows](#consuming-rows) from a table. When rows are inserted or updated, Sequin adds the rows to the end of the sequence so consumers will process them. Sequin stores sequence information in its internal catalog tables.
+
+When you setup a sequence for a table in Sequin, you must specify its **sort column**. Sequin will use this sort column to produce the initial sequence. You can also use the sort column when rewinding a consumer, as it approximates the sequence's order.
+
+<Note>
+The sort column orders historical rows in the sequence. For new and updated rows, their order in the sequence will depend on when they are committed. This is because auto-increment and datetime columns will [not necessarily commit in order in Postgres](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order).
+
+After the sequence starts, the order of rows in the sequence will be the order they appear in Sequin's replication slot. This corresponds to the latest entry of the row in the WAL (i.e. the most recent [LSN](https://www.postgresql.org/docs/current/datatype-pg-lsn.html) corresponding to a given row).
+</Note>
 
 It's important you choose the right sort column. The right sort column is either:
 
 - A **timestamp** like `updated_at` that your system updates whenever a row is inserted or updated.
-- A **sequence** like `seq` or `index` that your system increments whenever a row is inserted or updated.
+- A **Postgres sequence** like `idx` or `index` that your system increments whenever a row is inserted or updated.
 
 If your table does not have a timestamp or integer column that is updated on insert/update, you can add one:
 
@@ -65,44 +75,42 @@ If your table does not have a timestamp or integer column that is updated on ins
   </Accordion>
 
   <Accordion icon="list-ol" title="Adding a sequence column">
-    Here's how you can add an auto-incrementing `seq` column to your table:
+    Here's how you can add an auto-incrementing `idx` column to your table:
 
     ```sql
     -- Create a sequence
-    create sequence your_table_seq;
+    create sequence your_table_idx_seq;
 
-    -- Add the seq column
-    alter table your_table add column seq integer default nextval('your_table_seq');
+    -- Add the idx column
+    alter table your_table add column idx integer default nextval('your_table_idx_seq');
 
     -- Update existing rows (if needed)
     -- (Note if your table has millions of rows, this could take a while)
-    update your_table set seq = nextval('your_table_seq');
+    update your_table set idx = nextval('your_table_idx_seq');
     ```
 
-    This will ensure that the `seq` column is automatically incremented for new rows. For updates, you'll add this trigger:
+    This will ensure that the `idx` column is automatically incremented for new rows. For updates, you'll add this trigger:
 
     ```sql
-    create or replace function update_seq()
+    create or replace function update_idx()
     returns trigger as $$
     begin
-      new.seq = nextval('your_table_seq');
+      new.idx = nextval('your_table_idx_seq');
       return new;
     end;
     $$ language plpgsql;
 
-    create trigger set_seq
+    create trigger set_idx
     before update on your_table
     for each row
-    execute function update_seq();
+    execute function update_idx();
     ```
 
-    This trigger will ensure the `seq` is updated on row updates.
+    This trigger will ensure the `idx` is updated on row updates.
   </Accordion>
 </AccordionGroup>
 
 <Note>If your table is append-only, you can use `inserted_at` or an auto-incrementing `id` column as the sort column. `uuid` columns will not work as they are not sequential.</Note>
-
-<Note>We're well aware that [Postgres sequences and timestamps can commit out-of-order](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). Sequin uses the sort column along with other strategies (namely, the WAL) to detect changes and ensure no data is missed.</Note>
 
 ## Rows
 
@@ -150,7 +158,7 @@ For example:
 
 ## Consuming rows
 
-You have a few options for consuming rows with Sequin:
+After creating a sequence, you have a few options for consuming rows with Sequin:
 
 ### Consume API
 
@@ -159,7 +167,7 @@ With the **Consume API**, you can setup an HTTP endpoint that your apps and serv
 1. You can have many **consumers** (processes or workers) all pulling from the consume endpoint at the same time.
 2. After a batch of rows is delivered to a consumer in the group, that consumer has a certain period of time to process the rows. This **visibility timeout** is configurable at the group level.
 3. After processing a batch of rows, the consumer acknowledges them by calling the [acknowledge endpoint](/management-api/http-pull-consumers/ack).
-4. If the consumer fails to process the row, it will be made available again for delivery to other consumers in the group.
+4. If the consumer fails to process the batch, rows in the batch will be made available again for delivery to other consumers in the group.
 5. When a row is updated in the database, it is re-delivered to the group.
 
 You can setup many consumer groups for a single table.
@@ -192,7 +200,7 @@ You can monitor webhook status on the Sequin dashboard, including failing and ou
 The sync API is still in development.
 </Note>
 
-The **Sync API** is a simple alternative to the [Consume API](#consume-api). With the Sync API, Sequin presents your table stream as a paginateable endpoint. You can start paginating from any point in the table. When you reach the end, you can long-poll to receive new and updated rows in real-time.
+The **Sync API** is a simple alternative to the [Consume API](#consume-api). With the Sync API, Sequin presents your table as a paginateable endpoint. You can start paginating from any point in the table. When you reach the end, you can long-poll to receive new and updated rows in real-time.
 
 The Sync API is great for situations where you want to manage the state of the cursor and don't need multiple consumers to process a stream in parallel.
 
@@ -204,29 +212,23 @@ In all of Sequin's consuming paradigms, you can specify one or more **filters** 
   <img src="/images/core/filters-config.png" alt="The Sequin UI, prompting you to specify the filters for a consumer. There is a list of columns to choose from, a list of operators, and an input field for values." style={{ maxWidth: '500px' }} />
 </Frame>
 
-When your consumer is processing changes, it can also specify the specific operations to filter for:
-
-<Frame>
-  <img src="/images/core/filters-config-with-operations.png" alt="The Sequin UI, prompting you to specify the filters for a consumer. Above the filters, there are three switches for each of the three operations: insert, update, and delete." style={{ maxWidth: '500px' }} />
-</Frame>
-
 ### Transforming
 
 <Note>
 Transforms are still under development and coming soon.
 </Note>
 
-You can **transform** messages in a stream using a Lua function. This is useful for transforming data into a format more suitable for your application.
+You can **transform** messages before they're delivered to your consumers using a Lua function. This is useful for transforming data into a format more suitable for your application.
 
 ## WAL Pipelines
 
 Sequin streams rows directly from your tables. But sometimes, you want to log every discrete change to rows, and capture the `old` and `new` values of that change. Or, you want to retain a log of deleted rows.
 
-With **WAL Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can stream the changes from that table.
+With **WAL Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can setup a sequence for your event table to stream its rows.
 
 WAL Pipelines can indicate which operations to capture (i.e. `insert`, `update`, `delete`) as well as apply SQL filtering on changes.
 
-If you don't want to keep every change indefinitely, you can setup your target event table with a retention policy using the `pg_partman` extension. By retaining recent changes in a Postgres table, you get to use Sequin features like replay and rewind.
+If you don't want to keep every change indefinitely, you can setup your target event table with a retention policy using extensions such as `pg_cron` or `pg_partman`. By retaining recent changes in a Postgres table, you get to use Sequin features like replay and rewind.
 
 Event tables look like this:
 
@@ -247,18 +249,53 @@ create table your_event_log (
 );
 ```
 
-- `id`: Auto-generated, auto-incrementing ID for the event entry.
-- `seq`: (internal) A Sequin ID for the event entry.
-- `source_database_id`: (internal) The Sequin ID for your source database.
-- `source_table_oid`: The OID for the source table.
-- `source_table_schema`: The schema of the source table.
-- `source_table_name`: The name of the source table.
-- `record_pk`: The primary key for the source row. It's `text`, regardless of the type of the source's primary key type.
-- `record`: For inserts and updates, this contains all the latest field values for the row (i.e. `new`). For deletes, this contains all the field values prior to deletion (i.e. `old`).
-- `changes`: For updates, this is a JSON of all the `old` fields _that changed_ in this update. `changes` does not include unchanged values. So, to get the entire `old` row, just merge `changes` on top of `record`. (`null` for insert and upate operations.)
-- `action`: One of `insert`, `update`, or `delete`.
-- `committed_at`: The time the change was committed.
-- `inserted_at` The time this event was inserted into the event table.
+<ResponseField name="id" type="integer" required>
+  Auto-generated, auto-incrementing ID for the event entry.
+</ResponseField>
+
+<ResponseField name="seq" type="bigint" required>
+  (internal) A Sequin sequence for the event entry.
+</ResponseField>
+
+<ResponseField name="source_database_id" type="uuid" required>
+  (internal) The Sequin ID for your source database.
+</ResponseField>
+
+<ResponseField name="source_table_oid" type="bigint" required>
+  The OID for the source table.
+</ResponseField>
+
+<ResponseField name="source_table_schema" type="text" required>
+  The schema of the source table.
+</ResponseField>
+
+<ResponseField name="source_table_name" type="text" required>
+  The name of the source table.
+</ResponseField>
+
+<ResponseField name="record_pk" type="text" required>
+  The primary key for the source row. It's `text`, regardless of the type of the source's primary key type.
+</ResponseField>
+
+<ResponseField name="record" type="jsonb" required>
+  For inserts and updates, this contains all the latest field values for the row (i.e. `new`). For deletes, this contains all the field values prior to deletion (i.e. `old`).
+</ResponseField>
+
+<ResponseField name="changes" type="jsonb">
+  For updates, this is a JSON of all the `old` fields _that changed_ in this update. `changes` does not include unchanged values. So, to get the entire `old` row, just merge `changes` on top of `record`. (`null` for insert and delete operations.)
+</ResponseField>
+
+<ResponseField name="action" type="text" required>
+  One of `insert`, `update`, or `delete`.
+</ResponseField>
+
+<ResponseField name="committed_at" type="timestamp with time zone" required>
+  The time the change was committed.
+</ResponseField>
+
+<ResponseField name="inserted_at" type="timestamp with time zone" required>
+  The time this event was inserted into the event table.
+</ResponseField>
 
 When setting up a WAL Pipeline, Sequin will walk you through the full instructions for creating the table. You can also view those instructions here:
 
@@ -323,19 +360,19 @@ When setting up a WAL Pipeline, Sequin will walk you through the full instructio
 
 ## Replication slots
 
-To detect changes in your database, Sequin uses a [replication slot](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) and a [publication](https://www.postgresql.org/docs/current/logical-replication-publication.html). The publication determines which tables are captured by the replication slot.
+To maintain sequences, Sequin needs to detect changes in your database. Core to that process is a [replication slot](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) and a corresponding [publication](https://www.postgresql.org/docs/current/logical-replication-publication.html). The publication determines which tables are captured by the replication slot.
 
-Replication slots allow Sequin to provide transactional guarantees and never miss a change, even if Sequin is disconnected from your database for a period of time.
+Replication slots ensure Sequin never misses a change, even if Sequin is disconnected from your database for a period of time.
 
 ## Guarantees
 
 ### Strict ordering
 
-Sequin guarantees that messages with the same primary key are processed in order for a given stream and consumer.
-
-This is useful for applications that need to process changes to a single record in order. For example, if you're processing changes to a user's profile, you want to make sure that the changes are applied in order.
+Sequin guarantees that messages with the same primary key are processed in order for a given consumer.
 
 Sync endpoints are strictly ordered. For the Consume API and webhooks, Sequin will not deliver messages to a consumer until the previous messages for that primary key has been acknowledged.
+
+This is useful for applications that need to process changes to a single record in order. For example, if you're processing changes to a user's profile, you want to make sure that the changes are applied in order.
 
 ### Exactly-one processing
 

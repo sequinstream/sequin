@@ -105,6 +105,11 @@ defmodule SequinWeb.Router do
       live "/wal-pipelines/:id", WalPipelinesLive.Show, :show
       live "/wal-pipelines/:id/edit", WalPipelinesLive.Form, :edit
 
+      live "/sequences", SequencesLive.Index, :index
+      live "/sequences/new", SequencesLive.Index, :new
+      # live "/sequences/:id", SequencesLive.Show, :show
+      # live "/sequences/:id/edit", SequencesLive.Form, :edit
+
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home

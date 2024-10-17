@@ -14,6 +14,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
              :deliver_count,
              :last_delivered_at,
              :record_pks,
+             :group_id,
              :table_oid,
              :not_visible_until,
              :inserted_at
@@ -23,6 +24,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
     field :record_pks, {:array, :string}
+    field :group_id, :string
     field :table_oid, :integer
     field :state, Ecto.Enum, values: [:available, :acked, :delivered, :pending_redelivery], default: :available
 
@@ -45,6 +47,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
       :consumer_id,
       :commit_lsn,
       :record_pks,
+      :group_id,
       :state,
       :table_oid,
       :not_visible_until,
@@ -55,6 +58,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     |> validate_required([
       :consumer_id,
       :record_pks,
+      :group_id,
       :table_oid,
       :deliver_count,
       :replication_message_trace_id

@@ -5,6 +5,7 @@ defmodule Sequin.Databases do
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.NetworkUtils
@@ -97,10 +98,11 @@ defmodule Sequin.Databases do
 
   def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
     Repo.transact(fn ->
-      db = Repo.preload(db, :replication_slot)
+      db = Repo.preload(db, [:replication_slot, :sequences])
       # Check for related entities that need to be removed first
       with :ok <- check_related_entities(db),
            {:ok, _} <- Replication.delete_pg_replication_with_lifecycle(db.replication_slot),
+           {:ok, _} <- delete_sequences(db),
            {:ok, _} <- Repo.delete(db) do
         :ok
       end
@@ -127,6 +129,96 @@ defmodule Sequin.Databases do
 
       true ->
         :ok
+    end
+  end
+
+  # Sequences
+
+  def get_sequence_for_account(account_id, sequence_id) do
+    account_id
+    |> Sequence.where_account()
+    |> Sequence.where_id(sequence_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :sequence)}
+      sequence -> {:ok, sequence}
+    end
+  end
+
+  def list_sequences_for_account(account_id) do
+    account_id
+    |> Sequence.where_account()
+    |> Repo.all()
+  end
+
+  def create_sequence(attrs) do
+    %Sequence{}
+    |> Sequence.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def delete_sequence(%Sequence{} = sequence) do
+    case Consumers.list_consumers_for_sequence(sequence.id) do
+      [] ->
+        Repo.delete(sequence)
+
+      _ ->
+        {:error, Error.invariant(message: "Cannot delete sequence that's used by consumers")}
+    end
+  end
+
+  def delete_sequences(%PostgresDatabase{} = db) do
+    Repo.transact(fn ->
+      db.id
+      |> Sequence.where_postgres_database_id()
+      |> Repo.all()
+      |> Enum.reduce_while({:ok, 0}, fn sequence, {:ok, count} ->
+        case delete_sequence(sequence) do
+          {:ok, _} -> {:cont, {:ok, count + 1}}
+          error -> {:halt, error}
+        end
+      end)
+    end)
+  end
+
+  def update_sequences_from_db(%PostgresDatabase{} = db) do
+    Enum.reduce(Repo.preload(db, :sequences).sequences, {0, 0}, fn %Sequence{} = sequence, {ok_count, error_count} ->
+      case update_sequence_from_db(sequence, db) do
+        {:ok, _} ->
+          {ok_count + 1, error_count}
+
+        {:error, error} ->
+          Logger.error("Failed to update sequence #{sequence.id} from database: #{inspect(error)}", error: error)
+          {ok_count, error_count + 1}
+      end
+    end)
+  end
+
+  @doc """
+  Updates a sequence given a database's table schema. Adds names for table_schema, table_name, and sort_column_name.
+  These can drift if the customer migrates the database.
+  """
+  def update_sequence_from_db(%Sequence{} = sequence, %PostgresDatabase{} = db) do
+    with {:ok, tables} <- tables(db) do
+      table = Enum.find(tables, fn t -> t.oid == sequence.table_oid end)
+      column = table && Enum.find(table.columns, fn c -> c.attnum == sequence.sort_column_attnum end)
+
+      case {table, column} do
+        {nil, _} ->
+          {:error, Error.not_found(entity: :table, params: %{oid: sequence.table_oid})}
+
+        {_, nil} ->
+          {:error, Error.not_found(entity: :column, params: %{attnum: sequence.sort_column_attnum})}
+
+        {table, column} ->
+          sequence
+          |> Sequence.changeset(%{
+            table_schema: table.schema,
+            table_name: table.name,
+            sort_column_name: column.name
+          })
+          |> Repo.update()
+      end
     end
   end
 
@@ -332,9 +424,20 @@ defmodule Sequin.Databases do
          {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
       tables = Postgres.tables_to_map(tables)
 
-      db
-      |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
-      |> Repo.update()
+      res =
+        db
+        |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
+        |> Repo.update()
+
+      case res do
+        {:ok, db} ->
+          update_sequences_from_db(db)
+
+          {:ok, db}
+
+        error ->
+          error
+      end
     end
   end
 

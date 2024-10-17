@@ -3,6 +3,7 @@ defmodule Sequin.Factory.DatabasesFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Repo
@@ -82,9 +83,10 @@ defmodule Sequin.Factory.DatabasesFactory do
       :password,
       :pool_size
     ])
+    # Set low for tests
+    # If you want to test an erroneous connection, set queue_target and queue_interval to 1
+    |> Map.merge(%{queue_target: 150, queue_interval: 1000, pool_size: 2})
     |> Map.merge(attrs)
-    # Set very low for tests, for any tests that are testing erroneous queries against a bad db connection
-    |> Map.merge(%{queue_target: 50, queue_interval: 50})
     |> Map.put(:ssl, false)
     |> postgres_database_attrs()
   end
@@ -142,5 +144,42 @@ defmodule Sequin.Factory.DatabasesFactory do
     attrs
     |> column()
     |> Sequin.Map.from_ecto()
+  end
+
+  # Sequence
+
+  def sequence(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequence{
+        id: Factory.uuid(),
+        table_oid: Factory.unique_integer(),
+        table_schema: Factory.postgres_object(),
+        table_name: Factory.postgres_object(),
+        sort_column_attnum: Factory.integer(),
+        sort_column_name: Factory.postgres_object(),
+        postgres_database_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def sequence_attrs(attrs \\ []) do
+    attrs
+    |> sequence()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_sequence!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    attrs = Map.put_new_lazy(attrs, :postgres_database_id, fn -> insert_postgres_database!().id end)
+
+    attrs = sequence_attrs(attrs)
+
+    %Sequence{}
+    |> Sequence.changeset(attrs)
+    |> Repo.insert!()
   end
 end

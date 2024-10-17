@@ -6,7 +6,7 @@ import Config
 # which you should run after static files are built and
 # before starting your production server.
 
-self_hosted = System.get_env("SELF_HOSTED", "0") == "1"
+self_hosted = System.get_env("SELF_HOSTED", "0") in ~w(1 true)
 
 config :logger,
   level: :info,

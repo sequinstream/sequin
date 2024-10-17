@@ -15,7 +15,7 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-  import TableSelector from "../components/TableSelector.svelte";
+  import SequenceSelector from "../components/SequenceSelector.svelte";
   import {
     Card,
     CardContent,
@@ -25,7 +25,7 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils";
   import { ExternalLinkIcon } from "lucide-svelte";
-  import SortAndFilterCard from "../components/SortAndFilterCard.svelte";
+  import FilterForm from "../components/FilterForm.svelte";
 
   export let live;
   export let parent;
@@ -49,11 +49,19 @@
       producer: "table_and_wal",
       initialMinSortCol: null,
     },
+    sequenceId: consumer.sequence_id || null,
   };
 
   let form = { ...initialForm };
   let isDirty = false;
   let isSubmitting = false;
+
+  $: selectedTable =
+    selectedSequence && selectedDatabase
+      ? selectedDatabase.tables.find(
+          (table) => table.oid === selectedSequence.table_oid
+        )
+      : null;
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
@@ -65,16 +73,16 @@
   };
 
   let selectedDatabase: any;
-  let selectedTable: any;
+  let selectedSequence: any;
 
   $: {
-    if (form.postgresDatabaseId && form.tableOid) {
+    if (form.postgresDatabaseId && form.sequenceId) {
       selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId
       );
       if (selectedDatabase) {
-        selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid
+        selectedSequence = selectedDatabase.sequences.find(
+          (sequence) => sequence.id === form.sequenceId
         );
       }
     }
@@ -92,21 +100,24 @@
     });
   }
 
-  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+  function handleSequenceSelect(event: {
+    databaseId: string;
+    sequenceId: string;
+  }) {
     form.postgresDatabaseId = event.databaseId;
-    form.tableOid = event.tableOid;
+    form.sequenceId = event.sequenceId;
 
     // Set the form name based on the selected table
-    if (form.tableOid) {
+    if (form.sequenceId) {
       const selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId
       );
       if (selectedDatabase) {
-        const selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === form.tableOid
+        const selectedSequence = selectedDatabase.sequences.find(
+          (sequence) => sequence.id === form.sequenceId
         );
-        if (selectedTable) {
-          const tableName = selectedTable.name;
+        if (selectedSequence) {
+          const tableName = selectedSequence.table_name;
           const newName = `${tableName}_pull_consumer`;
           form.name = newName;
         }
@@ -124,7 +135,7 @@
     pushEvent("form_closed");
   }
 
-  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
+  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.sequenceId;
 
   const isEditMode = !!consumer.id;
 </script>
@@ -170,7 +181,7 @@
               disabled
               selected={{
                 value: form.tableOid,
-                label: selectedTable?.name || "Selected table",
+                label: selectedSequence.table_name,
               }}
             >
               <SelectTrigger
@@ -183,12 +194,12 @@
               </SelectTrigger>
             </Select>
           {:else}
-            <TableSelector
+            <SequenceSelector
               {pushEvent}
               {databases}
               selectedDatabaseId={form.postgresDatabaseId}
-              selectedTableOid={form.tableOid}
-              onSelect={handleTableSelect}
+              selectedSequenceId={form.sequenceId}
+              onSelect={handleSequenceSelect}
             />
           {/if}
           {#if errors.postgres_database_id || errors.table_oid}
@@ -246,15 +257,28 @@
       </CardContent>
     </Card>
 
-    <SortAndFilterCard
-      messageKind={form.messageKind}
-      showStartPositionForm={!isEditMode}
-      {selectedTable}
-      bind:form
-      {errors}
-      {isEditMode}
-      onFilterChange={handleFilterChange}
-    />
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          {#if form.messageKind === "record"}
+            Records to process
+          {:else}
+            Changes to process
+          {/if}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <FilterForm
+          messageKind={form.messageKind}
+          {selectedTable}
+          bind:form
+          {errors}
+          {isEditMode}
+          onFilterChange={handleFilterChange}
+          showTitle={false}
+        />
+      </CardContent>
+    </Card>
 
     <Card>
       <CardHeader>

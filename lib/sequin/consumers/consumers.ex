@@ -11,11 +11,14 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
-  alias Sequin.Consumers.SourceTable.DateTimeValue
-  alias Sequin.Consumers.SourceTable.NullValue
+  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.DateTimeValue
+  alias Sequin.Consumers.SequenceFilter.NullValue
+  alias Sequin.Consumers.SourceTable
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Health
@@ -43,6 +46,33 @@ defmodule Sequin.Consumers do
 
   # Consumers
 
+  def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
+    %SequenceFilter{} = filter = consumer.sequence_filter
+
+    %SourceTable{
+      actions: filter.actions,
+      group_column_attnums: filter.group_column_attnums,
+      sort_column_attnum: sequence.sort_column_attnum,
+      oid: sequence.table_oid,
+      schema_name: sequence.table_schema,
+      table_name: sequence.table_name,
+      column_filters:
+        Enum.map(consumer.sequence_filter.column_filters, fn filter_column ->
+          %SequenceFilter.ColumnFilter{
+            column_attnum: filter_column.column_attnum,
+            operator: filter_column.operator,
+            value: filter_column.value
+          }
+        end)
+    }
+  end
+
+  def source_table(%{source_tables: [source_table]}) do
+    source_table
+  end
+
+  def source_table(_), do: nil
+
   def get_consumer(consumer_id) do
     with {:error, _} <- get_http_pull_consumer(consumer_id),
          {:error, _} <- get_http_push_consumer(consumer_id) do
@@ -62,6 +92,7 @@ defmodule Sequin.Consumers do
       account_id
       |> HttpPullConsumer.where_account_id()
       |> HttpPullConsumer.where_id_or_name(consumer_id)
+      |> preload(:sequence)
       |> Repo.one()
 
     if pull_consumer do
@@ -70,6 +101,7 @@ defmodule Sequin.Consumers do
       account_id
       |> HttpPushConsumer.where_account_id()
       |> HttpPushConsumer.where_id_or_name(consumer_id)
+      |> preload(:sequence)
       |> Repo.one()
     end
   end
@@ -111,6 +143,13 @@ defmodule Sequin.Consumers do
   def list_consumers_for_replication_slot(replication_slot_id) do
     pull = HttpPullConsumer.where_replication_slot_id(replication_slot_id)
     push = HttpPushConsumer.where_replication_slot_id(replication_slot_id)
+
+    Repo.all(pull) ++ Repo.all(push)
+  end
+
+  def list_consumers_for_sequence(sequence_id) do
+    pull = HttpPullConsumer.where_sequence_id(sequence_id)
+    push = HttpPushConsumer.where_sequence_id(sequence_id)
 
     Repo.all(pull) ++ Repo.all(push)
   end
@@ -1151,10 +1190,23 @@ defmodule Sequin.Consumers do
   end
 
   # Source Table Matching
+  def matches_message?(
+        %HttpPullConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        message
+      ) do
+    matches_message?(sequence, sequence_filter, message)
+  end
+
+  def matches_message?(
+        %HttpPushConsumer{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        message
+      ) do
+    matches_message?(sequence, sequence_filter, message)
+  end
 
   def matches_message?(consumer_or_wal_pipeline, message) do
     matches? =
-      Enum.any?(consumer_or_wal_pipeline.source_tables, fn source_table ->
+      Enum.any?(consumer_or_wal_pipeline.source_tables, fn %SourceTable{} = source_table ->
         table_matches = source_table.oid == message.table_oid
         action_matches = action_matches?(source_table.actions, message.action)
         column_filters_match = column_filters_match_message?(source_table.column_filters, message)
@@ -1192,6 +1244,23 @@ defmodule Sequin.Consumers do
       )
 
       reraise error, __STACKTRACE__
+  end
+
+  def matches_message?(%Sequence{} = sequence, %SequenceFilter{} = sequence_filter, message) do
+    table_matches? = sequence.table_oid == message.table_oid
+    actions_match? = action_matches?(sequence_filter.actions, message.action)
+    column_filters_match? = column_filters_match_message?(sequence_filter.column_filters, message)
+    table_matches? and actions_match? and column_filters_match?
+  end
+
+  def matches_record?(
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        table_oid,
+        record
+      ) do
+    table_matches? = sequence.table_oid == table_oid
+    column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
+    table_matches? and column_filters_match?
   end
 
   def matches_record?(consumer, table_oid, record) do

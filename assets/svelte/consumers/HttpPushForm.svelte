@@ -268,54 +268,6 @@
             </p>
           {/if}
         </div>
-
-        <div class="space-y-2">
-          <Label for="message-kind">Source</Label>
-          <Select
-            selected={{
-              value: form.messageKind,
-              label:
-                form.messageKind === "event" ? "WAL (Changes)" : "Table (Rows)",
-            }}
-            onSelectedChange={(event) => {
-              form.messageKind = event.value;
-            }}
-            disabled={isEditMode}
-          >
-            <SelectTrigger
-              class={cn(
-                "w-full",
-                isEditMode && "bg-muted text-muted-foreground opacity-100"
-              )}
-            >
-              <SelectValue placeholder="Select source type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem class="cursor-pointer" value="event"
-                >WAL (Changes)</SelectItem
-              >
-              <SelectItem class="cursor-pointer" value="record"
-                >Table (Rows)</SelectItem
-              >
-            </SelectContent>
-          </Select>
-          <p class="text-sm text-muted-foreground">
-            {#if form.messageKind === "event"}
-              By consuming from the table's WAL, this consumer will receive
-              every create, update, and delete that happens to rows and includes
-              both new and old values. Replays and backfills are limited.
-            {:else if form.messageKind === "record"}
-              By consuming directly from the table, this consumer will receive
-              the latest version of rows whenever they change. Messages will not
-              include old values and the consumer will not receive deletes.
-            {/if}
-          </p>
-          {#if errors.message_kind}
-            <p class="text-destructive text-sm">
-              {errors.message_kind}
-            </p>
-          {/if}
-        </div>
       </CardContent>
     </Card>
 

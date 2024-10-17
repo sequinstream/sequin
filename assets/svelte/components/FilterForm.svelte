@@ -135,7 +135,7 @@
   };
 
   $: filterErrorMessages = (
-    errors.source_tables?.[0]?.column_filters || []
+    errors.sequence_filter?.column_filters || []
   ).reduce(
     (acc, error, index) => {
       if (error) {
@@ -143,6 +143,7 @@
         else if (error.operator) acc[index] = error.operator[0];
         else if (error.value && error.value.value)
           acc[index] = error.value.value[0];
+        else if (error.value) acc[index] = error.value[0];
       }
       return acc;
     },
@@ -339,7 +340,7 @@
               : ''}"
           >
             <Label for={`value-${index}`}
-              >Comparand
+              >Comparison value
               <!-- Unused help circle, helps align inputs -->
               <HelpCircle
                 class="inline-block h-4 w-4 text-gray-400 ml-1 cursor-help invisible"

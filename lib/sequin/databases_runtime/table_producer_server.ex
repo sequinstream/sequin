@@ -28,6 +28,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   # Convenience function
+  def via_tuple(%_{} = consumer) do
+    consumer = Repo.preload(consumer, :sequence)
+    via_tuple({consumer.id, consumer.sequence.table_oid})
+  end
+
+  # Convenience function
   def via_tuple(consumer_id) do
     consumer =
       consumer_id

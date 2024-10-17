@@ -5,7 +5,6 @@ defmodule Sequin.DatabasesRuntime.Starter do
   use GenServer
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.SourceTable
   alias Sequin.DatabasesRuntime.Supervisor
 
   require Logger
@@ -39,9 +38,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
 
   defp start do
     Enum.each(Consumers.list_consumers_where_table_producer(), fn consumer ->
-      Enum.each(consumer.source_tables, fn %SourceTable{} = source_table ->
-        Supervisor.start_table_producer({consumer, source_table.oid})
-      end)
+      Supervisor.start_table_producer(consumer)
     end)
   end
 

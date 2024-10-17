@@ -18,12 +18,12 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_table_producer(supervisor \\ TableProducerSupervisor, {consumer, table_oid}, opts \\ []) do
-    consumer = Repo.preload(consumer, replication_slot: :postgres_database)
+  def start_table_producer(supervisor \\ TableProducerSupervisor, consumer, opts \\ []) do
+    consumer = Repo.preload(consumer, :sequence, replication_slot: :postgres_database)
 
     default_opts = [
       consumer: consumer,
-      table_oid: table_oid
+      table_oid: consumer.sequence.table_oid
     ]
 
     opts = Keyword.merge(default_opts, opts)
@@ -31,14 +31,14 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Sequin.DynamicSupervisor.start_child(supervisor, {TableProducerServer, opts})
   end
 
-  def stop_table_producer(supervisor \\ TableProducerSupervisor, consumer_and_table_oid) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, TableProducerServer.via_tuple(consumer_and_table_oid))
+  def stop_table_producer(supervisor \\ TableProducerSupervisor, consumer) do
+    Sequin.DynamicSupervisor.stop_child(supervisor, TableProducerServer.via_tuple(consumer))
     :ok
   end
 
-  def restart_table_producer(supervisor \\ TableProducerSupervisor, consumer_and_table_oid, opts) do
-    stop_table_producer(supervisor, consumer_and_table_oid)
-    start_table_producer(supervisor, consumer_and_table_oid, opts)
+  def restart_table_producer(supervisor \\ TableProducerSupervisor, consumer, opts) do
+    stop_table_producer(supervisor, consumer)
+    start_table_producer(supervisor, consumer, opts)
   end
 
   defp children do

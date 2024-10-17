@@ -1386,7 +1386,7 @@ defmodule Sequin.Consumers do
 
   defp notify_consumer_create(consumer) do
     if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal and env() != :test do
-      Enum.each(consumer.source_tables, &DatabasesRuntimeSupervisor.start_table_producer({consumer, &1.oid}))
+      DatabasesRuntimeSupervisor.start_table_producer(consumer)
     end
   end
 
@@ -1409,7 +1409,7 @@ defmodule Sequin.Consumers do
 
   defp maybe_disable_table_producer(%{message_kind: :record} = consumer) do
     unless env() == :test do
-      Enum.each(consumer.source_tables, &DatabasesRuntimeSupervisor.stop_table_producer({consumer, &1.oid}))
+      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
     end
   end
 

@@ -6,8 +6,13 @@ defmodule SequinWeb.Components.Sidenav do
   import LiveSvelte
 
   alias Sequin.Accounts
-  alias Sequin.Accounts.User
   alias Sequin.Error
+
+  @impl Phoenix.LiveComponent
+  def update(assigns, socket) do
+    socket = assign(socket, assigns)
+    {:ok, assign(socket, current_account: current_account(socket), accounts: accounts(socket))}
+  end
 
   @impl Phoenix.LiveComponent
   def handle_event("change_selected_account", %{"accountId" => account_id}, socket) do
@@ -58,9 +63,7 @@ defmodule SequinWeb.Components.Sidenav do
 
   def render(assigns) do
     assigns =
-      assigns
-      |> assign(:parent_id, "sidenav")
-      |> assign(:current_account, User.current_account(assigns.current_user))
+      assign(assigns, :parent_id, "sidenav")
 
     ~H"""
     <div id={@parent_id}>
@@ -70,7 +73,7 @@ defmodule SequinWeb.Components.Sidenav do
           %{
             currentPath: @current_path,
             currentAccountId: @current_account.id,
-            accountList: Enum.sort_by(@current_user.accounts, & &1.inserted_at, DateTime),
+            accountList: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
             currentUser: @current_user,
             parent: @parent_id
           }

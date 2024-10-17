@@ -19,16 +19,17 @@ defmodule Sequin.Accounts.Impersonate do
         {:error, Error.not_found(entity: :secret)}
 
       {:ok, value} ->
-        [admin_user_id, account_id] = String.split(value, ":")
-        {:ok, %{admin_user_id: admin_user_id, account_id: account_id}}
+        [impersonating_user_id, impersonated_user_id] = String.split(value, ":")
+        {:ok, %{impersonating_user_id: impersonating_user_id, impersonated_user_id: impersonated_user_id}}
     end
   end
 
-  def generate_link(admin_user_id, account_id) when is_binary(admin_user_id) and is_binary(account_id) do
-    case find_account(account_id) do
-      {:ok, account} ->
-        generate_link(admin_user_id, account)
-
+  def generate_link(impersonating_user_id, impersonated_user_id)
+      when is_binary(impersonating_user_id) and is_binary(impersonated_user_id) do
+    with {:ok, impersonating_user} <- find_user(impersonating_user_id),
+         {:ok, impersonated_user} <- find_user(impersonated_user_id) do
+      generate_link(impersonating_user, impersonated_user)
+    else
       {:error, error} ->
         print("Error: #{Exception.message(error)}")
 
@@ -36,10 +37,11 @@ defmodule Sequin.Accounts.Impersonate do
     end
   end
 
-  def generate_link(admin_user_id, %Accounts.Account{} = account) when is_binary(admin_user_id) do
+  def generate_link(impersonating_user, impersonated_user) do
     secret = 48 |> :crypto.strong_rand_bytes() |> Base.encode32(padding: false)
 
-    {:ok, _} = Redix.command(:redix, ["SET", secret, "#{admin_user_id}:#{account.id}", "PX", :timer.minutes(1)])
+    {:ok, _} =
+      Redix.command(:redix, ["SET", secret, "#{impersonating_user.id}:#{impersonated_user.id}", "PX", :timer.minutes(1)])
 
     case Application.fetch_env!(:sequin, :env) do
       :dev ->
@@ -54,8 +56,8 @@ defmodule Sequin.Accounts.Impersonate do
     {:ok, secret}
   end
 
-  defp find_account(account_id) do
-    Accounts.get_account(account_id)
+  defp find_user(user_id) do
+    Accounts.get_user(user_id)
   end
 
   if Mix.env() == :test do

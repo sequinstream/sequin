@@ -345,8 +345,8 @@ defmodule Sequin.Accounts do
   @doc """
   Generates an impersonation token for a user.
   """
-  def generate_impersonation_token(user, account_id) do
-    {token, user_token} = UserToken.build_impersonation_token(user, account_id)
+  def generate_impersonation_token(impersonating_user, impersonated_user) do
+    {token, user_token} = UserToken.build_impersonation_token(impersonating_user, impersonated_user)
     Repo.insert!(user_token)
     token
   end
@@ -362,13 +362,13 @@ defmodule Sequin.Accounts do
     |> Repo.preload(:account)
   end
 
-  def get_impersonated_account_id(user, token) do
-    user_id = user.id
+  def get_impersonated_user_id(impersonating_user, token) do
+    user_id = impersonating_user.id
 
     case UserToken.verify_session_token_query(token, "impersonate") do
       {:ok, query} ->
         case Repo.one(query) do
-          {%User{id: ^user_id}, account_id} -> {:ok, account_id}
+          {%User{id: ^user_id}, %{"impersonated_user_id" => impersonated_user_id}} -> {:ok, impersonated_user_id}
           _ -> :error
         end
     end

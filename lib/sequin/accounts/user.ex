@@ -34,7 +34,7 @@ defmodule Sequin.Accounts.User do
 
     has_many :accounts_users, AccountUser
     has_many :accounts, through: [:accounts_users, :account]
-    field :impersonating_account, :map, virtual: true
+    field :impersonating_user, :map, virtual: true
 
     timestamps(type: :utc_datetime)
   end

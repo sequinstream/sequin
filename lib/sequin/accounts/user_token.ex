@@ -21,6 +21,7 @@ defmodule Sequin.Accounts.UserToken do
     field :token, :binary
     field :context, :string
     field :sent_to, :string
+    field :annotations, :map, default: %{}
     belongs_to :user, Sequin.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)
@@ -70,7 +71,7 @@ defmodule Sequin.Accounts.UserToken do
       from token in by_token_and_context_query(token, context),
         join: user in assoc(token, :user),
         where: token.inserted_at > ago(^validity_days, "day"),
-        select: {user, token.sent_to}
+        select: {user, token.annotations}
 
     {:ok, query}
   end
@@ -188,8 +189,15 @@ defmodule Sequin.Accounts.UserToken do
     from t in UserToken, where: t.user_id == ^user.id and t.context in ^contexts
   end
 
-  def build_impersonation_token(user, account_id) do
+  def build_impersonation_token(impersonating_user, impersonated_user) do
     token = :crypto.strong_rand_bytes(@rand_size)
-    {token, %UserToken{token: token, context: "impersonate", user_id: user.id, sent_to: account_id}}
+
+    {token,
+     %UserToken{
+       token: token,
+       context: "impersonate",
+       user_id: impersonating_user.id,
+       annotations: %{impersonated_user_id: impersonated_user.id}
+     }}
   end
 end

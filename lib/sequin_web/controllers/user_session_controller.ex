@@ -125,24 +125,29 @@ defmodule SequinWeb.UserSessionController do
   end
 
   def impersonate(conn, %{"secret" => secret}) do
+    current_user_id = conn.assigns.current_user.id
+
     case Impersonate.getdel_secret(secret) do
-      {:ok, %{admin_user_id: admin_user_id, account_id: account_id}} ->
-        admin_user = Accounts.get_user!(admin_user_id)
+      {:ok, %{impersonating_user_id: ^current_user_id, impersonated_user_id: impersonated_user_id}} ->
+        impersonated_user = Accounts.get_user!(impersonated_user_id)
 
         conn
-        |> UserAuth.log_in_user_with_impersonation(admin_user, account_id)
-        |> put_flash(:toast, %{kind: :info, title: "Impersonating account #{admin_user.impersonating_account.name}"})
+        |> UserAuth.log_in_user_with_impersonation(conn.assigns.current_user, impersonated_user)
+        |> put_flash(:toast, %{
+          kind: :info,
+          title: "Impersonating user #{impersonated_user.name} (#{impersonated_user.email})"
+        })
 
-      {:error, _} ->
+      _ ->
         conn
-        |> put_flash(:toast, %{kind: :error, title: "Invalid or expired impersonation link"})
+        |> put_flash(:toast, %{kind: :error, title: "Invalid impersonation link"})
         |> redirect(to: ~p"/")
     end
   end
 
   def unimpersonate(conn, _params) do
     case conn.assigns.current_user do
-      %{impersonating_account: nil} ->
+      %{impersonating_user: nil} ->
         conn
         |> put_flash(:toast, %{kind: :error, title: "You are not currently impersonating any account"})
         |> redirect(to: ~p"/")

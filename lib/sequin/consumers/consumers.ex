@@ -1310,7 +1310,7 @@ defmodule Sequin.Consumers do
 
   defp get_field_value(value, jsonb_path) when jsonb_path in [nil, ""], do: value
 
-  defp get_field_value(value, jsonb_path) do
+  defp get_field_value(value, jsonb_path) when is_map(value) do
     path = String.split(jsonb_path, ".")
     get_in(value, path)
   rescue
@@ -1321,6 +1321,8 @@ defmodule Sequin.Consumers do
     FunctionClauseError ->
       nil
   end
+
+  defp get_field_value(value, _jsonb_path), do: value
 
   defp apply_filter(operator, %Date{} = field_value, %DateTimeValue{} = filter_value) do
     field_value_as_datetime = DateTime.new!(field_value, ~T[00:00:00])

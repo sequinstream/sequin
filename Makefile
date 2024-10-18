@@ -72,7 +72,7 @@ help:
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
-	cd "$$INFRA_DIR" && ./scripts/prod_rpc.sh "Sequin.Accounts.Impersonate.generate_link\(~s{$(user)}\,~s{$(account)}\)"
+	cd "$$INFRA_DIR" && ./scripts/prod_rpc.sh "Sequin.Accounts.Impersonate.generate_link\(~s{$(impersonating_user_id)}\,~s{$(impersonated_user_id)}\)"
 
 deploy:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \

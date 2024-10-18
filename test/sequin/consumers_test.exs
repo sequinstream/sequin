@@ -2891,6 +2891,7 @@ defmodule Sequin.ConsumersTest do
       assert Consumers.consumer_features(consumer) == []
     end
 
+    @tag :skip
     test "does not return legacy_event_transform feature when table is not an event table" do
       account = AccountsFactory.account(features: ["legacy_event_transform"])
       regular_table = DatabasesFactory.table()

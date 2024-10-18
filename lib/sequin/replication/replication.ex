@@ -208,8 +208,8 @@ defmodule Sequin.Replication do
     end
   end
 
-  def create_wal_pipeline(attrs) do
-    %WalPipeline{}
+  def create_wal_pipeline(account_id, attrs) do
+    %WalPipeline{account_id: account_id}
     |> WalPipeline.create_changeset(attrs)
     |> Repo.insert()
   end

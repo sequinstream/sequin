@@ -271,7 +271,7 @@
             <CodeWithCopy
               maxWidth="750px"
               language="sql"
-              code={`alter table "${consumer.source_table.schema}"."${consumer.source_table.name}" replica identity full;`}
+              code={`alter table "${consumer.sequence.table_schema}"."${consumer.sequence.table_name}" replica identity full;`}
             />
           </Alert.Description>
         </Alert.Root>
@@ -319,7 +319,7 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">Source table</h2>
+            <h2 class="text-lg font-semibold">Sequence</h2>
             <a
               href="/databases/{consumer.postgres_database.id}"
               data-phx-link="redirect"
@@ -338,16 +338,16 @@
           <div class="mb-4 flex items-center space-x-2">
             <icon
               class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-                `${consumer.source_table.schema}.${consumer.source_table.name}`
+                `${consumer.sequence.table_schema}.${consumer.sequence.table_name}`
               )}"
             ></icon>
 
-            <pre class="font-medium">{consumer.source_table.schema}.{consumer
-                .source_table.name}</pre>
+            <pre class="font-medium">{consumer.sequence.table_schema}.{consumer
+                .sequence.table_name}</pre>
           </div>
           <div class="mb-4">
             <h3 class="text-md font-semibold mb-2">Filters</h3>
-            {#if consumer.source_table.column_filters.length > 0}
+            {#if consumer.sequence.column_filters.length > 0}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -357,7 +357,7 @@
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {#each consumer.source_table.column_filters as filter}
+                  {#each consumer.sequence.column_filters as filter}
                     <TableRow>
                       <TableCell>
                         <code>

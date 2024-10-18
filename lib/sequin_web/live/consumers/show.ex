@@ -13,8 +13,11 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
@@ -44,10 +47,10 @@ defmodule SequinWeb.ConsumersLive.Show do
         consumer =
           case consumer do
             %HttpPushConsumer{} ->
-              Repo.preload(consumer, [:http_endpoint, :postgres_database])
+              Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])
 
             %HttpPullConsumer{} ->
-              Repo.preload(consumer, [:postgres_database])
+              Repo.preload(consumer, [:postgres_database, :sequence])
           end
 
         # Attempt to get existing health, fallback to initializing
@@ -340,12 +343,7 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   defp assign_replica_identity(socket) do
     consumer = socket.assigns.consumer
-
-    table_oid =
-      case consumer.source_tables do
-        [source_table] -> source_table.oid
-        _ -> Repo.preload(consumer, :sequence).sequence.table_oid
-      end
+    table_oid = consumer.sequence.table_oid
 
     assign_async(socket, :replica_identity, fn ->
       case Databases.check_replica_identity(consumer.postgres_database, table_oid) do
@@ -375,8 +373,6 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   defp encode_consumer(%HttpPushConsumer{} = consumer) do
-    source_table = Consumers.source_table(consumer)
-
     %{
       id: consumer.id,
       name: consumer.name,
@@ -390,7 +386,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       updated_at: consumer.updated_at,
       http_endpoint: encode_http_endpoint(consumer.http_endpoint),
       http_endpoint_path: consumer.http_endpoint_path,
-      source_table: encode_source_table(source_table, consumer.postgres_database),
+      sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
       replica_warning_dismissed: consumer.replica_warning_dismissed
@@ -398,8 +394,6 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   defp encode_consumer(%HttpPullConsumer{} = consumer) do
-    source_table = Consumers.source_table(consumer)
-
     %{
       id: consumer.id,
       name: consumer.name,
@@ -411,7 +405,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      source_table: encode_source_table(source_table, consumer.postgres_database),
+      sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health)
     }
@@ -424,13 +418,17 @@ defmodule SequinWeb.ConsumersLive.Show do
     }
   end
 
-  defp encode_source_table(source_table, postgres_database) do
-    table = find_table_by_oid(source_table.oid, postgres_database.tables)
+  defp encode_sequence(
+         %Sequence{} = sequence,
+         %SequenceFilter{} = sequence_filter,
+         %PostgresDatabase{} = postgres_database
+       ) do
+    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
 
     %{
-      name: table.name,
-      schema: table.schema,
-      column_filters: Enum.map(source_table.column_filters, &encode_column_filter(&1, table))
+      table_name: sequence.table_name,
+      table_schema: sequence.table_schema,
+      column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
     }
   end
 

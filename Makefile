@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -81,6 +81,10 @@ impersonate:
 deploy:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/deploy.sh $(sha)
+
+remiex:
+	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
+	cd "$$INFRA_DIR" && ./scripts/prod_sequin.sh remote
 
 %:
 	@:

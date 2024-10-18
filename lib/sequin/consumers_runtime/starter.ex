@@ -13,7 +13,7 @@ defmodule Sequin.ConsumersRuntime.Starter do
   def init(_) do
     Logger.info("[ConsumersRuntimeStarter] Booting")
 
-    schedule_start(10)
+    schedule_start(:timer.seconds(5))
 
     {:ok, :ignore}
   end

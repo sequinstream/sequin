@@ -26,7 +26,7 @@ defmodule Sequin.WalPipelineTest do
     end
 
     test "create_wal_pipeline/1 with invalid data returns error changeset" do
-      assert {:error, %Ecto.Changeset{}} = Replication.create_wal_pipeline(%{name: nil})
+      assert {:error, %Ecto.Changeset{}} = Replication.create_wal_pipeline("account-id", %{name: nil})
     end
 
     test "update_wal_pipeline/2 with invalid data returns error changeset" do

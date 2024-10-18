@@ -1279,12 +1279,15 @@ defmodule Sequin.Consumers do
   end
 
   def matches_record?(
-        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter},
+        %{sequence: %Sequence{} = sequence, sequence_filter: %SequenceFilter{} = sequence_filter} = consumer,
         table_oid,
         record
       ) do
     table_matches? = sequence.table_oid == table_oid
     column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
+
+    Health.update(consumer, :filters, :healthy)
+
     table_matches? and column_filters_match?
   end
 

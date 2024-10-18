@@ -305,12 +305,14 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         })
       end)
 
-    Health.update(consumer, :ingestion, :healthy)
-
     # TODO: Add to tracer, ie:
     # Sequin.Tracer.Server.records_replicated(consumer, consumer_records)
 
-    Consumers.insert_consumer_records(consumer_records)
+    res = Consumers.insert_consumer_records(consumer_records)
+
+    Health.update(consumer, :ingestion, :healthy)
+
+    res
   end
 
   defp records_by_column_attnum(%Table{} = table, records) do

@@ -2848,6 +2848,71 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
+  describe "consumer_features/1" do
+    test "returns legacy_event_transform feature when conditions are met" do
+      account = AccountsFactory.account(features: ["legacy_event_transform"])
+      event_table = DatabasesFactory.event_table()
+      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
+
+      sequence =
+        DatabasesFactory.sequence(
+          postgres_database_id: database.id,
+          table_oid: event_table.oid
+        )
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          account: account,
+          postgres_database: database,
+          sequence: sequence
+        )
+
+      assert Consumers.consumer_features(consumer) == [legacy_event_transform: true]
+    end
+
+    test "does not return legacy_event_transform feature when account doesn't have the feature" do
+      account = AccountsFactory.account(features: [])
+      event_table = DatabasesFactory.event_table()
+      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
+
+      sequence =
+        DatabasesFactory.sequence(
+          postgres_database_id: database.id,
+          table_oid: event_table.oid
+        )
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          account: account,
+          postgres_database: database,
+          sequence: sequence
+        )
+
+      assert Consumers.consumer_features(consumer) == []
+    end
+
+    test "does not return legacy_event_transform feature when table is not an event table" do
+      account = AccountsFactory.account(features: ["legacy_event_transform"])
+      regular_table = DatabasesFactory.table()
+      database = DatabasesFactory.postgres_database(account: account, tables: [regular_table])
+
+      sequence =
+        DatabasesFactory.sequence(
+          postgres_database_id: database.id,
+          table_oid: regular_table.oid
+        )
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          account: account,
+          postgres_database: database,
+          sequence: sequence
+        )
+
+      assert Consumers.consumer_features(consumer) == []
+    end
+  end
+
   # Helper function to create a consumer record from a character
   defp build_consumer_record(consumer, character, type \\ :default) do
     table_oid =

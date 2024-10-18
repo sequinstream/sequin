@@ -244,6 +244,89 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       # Ensure the backoff is increasing
       assert diff_ms2 > diff_ms1
     end
+
+    test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
+      test_pid = self()
+
+      # Mock the HTTP adapter
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Start the pipeline with legacy_event_transform feature enabled
+      start_supervised!(
+        {HttpPushPipeline,
+         [
+           consumer: consumer,
+           req_opts: [adapter: adapter],
+           test_pid: test_pid,
+           features: [legacy_event_transform: true]
+         ]}
+      )
+
+      # Insert a consumer record
+      record = %{
+        "id" => Faker.UUID.v4(),
+        "house_id" => 102,
+        "house_name" => "House Harkonnen!!",
+        "planet_id" => 1,
+        "ruler_name" => "Baron Vladimir Harkonnen",
+        "updated_at" => "2024-10-17T16:41:01"
+      }
+
+      changes = %{
+        "house_name" => "House Harkonnen!",
+        "updated_at" => "2024-10-10T14:58:00"
+      }
+
+      consumer_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          record_pks: [record["id"]],
+          data:
+            ConsumersFactory.consumer_record_data(
+              record: %{
+                "action" => "update",
+                "changes" => changes,
+                "committed_at" => "2024-10-17T23:42:07.382672Z",
+                "record" => record,
+                "record_pk" => "1,102",
+                "seq" => 1_729_208_527_382_672,
+                "source_database_id" => "307f9b5e-99c9-4e46-abea-c996dcaeb919",
+                "source_table_name" => "rulers",
+                "source_table_oid" => 16_310_038,
+                "source_table_schema" => "public"
+              },
+              metadata: %{
+                table_schema: "public",
+                table_name: "event_logs",
+                commit_timestamp: DateTime.utc_now()
+              }
+            )
+        )
+
+      # Wait for the message to be processed
+      assert_receive {:http_request, req}, 5_000
+
+      # Assert the request details
+      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
+      json = Jason.decode!(req.body)
+
+      # Assert the transformed structure
+      assert json["record"] == record
+      assert json["metadata"]["table_name"] == "rulers"
+      assert json["metadata"]["table_schema"] == "public"
+      assert json["metadata"]["consumer"]["id"] == consumer.id
+      assert json["metadata"]["consumer"]["name"] == consumer.name
+      assert json["action"] == "update"
+      assert json["changes"] == changes
+
+      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      refute Consumers.reload(consumer_event)
+    end
   end
 
   defp start_pipeline!(consumer, adapter) do

@@ -720,6 +720,7 @@ defmodule Sequin.Accounts do
   ## Features
 
   def has_feature?(%Account{} = account, feature) do
+    feature = to_string(feature)
     Enum.any?(account.features, &(&1 == feature))
   end
 

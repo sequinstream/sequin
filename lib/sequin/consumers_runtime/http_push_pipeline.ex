@@ -2,6 +2,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   @moduledoc false
   use Broadway
 
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
@@ -13,10 +14,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
   def start_link(opts) do
     %HttpPushConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
-    consumer = Repo.preload(consumer, :http_endpoint)
+    consumer = Repo.preload(consumer, [:http_endpoint])
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
     test_pid = Keyword.get(opts, :test_pid)
+    legacy_event_transform = opts |> Keyword.get(:features, []) |> Keyword.get(:legacy_event_transform, false)
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
@@ -32,7 +34,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       context: %{
         consumer: consumer,
         http_endpoint: consumer.http_endpoint,
-        req_opts: req_opts
+        req_opts: req_opts,
+        legacy_event_transform: legacy_event_transform
       }
     )
   end
@@ -51,7 +54,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   def handle_message(_, %Broadway.Message{data: consumer_event} = message, %{
         consumer: consumer,
         http_endpoint: http_endpoint,
-        req_opts: req_opts
+        req_opts: req_opts,
+        legacy_event_transform: legacy_event_transform
       }) do
     Logger.metadata(
       account_id: consumer.account_id,
@@ -59,7 +63,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       http_endpoint_id: http_endpoint.id
     )
 
-    case push_message(http_endpoint, consumer, consumer_event.data, req_opts) do
+    message_data = maybe_transform_message(legacy_event_transform, consumer, consumer_event.data)
+
+    case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
         Health.update(consumer, :push, :healthy)
         Metrics.incr_http_endpoint_throughput(http_endpoint)
@@ -88,6 +94,36 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         Broadway.Message.failed(message, reason)
     end
   end
+
+  defp maybe_transform_message(true, consumer, message_data) do
+    %ConsumerEventData{
+      record: %{
+        "action" => action,
+        "changes" => changes,
+        "committed_at" => committed_at,
+        "record" => record,
+        "source_table_name" => source_table_name,
+        "source_table_schema" => source_table_schema
+      }
+    } = message_data
+
+    %{
+      "record" => record,
+      "metadata" => %{
+        "consumer" => %{
+          "id" => consumer.id,
+          "name" => consumer.name
+        },
+        "table_name" => source_table_name,
+        "table_schema" => source_table_schema,
+        "commit_timestamp" => committed_at
+      },
+      "action" => action,
+      "changes" => changes
+    }
+  end
+
+  defp maybe_transform_message(false, _consumer, message_data), do: message_data
 
   defp push_message(%HttpEndpoint{} = http_endpoint, %HttpPushConsumer{} = consumer, message_data, req_opts) do
     headers = http_endpoint.headers

@@ -37,7 +37,10 @@ defmodule Sequin.ConsumersRuntime.Starter do
   end
 
   defp start do
-    Enum.each(Consumers.list_active_push_consumers(), &Supervisor.start_for_push_consumer(&1.id))
+    Enum.each(
+      Consumers.list_active_push_consumers([:postgres_database, :sequence, :account]),
+      &Supervisor.start_for_push_consumer(&1.id)
+    )
   end
 
   defp logger_info(msg) do

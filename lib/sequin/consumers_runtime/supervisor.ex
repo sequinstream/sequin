@@ -21,7 +21,15 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def start_for_push_consumer(supervisor, %HttpPushConsumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
-    opts = Keyword.merge(default_opts, opts)
+    consumer_features = Consumers.consumer_features(consumer)
+
+    {features, opts} = Keyword.pop(opts, :features)
+    features = Keyword.merge(consumer_features, features)
+
+    opts =
+      default_opts
+      |> Keyword.merge(opts)
+      |> Keyword.put(:features, features)
 
     Sequin.DynamicSupervisor.start_child(supervisor, {HttpPushPipeline, opts})
   end

@@ -3,6 +3,7 @@ defmodule Sequin.Consumers do
   import Ecto.Query
 
   alias Ecto.Type
+  alias Sequin.Accounts
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
@@ -277,9 +278,10 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_active_push_consumers do
+  def list_active_push_consumers(preloads \\ []) do
     :active
     |> HttpPushConsumer.where_status()
+    |> preload(^preloads)
     |> Repo.all()
   end
 
@@ -306,6 +308,19 @@ defmodule Sequin.Consumers do
     %HttpPushConsumer{account_id: account_id}
     |> HttpPushConsumer.create_changeset(attrs)
     |> Repo.insert()
+  end
+
+  def consumer_features(%HttpPushConsumer{} = consumer) do
+    consumer = Repo.lazy_preload(consumer, [:postgres_database, :sequence, :account])
+
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+
+    with true <- Accounts.has_feature?(consumer.account, :legacy_event_transform),
+         true <- Postgres.is_event_table?(table) do
+      [legacy_event_transform: true]
+    else
+      false -> []
+    end
   end
 
   # ConsumerEvent

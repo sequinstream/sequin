@@ -12,7 +12,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @impl GenStage
   def init(opts) do
-    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload(:http_endpoint)
+    consumer =
+      opts |> Keyword.fetch!(:consumer) |> Repo.preload([:http_endpoint])
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Sandbox.allow(Sequin.Repo, test_pid, self())

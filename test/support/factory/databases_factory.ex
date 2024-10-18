@@ -128,6 +128,35 @@ defmodule Sequin.Factory.DatabasesFactory do
     end)
   end
 
+  def event_table(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    columns = [
+      column_attrs(name: "id", type: "integer", is_pk?: true),
+      column_attrs(name: "seq", type: "bigint"),
+      column_attrs(name: "source_database_id", type: "uuid"),
+      column_attrs(name: "source_table_oid", type: "bigint"),
+      column_attrs(name: "source_table_schema", type: "text"),
+      column_attrs(name: "source_table_name", type: "text"),
+      column_attrs(name: "record_pk", type: "text"),
+      column_attrs(name: "record", type: "jsonb"),
+      column_attrs(name: "changes", type: "jsonb"),
+      column_attrs(name: "action", type: "text"),
+      column_attrs(name: "committed_at", type: "timestamp with time zone"),
+      column_attrs(name: "inserted_at", type: "timestamp with time zone")
+    ]
+
+    merge_attributes(
+      %PostgresDatabase.Table{
+        schema: Map.get(attrs, :schema, "public"),
+        name: Map.get(attrs, :name, "sequin_events"),
+        oid: Factory.unique_integer(),
+        columns: columns
+      },
+      attrs
+    )
+  end
+
   def column(attrs \\ []) do
     merge_attributes(
       %PostgresDatabase.Table.Column{

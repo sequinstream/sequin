@@ -5,6 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Cog } from "lucide-svelte";
+  import { Label } from "$lib/components/ui/label";
 
   interface Account {
     id: string;
@@ -23,6 +24,9 @@
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
   let deleteErrorMessage: string | null = null;
+  let showInviteMember = false;
+  let inviteMemberLoading = false;
+  let inviteMemberError: string | null = null;
   $: renameDisabled = selectedAccount.name === form.name;
 
   function handleAccountSelect(accountId: string) {
@@ -70,6 +74,29 @@
       }
     );
   }
+
+  function handleInviteMember(event: Event) {
+    event.preventDefault();
+    inviteMemberLoading = true;
+    inviteMemberError = null;
+    live.pushEventTo(
+      `#${parent}`,
+      "invite_member",
+      {
+        accountId: selectedAccount.id,
+        email: form.email,
+      },
+      (res: any) => {
+        console.log(res);
+        inviteMemberLoading = false;
+        if (res.error) {
+          inviteMemberError = res.error;
+        } else {
+          showInviteMember = false;
+        }
+      }
+    );
+  }
 </script>
 
 <div>
@@ -101,7 +128,7 @@
         resources. Coming by the end of October 2024 - send us a note if you
         want this right away.
       </p>
-      <Button disabled>Add a team member</Button>
+      <Button on:click={() => (showInviteMember = true)}>Add a team member</Button>
     </div>
   </div>
 
@@ -173,5 +200,44 @@
         Delete
       </Button>
     </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showInviteMember}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Invite a team member</Dialog.Title>
+    </Dialog.Header>
+    <form on:submit={handleInviteMember}>
+      <div class="grid gap-4 py-4 my-4">
+        <div class="grid grid-cols-4 items-center gap-4">
+          <Label for="email" class="text-right">Email</Label>
+          <Input
+            id="email"
+            bind:value={form.email}
+            placeholder="Email"
+            class="col-span-3"
+          />
+        </div>
+        {#if inviteMemberError}
+          <p class="text-destructive text-sm mt-2 mb-4 col-span-4">
+            {inviteMemberError}
+          </p>
+        {/if}
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" on:click={() => (showInviteMember = false)}>
+          Cancel
+        </Button>
+        <Button
+          variant="default"
+          type="submit"
+          disabled={inviteMemberLoading}
+          loading={inviteMemberLoading}
+        >
+          Invite
+        </Button>
+      </Dialog.Footer>
+    </form>
   </Dialog.Content>
 </Dialog.Root>

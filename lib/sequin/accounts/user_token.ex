@@ -5,6 +5,7 @@ defmodule Sequin.Accounts.UserToken do
   import Ecto.Query
 
   alias Sequin.Accounts.UserToken
+  alias Sequin.Error
 
   @hash_algorithm :sha256
   @rand_size 32
@@ -16,6 +17,7 @@ defmodule Sequin.Accounts.UserToken do
   @change_email_validity_in_days 7
   @session_validity_in_days 60
   @impersonate_validity_in_days 1
+  @invite_validity_in_days 7
 
   schema "users_tokens" do
     field :token, :binary
@@ -199,5 +201,35 @@ defmodule Sequin.Accounts.UserToken do
        user_id: impersonating_user.id,
        annotations: %{impersonated_user_id: impersonated_user.id}
      }}
+  end
+
+  def build_account_invite_token(user, account_id, sent_to) do
+    {encoded_token, user_token} = build_hashed_token(user, "account-invite", sent_to)
+    {encoded_token, %{user_token | annotations: %{account_id: account_id}}}
+  end
+
+  def verify_account_invite_token_query(user, token) do
+    case Base.url_decode64(token, padding: false) do
+      {:ok, decoded_token} ->
+        hashed_token = :crypto.hash(@hash_algorithm, decoded_token)
+
+        query =
+          from t in UserToken,
+            where: t.token == ^hashed_token and t.context == "account-invite",
+            where: t.sent_to == ^user.email,
+            where: t.inserted_at > ago(@invite_validity_in_days, "day")
+
+        {:ok, query}
+
+      :error ->
+        {:error, Error.invariant(message: "Invalid account invite token")}
+    end
+  end
+
+  def account_invite_token_query(account_id, sent_to) do
+    from t in UserToken,
+      where: t.context == "account-invite",
+      where: fragment("? @> ?", t.annotations, ^%{"account_id" => account_id}),
+      where: t.sent_to == ^sent_to
   end
 end

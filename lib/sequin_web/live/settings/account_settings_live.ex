@@ -48,6 +48,20 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
     end
   end
 
+  def handle_event("invite_member", %{"accountId" => account_id, "email" => sent_to}, socket) do
+    user = current_user(socket)
+    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+
+    case Accounts.invite_user(user, account, sent_to, &url(~p"/settings/accounts?invite_token=#{&1}")) do
+      :ok ->
+        {:reply, %{ok: true}, socket}
+
+      {:error, changeset} ->
+        error = Error.validation(changeset: changeset)
+        {:reply, %{error: Exception.message(error)}, socket}
+    end
+  end
+
   def handle_event("delete_account", %{"accountId" => account_id}, socket) do
     user = current_user(socket)
     account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))

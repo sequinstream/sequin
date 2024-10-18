@@ -7,6 +7,7 @@ defmodule SequinWeb.OutboxLive do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias SequinWeb.RouteHelpers
 
   @page_size 25
 
@@ -182,14 +183,16 @@ defmodule SequinWeb.OutboxLive do
         %{
           id: consumer.id,
           name: consumer.name,
-          type: "http_pull"
+          type: "http_pull",
+          href: RouteHelpers.consumer_path(consumer)
         }
 
       %HttpPushConsumer{} = consumer ->
         %{
           id: consumer.id,
           name: consumer.name,
-          type: "http_push"
+          type: "http_push",
+          href: RouteHelpers.consumer_path(consumer)
         }
     end)
   end

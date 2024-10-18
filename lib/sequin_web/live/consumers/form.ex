@@ -18,6 +18,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Postgres
   alias Sequin.Posthog
   alias Sequin.Repo
+  alias SequinWeb.RouteHelpers
 
   require Logger
 
@@ -141,11 +142,13 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   def handle_event("form_closed", _params, socket) do
+    consumer = socket.assigns.consumer
+
     socket =
-      if is_edit?(socket) do
-        push_navigate(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}")
-      else
-        push_navigate(socket, to: ~p"/consumers")
+      case {Consumers.kind(consumer), is_edit?(socket)} do
+        {_, true} -> push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
+        {:push, false} -> push_navigate(socket, to: ~p"/consumers/push")
+        {:pull, false} -> push_navigate(socket, to: ~p"/consumers/pull")
       end
 
     {:noreply, socket}
@@ -359,7 +362,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         socket =
           socket
           |> assign(:consumer, updated_consumer)
-          |> push_navigate(to: ~p"/consumers/#{updated_consumer.id}")
+          |> push_navigate(to: RouteHelpers.consumer_path(updated_consumer))
 
         {:ok, socket}
 
@@ -382,7 +385,8 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case case_result do
       {:ok, consumer} ->
-        consumer_type = if is_struct(consumer, HttpPullConsumer), do: "HttpPullConsumer", else: "HttpPushConsumer"
+        kind = Consumers.kind(consumer)
+        consumer_type = if kind == :pull, do: "HttpPullConsumer", else: "HttpPushConsumer"
 
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
@@ -395,7 +399,7 @@ defmodule SequinWeb.ConsumersLive.Form do
           }
         })
 
-        {:ok, push_navigate(socket, to: ~p"/consumers/#{consumer.id}")}
+        {:ok, push_navigate(socket, to: RouteHelpers.consumer_path(consumer))}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error, assign(socket, :changeset, changeset)}

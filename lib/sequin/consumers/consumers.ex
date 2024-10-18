@@ -47,6 +47,9 @@ defmodule Sequin.Consumers do
 
   # Consumers
 
+  def kind(%HttpPullConsumer{}), do: :pull
+  def kind(%HttpPushConsumer{}), do: :push
+
   def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
     %SequenceFilter{} = filter = consumer.sequence_filter
 

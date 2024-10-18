@@ -169,11 +169,7 @@
                       <Radio class="h-4 w-4 mr-2" />
                       <span class="font-medium">{consumer.name}</span>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      href={`/consumers/${consumer.id}`}
-                    >
+                    <Button variant="outline" size="sm" href={consumer.href}>
                       <ExternalLink class="h-4 w-4 mr-2" />
                       View Consumer
                     </Button>
@@ -245,7 +241,6 @@
             <p class="text-sm font-medium text-gray-900 mb-3">
               No consumers attached to database
             </p>
-            <Button href="/consumers" variant="outline">Add a consumer</Button>
           </div>
         {/if}
       </CardContent>

@@ -9,6 +9,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Repo
   alias Sequin.Tracer
   alias Sequin.Tracer.Server
+  alias SequinWeb.RouteHelpers
 
   # Add this alias
 
@@ -262,12 +263,15 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   defp encode_consumers(consumers, database) do
     Enum.map(consumers, fn consumer ->
+      kind = Consumers.kind(consumer)
+
       %{
         id: consumer.id,
-        consumer_kind: if(consumer.__struct__ == Sequin.Consumers.HttpPushConsumer, do: :http_push, else: :http_pull),
+        consumer_kind: kind,
         name: consumer.name,
         message_kind: consumer.message_kind,
-        source_tables: Consumers.enrich_source_tables(consumer.source_tables, database)
+        source_tables: Consumers.enrich_source_tables(consumer.source_tables, database),
+        href: RouteHelpers.consumer_path(consumer)
       }
     end)
   end

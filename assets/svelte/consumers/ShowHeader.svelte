@@ -19,7 +19,7 @@
   export let live;
   export let parent;
   export let messages_failing;
-
+  export let kind;
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
 
@@ -46,8 +46,8 @@
   let activeTab: string;
 
   $: messageUrl = messages_failing
-    ? `/consumers/${consumer.id}/messages?showAcked=false`
-    : `/consumers/${consumer.id}/messages`;
+    ? `${consumer.href}/messages?showAcked=false`
+    : `${consumer.href}/messages`;
 
   onMount(() => {
     activeTab = live_action === "messages" ? "messages" : "overview";
@@ -59,7 +59,7 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <a href="/consumers">
+        <a href={`/consumers/${kind}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>
@@ -107,7 +107,7 @@
   <div class="container mx-auto px-4">
     <div class="flex space-x-4">
       <a
-        href="/consumers/{consumer.id}"
+        href={consumer.href}
         class={`py-2 px-4 font-medium border-b-2 ${
           activeTab === "overview"
             ? "text-black border-black"

@@ -8,6 +8,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   alias Sequin.Databases
   alias Sequin.Health
   alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.RouteHelpers
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -58,9 +59,22 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
-  def render(assigns) do
-    encoded_consumers = Enum.map(assigns.consumers, &encode_consumer/1)
-    assigns = assign(assigns, :encoded_consumers, encoded_consumers)
+  def render(%{live_action: index_kind} = assigns) when index_kind in [:list_push, :list_pull] do
+    consumers =
+      if index_kind == :list_push do
+        Enum.filter(assigns.consumers, &is_struct(&1, HttpPushConsumer))
+      else
+        Enum.filter(assigns.consumers, &is_struct(&1, HttpPullConsumer))
+      end
+
+    kind = if index_kind == :list_push, do: "push", else: "pull"
+
+    encoded_consumers = Enum.map(consumers, &encode_consumer/1)
+
+    assigns =
+      assigns
+      |> assign(:encoded_consumers, encoded_consumers)
+      |> assign(:kind, kind)
 
     ~H"""
     <div id="consumers-index">
@@ -68,6 +82,7 @@ defmodule SequinWeb.ConsumersLive.Index do
         name="consumers/Index"
         props={
           %{
+            consumerKind: @kind,
             consumers: @encoded_consumers,
             formErrors: @form_errors,
             hasDatabases: @has_databases?,
@@ -82,13 +97,25 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   @impl Phoenix.LiveView
   def handle_event("consumer_clicked", %{"id" => id}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/consumers/#{id}")}
+    case socket.assigns.live_action do
+      :list_push ->
+        {:noreply, push_navigate(socket, to: ~p"/consumers/push/#{id}")}
+
+      :list_pull ->
+        {:noreply, push_navigate(socket, to: ~p"/consumers/pull/#{id}")}
+    end
   end
 
-  defp apply_action(socket, :index, _params) do
+  defp apply_action(socket, :list_push, _params) do
     socket
-    |> assign(:page_title, "Consumers")
-    |> assign(:live_action, :index)
+    |> assign(:page_title, "Webhook subscriptions")
+    |> assign(:live_action, :list_push)
+  end
+
+  defp apply_action(socket, :list_pull, _params) do
+    socket
+    |> assign(:page_title, "Consumer endpoints")
+    |> assign(:live_action, :list_pull)
   end
 
   defp apply_action(socket, :new, %{"kind" => kind}) do
@@ -155,7 +182,8 @@ defmodule SequinWeb.ConsumersLive.Index do
       type: consumer_type(consumer),
       status: consumer.status,
       database_name: consumer.postgres_database.name,
-      health: Health.to_external(consumer.health)
+      health: Health.to_external(consumer.health),
+      href: RouteHelpers.consumer_path(consumer)
     }
   end
 

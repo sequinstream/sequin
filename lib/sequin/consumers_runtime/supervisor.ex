@@ -23,7 +23,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     default_opts = [consumer: consumer]
     consumer_features = Consumers.consumer_features(consumer)
 
-    {features, opts} = Keyword.pop(opts, :features)
+    {features, opts} = Keyword.pop(opts, :features, [])
     features = Keyword.merge(consumer_features, features)
 
     opts =

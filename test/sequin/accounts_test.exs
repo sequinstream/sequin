@@ -4,6 +4,7 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Accounts
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserToken
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ApiTokensFactory
@@ -788,6 +789,74 @@ defmodule Sequin.AccountsTest do
       # Removing a non-existent feature doesn't affect the list
       {:ok, updated_account} = Accounts.remove_feature(updated_account, "feature_c")
       assert length(updated_account.features) == 1
+    end
+  end
+
+  describe "invite_user/4" do
+    test "inviting a user to an account they do not own fails" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+
+      assert {:error, %InvariantError{message: "Cannot invite user to account"}} =
+               Accounts.invite_user(user, account, "test@example.com", fn _ -> "http://example.com" end)
+    end
+
+    test "inviting a user to an account they already are invited to fails" do
+      user = AccountsFactory.insert_user!()
+      user2 = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+
+      Accounts.associate_user_with_account(user, account)
+      Accounts.associate_user_with_account(user2, account)
+
+      assert {:error, %InvariantError{message: "User already invited to account"}} =
+               Accounts.invite_user(user, account, user2.email, fn _ -> "http://example.com" end)
+    end
+
+    test "sends an email to the user with a link to accept the invite" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account)
+
+      assert token =
+               AccountsSupport.extract_user_token(fn url ->
+                 Accounts.invite_user(user, account, "test@example.com", url)
+               end)
+
+      {:ok, token} = Base.url_decode64(token, padding: false)
+      assert user_token = Repo.get_by(UserToken, token: :crypto.hash(:sha256, token))
+      assert user_token.user_id == user.id
+      assert user_token.sent_to == "test@example.com"
+      assert user_token.context == "account-invite"
+      assert user_token.annotations["account_id"] == account.id
+    end
+
+    test "sending an invite twice removes the previous invite" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      Accounts.associate_user_with_account(user, account)
+
+      Accounts.invite_user(user, account, "test@example.com", fn _ -> "http://example.com" end)
+
+      assert token =
+               AccountsSupport.extract_user_token(fn url ->
+                 Accounts.invite_user(user, account, "test@example.com", url)
+               end)
+
+      {:ok, token} = Base.url_decode64(token, padding: false)
+      assert first_invite_token = Repo.get_by(UserToken, token: :crypto.hash(:sha256, token))
+
+      Accounts.invite_user(user, account, "test@example.com", fn _ -> "http://example.com" end)
+
+      assert token =
+               AccountsSupport.extract_user_token(fn url ->
+                 Accounts.invite_user(user, account, "test@example.com", url)
+               end)
+
+      {:ok, token} = Base.url_decode64(token, padding: false)
+      assert second_invite_token = Repo.get_by(UserToken, token: :crypto.hash(:sha256, token))
+
+      assert first_invite_token.id != second_invite_token.id
     end
   end
 end

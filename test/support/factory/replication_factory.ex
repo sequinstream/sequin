@@ -22,7 +22,8 @@ defmodule Sequin.Factory.ReplicationFactory do
       %PostgresReplicationSlot{
         postgres_database_id: Factory.uuid(),
         publication_name: "pub_#{Factory.name()}",
-        slot_name: "slot_#{Factory.name()}"
+        slot_name: "slot_#{Factory.name()}",
+        status: Factory.one_of([:active, :disabled])
       },
       attrs
     )

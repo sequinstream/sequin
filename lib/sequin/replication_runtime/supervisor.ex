@@ -12,6 +12,8 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
   alias Sequin.ReplicationRuntime.WalPipelineServer
   alias Sequin.Repo
 
+  require Logger
+
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
     Supervisor.start_link(__MODULE__, opts, name: name)
@@ -27,20 +29,25 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
 
-    default_opts = [
-      id: pg_replication.id,
-      slot_name: pg_replication.slot_name,
-      publication: pg_replication.publication_name,
-      postgres_database: pg_replication.postgres_database,
-      message_handler_ctx: MessageHandler.context(pg_replication),
-      message_handler_module: MessageHandler,
-      connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
-      ipv6: pg_replication.postgres_database.ipv6
-    ]
+    if pg_replication.status == :disabled do
+      Logger.info("PostgresReplicationSlot #{pg_replication.id} is disabled, skipping start")
+      {:error, :disabled}
+    else
+      default_opts = [
+        id: pg_replication.id,
+        slot_name: pg_replication.slot_name,
+        publication: pg_replication.publication_name,
+        postgres_database: pg_replication.postgres_database,
+        message_handler_ctx: MessageHandler.context(pg_replication),
+        message_handler_module: MessageHandler,
+        connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
+        ipv6: pg_replication.postgres_database.ipv6
+      ]
 
-    opts = Keyword.merge(default_opts, opts)
+      opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {ReplicationExt, opts})
+      Sequin.DynamicSupervisor.start_child(supervisor, {ReplicationExt, opts})
+    end
   end
 
   def start_replication(supervisor, id, opts) do

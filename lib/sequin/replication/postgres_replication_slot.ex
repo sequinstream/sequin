@@ -30,6 +30,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
   typed_schema "postgres_replication_slots" do
     field :publication_name, :string
     field :slot_name, :string
+    field :status, Ecto.Enum, values: [:active, :disabled], read_after_writes: true
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
@@ -45,7 +46,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id])
+    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id, :status])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)
@@ -58,7 +59,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def update_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name])
+    |> cast(attrs, [:publication_name, :slot_name, :status])
     |> validate_required([:publication_name, :slot_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
   end
@@ -66,6 +67,11 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()
   def where_account(query \\ base_query(), account_id) do
     from([postgres_replication: pgr] in query, where: pgr.account_id == ^account_id)
+  end
+
+  @spec where_status(Queryable.t(), atom()) :: Queryable.t()
+  def where_status(query \\ base_query(), status) do
+    from([postgres_replication: pgr] in query, where: pgr.status == ^status)
   end
 
   defp base_query(query \\ __MODULE__) do

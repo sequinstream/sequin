@@ -24,7 +24,7 @@ defmodule Sequin.Replication do
   end
 
   def all_active_pg_replications do
-    Repo.all(PostgresReplicationSlot)
+    Repo.all(PostgresReplicationSlot.where_status(:active))
   end
 
   def list_pg_replications_for_account(account_id) do

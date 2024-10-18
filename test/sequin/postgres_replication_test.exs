@@ -57,7 +57,8 @@ defmodule Sequin.PostgresReplicationTest do
           postgres_database_id: source_db.id,
           slot_name: replication_slot(),
           publication_name: @publication,
-          account_id: account_id
+          account_id: account_id,
+          status: :active
         )
 
       # Create a consumer for this replication slot (event)
@@ -914,7 +915,8 @@ defmodule Sequin.PostgresReplicationTest do
           postgres_database_id: source_db.id,
           slot_name: replication_slot(),
           publication_name: @publication,
-          account_id: account_id
+          account_id: account_id,
+          status: :active
         )
 
       sequence =
@@ -1248,7 +1250,8 @@ defmodule Sequin.PostgresReplicationTest do
           postgres_database_id: source_db.id,
           slot_name: replication_slot(),
           publication_name: @publication,
-          account_id: account_id
+          account_id: account_id,
+          status: :active
         )
 
       sequence =

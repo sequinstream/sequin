@@ -202,8 +202,8 @@
 
 <FullPageModal
   title={isEditMode
-    ? "Edit an HTTP push consumer"
-    : "Create an HTTP push consumer"}
+    ? "Edit Webhook Subscription"
+    : "Create Webhook Subscription"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   showConfirmOnExit={isDirty}

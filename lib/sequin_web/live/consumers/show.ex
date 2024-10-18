@@ -23,6 +23,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Metrics
   alias Sequin.Repo
   alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.RouteHelpers
 
   require Logger
 
@@ -78,7 +79,7 @@ defmodule SequinWeb.ConsumersLive.Show do
         {:ok,
          socket
          |> put_flash(:error, "Consumer not found")
-         |> push_navigate(to: ~p"/consumers")}
+         |> push_navigate(to: ~p"/sequences")}
     end
   end
 
@@ -116,6 +117,8 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    assigns = assign(assigns, :kind, Consumers.kind(assigns.consumer))
+
     ~H"""
     <!-- Use Flexbox to arrange header and content vertically -->
     <div id="consumer-show" class="flex flex-col">
@@ -125,6 +128,7 @@ defmodule SequinWeb.ConsumersLive.Show do
         props={
           %{
             consumer: encode_consumer(@consumer),
+            kind: @kind,
             parent: "consumer-show",
             live_action: @live_action,
             messages_failing: @metrics.messages_failing_count > 0
@@ -194,17 +198,29 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("edit", _params, socket) do
-    {:noreply, push_patch(socket, to: ~p"/consumers/#{socket.assigns.consumer.id}/edit")}
+    case Consumers.kind(socket.assigns.consumer) do
+      :push ->
+        {:noreply, push_patch(socket, to: ~p"/consumers/push/#{socket.assigns.consumer.id}/edit")}
+
+      :pull ->
+        {:noreply, push_patch(socket, to: ~p"/consumers/pull/#{socket.assigns.consumer.id}/edit")}
+    end
   end
 
   @impl Phoenix.LiveView
   def handle_event("delete", _params, socket) do
     case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
       {:ok, _deleted_consumer} ->
+        push_to =
+          case Consumers.kind(socket.assigns.consumer) do
+            :push -> ~p"/consumers/push"
+            :pull -> ~p"/consumers/pull"
+          end
+
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :success, title: "Consumer deleted."})
-         |> push_navigate(to: ~p"/consumers")}
+         |> push_navigate(to: push_to)}
 
       {:error, _changeset} ->
         {:noreply, push_toast(socket, %{kind: :error, title: "Failed to delete consumer. Please try again."})}
@@ -281,7 +297,7 @@ defmodule SequinWeb.ConsumersLive.Show do
      |> assign(:show_acked, show_acked)
      |> assign(:page, 0)
      |> load_consumer_messages()
-     |> push_patch(to: ~p"/consumers/#{socket.assigns.consumer.id}/messages?showAcked=#{show_acked}")}
+     |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
   end
 
   def handle_event("reset_message_visibility", %{"message_id" => message_id}, socket) do
@@ -305,7 +321,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply,
      socket
      |> assign(consumer: updated_consumer)
-     |> push_patch(to: ~p"/consumers/#{updated_consumer.id}")}
+     |> push_patch(to: RouteHelpers.consumer_path(updated_consumer))}
   end
 
   @impl Phoenix.LiveView
@@ -376,6 +392,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     %{
       id: consumer.id,
       name: consumer.name,
+      kind: :push,
       status: consumer.status,
       message_kind: consumer.message_kind,
       ack_wait_ms: consumer.ack_wait_ms,
@@ -389,7 +406,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
-      replica_warning_dismissed: consumer.replica_warning_dismissed
+      replica_warning_dismissed: consumer.replica_warning_dismissed,
+      href: RouteHelpers.consumer_path(consumer)
     }
   end
 
@@ -397,6 +415,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     %{
       id: consumer.id,
       name: consumer.name,
+      kind: :pull,
       status: consumer.status,
       message_kind: consumer.message_kind,
       ack_wait_ms: consumer.ack_wait_ms,
@@ -407,7 +426,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       updated_at: consumer.updated_at,
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
-      health: Health.to_external(consumer.health)
+      health: Health.to_external(consumer.health),
+      href: RouteHelpers.consumer_path(consumer)
     }
   end
 

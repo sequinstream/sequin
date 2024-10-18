@@ -377,7 +377,7 @@
           No messages found for the selected consumer.
         </p>
         <p class="text-gray-600">
-          Messages will be displayed here as soon as the consumer starts
+          Messages will be displayed here as soon as the consumer group starts
           processing them.
         </p>
       </div>

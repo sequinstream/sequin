@@ -2,7 +2,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   @moduledoc false
   use Broadway
 
-  alias Sequin.Consumers.ConsumerEventData
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
@@ -97,7 +97,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
   defp maybe_transform_message(true, consumer, message_data) do
     case message_data do
-      %ConsumerEventData{
+      %ConsumerRecordData{
         record: %{
           "action" => action,
           "changes" => changes,

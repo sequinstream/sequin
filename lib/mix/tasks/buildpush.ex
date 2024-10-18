@@ -8,8 +8,9 @@ defmodule Mix.Tasks.Buildpush do
   @red "\e[31m"
   @blue "\e[34m"
   @reset "\e[0m"
+  @yellow "\e[33m"
 
-  def run(_args) do
+  def run(args) do
     Application.ensure_all_started(:telemetry)
     Application.ensure_all_started(:req)
     start_time = System.monotonic_time(:second)
@@ -23,7 +24,8 @@ defmodule Mix.Tasks.Buildpush do
     sha = trimmed_cmd("git", ~w(rev-parse HEAD))
     branch = trimmed_cmd("git", ~w(rev-parse --abbrev-ref HEAD))
 
-    with :ok <- verify_branch(branch),
+    with :ok <- verify_clean_workdir(args),
+         :ok <- verify_branch(branch),
          :ok <- verify_signoff(owner, repo, sha) do
       build_and_push(start_time, owner, repo, sha, config)
     else
@@ -312,5 +314,26 @@ defmodule Mix.Tasks.Buildpush do
     IO.puts(:stderr, "#{@red}#{error}")
     IO.puts(:stderr, "#{@red}Exited after #{duration}#{@reset}")
     exit(:shutdown)
+  end
+
+  defp verify_clean_workdir(args) do
+    if "--dirty" in args do
+      IO.puts("#{@yellow}Warning: Running buildpush on a dirty repository.#{@reset}")
+      IO.puts("#{@yellow}Current git status:#{@reset}")
+      System.cmd("git", ["status", "--short"], into: IO.stream(:stdio, :line))
+      IO.puts("")
+      :ok
+    else
+      case System.cmd("git", ["status", "--porcelain"]) do
+        {"", 0} ->
+          :ok
+
+        {_, 0} ->
+          {:error, "Repository is dirty. Use 'mix buildpush --dirty' to override."}
+
+        _ ->
+          {:error, "Failed to check repository status"}
+      end
+    end
   end
 end

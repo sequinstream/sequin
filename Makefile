@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -53,6 +53,9 @@ check-links:
 buildpush:
 	mix buildpush
 
+buildpush-dirty:
+	mix buildpush --dirty
+
 help:
 	@echo "Available commands:"
 	@echo "  make dev       - Run the app locally"
@@ -69,6 +72,7 @@ help:
 	@echo "  make check-links - Run mintlify broken-links in the docs directory"
 	@echo "  make deploy [sha=<commit-sha>] - Deploy the specified or latest commit"
 	@echo "  make buildpush - Run mix buildpush (build and push docker image)"
+	@echo "  make buildpush-dirty - Run mix buildpush with --dirty flag"
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \

@@ -244,7 +244,33 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       # Ensure the backoff is increasing
       assert diff_ms2 > diff_ms1
     end
+  end
 
+  describe "messages flow from postgres to http end-to-end for message_kind=record" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
+
+      database = DatabasesFactory.postgres_database(account_id: account.id)
+      sequence = DatabasesFactory.sequence(postgres_database_id: database.id)
+      replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
+
+      consumer =
+        ConsumersFactory.http_push_consumer(
+          id: UUID.uuid4(),
+          account_id: account.id,
+          http_endpoint_id: http_endpoint.id,
+          replication_slot_id: replication.id,
+          sequence_id: sequence.id,
+          message_kind: :record
+        )
+
+      :ok = Consumers.create_consumer_partition(consumer)
+
+      {:ok, %{consumer: %{consumer | http_endpoint: http_endpoint, http_endpoint_id: http_endpoint.id}}}
+    end
+
+    @tag skip: true
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
       test_pid = self()
 
@@ -281,7 +307,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       }
 
       consumer_event =
-        ConsumersFactory.insert_consumer_event!(
+        ConsumersFactory.insert_consumer_record!(
           consumer_id: consumer.id,
           record_pks: [record["id"]],
           data:

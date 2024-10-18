@@ -19,7 +19,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
   end
 
   def start_link(_) do
-    GenServer.start_link(__MODULE__, :ignore)
+    GenServer.start_link(__MODULE__, :ignore, name: __MODULE__)
   end
 
   @impl GenServer

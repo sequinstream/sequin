@@ -311,16 +311,12 @@ defmodule Sequin.Consumers do
   end
 
   def consumer_features(%HttpPushConsumer{} = consumer) do
-    consumer = Repo.lazy_preload(consumer, [:postgres_database, :sequence, :account])
+    consumer = Repo.lazy_preload(consumer, [:account])
 
-    table = Enum.find(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-
-    with true <- is_struct(table),
-         true <- Accounts.has_feature?(consumer.account, :legacy_event_transform),
-         true <- Postgres.is_event_table?(table) do
+    if Accounts.has_feature?(consumer.account, :legacy_event_transform) do
       [legacy_event_transform: true]
     else
-      false -> []
+      []
     end
   end
 

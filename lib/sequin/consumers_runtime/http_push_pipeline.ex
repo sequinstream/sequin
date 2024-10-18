@@ -96,31 +96,35 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   end
 
   defp maybe_transform_message(true, consumer, message_data) do
-    %ConsumerEventData{
-      record: %{
-        "action" => action,
-        "changes" => changes,
-        "committed_at" => committed_at,
-        "record" => record,
-        "source_table_name" => source_table_name,
-        "source_table_schema" => source_table_schema
-      }
-    } = message_data
+    case message_data do
+      %ConsumerEventData{
+        record: %{
+          "action" => action,
+          "changes" => changes,
+          "committed_at" => committed_at,
+          "record" => record,
+          "source_table_name" => source_table_name,
+          "source_table_schema" => source_table_schema
+        }
+      } ->
+        %{
+          "record" => record,
+          "metadata" => %{
+            "consumer" => %{
+              "id" => consumer.id,
+              "name" => consumer.name
+            },
+            "table_name" => source_table_name,
+            "table_schema" => source_table_schema,
+            "commit_timestamp" => committed_at
+          },
+          "action" => action,
+          "changes" => changes
+        }
 
-    %{
-      "record" => record,
-      "metadata" => %{
-        "consumer" => %{
-          "id" => consumer.id,
-          "name" => consumer.name
-        },
-        "table_name" => source_table_name,
-        "table_schema" => source_table_schema,
-        "commit_timestamp" => committed_at
-      },
-      "action" => action,
-      "changes" => changes
-    }
+      _ ->
+        message_data
+    end
   end
 
   defp maybe_transform_message(false, _consumer, message_data), do: message_data

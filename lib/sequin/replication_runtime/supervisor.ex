@@ -95,6 +95,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
     pg_replication = Repo.preload(pg_replication, :wal_pipelines)
 
     pg_replication.wal_pipelines
+    |> Enum.filter(fn wp -> wp.status == :active end)
     |> Enum.group_by(fn wp -> {wp.replication_slot_id, wp.destination_oid, wp.destination_database_id} end)
     |> Enum.each(fn {{replication_slot_id, destination_oid, destination_database_id}, pipelines} ->
       start_wal_pipeline_server(replication_slot_id, destination_oid, destination_database_id, pipelines)

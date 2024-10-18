@@ -130,6 +130,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     encrypted_headers = http_endpoint.encrypted_headers || %{}
     headers = Map.merge(headers, encrypted_headers)
 
+    # Temporarily logging during migration
+    Logger.info("Pushing message", message_data: message_data)
+
     req =
       [
         base_url: HttpEndpoint.url(http_endpoint),

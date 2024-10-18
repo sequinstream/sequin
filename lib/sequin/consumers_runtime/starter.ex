@@ -13,13 +13,13 @@ defmodule Sequin.ConsumersRuntime.Starter do
   def init(_) do
     Logger.info("[ConsumersRuntimeStarter] Booting")
 
-    schedule_start(:timer.seconds(5))
+    schedule_start(10)
 
     {:ok, :ignore}
   end
 
   def start_link(_) do
-    GenServer.start_link(__MODULE__, :ignore)
+    GenServer.start_link(__MODULE__, :ignore, name: __MODULE__)
   end
 
   @impl GenServer
@@ -39,7 +39,7 @@ defmodule Sequin.ConsumersRuntime.Starter do
   defp start do
     Enum.each(
       Consumers.list_active_push_consumers([:postgres_database, :sequence, :account]),
-      &Supervisor.start_for_push_consumer(&1.id)
+      &Supervisor.start_for_push_consumer(&1)
     )
   end
 

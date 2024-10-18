@@ -1408,9 +1408,16 @@ defmodule Sequin.Consumers do
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
-      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id),
-           {:ok, _} <- ConsumersSupervisor.restart_for_push_consumer(consumer) do
-        :ok
+      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+        case consumer.status do
+          :active ->
+            {:ok, _} = ConsumersSupervisor.restart_for_push_consumer(consumer)
+            :ok
+
+          :disabled ->
+            ConsumersSupervisor.stop_for_push_consumer(consumer)
+            :ok
+        end
       end
     end
   end

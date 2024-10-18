@@ -141,7 +141,7 @@
   });
 
   let createEventTableDialogOpen = false;
-  let destinationTableName = "my_events";
+  let destinationTableName = "sequin_events";
   let retentionDays = 30;
 
   function openCreateEventTableDialog() {

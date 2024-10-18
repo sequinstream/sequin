@@ -497,7 +497,7 @@
                       class="bg-gray-100 p-4 rounded-lg flex justify-between items-center"
                     >
                       <h4 class="font-medium">{selectedTrace.consumer.name}</h4>
-                      <a href={`/consumers/${selectedTrace.consumer.id}`}>
+                      <a href={selectedTrace.consumer.href}>
                         <Button variant="outline" size="sm">
                           View Consumer
                           <ArrowUpRight class="h-4 w-4 ml-2" />

@@ -4,6 +4,8 @@
   import * as Command from "$lib/components/ui/command";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
+  import * as Tooltip from "$lib/components/ui/tooltip";
+  import { Badge } from "$lib/components/ui/badge";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -21,6 +23,7 @@
     Cog,
     Logs,
     ListOrdered,
+    RefreshCw,
   } from "lucide-svelte";
 
   export let live;
@@ -37,11 +40,32 @@
   let createAccountError: string | null = null;
 
   const navItems = [
-    { path: "/sequences", text: "Sequences", icon: ListOrdered },
-    { path: "/consumers", text: "Consumers", icon: Radio },
-    { path: "/databases", text: "Databases", icon: Database },
-    { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
-    { path: "/wal-pipelines", text: "WAL Pipelines", icon: Logs },
+    {
+      heading: "Stream",
+      items: [
+        { path: "/sequences", text: "Sequences", icon: ListOrdered },
+        { path: "/consumers/pull", text: "Consume Endpoints", icon: Radio },
+        {
+          path: "/consumers/push",
+          text: "Webhook Subscriptions",
+          icon: Webhook,
+        },
+        {
+          path: "/sync-endpoints",
+          text: "Sync Endpoints",
+          icon: RefreshCw,
+          disabledText: "Sync Endpoints are coming soon",
+        },
+      ],
+    },
+    {
+      heading: "Resources",
+      items: [
+        { path: "/databases", text: "Databases", icon: Database },
+        { path: "/wal-pipelines", text: "WAL Pipelines", icon: Logs },
+        { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
+      ],
+    },
   ];
 
   function navLink(path: string) {
@@ -122,22 +146,63 @@
 
   <div class="flex grow flex-col justify-between">
     <div class="text-basis mx-4 mt-5 flex h-full flex-col">
-      {#each navItems as item}
-        <a href={item.path} data-phx-link="redirect" data-phx-link-state="push">
-          <div
-            class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-              item.path
-            )}"
-          >
-            <svelte:component
-              this={item.icon}
-              class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
-            />
-            {#if !$isNavCollapsed}
-              <span class="text-sm leading-tight truncate">{item.text}</span>
-            {/if}
-          </div>
-        </a>
+      {#each navItems as group}
+        {#if !$isNavCollapsed}
+          <h3 class="text-xs font-semibold text-muted mb-2 mt-4">
+            {group.heading}
+          </h3>
+        {/if}
+        {#each group.items as item}
+          {#if item.disabledText}
+            <Tooltip.Root>
+              <Tooltip.Trigger asChild>
+                <div
+                  class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 text-carbon-300 cursor-not-allowed"
+                >
+                  <svelte:component
+                    this={item.icon}
+                    class="h-4 w-4 flex-shrink-0 {$isNavCollapsed
+                      ? ''
+                      : 'mr-2'}"
+                  />
+                  {#if !$isNavCollapsed}
+                    <span class="text-sm leading-tight truncate"
+                      >{item.text}</span
+                    >
+                    <span
+                      class="px-2 py-1 rounded-full bg-carbon-100 text-carbon-600 ml-2"
+                      style="font-size: 0.5em">SOON</span
+                    >
+                  {/if}
+                </div>
+              </Tooltip.Trigger>
+              <Tooltip.Content class="max-w-xs">
+                <p class="text-xs text-gray-500">{item.disabledText}</p>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          {:else}
+            <a
+              href={item.path}
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
+              <div
+                class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+                  item.path
+                )}"
+              >
+                <svelte:component
+                  this={item.icon}
+                  class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
+                />
+                {#if !$isNavCollapsed}
+                  <span class="text-sm leading-tight truncate">{item.text}</span
+                  >
+                {/if}
+              </div>
+            </a>
+          {/if}
+        {/each}
       {/each}
     </div>
 

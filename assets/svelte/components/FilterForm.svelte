@@ -416,7 +416,7 @@
   {#if messageKind === "record" && showStartPositionForm}
     <div>
       <Label for="startPosition" class="text-base font-medium">
-        Where should the consumer start?
+        Where should the consumer group start?
       </Label>
       <p class="text-sm text-muted-foreground mt-1 mb-2">
         Indicate where in the table you want the consumer to start.

@@ -6,12 +6,12 @@ defmodule SequinWeb.HomeLive do
   def mount(_params, _session, socket) do
     if Application.get_env(:sequin, :self_hosted) do
       if Sequin.Accounts.any_accounts?() do
-        {:ok, push_navigate(socket, to: "/consumers")}
+        {:ok, push_navigate(socket, to: "/sequences")}
       else
         {:ok, push_navigate(socket, to: "/setup")}
       end
     else
-      {:ok, push_navigate(socket, to: ~p"/consumers")}
+      {:ok, push_navigate(socket, to: ~p"/sequences")}
     end
   end
 end

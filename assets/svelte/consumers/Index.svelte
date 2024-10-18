@@ -46,6 +46,7 @@
   export let live: any;
   export let hasDatabases: boolean;
   export let hasSequences: boolean;
+  export let consumerKind: "push" | "pull";
 
   const hasConsumers = consumers.length > 0;
 
@@ -141,43 +142,24 @@
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Radio class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">Consumers</h1>
+      <h1 class="text-2xl font-bold">
+        {consumerKind === "push"
+          ? "Webhook Subscriptions"
+          : "Consume Endpoints"}
+      </h1>
     </div>
     {#if hasDatabases}
       {#if hasConsumers}
         <div class="relative inline-block text-left">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild let:builder>
-              <Button
-                variant="default"
-                builders={[builder]}
-                class="inline-flex items-center"
-              >
-                Create Consumer
-                <ChevronDown class="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <a
-                href="/consumers/new?kind=push"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Create Push Consumer
-                </DropdownMenuItem>
-              </a>
-              <a
-                href="/consumers/new?kind=pull"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Create Pull Consumer
-                </DropdownMenuItem>
-              </a>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <a
+            href={`/consumers/new?kind=${consumerKind}`}
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button variant="default">
+              Create {consumerKind === "push" ? "Subscription" : "Endpoint"}
+            </Button>
+          </a>
         </div>
       {/if}
     {/if}

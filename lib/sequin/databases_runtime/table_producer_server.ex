@@ -79,7 +79,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   def init(opts) do
     test_pid = Keyword.get(opts, :test_pid)
     maybe_setup_allowances(test_pid)
-    consumer = opts |> Keyword.fetch!(:consumer) |> Repo.preload([:sequence, replication_slot: :postgres_database])
+    consumer = opts |> Keyword.fetch!(:consumer) |> preload_consumer()
 
     state = %State{
       consumer: consumer,
@@ -254,10 +254,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         {:stop, :normal}
 
       consumer ->
-        consumer = Repo.preload(consumer, replication_slot: :postgres_database)
         actions = [reload_consumer_timeout()]
 
-        {:keep_state, %{state | consumer: consumer}, actions}
+        {:keep_state, %{state | consumer: preload_consumer(consumer)}, actions}
     end
   end
 
@@ -351,5 +350,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
+  end
+
+  defp preload_consumer(consumer) do
+    Repo.preload(consumer, [:sequence, replication_slot: :postgres_database])
   end
 end

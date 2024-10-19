@@ -5,7 +5,6 @@ defmodule Sequin.Release do
   def migrate(step) do
     load_app()
     ensure_ssl_started()
-    Application.ensure_all_started(:sequin)
 
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, step: step))
@@ -17,7 +16,6 @@ defmodule Sequin.Release do
   def migrate do
     load_app()
     ensure_ssl_started()
-    Application.ensure_all_started(:sequin)
 
     for repo <- repos() do
       {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :up, all: true))

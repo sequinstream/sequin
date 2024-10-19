@@ -5,6 +5,7 @@ defmodule SequinWeb.SequencesLive.Index do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Error.NotFoundError
+  alias Sequin.Error.ServiceError
   alias Sequin.Postgres
   alias Sequin.Repo
 
@@ -103,6 +104,10 @@ defmodule SequinWeb.SequencesLive.Index do
         submit_error =
           "Table is not in your publication, so Sequin won't receive changes from it. Please add it with `alter publication #{database.replication_slot.publication_name} add table {table_name}`"
 
+        {:noreply, assign(socket, submit_error: submit_error)}
+
+      {:error, %ServiceError{service: :postgres}} ->
+        submit_error = "We had trouble connecting to your database. Are your database connection details OK?"
         {:noreply, assign(socket, submit_error: submit_error)}
     end
   end

@@ -1493,4 +1493,13 @@ defmodule Sequin.Consumers do
       }
     end)
   end
+
+  @doc """
+  Checks if there are any consumers that haven't been migrated to use Sequences.
+
+  Returns `true` if there are any unmigrated consumers, `false` otherwise.
+  """
+  def any_unmigrated_consumers? do
+    Enum.any?(all_consumers(), fn consumer -> is_nil(consumer.sequence_id) end)
+  end
 end

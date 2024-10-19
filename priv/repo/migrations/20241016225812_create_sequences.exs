@@ -55,9 +55,5 @@ defmodule Sequin.Repo.Migrations.CreateSequences do
             );
             """,
             "select 1;"
-
-    flush()
-
-    Mix.Tasks.Sequin.MigrateToSequences.run([])
   end
 end

@@ -34,6 +34,10 @@ defmodule SequinWeb.Router do
 
     live_session :home do
       live "/", HomeLive, :index
+
+      if @self_hosted do
+        live "/migration-oct-2024", MigrationOct2024Live, :index
+      end
     end
   end
 

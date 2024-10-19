@@ -25,9 +25,9 @@ defmodule Sequin.HealthTest do
       assert health.status == :initializing
       assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :push, :warning)
+      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :warning)
       assert health.status == :warning
-      assert Enum.find(health.checks, &(&1.id == :push)).status == :warning
+      assert Enum.find(health.checks, &(&1.id == :filters)).status == :warning
       assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
 
       Enum.each(health.checks, fn check ->
@@ -52,10 +52,10 @@ defmodule Sequin.HealthTest do
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
       assert health.status == :initializing
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :push, :warning)
+      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :warning)
       assert health.status == :warning
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :error, ErrorFactory.random_error())
+      assert {:ok, %Health{} = health} = Health.update(entity, :push, :error, ErrorFactory.random_error())
       assert health.status == :error
 
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)

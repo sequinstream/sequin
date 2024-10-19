@@ -21,7 +21,7 @@ config :logger, :console,
 config :phoenix, :json_library, Jason
 
 config :redix,
-  url: "redis://localhost:6379"
+  start_opts: {"redis://localhost:6379", [name: :redix]}
 
 config :sentry,
   enable_source_code_context: true,

@@ -78,6 +78,15 @@ services:
 
 Make sure to configure the `PG_PORT` environment variable to match the port of your Postgres instance, usually `5432`.
 
+### IPv6
+
+Sequin supports IPv6 for Postgres and/or Redis connections. To enable IPv6, set the `PG_IPV6` and/or `REDIS_IPV6` environment variables to `true`:
+
+```bash
+PG_IPV6=true
+REDIS_IPV6=true
+```
+
 ## Getting started
 
 After booting the Docker compose stack, you can connect to Sequin at `http://localhost:7376`:

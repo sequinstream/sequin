@@ -30,6 +30,9 @@ if System.get_env("PHX_SERVER") do
   config :sequin, SequinWeb.Endpoint, server: true
 end
 
+# Deprecate ECTO_IPV6 in favor of PG_IPV6
+ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
+
 if config_env() == :prod and self_hosted do
   database_url =
     case System.get_env("PG_URL") do
@@ -55,8 +58,6 @@ if config_env() == :prod and self_hosted do
         url
     end
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
       raise """
@@ -76,7 +77,7 @@ if config_env() == :prod and self_hosted do
     ssl: System.get_env("PG_SSL") in ~w(true 1),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
     url: database_url,
-    socket_options: maybe_ipv6
+    socket_options: ecto_socket_opts
 
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you
@@ -99,8 +100,6 @@ end
 if config_env() == :prod and not self_hosted do
   database_url = System.fetch_env!("PG_URL")
 
-  maybe_ipv6 = if System.get_env("ECTO_IPV6") in ~w(true 1), do: [:inet6], else: []
-
   secret_key_base =
     System.get_env("SECRET_KEY_BASE") ||
       raise """
@@ -121,7 +120,7 @@ if config_env() == :prod and not self_hosted do
   config :sequin, Sequin.Repo,
     ssl: AwsRdsCAStore.ssl_opts(database_url),
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
-    socket_options: maybe_ipv6,
+    socket_options: ecto_socket_opts,
     url: database_url,
     datadog_req_opts: [
       headers: [
@@ -159,7 +158,9 @@ if config_env() == :prod do
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
-  config :redix, url: System.fetch_env!("REDIS_URL")
+  redix_socket_opts = if System.get_env("REDIS_IPV6") in ~w(true 1), do: [:inet6], else: []
+
+  config :redix, start_opts: {System.fetch_env!("REDIS_URL"), [name: :redix] ++ [socket_opts: redix_socket_opts]}
 
   config :sequin, Sequin.Vault,
     ciphers: [

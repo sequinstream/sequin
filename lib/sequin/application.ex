@@ -56,7 +56,7 @@ defmodule Sequin.Application do
       {Task.Supervisor, name: Sequin.TaskSupervisor},
       {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
       {Oban, Application.fetch_env!(:sequin, Oban)},
-      {Redix, {Application.get_env(:redix, :url), [name: :redix]}},
+      {Redix, Application.fetch_env!(:redix, :start_opts)},
       ConnectionCache,
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,

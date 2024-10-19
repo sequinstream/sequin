@@ -51,6 +51,20 @@ services:
       - REDIS_URL=<url>
 ```
 
+### Generating secrets
+
+The `docker-compose.yaml` file contains placeholder values for the `SECRET_KEY_BASE` and `VAULT_KEY` environment variables. While these are OK to use for development, you should generate your own secrets for production environments.
+
+To generate each secret, run the following command:
+
+```bash
+# SECRET_KEY_BASE
+openssl rand -base64 32
+
+# VAULT_KEY - make 'em different
+openssl rand -base64 32
+```
+
 ### Docker compose with existing project
 
 If you are adding Sequin to an existing `docker-compose.yaml` file in your project, you can add the following to the `services` section:

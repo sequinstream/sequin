@@ -8,6 +8,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
   alias Sequin.Health
   alias Sequin.Postgres
   alias Sequin.Replication
+  alias Sequin.Replication.WalPipeline
 
   require Logger
 
@@ -25,6 +26,10 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
     GenStateMachine.start_link(__MODULE__, opts,
       name: via_tuple({replication_slot_id, destination_oid, destination_database_id})
     )
+  end
+
+  def via_tuple(%WalPipeline{} = pipeline) do
+    via_tuple({pipeline.replication_slot_id, pipeline.destination_oid, pipeline.destination_database_id})
   end
 
   def via_tuple({replication_slot_id, destination_oid, destination_database_id}) do

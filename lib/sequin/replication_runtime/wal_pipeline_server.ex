@@ -83,6 +83,13 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
     table = Sequin.Enum.find!(tables, &(&1.oid == destination_oid))
     replication_slot = Replication.get_pg_replication!(replication_slot_id)
 
+    Logger.metadata(
+      account_id: replication_slot.account_id,
+      replication_slot_id: replication_slot_id,
+      table_oid: destination_oid,
+      database_id: destination_database_id
+    )
+
     state = %State{
       replication_slot: replication_slot,
       destination_table: table,

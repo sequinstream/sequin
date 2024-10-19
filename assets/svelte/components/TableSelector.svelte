@@ -150,7 +150,7 @@
 
   $: createTableDDL = `
 create table ${destinationTableName} (
-  id serial primary key,
+  id bigserial primary key,
   seq bigint not null,
   source_database_id uuid not null,
   source_table_oid bigint not null,

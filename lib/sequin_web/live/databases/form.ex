@@ -238,13 +238,13 @@ defmodule SequinWeb.DatabasesLive.Form do
         error_msg(error, use_local_tunnel)
 
       :econnrefused ->
-        maybe_append_local_tunnel_error(
+        maybe_append_network_instructions(
           "Connection refused. Please check if the database server is running and accessible.",
           use_local_tunnel
         )
 
       :timeout ->
-        maybe_append_local_tunnel_error(
+        maybe_append_network_instructions(
           "Connection timed out. Please verify the hostname and port are correct.",
           use_local_tunnel
         )
@@ -266,7 +266,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         Exception.message(error)
 
       %DBConnection.ConnectionError{reason: :queue_timeout} ->
-        maybe_append_local_tunnel_error(
+        maybe_append_network_instructions(
           "The database is not reachable. Please ensure the database server is running and accessible.",
           use_local_tunnel
         )
@@ -295,11 +295,16 @@ defmodule SequinWeb.DatabasesLive.Form do
     end
   end
 
-  defp maybe_append_local_tunnel_error(error, use_local_tunnel) do
-    if use_local_tunnel do
-      "#{error} Also, please make sure your tunnel is running via the Sequin CLI."
-    else
-      error
+  defp maybe_append_network_instructions(error, use_local_tunnel) do
+    cond do
+      use_local_tunnel ->
+        "#{error} Also, please make sure your tunnel is running via the Sequin CLI."
+
+      Application.get_env(:sequin, :self_hosted) ->
+        "#{error} If you are running Sequin inside of Docker and trying to connect to a database on your local machine, use the host `host.docker.internal` instead of `localhost`."
+
+      true ->
+        error
     end
   end
 

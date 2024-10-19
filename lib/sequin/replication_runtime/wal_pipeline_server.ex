@@ -114,6 +114,10 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
     :keep_state_and_data
   end
 
+  def handle_event(:enter, _, :awaiting_retry, _) do
+    :keep_state_and_data
+  end
+
   def handle_event(:state_timeout, :fetch_wal_events, :idle, state) do
     {:next_state, :fetching_wal_events, state}
   end

@@ -287,10 +287,6 @@ defmodule Sequin.Databases do
         {:error, error}
 
       {:error, error} when is_exception(error) ->
-        sanitized = db |> Map.from_struct() |> Map.delete(:password)
-
-        Logger.error("Unable to connect to database", error: error, metadata: %{connection_opts: sanitized})
-
         {:error, error}
     end
   end

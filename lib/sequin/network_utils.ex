@@ -32,11 +32,6 @@ defmodule Sequin.NetworkUtils do
           :ok
 
         {:error, error} ->
-          Logger.error("Unable to connect to database",
-            error: error,
-            metadata: %{host: host, port: port}
-          )
-
           case error do
             :nxdomain ->
               {:error, Error.validation(summary: "The host is not reachable (nxdomain).", code: :nxdomain)}
@@ -49,11 +44,6 @@ defmodule Sequin.NetworkUtils do
               {:error, Error.validation(summary: "Timed out attempting to reach the host on that port.", code: :timeout)}
 
             error ->
-              Logger.error("Unknown error when attempting to connect to database",
-                error: error,
-                metadata: %{host: host, port: port}
-              )
-
               {:error, Error.validation(summary: "Unknown error connecting to database: #{inspect(error)}")}
           end
       end

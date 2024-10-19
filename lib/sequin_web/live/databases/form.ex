@@ -170,6 +170,7 @@ defmodule SequinWeb.DatabasesLive.Form do
           {:reply, %{ok: false}, assign(socket, :submit_error, Exception.message(error))}
 
         {:error, error} ->
+          Logger.error("Error in DatabasesLive.Form#validate_and_create_or_update", error: error)
           {:reply, %{ok: false}, assign(socket, :submit_error, error_msg(error, params["database"]["use_local_tunnel"]))}
       end
     else

@@ -83,6 +83,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         }
       )
       |> assign(:encoded_api_token, encode_api_token(assigns.api_token))
+      |> assign(:show_local_tunnel_prompt, not Application.get_env(:sequin, :self_hosted))
 
     ~H"""
     <div id={@parent_id}>
@@ -97,7 +98,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
             api_token: @encoded_api_token,
-            existingDatabaseCheck: @existing_database_check
+            existingDatabaseCheck: @existing_database_check,
+            showLocalTunnelPrompt: @show_local_tunnel_prompt
           }
         }
       />

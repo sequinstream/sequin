@@ -19,7 +19,6 @@
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
   import CodeWithCopy from "../components/CodeWithCopy.svelte";
-  import CopyIcon from "../components/CopyIcon.svelte";
   import {
     Alert,
     AlertDescription,
@@ -67,7 +66,7 @@
   export let showSupabasePoolerPrompt: boolean = false;
   export let api_token: { name: string; token: string };
   export let existingDatabaseCheck: boolean;
-
+  export let showLocalTunnelPrompt: boolean = true;
   let form = { ...database, ssl: true }; // Set default SSL to true
 
   const isEdit = !!form.id;
@@ -315,22 +314,24 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           >
             <Label for="hostname">Host</Label>
             <div class="flex items-center space-x-2">
-              <Switch
-                id="use-localhost"
-                checked={form.useLocalTunnel}
-                onCheckedChange={toggleLocalTunnel}
-                disabled={isEdit}
-              />
-              <Label for="use-localhost">Use localhost</Label>
-              <Popover>
-                <PopoverTrigger>
-                  <Info class="w-4 h-4 text-muted-foreground" />
-                </PopoverTrigger>
-                <PopoverContent>
-                  You can use the Sequin CLI to connect Sequin to a database
-                  running on your local machine.
-                </PopoverContent>
-              </Popover>
+              {#if showLocalTunnelPrompt}
+                <Switch
+                  id="use-localhost"
+                  checked={form.useLocalTunnel}
+                  onCheckedChange={toggleLocalTunnel}
+                  disabled={isEdit}
+                />
+                <Label for="use-localhost">Use localhost</Label>
+                <Popover>
+                  <PopoverTrigger>
+                    <Info class="w-4 h-4 text-muted-foreground" />
+                  </PopoverTrigger>
+                  <PopoverContent>
+                    You can use the Sequin CLI to connect Sequin to a database
+                    running on your local machine.
+                  </PopoverContent>
+                </Popover>
+              {/if}
             </div>
           </div>
           <Input

@@ -89,7 +89,7 @@ config :sequin, SequinWeb.Endpoint,
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :sequin, dev_routes: true
+config :sequin, dev_routes: true, self_hosted: false
 
 # Do not include metadata nor timestamps in development logs
 

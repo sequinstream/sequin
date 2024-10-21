@@ -177,7 +177,7 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_result(result, state) do
-    Logger.error("Unknown result: #{inspect(result)}")
+    Logger.warning("Unknown result: #{inspect(result)}")
     {:noreply, state}
   end
 

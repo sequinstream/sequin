@@ -13,6 +13,7 @@ defmodule Sequin.Databases.Sequence do
     field :table_name, :string
     field :sort_column_attnum, :integer
     field :sort_column_name, :string
+    field :sort_column_type, :string, virtual: true
 
     belongs_to :postgres_database, PostgresDatabase
 

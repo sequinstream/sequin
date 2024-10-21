@@ -284,6 +284,8 @@
         <FilterForm
           messageKind={form.messageKind}
           {selectedTable}
+          sortColumnName={selectedSequence?.sort_column_name}
+          sortColumnType={selectedSequence?.sort_column_type}
           bind:form
           {errors}
           {isEditMode}

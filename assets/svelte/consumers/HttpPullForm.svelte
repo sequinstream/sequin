@@ -4,8 +4,6 @@
   import { Input } from "$lib/components/ui/input";
   import {
     Select,
-    SelectContent,
-    SelectItem,
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
@@ -24,7 +22,6 @@
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils";
-  import { ExternalLinkIcon } from "lucide-svelte";
   import FilterForm from "../components/FilterForm.svelte";
 
   export let live;
@@ -68,7 +65,7 @@
     pushEvent("form_updated", { form });
   }
 
-  const pushEvent = (event, payload = {}, cb = (event: any) => {}) => {
+  const pushEvent = (event, payload = {}, cb = () => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
@@ -223,6 +220,8 @@
         <FilterForm
           messageKind={form.messageKind}
           {selectedTable}
+          sortColumnName={selectedSequence?.sort_column_name}
+          sortColumnType={selectedSequence?.sort_column_type}
           bind:form
           {errors}
           {isEditMode}

@@ -1,10 +1,4 @@
 <script lang="ts">
-  import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-  } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
   import {
     Select,
@@ -14,8 +8,7 @@
     SelectValue,
   } from "$lib/components/ui/select";
   import { Switch } from "$lib/components/ui/switch";
-  import { ExternalLinkIcon, HelpCircle } from "lucide-svelte";
-  import { getColorFromName } from "$lib/utils";
+  import { HelpCircle } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { PlusCircle } from "lucide-svelte";
@@ -25,6 +18,8 @@
 
   export let messageKind: string;
   export let selectedTable: any;
+  export let sortColumnName: any;
+  export let sortColumnType: any;
   export let form: any;
   export let errors: any;
   export let showTitle: boolean = true;
@@ -440,14 +435,14 @@
         <div class="grid grid-cols-[auto_1fr] gap-4 content-center mt-4">
           <div class="flex items-center space-x-2 text-sm font-mono">
             <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
-              >{selectedTable.sort_column_name}</span
+              >{sortColumnName}</span
             >
             <span class="bg-secondary-2xSubtle px-2 py-1 rounded">&gt;=</span>
           </div>
 
-          {#if selectedTable.sort_column_type.startsWith("timestamp")}
+          {#if sortColumnType.startsWith("timestamp")}
             <Datetime bind:value={form.recordConsumerState.initialMinSortCol} />
-          {:else if ["integer", "bigint", "smallint", "serial"].includes(selectedTable.sort_column_type)}
+          {:else if ["integer", "bigint", "smallint", "serial"].includes(sortColumnType)}
             <Input
               type="number"
               bind:value={form.recordConsumerState.initialMinSortCol}

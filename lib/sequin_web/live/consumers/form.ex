@@ -305,7 +305,9 @@ defmodule SequinWeb.ConsumersLive.Form do
       "table_oid" => sequence.table_oid,
       "table_name" => sequence.table_name,
       "table_schema" => sequence.table_schema,
-      "sort_column_name" => sequence.sort_column_name
+      "sort_column_name" => sequence.sort_column_name,
+      "sort_column_attnum" => sequence.sort_column_attnum,
+      "sort_column_type" => sequence.sort_column_type
     }
   end
 
@@ -321,10 +323,17 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp encode_database(database) do
+    sequences_with_sort_column_type =
+      Enum.map(database.sequences, fn %Sequence{} = sequence ->
+        table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
+        column = Sequin.Enum.find!(table.columns, &(&1.attnum == sequence.sort_column_attnum))
+        %{sequence | sort_column_type: column.type}
+      end)
+
     %{
       "id" => database.id,
       "name" => database.name,
-      "sequences" => Enum.map(database.sequences, &encode_sequence/1),
+      "sequences" => Enum.map(sequences_with_sort_column_type, &encode_sequence/1),
       "tables" =>
         Enum.map(database.tables, fn %Table{} = table ->
           %{

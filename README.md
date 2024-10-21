@@ -20,13 +20,18 @@
 
 ## What is Sequin?
 
-Sequin streams data out of your Postgres database. You can use it to **replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients. Or you can use it to build **event processing workflows**, such as triggering side effects when data in Postgres changes.
+Sequin is a tool for capturing changes and streaming data out of your Postgres database.
 
-Sequin itself is built on Postgres. It uses the Write Ahead Log (WAL) to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like [Debezium](#sequin-vs-debezium--kafka) and [Kafka](#sequin-vs-kafka).
+Sequin is great for:
+
+1. **[Replicating data](#replication-use-case)** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
+2. **[Building event driven workflows](#event-driven-use-case)** such as triggering side effects when data in Postgres changes.
+
+Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like [Debezium](#sequin-vs-debezium--kafka) and [Kafka](#sequin-vs-kafka).
 
 Sequin is a standalone Docker container that you can deploy in front of your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 
-Sequin is open source/MIT. We can't wait to see what you build.
+Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
 ## Killer features
 
@@ -38,50 +43,68 @@ Sequin is open source/MIT. We can't wait to see what you build.
 - **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-## Cloud
+## Getting started
 
-[**Try Sequinstream.com now →**](https://console.sequinstream.com/register)
+The quickest way to get started is to create an account in our [web app](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
 
-## How Sequin works
+Our [cloud quickstart](https://sequinstream.com/docs/quickstart) and [database setup guides](https://sequinstream.com/docs/guides/rds) are helpful resources.
 
-![Sequin architecture](./docs/images/readme/arch-diagram.png)
+### Self-hosting
 
-Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
-
-Sequin connects to any Postgres database via both direct table reads (i.e. `select`) and the WAL. Consumers can start processing rows at any point in the table. Sequin turns the table's rows into a stream of messages. You can read those messages over an HTTP interface similar to SQS, or Sequin can push changes to you via webhooks.
-
-As rows are inserted or updated, Sequin will redeliver them to consumers.
-
-With [WAL Pipelines](#wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
+If you prefer to self-host, follow our [self-hosted quickstart](https://sequinstream.com/docs/self-hosting/docker-compose).
 
 You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
-Sequin comes with a web console/UI for configuration:
-
-1. Connect any Postgres database to Sequin (Sequin uses logical replication).
-2. Select the tables, actions, and SQL filters that publish messages to your consumers.
-3. Consume messages using HTTP pull and push interfaces. (You can use our SDKs.)
-
-You can configure Sequin as code using TOML config files (coming soon).
-
-## Benchmarks
-
-Sequin efficiently captures changes using the Write Ahead Log. This adds virtually no overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
-
-Postgres Performance is highly dependent on machine resources. But to give you an idea, a `db.m5.xlarge` RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle inserts at 5,000 messages/second, with bursts up to 10k messages/second.
-
 ## Use cases
 
+<a name="replication-use-case"></a>
 **Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
 ![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-replication.svg?)
 
+<a name="event-driven-use-case"></a>
 **Trigger side-effects:** Never miss a change in your database for processing by other systems.
 ![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-side-effect.svg?)
 
 **Fan out:** Broadcast events, distribute workloads, and decouple services.
 ![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-fan-out.svg?)
 
-## Sequin vs Kafka
+## How Sequin works
+
+![Sequin architecture](./docs/images/core/consumer-workflow-diagram.png)
+
+Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
+
+Sequin connects to any Postgres database via a replication slot and direct table reads (i.e. `select`). To stream data, you'll create [sequences](https://sequinstream.com/docs/how-sequin-works#sequences) for each table you want to stream. Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume rows by:
+
+  1. Using the [Consume API](https://sequinstream.com/docs/how-sequin-works#consume-api)
+  2. Receiving [webhooks](https://sequinstream.com/docs/how-sequin-works#webhooks)
+  3. Using the [Sync API](https://sequinstream.com/docs/how-sequin-works#sync-api) ([coming soon](https://github.com/sequinstream/sequin/issues/345))
+
+As rows are inserted or updated, Sequin will redeliver them to consumers until acknowledged.
+
+With [WAL Pipelines](#wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
+
+Sequin comes with a web console/UI for configuration:
+
+1. Connect any Postgres database to Sequin (Sequin uses logical replication).
+2. Add sequences and consumers to tables you want to stream.
+3. Consume messages using Sequin's APIs (You can use our SDKs.)
+
+You can configure Sequin as code using TOML config files ([coming soon](https://github.com/sequinstream/sequin/issues/315)).
+
+## Benchmarks
+
+Sequin efficiently captures changes using logical replication. This adds virtually no overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
+
+Postgres Performance is highly dependent on machine resources. But to give you an idea, a `db.m5.xlarge` RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle inserts at 5,000 messages/second, with bursts up to 10k messages/second.
+
+## How Sequin compares
+
+<details>
+
+<summary>Sequin vs Kafka</summary>
+
+### Sequin vs Kafka
 
 Apache Kafka is a distributed event streaming platform. Kafka is designed for very high throughput and horizontal scalability.
 
@@ -93,6 +116,12 @@ Consumers can also use SQL-based filtering to consume a subset of rows from a ta
 
 While Kafka may be necessary for very high throughput use cases (logs or metrics, millions of messages per second), Postgres and Sequin are able to handle a lot of use cases with a lot less complexity (even modest Postgres instances can handle tens of thousands of messages per second).
 
+</details>
+
+<details>
+
+<summary>Sequin vs Debezium + Kafka</summary>
+
 ## Sequin vs Debezium + Kafka
 
 Debezium is a change data capture (CDC) tool for databases like Postgres. It requires an external messaging system like Kafka to operate.
@@ -103,11 +132,23 @@ Debezium is a complex system that requires a lot of setup and configuration.
 
 Sequin is simpler to setup and operate, yet is quickly becoming as comprehensive as Debezium. Sequin comes with a much more comprehensive UI for configuration and monitoring. And Sequin doesn't require another messaging system like Kafka to learn and operate. With [WAL Pipelines](#wal-pipelines) you can capture the same changes that Debezium does.
 
+</details>
+
+<details>
+
+<summary>Sequin vs PG Triggers</summary>
+
 ## Sequin vs PG Triggers
 
 [PG Triggers](https://www.postgresql.org/docs/current/sql-createtrigger.html) provide exactly-once processing guarantees within the context of your database. For instance, you can ensure that when a record is inserted in one table, it is appended to another.
 
 Sequin extends this guarantee outside of your database with a simple HTTP interface. Notably, Sequin is much more efficient at processing changes - as the trigger is captured via the WAL while Postgres triggers execute per row, inside transactions.
+
+</details>
+
+<details>
+
+<summary>Sequin vs LISTEN / NOTIFY</summary>
 
 ## Sequin vs LISTEN / NOTIFY
 
@@ -115,7 +156,13 @@ Sequin extends this guarantee outside of your database with a simple HTTP interf
 
 Sequin adds a HTTP interface and persistent, durable messaging to provide exactly-once processing guarantees to the NOTIFY implementation. Paired with filtering, transforms, and observability - Sequin is easier to use and monitor.
 
-## Amazon SQS
+</details>
+
+<details>
+
+<summary>Sequin vs Amazon SQS</summary>
+
+## Sequin vs Amazon SQS
 
 Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
 
@@ -123,21 +170,8 @@ Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, Se
 
 So, Sequin is kind of like combining your Postgres table with SQS, like you might do with a system like Debezium.
 
-## WAL Pipelines
-
-Sequin streams rows from your Postgres tables. To capture and stream discrete changes to your tables – including `OLD` values for updates and hard-deletes – you can use **WAL Pipelines**. WAL Pipelines insert WAL records into an append-only event log table in your database. You can then stream these changes with Sequin.
-
-## Documentation
-
-For Sequin's complete documentation, visit [sequinstream.com/docs](http://sequinstream.com/docs).
-
-## Quick start
-
-Sequin is available as a cloud version or self-hosted. See the following docs to get up and running quickly:
-
-- [Sequin cloud quickstart](https://sequinstream.com/docs/quickstart)
-- [Sequin self-hosted quickstart](https://sequinstream.com/docs/self-hosting/docker-compose)
+</details>
 
 ## Contribute
 
-Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or send us a note: [support@sequinstream.com](mailto:support@sequinstream.com)
+Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or join the [Discord Server](https://discord.gg/BV8wFXvNtY) and let us know what you want to build.

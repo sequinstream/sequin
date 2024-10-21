@@ -168,49 +168,30 @@
   {#if !hasConsumers}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No consumers</h2>
+        <h2 class="text-xl font-semibold mb-4">
+          {consumerKind === "push"
+            ? "No Webhook Subscriptions"
+            : "No Consume Endpoints"}
+        </h2>
         <p class="text-gray-600 mb-6">
-          Consumers filter, transform, and send messages from a table in your
-          database to your application or another service.
-        </p>
-        <p class="text-gray-600 mb-6">
-          You need to connect a database to Sequin before you can create a
-          consumer.
+          {#if consumerKind === "push"}
+            Webhook Subscriptions filter, transform, and send messages from a
+            table in your database to your application or another service.
+          {:else}
+            Consume Endpoints let you filter, transform, and pull messages from
+            a table in your database into your application.
+          {/if}
         </p>
         <div class="relative inline-block text-left">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild let:builder>
-              <Button
-                variant="default"
-                builders={[builder]}
-                class="inline-flex items-center"
-                disabled={!hasDatabases || !hasSequences}
-              >
-                Create Consumer
-                <ChevronDown class="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <a
-                href="/consumers/new?kind=push"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Create Push Consumer
-                </DropdownMenuItem>
-              </a>
-              <a
-                href="/consumers/new?kind=pull"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <DropdownMenuItem class="cursor-pointer">
-                  Create Pull Consumer
-                </DropdownMenuItem>
-              </a>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <a
+            href={`/consumers/new?kind=${consumerKind}`}
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button variant="default">
+              Create {consumerKind === "push" ? "Subscription" : "Endpoint"}
+            </Button>
+          </a>
         </div>
       </div>
     </div>

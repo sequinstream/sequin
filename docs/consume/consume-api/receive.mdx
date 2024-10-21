@@ -1,7 +1,7 @@
 ---
 title: 'Receive next messages'
 sidebarTitle: "Receive"
-description: "Use the `/receive` endpoint to get one or more messages from a pull consumer"
+description: "Use the `/receive` endpoint to get one or more messages from a Consume endpoint"
 api: 'POST /http_pull_consumers/{consumer_name_or_id}/receive'
 ---
 
@@ -35,7 +35,7 @@ The response is an object with a `data` property that contains a list of message
     A [row](/how-sequin-works#rows) containing the message data with a key for each column in the associated table.
     </ResponseField>
     <ResponseField name="ack_token" type="string">
-    You'll use the `ack_token` in follow-up requests to either [ack](/management-api/http-pull-consumers/ack) or [nack](/management-api/http-pull-consumers/nack) this specific message.
+    You'll use the `ack_token` in follow-up requests to either [ack](/consume/consume-api/ack) or [nack](/consume/consume-api/nack) this specific message.
     </ResponseField>
   </Expandable>
 </ResponseField>

@@ -162,17 +162,17 @@ After creating a sequence, you have a few options for consuming rows with Sequin
 
 ### Consume API
 
-With the **Consume API**, you can setup an HTTP endpoint that your apps and services pull rows from. The endpoint follows the popular **consumer group** pattern of other queues and streams:
+With the [**Consume API**](/consume/consume-api/overview), you can setup an HTTP endpoint that your apps and services pull rows from. The endpoint follows the popular **consumer group** pattern of other queues and streams:
 
 1. You can have many **consumers** (processes or workers) all pulling from the consume endpoint at the same time.
 2. After a batch of rows is delivered to a consumer in the group, that consumer has a certain period of time to process the rows. This **visibility timeout** is configurable at the group level.
-3. After processing a batch of rows, the consumer acknowledges them by calling the [acknowledge endpoint](/management-api/http-pull-consumers/ack).
+3. After processing a batch of rows, the consumer acknowledges them by calling the [acknowledge endpoint](/consume/consume-api/ack).
 4. If the consumer fails to process the batch, rows in the batch will be made available again for delivery to other consumers in the group.
 5. When a row is updated in the database, it is re-delivered to the group.
 
 You can setup many consumer groups for a single table.
 
-[Read more](/management-api/http-pull-consumers/overview) about the Consume API endpoints.
+[Read more](/consume/consume-api/overview) about the Consume API endpoints.
 
 <Frame>
   <img src="/images/core/pull-instructions.png" alt="The Sequin UI, displaying instructions for pulling messages from a consumer. The instructions are curl requests to the consumer's endpoint." style={{ maxWidth: '500px' }} />

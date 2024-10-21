@@ -1,0 +1,103 @@
+---
+title: 'Overview'
+description: "Exactly-once processing of rows from your database"
+icon: "code"
+iconType: "solid"
+---
+
+The **Consume API** allows you to pull rows from your Sequin sequences using HTTP endpoints. It follows the popular **consumer group** pattern, providing scalable and fault-tolerant processing of your data.
+
+In the consumer group pattern, each message (i.e. row from your table) goes to only one worker in the group. If a worker fails, other workers can pick up its messages, making sure nothing is missed.
+
+When you set up a Consume API endpoint, Sequin provisions an HTTP endpoint for your consumer group:
+
+```
+https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_GROUP_NAME}}/
+```
+
+Key features of the Consume API include:
+
+- **Multiple consumers**: You can have many processes or workers pulling from the same endpoint simultaneously.
+- **Visibility timeout**: After receiving a batch of rows, a consumer has a configurable period to process them before they become available to other consumers.
+- **Acknowledgment**: Consumers explicitly acknowledge processed rows to ensure exactly-once delivery.
+- **Automatic retries**: If a consumer fails to process or acknowledge a batch, those rows become available for redelivery.
+- **Receive inserts and updates right away**: When a row is inserted in the database, it is delivered to the consumer group. If it is updated, it is re-delivered to the consumer group.
+
+There are three main steps in the lifecycle of processing messages with the Consume API:
+
+<Steps>
+  <Step title="Receive" icon="arrow-right-to-arc">
+    Your worker requests one or a batch of available messages from the consumer group by calling the `/receive` endpoint.
+  </Step>
+  <Step title="Process" icon="gear">
+    Your worker processes the received messages.
+  </Step>
+  <Step title="Ack or Nack" icon="arrow-left-from-arc">
+    After processing, your worker sends an acknowledgement ('ack') for successfully processed messages or a negative acknowledgement ('nack') for messages that couldn't be processed.
+  </Step>
+</Steps>
+
+If a message is neither ack'd nor nack'd within the visibility timeout, Sequin automatically makes it available for other workers in the group to process.
+
+## Processing messages
+
+The first step is to make a call to the [`/receive` endpoint](/consume/consume-api/receive) to get one or a batch of messages:
+
+```bash
+curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/receive?batch_size=10 \
+  -H "Authorization: Bearer {your-token}"
+```
+
+This will return a batch of messages. Each message will contain an `ack_token` and either a row or changes object:
+
+```json
+{
+  "data": [
+    {
+      "ack_token": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 2,
+        "name": "Chani",
+        "title": "Fremen Warrior",
+        "spice_allocation": 500,
+        "is_sayyadina": true
+      },
+      "changes": null,
+      "action": "insert",
+    },
+    // more messages...
+  ]
+}
+```
+
+While your worker is processing this batch of messages, the messages will not be visible to other workers. The amount of time these messages are not visible (i.e. the visibility timeout) defaults to `30` seconds and is configurable in your consumer's settings.
+
+Once your worker has finished processing the messages, you'll [acknowledge](/consume/consume-api/ack) or **ack** them. This tells Sequin you're done processing them, and ensures that workers for your consumer won't see them again:
+
+```bash
+curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/ack \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {your-token}" \
+  -d '{
+    "ack_tokens": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
+  }'
+```
+
+Alternatively, if you're unable to process the messages, you can [**nack**](/consume/consume-api/nack) them. This tells Sequin to make the messages available for processing again:
+
+```bash
+curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/nack \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer {your-token}" \
+  -d '{
+    "ack_tokens": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
+  }'
+```
+
+Nacking is a good option if for whatever reason you can't process the messages right away, but you anticipate they will be processable shortly. For example, if you're having difficulty connecting to a downstream database, you can `nack` in the hopes that another worker will pick up the messages that has a working connection.
+
+Instead of nacking, your worker can also do nothing. After the visibility timeout expires, the messages will be made available for processing again.
+
+### Parallel processing
+
+You can have multiple workers process messages for a single pull consumer. This is a great way to scale your processing throughput in a more deterministic way compared to push consumers.

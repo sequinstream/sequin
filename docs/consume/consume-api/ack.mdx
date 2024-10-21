@@ -1,7 +1,7 @@
 ---
-title: 'Nack messages'
-description: "Nack messages for a pull consumer"
-api: 'POST /http_pull_consumers/{consumer_name_or_id}/nack'
+title: 'Ack messages'
+description: "Ack messages for a Consume endpoint"
+api: 'POST /http_pull_consumers/{consumer_name_or_id}/ack'
 ---
 
 ## Request parameters
@@ -10,15 +10,15 @@ api: 'POST /http_pull_consumers/{consumer_name_or_id}/nack'
   The ID or name of the consumer.
 </ParamField>
 <ParamField body="ack_tokens" type="string[]" required>
-  An array of `ack_token` values to nack.
+  An array of `ack_token` values to acknowledge.
 
-  Each message returned by the [`/receive` endpoint](/management-api/http-pull-consumers/receive) contains an `ack_token` that you can use to `nack`` the message.
+  Each message returned by the [`/receive` endpoint](/consume/consume-api/receive) contains an `ack_token` that you can use to acknowledge the message.
 </ParamField>
 
 <RequestExample>
 ```shell
 curl --request POST \
-  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/nack \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/ack \
   --header 'Authorization: Bearer YOUR_API_TOKEN'\
   --header 'Content-Type: application/json' \
   --data '{

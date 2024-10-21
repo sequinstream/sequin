@@ -54,6 +54,20 @@
       ]
     },
     {
+      "group": "Consume",
+      "pages": [
+        {
+          "group": "Consume API",
+          "pages": [
+            "consume/consume-api/overview",
+            "consume/consume-api/receive",
+            "consume/consume-api/ack",
+            "consume/consume-api/nack"
+          ]
+        }
+      ]
+    },
+    {
       "group": "Database setup",
       "pages": [
         "guides/gcp",
@@ -88,16 +102,7 @@
       "pages": [
         "management-api/introduction",
         "management-api/authentication",
-        "management-api/errors",
-        {
-          "group": "HTTP Pull Consumers",
-          "pages": [
-            "management-api/http-pull-consumers/overview",
-            "management-api/http-pull-consumers/receive",
-            "management-api/http-pull-consumers/ack",
-            "management-api/http-pull-consumers/nack"
-          ]
-        }
+        "management-api/errors"
       ]
     }
   ],

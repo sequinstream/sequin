@@ -466,7 +466,7 @@ defmodule Sequin.Postgres do
   """
   def quote_name(nil, name), do: quote_name(name)
 
-  def quote_name(prefix, name), do: [quote_name(prefix), ?., quote_name(name)]
+  def quote_name(prefix, name), do: to_string([quote_name(prefix), ?., quote_name(name)])
 
   def quote_name(name) when is_atom(name) do
     quote_name(Atom.to_string(name))

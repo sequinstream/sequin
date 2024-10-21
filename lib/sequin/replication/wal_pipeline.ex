@@ -14,6 +14,7 @@ defmodule Sequin.Replication.WalPipeline do
     field :destination_oid, :integer
 
     field :health, :map, virtual: true
+    field :annotations, :map, default: %{}
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
     belongs_to :replication_slot, Sequin.Replication.PostgresReplicationSlot
@@ -27,14 +28,14 @@ defmodule Sequin.Replication.WalPipeline do
   @doc false
   def create_changeset(wal_pipeline, attrs) do
     wal_pipeline
-    |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id])
+    |> cast(attrs, [:name, :status, :seq, :replication_slot_id, :destination_oid, :destination_database_id, :annotations])
     |> changeset()
   end
 
   @doc false
   def update_changeset(wal_pipeline, attrs) do
     wal_pipeline
-    |> cast(attrs, [:name, :status, :seq])
+    |> cast(attrs, [:name, :status, :seq, :annotations])
     |> changeset()
   end
 

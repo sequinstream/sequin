@@ -4,8 +4,11 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Health
+  alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Repo
 
@@ -25,6 +28,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
           |> assign(:wal_pipeline, wal_pipeline)
           |> assign_health()
           |> assign_metrics()
+          |> assign_replica_identity()
 
         if connected?(socket) do
           Process.send_after(self(), :update_health, 1000)
@@ -47,6 +51,25 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("refresh_replica_warning", _params, socket) do
+    {:noreply, assign_replica_identity(socket)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("dismiss_replica_warning", _params, socket) do
+    wal_pipeline = socket.assigns.wal_pipeline
+    new_annotations = Map.put(wal_pipeline.annotations, "replica_warning_dismissed", true)
+
+    case Replication.update_wal_pipeline(wal_pipeline, %{annotations: new_annotations}) do
+      {:ok, updated_wal_pipeline} ->
+        {:noreply, assign(socket, :wal_pipeline, updated_wal_pipeline)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to dismiss warning. Please try again.")}
+    end
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 10_000)
     {:noreply, assign_health(socket)}
@@ -59,6 +82,14 @@ defmodule SequinWeb.WalPipelinesLive.Show do
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    # Show when: we successfully loaded the replica identity, it's not full, and it's not dismissed
+    show_replica_warning =
+      assigns.replica_identity.ok? and
+        assigns.replica_identity.result != :full and
+        not assigns.wal_pipeline.annotations["replica_warning_dismissed"]
+
+    assigns = assign(assigns, :show_replica_warning, show_replica_warning)
+
     ~H"""
     <div id="wal-pipeline-show">
       <.svelte
@@ -66,7 +97,8 @@ defmodule SequinWeb.WalPipelinesLive.Show do
         props={
           %{
             walPipeline: encode_wal_pipeline(@wal_pipeline),
-            metrics: encode_metrics(@metrics)
+            metrics: encode_metrics(@metrics),
+            showReplicaWarning: @show_replica_warning
           }
         }
       />
@@ -120,12 +152,20 @@ defmodule SequinWeb.WalPipelinesLive.Show do
         id: wal_pipeline.destination_database.id,
         name: wal_pipeline.destination_database.name
       },
-      source_table: "#{source_table_info.schema}.#{source_table_info.name}",
+      source_table: encode_source_table(source_table, source_table_info),
       source_filters: encode_source_filters(source_table.column_filters),
       destination_table: "#{destination_table_info.schema}.#{destination_table_info.name}",
       inserted_at: wal_pipeline.inserted_at,
       updated_at: wal_pipeline.updated_at,
       health: Health.to_external(wal_pipeline.health)
+    }
+  end
+
+  defp encode_source_table(%SourceTable{} = table, %Table{} = source_table_info) do
+    %{
+      oid: table.oid,
+      name: "#{source_table_info.schema}.#{source_table_info.name}",
+      quoted_name: Postgres.quote_name(source_table_info.schema, source_table_info.name)
     }
   end
 
@@ -136,6 +176,22 @@ defmodule SequinWeb.WalPipelinesLive.Show do
         operator: ColumnFilter.to_external_operator(filter.operator),
         value: filter.value.value
       }
+    end)
+  end
+
+  defp assign_replica_identity(socket) do
+    wal_pipeline = socket.assigns.wal_pipeline
+    [source_table] = wal_pipeline.source_tables
+    table_oid = source_table.oid
+
+    assign_async(socket, :replica_identity, fn ->
+      case Databases.check_replica_identity(wal_pipeline.source_database, table_oid) do
+        {:ok, replica_identity} ->
+          {:ok, %{replica_identity: replica_identity}}
+
+        {:error, _} ->
+          {:ok, %{replica_identity: nil}}
+      end
     end)
   end
 end

@@ -10,6 +10,7 @@
     Loader2,
     MoreHorizontal,
     Logs,
+    XCircle,
   } from "lucide-svelte";
   import { formatRelativeTimestamp, getColorFromName } from "$lib/utils";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -23,10 +24,13 @@
     TableRow,
   } from "$lib/components/ui/table";
   import * as Popover from "$lib/components/ui/popover";
+  import * as Alert from "$lib/components/ui/alert";
+  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
 
   export let walPipeline;
   export let live;
   export let metrics;
+  export let showReplicaWarning;
 
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
@@ -52,6 +56,24 @@
   function cancelDelete() {
     showDeleteConfirmDialog = false;
     deleteErrorMessage = null;
+  }
+
+  let refreshReplicaWarningLoading = false;
+
+  function handleRefreshReplicaWarning() {
+    refreshReplicaWarningLoading = true;
+    live.pushEventTo(
+      "#wal-pipeline-show",
+      "refresh_replica_warning",
+      {},
+      () => {
+        refreshReplicaWarningLoading = false;
+      }
+    );
+  }
+
+  function handleDismissReplicaWarning() {
+    live.pushEventTo("#wal-pipeline-show", "dismiss_replica_warning", {});
   }
 </script>
 
@@ -109,8 +131,8 @@
     </div>
   </div>
 
-  <main class="container mx-auto px-4 py-8">
-    <div class="grid gap-6 md:grid-cols-2 mb-6">
+  <main class="container mx-auto px-4 py-8 grid gap-6">
+    <div class="grid gap-6 md:grid-cols-2">
       <HealthComponent health={walPipeline.health} />
 
       <Card>
@@ -158,7 +180,51 @@
       </Card>
     </div>
 
-    <Card class="mb-6">
+    {#if showReplicaWarning}
+      <Alert.Root variant="warning">
+        <Alert.Title class="flex items-center justify-between">
+          <span>Warning: Replica identity not set to full</span>
+          <div class="space-x-2">
+            <Button
+              variant="outline"
+              loading={refreshReplicaWarningLoading}
+              size="sm"
+              on:click={handleRefreshReplicaWarning}
+            >
+              <RefreshCw class="h-4 w-4 mr-1" />
+              Refresh
+              <span slot="loading">Refreshing...</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={handleDismissReplicaWarning}
+            >
+              <XCircle class="h-4 w-4 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+        </Alert.Title>
+        <Alert.Description>
+          <p class="mb-2">
+            The replica identity for your table is not set to
+            <code>full</code>. This means the <code>changes</code> field in message
+            payloads will be empty.
+          </p>
+          <p class="mb-2">
+            If you want the <code>changes</code> field to appear in message payloads,
+            run the following SQL command:
+          </p>
+          <CodeWithCopy
+            maxWidth="750px"
+            language="sql"
+            code={`alter table ${walPipeline.source_table.quoted_name} replica identity full;`}
+          />
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
+
+    <Card>
       <CardContent class="p-6">
         <h2 class="text-lg font-semibold mb-4">Details</h2>
         <div class="grid grid-cols-2 gap-4">
@@ -168,7 +234,7 @@
           </div>
           <div>
             <p class="text-sm text-gray-500">Source Table</p>
-            <p class="font-medium">{walPipeline.source_table}</p>
+            <p class="font-medium">{walPipeline.source_table.name}</p>
           </div>
           <div>
             <p class="text-sm text-gray-500">Destination Database</p>
@@ -204,10 +270,10 @@
         <div class="mb-4 flex items-center space-x-2">
           <icon
             class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-              walPipeline.source_table
+              walPipeline.source_table.name
             )}"
           ></icon>
-          <pre class="font-medium">{walPipeline.source_table}</pre>
+          <pre class="font-medium">{walPipeline.source_table.name}</pre>
         </div>
         <div class="mb-4">
           <h3 class="text-md font-semibold mb-2">Filters</h3>

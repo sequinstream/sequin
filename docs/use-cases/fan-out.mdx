@@ -1,7 +1,7 @@
 ---
 title: "Using Sequin to fan out events"
 sidebarTitle: "Fan out"
-description: "How to fan out events to multiple services."
+description: "Such as informing multiple services of a new order"
 icon: "split"
 iconType: "solid"
 ---
@@ -16,7 +16,7 @@ When a customer places an order, you need to update your inventory, schedule a s
 2. It then asynchronously queues messages for each service to ensure every order is processed by each service.
 3. With a simple HTTP interface, replays, and observability built in you can easily scale this implementation.
 
-This is a common "fan out" pattern. This guide shows you how to implement fan outs with Sequin.
+This guide shows you how to implement fan outs with Sequin.
 
 <Note>
   You could implement this pattern as a [side effect](/use-cases/side-effects) by sending a single message to a single service that then triggers multiple actions. However, by fanning out the order as unique messages you can ensure that each service is scaled and managed independently. You also gain the benefits of durable retries and observability for each service through Sequin.
@@ -101,7 +101,7 @@ This is a common "fan out" pattern. This guide shows you how to implement fan ou
     });
     ```
 
-    Importantly, to ensure that every new order is processed by each service - Sequin will retry message until the HTTP request is acknowledged with a 200 status.
+    Importantly, to ensure that every new order is processed by each service, Sequin will retry the message until the HTTP request is acknowledged with a `200` status.
   </Step>
 </Steps>
 

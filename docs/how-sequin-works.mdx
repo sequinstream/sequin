@@ -23,7 +23,7 @@ You can also filter and transform rows before they're delivered to your applicat
 
 ## Sequences
 
-Sequin produces a **sequence** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [[1](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/)]. This makes them difficult to stream properly without skipping rows [[2](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/)].
+Sequin produces a **sequence** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [¹](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). This makes them difficult to stream properly without skipping rows [²](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/).
 
 To produce a stricly ordered sequence, Sequin uses a combination of the source table and a replication slot to produce a sequence. This makes it possible to [consume rows](#consuming-rows) from a table. When rows are inserted or updated, Sequin adds the rows to the end of the sequence so consumers will process them. Sequin stores sequence information in its internal catalog tables.
 

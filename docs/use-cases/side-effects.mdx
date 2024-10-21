@@ -1,7 +1,7 @@
 ---
 title: "Using Sequin to trigger side effects"
 sidebarTitle: "Side effects"
-description: "Use Sequin to trigger side effects in your application, like sending a welcome email to a new user."
+description: "Such as sending a welcome email to a new user"
 icon: "sparkles"
 iconType: "solid"
 ---
@@ -16,7 +16,7 @@ When you insert a new user into your database, you might want to send them a wel
 2. It then asynchronously queues and delivers messages to the `sendWelcomeEmail` function. Messages are retried until they are acknowledged by the function.
 3. With a simple HTTP interface, replays, and observability built in you can easily scale this implementation.
 
-This is a common "side effect" pattern. This guide shows you how to implement side effects with Sequin.
+This guide shows you how to implement side effects with Sequin.
 
 ## Example
 
@@ -32,7 +32,7 @@ This is a common "side effect" pattern. This guide shows you how to implement si
     </Check>
 
   </Step>
-  <Step title="Create a consumer to captures `inserts` on the `users` table" icon="signal-stream">
+  <Step title="Create a consumer to capture `inserts` on the `users` table" icon="signal-stream">
        Create a [webhook subscription](/how-sequin-works#webhooks) that captures changes from the `users` table. It'll then send an HTTP request to your application with the new user's information (which you'll handle in the next step).
 
     1. Click the **Create Consumer** button and then select the `users` table.
@@ -96,7 +96,7 @@ This is a common "side effect" pattern. This guide shows you how to implement si
     });
     ```
 
-    Importantly, to ensuer every new user receives an email - Sequin will retry message until the HTTP request is acknowledged with a 200 status.
+    Importantly, to ensure every new user receives an email, Sequin will retry the message until the HTTP request is acknowledged with a `200` status.
   </Step>
 </Steps>
 

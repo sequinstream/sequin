@@ -1,12 +1,12 @@
 ---
-title: "Using Sequin to replicate changes in your database"
+title: "Using Sequin to replicate changes from your database"
 sidebarTitle: "Replication"
-description: "Use Sequin to update search indexes, invalidate caches, or generate normalized views."
+description: "Such as updating search indexes, invalidating caches, or generating normalized views"
 icon: "copy"
 iconType: "solid"
 ---
 
-When you update a product description, you want to update your search index.
+When you update a product description, you might want to update your search index:
 
 <Frame>
   <img src="/images/use-cases/replicate/replicate.svg" alt="Replicate changes with Sequin" />
@@ -103,7 +103,7 @@ This is a common replication pattern. This guide shows you how to implement repl
     });
     ```
 
-    Importantly, to ensure that every product update is reflected in your search index, Sequin will retry the message until the HTTP request is acknowledged with a 200 status.
+    Importantly, to ensure that every product update is reflected in your search index, Sequin will retry the message until the HTTP request is acknowledged with a `200` status.
 
   </Step>
 </Steps>

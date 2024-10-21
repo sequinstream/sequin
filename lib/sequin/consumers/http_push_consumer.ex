@@ -29,7 +29,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
              :http_endpoint_id,
              :record_consumer_state,
              :status,
-             :replica_warning_dismissed,
              :health
            ]}
   typed_schema "http_push_consumers" do
@@ -41,7 +40,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     field :max_waiting, :integer, default: 20
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
-    field :replica_warning_dismissed, :boolean, default: false
     field :seq, :integer, read_after_writes: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
@@ -107,7 +105,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :status,
-      :replica_warning_dismissed,
       :message_kind
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])

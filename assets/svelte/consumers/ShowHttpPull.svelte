@@ -35,22 +35,6 @@
   export let parent;
   export let apiBaseUrl;
   export let api_token;
-  export let replica_identity;
-
-  // Remove functions and variables related to header
-  let refreshReplicaWarningLoading = false;
-
-  function handleRefreshReplicaWarning() {
-    refreshReplicaWarningLoading = true;
-    live.pushEventTo("#" + parent, "refresh_replica_warning", {}, () => {
-      refreshReplicaWarningLoading = false;
-    });
-  }
-
-  function handleDismissReplicaWarning() {
-    consumer.replica_warning_dismissed = true;
-    live.pushEventTo("#" + parent, "dismiss_replica_warning", {});
-  }
 </script>
 
 <!-- Wrap the content in a flex column that fills available space -->
@@ -181,49 +165,6 @@
           </div>
         </CardContent>
       </Card>
-
-      {#if consumer.message_kind === "event" && replica_identity !== "full" && replica_identity !== "loading" && !consumer.replica_warning_dismissed}
-        <Alert.Root variant="warning">
-          <Alert.Title class="flex items-center justify-between">
-            <span>Warning: Replica Identity Not Set to Full</span>
-            <div class="space-x-2">
-              <Button
-                variant="outline"
-                loading={refreshReplicaWarningLoading}
-                size="sm"
-                on:click={handleRefreshReplicaWarning}
-              >
-                <RefreshCw class="h-4 w-4 mr-1" />
-                Refresh
-                <span slot="loading">Refreshing...</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                on:click={handleDismissReplicaWarning}
-              >
-                <XCircle class="h-4 w-4 mr-1" />
-                Dismiss
-              </Button>
-            </div>
-          </Alert.Title>
-          <Alert.Description>
-            <p class="mb-2">
-              The replica identity for your table is not set to 'full'. This
-              means the <code>changes</code> field in message payloads will be empty.
-            </p>
-            <p class="mb-2">
-              If you want the <code>changes</code> field to appear in message payloads,
-              run the following SQL command:
-            </p>
-            <CodeWithCopy
-              maxWidth="750px"
-              language="sql"
-              code={`alter table "${consumer.sequence.table_schema}"."${consumer.sequence.table_name}" replica identity full;`}
-            />
-          </Alert.Description>
-        </Alert.Root>
-      {/if}
 
       <Card>
         <CardContent class="p-6">

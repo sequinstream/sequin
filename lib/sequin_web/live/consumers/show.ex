@@ -64,7 +64,6 @@ defmodule SequinWeb.ConsumersLive.Show do
           |> assign(:consumer, consumer)
           |> assign(:api_token, api_token)
           |> assign(:api_base_url, api_base_url)
-          |> assign_replica_identity()
           |> assign_metrics()
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")
@@ -154,7 +153,6 @@ defmodule SequinWeb.ConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  replica_identity: encode_replica_identity(@replica_identity),
                   parent: "consumer-show",
                   metrics: @metrics
                 }
@@ -167,7 +165,6 @@ defmodule SequinWeb.ConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  replica_identity: encode_replica_identity(@replica_identity),
                   parent: "consumer-show",
                   metrics: @metrics,
                   apiBaseUrl: @api_base_url,
@@ -225,20 +222,6 @@ defmodule SequinWeb.ConsumersLive.Show do
       {:error, _changeset} ->
         {:noreply, push_toast(socket, %{kind: :error, title: "Failed to delete consumer. Please try again."})}
     end
-  end
-
-  def handle_event("dismiss_replica_warning", _params, socket) do
-    case Consumers.update_consumer(socket.assigns.consumer, %{replica_warning_dismissed: true}) do
-      {:ok, updated_consumer} ->
-        {:noreply, assign(socket, :consumer, updated_consumer)}
-
-      {:error, _changeset} ->
-        {:noreply, push_toast(socket, %{kind: :error, title: "Failed to dismiss warning. Please try again."})}
-    end
-  end
-
-  def handle_event("refresh_replica_warning", _params, socket) do
-    {:noreply, assign_replica_identity(socket)}
   end
 
   def handle_event("pause_updates", _params, socket) do
@@ -357,21 +340,6 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply, socket}
   end
 
-  defp assign_replica_identity(socket) do
-    consumer = socket.assigns.consumer
-    table_oid = consumer.sequence.table_oid
-
-    assign_async(socket, :replica_identity, fn ->
-      case Databases.check_replica_identity(consumer.postgres_database, table_oid) do
-        {:ok, replica_identity} ->
-          {:ok, %{replica_identity: replica_identity}}
-
-        {:error, _} ->
-          {:ok, %{replica_identity: nil}}
-      end
-    end)
-  end
-
   defp assign_metrics(socket) do
     consumer = socket.assigns.consumer
 
@@ -406,7 +374,6 @@ defmodule SequinWeb.ConsumersLive.Show do
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
-      replica_warning_dismissed: consumer.replica_warning_dismissed,
       href: RouteHelpers.consumer_path(consumer)
     }
   end
@@ -451,9 +418,6 @@ defmodule SequinWeb.ConsumersLive.Show do
       column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
     }
   end
-
-  defp encode_replica_identity(%AsyncResult{ok?: true, result: result}), do: result
-  defp encode_replica_identity(%AsyncResult{ok?: false}), do: :loading
 
   defp find_table_by_oid(oid, tables) do
     Enum.find(tables, &(&1.oid == oid))

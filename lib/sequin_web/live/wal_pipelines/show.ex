@@ -82,11 +82,10 @@ defmodule SequinWeb.WalPipelinesLive.Show do
 
   @impl Phoenix.LiveView
   def render(assigns) do
+    replica_warning_dismissed = assigns.wal_pipeline.annotations["replica_warning_dismissed"] || false
     # Show when: we successfully loaded the replica identity, it's not full, and it's not dismissed
     show_replica_warning =
-      assigns.replica_identity.ok? and
-        assigns.replica_identity.result != :full and
-        not assigns.wal_pipeline.annotations["replica_warning_dismissed"]
+      assigns.replica_identity.ok? and assigns.replica_identity.result != :full and not replica_warning_dismissed
 
     assigns = assign(assigns, :show_replica_warning, show_replica_warning)
 

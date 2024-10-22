@@ -47,19 +47,26 @@ defmodule Sequin.Swoosh.Adapters.Loops do
 
   """
 
-  use Swoosh.Adapter, required_config: [:api_key]
+  use Swoosh.Adapter, config: [:api_key]
 
   alias Sequin.Loops
   alias Sequin.Loops.TransactionalRequest
   alias Swoosh.Email
 
+  require Logger
+
   @impl Swoosh.Adapter
   def deliver(%Email{} = email, config \\ []) do
-    request = prepare_request(email)
+    if !config[:api_key] and Application.get_env(:sequin, :self_hosted) do
+      Logger.warning("Skipping email delivery because no API key was provided")
+      {:ok, %{id: nil}}
+    else
+      request = prepare_request(email)
 
-    case Loops.send_transactional(request, api_key: config[:api_key]) do
-      {:ok, response} -> {:ok, %{id: response["id"]}}
-      {:error, error} -> {:error, error}
+      case Loops.send_transactional(request, api_key: config[:api_key]) do
+        {:ok, response} -> {:ok, %{id: response["id"]}}
+        {:error, error} -> {:error, error}
+      end
     end
   end
 

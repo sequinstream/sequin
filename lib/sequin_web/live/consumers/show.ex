@@ -41,8 +41,6 @@ defmodule SequinWeb.ConsumersLive.Show do
           Process.send_after(self(), :update_messages, 100)
         end
 
-        api_base_url = Application.get_env(:sequin, :api_base_url, SequinWeb.Endpoint.url())
-
         consumer =
           case consumer do
             %HttpPushConsumer{} ->
@@ -61,7 +59,7 @@ defmodule SequinWeb.ConsumersLive.Show do
           socket
           |> assign(:consumer, consumer)
           |> assign(:api_token, api_token)
-          |> assign(:api_base_url, api_base_url)
+          |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign_metrics()
           |> assign(:paused, false)
           |> assign(:show_acked, params["showAcked"] == "true")

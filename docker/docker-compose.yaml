@@ -31,6 +31,8 @@ services:
     command: ["postgres", "-c", "wal_level=logical"]
     volumes:
       - sequin_postgres_data:/var/lib/postgresql/data
+      # Creates a sample database for Sequin's Quickstart guide
+      - ./postgres-init:/docker-entrypoint-initdb.d
 
   sequin_redis:
     image: redis:7

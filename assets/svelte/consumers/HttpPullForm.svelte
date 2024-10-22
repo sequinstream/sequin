@@ -233,7 +233,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Pull configuration</CardTitle>
+        <CardTitle>Consumer endpoint configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -308,7 +308,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Consumer</CardTitle>
+        <CardTitle>Consumer endpoint name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -342,7 +342,7 @@
           type="submit"
           disabled={isCreateConsumerDisabled}
         >
-          {isEditMode ? "Update" : "Create"} consumer
+          {isEditMode ? "Update" : "Create"} consumer endpoint
           <span slot="loading"
             >{isEditMode ? "Updating..." : "Creating..."}</span
           >

@@ -297,7 +297,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Push configuration</CardTitle>
+        <CardTitle>Webhook subscription configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -469,7 +469,7 @@
     </Card>
     <Card>
       <CardHeader>
-        <CardTitle>Consumer</CardTitle>
+        <CardTitle>Webhook subscription name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -503,7 +503,7 @@
           type="submit"
           disabled={isCreateConsumerDisabled}
         >
-          {isEditMode ? "Update" : "Create"} consumer
+          {isEditMode ? "Update" : "Create"} webhook subscription
           <span slot="loading"
             >{isEditMode ? "Updating..." : "Creating..."}</span
           >

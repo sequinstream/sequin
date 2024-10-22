@@ -41,13 +41,22 @@ defmodule SequinWeb.DatabasesLive.Form do
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
-          |> check_for_existing_databases()
 
         {:ok, socket}
 
       {:error, %NotFoundError{}} ->
         Logger.error("Database not found (id=#{id})")
         {:ok, push_navigate(socket, to: ~p"/databases")}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_params(params, _uri, socket) do
+    if Map.get(params, "localhost") do
+      database = socket.assigns.database
+      {:noreply, assign(socket, :database, %{database | use_local_tunnel: true})}
+    else
+      {:noreply, socket}
     end
   end
 
@@ -59,11 +68,6 @@ defmodule SequinWeb.DatabasesLive.Form do
     with {:ok, database} <- Databases.get_db_for_account(current_account_id(socket), id) do
       {:ok, Repo.preload(database, :replication_slot)}
     end
-  end
-
-  defp check_for_existing_databases(socket) do
-    has_databases? = socket |> current_account_id() |> Databases.list_dbs_for_account() |> Enum.any?()
-    assign(socket, :existing_database_check, has_databases?)
   end
 
   @parent_id "databases_form"
@@ -98,7 +102,6 @@ defmodule SequinWeb.DatabasesLive.Form do
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
             api_token: @encoded_api_token,
-            existingDatabaseCheck: @existing_database_check,
             showLocalTunnelPrompt: @show_local_tunnel_prompt
           }
         }

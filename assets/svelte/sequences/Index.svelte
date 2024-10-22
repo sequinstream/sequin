@@ -29,6 +29,7 @@
     DropdownMenuItem,
   } from "$lib/components/ui/dropdown-menu";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import DatabaseConnectionAlert from "$lib/components/DatabaseConnectionAlert.svelte";
 
   export let live;
   export let liveAction: string;
@@ -94,60 +95,7 @@
 </script>
 
 <div class="container mx-auto py-10">
-  {#if !hasDatabases}
-    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
-      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
-        <AlertCircle class="h-5 w-5 text-carbon-600" />
-        <AlertTitle class="text-lg font-semibold text-carbon-900">
-          First, you need to connect to a database
-        </AlertTitle>
-        <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must be connected to at least one Postgres database before you
-          can create a sequence.
-        </AlertDescription>
-
-        <div class="flex mt-2 gap-4 col-start-2">
-          <a
-            href="/databases/new"
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button
-              variant="default"
-              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
-            >
-              <Database class="inline-block h-4 w-4 mr-2" />
-              Connect database
-            </Button>
-          </a>
-          <Popover>
-            <PopoverTrigger>
-              <Button variant="magic">
-                <Zap class="inline-block h-4 w-4 mr-2" /> Try with test database
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent class="w-80">
-              <div class="space-y-2">
-                <h4 class="font-medium">Need a test database?</h4>
-                <p class="text-sm text-muted-foreground">
-                  We recommend setting up a free database with Supabase to get
-                  started.
-                </p>
-                <Button
-                  variant="outline"
-                  href="https://supabase.com/dashboard"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Go to Supabase Dashboard
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      </div>
-    </Alert>
-  {/if}
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="sequence" />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">

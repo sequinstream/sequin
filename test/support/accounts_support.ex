@@ -2,7 +2,13 @@ defmodule Sequin.Test.Support.AccountsSupport do
   @moduledoc false
   def extract_user_token(fun) do
     {:ok, captured_email} = fun.(&"[TOKEN]#{&1}[TOKEN]")
-    [_, token | _] = String.split(captured_email.text_body, "[TOKEN]")
+
+    url =
+      captured_email.provider_options.data_variables
+      |> Map.values()
+      |> Sequin.Enum.find!(fn url -> String.contains?(url, "[TOKEN]") end)
+
+    [_, token | _] = String.split(url, "[TOKEN]")
     token
   end
 end

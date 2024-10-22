@@ -163,6 +163,8 @@ if config_env() == :prod do
 
   config :redix, start_opts: {System.fetch_env!("REDIS_URL"), [name: :redix] ++ [socket_opts: redix_socket_opts]}
 
+  config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
+
   config :sequin, Sequin.Vault,
     ciphers: [
       # In AES.GCM, it is important to specify 12-byte IV length for
@@ -190,8 +192,6 @@ if config_env() == :prod do
       app_key: datadog_app_key,
       default_query: "service:sequin"
     ]
-
-  config :swoosh, Sequin.Mailer, api_key: get_env.("SENDGRID_API_KEY")
 
   # ## SSL Support
   #

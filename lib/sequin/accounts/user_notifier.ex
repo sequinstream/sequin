@@ -5,20 +5,17 @@ defmodule Sequin.Accounts.UserNotifier do
   alias Sequin.Mailer
 
   # Delivers the email using the application mailer.
-  defp deliver(recipient, subject, body) do
+  defp deliver(recipient, subject, template_id, data_variables) do
     email =
       new()
       |> to(recipient)
       |> from({"Sequin", "support@sequinstream.com"})
       |> subject(subject)
-      |> text_body(body)
+      |> put_provider_option(:transactional_id, template_id)
+      |> put_provider_option(:data_variables, data_variables)
 
-    if Application.get_env(:sequin, :env) == :prod do
-      {:ok, :not_sent}
-    else
-      with {:ok, _metadata} <- Mailer.deliver(email) do
-        {:ok, email}
-      end
+    with {:ok, _metadata} <- Mailer.deliver(email) do
+      {:ok, email}
     end
   end
 
@@ -26,59 +23,29 @@ defmodule Sequin.Accounts.UserNotifier do
   Deliver instructions to confirm account.
   """
   def deliver_confirmation_instructions(user, url) do
-    deliver(user.email, "Confirmation instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can confirm your account by visiting the URL below:
-
-    #{url}
-
-    If you didn't create an account with us, please ignore this.
-
-    ==============================
-    """)
+    deliver(user.email, "[Sequin] Please confirm your email", "cm0q0dm7f02pizz7zypxmjidb", %{
+      "user_email" => user.email,
+      "confirmation_url" => url
+    })
   end
 
   @doc """
   Deliver instructions to reset a user password.
   """
   def deliver_reset_password_instructions(user, url) do
-    deliver(user.email, "Reset password instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can reset your password by visiting the URL below:
-
-    #{url}
-
-    If you didn't request this change, please ignore this.
-
-    ==============================
-    """)
+    deliver(user.email, "[Sequin] Reset your password", "cm0q0hf5z02tezz7zkpj2du1d", %{
+      "user_email" => user.email,
+      "reset_password_url" => url
+    })
   end
 
   @doc """
   Deliver instructions to update a user email.
   """
   def deliver_update_email_instructions(user, url) do
-    deliver(user.email, "Update email instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can change your email by visiting the URL below:
-
-    #{url}
-
-    If you didn't request this change, please ignore this.
-
-    ==============================
-    """)
+    deliver(user.email, "[Sequin] Complete your update email request", "cm0q0ifgj02uozz7zdhdwbyzd", %{
+      "user_email" => user.email,
+      "update_email_url" => url
+    })
   end
 end

@@ -111,7 +111,8 @@ if config_env() == :prod and not self_hosted do
   port = String.to_integer(System.get_env("PORT") || "7376")
 
   config :sentry,
-    dsn: System.fetch_env!("SENTRY_DSN")
+    dsn: System.fetch_env!("SENTRY_DSN"),
+    release: System.fetch_env!("CURRENT_GIT_SHA")
 
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",

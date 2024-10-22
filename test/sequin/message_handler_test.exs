@@ -1,5 +1,5 @@
 defmodule Sequin.MessageHandlerTest do
-  use Sequin.DataCase, async: true
+  use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
   alias Sequin.Factory.ConsumersFactory

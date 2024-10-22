@@ -77,10 +77,20 @@
   $: {
     databaseErrors = errors.database || {};
     replicationErrors = errors.replication || {};
+  }
 
+  $: {
     // Automatically enable SSL for Supabase databases
     if (form.hostname && form.hostname.endsWith("supabase.co")) {
       form.ssl = true;
+    }
+
+    if (
+      form.hostname === "localhost" ||
+      form.hostname === "127.0.0.1" ||
+      form.hostname === "host.docker.internal"
+    ) {
+      form.ssl = false;
     }
   }
 

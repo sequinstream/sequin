@@ -26,7 +26,7 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Alert from "$lib/components/ui/alert";
   import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
-
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let walPipeline;
   export let live;
   export let metrics;
@@ -82,11 +82,11 @@
     <div class="container mx-auto px-4 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <a href="/wal-pipelines">
+          <LinkPushNavigate href="/wal-pipelines">
             <Button variant="ghost" size="sm">
               <ArrowLeft class="h-4 w-4" />
             </Button>
-          </a>
+          </LinkPushNavigate>
           <div class="flex items-center">
             <Logs class="h-6 w-6 mr-2" />
             <h1 class="text-xl font-semibold">{walPipeline.name}</h1>

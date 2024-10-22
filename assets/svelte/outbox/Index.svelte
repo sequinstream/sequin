@@ -12,7 +12,7 @@
     X,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
-
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let consumer_id: string | null;
   export let messages: any[];
   export let consumers: any[];
@@ -219,12 +219,12 @@
             Once created, you'll be able to view and manage outgoing messages
             for each consumer.
           </p>
-          <a href="/consumers" class="inline-block">
+          <LinkPushNavigate href="/consumers" class="inline-block">
             <Button variant="default" class="mb-4">
               Create Consumer
               <ArrowUpRight class="h-4 w-4 ml-2" />
             </Button>
-          </a>
+          </LinkPushNavigate>
         </div>
         <div
           class="mb-6 drop-shadow-lg relative pb-[56.25%] overflow-hidden max-w-full"
@@ -543,12 +543,12 @@
                       class="bg-gray-100 p-4 rounded-lg flex justify-between items-center"
                     >
                       <h4 class="font-medium">{selectedConsumer}</h4>
-                      <a href={`/consumers/${selectedConsumer}`}>
+                      <LinkPushNavigate href={`/consumers/${selectedConsumer}`}>
                         <Button variant="outline" size="sm">
                           View Consumer
                           <ArrowUpRight class="h-4 w-4 ml-2" />
                         </Button>
-                      </a>
+                      </LinkPushNavigate>
                     </div>
                   </div>
                 </div>

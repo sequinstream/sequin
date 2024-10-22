@@ -13,7 +13,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import * as Dialog from "$lib/components/ui/dialog";
   import { formatRelativeTimestamp } from "../utils";
-
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let consumer;
   export let live_action;
   export let live;
@@ -59,11 +59,11 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <a href={`/consumers/${kind}`}>
+        <LinkPushNavigate href={`/consumers/${kind}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>
-        </a>
+        </LinkPushNavigate>
         <div class="flex items-center">
           <Radio class="h-6 w-6 mr-2" />
           <h1 class="text-xl font-semibold">{consumer.name}</h1>

@@ -28,6 +28,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import * as Alert from "$lib/components/ui/alert";
   import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
   export let consumer;
   export let metrics;
@@ -208,12 +209,12 @@
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-semibold">Sequence</h2>
-            <a href="/databases/{consumer.postgres_database.id}">
+            <LinkPushNavigate href="/databases/{consumer.postgres_database.id}">
               <Button variant="outline" size="sm">
                 View Database
                 <ArrowUpRight class="h-4 w-4 ml-2" />
               </Button>
-            </a>
+            </LinkPushNavigate>
           </div>
           <div class="mb-4 flex items-center space-x-2">
             <Database class="h-5 w-5 text-gray-400" />

@@ -9,7 +9,7 @@
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
   import * as Dialog from "$lib/components/ui/dialog";
-
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let database;
   export let activeTab;
   export let live;
@@ -54,11 +54,11 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <a href="/databases">
+        <LinkPushNavigate href="/databases">
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>
-        </a>
+        </LinkPushNavigate>
         <div class="flex items-center">
           <Database class="h-6 w-6 mr-2" />
           <h1 class="text-xl font-semibold">{database.name}</h1>

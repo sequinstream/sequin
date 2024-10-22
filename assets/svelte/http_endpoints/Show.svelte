@@ -25,7 +25,7 @@
   } from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthComponent from "../health/HealthComponent.svelte";
-
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let http_endpoint;
   export let metrics;
   export let live;
@@ -78,11 +78,11 @@
     <div class="container mx-auto px-4 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <a href="/http-endpoints">
+          <LinkPushNavigate href="/http-endpoints">
             <Button variant="ghost" size="sm">
               <ArrowLeft class="h-4 w-4" />
             </Button>
-          </a>
+          </LinkPushNavigate>
           <div class="flex items-center">
             <Webhook class="h-6 w-6 mr-2" />
             <h1 class="text-xl font-semibold">{http_endpoint.name}</h1>

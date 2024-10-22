@@ -83,12 +83,6 @@
     }
   }
 
-  $: {
-    if (selectedDatabase && selectedDatabase.sequences.length !== 0) {
-      selectedSequenceId = selectedDatabase.sequences[0].id;
-    }
-  }
-
   let databaseRefreshState: "idle" | "refreshing" | "done" = "idle";
   let sequenceRefreshState: "idle" | "refreshing" | "done" = "idle";
 

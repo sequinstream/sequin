@@ -82,21 +82,28 @@
   let selectedTable: any;
 
   $: {
-    if (form.postgresDatabaseId && form.sequenceId) {
+    if (form.postgresDatabaseId) {
       selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId
       );
-      if (selectedDatabase) {
-        selectedSequence = selectedDatabase.sequences.find(
-          (sequence) => sequence.id === form.sequenceId
-        );
-      }
-      if (selectedSequence) {
-        selectedTable = selectedDatabase.tables.find(
-          (table) => table.oid === selectedSequence.table_oid
-        );
-      }
     }
+
+    if (selectedDatabase && !form.sequenceId) {
+      form.sequenceId = selectedDatabase.sequences[0].id;
+    }
+
+    if (form.sequenceId && selectedDatabase) {
+      selectedSequence = selectedDatabase.sequences.find(
+        (sequence) => sequence.id === form.sequenceId
+      );
+    }
+
+    selectedTable =
+      selectedSequence && selectedDatabase
+        ? selectedDatabase.tables.find(
+            (table) => table.oid === selectedSequence.table_oid
+          )
+        : null;
   }
 
   let selectedHttpEndpoint = form.httpEndpointId

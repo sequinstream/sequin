@@ -52,13 +52,32 @@
   let form = { ...initialForm };
   let isDirty = false;
   let isSubmitting = false;
+  let selectedTable: any;
 
-  $: selectedTable =
-    selectedSequence && selectedDatabase
-      ? selectedDatabase.tables.find(
-          (table) => table.oid === selectedSequence.table_oid
-        )
-      : null;
+  $: {
+    if (form.postgresDatabaseId) {
+      selectedDatabase = databases.find(
+        (db) => db.id === form.postgresDatabaseId
+      );
+    }
+
+    if (selectedDatabase && !form.sequenceId) {
+      form.sequenceId = selectedDatabase.sequences[0].id;
+    }
+
+    if (form.sequenceId && selectedDatabase) {
+      selectedSequence = selectedDatabase.sequences.find(
+        (sequence) => sequence.id === form.sequenceId
+      );
+    }
+
+    selectedTable =
+      selectedSequence && selectedDatabase
+        ? selectedDatabase.tables.find(
+            (table) => table.oid === selectedSequence.table_oid
+          )
+        : null;
+  }
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
@@ -71,19 +90,6 @@
 
   let selectedDatabase: any;
   let selectedSequence: any;
-
-  $: {
-    if (form.postgresDatabaseId && form.sequenceId) {
-      selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
-      );
-      if (selectedDatabase) {
-        selectedSequence = selectedDatabase.sequences.find(
-          (sequence) => sequence.id === form.sequenceId
-        );
-      }
-    }
-  }
 
   let dialogOpen = true;
   let showConfirmDialog = false;

@@ -20,12 +20,12 @@ defmodule SequinWeb.UserRegistrationLive do
         </.header>
 
         <div class="mt-6 space-y-4">
-          <.link href="/auth/github">
+          <.link href={if @github_disabled, do: "#", else: "/auth/github"}>
             <.button
               class="w-full flex items-center justify-center gap-2 mb-10 disabled:opacity-50 disabled:cursor-not-allowed"
-              phx-click="github_register"
+              phx-click={if @github_disabled, do: nil, else: "github_register"}
               id="github-register-button"
-              disabled={@github_loading}
+              disabled={@github_loading || @github_disabled}
             >
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path
@@ -82,6 +82,7 @@ defmodule SequinWeb.UserRegistrationLive do
       socket
       |> assign(trigger_submit: false)
       |> assign(github_loading: false)
+      |> assign(github_disabled: github_disabled?())
       |> assign_form(changeset)
 
     {:ok, socket, temporary_assigns: [form: nil]}
@@ -118,5 +119,10 @@ defmodule SequinWeb.UserRegistrationLive do
     form = to_form(changeset, as: "user")
 
     assign(socket, form: form)
+  end
+
+  defp github_disabled? do
+    Application.get_env(:sequin, :self_hosted, false) &&
+      is_nil(Application.get_env(:sequin, SequinWeb.UserSessionController)[:github][:client_id])
   end
 end

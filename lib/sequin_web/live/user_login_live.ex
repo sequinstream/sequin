@@ -12,12 +12,12 @@ defmodule SequinWeb.UserLoginLive do
         </.header>
 
         <div class="mt-6 space-y-4">
-          <.link href="/auth/github">
+          <.link href={if @github_disabled, do: "#", else: "/auth/github"}>
             <.button
               class="w-full flex items-center justify-center gap-2 mb-10 disabled:opacity-50 disabled:cursor-not-allowed"
-              phx-click="github_login"
+              phx-click={if @github_disabled, do: nil, else: "github_login"}
               id="github-login-button"
-              disabled={@github_loading}
+              disabled={@github_loading || @github_disabled}
             >
               <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                 <path
@@ -80,11 +80,17 @@ defmodule SequinWeb.UserLoginLive do
       socket
       |> assign(form: form)
       |> assign(github_loading: false)
+      |> assign(github_disabled: github_disabled?())
 
     {:ok, socket, temporary_assigns: [form: form]}
   end
 
   def handle_event("github_login", _params, socket) do
     {:noreply, assign(socket, github_loading: true)}
+  end
+
+  defp github_disabled? do
+    Application.get_env(:sequin, :self_hosted, false) &&
+      is_nil(Application.get_env(:sequin, SequinWeb.UserSessionController)[:github][:client_id])
   end
 end

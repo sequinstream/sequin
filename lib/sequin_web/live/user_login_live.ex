@@ -6,15 +6,18 @@ defmodule SequinWeb.UserLoginLive do
     ~H"""
     <div class="flex items-center justify-center h-[80vh]">
       <div class="mx-auto max-w-sm w-full">
-        <.header :if={!@accepting_invite?} class="text-center">
-          Welcome back
-          <:subtitle>Sign in to your account</:subtitle>
-        </.header>
-        <.header :if={@accepting_invite?} class="text-center">
-          Accept your invite
-          <:subtitle>Sign in to accept your invite</:subtitle>
-        </.header>
+        <.alert :if={@accepting_invite?} class="mb-4">
+          <.alert_title>Accepting Invite</.alert_title>
+          <.alert_description>
+            Sign in with the same email address as your invite to join the account.
+          </.alert_description>
+        </.alert>
 
+        <.header class="text-center">
+          Welcome back
+          <:subtitle :if={!@accepting_invite?}>Sign in to your account</:subtitle>
+          <:subtitle :if={@accepting_invite?}>Sign in to accept your invite</:subtitle>
+        </.header>
         <div class="mt-6 space-y-4">
           <.link href={if @github_disabled, do: "#", else: "/auth/github"}>
             <.button

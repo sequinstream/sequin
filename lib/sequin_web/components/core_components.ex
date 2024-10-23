@@ -671,4 +671,99 @@ defmodule SequinWeb.CoreComponents do
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
+
+  @doc """
+  Renders an alert component.
+
+  ## Examples
+
+      <.alert>
+        A default alert
+      </.alert>
+
+      <.alert variant="destructive">
+        A destructive alert
+      </.alert>
+
+      <.alert variant="warning">
+        <.alert_title>Warning</.alert_title>
+        <.alert_description>This is a warning message</.alert_description>
+      </.alert>
+  """
+  attr :variant, :string, default: "default", values: ["default", "destructive", "warning"]
+  attr :class, :string, default: nil
+  attr :rest, :global
+
+  slot :inner_block, required: true
+
+  def alert(assigns) do
+    ~H"""
+    <div
+      class={[
+        alert_variants(@variant),
+        "relative w-full rounded-lg border p-4 [&:has(svg)]:pl-11 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
+        @class
+      ]}
+      role="alert"
+      {@rest}
+    >
+      <%= render_slot(@inner_block) %>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders an alert title.
+
+  ## Examples
+
+      <.alert_title>Alert Title</.alert_title>
+  """
+  attr :class, :string, default: nil
+  attr :as, :any, default: :h5
+  attr :rest, :global
+
+  slot :inner_block, required: true
+
+  def alert_title(assigns) do
+    ~H"""
+    <div name={@as} class={["mb-1 font-medium leading-none tracking-tight", @class]} {@rest}>
+      <%= render_slot(@inner_block) %>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders an alert description.
+
+  ## Examples
+
+      <.alert_description>Alert description text</.alert_description>
+  """
+  attr :class, :string, default: nil
+  attr :rest, :global
+
+  slot :inner_block, required: true
+
+  def alert_description(assigns) do
+    ~H"""
+    <div class={["text-sm [&_p]:leading-relaxed", @class]} {@rest}>
+      <%= render_slot(@inner_block) %>
+    </div>
+    """
+  end
+
+  # Helper function to generate alert variant classes
+  defp alert_variants(variant) do
+    base_classes = "[&>svg]:text-foreground"
+
+    variant_classes =
+      case variant do
+        "default" -> "bg-blue-50 text-foreground border-blue-500"
+        "destructive" -> "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive"
+        "warning" -> "border-warning/50 text-warning dark:border-warning [&>svg]:text-warning bg-warning/10"
+      end
+
+    "#{base_classes} #{variant_classes}"
+  end
 end

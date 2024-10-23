@@ -9,17 +9,15 @@ defmodule SequinWeb.UserRegistrationLive do
     ~H"""
     <div class="flex items-center justify-center h-[80vh]">
       <div class="mx-auto max-w-sm w-full">
-        <.header :if={!@accepting_invite?} class="text-center">
+        <.alert :if={@accepting_invite?} class="mb-4">
+          <.alert_title>Accepting Invite</.alert_title>
+          <.alert_description>
+            Register with the same email address as your invite to join the account.
+          </.alert_description>
+        </.alert>
+
+        <.header class="text-center">
           Register for an account
-          <:subtitle>
-            Already registered?
-            <.link navigate={~p"/login"} class="font-semibold text-brand hover:underline">
-              Log in
-            </.link>
-          </:subtitle>
-        </.header>
-        <.header :if={@accepting_invite?} class="text-center">
-          Register for an account to accept your invite
           <:subtitle>
             Already registered?
             <.link navigate={~p"/login"} class="font-semibold text-brand hover:underline">

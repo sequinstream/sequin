@@ -18,6 +18,7 @@ defmodule SequinWeb.AcceptInviteLive do
     {:ok,
      socket
      |> assign(:token, token)
+     |> assign(:logout, false)
      |> assign_async(:invite_result, fn ->
        accept_invite(user, token, pid)
      end), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
@@ -57,6 +58,8 @@ defmodule SequinWeb.AcceptInviteLive do
                     as={:user}
                     action={~p"/logout?redirect_to=/accept-invite/#{@token}"}
                     method="delete"
+                    phx-submit="logout"
+                    phx-trigger-action={@logout}
                   >
                     <.button>Log out</.button>
                   </.form>
@@ -129,5 +132,10 @@ defmodule SequinWeb.AcceptInviteLive do
   def handle_info(:redirect, socket) do
     Logger.info("Redirecting to home page")
     {:noreply, redirect(socket, to: "/")}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("logout", _params, socket) do
+    {:noreply, socket |> assign(:logout, true) |> push_event("ph-reset", %{})}
   end
 end

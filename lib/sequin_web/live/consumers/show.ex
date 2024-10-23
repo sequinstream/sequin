@@ -370,7 +370,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
-      href: RouteHelpers.consumer_path(consumer)
+      href: RouteHelpers.consumer_path(consumer),
+      group_column_names: encode_group_column_names(consumer)
     }
   end
 
@@ -390,7 +391,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
-      href: RouteHelpers.consumer_path(consumer)
+      href: RouteHelpers.consumer_path(consumer),
+      group_column_names: encode_group_column_names(consumer)
     }
   end
 
@@ -443,6 +445,32 @@ defmodule SequinWeb.ConsumersLive.Show do
       name: api_token.name,
       token: api_token.token
     }
+  end
+
+  defp encode_group_column_names(%{
+         sequence: %Sequence{} = sequence,
+         sequence_filter: %SequenceFilter{group_column_attnums: nil},
+         postgres_database: %PostgresDatabase{} = postgres_database
+       }) do
+    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+
+    table.columns
+    |> Enum.filter(& &1.is_pk?)
+    |> Enum.sort_by(& &1.attnum)
+    |> Enum.map(& &1.name)
+  end
+
+  defp encode_group_column_names(%{
+         sequence: %Sequence{} = sequence,
+         sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums},
+         postgres_database: %PostgresDatabase{} = postgres_database
+       }) do
+    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+
+    table.columns
+    |> Enum.filter(&(&1.attnum in group_column_attnums))
+    |> Enum.sort_by(& &1.attnum)
+    |> Enum.map(& &1.name)
   end
 
   # Function to load messages for the consumer

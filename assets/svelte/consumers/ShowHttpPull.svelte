@@ -29,6 +29,7 @@
   import * as Alert from "$lib/components/ui/alert";
   import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
+  import ShowSequence from "./ShowSequence.svelte";
 
   export let consumer;
   export let metrics;
@@ -143,26 +144,6 @@
                 {formatNumberWithCommas(consumer.max_ack_pending)} messages
               </p>
             </div>
-            <!-- <div>
-              <span class="text-sm text-gray-500">Max Waiting</span>
-              <Tooltip.Root openDelay={200}>
-                <Tooltip.Trigger>
-                  <HelpCircle
-                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
-                  />
-                </Tooltip.Trigger>
-                <Tooltip.Content class="max-w-xs">
-                  <p class="text-xs text-gray-500">
-                    <b>Max waiting</b> The maximum number of messages that can be
-                    waiting to be processed before the consumer stops processing
-                    new messages.
-                  </p>
-                </Tooltip.Content>
-              </Tooltip.Root>
-              <p class="font-medium">
-                {formatNumberWithCommas(consumer.max_waiting)}
-              </p>
-            </div> -->
           </div>
         </CardContent>
       </Card>
@@ -205,74 +186,7 @@
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">Sequence</h2>
-            <LinkPushNavigate href="/databases/{consumer.postgres_database.id}">
-              <Button variant="outline" size="sm">
-                View Database
-                <ArrowUpRight class="h-4 w-4 ml-2" />
-              </Button>
-            </LinkPushNavigate>
-          </div>
-          <div class="mb-4 flex items-center space-x-2">
-            <Database class="h-5 w-5 text-gray-400" />
-            <pre class="font-medium">{consumer.postgres_database.name}</pre>
-          </div>
-          <div class="mb-4 flex items-center space-x-2">
-            <icon
-              class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-                `${consumer.sequence.table_schema}.${consumer.sequence.table_name}`
-              )}"
-            ></icon>
-
-            <pre class="font-medium">{consumer.sequence.table_schema}.{consumer
-                .sequence.table_name}</pre>
-          </div>
-          <div class="mb-4">
-            <h3 class="text-md font-semibold mb-2">Filters</h3>
-            {#if consumer.sequence.column_filters.length > 0}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Column</TableHead>
-                    <TableHead>Operator</TableHead>
-                    <TableHead>Value</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {#each consumer.sequence.column_filters as filter}
-                    <TableRow>
-                      <TableCell
-                        ><code>
-                          {filter.column}
-                          {#if filter.is_jsonb && filter.jsonb_path}
-                            -> {filter.jsonb_path}
-                          {/if}</code
-                        ></TableCell
-                      >
-                      <TableCell><code>{filter.operator}</code></TableCell>
-                      <TableCell><code>{filter.value}</code></TableCell>
-                    </TableRow>
-                  {/each}
-                </TableBody>
-              </Table>
-            {:else}
-              <div
-                class="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center"
-              >
-                <h4 class="text-sm font-medium text-gray-900 mb-1">
-                  No filters applied
-                </h4>
-                <p class="text-sm text-gray-500 mb-4">
-                  This consumer will process all data from the source table.
-                </p>
-              </div>
-            {/if}
-          </div>
-        </CardContent>
-      </Card>
+      <ShowSequence {consumer} />
     </div>
   </div>
 </div>

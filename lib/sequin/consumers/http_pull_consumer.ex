@@ -72,7 +72,7 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     ])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
-    |> cast_embed(:sequence_filter)
+    |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     # TODO: add sequence_id requirement
     |> validate_required([:name, :status])
     |> foreign_key_constraint(:sequence_id, name: "postgres_databases_account_id_fkey")
@@ -93,7 +93,6 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     ])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
-    |> cast_embed(:sequence_filter)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

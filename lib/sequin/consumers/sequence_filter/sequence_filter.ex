@@ -23,7 +23,7 @@ defmodule Sequin.Consumers.SequenceFilter do
     embeds_many :column_filters, ColumnFilter
   end
 
-  def changeset(source_table, attrs) do
+  def create_changeset(source_table, attrs) do
     source_table
     |> cast(attrs, [:actions, :group_column_attnums])
     |> validate_required([:actions])

@@ -9,8 +9,17 @@ defmodule SequinWeb.UserRegistrationLive do
     ~H"""
     <div class="flex items-center justify-center h-[80vh]">
       <div class="mx-auto max-w-sm w-full">
-        <.header class="text-center">
+        <.header :if={!@accepting_invite?} class="text-center">
           Register for an account
+          <:subtitle>
+            Already registered?
+            <.link navigate={~p"/login"} class="font-semibold text-brand hover:underline">
+              Log in
+            </.link>
+          </:subtitle>
+        </.header>
+        <.header :if={@accepting_invite?} class="text-center">
+          Register for an account to accept your invite
           <:subtitle>
             Already registered?
             <.link navigate={~p"/login"} class="font-semibold text-brand hover:underline">
@@ -57,7 +66,7 @@ defmodule SequinWeb.UserRegistrationLive do
             phx-submit="save"
             phx-change="validate"
             phx-trigger-action={@trigger_submit}
-            action={~p"/login?_action=registered"}
+            action={~p"/login?_action=registered" <> if @redirect_to, do: "?redirect_to=#{@redirect_to}", else: ""}
             method="post"
           >
             <.input field={@form[:email]} type="email" label="Email" required />
@@ -75,7 +84,7 @@ defmodule SequinWeb.UserRegistrationLive do
     """
   end
 
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     changeset = Accounts.change_user_registration(%User{})
 
     socket =
@@ -83,6 +92,8 @@ defmodule SequinWeb.UserRegistrationLive do
       |> assign(trigger_submit: false)
       |> assign(github_loading: false)
       |> assign(github_disabled: github_disabled?())
+      |> assign(redirect_to: session["user_return_to"])
+      |> assign(accepting_invite?: accepting_invite?(session))
       |> assign_form(changeset)
 
     {:ok, socket, temporary_assigns: [form: nil]}
@@ -124,5 +135,12 @@ defmodule SequinWeb.UserRegistrationLive do
   defp github_disabled? do
     Application.get_env(:sequin, :self_hosted, false) &&
       is_nil(Application.get_env(:sequin, SequinWeb.UserSessionController)[:github][:client_id])
+  end
+
+  defp accepting_invite?(session) do
+    case session["user_return_to"] do
+      "/accept-invite/" <> _ -> true
+      _ -> false
+    end
   end
 end

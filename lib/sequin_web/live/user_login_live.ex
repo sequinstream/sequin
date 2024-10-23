@@ -6,9 +6,13 @@ defmodule SequinWeb.UserLoginLive do
     ~H"""
     <div class="flex items-center justify-center h-[80vh]">
       <div class="mx-auto max-w-sm w-full">
-        <.header class="text-center">
+        <.header :if={!@accepting_invite?} class="text-center">
           Welcome back
           <:subtitle>Sign in to your account</:subtitle>
+        </.header>
+        <.header :if={@accepting_invite?} class="text-center">
+          Accept your invite
+          <:subtitle>Sign in to accept your invite</:subtitle>
         </.header>
 
         <div class="mt-6 space-y-4">
@@ -43,7 +47,12 @@ defmodule SequinWeb.UserLoginLive do
             </div>
           </div>
 
-          <.simple_form for={@form} id="login_form" action={~p"/login"} phx-update="ignore">
+          <.simple_form
+            for={@form}
+            id="login_form"
+            action={~p"/login" <> if @redirect_to, do: "?redirect_to=#{@redirect_to}", else: ""}
+            phx-update="ignore"
+          >
             <.input field={@form[:email]} type="email" label="Email" required />
             <.input field={@form[:password]} type="password" label="Password" required />
 
@@ -72,7 +81,7 @@ defmodule SequinWeb.UserLoginLive do
     """
   end
 
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     email = Phoenix.Flash.get(socket.assigns.flash, :email)
     form = to_form(%{"email" => email}, as: "user")
 
@@ -81,6 +90,8 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(form: form)
       |> assign(github_loading: false)
       |> assign(github_disabled: github_disabled?())
+      |> assign(redirect_to: session["user_return_to"])
+      |> assign(accepting_invite?: accepting_invite?(session))
 
     {:ok, socket, temporary_assigns: [form: form]}
   end
@@ -92,5 +103,12 @@ defmodule SequinWeb.UserLoginLive do
   defp github_disabled? do
     Application.get_env(:sequin, :self_hosted, false) &&
       is_nil(Application.get_env(:sequin, SequinWeb.UserSessionController)[:github][:client_id])
+  end
+
+  defp accepting_invite?(session) do
+    case session["user_return_to"] do
+      "/accept-invite/" <> _ -> true
+      _ -> false
+    end
   end
 end

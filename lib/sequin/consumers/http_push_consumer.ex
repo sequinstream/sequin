@@ -86,7 +86,7 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       end
     )
     |> cast_embed(:record_consumer_state)
-    |> cast_embed(:sequence_filter)
+    |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     |> foreign_key_constraint(:http_endpoint_id)
     |> foreign_key_constraint(:sequence_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
@@ -111,7 +111,6 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
     |> cast_embed(:record_consumer_state)
-    |> cast_embed(:sequence_filter)
     |> Sequin.Changeset.cast_embed(:source_tables)
   end
 

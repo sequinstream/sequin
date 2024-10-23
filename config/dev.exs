@@ -35,25 +35,36 @@ config :sequin, Sequin.Vault,
        tag: "AES.GCM.V1", key: Base.decode64!("2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY="), iv_length: 12}
   ]
 
-# For development, we disable any cache and enable
-# debugging and code reloading.
-#
-# The watchers configuration can be used to run external
-# watchers to your application. For example, we can use it
-# to bundle .js and .css sources.
 config :sequin, SequinWeb.Endpoint,
-  # Binding to loopback ipv4 address prevents access from other machines.
-  # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}, port: 4000],
+  # For development, we disable any cache and enable
+  # debugging and code reloading.
+  #
+  # The watchers configuration can be used to run external
+  # watchers to your application. For example, we can use it
+  # to bundle .js and .css sources.
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "F9DmzIZCZ4Kl17OcwJgcvsRRH34s2lkEvq8HTA0IORAMsEMuWd+pSNUFsX4V9no/",
   watchers: [
     node: ["build.js", "--watch", cd: Path.expand("../assets", __DIR__)],
-    # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
+    # Binding to loopback ipv4 address prevents access from other machines.
+    # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
     tailwind: {Tailwind, :install_and_run, [:sequin, ~w(--watch)]}
   ]
+
+config :sequin, SequinWeb.Endpoint,
+  live_reload: [
+    patterns: [
+      ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"priv/gettext/.*(po)$",
+      ~r"lib/sequin_web/(controllers|live|components)/.*(ex|heex)$"
+    ]
+  ]
+
+config :sequin, api_base_url: "http://localhost:4000"
+# esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
 
 # ## SSL Support
 #
@@ -79,14 +90,6 @@ config :sequin, SequinWeb.Endpoint,
 # different ports.
 
 # Watch static and templates for browser reloading.
-config :sequin, SequinWeb.Endpoint,
-  live_reload: [
-    patterns: [
-      ~r"priv/static/(?!uploads/).*(js|css|png|jpeg|jpg|gif|svg)$",
-      ~r"priv/gettext/.*(po)$",
-      ~r"lib/sequin_web/(controllers|live|components)/.*(ex|heex)$"
-    ]
-  ]
 
 # Enable dev routes for dashboard and mailbox
 config :sequin, dev_routes: true, self_hosted: false

@@ -13,6 +13,7 @@ defmodule Sequin.PostgresReplicationTest do
   use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Factory.AccountsFactory
@@ -1139,7 +1140,13 @@ defmodule Sequin.PostgresReplicationTest do
           ]
         )
 
-      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{sequence_filter: sequence_filter})
+      consumer
+      |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
+      |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+      |> Repo.update!()
+
+      # Restart the consumer to apply the changes
+      Consumers.update_consumer_with_lifecycle(consumer, %{})
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -1303,10 +1310,16 @@ defmodule Sequin.PostgresReplicationTest do
           ]
         )
 
-      {:ok, _} =
-        Consumers.update_consumer_with_lifecycle(consumer, %{
-          sequence_filter: sequence_filter
-        })
+      # Update the consumer with the new sequence filter
+      # we can't do this via the lifecycle because the sequence filter is not updated via the changeset
+      Repo.update!(
+        consumer
+        |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
+        |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+      )
+
+      # Restart the consumer to apply the changes
+      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{})
 
       {:ok, matching_character} =
         UnboxedRepo.transaction(fn ->

@@ -66,8 +66,14 @@
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No WAL Pipelines found</h2>
         <p class="text-gray-600 mb-6">
-          WAL Pipelines allow you to replicate data from one table to another
-          using the WAL.
+          WAL Pipelines use the
+          <a
+            href="https://www.postgresql.org/docs/current/wal-intro.html"
+            target="_blank"
+            class="text-blue-500 hover:underline">Write Ahead Log (WAL)</a
+          >
+          to capture changes from one table in your database and replicate them to
+          another table in the same or different database.
         </p>
         {#if hasDatabases}
           <a

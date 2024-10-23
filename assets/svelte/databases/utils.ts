@@ -5,7 +5,7 @@
  */
 export function isValidPostgresURL(url: string): boolean {
     // Regular expression to match PostgreSQL URL format
-    const postgresURLRegex = /^postgresql:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:@/?]+)(?::(\d+))?(?:\/([^?]+))?(?:\?(.+))?$/;
+    const postgresURLRegex = /^(postgres|postgresql|psql):\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:@/?]+)(?::(\d+))?(?:\/([^?]+))?(?:\?(.+))?$/;
   
     // Test the input URL against the regex
     const match = url.match(postgresURLRegex);

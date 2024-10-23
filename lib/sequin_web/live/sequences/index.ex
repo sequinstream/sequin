@@ -12,6 +12,8 @@ defmodule SequinWeb.SequencesLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
+    user = current_user(socket)
+    account = current_account(socket)
 
     sequence_frequencies =
       account_id
@@ -22,6 +24,20 @@ defmodule SequinWeb.SequencesLive.Index do
       account_id
       |> Databases.list_sequences_for_account()
       |> Repo.preload(:postgres_database)
+
+    socket =
+      if connected?(socket) do
+        push_event(socket, "ph-identify", %{
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.name,
+          accountId: account.id,
+          accountName: account.name,
+          createdAt: user.inserted_at
+        })
+      else
+        socket
+      end
 
     socket =
       socket

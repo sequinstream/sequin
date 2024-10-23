@@ -74,7 +74,7 @@ defmodule SequinWeb.UserAuth do
 
   It clears all session data for safety. See renew_session.
   """
-  def log_out_user(conn) do
+  def log_out_user(conn, redirect_to \\ ~p"/login") do
     user_token = get_session(conn, :user_token)
     user_token && Accounts.delete_user_session_token(user_token)
 
@@ -85,7 +85,7 @@ defmodule SequinWeb.UserAuth do
     conn
     |> renew_session()
     |> delete_resp_cookie(@remember_me_cookie)
-    |> redirect(to: ~p"/login")
+    |> redirect(to: redirect_to)
   end
 
   def log_in_user_with_impersonation(conn, impersonating_user, impersonated_user) do

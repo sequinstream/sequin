@@ -4,9 +4,11 @@ defmodule SequinWeb.AcceptInviteLive do
 
   alias Sequin.Accounts
   alias Sequin.Accounts.User
+  alias Sequin.Error.InvariantError
 
   require Logger
 
+  @impl Phoenix.LiveView
   def mount(%{"token" => token}, _session, socket) do
     Logger.info("[AcceptInviteLive] Mounting with token: #{token}")
 
@@ -21,6 +23,7 @@ defmodule SequinWeb.AcceptInviteLive do
      end), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
   end
 
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <div class="flex items-center justify-center min-h-screen mx-auto">
@@ -40,7 +43,26 @@ defmodule SequinWeb.AcceptInviteLive do
               header="Error"
               body={error}
               icon_class="text-red-500"
-            />
+            >
+              <%= if error =~ "email address" do %>
+                <div class="flex gap-4 mt-4">
+                  <.link
+                    navigate={~p"/"}
+                    class="phx-submit-loading:opacity-75 rounded-lg bg-white border border-gray-300 hover:bg-gray-100 py-2 px-3 text-sm font-semibold leading-6 text-black active:text-black/80"
+                  >
+                    Continue without accepting
+                  </.link>
+                  <.form
+                    for={%{}}
+                    as={:user}
+                    action={~p"/logout?redirect_to=/accept-invite/#{@token}"}
+                    method="delete"
+                  >
+                    <.button>Log out</.button>
+                  </.form>
+                </div>
+              <% end %>
+            </.status_card>
           </:failed>
           <%= if result == :ok do %>
             <.status_card
@@ -56,6 +78,13 @@ defmodule SequinWeb.AcceptInviteLive do
     """
   end
 
+  attr :header, :string, required: true
+  attr :icon, :string, required: true
+  attr :icon_class, :string, required: true
+  attr :body, :string, required: true
+
+  slot :inner_block
+
   defp status_card(assigns) do
     ~H"""
     <div class="p-6 rounded-lg shadow-lg min-w-96">
@@ -64,13 +93,13 @@ defmodule SequinWeb.AcceptInviteLive do
         <.icon name={@icon} class={@icon_class} />
       </div>
       <p class="text-gray-600 dark:text-gray-300"><%= @body %></p>
+      <%= render_slot(@inner_block) %>
     </div>
     """
   end
 
   defp accept_invite(%User{} = user, token, pid) do
     Logger.info("[AcceptInviteLive] Accepting invite with token: #{token}")
-    Process.sleep(1000)
 
     with {:ok, token} <- Base.url_decode64(token, padding: false),
          hashed_token = :crypto.hash(:sha256, token),
@@ -84,12 +113,19 @@ defmodule SequinWeb.AcceptInviteLive do
         Logger.error("Invalid base64 token, #{token}")
         {:error, "Invalid token. Please double check the invitation link and try again."}
 
+      {:error, %InvariantError{message: "Email mismatch"}} ->
+        Logger.error("Email mismatch, #{token}")
+
+        {:error,
+         "The email address of the logged in user (#{user.email}) does not match the email address for this invite."}
+
       {:error, error} when is_exception(error) ->
         Logger.error("Error accepting invite: #{Exception.message(error)}")
         {:error, "Invalid token. Please double check the invitation link and try again."}
     end
   end
 
+  @impl Phoenix.LiveView
   def handle_info(:redirect, socket) do
     Logger.info("Redirecting to home page")
     {:noreply, redirect(socket, to: "/")}

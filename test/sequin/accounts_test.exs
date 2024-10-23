@@ -904,7 +904,8 @@ defmodule Sequin.AccountsTest do
       {:ok, hashed_token} = Base.url_decode64(token, padding: false)
       hashed_token = :crypto.hash(:sha256, hashed_token)
 
-      assert {:error, %NotFoundError{}} = Accounts.accept_invite(different_user, hashed_token)
+      # This "Email mismatch" string is used in AcceptInviteLive, if this changes, we need to update that liveview.
+      assert {:error, %InvariantError{message: "Email mismatch"}} = Accounts.accept_invite(different_user, hashed_token)
     end
 
     test "returns an error if the invitation is expired", %{invited_email: invited_email, token: token} do

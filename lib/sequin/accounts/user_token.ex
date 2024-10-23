@@ -227,11 +227,10 @@ defmodule Sequin.Accounts.UserToken do
       where: ut.id == ^user_token_id
   end
 
-  def accept_invite_query(user, token) do
+  def accept_invite_query(token) do
     from ut in UserToken,
       where: ut.context == "account-invite",
       where: ut.token == ^token,
-      where: ut.sent_to == ^user.email,
       where: ut.inserted_at > ago(@account_invite_validity_in_days, "day")
   end
 end

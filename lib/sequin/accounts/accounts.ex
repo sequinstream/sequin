@@ -768,14 +768,16 @@ defmodule Sequin.Accounts do
   end
 
   def accept_invite(%User{} = user, token) do
-    user
-    |> UserToken.accept_invite_query(token)
+    user_email = user.email
+
+    token
+    |> UserToken.accept_invite_query()
     |> Repo.one()
     |> case do
       nil ->
         {:error, Error.not_found(entity: :user_token)}
 
-      %UserToken{annotations: %{"account_id" => account_id}} = user_token ->
+      %UserToken{sent_to: ^user_email, annotations: %{"account_id" => account_id}} = user_token ->
         Repo.transaction(fn ->
           Repo.delete!(user_token)
 
@@ -791,6 +793,9 @@ defmodule Sequin.Accounts do
               {:error, Error.invariant(message: "Error accepting invite")}
           end
         end)
+
+      %UserToken{annotations: %{"account_id" => _}} ->
+        {:error, Error.invariant(message: "Email mismatch")}
     end
   end
 

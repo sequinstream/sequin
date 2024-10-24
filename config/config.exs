@@ -87,7 +87,8 @@ config :sequin,
   retool_workflow_key: "dummy_retool_workflow_key",
   portal_hostname: "localhost",
   datadog_req_opts: [],
-  datadog: [configured: false]
+  datadog: [configured: false],
+  api_base_url: "http://localhost:4000"
 
 # Configure tailwind (the version is required)
 config :tailwind,

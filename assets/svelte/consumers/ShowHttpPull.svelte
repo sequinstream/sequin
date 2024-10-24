@@ -13,11 +13,13 @@
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import ShowSequence from "./ShowSequence.svelte";
+  import Cursor from "./Cursor.svelte";
 
   export let consumer;
   export let metrics;
   export let apiBaseUrl;
   export let api_token;
+  export let cursor_position;
 </script>
 
 <!-- Wrap the content in a flex column that fills available space -->
@@ -38,7 +40,7 @@
           <span class="text-2xl font-bold">
             {metrics.messages_processed_count
               ? metrics.messages_processed_count.toLocaleString()
-              : "N/A"}
+              : 0}
           </span>
         </CardContent>
       </Card>
@@ -128,6 +130,8 @@
           </div>
         </CardContent>
       </Card>
+
+      <Cursor {cursor_position} />
 
       <Card>
         <CardContent class="p-6">

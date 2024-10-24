@@ -35,10 +35,10 @@ defmodule SequinWeb.ConsumersLive.Show do
         {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
 
         if connected?(socket) do
-          Process.send_after(self(), :update_health, 1000)
-          Process.send_after(self(), :update_metrics, 1000)
-          # Start message updates
-          Process.send_after(self(), :update_messages, 100)
+          send(self(), :update_health)
+          send(self(), :update_metrics)
+          send(self(), :update_messages)
+          send(self(), :update_cursor_position)
         end
 
         consumer =
@@ -66,6 +66,8 @@ defmodule SequinWeb.ConsumersLive.Show do
           |> assign(:page, 0)
           |> assign(:page_size, @page_size)
           |> assign(:total_count, 0)
+          |> assign(:cursor_position, nil)
+          |> assign(:cursor_task_ref, nil)
           |> load_consumer_messages()
 
         {:ok, socket}
@@ -150,7 +152,8 @@ defmodule SequinWeb.ConsumersLive.Show do
                 %{
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
-                  metrics: @metrics
+                  metrics: @metrics,
+                  cursor_position: @cursor_position
                 }
               }
             />
@@ -164,7 +167,8 @@ defmodule SequinWeb.ConsumersLive.Show do
                   parent: "consumer-show",
                   metrics: @metrics,
                   apiBaseUrl: @api_base_url,
-                  api_token: encode_api_token(@api_token)
+                  api_token: encode_api_token(@api_token),
+                  cursor_position: @cursor_position
                 }
               }
             />
@@ -336,6 +340,41 @@ defmodule SequinWeb.ConsumersLive.Show do
     {:noreply, socket}
   end
 
+  @impl Phoenix.LiveView
+  def handle_info(:update_cursor_position, socket) do
+    task =
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        get_cursors(socket.assigns.consumer)
+      end)
+
+    Process.send_after(self(), :update_cursor_position, 1000)
+
+    {:noreply, assign(socket, :cursor_task_ref, task.ref)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({ref, {:ok, cursor_position}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, assign(socket, cursor_position: cursor_position, cursor_task_ref: nil)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({ref, {:error, _}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, assign(socket, cursor_task_ref: nil)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:DOWN, ref, :process, _, _}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+    {:noreply, assign(socket, cursor_task_ref: nil)}
+  end
+
+  # Ignore messages from old tasks
+  @impl Phoenix.LiveView
+  def handle_info({_ref, _}, socket), do: {:noreply, socket}
+  @impl Phoenix.LiveView
+  def handle_info({:DOWN, _, :process, _, _}, socket), do: {:noreply, socket}
+
   defp assign_metrics(socket) do
     consumer = socket.assigns.consumer
 
@@ -350,6 +389,12 @@ defmodule SequinWeb.ConsumersLive.Show do
     }
 
     assign(socket, :metrics, metrics)
+  end
+
+  defp get_cursors(consumer) do
+    Sequin.Consumers.cursors(consumer)
+  rescue
+    _ -> {:error, "Failed to get cursor position"}
   end
 
   defp encode_consumer(%HttpPushConsumer{} = consumer) do

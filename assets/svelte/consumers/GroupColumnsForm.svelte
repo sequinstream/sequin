@@ -9,62 +9,59 @@
   import { Checkbox } from "$lib/components/ui/checkbox";
   import { onMount } from "svelte";
 
-  //   export let errors: any;
-  export let selectedTable: any;
-  export let onGroupColumnAttnumsChange: (attnums: number[]) => void;
+  export let errors: any;
   export let isEditMode: boolean;
+  export let selectedTable: any;
   export let groupColumnAttnums: number[] | null;
+  export let onGroupColumnAttnumsChange: (attnums: number[]) => void;
 
-  let previousTableOid: number | null = null;
   let useCustomGrouping = false;
   let customGroupColumnAttnums: number[] = [];
   let primaryKeyAttnums: number[] = [];
   let isUsingPrimaryKeys = false;
+  let previousTableOid: number | null = null;
+  let groupColumnError: string | null = null;
+
+  $: isUsingPrimaryKeys = arraysEqual(groupColumnAttnums, primaryKeyAttnums);
+  $: groupColumnError = errors.sequence_filter?.group_column_attnums?.[0];
 
   $: {
     if (selectedTable && selectedTable.oid !== previousTableOid) {
       previousTableOid = selectedTable.oid;
 
-      updatePrimaryKeyAttnums();
-      updateCustomGroupColumnAttnums();
-      setFormGroupColumnAttnums();
+      // Update primary key attnums
+      primaryKeyAttnums = selectedTable.columns
+        .filter((column) => column["isPk?"])
+        .map((column) => column.attnum);
+
+      // Reset custom group column attnums to match primary keys
+      customGroupColumnAttnums = [...primaryKeyAttnums];
+
+      // Automatically use custom grouping if no primary keys are available
+      useCustomGrouping = primaryKeyAttnums.length === 0;
+
+      // Set group column attnums in the form
+      setGroupColumnAttnums();
     }
   }
 
-  $: {
-    if (isEditMode) {
-      isUsingPrimaryKeys = arraysEqual(groupColumnAttnums, primaryKeyAttnums);
-    }
-  }
-
-  function setFormGroupColumnAttnums() {
+  function setGroupColumnAttnums() {
     const attnums = useCustomGrouping
       ? customGroupColumnAttnums
       : primaryKeyAttnums;
 
     if (!isEditMode && !arraysEqual(groupColumnAttnums, attnums)) {
-      console.log("Updating group column attnums to:", attnums);
       onGroupColumnAttnumsChange(attnums);
       groupColumnAttnums = attnums;
     }
   }
 
-  function updatePrimaryKeyAttnums() {
-    primaryKeyAttnums = selectedTable.columns
-      .filter((column) => column["isPk?"])
-      .map((column) => column.attnum);
-  }
-
-  function updateCustomGroupColumnAttnums() {
-    customGroupColumnAttnums = selectedTable.columns
-      .filter((column) => column["isPk?"])
-      .map((column) => column.attnum);
-  }
+  function updatePrimaryKeyAttnums() {}
 
   function toggleGroupingMode(checked: boolean) {
     useCustomGrouping = checked;
 
-    setFormGroupColumnAttnums();
+    setGroupColumnAttnums();
   }
 
   function toggleColumnGrouping(attnum: number) {
@@ -78,7 +75,7 @@
       );
     }
 
-    setFormGroupColumnAttnums();
+    setGroupColumnAttnums();
   }
 
   function getGroupingColumnNames() {
@@ -113,6 +110,7 @@
             id="use-custom-grouping"
             checked={useCustomGrouping}
             onCheckedChange={toggleGroupingMode}
+            disabled={primaryKeyAttnums.length === 0}
           />
           <span class="text-sm">Custom</span>
         </div>
@@ -128,14 +126,19 @@
       {/if}
     </div>
   </CardHeader>
-  <CardContent>
+  <CardContent class="space-y-4">
+    {#if primaryKeyAttnums.length === 0 && !isEditMode}
+      <p class="text-sm text-info">
+        No primary keys available. Custom grouping is required.
+      </p>
+    {/if}
     {#if isEditMode}
       {#if isUsingPrimaryKeys}
         <p class="text-sm text-muted-foreground">
           Using primary keys for grouping.
         </p>
       {:else}
-        <div class="space-y-2">
+        <div class="space-y-2 max-h-96 overflow-y-auto">
           {#each selectedTable.columns as column}
             <div class="flex items-center space-x-2">
               <Checkbox
@@ -158,11 +161,14 @@
         By default, Sequin uses primary keys to group messages. This ensures
         that records are processed serially for each individual record.
       </p>
+      {#if groupColumnError}
+        <p class="text-destructive text-sm">{groupColumnError}</p>
+      {/if}
     {:else}
       <p class="text-sm text-muted-foreground mb-4">
         Select the columns to use for custom grouping.
       </p>
-      <div class="space-y-2">
+      <div class="space-y-2 max-h-96 overflow-y-auto">
         {#each selectedTable.columns as column}
           <div class="flex items-center space-x-2">
             <Checkbox
@@ -179,6 +185,9 @@
           </div>
         {/each}
       </div>
+      {#if groupColumnError}
+        <p class="text-destructive text-sm">{groupColumnError}</p>
+      {/if}
     {/if}
   </CardContent>
 </Card>

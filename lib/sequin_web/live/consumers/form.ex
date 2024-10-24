@@ -269,7 +269,6 @@ defmodule SequinWeb.ConsumersLive.Form do
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
     source_table = Consumers.source_table(consumer)
-    dbg(source_table)
 
     base = %{
       "id" => consumer.id,

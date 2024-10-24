@@ -37,12 +37,6 @@
     }
   }
 
-  $: {
-    console.log("groupColumnAttnums", groupColumnAttnums);
-    console.log("primaryKeyAttnums", primaryKeyAttnums);
-    console.log("isUsingPrimaryKeys", isUsingPrimaryKeys);
-  }
-
   function setFormGroupColumnAttnums() {
     const attnums = useCustomGrouping
       ? customGroupColumnAttnums

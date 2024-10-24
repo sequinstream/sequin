@@ -48,13 +48,13 @@
   $: baseUrlErrors = Object.fromEntries(
     ["host", "scheme", "port", "path", "query", "fragment"]
       .map((key) => [key, errors[key]])
-      .filter(([_, value]) => value !== undefined)
+      .filter(([_, value]) => value !== undefined),
   );
 
   function pushEvent(
     event: string,
     payload = {},
-    callback = (event: any) => {}
+    callback = (event: any) => {},
   ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }

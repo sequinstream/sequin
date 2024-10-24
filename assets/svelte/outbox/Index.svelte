@@ -13,6 +13,7 @@
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
+
   export let consumer_id: string | null;
   export let messages: any[];
   export let consumers: any[];
@@ -73,7 +74,7 @@
         (reply) => {
           loading = false;
           // Handle the reply if needed
-        }
+        },
       );
       updateUrlParams();
     }
@@ -117,7 +118,7 @@
         } else {
           messageData = reply.data;
         }
-      }
+      },
     );
   }
 

@@ -6,7 +6,6 @@
     Clock,
     RefreshCw,
     Activity,
-    CheckCircle2,
     Eye,
     EyeOff,
     ExternalLink,
@@ -96,7 +95,7 @@
               <Clock class="h-4 w-4" />
               <span
                 >Created {formatRelativeTimestamp(
-                  http_endpoint.inserted_at
+                  http_endpoint.inserted_at,
                 )}</span
               >
             </div>
@@ -104,7 +103,7 @@
               <RefreshCw class="h-4 w-4" />
               <span
                 >Updated {formatRelativeTimestamp(
-                  http_endpoint.updated_at
+                  http_endpoint.updated_at,
                 )}</span
               >
             </div>

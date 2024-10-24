@@ -8,7 +8,6 @@
     ChevronRight,
     X,
     ArrowUpRight,
-    Activity,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
@@ -58,7 +57,7 @@
 
   const getVerticalLineColor = (spanTypes: string[]) => {
     const mappedTypes = spanTypes.map((type) =>
-      getFrontendSpanType(type).toLowerCase()
+      getFrontendSpanType(type).toLowerCase(),
     );
     if (mappedTypes.includes("acked")) return "bg-green-500";
     if (mappedTypes.includes("excluded by filters")) return "bg-gray-400";
@@ -66,7 +65,7 @@
       return "bg-red-500";
     if (
       mappedTypes.some((type) =>
-        ["replicated", "delivered", "ingested"].includes(type)
+        ["replicated", "delivered", "ingested"].includes(type),
       )
     )
       return "bg-blue-500";
@@ -92,10 +91,10 @@
 
   const getErrorMessage = (spanTypes: string[]) => {
     const deliveredCount = spanTypes.filter(
-      (type) => getFrontendSpanType(type).toLowerCase() === "delivered"
+      (type) => getFrontendSpanType(type).toLowerCase() === "delivered",
     ).length;
     const isAcked = spanTypes.some(
-      (type) => getFrontendSpanType(type).toLowerCase() === "acked"
+      (type) => getFrontendSpanType(type).toLowerCase() === "acked",
     );
     if (deliveredCount > 1) {
       return {
@@ -189,7 +188,7 @@
       const updatedTrace = trace_state.message_traces.find(
         (trace) =>
           trace.trace_id === selectedTrace.trace_id &&
-          trace.consumer_id === selectedTrace.consumer_id
+          trace.consumer_id === selectedTrace.consumer_id,
       );
       if (updatedTrace) {
         selectedTrace = updatedTrace;
@@ -336,7 +335,7 @@
       <div>
         Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(
           currentPage * itemsPerPage,
-          trace_state?.total_count || 0
+          trace_state?.total_count || 0,
         )} of {trace_state?.total_count || 0} entries
       </div>
       <div class="flex items-center space-x-2">

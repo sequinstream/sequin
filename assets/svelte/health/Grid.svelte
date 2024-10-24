@@ -20,9 +20,9 @@
     <HealthPill status={initializing.status} />
 
     <!-- Component row -->
-    <HealthComponent health={healthy} expanded={false} />
-    <HealthComponent health={warning} expanded={false} />
-    <HealthComponent health={unhealthy} expanded={false} />
-    <HealthComponent health={initializing} expanded={false} />
+    <HealthComponent health={healthy} />
+    <HealthComponent health={warning} />
+    <HealthComponent health={unhealthy} />
+    <HealthComponent health={initializing} />
   </div>
 </div>

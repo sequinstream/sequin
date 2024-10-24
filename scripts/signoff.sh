@@ -70,7 +70,6 @@ fi
 
 echo -e "${BLUE}Attempting to sign off on ${SHA} in ${OWNER}/${REPO} as ${USER}${RESET}"
 
-
 # Run steps
 run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
@@ -90,6 +89,14 @@ run_step "make spellcheck"
 
 # Run mintlify broken-links check
 run_step "make check-links"
+
+cd assets
+# Prettier formatting check
+run_step "npm run format:check"
+# TypeScript checking
+run_step "npm run tsc"
+
+cd ..
 
 # Report successful sign off to GitHub
 description="Signed off by ${USER} (${SECONDS} seconds)"

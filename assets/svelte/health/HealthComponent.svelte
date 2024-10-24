@@ -29,7 +29,7 @@
     { healthy: 0, error: 0, warning: 0, initializing: 0 } as Record<
       Health["status"],
       number
-    >
+    >,
   );
 
   $: statusMessage = (() => {

@@ -22,14 +22,14 @@
 
 import "phoenix_html";
 // Establish Phoenix Socket and LiveView configuration.
+import Intercom from "@intercom/messenger-js-sdk";
+import { getHooks } from "live_svelte";
 import { Socket } from "phoenix";
 import { LiveSocket } from "phoenix_live_view";
-import topbar from "../vendor/topbar";
-import { getHooks } from "live_svelte";
-import * as Components from "../svelte/**/*.svelte";
-import { toast } from "svelte-sonner";
 import posthog from "posthog-js";
-import Intercom from "@intercom/messenger-js-sdk";
+import { toast } from "svelte-sonner";
+import * as Components from "../svelte/**/*.svelte";
+import topbar from "../vendor/topbar";
 
 posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",

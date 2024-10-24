@@ -81,7 +81,7 @@
       },
       (res: { error?: string }) => {
         // TODO: toaster error or open dialog?!
-      }
+      },
     );
   }
 
@@ -99,7 +99,7 @@
         if (res.error) {
           renameErrorMessage = res.error;
         }
-      }
+      },
     );
   }
 
@@ -120,7 +120,7 @@
         } else {
           showDeleteConfirmDialog = false;
         }
-      }
+      },
     );
   }
 
@@ -133,7 +133,7 @@
       "invite_user",
       {
         accountId: selectedAccount.id,
-        email: event.target.email.value,
+        email: (event.target as HTMLFormElement).email.value,
       },
       (res?: { error?: string }) => {
         inviteMemberLoading = false;
@@ -142,7 +142,7 @@
         } else {
           closeInviteMemberDialog();
         }
-      }
+      },
     );
   }
 
@@ -175,7 +175,7 @@
         } else {
           closeRemoveUserDialog();
         }
-      }
+      },
     );
   }
 </script>

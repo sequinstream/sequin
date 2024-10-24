@@ -5,7 +5,6 @@
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import { Badge } from "$lib/components/ui/badge";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
@@ -102,7 +101,7 @@
         } else {
           showCreateAccount = false;
         }
-      }
+      },
     );
   }
 
@@ -188,7 +187,7 @@
             >
               <div
                 class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-                  item.path
+                  item.path,
                 )}"
               >
                 <svelte:component
@@ -215,7 +214,7 @@
       >
         <div
           class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-            'https://discord.gg/BV8wFXvNtY'
+            'https://discord.gg/BV8wFXvNtY',
           )}"
         >
           <svg
@@ -240,7 +239,7 @@
       >
         <div
           class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-            'https://sequinstream.com/docs'
+            'https://sequinstream.com/docs',
           )}"
         >
           <FileText
@@ -254,7 +253,7 @@
       <a id="launch-intercom" href="mailto:support@sequinstream.com">
         <div
           class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-            'mailto:support@sequinstream.com'
+            'mailto:support@sequinstream.com',
           )}"
         >
           <LifeBuoy
@@ -304,7 +303,7 @@
                   <Check
                     class={cn(
                       "mr-2 h-4 w-4",
-                      currentAccountId !== account.id && "text-transparent"
+                      currentAccountId !== account.id && "text-transparent",
                     )}
                   />
                   {account.name}

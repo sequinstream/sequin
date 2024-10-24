@@ -1,24 +1,24 @@
 {
-    "compilerOptions": {
-        "verbatimModuleSyntax": true,
-        "types": ["@types/node"],
-        "baseUrl": ".",
-        "paths": {
-            "$lib": ["svelte",  "./src/lib"],
-            "$lib/*": ["svelte/*", "./src/lib/*"]
-        },
-        "moduleResolution": "bundler",
-        "target": "ESNext",
-        "useDefineForClassFields": true,
-        "allowJs": true,
-        "checkJs": true,
-        "isolatedModules": true,
-        "module": "ESNext",
-        "outDir": "./dist",
-        "allowImportingTsExtensions": true,
-        "noEmit": true,
+  "compilerOptions": {
+    "verbatimModuleSyntax": true,
+    "types": ["@types/node"],
+    "baseUrl": ".",
+    "paths": {
+      "$lib": ["svelte", "./src/lib"],
+      "$lib/*": ["svelte/*", "./src/lib/*"]
     },
-    "exclude": [
-        "node_modules"
-    ]
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "allowJs": true,
+    "checkJs": true,
+    "isolatedModules": true,
+    "module": "ESNext",
+    "outDir": "./dist",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["svelte/**/*"],
+  "exclude": ["node_modules", "../deps", "build.js", "vendor"]
 }

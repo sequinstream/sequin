@@ -1,10 +1,7 @@
 <script lang="ts">
   import {
-    ArrowLeft,
-    CheckCircle,
     Clock,
     RefreshCw,
-    Database,
     Radio,
     ExternalLink,
     SquareStack,
@@ -14,7 +11,7 @@
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import { getColorFromName, formatRelativeTimestamp } from "$lib/utils";
+  import { getColorFromName } from "$lib/utils";
   import HealthComponent from "$lib/health/HealthComponent.svelte";
   import type { Health } from "$lib/health/Types";
   import { Badge } from "$lib/components/ui/badge";
@@ -31,6 +28,7 @@
     message_kind: string;
     consumer_kind: string;
     source_tables: Table[];
+    href: string;
   }
 
   interface PostgresDatabase {
@@ -187,7 +185,7 @@
                         >
                           <icon
                             class="hero-table-cells w-5 h-5 mr-1 rounded {getColorFromName(
-                              `${table.schema_name}.${table.table_name}`
+                              `${table.schema_name}.${table.table_name}`,
                             )}"
                           ></icon>
 

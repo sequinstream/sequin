@@ -69,7 +69,6 @@ defmodule SequinWeb.ConsumersLive.Form do
       cond do
         is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
         is_struct(consumer, HttpPushConsumer) -> "consumers/HttpPushForm"
-        true -> "consumers/Wizard"
       end
 
     consumer =

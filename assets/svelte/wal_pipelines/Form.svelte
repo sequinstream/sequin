@@ -1,17 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
-  import * as RadioGroup from "$lib/components/ui/radio-group";
   import {
     Select,
-    SelectContent,
-    SelectItem,
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
-  import { Checkbox } from "$lib/components/ui/checkbox";
   import {
     Card,
     CardContent,
@@ -19,19 +14,9 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import TableSelector from "../components/TableSelector.svelte";
-  import CodeWithCopy from "../components/CodeWithCopy.svelte";
   import FilterForm from "../components/FilterForm.svelte";
   import FullPageModal from "../components/FullPageModal.svelte";
-  import {
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger,
-  } from "$lib/components/ui/accordion";
-  import { Info } from "lucide-svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
   import { cn } from "$lib/utils";
-  import { ExternalLinkIcon } from "lucide-svelte";
 
   export let walPipeline: any;
   export let databases: any[];
@@ -68,22 +53,22 @@
   $: {
     if (form.postgresDatabaseId) {
       selectedSourceDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
+        (db) => db.id === form.postgresDatabaseId,
       );
     }
     if (form.destinationDatabaseId) {
       selectedDestinationDatabase = databases.find(
-        (db) => db.id === form.destinationDatabaseId
+        (db) => db.id === form.destinationDatabaseId,
       );
     }
     if (form.tableOid) {
       selectedSourceTable = selectedSourceDatabase.tables.find(
-        (table) => table.oid === form.tableOid
+        (table) => table.oid === form.tableOid,
       );
     }
     if (form.destinationTableOid) {
       selectedDestinationTable = selectedDestinationDatabase.tables.find(
-        (table) => table.oid === form.destinationTableOid
+        (table) => table.oid === form.destinationTableOid,
       );
     }
   }
@@ -136,7 +121,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected database" />
@@ -152,7 +137,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected table" />
@@ -175,7 +160,6 @@
           {#if selectedSourceTable}
             <FilterForm
               showTitle={false}
-              showTableInfo
               messageKind="event"
               selectedTable={selectedSourceTable}
               bind:form
@@ -205,7 +189,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected database" />
@@ -221,7 +205,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected table" />

@@ -64,7 +64,7 @@
   function pushEvent(
     event: string,
     payload = {},
-    callback: (reply?: any) => void = () => {}
+    callback: (reply?: any) => void = () => {},
   ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
@@ -98,7 +98,7 @@
 
     if (selectedDatabase && form.table_oid) {
       selectedTable = selectedDatabase.tables.find(
-        (table) => table.oid === form.table_oid
+        (table) => table.oid === form.table_oid,
       );
     } else {
       selectedTable = null;
@@ -169,7 +169,7 @@
                 value: form.sort_column_attnum,
                 label:
                   selectedTable.columns.find(
-                    (column) => column.attnum === form.sort_column_attnum
+                    (column) => column.attnum === form.sort_column_attnum,
                   )?.name || "Select a sort column",
               }}
               onSelectedChange={(event) => {

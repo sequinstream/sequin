@@ -4,24 +4,11 @@
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
     ListOrdered,
-    AlertCircle,
-    Database,
-    Zap,
     ArrowUpRight,
     MoreHorizontal,
     Trash2,
   } from "lucide-svelte";
   import NewSequenceForm from "./Form.svelte";
-  import {
-    Alert,
-    AlertDescription,
-    AlertTitle,
-  } from "$lib/components/ui/alert";
-  import {
-    Popover,
-    PopoverTrigger,
-    PopoverContent,
-  } from "$lib/components/ui/popover";
   import {
     DropdownMenu,
     DropdownMenuTrigger,

@@ -34,15 +34,17 @@
   import { Label } from "$lib/components/ui/label";
   import * as Tabs from "$lib/components/ui/tabs";
 
+  type Table = {
+    oid: number;
+    schema: string;
+    name: string;
+    isEventTable?: boolean;
+  };
+
   export let databases: Array<{
     id: string;
     name: string;
-    tables: Array<{
-      oid: number;
-      schema: string;
-      name: string;
-      isEventTable?: boolean;
-    }>;
+    tables: Array<Table>;
   }>;
   export let onSelect: (event: {
     databaseId: string;
@@ -51,7 +53,7 @@
   export let pushEvent: (
     event: string,
     detail: any,
-    callback: () => void
+    callback: () => void,
   ) => void;
   export let selectedDatabaseId: string | undefined;
   export let selectedTableOid: number | null;
@@ -61,7 +63,7 @@
   let selectedDatabase;
   let autoRefreshedDatabaseTables = [];
 
-  let filteredTables: Array<{ oid: number; schema: string; name: string }> = [];
+  let filteredTables: Array<Table> = [];
   let searchQuery = "";
 
   $: {
@@ -72,7 +74,7 @@
       selectedDatabase?.tables.filter((table) =>
         `${table.schema}.${table.name}`
           .toLowerCase()
-          .includes((searchQuery || "").toLowerCase())
+          .includes((searchQuery || "").toLowerCase()),
       ) || [];
 
     if (onlyEventTables) {
@@ -335,7 +337,7 @@ $$);
             <TableBody>
               {#if filteredTables.length === 0 && onlyEventTables}
                 <TableRow>
-                  <TableCell colspan="2" class="text-center py-8">
+                  <TableCell colspan={2} class="text-center py-8">
                     <p class="text-gray-500 mb-4">
                       No event tables found in the destination.
                     </p>
@@ -382,10 +384,7 @@ $$);
   {/if}
 </div>
 
-<Dialog.Root
-  bind:open={createEventTableDialogOpen}
-  id="create-event-table-dialog"
->
+<Dialog.Root bind:open={createEventTableDialogOpen}>
   <Dialog.Content class="w-4/5 max-w-[80%] flex flex-col">
     <Dialog.Header>
       <Dialog.Title>Create Event Table</Dialog.Title>

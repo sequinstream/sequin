@@ -42,7 +42,6 @@
     DropdownMenuContent,
     DropdownMenuItem,
   } from "$lib/components/ui/dropdown-menu";
-  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
   export let live;
   export let parent;
@@ -94,7 +93,7 @@
   $: {
     if (form.postgresDatabaseId) {
       selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
+        (db) => db.id === form.postgresDatabaseId,
       );
     }
 
@@ -108,14 +107,14 @@
 
     if (form.sequenceId && selectedDatabase) {
       selectedSequence = selectedDatabase.sequences.find(
-        (sequence) => sequence.id === form.sequenceId
+        (sequence) => sequence.id === form.sequenceId,
       );
     }
 
     selectedTable =
       selectedSequence && selectedDatabase
         ? selectedDatabase.tables.find(
-            (table) => table.oid === selectedSequence.table_oid
+            (table) => table.oid === selectedSequence.table_oid,
           )
         : null;
   }
@@ -129,7 +128,7 @@
   $: {
     if (form.httpEndpointId) {
       selectedHttpEndpoint = httpEndpoints.find(
-        (endpoint) => endpoint.id === form.httpEndpointId
+        (endpoint) => endpoint.id === form.httpEndpointId,
       );
     }
   }
@@ -188,11 +187,11 @@
     // Set the form name based on the selected sequence
     if (form.sequenceId) {
       const selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
+        (db) => db.id === form.postgresDatabaseId,
       );
       if (selectedDatabase) {
         const selectedSequence = selectedDatabase.sequences.find(
-          (sequence) => sequence.id === form.sequenceId
+          (sequence) => sequence.id === form.sequenceId,
         );
         if (selectedSequence) {
           const tableName = selectedSequence.table_name;
@@ -257,7 +256,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected database" />
@@ -273,7 +272,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected table" />
@@ -323,7 +322,6 @@
     </Card>
 
     <GroupColumnsForm
-      bind:form
       {errors}
       {isEditMode}
       {selectedTable}

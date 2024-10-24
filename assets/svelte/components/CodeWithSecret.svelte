@@ -1,6 +1,5 @@
 <script>
   import CopyIcon from "$lib/components/CopyIcon.svelte";
-  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let tabs;
   export let secret;
@@ -22,7 +21,7 @@
   $: {
     codeForDisplay = selectedTab.value.replace(
       /{{secret}}/g,
-      showSecret ? secret : "********"
+      showSecret ? secret : "********",
     );
   }
 </script>

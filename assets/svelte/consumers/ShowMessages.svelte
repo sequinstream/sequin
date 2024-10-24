@@ -3,7 +3,6 @@
   import { Button } from "$lib/components/ui/button";
   import { Switch } from "$lib/components/ui/switch";
   import {
-    ArrowUpRight,
     ChevronLeft,
     ChevronRight,
     Loader2,
@@ -173,7 +172,7 @@
         } else {
           messageData = reply.data;
         }
-      }
+      },
     );
 
     live.pushEvent(
@@ -186,7 +185,7 @@
         } else {
           messageLogs = reply.logs;
         }
-      }
+      },
     );
   }
 
@@ -247,7 +246,7 @@
         } else {
           messageLogs = reply.logs;
         }
-      }
+      },
     );
   }
 
@@ -272,7 +271,7 @@
           selectedMessage = reply.updated_message;
           refreshLogs();
         }
-      }
+      },
     );
   }
 
@@ -404,7 +403,7 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
                 <span
                   class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                    message.state
+                    message.state,
                   )} text-gray-800`}
                 >
                   {message.state}
@@ -527,7 +526,7 @@
                       >
                       <span
                         class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                          selectedMessage.state
+                          selectedMessage.state,
                         )} text-gray-800`}
                       >
                         {selectedMessage.state}
@@ -692,7 +691,7 @@
                                     <div class="flex-grow p-2">
                                       <div class="text-xs text-gray-500 mb-1">
                                         {new Date(
-                                          log.timestamp
+                                          log.timestamp,
                                         ).toLocaleString()}
                                       </div>
                                       <div class="text-sm text-gray-900">

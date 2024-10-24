@@ -43,7 +43,7 @@
 
       // Random delay before next cycle
       await new Promise((resolve) =>
-        setTimeout(resolve, Math.random() * 2000 + 1000)
+        setTimeout(resolve, Math.random() * 2000 + 1000),
       );
 
       // Reset for next cycle

@@ -1,34 +1,21 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    Database,
     Webhook,
     ExternalLink,
     ArrowUpRight,
-    ArrowRight,
     ArrowRightToLine,
     HelpCircle,
     SquareStack,
-    RefreshCw,
     XCircle,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
-  import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "$lib/components/ui/table";
-  import { getColorFromName, formatNumberWithCommas } from "../utils";
+  import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import { concatenateUrl } from "../databases/utils";
-  import * as Alert from "$lib/components/ui/alert";
-  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
   import ShowSequence from "./ShowSequence.svelte";
   export let consumer;
   export let metrics = {
@@ -48,7 +35,7 @@
 
   $: fullEndpointUrl = concatenateUrl(
     consumer.http_endpoint.url,
-    consumer.http_endpoint_path
+    consumer.http_endpoint_path,
   );
 </script>
 

@@ -105,8 +105,8 @@
         parseInt(day),
         parseInt(hours),
         parseInt(minutes),
-        parseInt(seconds)
-      )
+        parseInt(seconds),
+      ),
     );
     // Only update if the new date is different to prevent infinite loops
     if (+newDate !== +value) {

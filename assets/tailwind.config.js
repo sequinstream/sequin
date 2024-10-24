@@ -1,6 +1,6 @@
-import { fontFamily } from "tailwindcss/defaultTheme";
-import path from "path";
 import fs from "fs";
+import path from "path";
+import { fontFamily } from "tailwindcss/defaultTheme";
 
 /** @type {import('tailwindcss').Config} */
 const config = {
@@ -224,7 +224,7 @@ const config = {
             };
           },
         },
-        { values }
+        { values },
       );
     },
     // Disable dark mode for scroll bars

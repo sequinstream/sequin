@@ -38,7 +38,7 @@ let optsClient = {
           const css = await require("fs").promises.readFile(args.path, "utf8");
           const result = await postcss([tailwindcss(), autoprefixer()]).process(
             css,
-            { from: args.path }
+            { from: args.path },
           );
           return { contents: result.css, loader: "css" };
         });

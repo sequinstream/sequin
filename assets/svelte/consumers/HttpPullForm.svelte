@@ -59,7 +59,7 @@
   $: {
     if (form.postgresDatabaseId) {
       selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
+        (db) => db.id === form.postgresDatabaseId,
       );
     }
 
@@ -73,14 +73,14 @@
 
     if (form.sequenceId && selectedDatabase) {
       selectedSequence = selectedDatabase.sequences.find(
-        (sequence) => sequence.id === form.sequenceId
+        (sequence) => sequence.id === form.sequenceId,
       );
     }
 
     selectedTable =
       selectedSequence && selectedDatabase
         ? selectedDatabase.tables.find(
-            (table) => table.oid === selectedSequence.table_oid
+            (table) => table.oid === selectedSequence.table_oid,
           )
         : null;
   }
@@ -90,7 +90,7 @@
     pushEvent("form_updated", { form });
   }
 
-  const pushEvent = (event, payload = {}, cb = () => {}) => {
+  const pushEvent = (event, payload = {}, cb = (event: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
@@ -119,11 +119,11 @@
     // Set the form name based on the selected table
     if (form.sequenceId) {
       const selectedDatabase = databases.find(
-        (db) => db.id === form.postgresDatabaseId
+        (db) => db.id === form.postgresDatabaseId,
       );
       if (selectedDatabase) {
         const selectedSequence = selectedDatabase.sequences.find(
-          (sequence) => sequence.id === form.sequenceId
+          (sequence) => sequence.id === form.sequenceId,
         );
         if (selectedSequence) {
           const tableName = selectedSequence.table_name;
@@ -182,7 +182,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected database" />
@@ -198,7 +198,7 @@
               <SelectTrigger
                 class={cn(
                   "w-full",
-                  "bg-muted text-muted-foreground opacity-100"
+                  "bg-muted text-muted-foreground opacity-100",
                 )}
               >
                 <SelectValue placeholder="Selected table" />
@@ -248,7 +248,6 @@
     </Card>
 
     <GroupColumnsForm
-      bind:form
       {errors}
       {isEditMode}
       {selectedTable}

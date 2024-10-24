@@ -18,14 +18,16 @@
 
   export let messageKind: string;
   export let selectedTable: any;
-  export let sortColumnName: any;
-  export let sortColumnType: any;
   export let form: any;
   export let errors: any;
-  export let showTitle: boolean = true;
-  export let showStartPositionForm = true;
-  export let isEditMode: boolean;
   export let onFilterChange: (newFilters: any) => void;
+
+  // Make these props optional with default values
+  export let sortColumnName: any = undefined;
+  export let sortColumnType: any = undefined;
+  export let showTitle: boolean = true;
+  export let showStartPositionForm: boolean = true;
+  export let isEditMode: boolean = false;
 
   $: actions = form.sourceTableActions || [];
   const switches = [
@@ -80,7 +82,7 @@
 
   function removeFilter(index: number) {
     form.sourceTableFilters = form.sourceTableFilters.filter(
-      (_, i) => i !== index
+      (_, i) => i !== index,
     );
     onFilterChange(form.sourceTableFilters);
   }
@@ -99,7 +101,7 @@
         // Update column type and value type when column changes
         if (key === "columnAttnum") {
           const selectedColumn = selectedTable?.columns.find(
-            (col) => col.attnum === value
+            (col) => col.attnum === value,
           );
           if (selectedColumn) {
             // The `columnType` of the filter always maps to the column's filter type
@@ -145,7 +147,7 @@
       }
       return acc;
     },
-    {} as Record<number, string>
+    {} as Record<number, string>,
   );
 
   let startPosition = "beginning";
@@ -224,12 +226,11 @@
               />
             </Label>
             <Select
-              id={`column-${index}`}
               selected={{
                 value: filter.columnAttnum,
                 label:
                   selectedTable?.columns.find(
-                    (col) => col.attnum === filter.columnAttnum
+                    (col) => col.attnum === filter.columnAttnum,
                   )?.name || "Column",
               }}
               onSelectedChange={(e) =>
@@ -295,7 +296,6 @@
                 </Tooltip.Root>
               </Label>
               <Select
-                id={`field-type-${index}`}
                 selected={{
                   value: filter.valueType,
                   label: getFieldTypeLabel(filter.valueType) || "Field type",
@@ -330,7 +330,6 @@
               />
             </Label>
             <Select
-              id={`operator-${index}`}
               selected={{
                 value: filter.operator,
                 label: filter.operator || "Operator",

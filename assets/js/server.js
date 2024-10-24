@@ -1,4 +1,4 @@
-import * as Components from "../svelte/**/*.svelte"
-import {getRender} from "live_svelte"
+import { getRender } from "live_svelte";
+import * as Components from "../svelte/**/*.svelte";
 
-export const render = getRender(Components)
+export const render = getRender(Components);

@@ -68,7 +68,7 @@
       {},
       () => {
         refreshReplicaWarningLoading = false;
-      }
+      },
     );
   }
 
@@ -100,7 +100,7 @@
               <Clock class="h-4 w-4" />
               <span
                 >Created {formatRelativeTimestamp(
-                  walPipeline.inserted_at
+                  walPipeline.inserted_at,
                 )}</span
               >
             </div>
@@ -270,7 +270,7 @@
         <div class="mb-4 flex items-center space-x-2">
           <icon
             class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-              walPipeline.source_table.name
+              walPipeline.source_table.name,
             )}"
           ></icon>
           <pre class="font-medium">{walPipeline.source_table.name}</pre>

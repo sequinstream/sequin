@@ -30,7 +30,6 @@
     EyeOff,
     HelpCircle,
     Wand,
-    Zap,
     ExternalLinkIcon,
   } from "lucide-svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -153,7 +152,7 @@
   function pushEvent(
     event: string,
     payload = {},
-    callback: (reply?: any) => void = () => {}
+    callback: (reply?: any) => void = () => {},
   ) {
     live.pushEventTo(`#${parent}`, event, payload, callback);
     if (event === "form_updated") {

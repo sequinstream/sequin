@@ -43,7 +43,7 @@
   export let pushEvent: (
     event: string,
     detail: any,
-    callback: () => void
+    callback: () => void,
   ) => void;
   export let selectedDatabaseId: string | undefined;
   export let selectedSequenceId: string | null;
@@ -68,7 +68,7 @@
       selectedDatabase?.sequences.filter((sequence) =>
         `${sequence.table_schema}.${sequence.table_name}`
           .toLowerCase()
-          .includes((searchQuery || "").toLowerCase())
+          .includes((searchQuery || "").toLowerCase()),
       ) || [];
   }
 
@@ -112,7 +112,7 @@
           setTimeout(() => {
             sequenceRefreshState = "idle";
           }, 2000);
-        }
+        },
       );
     }
   }
@@ -220,7 +220,7 @@
             <TableBody>
               {#if filteredSequences.length === 0}
                 <TableRow>
-                  <TableCell colspan="2" class="text-center py-8">
+                  <TableCell colspan={2} class="text-center py-8">
                     <p class="text-gray-500">
                       No sequences found in the database.
                     </p>

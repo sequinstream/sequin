@@ -1,34 +1,17 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    Database,
     ArrowUpRight,
     ArrowLeftFromLine,
     HelpCircle,
     SquareStack,
-    RefreshCw,
-    XCircle,
-    ExternalLink,
   } from "lucide-svelte";
-  import { Button } from "$lib/components/ui/button";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { Card, CardContent } from "$lib/components/ui/card";
-  import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-  } from "$lib/components/ui/table";
-  import { getColorFromName, formatNumberWithCommas } from "../utils";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
   import { Badge } from "$lib/components/ui/badge";
-  import * as Alert from "$lib/components/ui/alert";
-  import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
-  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import ShowSequence from "./ShowSequence.svelte";
 
   export let consumer;

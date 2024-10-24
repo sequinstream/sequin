@@ -7,7 +7,6 @@
   } from "$lib/components/ui/card";
   import { Switch } from "$lib/components/ui/switch";
   import { Checkbox } from "$lib/components/ui/checkbox";
-  import { onMount } from "svelte";
 
   export let errors: any;
   export let isEditMode: boolean;
@@ -56,8 +55,6 @@
     }
   }
 
-  function updatePrimaryKeyAttnums() {}
-
   function toggleGroupingMode(checked: boolean) {
     useCustomGrouping = checked;
 
@@ -71,21 +68,11 @@
       customGroupColumnAttnums = [...customGroupColumnAttnums, attnum];
     } else {
       customGroupColumnAttnums = customGroupColumnAttnums.filter(
-        (num) => num !== attnum
+        (num) => num !== attnum,
       );
     }
 
     setGroupColumnAttnums();
-  }
-
-  function getGroupingColumnNames() {
-    const attnums = useCustomGrouping
-      ? customGroupColumnAttnums
-      : primaryKeyAttnums;
-    return selectedTable.columns
-      .filter((column) => attnums.includes(column.attnum))
-      .map((column) => column.name)
-      .join(", ");
   }
 
   function arraysEqual(a, b) {

@@ -3,21 +3,13 @@
   import { Button } from "$lib/components/ui/button";
   import {
     AlertCircle,
-    ChevronDown,
     Radio,
     ArrowRightToLine,
     ArrowLeftFromLine,
     CirclePlay,
     CircleStop,
     Database,
-    Zap,
   } from "lucide-svelte";
-  import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-  } from "$lib/components/ui/dropdown-menu";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
     Alert,
@@ -25,11 +17,6 @@
     AlertTitle,
   } from "$lib/components/ui/alert";
   import HealthPill from "../health/HealthPill.svelte";
-  import {
-    Popover,
-    PopoverTrigger,
-    PopoverContent,
-  } from "$lib/components/ui/popover";
   import { Badge } from "$lib/components/ui/badge";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
 

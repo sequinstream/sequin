@@ -35,7 +35,7 @@
     <div class="mb-4 flex items-center space-x-2">
       <icon
         class="hero-table-cells w-6 h-6 rounded {getColorFromName(
-          `${consumer.sequence.table_schema}.${consumer.sequence.table_name}`
+          `${consumer.sequence.table_schema}.${consumer.sequence.table_name}`,
         )}"
       ></icon>
 

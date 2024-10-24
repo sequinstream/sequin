@@ -38,7 +38,6 @@ dump.rdb
 **/priv/static/cache_manifest.json
 
 docker-compose.override.yaml
-.vscode/settings.json
 
 # IntelliJ things
 *.iml

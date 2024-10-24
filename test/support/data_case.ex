@@ -37,9 +37,7 @@ defmodule Sequin.DataCase do
 
   setup tags do
     if tags[:unboxed] do
-      UnboxedRepo.delete_all(Character)
-      UnboxedRepo.delete_all(CharacterDetailed)
-      UnboxedRepo.delete_all(CharacterMultiPK)
+      Enum.each([Character, CharacterDetailed, CharacterMultiPK], &UnboxedRepo.delete_all/1)
     end
 
     Sequin.DataCase.setup_sandbox(tags)

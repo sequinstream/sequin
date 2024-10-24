@@ -89,6 +89,7 @@
     {
       "group": "Guides",
       "pages": [
+        "guides/timescale",
         "guides/cloudflare",
         "guides/inngest",
         "guides/lambda",

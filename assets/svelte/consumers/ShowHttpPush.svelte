@@ -31,8 +31,6 @@
   import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
   import ShowSequence from "./ShowSequence.svelte";
   export let consumer;
-  export let live;
-  export let parent;
   export let metrics = {
     messages_processed_count: 0,
     messages_processed_throughput: 0,

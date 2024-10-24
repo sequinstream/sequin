@@ -51,11 +51,14 @@ defmodule Sequin.Consumers do
   def kind(%HttpPushConsumer{}), do: :push
 
   def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
+    %PostgresDatabase{} = postgres_database = consumer.postgres_database
     %SequenceFilter{} = filter = consumer.sequence_filter
+    table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == sequence.table_oid))
+    primary_key_attnums = table.columns |> Enum.filter(& &1.is_pk?) |> Enum.map(& &1.attnum)
 
     %SourceTable{
       actions: filter.actions,
-      group_column_attnums: filter.group_column_attnums,
+      group_column_attnums: filter.group_column_attnums || primary_key_attnums,
       sort_column_attnum: sequence.sort_column_attnum,
       oid: sequence.table_oid,
       schema_name: sequence.table_schema,

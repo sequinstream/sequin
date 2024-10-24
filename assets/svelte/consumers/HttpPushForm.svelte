@@ -34,6 +34,7 @@
   } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
   import FilterForm from "../components/FilterForm.svelte";
+  import GroupColumnsForm from "./GroupColumnsForm.svelte";
 
   export let live;
   export let parent;
@@ -60,6 +61,7 @@
       initialMinSortCol: null,
     },
     sequenceId: consumer.sequence_id || null,
+    groupColumnAttnums: consumer.group_column_attnums || null,
   };
 
   let form = { ...initialForm };
@@ -195,6 +197,12 @@
     pushEvent("form_updated", { form });
   }
 
+  function handleGroupColumnsChange(newGroupColumnAttnums) {
+    form.groupColumnAttnums = newGroupColumnAttnums;
+    // Trigger a form update to refresh error messages
+    pushEvent("form_updated", { form });
+  }
+
   function handleClose() {
     pushEvent("form_closed");
   }
@@ -301,6 +309,15 @@
         />
       </CardContent>
     </Card>
+
+    <GroupColumnsForm
+      bind:form
+      {selectedTable}
+      {errors}
+      onGroupColumnAttnumsChange={handleGroupColumnsChange}
+      {isEditMode}
+      groupColumnAttnums={form.groupColumnAttnums}
+    />
 
     <Card>
       <CardHeader>

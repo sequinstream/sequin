@@ -33,8 +33,6 @@
 
   export let consumer;
   export let metrics;
-  export let live;
-  export let parent;
   export let apiBaseUrl;
   export let api_token;
 </script>

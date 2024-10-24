@@ -214,7 +214,13 @@ In all of Sequin's consuming paradigms, you can specify one or more **filters** 
 
 ## Grouping
 
-In all of Sequin's consuming paradigms, you can specify one or more **grouping columns** to group messages during delivery. Grouping ensures that messages with the same values in the specified grouping columns are processed in a strict order relative to each other. This means that for a given group, messages are always processed one by one, in the order they were received. However, messages belonging to different groups may be processed concurrently or out of order relative to each other. Grouping is particularly useful when you need to maintain consistency for related messages while still allowing parallel processing across different groups.
+In all of Sequin's consuming paradigms, you can specify one or more **grouping columns** to group messages during delivery.
+
+Grouping ensures that messages with the same values in the specified grouping columns are processed in a strict order relative to each other. This means that for a given group, messages are always processed one by one, in the order they were received.
+
+However, messages belonging to different groups may be processed concurrently or out of order relative to each other.
+
+Grouping is particularly useful when you need to maintain consistency for related messages while still allowing parallel processing across different groups.
 
 ### Transforming
 

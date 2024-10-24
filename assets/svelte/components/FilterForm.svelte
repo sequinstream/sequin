@@ -370,7 +370,8 @@
               on:input={(e) =>
                 updateFilter(index, "value", e.currentTarget.value)}
               disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                ["IS NULL", "IS NOT NULL"].includes(filter.operator)}
+                ["IS NULL", "IS NOT NULL"].includes(filter.operator) ||
+                filter.columnAttnum === null}
               class="bg-surface-base border-carbon-100"
             />
           </div>

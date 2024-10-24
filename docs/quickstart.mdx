@@ -1,8 +1,8 @@
 ---
 title: 'Sequin cloud Quickstart'
-sidebarTitle: 'Quickstart'
+sidebarTitle: 'Cloud Quickstart'
 description: 'Connect Sequin to your database and stream changes to your application'
-icon: "rocket"
+icon: "cloud"
 iconType: "solid"
 ---
 
@@ -69,7 +69,7 @@ iconType: "solid"
 
         Here, we've selected the `public.orders` sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
-        Now, enter the final details for your webhook subscription:
+        Now, enter the final details for your consume endpoint:
 
         <Frame>
           <img src="/images/cloud-getting-started/create-consume-endpoint.png" alt="Set endpoint" />
@@ -77,7 +77,7 @@ iconType: "solid"
 
         You can accept the default timeout, max ack pending, and max waiting for now (you can change these at any time).
 
-        Finally, give your webhook subscription a name and click **Create Consumer**:
+        Finally, give your endpoint a name and click **Create Consumer**:
 
         <Frame>
           <img src="/images/cloud-getting-started/consume-api-created.png" alt="Consumer created" />
@@ -85,17 +85,24 @@ iconType: "solid"
 
         To try out your consume endpoint, insert a new row on your table, then make a [`receive` request](/consume/consume-api/receive) to your endpoint:
 
-        <script src="https://fast.wistia.com/embed/medias/1caxnzmfuo.jsonp" async></script>
-        <script src="https://fast.wistia.com/assets/external/E-v1.js" async></script>
-        <div className="wistia_responsive_padding" style={{padding: '54.37% 0 0 0', position: 'relative'}}>
+        <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
           <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
-            <div className="wistia_embed wistia_async_1caxnzmfuo seo=true videoFoam=true" style={{height: '100%', position: 'relative', width: '100%'}}>
-              <div className="wistia_swatch" style={{height: '100%', left: 0, opacity: 0, overflow: 'hidden', position: 'absolute', top: 0, transition: 'opacity 200ms', width: '100%'}}>
-                <img src="https://fast.wistia.com/embed/medias/1caxnzmfuo/swatch" style={{filter: 'blur(5px)', height: '100%', objectFit: 'contain', width: '100%'}} alt="" aria-hidden="true" onLoad="this.parentNode.style.opacity=1;" />
-              </div>
-            </div>
+            <iframe
+              src="https://fast.wistia.net/embed/iframe/1caxnzmfuo?seo=false&videoFoam=true"
+              title="consume Video"
+              allow="autoplay; fullscreen"
+              allowTransparency={true}
+              frameBorder="0"
+              scrolling="no"
+              className="wistia_embed"
+              name="wistia_embed"
+              msallowfullscreen
+              style={{width: '100%', height: '100%'}}
+            ></iframe>
           </div>
         </div>
+        <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+
 
         You can see every row processed through your endpoint in the **Messages** tab.
 
@@ -104,7 +111,7 @@ iconType: "solid"
         </Check>
       </Tab>
       <Tab title="Webhook subscriptions">
-        Navigate to the **Webhook Subscriptions** tab and click the **Create Consumer** button.
+        Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
         Select the sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
@@ -133,17 +140,23 @@ iconType: "solid"
 
         To test your webhook subscription, insert a new row on your table. You'll see a new message arrive at your endpoint:
 
-        <script src="https://fast.wistia.com/embed/medias/89t8m6x7xe.jsonp" async></script>
-        <script src="https://fast.wistia.com/assets/external/E-v1.js" async></script>
-        <div className="wistia_responsive_padding" style={{padding: '54.37% 0 0 0', position: 'relative'}}>
+        <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
           <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
-            <div className="wistia_embed wistia_async_89t8m6x7xe seo=true videoFoam=true" style={{height: '100%', position: 'relative', width: '100%'}}>
-              <div className="wistia_swatch" style={{height: '100%', left: 0, opacity: 0, overflow: 'hidden', position: 'absolute', top: 0, transition: 'opacity 200ms', width: '100%'}}>
-                <img src="https://fast.wistia.com/embed/medias/89t8m6x7xe/swatch" style={{filter: 'blur(5px)', height: '100%', objectFit: 'contain', width: '100%'}} alt="" aria-hidden="true" onLoad="this.parentNode.style.opacity=1;" />
-              </div>
-            </div>
+            <iframe
+              src="https://fast.wistia.net/embed/iframe/89t8m6x7xe?seo=false&videoFoam=true"
+              title="webhooks Video"
+              allow="autoplay; fullscreen"
+              allowTransparency={true}
+              frameBorder="0"
+              scrolling="no"
+              className="wistia_embed"
+              name="wistia_embed"
+              msallowfullscreen
+              style={{width: '100%', height: '100%'}}
+            ></iframe>
           </div>
         </div>
+        <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
         You can see every row processed by your webhook subscription in the **Messages** tab.
 

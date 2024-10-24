@@ -1000,7 +1000,7 @@ defmodule Sequin.Consumers do
     })
   end
 
-  @spec nack_messages(consumer(), [String.t()]) :: :ok
+  @spec nack_messages(consumer(), [String.t()]) :: {:ok, integer()}
   def nack_messages(%{message_kind: :event} = consumer, ack_ids) do
     {count, _} =
       consumer.id
@@ -1011,6 +1011,7 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
+  @spec nack_messages(consumer(), [String.t()]) :: {:ok, integer()}
   def nack_messages(%{message_kind: :record} = consumer, ack_ids) do
     {count, _} =
       consumer.id
@@ -1445,7 +1446,7 @@ defmodule Sequin.Consumers do
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
-      with :ok <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
+      with %Task{} <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
         ConsumersSupervisor.stop_for_push_consumer(consumer)
       end
     end

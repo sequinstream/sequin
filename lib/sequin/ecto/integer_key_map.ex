@@ -2,6 +2,8 @@ defmodule Sequin.Ecto.IntegerKeyMap do
   @moduledoc false
   use Ecto.Type
 
+  @type t :: map()
+
   def type, do: :map
 
   def cast(data) when is_map(data) do

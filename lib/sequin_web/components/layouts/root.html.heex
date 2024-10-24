@@ -19,7 +19,13 @@
   </head>
   <body
     class="bg-white antialiased"
-    data-ph-token={Application.get_env(:sequin, :frontend_posthog_api_key)}
+    data-ph-token={
+      if Application.get_env(:sequin, Sequin.Posthog, [])[:is_disabled] do
+        nil
+      else
+        Application.get_env(:sequin, Sequin.Posthog, [])[:frontend_api_key]
+      end
+    }
   >
     <.svelte name="components/Toaster" />
     <%= if @current_user && @current_user.impersonating_user do %>

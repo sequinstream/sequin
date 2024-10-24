@@ -88,7 +88,8 @@
     if (
       form.hostname === "localhost" ||
       form.hostname === "127.0.0.1" ||
-      form.hostname === "host.docker.internal"
+      form.hostname === "host.docker.internal" ||
+      form.hostname === "sequin_postgres"
     ) {
       form.ssl = false;
     }

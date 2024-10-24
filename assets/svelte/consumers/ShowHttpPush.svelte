@@ -17,12 +17,14 @@
   import { Badge } from "$lib/components/ui/badge";
   import { concatenateUrl } from "../databases/utils";
   import ShowSequence from "./ShowSequence.svelte";
+  import Cursor from "./Cursor.svelte";
   export let consumer;
   export let metrics = {
     messages_processed_count: 0,
     messages_processed_throughput: 0,
     messages_failing_count: 0,
   };
+  export let cursor_position = null;
 
   function isWebhookSiteUrl(url: string): boolean {
     return url.startsWith("https://webhook.site/");
@@ -35,7 +37,7 @@
 
   $: fullEndpointUrl = concatenateUrl(
     consumer.http_endpoint.url,
-    consumer.http_endpoint_path,
+    consumer.http_endpoint_path
   );
 </script>
 
@@ -202,6 +204,8 @@
           </div>
         </CardContent>
       </Card>
+
+      <Cursor {cursor_position} />
 
       <Card>
         <CardContent class="p-6">

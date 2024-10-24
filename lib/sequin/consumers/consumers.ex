@@ -22,6 +22,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Postgres
@@ -402,7 +403,7 @@ defmodule Sequin.Consumers do
 
   # ConsumerRecord
 
-  def get_consumer_record(consumer_id, id) do
+  def get_consumer_record(consumer_id, id) when is_integer(id) do
     consumer_record =
       consumer_id
       |> ConsumerRecord.where_consumer_id()
@@ -415,35 +416,51 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def get_consumer_record!(consumer_id, id) do
+  def get_consumer_record(consumer_id, params) when is_list(params) or is_map(params) do
+    consumer_id
+    |> consumer_record_query(params)
+    |> Repo.one()
+    |> case do
+      %ConsumerRecord{} = consumer_record -> {:ok, consumer_record}
+      nil -> {:error, Error.not_found(entity: :consumer_record)}
+    end
+  end
+
+  def get_consumer_record!(consumer_id, id) when is_integer(id) do
     case get_consumer_record(consumer_id, id) do
       {:ok, consumer_record} -> consumer_record
-      {:error, _} -> raise Error.not_found(entity: :consumer_record)
+      {:error, error} -> raise error
     end
   end
 
   def list_consumer_records_for_consumer(consumer_id, params \\ []) do
+    consumer_id
+    |> consumer_record_query(params)
+    |> Repo.all()
+  end
+
+  defp consumer_record_query(consumer_id, params) do
     base_query = ConsumerRecord.where_consumer_id(consumer_id)
 
-    query =
-      Enum.reduce(params, base_query, fn
-        {:is_deliverable, false}, query ->
-          ConsumerRecord.where_not_visible(query)
+    Enum.reduce(params, base_query, fn
+      {:is_deliverable, false}, query ->
+        ConsumerRecord.where_not_visible(query)
 
-        {:is_deliverable, true}, query ->
-          ConsumerRecord.where_deliverable(query)
+      {:is_deliverable, true}, query ->
+        ConsumerRecord.where_deliverable(query)
 
-        {:limit, limit}, query ->
-          limit(query, ^limit)
+      {:is_delivered, true}, query ->
+        ConsumerRecord.where_not_visible(query)
 
-        {:offset, offset}, query ->
-          offset(query, ^offset)
+      {:limit, limit}, query ->
+        limit(query, ^limit)
 
-        {:order_by, order_by}, query ->
-          order_by(query, ^order_by)
-      end)
+      {:offset, offset}, query ->
+        offset(query, ^offset)
 
-    Repo.all(query)
+      {:order_by, order_by}, query ->
+        order_by(query, ^order_by)
+    end)
   end
 
   @fast_count_threshold 50_000
@@ -461,7 +478,7 @@ defmodule Sequin.Consumers do
         count
 
       _ ->
-        count_messages_for_consumer(consumer)
+        count_messages_for_consumer(consumer, params)
     end
   end
 
@@ -469,6 +486,9 @@ defmodule Sequin.Consumers do
     Enum.reduce(params, ConsumerRecord.where_consumer_id(consumer.id), fn
       {:delivery_count_gte, delivery_count}, query ->
         ConsumerRecord.where_delivery_count_gte(query, delivery_count)
+
+      {:is_delivered, true}, query ->
+        ConsumerRecord.where_not_visible(query)
     end)
   end
 
@@ -1101,6 +1121,132 @@ defmodule Sequin.Consumers do
       {0, _} ->
         {:error, Error.not_found(entity: consumer.message_kind)}
     end
+  end
+
+  @doc """
+  Min active cursor: the value of the sort_key column for the sequence row that corresponds to the min value of id in the consumer records table
+  Max active cursor: the value of the sort_key column for the sequence row that corresponds to the max value of id in the consumer records table for delivered records
+  Min/max possible cursors: the min and max values of the sort_key column from the underlying sequences table
+  """
+  def cursors(consumer) do
+    consumer = Repo.preload(consumer, [:postgres_database, :sequence])
+
+    with {:ok, min_active_cursor} <- get_min_active_cursor(consumer),
+         {:ok, max_active_cursor} <- get_max_active_cursor(consumer),
+         {:ok, next_active_cursor} <- get_next_active_cursor(consumer),
+         {:ok, min_possible_cursor} <- get_min_possible_cursor(consumer),
+         {:ok, max_possible_cursor} <- get_max_possible_cursor(consumer),
+         processing_count = fast_count_messages_for_consumer(consumer, is_delivered: true),
+         {:ok, to_process_count} <- fast_count_to_process_count(consumer, max_active_cursor || next_active_cursor) do
+      {:ok,
+       %{
+         min_active_cursor: min_active_cursor,
+         max_active_cursor: max_active_cursor,
+         next_active_cursor: next_active_cursor,
+         min_possible_cursor: min_possible_cursor,
+         max_possible_cursor: max_possible_cursor,
+         processing_count: processing_count,
+         to_process_count: to_process_count
+       }}
+    end
+  end
+
+  defp get_min_active_cursor(consumer) do
+    get_active_cursor(consumer, [order_by: [asc: :id], is_delivered: true, limit: 1], :min_active_cursor)
+  end
+
+  defp get_max_active_cursor(consumer) do
+    get_active_cursor(consumer, [order_by: [desc: :id], limit: 1, is_delivered: true], :max_active_cursor)
+  end
+
+  defp get_next_active_cursor(consumer) do
+    get_active_cursor(consumer, [order_by: [asc: :id], is_deliverable: true, limit: 1], :next_active_cursor)
+  end
+
+  defp get_active_cursor(consumer, params, entity_name) do
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+
+    with {:ok, %ConsumerRecord{} = consumer_record} <- get_consumer_record(consumer.id, params),
+         {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: record}}]} when not is_nil(record) <-
+           fetch_records_data(consumer.postgres_database, table, [consumer_record]) do
+      {:ok, record[consumer.sequence.sort_column_name]}
+    else
+      {:error, %NotFoundError{entity: :consumer_record}} ->
+        {:ok, nil}
+
+      {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: nil}}]} ->
+        {:error, Error.not_found(entity: entity_name)}
+
+      {:error, error} when is_exception(error) ->
+        {:error, error}
+    end
+  end
+
+  defp get_min_possible_cursor(consumer) do
+    get_possible_cursor(consumer, "MIN", :min_possible_cursor)
+  end
+
+  defp get_max_possible_cursor(consumer) do
+    get_possible_cursor(consumer, "MAX", :max_possible_cursor)
+  end
+
+  defp get_possible_cursor(consumer, aggregate_function, entity_name) do
+    table_name = Postgres.quote_name(consumer.sequence.table_name)
+    sort_column_name = Postgres.quote_name(consumer.sequence.sort_column_name)
+
+    sql = "SELECT #{aggregate_function}(#{sort_column_name}) FROM #{table_name}"
+
+    case Postgres.query(consumer.postgres_database, sql, []) do
+      {:ok, %Postgrex.Result{rows: [[possible_cursor]]}} ->
+        {:ok, possible_cursor}
+
+      {:ok, %Postgrex.Result{rows: []}} ->
+        {:error, Error.not_found(entity: entity_name)}
+
+      {:error, error} when is_exception(error) ->
+        {:error, error}
+    end
+  end
+
+  defp fast_count_to_process_count(consumer, max_active_cursor) do
+    sql = """
+    EXPLAIN SELECT COUNT(*)
+    FROM #{consumer.sequence.table_name}
+    WHERE #{consumer.sequence.sort_column_name} >= $1
+    """
+
+    case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do
+      {:ok, %Postgrex.Result{rows: rows}} ->
+        case extract_row_count(rows) do
+          {:ok, count} when count > @fast_count_threshold ->
+            {:ok, count}
+
+          _ ->
+            # If the count is small or couldn't be extracted, run the actual query
+            sql = """
+            SELECT COUNT(*)
+            FROM #{consumer.sequence.table_name}
+            WHERE #{consumer.sequence.sort_column_name} >= $1
+            """
+
+            case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do
+              {:ok, %Postgrex.Result{rows: [[count]]}} -> {:ok, count}
+              {:error, error} -> {:error, error}
+            end
+        end
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp extract_row_count(rows) do
+    Enum.reduce_while(rows, :error, fn [row], acc ->
+      case Regex.run(~r/rows=(\d+)/, row) do
+        [_, count_str] -> {:halt, {:ok, String.to_integer(count_str)}}
+        _ -> {:cont, acc}
+      end
+    end)
   end
 
   # HttpEndpoint

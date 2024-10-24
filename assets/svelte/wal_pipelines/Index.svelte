@@ -2,25 +2,9 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import {
-    Logs,
-    AlertCircle,
-    Database,
-    Zap,
-    ArrowUpRight,
-  } from "lucide-svelte";
+  import { Logs } from "lucide-svelte";
   import HealthPill from "../health/HealthPill.svelte";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
-  import {
-    Alert,
-    AlertDescription,
-    AlertTitle,
-  } from "$lib/components/ui/alert";
-  import {
-    Popover,
-    PopoverTrigger,
-    PopoverContent,
-  } from "$lib/components/ui/popover";
 
   export let walPipelines: Array<{
     id: string;

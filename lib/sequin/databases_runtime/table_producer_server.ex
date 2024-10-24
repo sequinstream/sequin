@@ -81,6 +81,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     maybe_setup_allowances(test_pid)
     consumer = opts |> Keyword.fetch!(:consumer) |> preload_consumer()
 
+    Logger.metadata(consumer_id: consumer.id)
+
     state = %State{
       consumer: consumer,
       page_size: Keyword.get(opts, :page_size, 1000),

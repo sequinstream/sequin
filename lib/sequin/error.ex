@@ -293,6 +293,8 @@ defmodule Sequin.Error do
   This allows us to transform error keys from the internal database column
   names to the external API field names.
   """
+  def errors_on(%Ecto.Changeset{valid?: true}), do: %{}
+
   def errors_on(%Ecto.Changeset{} = changeset) do
     errors = traverse_errors(changeset)
 
@@ -309,6 +311,7 @@ defmodule Sequin.Error do
           nil
       end)
       |> Enum.reject(&is_nil/1)
+      |> Enum.reject(fn {_key, errors} -> Enum.empty?(errors) end)
       |> Map.new()
 
     Map.merge(errors, embedded_errors)
@@ -327,6 +330,7 @@ defmodule Sequin.Error do
       _ -> nil
     end)
     |> Enum.reject(&is_nil/1)
+    |> Enum.reject(fn errors -> map_size(errors) == 0 end)
   end
 
   defp traverse_errors(changeset) do

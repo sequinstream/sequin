@@ -9,50 +9,75 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @max_messages 10_000
 
   @doc """
-  Stores messages for a given consumer_id in a Redis sorted set and trims to the latest @max_messages.
+  Stores messages for a given consumer_id using a Redis sorted set for IDs and a hash for message data.
+  Trims to the latest @max_messages.
   """
   @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
   def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
-    messages =
-      messages
-      |> Enum.map(&to_acknowledged_message/1)
-      |> Enum.map(&AcknowledgedMessage.encode/1)
-
     now = :os.system_time(:nanosecond)
-    key = "acknowledged_messages:#{consumer_id}"
+    sorted_set_key = "acknowledged_messages:#{consumer_id}:ids"
+    hash_key = "acknowledged_messages:#{consumer_id}:data"
 
     commands =
-      Enum.map(messages, fn message ->
-        ["ZADD", key, now, message]
-      end) ++
+      messages
+      |> Enum.map(&to_acknowledged_message/1)
+      |> Enum.flat_map(fn message ->
+        encoded_message = AcknowledgedMessage.encode(message)
+
         [
-          ["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]
+          ["ZADD", sorted_set_key, now, message.id],
+          ["HSET", hash_key, message.id, encoded_message]
+        ]
+      end)
+
+    commands =
+      commands ++
+        [
+          ["ZREMRANGEBYRANK", sorted_set_key, 0, -(max_messages + 1)],
+          ["ZRANGE", sorted_set_key, 0, 0],
+          ["HKEYS", hash_key]
         ]
 
-    :redix
-    |> Redix.pipeline(commands)
-    |> handle_response()
-    |> case do
-      {:ok, _} -> :ok
-      error -> error
+    case Redix.pipeline(:redix, commands) do
+      {:ok, results} ->
+        [_zadd_results, _hset_results, _zremrange_result, [oldest_id], all_hash_keys] = Enum.take(results, -5)
+        cleanup_hash(hash_key, all_hash_keys, [oldest_id])
+        :ok
+
+      error ->
+        handle_response(error)
     end
   end
 
   @doc """
-  Fetches messages for a given consumer_id from a Redis sorted set, sorted by descending score.
+  Fetches messages for a given consumer_id using the sorted set for IDs and hash for message data.
   """
   @spec fetch_messages(String.t(), non_neg_integer(), non_neg_integer()) ::
           {:ok, list(AcknowledgedMessage.t())} | {:error, Error.t()}
   def fetch_messages(consumer_id, count \\ 100, offset \\ 0) do
-    key = "acknowledged_messages:#{consumer_id}"
+    sorted_set_key = "acknowledged_messages:#{consumer_id}:ids"
+    hash_key = "acknowledged_messages:#{consumer_id}:data"
 
-    :redix
-    |> Redix.command(["ZREVRANGE", key, offset, offset + count - 1])
-    |> handle_response()
-    |> case do
-      {:ok, messages} -> {:ok, Enum.map(messages, &AcknowledgedMessage.decode/1)}
-      error -> error
+    commands = [
+      ["ZREVRANGE", sorted_set_key, offset, offset + count - 1],
+      ["HMGET", hash_key | Enum.to_list(offset..(offset + count - 1))]
+    ]
+
+    case Redix.pipeline(:redix, commands) do
+      {:ok, [ids, messages]} ->
+        decoded_messages =
+          Enum.map(Enum.zip(ids, messages), fn {id, message} ->
+            case message do
+              nil -> nil
+              _ -> AcknowledgedMessage.decode(message)
+            end
+          end)
+
+        {:ok, Enum.reject(decoded_messages, &is_nil/1)}
+
+      error ->
+        handle_response(error)
     end
   end
 
@@ -61,7 +86,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   """
   @spec count_messages(String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_messages(consumer_id) do
-    key = "acknowledged_messages:#{consumer_id}"
+    key = "acknowledged_messages:#{consumer_id}:ids"
 
     :redix
     |> Redix.command(["ZCARD", key])
@@ -109,5 +134,13 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
       inserted_at: event.inserted_at,
       trace_id: event.replication_message_trace_id
     }
+  end
+
+  defp cleanup_hash(hash_key, all_hash_keys, ids_to_keep) do
+    keys_to_remove = all_hash_keys -- ids_to_keep
+
+    if length(keys_to_remove) > 0 do
+      Redix.command(:redix, ["HDEL", hash_key | keys_to_remove])
+    end
   end
 end

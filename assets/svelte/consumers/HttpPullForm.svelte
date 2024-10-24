@@ -63,7 +63,11 @@
       );
     }
 
-    if (selectedDatabase && !form.sequenceId) {
+    if (
+      selectedDatabase &&
+      !form.sequenceId &&
+      selectedDatabase.sequences.length > 0
+    ) {
       form.sequenceId = selectedDatabase.sequences[0].id;
     }
 
@@ -245,11 +249,11 @@
 
     <GroupColumnsForm
       bind:form
-      {selectedTable}
       {errors}
-      onGroupColumnAttnumsChange={handleGroupColumnAttnumsChange}
       {isEditMode}
+      {selectedTable}
       groupColumnAttnums={form.groupColumnAttnums}
+      onGroupColumnAttnumsChange={handleGroupColumnAttnumsChange}
     />
 
     <Card>

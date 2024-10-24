@@ -108,9 +108,9 @@
         <div class="flex items-center space-x-2">
           <Switch
             id="use-custom-grouping"
-            checked={useCustomGrouping}
+            checked={selectedTable && useCustomGrouping}
             onCheckedChange={toggleGroupingMode}
-            disabled={primaryKeyAttnums.length === 0}
+            disabled={!selectedTable || primaryKeyAttnums.length === 0}
           />
           <span class="text-sm">Custom</span>
         </div>
@@ -127,7 +127,7 @@
     </div>
   </CardHeader>
   <CardContent class="space-y-4">
-    {#if primaryKeyAttnums.length === 0 && !isEditMode}
+    {#if selectedTable && primaryKeyAttnums.length === 0 && !isEditMode}
       <p class="text-sm text-info">
         No primary keys available. Custom grouping is required.
       </p>

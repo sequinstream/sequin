@@ -416,7 +416,10 @@
       <p class="text-sm text-muted-foreground mt-1 mb-2">
         Indicate where in the table you want the consumer to start.
       </p>
-      <RadioGroup bind:value={startPosition} disabled={isEditMode}>
+      <RadioGroup
+        bind:value={startPosition}
+        disabled={isEditMode || !selectedTable}
+      >
         <div class="flex items-center space-x-2">
           <RadioGroupItem value="beginning" id="beginning" />
           <Label for="beginning">At the beginning of the table</Label>

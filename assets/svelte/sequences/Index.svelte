@@ -127,10 +127,10 @@
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
-            <Button>Create your first sequence</Button>
+            <Button>Create Sequence</Button>
           </a>
         {:else}
-          <Button disabled>Create your first sequence</Button>
+          <Button disabled>Create Sequence</Button>
           <p class="text-gray-600 mt-4">
             You need to connect a database to Sequin before you can create a
             sequence.

@@ -38,7 +38,7 @@
     <div class="text-center py-12">
       <p class="text-gray-600 mb-4">No WAL Pipelines found</p>
       <Button on:click={() => pushEvent("new_wal_pipeline", {})}>
-        Create your first WAL Pipeline
+        Create WAL Pipeline
       </Button>
     </div>
   {:else}

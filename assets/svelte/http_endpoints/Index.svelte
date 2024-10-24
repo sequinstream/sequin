@@ -52,7 +52,7 @@
           data-phx-link="redirect"
           data-phx-link-state="push"
         >
-          <Button>Create your first HTTP Endpoint</Button>
+          <Button>Create HTTP Endpoint</Button>
         </a>
       </div>
     </div>

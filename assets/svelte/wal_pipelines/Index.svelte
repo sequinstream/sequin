@@ -65,10 +65,10 @@
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
-            <Button>Create your first WAL Pipeline</Button>
+            <Button>Create WAL Pipeline</Button>
           </a>
         {:else}
-          <Button disabled>Create your first WAL Pipeline</Button>
+          <Button disabled>Create WAL Pipeline</Button>
           <p class="text-gray-600 mt-4">
             You need to connect a database to Sequin before you can create a WAL
             pipeline.

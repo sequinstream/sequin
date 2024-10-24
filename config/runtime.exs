@@ -70,7 +70,9 @@ if config_env() == :prod and self_hosted do
 
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
+    # These are public tokens
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
+    frontend_api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
 
   config :sequin, Sequin.Repo,
@@ -96,7 +98,8 @@ if config_env() == :prod and self_hosted do
     ],
     secret_key_base: secret_key_base
 
-  config :sequin, :api_base_url, "http://#{host || "localhost"}:#{port}"
+  config :sequin,
+    api_base_url: "http://#{host || "localhost"}:#{port}"
 end
 
 if config_env() == :prod and not self_hosted do
@@ -118,7 +121,9 @@ if config_env() == :prod and not self_hosted do
 
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
-    api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
+    # These are public tokens
+    api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY",
+    frontend_api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
 
   config :sequin, Sequin.Repo,
     ssl: AwsRdsCAStore.ssl_opts(database_url),
@@ -150,9 +155,7 @@ if config_env() == :prod and not self_hosted do
     secret_key_base: secret_key_base
 
   config :sequin,
-    api_base_url: "https://api.sequinstream.com",
-    # this is a public token
-    frontend_posthog_api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
+    api_base_url: "https://api.sequinstream.com"
 end
 
 if config_env() == :prod do

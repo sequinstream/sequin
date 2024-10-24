@@ -1,123 +1,282 @@
 ---
-title: 'Docker compose'
-icon: "docker"
+title: 'Quickstart'
+sidebarTitle: 'Quickstart'
+description: 'Run Sequin, connect a database, and start streaming rows in about 5 minutes'
+icon: "gauge-max"
 iconType: "solid"
 ---
 
-As an alternative to Sequin's [cloud offering](https://sequinstream.com/docs/quickstart), you can run Sequin locally or self-host Sequin using Docker compose.
+<Steps titleSize="h2">
+  <Step title="Run Sequin">
+    The easiest way to run and test Sequin is with our Docker Compose file. This file starts a Postgres database, Redis instance, and Sequin server.
 
-Sequin requires:
+    Git clone the repository and run `docker compose up -d` in the `docker` directory:
 
-- A Postgres database (for storing Sequin runtime configuration and message data)
-- A Redis instance (for caching and assistance with message delivery)
+    ```bash
+    git clone git@github.com:sequinstream/sequin.git
+    cd sequin/docker
+    docker compose up -d
+    ```
 
-## Docker compose
+    <Note>
+    For more configuration options, including running Sequin on an existing Postgres and Redis instance or within an existing project, see our [Docker setup](/self-hosting/docker-setup).
+    </Note>
+  </Step>
+  <Step title="Login to Sequin">
+    After booting the Docker compose stack, open the Sequin console at [http://localhost:7376](http://localhost:7376):
 
-The easiest way to get started is to use the `docker/docker-compose.yaml` file in the repository to start a Postgres instance, Redis instance, and Sequin server. This file uses a prod-ready version of Sequin.
+    <Frame>
+      <img src="/images/self-hosting/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
+    </Frame>
 
-Git clone the repository and run `docker compose up -d` in the `docker` directory:
+    Click the **Get started** button to provision a user and an account. On the login page, you can login with the default credentials:
 
-```bash
-git clone git@github.com:sequinstream/sequin.git
-cd sequin/docker
-docker compose up -d
-```
+    - email: `admin@sequinstream.com`
+    - password: `sequinpassword!`
+  </Step>
+  <Step title="Connect the playground database">
+    <Tip>
+      To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.users` table. Let's connect to it.
+    </Tip>
 
-The Docker compose file contains a Postgres service that is configured to run on port 5432. It also contains a Redis service that is configured to run on port 6379. If you want to use your own existing Postgres database with Sequin instead of the bundled Postgres container, you can modify the `docker-compose.yaml` file as follows:
+    In the Sequin console, click **Connect Database** and then click the **Autofill with Connection String** button. Paste in the connection string for the `sequin_playground` database.
 
-1. Remove the `postgres` service from the `docker-compose.yaml` file.
-2. Update the `sequin` service environment variables to point to your Postgres database:
+    ```bash
+    postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
+    ```
 
-```yaml
-services:
-  sequin:
-    environment:
-      - PG_PORT=<port>
-      - PG_HOSTNAME=<hostname>
-      - PG_DATABASE=<database>
-      - PG_USERNAME=<username>
-      - PG_PASSWORD=<password>
-```
+    The database comes pre-configured with a publication and replication slot. Give your database a name (i.e. `playground`) and click **Create Database**:
 
-If you want to use your own existing Redis instance instead of the bundled Redis container, you can modify the `docker-compose.yaml` file as follows:
+    <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
+      <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
+        <iframe
+          src="https://fast.wistia.net/embed/iframe/awrhv0r6ah?seo=false&videoFoam=true"
+          title="connect-db Video"
+          allow="autoplay; fullscreen"
+          allowTransparency={true}
+          frameBorder="0"
+          scrolling="no"
+          className="wistia_embed"
+          name="wistia_embed"
+          msallowfullscreen
+          style={{width: '100%', height: '100%'}}
+        ></iframe>
+      </div>
+    </div>
+    <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
-1. Remove the `redis` service from the `docker-compose.yaml` file.
-2. Update the `sequin` service environment variables to point to your Redis instance:
+    <Check>
+    You've connected the playground database!
+    </Check>
+  </Step>
+  <Step title="Create a Sequence">
+    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.users` table.
 
-```yaml
-services:
-  sequin:
-    environment:
-      - REDIS_URL=<url>
-```
+    Navigate to the **Sequences** tab and click the **Create Sequence** button.
 
-### Generating secrets
+    Select the `public.users` table. Then, select the column Sequin should use to order changes - in this case select the `updated_at` column:
 
-The `docker-compose.yaml` file contains placeholder values for the `SECRET_KEY_BASE` and `VAULT_KEY` environment variables. While these are OK to use for development, you should generate your own secrets for production environments.
+    <Frame>
+      <img src="/images/self-hosting/quickstart/create-sequence.png" alt="Create Sequence" />
+    </Frame>
 
-To generate each secret, run the following command:
+    Click **Create Sequence**.
 
-```bash
-# SECRET_KEY_BASE
-openssl rand -base64 32
+     <Check>
+    You've created a sequence to stream changes from the `public.users` table!
+    </Check>
+  </Step>
+  <Step title="Consume rows">
+    Sequin is setup to stream rows from the `public.users` table. Now, consume rows from your sequence using the consume API, the sync API, or webhooks subscriptions.
 
-# VAULT_KEY - make 'em different
-openssl rand -base64 32
-```
+    <Tabs>
+      <Tab title="Consume API">
+        Navigate to the **Consume Endpoints** tab and click the **Create Endpoint** button.
 
-### Docker compose with existing project
+        Select the the sequence you just created for the `public.users` table. Then click to add a filter to only capture rows where the `house_name` is `House Atreides`:
 
-If you are adding Sequin to an existing `docker-compose.yaml` file in your project, you can add the following to the `services` section:
+        <Frame>
+          <img src="/images/self-hosting/quickstart/setup-consume-endpoint-1.png" alt="Select filters" />
+        </Frame>
 
-```yaml
-services:
-  ...
-  sequin:
-    image: sequin/sequin:latest
-    ports:
-      - "7376:7376"
-    environment:
-      - PG_PORT=<port>
-      - PG_HOSTNAME=postgres
-      - PG_DATABASE=sequin
-      - PG_USERNAME=postgres
-      - PG_PASSWORD=postgres
-      - REDIS_URL=<url>
-      - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
-      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
-    depends_on:
-      - postgres
-      - redis
-```
+        Now, indicate where the consumer should start. For this example, select **At the beginning of the table**.
 
-Make sure to configure the `PG_PORT` environment variable to match the port of your Postgres instance, usually `5432`.
+        You can accept the default timeout, max ack pending, and max waiting for now (you can change these at any time).
 
-### IPv6
+        Finally, give your consumer group a name (i.e. `house_atreides_users`) and click **Create Consumer**:
 
-Sequin supports IPv6 for Postgres and/or Redis connections. To enable IPv6, set the `PG_IPV6` and/or `REDIS_IPV6` environment variables to `true`:
+        <Frame>
+          <img src="/images/self-hosting/quickstart/create-consumer-group.png" alt="Consumer created" />
+        </Frame>
 
-```bash
-PG_IPV6=true
-REDIS_IPV6=true
-```
+        To try out your consume endpoint, make a call to the `receive` endpoint using the cURL command in the console:
 
-## Getting started
+        ```bash
+        curl -X GET "http://localhost:7376/api/http_pull_consumers/house_atreides_users/receive" \
+       -H "Authorization: Bearer [YOUR-TOKEN-HERE]"
+       ```
 
-After booting the Docker compose stack, you can connect to Sequin at `http://localhost:7376`:
+       You'll immediately see a row returned in the console:
 
-<Frame>
-  <img src="/images/self-hosting/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" style={{ maxWidth: '500px' }} />
-</Frame>
+       ```json
+       {
+        "data": [
+          {
+            "data": {
+              "record": {
+                "house_name": "House Atreides",
+                "id": 1,
+                "inserted_at": "2024-10-23T23:56:28.348541",
+                "name": "Paul Atreides",
+                "updated_at": "2024-10-23T23:56:28.348541"
+              }
+            },
+            "ack_id": "bf298c77-6d73-4598-8c89-9b2119558b59"
+          }
+        ]
+       }
+       ```
 
-Click the "Setup" button to provision a user and an account. On the login page, you can login with the default credentials:
+       You can then acknowledge the row using the `ack_id`. In this case:
 
-- email: `admin@sequinstream.com`
-- password: `sequinpassword!`
+       ```bash
+       curl -X POST "http://localhost:7376/api/http_pull_consumers/house_atreides_users/ack" \
+       -H "Authorization: Bearer [YOUR-TOKEN-HERE]" \
+       -H "Content-Type: application/json" \
+       -d '{"ack_ids": ["bf298c77-6d73-4598-8c89-9b2119558b59"]}'
 
-## Telemetry
+       {"success":true}
+       ```
 
-By default, the Sequin instance sends telemetry data to our servers. This data is anonymous and used to improve the product. If you would like to opt-out of this, you can set the `SEQUIN_TELEMETRY_DISABLED` environment variable in your `.env` file to `true`. For example:
+       In the Sequin console, you can see the row in the **Messages** tab has been acknowledged:
 
-```bash
-SEQUIN_TELEMETRY_DISABLED=true
-```
+        <Frame>
+          <img src="/images/self-hosting/quickstart/consumer-group-messages.png" alt="Consumer created" />
+        </Frame>
+
+        Play around with the consume API to get a feel for how it works. Here are some `psql` commands to insert and update rows into the `public.users` table to generate more messages:
+
+        ```bash Connect to the database
+        # Connect to the Sequin PostgreSQL database
+        psql postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmod`e=disable
+        ```
+
+        <CodeGroup>
+
+        ```bash Insert user
+        # Insert a new user into House Atreides
+        "INSERT INTO public.users (house_name, name) VALUES ('House Atreides', 'Leto Atreides');"
+        ```
+
+        ```bash Update user
+        # Update a user into House Atreides
+        "UPDATE public.users SET house_name = 'House Atreides' WHERE id = 2;"
+        ```
+
+        ```bash Insert filtered out user
+        # Insert a new user into House Harkonnen - this will be filtered out by our consume endpoint
+        "INSERT INTO public.users (house_name, name) VALUES ('House Harkonnen', 'Baron Vladimir Harkonnen');"
+        ```
+
+        </CodeGroup>
+
+        <Check>
+          You can now consume rows from your table!
+        </Check>
+      </Tab>
+      <Tab title="Webhook subscriptions">
+        Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
+
+        Select the the sequence you just created for the `public.users` table. Then click to add a filter to only capture rows where the `house_name` is `House Atreides`:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/setup-consume-endpoint-1.png" alt="Select filters" />
+        </Frame>
+
+        Now, indicate where the consumer should start. For this example, select **At the beginning of the table**.
+
+        You can accept the default timeout and max ack pending for now (you can change these at any time).
+
+        Now, in the HTTP Endpoint section, you'll define the endpoint that Sequin will send webhook requests to. To get going quickly, click the **Create and use a new Webhook.site endpoint** button. This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for test purposes:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/create-http-endpoint.png" alt="Create webhook subscription" />
+        </Frame>
+
+        Finally, give your Webhook Subscription a name (i.e. `house_atreides_users`) and click **Create webhooks consumer**:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/create-webhook-subscription.png" alt="Consumer created" />
+        </Frame>
+
+        Sequin will now send rows that match your filter to your endpoint. Open the **Messages** tab to see the rows that have been sent:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/webhook-messages.png" alt="Consumer created" />
+        </Frame>
+
+        If you go back to the **Overview** tab, and click the **View on Webhook.site** button, you can see the raw webhook requests that were sent:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/webhook-dot-site.png" alt="Consumer created" />
+        </Frame>
+
+        Play around with your webhook subscription to get a feel for how it works. Here are some `psql` commands to insert and update rows into the `public.users` table to generate more messages:
+
+        ```bash Connect to the database
+        # Connect to the Sequin PostgreSQL database
+        psql postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmod`e=disable
+        ```
+
+        <CodeGroup>
+
+        ```bash Insert user
+        # Insert a new user into House Atreides
+        "INSERT INTO public.users (house_name, name) VALUES ('House Atreides', 'Leto Atreides');"
+        ```
+
+        ```bash Update user
+        # Update a user into House Atreides
+        "UPDATE public.users SET house_name = 'House Atreides' WHERE id = 2;"
+        ```
+
+        ```bash Insert filtered out user
+        # Insert a new user into House Harkonnen - this will be filtered out by our consume endpoint
+        "INSERT INTO public.users (house_name, name) VALUES ('House Harkonnen', 'Baron Vladimir Harkonnen');"
+        ```
+
+        </CodeGroup>
+
+        <Check>
+        Sequin is now sending rows from your table to your endpoint.
+        </Check>
+      </Tab>
+      <Tab title="Sync API" >
+        <Card title="Coming Soon" icon="wrench" href="/how-sequin-works#sync-api" horizontal>
+        We're building the Sync API now. You can track our progress on [GitHub](https://github.com/sequinstream/sequin/issues/345).
+        </Card>
+      </Tab>
+    </Tabs>
+
+
+  </Step>
+</Steps>
+
+## Next steps
+
+Sequin is now deployed, connected to a playground database, and streaming rows as they change. Now that you have a feel for how Sequin works, you can tailor it to your needs by connecting to your own database, creating sequences, and consuming rows.
+
+<CardGroup cols={2}>
+  <Card title="Learn more about how Sequin works" icon="wrench" href="/how-sequin-works">
+    Learn more about how Sequin works so you can tailor it to your needs.
+  </Card>
+  <Card title="Get detailed guides for your database provider" icon="database" href="/guides/rds">
+    See how to connect Sequin to AWS RDS, GCP, Azure, and more.
+  </Card>
+  <Card title="Check out common use patterns" icon="sparkles" href="/use-cases/side-effects">
+    See how to implement Sequin with common use cases like replication, event driven architectures, and auditing.
+  </Card>
+  <Card title="Get started with one of our examples" icon="lambda" href="/guides/lambda">
+    See examples of how to use Sequin to trigger side effects with AWS lambda, replicate data to ClickHouse with Tinybird, and more.
+  </Card>
+</CardGroup>

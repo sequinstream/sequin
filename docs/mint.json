@@ -46,11 +46,12 @@
       "group": "Get started",
       "pages": [
         "introduction",
+        "self-hosting/docker-compose",
         "quickstart",
         "how-sequin-works",
         "compare",
-        "self-hosting/docker-compose",
-        "cli"
+        "cli",
+        "self-hosting/docker-setup"
       ]
     },
     {

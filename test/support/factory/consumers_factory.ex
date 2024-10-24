@@ -495,7 +495,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %SequenceFilter{
         actions: [:insert, :update, :delete],
         column_filters: [sequence_filter_column_filter()],
-        group_column_attnums: nil
+        group_column_attnums: [Factory.integer()]
       },
       attrs
     )

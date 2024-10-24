@@ -199,7 +199,8 @@ defmodule SequinWeb.ConsumersLive.Form do
       "sequence_id" => form["sequenceId"],
       "sequence_filter" => %{
         "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-        "actions" => form["sourceTableActions"]
+        "actions" => form["sourceTableActions"],
+        "group_column_attnums" => form["groupColumnAttnums"]
       }
     }
     |> maybe_delete_http_endpoint()
@@ -268,11 +269,13 @@ defmodule SequinWeb.ConsumersLive.Form do
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
     source_table = Consumers.source_table(consumer)
+    dbg(source_table)
 
     base = %{
       "id" => consumer.id,
       "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
+      "group_column_attnums" => source_table && source_table.group_column_attnums,
       "max_ack_pending" => consumer.max_ack_pending,
       "max_deliver" => consumer.max_deliver,
       "max_waiting" => consumer.max_waiting,

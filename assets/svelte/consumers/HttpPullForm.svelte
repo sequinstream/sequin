@@ -23,6 +23,7 @@
   import { Label } from "$lib/components/ui/label";
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
+  import GroupColumnsForm from "./GroupColumnsForm.svelte";
 
   export let live;
   export let parent;
@@ -47,6 +48,7 @@
       initialMinSortCol: null,
     },
     sequenceId: consumer.sequence_id || null,
+    groupColumnAttnums: consumer.group_column_attnums || null,
   };
 
   let form = { ...initialForm };
@@ -130,7 +132,11 @@
 
   function handleFilterChange(newFilters) {
     form.sourceTableFilters = newFilters;
-    // Trigger a form update to refresh error messages
+    pushEvent("form_updated", { form });
+  }
+
+  function handleGroupColumnAttnumsChange(attnums: number[]) {
+    form.groupColumnAttnums = attnums;
     pushEvent("form_updated", { form });
   }
 
@@ -236,6 +242,15 @@
         />
       </CardContent>
     </Card>
+
+    <GroupColumnsForm
+      bind:form
+      {selectedTable}
+      {errors}
+      onGroupColumnAttnumsChange={handleGroupColumnAttnumsChange}
+      {isEditMode}
+      groupColumnAttnums={form.groupColumnAttnums}
+    />
 
     <Card>
       <CardHeader>

@@ -26,8 +26,9 @@ defmodule Sequin.Consumers.SequenceFilter do
   def create_changeset(source_table, attrs) do
     source_table
     |> cast(attrs, [:actions, :group_column_attnums])
-    |> validate_required([:actions])
+    |> validate_required([:actions, :group_column_attnums])
     |> cast_embed(:column_filters, with: &ColumnFilter.changeset/2)
     |> validate_length(:actions, min: 1)
+    |> validate_length(:group_column_attnums, min: 1)
   end
 end

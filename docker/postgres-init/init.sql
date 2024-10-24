@@ -4,10 +4,10 @@ create database sequin_playground;
 -- Connect to the new database
 \c sequin_playground
 -- Create tables and seed data
-create table users(
+create table regions(
   id serial primary key,
   name varchar(100),
-  house_name text,
+  timezone text,
   inserted_at timestamp default now(),
   updated_at timestamp default now()
 );
@@ -25,14 +25,17 @@ end;
 $function$;
 
 create trigger update_timestamp
-  before update on users for each row
+  before update on regions for each row
   execute procedure update_timestamp();
 
-insert into users(name, house_name)
-  values ('Paul Atreides', 'House Atreides'),
-('Lady Jessica', 'Bene Gesserit'),
-('Duncan Idaho', 'House Atreides'),
-('Chani', 'Fremen');
+insert into
+  regions (name, timezone)
+values
+  ('us-east-1', 'est'),
+  ('us-west-1', 'pst'),
+  ('us-west-2', 'pst'),
+  ('us-east-2', 'est'),
+  ('us-central-1', 'cst');
 
 create publication sequin_pub for all tables;
 

@@ -26,7 +26,6 @@
   import { cn, truncateMiddle } from "$lib/utils";
   import { toast } from "svelte-sonner";
   import {
-    ExternalLinkIcon,
     Loader2,
     ExternalLink,
     RefreshCwIcon,
@@ -474,9 +473,11 @@
               The path to append to the base URL for this consumer's requests.
             </p>
             {#if errors.http_endpoint_path}
-              <p class="text-destructive text-sm">
-                {errors.http_endpoint_path}
-              </p>
+              {#each errors.http_endpoint_path as error}
+                <p class="text-destructive text-sm">
+                  {error}
+                </p>
+              {/each}
             {/if}
           </div>
         {/if}

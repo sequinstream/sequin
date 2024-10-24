@@ -181,9 +181,21 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     changeset
     |> validate_format(
       :http_endpoint_path,
-      ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*)?$/,
-      message: "must be a valid URL path or empty"
+      ~r/^[\/\?\#]/,
+      message: "must start with '/', '?', or '#'"
     )
+    |> then(fn changeset ->
+      if changeset.valid? do
+        validate_format(
+          changeset,
+          :http_endpoint_path,
+          ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*)?$/,
+          message: "must be a valid URL path or empty"
+        )
+      else
+        changeset
+      end
+    end)
     |> validate_length(:http_endpoint_path, max: 2000)
   end
 end

@@ -86,6 +86,14 @@
     }
 
     if (
+      form.hostname == "sequin_postgres" &&
+      form.database == "sequin_playground"
+    ) {
+      form.ssl = false;
+      form.name = "playground";
+    }
+
+    if (
       form.hostname === "localhost" ||
       form.hostname === "127.0.0.1" ||
       form.hostname === "host.docker.internal" ||

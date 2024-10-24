@@ -181,8 +181,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
     changeset
     |> validate_format(
       :http_endpoint_path,
-      ~r/^[\/\?\#]/,
-      message: "must start with '/', '?', or '#'"
+      ~r/^([\/\?\#]|$)/,
+      message: "must start with '/', '?', '#', or be blank"
     )
     |> then(fn changeset ->
       if changeset.valid? do

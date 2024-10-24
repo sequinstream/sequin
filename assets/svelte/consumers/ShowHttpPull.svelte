@@ -131,7 +131,12 @@
         </CardContent>
       </Card>
 
-      <Cursor {cursor_position} />
+      <Cursor
+        {cursor_position}
+        messages_processed_count={metrics.messages_processed_count
+          ? metrics.messages_processed_count.toLocaleString()
+          : 0}
+      />
 
       <Card>
         <CardContent class="p-6">

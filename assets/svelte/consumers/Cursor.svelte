@@ -11,14 +11,15 @@
   import { formatNumberWithCommas } from "../utils";
 
   export let cursor_position;
+  export let messages_processed_count;
 </script>
 
 <Card class="mb-8">
   <CardContent class="p-6">
     <h2 class="text-lg font-semibold mb-4">Cursor Position</h2>
     {#if cursor_position === null}
-      <div class="grid gap-4 md:grid-cols-2">
-        {#each Array(2) as _}
+      <div class="grid gap-4 md:grid-cols-3">
+        {#each Array(3) as _}
           <div class="flex flex-col space-y-2">
             <Skeleton class="h-4 w-24" />
             <Skeleton class="h-8 w-32" />
@@ -27,7 +28,18 @@
         {/each}
       </div>
     {:else}
-      <div class="grid gap-4 md:grid-cols-2">
+      <div class="grid gap-4 md:grid-cols-3">
+        <!-- Processed Section -->
+        <div class="flex flex-col">
+          <span class="text-sm font-medium text-gray-500 mb-2">Processed</span>
+          <div class="flex items-center">
+            <CheckCircle class="h-5 w-5 text-green-500 mr-2" />
+            <span class="text-xl font-bold"
+              >{formatNumberWithCommas(messages_processed_count || 0)}</span
+            >
+          </div>
+        </div>
+
         <!-- Processing Section -->
         <div class="flex flex-col">
           <span class="text-sm font-medium text-gray-500 mb-2">Processing</span>

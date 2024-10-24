@@ -30,10 +30,19 @@
     ExternalLink,
     RefreshCwIcon,
     CheckIcon,
+    ChevronDown,
+    Plus,
   } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
+  import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+  } from "$lib/components/ui/dropdown-menu";
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
   export let live;
   export let parent;
@@ -439,12 +448,35 @@
                 <RefreshCwIcon class="h-5 w-5" />
               {/if}
             </Button>
-            <a href="/http-endpoints/new" target="_blank" class="ml-2">
-              <Button variant="outline" size="sm">
-                <ExternalLink class="h-4 w-4 mr-2" />
-                New HTTP Endpoint
-              </Button>
-            </a>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild let:builder>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  builders={[builder]}
+                  class="ml-2"
+                >
+                  New HTTP Endpoint
+                  <ChevronDown class="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem class="cursor-pointer">
+                  <!-- Keep it a link to enable right click -->
+                  <ExternalLink class="h-4 w-4 mr-2" />
+                  <a href="/http-endpoints/new" target="_blank">
+                    Create new HTTP Endpoint
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  on:click={createWebhookSiteEndpoint}
+                  class="cursor-pointer"
+                >
+                  <Plus class="h-4 w-4 mr-2" />
+                  Create Webhook.site endpoint
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

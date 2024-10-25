@@ -276,11 +276,7 @@
             >
               PKs
             </th>
-            <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
-            >
-              Commit LSN
-            </th>
+
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
             >
@@ -318,9 +314,6 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs">
                 {message.record_pks}
               </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{message.commit_lsn}</td
-              >
               <td
                 class="px-2 py-1 whitespace-nowrap text-2xs"
                 class:text-red-600={isHighDeliveryCount(message.deliver_count)}

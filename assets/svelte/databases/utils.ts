@@ -39,7 +39,7 @@ export function parsePostgresURL(url: string): {
   ssl: string | null;
 } {
   const regex =
-    /^postgresql:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:@/?]+)(?::(\d+))?(?:\/([^?]+))?(?:\?(.+))?$/;
+    /^((postgres|postgresql|psql):\/\/)?(?:([^:@]+)(?::([^@]+))?@)?([^:@/?]+)(?::(\d+))?(?:\/([^?]+))?(?:\?(.+))?$/;
   const match = url.match(regex);
 
   if (!match) {

@@ -28,7 +28,7 @@ iconType: "solid"
         docker compose up -d
         ```
 
-    4. Watch for the containers to start and verify they're running:
+    4. Verify the containers are running:
 
         ```bash
         docker compose ps
@@ -39,7 +39,7 @@ iconType: "solid"
     </Note>
   </Step>
   <Step title="Create an account" icon="key">
-    1. After booting the Docker compose stack, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
+    1. After starting the Docker Compose services, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
 
         <Frame>
           <img src="/images/self-hosting/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
@@ -51,23 +51,21 @@ iconType: "solid"
         - Password: `sequinpassword!`
 
     <Check>
-    You're running Sequin and logged in to the web console!
+    Sequin is up and running.
     </Check>
   </Step>
   <Step title="Connect the playground database" icon="database">
-    <Tip>
-      To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it.
-    </Tip>
+    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it:
 
-    1. In the Sequin web web console, click **Connect Database**.
+    1. In the Sequin web console, click **Connect Database**.
     2. Click the **Autofill with Connection String** button and paste in the connection string for the `sequin_playground` database:
         ```bash
         postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
         ```
 
-        The playground database comes pre-configured with a publication and replication slot so you can skip the end of the form.
+        The playground database comes pre-configured with a publication and replication slot so you can skip to the end of the form.
 
-    3. Click **Create Database**.
+    3. Click **Connect Database**.
 
         <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
           <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
@@ -87,33 +85,32 @@ iconType: "solid"
         </div>
         <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
-    <Check>
-    You've connected the playground database!
-    </Check>
   </Step>
   <Step title="Create a Sequence" icon="list">
-    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table.
+    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table:
 
     1. Navigate to the **Sequences** tab and click the **Create Sequence** button.
 
-    2. Select the `public.regions` table. Then, select the column Sequin should use to order changes - in this case select the `updated_at` column:
+    2. Select the `public.regions` table.
+    
+    3. Then, select the column Sequin should use to order changes. In this case select the `updated_at` column:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/create-sequence.png" alt="Create Sequence" />
         </Frame>
 
-    3. Click **Create Sequence**.
+    4. Click **Create Sequence**.
 
-     <Check>
-    You've created a sequence to stream changes from the `public.regions` table!
+    <Check>
+    With the sequence created, you're ready to consume rows.
     </Check>
   </Step>
   <Step title="Consume rows using webhooks" icon="webhook">
-    Sequin is setup to stream rows from the `public.regions` table. Now, consume rows from your sequence using a webhook subscription.
+    Now, consume rows from your sequence using a Webhook Subscription.
 
     1. Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-    2. Select the the sequence you just created for the `public.regions` table.
+    2. Select the the sequence you just created for the `public.regions` table:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/setup-webhook-source.png" alt="Select webhook source" />
@@ -130,20 +127,20 @@ iconType: "solid"
     4. Click the blue **Create and use a new Webhook.site endpoint** link:
 
         <Frame>
-          <img src="/images/self-hosting/quickstart/create-http-endpoint.png" alt="Create webhook subscription" />
+          <img src="/images/self-hosting/quickstart/create-http-endpoint.png" alt="Create Webhook Subscription" />
         </Frame>
 
         This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for testing purposes.
 
-    5. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `pst_regions`) and click **Create webhooks consumer**:
+    5. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `pst_regions`) and click **Create Webhook Subscription**.
+
+        <Check>
+          Sequin will now send rows that match your filter to your endpoint.
+        </Check>
 
         <Frame>
           <img src="/images/self-hosting/quickstart/create-webhook-subscription.png" alt="Consumer created" />
         </Frame>
-
-        <Check>
-        Sequin will now send rows that match your filter to your endpoint.
-        </Check>
 
     6. Open the **Messages** tab to see the rows that have been sent:
 
@@ -157,7 +154,7 @@ iconType: "solid"
           <img src="/images/self-hosting/quickstart/message-logs.png" alt="Message logs" />
         </Frame>
 
-    8. Go back to the **Overview** tab, and click the **View on Webhook.site** button to open the webhook.site dashboard:
+    8. Go back to the **Overview** tab, and click the **View on Webhook.site** button to open the Webhook.site dashboard:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/webhook-dot-site.png" alt="Webhook.site" />
@@ -168,7 +165,7 @@ iconType: "solid"
         </Check>
   </Step>
   <Step title="Insert and update rows" icon="play">
-    To learn how Sequin works, `insert` and `update` a couple of rows in the `public.regions` table:
+    To learn how Sequin works, `insert` and `update` a couple of rows into the `public.regions` table:
 
     1. Open a terminal and connect to the `sequin_playground` database:
 
@@ -181,7 +178,7 @@ iconType: "solid"
         INSERT INTO public.regions (name, timezone) VALUES ('us-gov-west-1', 'pst');
         ```
 
-        This row matches the filter of your webhook subscription, so it will be delivered to your endpoint. You can verify this by checking the **Messages** tab in the Sequin web console:
+        This row matches the filter of your Webhook Subscription, so it will be delivered to your endpoint. You can verify this by checking the **Messages** tab in the Sequin web console:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/new-message-after-insert.png" alt="Messages tab" />
@@ -201,14 +198,14 @@ iconType: "solid"
         INSERT INTO public.regions (name, timezone) VALUES ('ca-west-1', 'mst');
         ```
 
-        This row doesn't match the filter of your webhook subscription, so it won't be delivered to your endpoint. You can verify this by navigating to the **Databases** tab, selecting the `playground` database, and then clicking on the **Messages** tab:
+        This row doesn't match the filter of your Webhook Subscription, so it won't be delivered to your endpoint. You can verify this by navigating to the **Databases** tab, selecting the `playground` database, and then clicking on the **Messages** tab:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/filtered-out-message-trace.png" alt="Messages tab" />
         </Frame>
 
     <Check>
-    You've learned how changes in your database flow through Sequin and how you can trace your messages end to end.
+    You've seen how changes in your database flow through Sequin and how you can trace your messages end to end.
     </Check>
   </Step>
 </Steps>

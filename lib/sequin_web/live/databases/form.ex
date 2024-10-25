@@ -424,20 +424,23 @@ defmodule SequinWeb.DatabasesLive.Form do
     %{
       "database" => %{
         "name" => form["name"],
-        "hostname" => hostname,
+        "hostname" => maybe_trim(hostname),
         "port" => port,
-        "database" => form["database"],
-        "username" => form["username"],
+        "database" => maybe_trim(form["database"]),
+        "username" => maybe_trim(form["username"]),
         "password" => form["password"],
         "ssl" => ssl,
         "use_local_tunnel" => form["useLocalTunnel"]
       },
       "replication_slot" => %{
-        "publication_name" => form["publication_name"],
-        "slot_name" => form["slot_name"]
+        "publication_name" => maybe_trim(form["publication_name"]),
+        "slot_name" => maybe_trim(form["slot_name"])
       }
     }
   end
+
+  defp maybe_trim(nil), do: nil
+  defp maybe_trim(value), do: String.trim(value)
 
   defp encode_api_token(api_token) do
     %{

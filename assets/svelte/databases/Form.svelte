@@ -173,12 +173,12 @@
   function handleSubmit(event: Event) {
     event.preventDefault();
     validating = true;
+    clearFormStorage();
     pushEvent("form_submitted", { form }, (reply) => {
       if (reply?.ok !== true) {
         validating = false;
         progress.set(0);
-      } else {
-        clearFormStorage();
+        saveFormToStorage();
       }
     });
   }
@@ -229,8 +229,6 @@
   function togglePasswordVisibility() {
     showPassword = !showPassword;
   }
-
-  let testDatabaseCardExpanded = false;
 
   function toggleLocalTunnel() {
     form.useLocalTunnel = !form.useLocalTunnel;

@@ -36,7 +36,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     :ok
   end
 
-  def restart_table_producer(supervisor \\ TableProducerSupervisor, consumer, opts) do
+  def restart_table_producer(supervisor \\ TableProducerSupervisor, consumer, opts \\ []) do
     stop_table_producer(supervisor, consumer)
     start_table_producer(supervisor, consumer, opts)
   end

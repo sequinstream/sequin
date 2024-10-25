@@ -10,7 +10,7 @@
     TableHeader,
     TableRow,
   } from "$lib/components/ui/table";
-  import { Database, ArrowUpRight, HelpCircle } from "lucide-svelte";
+  import { Database, HelpCircle, ExternalLink } from "lucide-svelte";
   import { getColorFromName } from "../utils";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
@@ -23,8 +23,8 @@
       <h2 class="text-lg font-semibold">Sequence</h2>
       <LinkPushNavigate href="/databases/{consumer.postgres_database.id}">
         <Button variant="outline" size="sm">
+          <ExternalLink class="h-4 w-4 mr-2" />
           View Database
-          <ArrowUpRight class="h-4 w-4 ml-2" />
         </Button>
       </LinkPushNavigate>
     </div>

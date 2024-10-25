@@ -1564,7 +1564,11 @@ defmodule Sequin.Consumers do
       with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
         case consumer.status do
           :active ->
-            {:ok, _} = ConsumersSupervisor.restart_for_push_consumer(consumer)
+            if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal do
+              DatabasesRuntimeSupervisor.restart_table_producer(consumer)
+            end
+
+            ConsumersSupervisor.restart_for_push_consumer(consumer)
             :ok
 
           :disabled ->

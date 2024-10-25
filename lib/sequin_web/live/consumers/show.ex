@@ -343,11 +343,13 @@ defmodule SequinWeb.ConsumersLive.Show do
   @impl Phoenix.LiveView
   def handle_info(:update_cursor_position, socket) do
     task =
-      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-        get_cursors(socket.assigns.consumer)
-      end)
-
-    Process.send_after(self(), :update_cursor_position, 1000)
+      Task.Supervisor.async_nolink(
+        Sequin.TaskSupervisor,
+        fn ->
+          get_cursors(socket.assigns.consumer)
+        end,
+        timeout: :timer.seconds(30)
+      )
 
     {:noreply, assign(socket, :cursor_task_ref, task.ref)}
   end
@@ -355,17 +357,30 @@ defmodule SequinWeb.ConsumersLive.Show do
   @impl Phoenix.LiveView
   def handle_info({ref, {:ok, cursor_position}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
     Process.demonitor(ref, [:flush])
+    Process.send_after(self(), :update_cursor_position, 1000)
+
     {:noreply, assign(socket, cursor_position: cursor_position, cursor_task_ref: nil)}
   end
 
   @impl Phoenix.LiveView
-  def handle_info({ref, {:error, _}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+  def handle_info({ref, {:error, error}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
     Process.demonitor(ref, [:flush])
+    Process.send_after(self(), :update_cursor_position, 1000)
+
+    if is_exception(error) do
+      Logger.error("Failed to get cursor position: #{Exception.message(error)}")
+    else
+      Logger.error("Failed to get cursor position: #{inspect(error)}")
+    end
+
     {:noreply, assign(socket, cursor_task_ref: nil)}
   end
 
   @impl Phoenix.LiveView
-  def handle_info({:DOWN, ref, :process, _, _}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+  def handle_info({:DOWN, ref, :process, _, reason}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+    Logger.error("Cursor task #{ref} exited: #{inspect(reason)}")
+    Process.send_after(self(), :update_cursor_position, 1000)
+
     {:noreply, assign(socket, cursor_task_ref: nil)}
   end
 

@@ -170,7 +170,7 @@
         />
       </div>
     </div>
-    <div class="space-y-2">
+    <div class="space-y-2 flex flex-col justify-between">
       <div class="grid grid-cols-[1fr_auto] gap-2 items-center">
         <Label class="text-sm text-muted-foreground">Time</Label>
         <Popover.Root bind:open={isPopoverOpen}>

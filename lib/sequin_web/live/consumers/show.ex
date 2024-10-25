@@ -12,10 +12,13 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
@@ -153,7 +156,7 @@ defmodule SequinWeb.ConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
                   metrics: @metrics,
-                  cursor_position: @cursor_position
+                  cursor_position: encode_cursor_position(@cursor_position, @consumer)
                 }
               }
             />
@@ -168,7 +171,7 @@ defmodule SequinWeb.ConsumersLive.Show do
                   metrics: @metrics,
                   apiBaseUrl: @api_base_url,
                   api_token: encode_api_token(@api_token),
-                  cursor_position: @cursor_position
+                  cursor_position: encode_cursor_position(@cursor_position, @consumer)
                 }
               }
             />
@@ -295,6 +298,43 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("rewind", %{"new_cursor_position" => new_cursor_position}, socket) do
+    consumer = socket.assigns.consumer
+    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = %Table{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
+
+    dbg(new_cursor_position)
+
+    initial_min_cursor =
+      if new_cursor_position do
+        KeysetCursor.min_cursor(table, new_cursor_position)
+      else
+        KeysetCursor.min_cursor(table)
+      end
+
+    dbg(initial_min_cursor)
+
+    new_record_consumer_state =
+      Map.from_struct(%{
+        consumer.record_consumer_state
+        | initial_min_cursor: initial_min_cursor,
+          producer: "table_and_wal"
+      })
+
+    case Consumers.update_consumer_with_lifecycle(consumer, %{
+           record_consumer_state: new_record_consumer_state
+         }) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Consumer rewound successfully"})}
+
+      {:error, _error} ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to rewind consumer"})}
+    end
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end
@@ -345,9 +385,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     task =
       Task.Supervisor.async_nolink(
         Sequin.TaskSupervisor,
-        fn ->
-          get_cursors(socket.assigns.consumer)
-        end,
+        fn -> get_cursors(socket.assigns.consumer) end,
         timeout: :timer.seconds(30)
       )
 
@@ -699,6 +737,42 @@ defmodule SequinWeb.ConsumersLive.Show do
           state: get_message_state(consumer, message)
         }
     end
+  end
+
+  defp encode_cursor_position(nil, _consumer), do: nil
+
+  defp encode_cursor_position(cursor_position, consumer) do
+    %{
+      min_active_cursor: min_active_cursor,
+      max_active_cursor: max_active_cursor,
+      next_active_cursor: next_active_cursor,
+      min_possible_cursor: min_possible_cursor,
+      max_possible_cursor: max_possible_cursor,
+      processing_count: processing_count,
+      to_process_count: to_process_count
+    } = cursor_position
+
+    %{record_consumer_state: %RecordConsumerState{initial_min_cursor: initial_min_cursor}} = consumer
+    sort_column_attnum = consumer.sequence.sort_column_attnum
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
+
+    initial_min_cursor_value = initial_min_cursor[sort_column_attnum]
+    initial_min_cursor_type = column.type
+
+    %{
+      min_active_cursor: min_active_cursor,
+      max_active_cursor: max_active_cursor,
+      next_active_cursor: next_active_cursor,
+      min_possible_cursor: min_possible_cursor,
+      max_possible_cursor: max_possible_cursor,
+      processing_count: processing_count,
+      to_process_count: to_process_count,
+      initial_min_cursor: %{
+        value: initial_min_cursor_value,
+        type: initial_min_cursor_type
+      }
+    }
   end
 
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "acknowledged"

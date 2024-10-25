@@ -18,6 +18,9 @@
   import { concatenateUrl } from "../databases/utils";
   import ShowSequence from "./ShowSequence.svelte";
   import Cursor from "./Cursor.svelte";
+
+  export let live;
+  export let parent;
   export let consumer;
   export let metrics = {
     messages_processed_count: 0,
@@ -26,6 +29,8 @@
   };
   export let cursor_position = null;
 
+  let isRewinding = false;
+
   function isWebhookSiteUrl(url: string): boolean {
     return url.startsWith("https://webhook.site/");
   }
@@ -33,6 +38,26 @@
   function getWebhookSiteViewUrl(url: string): string {
     const uuid = url.split("/").pop();
     return `https://webhook.site/#!/view/${uuid}`;
+  }
+
+  function onRewind(newCursorPosition: string): { ok: boolean } {
+    isRewinding = true;
+    try {
+      const result = live.pushEventTo(
+        "#" + parent,
+        "rewind",
+        {
+          new_cursor_position: newCursorPosition,
+        },
+        (reply) => reply,
+      );
+      isRewinding = false;
+      return result;
+    } catch (error) {
+      console.error("Rewind operation failed:", error);
+      isRewinding = false;
+      return { ok: false };
+    }
   }
 
   $: fullEndpointUrl = concatenateUrl(
@@ -210,6 +235,7 @@
         messages_processed_count={metrics.messages_processed_count
           ? metrics.messages_processed_count.toLocaleString()
           : 0}
+        {onRewind}
       />
 
       <Card>

@@ -15,11 +15,35 @@
   import ShowSequence from "./ShowSequence.svelte";
   import Cursor from "./Cursor.svelte";
 
+  export let live;
+  export let parent;
   export let consumer;
   export let metrics;
   export let apiBaseUrl;
   export let api_token;
   export let cursor_position;
+
+  let isRewinding = false;
+
+  function onRewind(newCursorPosition: string): { ok: boolean } {
+    isRewinding = true;
+    try {
+      live.pushEventTo(
+        "#" + parent,
+        "rewind",
+        {
+          new_cursor_position: newCursorPosition,
+        },
+        (reply) => reply,
+      );
+      isRewinding = false;
+      return { ok: true };
+    } catch (error) {
+      console.error("Rewind operation failed:", error);
+      isRewinding = false;
+      return { ok: false };
+    }
+  }
 </script>
 
 <!-- Wrap the content in a flex column that fills available space -->
@@ -136,6 +160,7 @@
         messages_processed_count={metrics.messages_processed_count
           ? metrics.messages_processed_count.toLocaleString()
           : 0}
+        {onRewind}
       />
 
       <Card>

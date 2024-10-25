@@ -7,264 +7,215 @@ iconType: "solid"
 ---
 
 <Steps titleSize="h2">
-  <Step title="Run Sequin">
+  <Step title="Run Sequin" icon="server">
     The easiest way to run and test Sequin is with our Docker Compose file. This file starts a Postgres database, Redis instance, and Sequin server.
 
-    Git clone the repository and run `docker compose up -d` in the `docker` directory:
+    1. Git clone the repository:
 
-    ```bash
-    git clone git@github.com:sequinstream/sequin.git
-    cd sequin/docker
-    docker compose up -d
-    ```
+        ```bash
+        git clone git@github.com:sequinstream/sequin.git
+        ```
+
+    2. Navigate to the `docker` directory:
+
+        ```bash
+        cd sequin/docker
+        ```
+
+    3. Run `docker compose up -d`:
+
+        ```bash
+        docker compose up -d
+        ```
+
+    4. Watch for the containers to start and verify they're running:
+
+        ```bash
+        docker compose ps
+        ```
 
     <Note>
     For more configuration options, including running Sequin on an existing Postgres and Redis instance or within an existing project, see our [Docker setup](/self-hosting/docker-setup).
     </Note>
   </Step>
-  <Step title="Login to Sequin">
-    After booting the Docker compose stack, open the Sequin console at [http://localhost:7376](http://localhost:7376):
+  <Step title="Create an account" icon="key">
+    1. After booting the Docker compose stack, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
 
-    <Frame>
-      <img src="/images/self-hosting/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
-    </Frame>
+        <Frame>
+          <img src="/images/self-hosting/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
+        </Frame>
 
-    Click the **Get started** button to provision a user and an account. On the login page, you can login with the default credentials:
+    2. Click the **Get started** button to provision a user and an account.
+    3. On the login page, you can login with the default credentials:
+        - Email: `admin@sequinstream.com`
+        - Password: `sequinpassword!`
 
-    - email: `admin@sequinstream.com`
-    - password: `sequinpassword!`
+    <Check>
+    You're running Sequin and logged in to the web console!
+    </Check>
   </Step>
-  <Step title="Connect the playground database">
+  <Step title="Connect the playground database" icon="database">
     <Tip>
-      To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.users` table. Let's connect to it.
+      To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it.
     </Tip>
 
-    In the Sequin console, click **Connect Database** and then click the **Autofill with Connection String** button. Paste in the connection string for the `sequin_playground` database.
+    1. In the Sequin web web console, click **Connect Database**.
+    2. Click the **Autofill with Connection String** button and paste in the connection string for the `sequin_playground` database:
+        ```bash
+        postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
+        ```
 
-    ```bash
-    postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
-    ```
+        The playground database comes pre-configured with a publication and replication slot so you can skip the end of the form.
 
-    The database comes pre-configured with a publication and replication slot. Give your database a name (i.e. `playground`) and click **Create Database**:
+    3. Click **Create Database**.
 
-    <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
-      <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
-        <iframe
-          src="https://fast.wistia.net/embed/iframe/awrhv0r6ah?seo=false&videoFoam=true"
-          title="connect-db Video"
-          allow="autoplay; fullscreen"
-          allowTransparency={true}
-          frameBorder="0"
-          scrolling="no"
-          className="wistia_embed"
-          name="wistia_embed"
-          msallowfullscreen
-          style={{width: '100%', height: '100%'}}
-        ></iframe>
-      </div>
-    </div>
-    <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+        <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
+          <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
+            <iframe
+              src="https://fast.wistia.net/embed/iframe/awrhv0r6ah?seo=false&videoFoam=true"
+              title="connect-db Video"
+              allow="autoplay; fullscreen"
+              allowTransparency={true}
+              frameBorder="0"
+              scrolling="no"
+              className="wistia_embed"
+              name="wistia_embed"
+              msallowfullscreen
+              style={{width: '100%', height: '100%'}}
+            ></iframe>
+          </div>
+        </div>
+        <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
     <Check>
     You've connected the playground database!
     </Check>
   </Step>
-  <Step title="Create a Sequence">
-    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.users` table.
+  <Step title="Create a Sequence" icon="list">
+    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table.
 
-    Navigate to the **Sequences** tab and click the **Create Sequence** button.
+    1. Navigate to the **Sequences** tab and click the **Create Sequence** button.
 
-    Select the `public.users` table. Then, select the column Sequin should use to order changes - in this case select the `updated_at` column:
+    2. Select the `public.regions` table. Then, select the column Sequin should use to order changes - in this case select the `updated_at` column:
 
-    <Frame>
-      <img src="/images/self-hosting/quickstart/create-sequence.png" alt="Create Sequence" />
-    </Frame>
+        <Frame>
+          <img src="/images/self-hosting/quickstart/create-sequence.png" alt="Create Sequence" />
+        </Frame>
 
-    Click **Create Sequence**.
+    3. Click **Create Sequence**.
 
      <Check>
-    You've created a sequence to stream changes from the `public.users` table!
+    You've created a sequence to stream changes from the `public.regions` table!
     </Check>
   </Step>
-  <Step title="Consume rows">
-    Sequin is setup to stream rows from the `public.users` table. Now, consume rows from your sequence using the consume API, the sync API, or webhooks subscriptions.
+  <Step title="Consume rows using webhooks" icon="webhook">
+    Sequin is setup to stream rows from the `public.regions` table. Now, consume rows from your sequence using a webhook subscription.
 
-    <Tabs>
-      <Tab title="Consume API">
-        Navigate to the **Consume Endpoints** tab and click the **Create Endpoint** button.
+    1. Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-        Select the the sequence you just created for the `public.users` table. Then click to add a filter to only capture rows where the `house_name` is `House Atreides`:
+    2. Select the the sequence you just created for the `public.regions` table.
 
         <Frame>
-          <img src="/images/self-hosting/quickstart/setup-consume-endpoint-1.png" alt="Select filters" />
+          <img src="/images/self-hosting/quickstart/setup-webhook-source.png" alt="Select webhook source" />
         </Frame>
 
-        Now, indicate where the consumer should start. For this example, select **At the beginning of the table**.
-
-        You can accept the default timeout, max ack pending, and max waiting for now (you can change these at any time).
-
-        Finally, give your consumer group a name (i.e. `house_atreides_users`) and click **Create Consumer**:
+    3. Click to add a filter to only capture rows where the `timezone` is `pst`:
 
         <Frame>
-          <img src="/images/self-hosting/quickstart/create-consumer-group.png" alt="Consumer created" />
+          <img src="/images/self-hosting/quickstart/set-webhook-filter.png" alt="Select filters" />
         </Frame>
 
-        To try out your consume endpoint, make a call to the `receive` endpoint using the cURL command in the console:
+    3. Jump ahead to the **HTTP Endpoint** section (you can use the defaults for the consumer starting point, message grouping, and configuration).
 
-        ```bash
-        curl -X GET "http://localhost:7376/api/http_pull_consumers/house_atreides_users/receive" \
-       -H "Authorization: Bearer [YOUR-TOKEN-HERE]"
-       ```
-
-       You'll immediately see a row returned in the console:
-
-       ```json
-       {
-        "data": [
-          {
-            "data": {
-              "record": {
-                "house_name": "House Atreides",
-                "id": 1,
-                "inserted_at": "2024-10-23T23:56:28.348541",
-                "name": "Paul Atreides",
-                "updated_at": "2024-10-23T23:56:28.348541"
-              }
-            },
-            "ack_id": "bf298c77-6d73-4598-8c89-9b2119558b59"
-          }
-        ]
-       }
-       ```
-
-       You can then acknowledge the row using the `ack_id`. In this case:
-
-       ```bash
-       curl -X POST "http://localhost:7376/api/http_pull_consumers/house_atreides_users/ack" \
-       -H "Authorization: Bearer [YOUR-TOKEN-HERE]" \
-       -H "Content-Type: application/json" \
-       -d '{"ack_ids": ["bf298c77-6d73-4598-8c89-9b2119558b59"]}'
-
-       {"success":true}
-       ```
-
-       In the Sequin console, you can see the row in the **Messages** tab has been acknowledged:
-
-        <Frame>
-          <img src="/images/self-hosting/quickstart/consumer-group-messages.png" alt="Consumer created" />
-        </Frame>
-
-        Play around with the consume API to get a feel for how it works. Here are some `psql` commands to insert and update rows into the `public.users` table to generate more messages:
-
-        ```bash Connect to the database
-        # Connect to the Sequin PostgreSQL database
-        psql postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmod`e=disable
-        ```
-
-        <CodeGroup>
-
-        ```bash Insert user
-        # Insert a new user into House Atreides
-        "INSERT INTO public.users (house_name, name) VALUES ('House Atreides', 'Leto Atreides');"
-        ```
-
-        ```bash Update user
-        # Update a user into House Atreides
-        "UPDATE public.users SET house_name = 'House Atreides' WHERE id = 2;"
-        ```
-
-        ```bash Insert filtered out user
-        # Insert a new user into House Harkonnen - this will be filtered out by our consume endpoint
-        "INSERT INTO public.users (house_name, name) VALUES ('House Harkonnen', 'Baron Vladimir Harkonnen');"
-        ```
-
-        </CodeGroup>
-
-        <Check>
-          You can now consume rows from your table!
-        </Check>
-      </Tab>
-      <Tab title="Webhook subscriptions">
-        Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
-
-        Select the the sequence you just created for the `public.users` table. Then click to add a filter to only capture rows where the `house_name` is `House Atreides`:
-
-        <Frame>
-          <img src="/images/self-hosting/quickstart/setup-consume-endpoint-1.png" alt="Select filters" />
-        </Frame>
-
-        Now, indicate where the consumer should start. For this example, select **At the beginning of the table**.
-
-        You can accept the default timeout and max ack pending for now (you can change these at any time).
-
-        Now, in the HTTP Endpoint section, you'll define the endpoint that Sequin will send webhook requests to. To get going quickly, click the **Create and use a new Webhook.site endpoint** button. This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for test purposes:
+    4. Click the blue **Create and use a new Webhook.site endpoint** link:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/create-http-endpoint.png" alt="Create webhook subscription" />
         </Frame>
 
-        Finally, give your Webhook Subscription a name (i.e. `house_atreides_users`) and click **Create webhooks consumer**:
+        This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for testing purposes.
+
+    5. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `pst_regions`) and click **Create webhooks consumer**:
 
         <Frame>
           <img src="/images/self-hosting/quickstart/create-webhook-subscription.png" alt="Consumer created" />
         </Frame>
 
-        Sequin will now send rows that match your filter to your endpoint. Open the **Messages** tab to see the rows that have been sent:
+        <Check>
+        Sequin will now send rows that match your filter to your endpoint.
+        </Check>
+
+    6. Open the **Messages** tab to see the rows that have been sent:
 
         <Frame>
-          <img src="/images/self-hosting/quickstart/webhook-messages.png" alt="Consumer created" />
+          <img src="/images/self-hosting/quickstart/webhook-messages.png" alt="Messages" />
         </Frame>
 
-        If you go back to the **Overview** tab, and click the **View on Webhook.site** button, you can see the raw webhook requests that were sent:
+    7. Click on one of the messages to see the delivery details including the logs for the message:
 
         <Frame>
-          <img src="/images/self-hosting/quickstart/webhook-dot-site.png" alt="Consumer created" />
+          <img src="/images/self-hosting/quickstart/message-logs.png" alt="Message logs" />
         </Frame>
 
-        Play around with your webhook subscription to get a feel for how it works. Here are some `psql` commands to insert and update rows into the `public.users` table to generate more messages:
+    8. Go back to the **Overview** tab, and click the **View on Webhook.site** button to open the webhook.site dashboard:
 
-        ```bash Connect to the database
-        # Connect to the Sequin PostgreSQL database
-        psql postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmod`e=disable
-        ```
-
-        <CodeGroup>
-
-        ```bash Insert user
-        # Insert a new user into House Atreides
-        "INSERT INTO public.users (house_name, name) VALUES ('House Atreides', 'Leto Atreides');"
-        ```
-
-        ```bash Update user
-        # Update a user into House Atreides
-        "UPDATE public.users SET house_name = 'House Atreides' WHERE id = 2;"
-        ```
-
-        ```bash Insert filtered out user
-        # Insert a new user into House Harkonnen - this will be filtered out by our consume endpoint
-        "INSERT INTO public.users (house_name, name) VALUES ('House Harkonnen', 'Baron Vladimir Harkonnen');"
-        ```
-
-        </CodeGroup>
+        <Frame>
+          <img src="/images/self-hosting/quickstart/webhook-dot-site.png" alt="Webhook.site" />
+        </Frame>
 
         <Check>
-        Sequin is now sending rows from your table to your endpoint.
+        You'll see that each message was delivered to the endpoint!
         </Check>
-      </Tab>
-      <Tab title="Sync API" >
-        <Card title="Coming Soon" icon="wrench" href="/how-sequin-works#sync-api" horizontal>
-        We're building the Sync API now. You can track our progress on [GitHub](https://github.com/sequinstream/sequin/issues/345).
-        </Card>
-      </Tab>
-    </Tabs>
+  </Step>
+  <Step title="Insert and update rows" icon="play">
+    To learn how Sequin works, `insert` and `update` a couple of rows in the `public.regions` table:
 
+    1. Open a terminal and connect to the `sequin_playground` database:
 
+        ```bash
+        psql 'postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmode=disable'
+        ```
+    2. Create a new region in the `public.regions` table:
+
+        ```bash
+        INSERT INTO public.regions (name, timezone) VALUES ('us-gov-west-1', 'pst');
+        ```
+
+        This row matches the filter of your webhook subscription, so it will be delivered to your endpoint. You can verify this by checking the **Messages** tab in the Sequin web console:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/new-message-after-insert.png" alt="Messages tab" />
+        </Frame>
+
+    3. Update an existing region:
+
+        ```bash
+        UPDATE public.regions SET timezone = 'pst' WHERE id = 1;
+        ```
+
+        Again, this row also matches the filter of your webhook subscription, so it will be delivered to your endpoint.
+
+    4. Finally, create a new region that doesn't match the filter:
+
+        ```bash
+        INSERT INTO public.regions (name, timezone) VALUES ('ca-west-1', 'mst');
+        ```
+
+        This row doesn't match the filter of your webhook subscription, so it won't be delivered to your endpoint. You can verify this by navigating to the **Databases** tab, selecting the `playground` database, and then clicking on the **Messages** tab:
+
+        <Frame>
+          <img src="/images/self-hosting/quickstart/filtered-out-message-trace.png" alt="Messages tab" />
+        </Frame>
+
+    <Check>
+    You've learned how changes in your database flow through Sequin and how you can trace your messages end to end.
+    </Check>
   </Step>
 </Steps>
 
 ## Next steps
 
-Sequin is now deployed, connected to a playground database, and streaming rows as they change. Now that you have a feel for how Sequin works, you can tailor it to your needs by connecting to your own database, creating sequences, and consuming rows.
+You are running Sequin, connected to a playground database, and streaming rows as they change. Now that you have a feel for how Sequin works, you can tailor it to your needs by connecting to your own database, creating sequences, and consuming rows.
 
 <CardGroup cols={2}>
   <Card title="Learn more about how Sequin works" icon="wrench" href="/how-sequin-works">

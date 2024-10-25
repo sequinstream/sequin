@@ -1175,7 +1175,7 @@ defmodule Sequin.Consumers do
         {:ok, nil}
 
       {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: nil}}]} ->
-        {:error, Error.not_found(entity: entity_name)}
+        {:error, Error.not_found(entity: entity_name, params: params)}
 
       {:error, error} when is_exception(error) ->
         {:error, error}

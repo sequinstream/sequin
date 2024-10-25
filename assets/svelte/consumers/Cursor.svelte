@@ -91,6 +91,12 @@
           </div>
         {/each}
       </div>
+    {:else if cursor_position === "error"}
+      <Alert.Root class="mt-4">
+        <AlertCircle class="h-4 w-4" />
+        <Alert.Title>Error</Alert.Title>
+        <Alert.Description>Failed to get cursor position.</Alert.Description>
+      </Alert.Root>
     {:else}
       <div class="grid gap-4 md:grid-cols-3">
         <!-- Processed Section -->

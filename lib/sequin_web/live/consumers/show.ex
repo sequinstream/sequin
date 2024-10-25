@@ -411,7 +411,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       Logger.error("Failed to get cursor position: #{inspect(error)}")
     end
 
-    {:noreply, assign(socket, cursor_task_ref: nil)}
+    {:noreply, assign(socket, cursor_task_ref: nil, cursor_position: :error)}
   end
 
   @impl Phoenix.LiveView

@@ -37,7 +37,7 @@
 
   $: fullEndpointUrl = concatenateUrl(
     consumer.http_endpoint.url,
-    consumer.http_endpoint_path
+    consumer.http_endpoint_path,
   );
 </script>
 

@@ -47,7 +47,7 @@
             <ArrowRightCircle class="h-5 w-5 text-blue-500 mr-2" />
             <span class="text-xl font-bold"
               >{formatNumberWithCommas(
-                cursor_position.processing_count || 0
+                cursor_position.processing_count || 0,
               )}</span
             >
           </div>
@@ -75,7 +75,7 @@
             <ArrowRight class="h-5 w-5 text-yellow-500 mr-2" />
             <span class="text-xl font-bold"
               >{formatNumberWithCommas(
-                cursor_position.to_process_count || 0
+                cursor_position.to_process_count || 0,
               )}</span
             >
           </div>

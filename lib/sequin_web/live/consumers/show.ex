@@ -740,6 +740,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   defp encode_cursor_position(nil, _consumer), do: nil
+  defp encode_cursor_position(:error, _consumer), do: :error
 
   defp encode_cursor_position(cursor_position, consumer) do
     %{

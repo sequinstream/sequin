@@ -29,8 +29,6 @@
   };
   export let cursor_position = null;
 
-  let isRewinding = false;
-
   function isWebhookSiteUrl(url: string): boolean {
     return url.startsWith("https://webhook.site/");
   }
@@ -40,24 +38,16 @@
     return `https://webhook.site/#!/view/${uuid}`;
   }
 
-  function onRewind(newCursorPosition: string): { ok: boolean } {
-    isRewinding = true;
-    try {
-      const result = live.pushEventTo(
-        "#" + parent,
-        "rewind",
-        {
-          new_cursor_position: newCursorPosition,
-        },
-        (reply) => reply,
-      );
-      isRewinding = false;
-      return result;
-    } catch (error) {
-      console.error("Rewind operation failed:", error);
-      isRewinding = false;
-      return { ok: false };
-    }
+  function onRewind(
+    newCursorPosition: string | null,
+    callback: (result: { ok: boolean }) => void,
+  ) {
+    live.pushEventTo(
+      "#" + parent,
+      "rewind",
+      { new_cursor_position: newCursorPosition },
+      (reply) => callback(reply),
+    );
   }
 
   $: fullEndpointUrl = concatenateUrl(

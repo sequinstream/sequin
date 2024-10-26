@@ -44,19 +44,6 @@ defmodule SequinWeb.ConsumersLive.Show do
           send(self(), :update_cursor_position)
         end
 
-        consumer =
-          case consumer do
-            %HttpPushConsumer{} ->
-              Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])
-
-            %HttpPullConsumer{} ->
-              Repo.preload(consumer, [:postgres_database, :sequence])
-          end
-
-        # Attempt to get existing health, fallback to initializing
-        {:ok, health} = Health.get(consumer)
-        consumer = %{consumer | health: health}
-
         # Initialize message-related assigns
         socket =
           socket
@@ -84,9 +71,20 @@ defmodule SequinWeb.ConsumersLive.Show do
   end
 
   defp load_consumer(id, socket) do
-    case Consumers.get_consumer_for_account(current_account_id(socket), id) do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
+    case_result =
+      case Consumers.get_consumer_for_account(current_account_id(socket), id) do
+        nil -> {:error, Error.not_found(entity: :consumer)}
+        %HttpPullConsumer{} = consumer -> {:ok, Repo.preload(consumer, [:postgres_database, :sequence])}
+        %HttpPushConsumer{} = consumer -> {:ok, Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])}
+      end
+
+    case case_result do
+      {:ok, consumer} ->
+        {:ok, health} = Health.get(consumer)
+        {:ok, %{consumer | health: health}}
+
+      error ->
+        error
     end
   end
 
@@ -394,10 +392,12 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_info({ref, {:ok, cursor_position}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
+    {:ok, consumer} = load_consumer(socket.assigns.consumer.id, socket)
+
     Process.demonitor(ref, [:flush])
     Process.send_after(self(), :update_cursor_position, 1000)
 
-    {:noreply, assign(socket, cursor_position: cursor_position, cursor_task_ref: nil)}
+    {:noreply, assign(socket, consumer: consumer, cursor_position: cursor_position, cursor_task_ref: nil)}
   end
 
   @impl Phoenix.LiveView
@@ -742,7 +742,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   defp encode_cursor_position(nil, _consumer), do: nil
   defp encode_cursor_position(:error, _consumer), do: :error
 
-  defp encode_cursor_position(cursor_position, consumer) do
+  defp encode_cursor_position(cursor_position, consumer) when is_map(cursor_position) do
     %{
       min_active_cursor: min_active_cursor,
       max_active_cursor: max_active_cursor,
@@ -753,7 +753,7 @@ defmodule SequinWeb.ConsumersLive.Show do
       to_process_count: to_process_count
     } = cursor_position
 
-    %{record_consumer_state: %RecordConsumerState{initial_min_cursor: initial_min_cursor}} = consumer
+    %{record_consumer_state: %RecordConsumerState{producer: producer, initial_min_cursor: initial_min_cursor}} = consumer
     sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
@@ -769,6 +769,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       max_possible_cursor: max_possible_cursor,
       processing_count: processing_count,
       to_process_count: to_process_count,
+      producer: producer,
+      sort_column_name: column.name,
       initial_min_cursor: %{
         value: initial_min_cursor_value,
         type: initial_min_cursor_type

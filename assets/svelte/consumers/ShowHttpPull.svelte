@@ -23,26 +23,16 @@
   export let api_token;
   export let cursor_position;
 
-  let isRewinding = false;
-
-  function onRewind(newCursorPosition: string): { ok: boolean } {
-    isRewinding = true;
-    try {
-      live.pushEventTo(
-        "#" + parent,
-        "rewind",
-        {
-          new_cursor_position: newCursorPosition,
-        },
-        (reply) => reply,
-      );
-      isRewinding = false;
-      return { ok: true };
-    } catch (error) {
-      console.error("Rewind operation failed:", error);
-      isRewinding = false;
-      return { ok: false };
-    }
+  function onRewind(
+    newCursorPosition: string | null,
+    callback: (result: { ok: boolean }) => void,
+  ) {
+    live.pushEventTo(
+      "#" + parent,
+      "rewind",
+      { new_cursor_position: newCursorPosition },
+      (reply) => callback(reply),
+    );
   }
 </script>
 

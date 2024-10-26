@@ -7,6 +7,7 @@
     CheckCircle,
     AlertCircle,
     RefreshCcw,
+    Database,
   } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -19,7 +20,10 @@
 
   export let cursor_position;
   export let messages_processed_count;
-  export let onRewind: (newCursorPosition: string) => { ok: boolean };
+  export let onRewind: (
+    newCursorPosition: string | null,
+    callback: (result: { ok: boolean }) => void,
+  ) => void;
 
   let showDialog = false;
   let newCursorPosition;
@@ -29,6 +33,12 @@
 
   $: initial_min_cursor = cursor_position?.initial_min_cursor?.value;
   $: initial_min_cursor_type = cursor_position?.initial_min_cursor?.type;
+
+  $: isBackfilling = cursor_position?.producer === "table_and_wal";
+
+  $: backfillCondition = cursor_position
+    ? `${cursor_position.sort_column_name} >= ${cursor_position.initial_min_cursor.value}`
+    : null;
 
   function openDialog() {
     newCursorPosition = initial_min_cursor;
@@ -57,8 +67,9 @@
         position = newCursorPosition;
       }
     }
-    onRewind(position);
-    isRewinding = false;
+    onRewind(position, () => {
+      isRewinding = false;
+    });
   }
 </script>
 
@@ -66,20 +77,31 @@
   <CardContent class="p-6">
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">Cursor Position</h2>
-      <Button
-        variant="outline"
-        size="sm"
-        on:click={openDialog}
-        disabled={isRewinding}
-      >
-        {#if isRewinding}
-          <RefreshCcw class="h-4 w-4 mr-2 animate-spin" />
-          Rewinding...
-        {:else}
-          <RefreshCcw class="h-4 w-4 mr-2" />
-          Rewind
+      <div class="flex items-center">
+        {#if isBackfilling}
+          <div class="mr-2 text-blue-500 flex items-center" title="Backfilling">
+            <Database class="h-4 w-4 mr-1" />
+            <span class="text-xs">Backfilling</span>
+            {#if backfillCondition}
+              <span class="text-xs ml-1">({backfillCondition})</span>
+            {/if}
+          </div>
         {/if}
-      </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          on:click={openDialog}
+          disabled={isRewinding}
+        >
+          {#if isRewinding}
+            <RefreshCcw class="h-4 w-4 mr-2 animate-spin" />
+            Rewinding...
+          {:else}
+            <RefreshCcw class="h-4 w-4 mr-2" />
+            Rewind
+          {/if}
+        </Button>
+      </div>
     </div>
     {#if cursor_position === null}
       <div class="grid gap-4 md:grid-cols-3">

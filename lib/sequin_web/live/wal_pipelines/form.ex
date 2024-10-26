@@ -91,13 +91,14 @@ defmodule SequinWeb.WalPipelinesLive.Form do
     if socket.assigns.changeset.valid? do
       database = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == params["source_database_id"]))
       table = Sequin.Enum.find!(database.tables, &(&1.oid == source_table_oid))
+      toast_title = if socket.assigns.is_edit, do: "WAL Pipeline updated", else: "WAL Pipeline created"
 
       with :ok <- Databases.verify_table_in_publication(database, source_table_oid),
            :ok <- verify_source_not_event_table(table),
            {:ok, wal_pipeline} <- create_or_update_wal_pipeline(socket, socket.assigns.wal_pipeline, params) do
         {:noreply,
          socket
-         |> put_flash(:toast, %{kind: :info, title: "WAL Pipeline saved successfully"})
+         |> put_flash(:toast, %{kind: :info, title: toast_title})
          |> push_navigate(to: ~p"/wal-pipelines/#{wal_pipeline.id}")}
       else
         {:error, %Ecto.Changeset{} = changeset} ->

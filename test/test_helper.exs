@@ -7,6 +7,7 @@ Ecto.Adapters.SQL.Sandbox.mode(Sequin.Repo, :manual)
 Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.Character)
 Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterDetailed)
 Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterMultiPK)
+Sequin.Test.UnboxedRepo.delete_all(Sequin.Test.Support.Models.TestEventLogPartitioned)
 
 # Clean out health redis keys
 :ok = Sequin.Health.clean_test_keys()

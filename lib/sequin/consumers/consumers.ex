@@ -791,7 +791,13 @@ defmodule Sequin.Consumers do
   defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabase.Table{} = table, records) do
     record_count = length(records)
     # Get the primary key columns and their types
-    pk_columns = Enum.filter(table.columns, & &1.is_pk?)
+    pk_columns =
+      if Postgres.is_event_table?(table) do
+        [Sequin.Enum.find!(table.columns, &(&1.name == "id"))]
+      else
+        Enum.filter(table.columns, & &1.is_pk?)
+      end
+
     ordered_pk_columns = Enum.sort_by(pk_columns, & &1.attnum)
     pk_column_count = length(pk_columns)
     pk_types = Enum.map(pk_columns, & &1.type)
@@ -848,15 +854,23 @@ defmodule Sequin.Consumers do
           }
 
           source_row =
-            Enum.find(rows, fn row ->
-              # Using ordered pk_columns is important to ensure it lines up with `record_pks`
-              pk_values =
-                ordered_pk_columns
-                |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
-                |> Enum.map(&to_string/1)
+            if Postgres.is_event_table?(table) do
+              # Don't use `committed_at`/timestamp column to match records in the event table,
+              # as timestamp comparisons are fraught.
+              Enum.find(rows, fn row ->
+                to_string(Map.fetch!(row, "id")) == to_string(List.first(record.record_pks))
+              end)
+            else
+              Enum.find(rows, fn row ->
+                # Using ordered pk_columns is important to ensure it lines up with `record_pks`
+                pk_values =
+                  ordered_pk_columns
+                  |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
+                  |> Enum.map(&to_string/1)
 
-              pk_values == record.record_pks
-            end)
+                pk_values == record.record_pks
+              end)
+            end
 
           if source_row do
             %{record | data: %ConsumerRecordData{record: source_row, metadata: metadata}}

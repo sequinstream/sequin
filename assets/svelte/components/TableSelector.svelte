@@ -32,6 +32,8 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import CodeWithCopy from "./CodeWithCopy.svelte";
   import { Label } from "$lib/components/ui/label";
+  import * as Tabs from "$lib/components/ui/tabs";
+  import * as RadioGroup from "$lib/components/ui/radio-group";
 
   type Table = {
     oid: number;
@@ -143,7 +145,6 @@
     if (selectedDatabaseId) {
       selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
     }
-
     if (selectedDatabase && selectedDatabase.tables.length === 1) {
       handleTableSelect(selectedDatabase.tables[0]);
     }
@@ -151,14 +152,34 @@
 
   let createEventTableDialogOpen = false;
   let destinationTableName = "sequin_events";
+  let destinationSchemaName = "public";
   let retentionDays = 30;
+  let retentionPolicy = "none";
+  let createTableDDL = "";
 
   function openCreateEventTableDialog() {
     createEventTableDialogOpen = true;
   }
 
-  $: createTableDDL = `
-create table ${destinationTableName} (
+  $: {
+    createTableDDL =
+      retentionPolicy === "pg_partman"
+        ? `create table ${destinationSchemaName}.${destinationTableName} (
+  id bigserial,
+  seq bigint not null,
+  source_database_id uuid not null,
+  source_table_oid bigint not null,
+  source_table_schema text not null,
+  source_table_name text not null,
+  record_pk text not null,
+  record jsonb not null,
+  changes jsonb,
+  action text not null,
+  committed_at timestamp with time zone not null,
+  inserted_at timestamp with time zone not null default now(),
+  primary key (id, committed_at)
+) partition by range (committed_at);`
+        : `create table ${destinationSchemaName}.${destinationTableName} (
   id bigserial primary key,
   seq bigint not null,
   source_database_id uuid not null,
@@ -171,26 +192,58 @@ create table ${destinationTableName} (
   action text not null,
   committed_at timestamp with time zone not null,
   inserted_at timestamp with time zone not null default now()
-);
+);`;
 
-create unique index on ${destinationTableName} (source_database_id, seq, record_pk);
-create index on ${destinationTableName} (seq);
-create index on ${destinationTableName} (source_table_oid);
-create index on ${destinationTableName} (committed_at);
+    createTableDDL =
+      createTableDDL +
+      `\n\ncreate unique index on ${destinationSchemaName}.${destinationTableName} (source_database_id, committed_at, seq, record_pk);
+create index on ${destinationSchemaName}.${destinationTableName} (seq);
+create index on ${destinationSchemaName}.${destinationTableName} (source_table_oid);
+create index on ${destinationSchemaName}.${destinationTableName} (committed_at);
 
 -- important comment to identify this table as a sequin events table
-comment on table ${destinationTableName} is '$sequin-events$';
+comment on table ${destinationSchemaName}.${destinationTableName} is '$sequin-events$';
 `;
+  }
 
-  let retentionPolicyDDL = `
+  let retentionPolicyPgCronDDL = `
 -- create required extension
+-- you need to run this in the database that pg_cron is installed in
+-- (usually in \`postgres\`)
 create extension if not exists pg_cron;
 
 -- setup cron job to run every 10 minutes and delete old data
 select cron.schedule('retention_policy_10min', '*/10 * * * *', $$
-  delete from ${destinationTableName}
+  delete from ${destinationSchemaName}.${destinationTableName}
   where committed_at < now() - interval '${retentionDays} days';
 $$);
+`;
+
+  $: retentionPolicyPgPartmanDDL = `
+-- You'll need to setup pg_partman in your database, including adding this to postgresql.conf:
+-- shared_preload_libraries = 'pg_partman_bgw'     # (change requires restart)
+
+-- create required extensions
+create schema partman;
+create extension pg_partman schema partman;
+
+-- set up pg_partman for time-based partitioning
+select partman.create_parent(
+  p_parent_table => '${destinationSchemaName}.${destinationTableName}',
+  p_template_table => '${destinationSchemaName}.${destinationTableName}',
+  p_control => 'committed_at',
+  p_interval => '1 day',
+  p_automatic_maintenance => 'on',
+  p_default_table := false
+);
+
+-- set up retention policy
+update partman.part_config
+set
+  retention = '${retentionDays} days',
+  retention_keep_table = false,
+  infinite_time_partitions = true
+where parent_table = '${destinationSchemaName}.${destinationTableName}';
 `;
 </script>
 
@@ -364,25 +417,63 @@ $$);
 </div>
 
 <Dialog.Root bind:open={createEventTableDialogOpen}>
-  <Dialog.Content class="w-4/5 max-w-[80%] flex flex-col">
+  <Dialog.Content class="w-4/5 max-w-[80%] flex flex-col space-y-4">
     <Dialog.Header>
-      <Dialog.Title>Create Event Table</Dialog.Title>
+      <Dialog.Title>Create event table</Dialog.Title>
       <Dialog.Description>
         Set up your event table with the correct schema and retention policy.
       </Dialog.Description>
     </Dialog.Header>
-    <div class="flex flex-col gap-4 flex-grow overflow-y-auto">
+    <div class="flex flex-col gap-4 flex-grow overflow-y-auto mt-4">
       <div class="flex flex-col gap-2">
-        <Label for="destinationTableName">Desired table name</Label>
+        <Label for="destinationSchemaName">Schema name</Label>
+        <Input id="destinationSchemaName" bind:value={destinationSchemaName} />
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <Label for="destinationTableName">Table name</Label>
         <Input id="destinationTableName" bind:value={destinationTableName} />
       </div>
 
       <div class="flex flex-col gap-4">
-        <Label for="retentionDays">Desired retention period (days)</Label>
-        <Input type="number" id="retentionDays" bind:value={retentionDays} />
+        <Label>Retention Policy</Label>
+        <p class="text-sm text-gray-500">
+          If you want to enforce a retention policy, you can use <code
+            >pg_cron</code
+          >
+          or
+          <code>pg_partman</code> to do so. <code>pg_cron</code> is fine if your
+          change volume will rarely exceed 10 writes/sec or 1M writes/day. For
+          higher volumes, we recommend
+          <code>pg_partman</code>. You can change this in the future.
+        </p>
+        <RadioGroup.Root
+          bind:value={retentionPolicy}
+          class="flex flex-col space-y-1 cursor-pointer"
+        >
+          <div class="flex items-center space-x-2">
+            <RadioGroup.Item value="none" id="none" />
+            <Label for="none">None</Label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <RadioGroup.Item value="pg_cron" id="pg_cron" />
+            <Label for="pg_cron">pg_cron</Label>
+          </div>
+          <div class="flex items-center space-x-2">
+            <RadioGroup.Item value="pg_partman" id="pg_partman" />
+            <Label for="pg_partman">pg_partman (&gt;1M writes/day)</Label>
+          </div>
+        </RadioGroup.Root>
       </div>
 
-      {#if destinationTableName}
+      {#if retentionPolicy !== "none"}
+        <div class="flex flex-col gap-4">
+          <Label for="retentionDays">Retention period (days)</Label>
+          <Input type="number" id="retentionDays" bind:value={retentionDays} />
+        </div>
+      {/if}
+
+      {#if destinationTableName && destinationSchemaName}
         <div class="flex flex-col gap-4">
           <p><strong>Create your event table</strong></p>
           <p>
@@ -394,20 +485,18 @@ $$);
             copyIconPosition="top"
           />
         </div>
-        <div class="flex flex-col gap-4">
-          <p><strong>Create your retention policy</strong></p>
-          <p>
-            If you want to enforce a retention policy, use the <code
-              >pg_cron</code
-            >
-            extension. You can setup <code>pg_cron</code> to remove old records:
-          </p>
-          <CodeWithCopy
-            language="sql"
-            code={retentionPolicyDDL}
-            copyIconPosition="top"
-          />
-        </div>
+        {#if retentionPolicy !== "none"}
+          <div class="flex flex-col gap-4">
+            <p><strong>Retention Policy</strong></p>
+            <CodeWithCopy
+              language="sql"
+              code={retentionPolicy === "pg_cron"
+                ? retentionPolicyPgCronDDL
+                : retentionPolicyPgPartmanDDL}
+              copyIconPosition="top"
+            />
+          </div>
+        {/if}
       {/if}
     </div>
     <Dialog.Footer class="py-4 sticky bottom-0 bg-background">

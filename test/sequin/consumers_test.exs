@@ -24,9 +24,11 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
   alias Sequin.Test.Support.Models.CharacterMultiPK
+  alias Sequin.Test.Support.Models.TestEventLogPartitioned
   alias Sequin.Test.UnboxedRepo
 
   describe "receive_for_consumer/2 with event message kind" do
@@ -445,6 +447,73 @@ defmodule Sequin.ConsumersTest do
       records = ConsumerRecord |> Repo.all() |> Enum.filter(&(&1.group_id == "shared_group"))
       assert length(records) == 2
       assert Enum.any?(records, &(&1.state == :available))
+    end
+  end
+
+  describe "receive_for_consumer/2 with partitioned event logs" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: [])
+      # Load tables from actual database
+      {:ok, _tables} = Databases.tables(database)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: database.id,
+          account_id: database.account_id
+        )
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          postgres_database_id: database.id,
+          table_oid: TestEventLogPartitioned.table_oid(),
+          sort_column_attnum: TestEventLogPartitioned.column_attnum("committed_at")
+        )
+
+      group_column_attnums =
+        Enum.map(["source_database_id", "source_table_oid", "record_pk"], &TestEventLogPartitioned.column_attnum/1)
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          actions: [:insert, :update, :delete],
+          column_filters: [],
+          group_column_attnums: group_column_attnums
+        )
+
+      consumer =
+        ConsumersFactory.insert_http_pull_consumer!(
+          message_kind: :record,
+          account_id: account.id,
+          replication_slot_id: slot.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter
+        )
+
+      consumer = Repo.preload(consumer, :postgres_database)
+
+      ConnectionCache.cache_connection(consumer.postgres_database, Repo)
+
+      %{consumer: consumer, database: database, account: account}
+    end
+
+    test "receives records from partitioned table", %{consumer: consumer} do
+      # Insert some test records
+      for _ <- 1..5 do
+        insert_consumer_record!(consumer, table: :partitioned, state: :available)
+      end
+
+      # Attempt to receive records
+      assert {:ok, received_records} = Consumers.receive_for_consumer(consumer)
+
+      # Verify the received records
+      assert length(received_records) == 5
+
+      for record <- received_records do
+        assert record.data.metadata.table_name == "test_event_logs_partitioned"
+        assert record.data.metadata.table_schema == "public"
+        assert is_map(record.data.record)
+        assert record.table_oid == TestEventLogPartitioned.table_oid()
+      end
     end
   end
 
@@ -2934,7 +3003,8 @@ defmodule Sequin.ConsumersTest do
   end
 
   defp insert_consumer_record!(consumer, attrs) do
-    {table, attrs} = Keyword.pop_lazy(attrs, :table, fn -> Enum.random([:default, :multi_pk, :detailed]) end)
+    {table, attrs} =
+      Keyword.pop_lazy(attrs, :table, fn -> Enum.random([:default, :multi_pk, :detailed, :partitioned]) end)
 
     case table do
       :default ->
@@ -2959,6 +3029,17 @@ defmodule Sequin.ConsumersTest do
         char = CharacterFactory.insert_character_detailed!()
 
         [consumer_id: consumer.id, table_oid: CharacterDetailed.table_oid(), record_pks: [char.id]]
+        |> Keyword.merge(attrs)
+        |> ConsumersFactory.insert_consumer_record!()
+
+      :partitioned ->
+        event_log = TestEventLogFactory.insert_test_event_log_partitioned!([], repo: Sequin.Repo)
+
+        [
+          consumer_id: consumer.id,
+          table_oid: TestEventLogPartitioned.table_oid(),
+          record_pks: [event_log.id, event_log.committed_at]
+        ]
         |> Keyword.merge(attrs)
         |> ConsumersFactory.insert_consumer_record!()
     end

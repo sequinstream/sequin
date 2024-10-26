@@ -89,6 +89,11 @@ defmodule Sequin.Postgres do
     Postgrex.query(pid, query, params, opts)
   end
 
+  # When a transaction is open, this is the conn
+  def query(%DBConnection{} = conn, query, params, opts) do
+    Postgrex.query(conn, query, params, opts)
+  end
+
   def query(mod, query, params, opts) when is_atom(mod) do
     mod.query(query, params, opts)
   end
@@ -120,6 +125,43 @@ defmodule Sequin.Postgres do
     end
   end
 
+  @doc """
+  Executes a transaction against a database connection.
+
+  Similar to `query/4`, this function provides a unified interface for transactions, supporting:
+  - Direct Postgrex connections (when given a PID)
+  - Module-based connections (when given a module name)
+  - PostgresDatabase structs (using ConnectionCache)
+
+  ## Examples
+
+      Postgres.transaction(conn_pid, fn conn -> ... end)
+      Postgres.transaction(Repo, fn conn -> ... end)
+      Postgres.transaction(postgres_database, fn conn -> ... end)
+  """
+  def transaction(conn, fun, opts \\ [])
+
+  def transaction(pid, fun, opts) when is_pid(pid) do
+    Postgrex.transaction(pid, fun, opts)
+  end
+
+  def transaction(mod, fun, opts) when is_atom(mod) do
+    mod.transaction(fun, opts)
+  end
+
+  def transaction(%PostgresDatabase{} = db, fun, opts) do
+    case ConnectionCache.connection(db) do
+      {:ok, conn_or_mod} ->
+        case transaction(conn_or_mod, fun, opts) do
+          {:ok, result} -> {:ok, result}
+          {:error, _} = error -> error
+        end
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
   def pg_type_to_ecto_type(pg_type) do
     case pg_type do
       "integer" -> :integer
@@ -135,6 +177,8 @@ defmodule Sequin.Postgres do
       "date" -> :date
       "timestamp" -> :naive_datetime
       "timestamptz" -> :utc_datetime
+      "timestamp with time zone" -> :utc_datetime
+      "timestamp without time zone" -> :naive_datetime
       "uuid" -> :binary_id
       "jsonb" -> :map
       "json" -> :map
@@ -204,23 +248,27 @@ defmodule Sequin.Postgres do
     schemas_list = Enum.map_join(schemas, ",", &"'#{&1}'")
 
     query = """
-    SELECT DISTINCT ON (n.nspname, c.relname, a.attnum)
-      n.nspname AS schema,
-      c.relname AS table_name,
-      c.oid AS table_oid,
-      a.attnum,
-      a.attname AS column_name,
-      pg_catalog.format_type(a.atttypid, -1) AS column_type,
-      COALESCE(i.indisprimary, false) AS is_pk
-    FROM pg_class c
-    JOIN pg_namespace n ON c.relnamespace = n.oid
-    JOIN pg_attribute a ON c.oid = a.attrelid
-    LEFT JOIN pg_index i ON c.oid = i.indrelid AND a.attnum = ANY(i.indkey)
-    WHERE n.nspname IN (#{schemas_list})
-      AND c.relkind = 'r'
-      AND a.attnum > 0
-      AND NOT a.attisdropped
-    ORDER BY n.nspname, c.relname, a.attnum, i.indisprimary DESC NULLS LAST
+      select distinct on (n.nspname, c.relname, a.attnum)
+        n.nspname as schema,
+        c.relname as table_name,
+        c.oid as table_oid,
+        a.attnum,
+        a.attname as column_name,
+        pg_catalog.format_type(a.atttypid, -1) as column_type,
+        coalesce(i.indisprimary, false) as is_pk
+      from pg_class c
+      join pg_namespace n on c.relnamespace = n.oid
+      join pg_attribute a on c.oid = a.attrelid
+      left join pg_index i on c.oid = i.indrelid and a.attnum = any(i.indkey)
+      where n.nspname in (#{schemas_list})
+        and c.relkind in ('r', 'p')
+        and a.attnum > 0
+        and not a.attisdropped
+        and not exists ( -- this excludes partition children
+          select 1 from pg_inherits inh
+          where inh.inhrelid = c.oid
+        )
+      order by n.nspname, c.relname, a.attnum, i.indisprimary desc nulls last
     """
 
     case query(conn, query) do
@@ -230,6 +278,66 @@ defmodule Sequin.Postgres do
 
       {:error, _} = error ->
         error
+    end
+  end
+
+  @doc """
+  Fetches unique indexes for a given table.
+
+  ## Parameters
+    - conn: The database connection
+    - schema: The schema name
+    - table: The table name
+
+  ## Returns
+    - {:ok, [%{name: String.t(), columns: [String.t()]}]} on success
+    - {:error, Error.t()} on failure
+  """
+  @spec fetch_unique_indexes(Postgrex.Connection.t() | PostgresDatabase.t(), String.t(), String.t()) ::
+          {:ok, [%{name: String.t(), columns: [String.t()]}]} | {:error, Error.t()}
+  def fetch_unique_indexes(conn, schema, table) do
+    query = """
+    select
+      i.relname as index_name,
+      array_agg(a.attname order by array_position(ix.indkey, a.attnum)) as column_names
+    from
+      pg_class t,
+      pg_class i,
+      pg_index ix,
+      pg_attribute a,
+      pg_namespace n
+    where
+      t.oid = ix.indrelid
+      and i.oid = ix.indexrelid
+      and a.attrelid = t.oid
+      and a.attnum = any(ix.indkey)
+      and t.relkind in ('r', 'p')
+      and t.relname = $1
+      and n.oid = t.relnamespace
+      and n.nspname = $2
+      and (ix.indisunique or ix.indisprimary)
+    group by
+      i.relname
+    order by
+      i.relname;
+    """
+
+    case query(conn, query, [table, schema]) do
+      {:ok, %{rows: rows}} ->
+        indexes =
+          Enum.map(rows, fn [name, columns] ->
+            %{name: name, columns: columns}
+          end)
+
+        {:ok, indexes}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to fetch unique indexes",
+           details: error
+         )}
     end
   end
 
@@ -628,7 +736,16 @@ defmodule Sequin.Postgres do
       join pg_class c on c.relname = pt.tablename
       join pg_namespace n on n.nspname = pt.schemaname and n.oid = c.relnamespace
       where pt.pubname = $1
-        and c.oid = $2
+        and (
+          c.oid = $2  -- Direct match for regular tables
+          or          -- OR
+          exists (    -- Check for partition children
+            select 1
+            from pg_inherits i
+            where i.inhrelid = c.oid
+              and i.inhparent = $2
+          )
+        )
     )
     """
 

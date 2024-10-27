@@ -13,6 +13,7 @@
 
   export let value: Date;
   value = value || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  export let error: string = "";
 
   const months = [
     "January",
@@ -39,70 +40,60 @@
   // Validate day
   $: {
     let dayNum = parseInt(day);
-    if (isNaN(dayNum) || dayNum < 1) {
-      day = "01";
-    } else if (dayNum > 31) {
+    if (!isNaN(dayNum) && dayNum > 31) {
       day = "31";
-    } else {
-      day = dayNum.toString().padStart(2, "0");
     }
   }
 
   // Validate year
   $: {
     let yearNum = parseInt(year);
-    if (isNaN(yearNum) || yearNum < 1900) {
-      year = "1900";
-    } else if (yearNum > 9999) {
+    if (!isNaN(yearNum) && yearNum > 9999) {
       year = "9999";
-    } else {
-      year = yearNum.toString().padStart(4, "0");
     }
   }
 
   // Validate hours
   $: {
     let hoursNum = parseInt(hours);
-    if (isNaN(hoursNum) || hoursNum < 0) {
-      hours = "00";
-    } else if (hoursNum > 23) {
+    if (!isNaN(hoursNum) && hoursNum > 23) {
       hours = "23";
-    } else {
-      hours = hoursNum.toString().padStart(2, "0");
     }
   }
 
   // Validate minutes
   $: {
     let minutesNum = parseInt(minutes);
-    if (isNaN(minutesNum) || minutesNum < 0) {
-      minutes = "00";
-    } else if (minutesNum > 59) {
+    if (!isNaN(minutesNum) && minutesNum > 59) {
       minutes = "59";
-    } else {
-      minutes = minutesNum.toString().padStart(2, "0");
     }
   }
 
   // Validate seconds
   $: {
     let secondsNum = parseInt(seconds);
-    if (isNaN(secondsNum) || secondsNum < 0) {
-      seconds = "00";
-    } else if (secondsNum > 59) {
+    if (!isNaN(secondsNum) && secondsNum > 59) {
       seconds = "59";
-    } else {
-      seconds = secondsNum.toString().padStart(2, "0");
     }
   }
 
   // Initialize local variables from the initial value
   $: {
+    const monthIndex = months.indexOf(month);
+    const yearNum = parseInt(year);
+    const dayNum = parseInt(day);
+
+    if (!isValidDate(yearNum, monthIndex, dayNum)) {
+      error = "Invalid date.";
+    } else {
+      error = "";
+    }
+
     const newDate = new Date(
       Date.UTC(
-        parseInt(year),
-        months.indexOf(month),
-        parseInt(day),
+        yearNum,
+        monthIndex,
+        dayNum,
         parseInt(hours),
         parseInt(minutes),
         parseInt(seconds),
@@ -138,6 +129,14 @@
       iso8601Input = ""; // Clear the input field
     }
   }
+
+  // Add this validation function
+  function isValidDate(y: number, m: number, d: number): boolean {
+    const date = new Date(y, m, d);
+    return (
+      date.getFullYear() === y && date.getMonth() === m && date.getDate() === d
+    );
+  }
 </script>
 
 <div class="space-y-2 {$$props.class}">
@@ -165,7 +164,7 @@
           type="number"
           bind:value={year}
           class="w-20"
-          min={1900}
+          min={100}
           max={9999}
         />
       </div>

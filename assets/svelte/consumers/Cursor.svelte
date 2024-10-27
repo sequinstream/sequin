@@ -27,6 +27,7 @@
 
   let showDialog = false;
   let newCursorPosition;
+  let cursorError: string = "";
   let startPosition = "beginning";
   let cursorDate: Date | null = null;
   let isRewinding = false;
@@ -50,7 +51,18 @@
       newCursorPosition = null;
       cursorDate = null;
     } else if (initial_min_cursor_type?.startsWith("timestamp")) {
-      cursorDate = new Date(initial_min_cursor);
+      // Parse ISO string manually to ignore timezone
+      const [datePart, timePart] = initial_min_cursor.split("T");
+      const [year, month, day] = datePart.split("-");
+      const [hours, minutes, seconds] = timePart.split(":");
+      cursorDate = new Date(
+        year,
+        month - 1,
+        day,
+        hours,
+        minutes,
+        parseInt(seconds),
+      );
     }
   }
 
@@ -237,7 +249,14 @@
           <Label for="cursor" class="text-right">Cursor</Label>
           <div class="col-span-3">
             {#if initial_min_cursor_type?.startsWith("timestamp")}
-              <Datetime bind:value={cursorDate} class="z-[100]" />
+              <Datetime
+                bind:value={cursorDate}
+                class="z-[100]"
+                bind:error={cursorError}
+              />
+              {#if cursorError}
+                <p class="text-sm text-red-500 mt-2">{cursorError}</p>
+              {/if}
             {:else if ["integer", "bigint", "smallint", "serial"].includes(initial_min_cursor_type)}
               <Input type="number" id="cursor" bind:value={newCursorPosition} />
             {:else}
@@ -248,7 +267,9 @@
       {/if}
     </div>
     <Dialog.Footer>
-      <Button type="submit" on:click={handleSubmit}>Update</Button>
+      <Button type="submit" on:click={handleSubmit} disabled={!!cursorError}>
+        Update
+      </Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

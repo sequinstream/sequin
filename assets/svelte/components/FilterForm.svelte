@@ -151,6 +151,7 @@
   );
 
   let startPosition = "beginning";
+  let minSortColError: string = "";
 
   $: {
     if (startPosition === "beginning") {
@@ -444,7 +445,13 @@
           </div>
 
           {#if sortColumnType.startsWith("timestamp")}
-            <Datetime bind:value={form.recordConsumerState.initialMinSortCol} />
+            <Datetime
+              bind:value={form.recordConsumerState.initialMinSortCol}
+              bind:error={minSortColError}
+            />
+            {#if minSortColError}
+              <p class="text-sm text-red-500 mt-2">{minSortColError}</p>
+            {/if}
           {:else if ["integer", "bigint", "smallint", "serial"].includes(sortColumnType)}
             <Input
               type="number"

@@ -344,6 +344,18 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
         Logger.info("[WalPipelineServer] Successfully wrote #{result.num_rows} rows to destination")
         :ok
 
+      # Switch this out when we switch `seq` to bigserial
+      # We only need to do this because one batch can contain multiple events with the same `seq`
+      {:error, %Postgrex.Error{message: nil, postgres: %{code: :cardinality_violation}}} ->
+        Logger.error("[WalPipelineServer] Cardinality violation, splitting and retrying")
+
+        Enum.reduce_while(wal_events, :ok, fn wal_event, :ok ->
+          case write_to_destination(state, [wal_event]) do
+            :ok -> {:cont, :ok}
+            {:error, error} -> {:halt, {:error, error}}
+          end
+        end)
+
       {:error, error} ->
         Logger.error("[WalPipelineServer] Failed to write to destination: #{inspect(error)}")
         {:error, error}

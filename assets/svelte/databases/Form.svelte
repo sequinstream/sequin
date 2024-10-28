@@ -252,8 +252,8 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       username: "",
       password: "",
       ssl: true,
-      publication_name: "",
-      slot_name: "",
+      publication_name: database.publication_name,
+      slot_name: database.slot_name,
       useLocalTunnel: false,
     };
     clearFormStorage();

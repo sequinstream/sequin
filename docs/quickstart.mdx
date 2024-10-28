@@ -10,7 +10,7 @@ iconType: "solid"
   <Step title="Create a Sequin account">
     If you haven't already, create a [Sequin cloud account](https://console.sequinstream.com/register) and login.
 
-    <Note>If you're looking to self-host Sequin, start with our [self-hosting guide](/self-hosting/docker-compose).</Note>
+    <Note>If you're looking to run Sequin locally or self-host Sequin, start with our [other Quickstart guide](/quickstart/setup).</Note>
   </Step>
   <Step title="Connect your database">
     In the Sequin console, click on the **Connect Database** button. Enter the connection details for your Postgres database (i.e. host, port, database name, username, and password).
@@ -51,23 +51,23 @@ iconType: "solid"
     Click **Create Sequence**.
 
      <Check>
-    You've created a sequence and your table is setup to stream.
+    You've created a Sequence and your table is setup to stream.
     </Check>
   </Step>
   <Step title="Consume rows">
-    Sequin is setup to stream rows from your table. Now, consume rows from your sequence using the consume API, the sync API, or webhooks subscriptions.
+    Sequin is setup to stream rows from your table. Now, consume rows from your Sequence using the consume API, the sync API, or webhooks subscriptions.
 
     <Tabs>
       <Tab title="Consume API">
         Navigate to the **Consume Endpoints** tab and click the **Create Endpoint** button.
 
-        Select the sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
+        Select the Sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
         <Frame>
           <img src="/images/cloud-getting-started/set-filters.png" alt="Select filters" />
         </Frame>
 
-        Here, we've selected the `public.orders` sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
+        Here, we've selected the `public.orders` Sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
         Now, enter the final details for your consume endpoint:
 
@@ -113,13 +113,13 @@ iconType: "solid"
       <Tab title="Webhook subscriptions">
         Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-        Select the sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
+        Select the Sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
         <Frame>
           <img src="/images/cloud-getting-started/set-filters.png" alt="Select filters" />
         </Frame>
 
-        Here, we've selected the `public.orders` sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
+        Here, we've selected the `public.orders` Sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
         Now, enter the final details for your webhook subscription:
 
@@ -177,7 +177,7 @@ iconType: "solid"
 
 ## Next steps
 
-You've now walked through the basics of connecting your database, creating a sequence, and consume rows. Now you can write the business logic in your application.
+You've now walked through the basics of connecting your database, creating a Sequence, and consume rows. Now you can write the business logic in your application.
 
 <CardGroup cols={2}>
   <Card title="Learn more about how Sequin works" icon="wrench" href="/how-sequin-works">

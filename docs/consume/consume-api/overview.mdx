@@ -5,7 +5,7 @@ icon: "code"
 iconType: "solid"
 ---
 
-The **Consume API** allows you to pull rows from your Sequin sequences using HTTP endpoints. It follows the popular **consumer group** pattern, providing scalable and fault-tolerant processing of your data.
+The **Consume API** allows you to pull rows from your Sequin Sequences using HTTP endpoints. It follows the popular **consumer group** pattern, providing scalable and fault-tolerant processing of your data.
 
 In the consumer group pattern, each message (i.e. row from your table) goes to only one worker in the group. If a worker fails, other workers can pick up its messages, making sure nothing is missed.
 
@@ -48,13 +48,13 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
   -H "Authorization: Bearer {your-token}"
 ```
 
-This will return a batch of messages. Each message will contain an `ack_token` and either a row or changes object:
+This will return a batch of messages. Each message will contain an `ack_id` and either a row or changes object:
 
 ```json
 {
   "data": [
     {
-      "ack_token": "MTYyeJ7abUjl1pO",
+      "ack_id": "MTYyeJ7abUjl1pO",
       "record": {
         "id": 2,
         "name": "Chani",
@@ -79,7 +79,7 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {your-token}" \
   -d '{
-    "ack_tokens": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
+    "ack_ids": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
   }'
 ```
 
@@ -90,7 +90,7 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer {your-token}" \
   -d '{
-    "ack_tokens": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
+    "ack_ids": ["MTYyeJ7abUjl1pO", "MTYyeJ0p73hQak"]
   }'
 ```
 

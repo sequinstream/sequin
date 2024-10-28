@@ -79,7 +79,7 @@ Name your database connection in Sequin and click the **Connect Database** butto
 
 ## Creating a Sequence for a TimescaleDB Hypertable
 
-TimescaleDB uses hypertables to optimize time-series data storage. Hypertables work like any other table in Sequin. Let's create a sequence for a hypertable:
+TimescaleDB uses hypertables to optimize time-series data storage. Hypertables work like any other table in Sequin. Let's create a Sequence for a hypertable:
 
 <Steps>
 <Step title="Create a hypertable">
@@ -99,7 +99,7 @@ select create_hypertable('sensor_data', 'time');
 ```
 </Step>
 
-<Step title="Create a sequence in Sequin">
+<Step title="Create a Sequence in Sequin">
 1. In the Sequin console, go to the **Sequences** tab and click **Create Sequence**.
 2. Select the `sensor_data` hypertable.
 3. Choose `time` as the sort column.
@@ -109,7 +109,7 @@ select create_hypertable('sensor_data', 'time');
 
 ## Consuming TimescaleDB Data with Sequin
 
-Now that you have a sequence set up, you can consume data using Sequin's [Consume API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
+Now that you have a Sequence set up, you can consume data using Sequin's [Consume API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
 
 Here's an example of how to consume data using the Consume API:
 
@@ -124,7 +124,7 @@ This will return up a batch of up to 10 messages from your `sensor_data` hyperta
 {
   "data": [
     {
-      "ack_token": "MTYyeJ7abUjl1pO",
+      "ack_id": "MTYyeJ7abUjl1pO",
       "data": {
         "record": {
           "time": "2023-06-01T12:00:00Z",
@@ -146,7 +146,7 @@ curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/sensor_data_c
 -H 'Authorization: Bearer YOUR_API_TOKEN' \
 -H 'Content-Type: application/json' \
 -d '{
-  "ack_tokens": ["MTYyeJ7abUjl1pO"]
+  "ack_ids": ["MTYyeJ7abUjl1pO"]
 }'
 ```
 

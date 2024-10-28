@@ -5,7 +5,7 @@ icon: "wrench"
 iconType: "solid"
 ---
 
-With Sequin, you can stream Postgres by creating [**sequences**](#sequences). Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume a table's rows by:
+With Sequin, you can stream Postgres by creating [**Sequences**](#sequences). Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this Sequence to consume a table's rows by:
 
 1. Using the [Consume API](#consume-api)
 2. [Receiving webhooks](#webhooks)
@@ -13,7 +13,7 @@ With Sequin, you can stream Postgres by creating [**sequences**](#sequences). Se
 
 Whether you're pulling rows or having them pushed to you, Sequin always delivers the latest version of rows in order. When new rows are inserted or when rows are updated, they're re-delivered to you.
 
-If you want to capture discrete change events to rows, you can use a [WAL Pipeline](#wal-pipeline). With a WAL Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then create a sequence to consume the rows in your event table.
+If you want to capture discrete change events to rows, you can use a [WAL Pipeline](#wal-pipeline). With a WAL Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then create a Sequence to consume the rows in your event table.
 
 You can also filter and transform rows before they're delivered to your application:
 
@@ -23,16 +23,16 @@ You can also filter and transform rows before they're delivered to your applicat
 
 ## Sequences
 
-Sequin produces a **sequence** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [¹](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). This makes them difficult to stream properly without skipping rows [²](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/).
+Sequin produces a **Sequence** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [¹](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). This makes them difficult to stream properly without skipping rows [²](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/).
 
-To produce a stricly ordered sequence, Sequin uses a combination of the source table and a replication slot to produce a sequence. This makes it possible to [consume rows](#consuming-rows) from a table. When rows are inserted or updated, Sequin adds the rows to the end of the sequence so consumers will process them. Sequin stores sequence information in its internal catalog tables.
+To produce a stricly ordered Sequence, Sequin uses a combination of the source table and a replication slot to produce a Sequence. This makes it possible to [consume rows](#consuming-rows) from a table. When rows are inserted or updated, Sequin adds the rows to the end of the Sequence so consumers will process them. Sequin stores Sequence information in its internal catalog tables.
 
-When you setup a sequence for a table in Sequin, you must specify its **sort column**. Sequin will use this sort column to produce the initial sequence. You can also use the sort column when rewinding a consumer, as it approximates the sequence's order.
+When you setup a Sequence for a table in Sequin, you must specify its **sort column**. Sequin will use this sort column to produce the initial Sequence. You can also use the sort column when rewinding a consumer, as it approximates the Sequence's order.
 
 <Note>
-The sort column orders historical rows in the sequence. For new and updated rows, their order in the sequence will depend on when they are committed. This is because auto-increment and datetime columns will [not necessarily commit in order in Postgres](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order).
+The sort column orders historical rows in the Sequence. For new and updated rows, their order in the Sequence will depend on when they are committed. This is because auto-increment and datetime columns will [not necessarily commit in order in Postgres](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order).
 
-After the sequence starts, the order of rows in the sequence will be the order they appear in Sequin's replication slot. This corresponds to the latest entry of the row in the WAL (i.e. the most recent [LSN](https://www.postgresql.org/docs/current/datatype-pg-lsn.html) corresponding to a given row).
+After the Sequence starts, the order of rows in the Sequence will be the order they appear in Sequin's replication slot. This corresponds to the latest entry of the row in the WAL (i.e. the most recent [LSN](https://www.postgresql.org/docs/current/datatype-pg-lsn.html) corresponding to a given row).
 </Note>
 
 It's important you choose the right sort column. The right sort column is either:
@@ -158,7 +158,7 @@ For example:
 
 ## Consuming rows
 
-After creating a sequence, you have a few options for consuming rows with Sequin:
+After creating a Sequence, you have a few options for consuming rows with Sequin:
 
 ### Consume API
 
@@ -234,7 +234,7 @@ You can **transform** messages before they're delivered to your consumers using 
 
 Sequin streams rows directly from your tables. But sometimes, you want to log every discrete change to rows, and capture the `old` and `new` values of that change. Or, you want to retain a log of deleted rows.
 
-With **WAL Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can setup a sequence for your event table to stream its rows.
+With **WAL Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can setup a Sequence for your event table to stream its rows.
 
 WAL Pipelines can indicate which operations to capture (i.e. `insert`, `update`, `delete`) as well as apply SQL filtering on changes.
 
@@ -370,7 +370,7 @@ When setting up a WAL Pipeline, Sequin will walk you through the full instructio
 
 ## Replication slots
 
-To maintain sequences, Sequin needs to detect changes in your database. Core to that process is a [replication slot](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) and a corresponding [publication](https://www.postgresql.org/docs/current/logical-replication-publication.html). The publication determines which tables are captured by the replication slot.
+To maintain Sequences, Sequin needs to detect changes in your database. Core to that process is a [replication slot](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) and a corresponding [publication](https://www.postgresql.org/docs/current/logical-replication-publication.html). The publication determines which tables are captured by the replication slot.
 
 Replication slots ensure Sequin never misses a change, even if Sequin is disconnected from your database for a period of time.
 

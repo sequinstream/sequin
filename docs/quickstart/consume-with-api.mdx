@@ -1,0 +1,166 @@
+---
+title: 'Consume with API'
+sidebarTitle: 'Consume with API'
+description: 'Consume rows from your Sequence using the Consume API'
+---
+
+With Sequin's **Consume API**, you can pull rows from your Sequences using HTTP endpoints. You'll create a **Consume API Endpoint** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
+
+<Info>
+This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
+</Info>
+
+<Steps titleSize="h2">
+  <Step title="Create a Consume API Endpoint" icon="users">
+    After connecting a database and creating a Sequence, you can consume rows from your Sequence using a Consume API Endpoint:
+
+    1. Navigate to the **Consume API** tab and click the **Create API Endpoint** button.
+
+    2. The Sequence you created for the `public.regions` table should already be selected:
+
+        <Frame>
+          <img src="/images/quickstart/setup-consumer-source.png" alt="Select consumer source" />
+        </Frame>
+
+    3. Click "Add filter" and add a filter to only capture rows where the `timezone` is `pst`:
+
+        <Frame>
+          <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
+        </Frame>
+
+    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Sequence, playing the whole table from the beginning:
+
+        <Frame>
+          <img src="/images/quickstart/set-consumer-start.png" alt="Set consumer start" style={{ maxWidth: '400px' }} />
+        </Frame>
+
+    4. Jump ahead to the **Consumer endpoint name** section (you can use the defaults for message grouping and consumer configuration).
+
+    5. Give your Consume API Endpoint a name (i.e. `pst_regions`) and click **Create Consume API Endpoint**.
+
+        <Check>
+          Sequin will now make rows that match your filter available via the Consume API.
+        </Check>
+
+        <Frame>
+          <img src="/images/quickstart/create-consumer-group.png" alt="Consumer created" />
+        </Frame>
+  </Step>
+
+  <Step title="Receive messages" icon="arrow-down-to-line">
+    Now, use the Consume API to receive messages:
+
+    1. Copy the "Receive messages" curl command from the **Overview** tab. It looks like this:
+
+        ```bash
+        curl -X GET 'https://api.sequinstream.com/api/http_pull_consumers/pst_regions/receive?batch_size=10' \
+          -H "Authorization: Bearer YOUR_API_TOKEN"
+        ```
+
+    2. Run the command to receive a message. You should see a response like:
+
+        ```json
+        {
+          "data": [
+            {
+              "data": {
+                "record": {
+                  "id": 2,
+                  "inserted_at": "2024-10-28T21:08:02.266189",
+                  "name": "us-west-1",
+                  "timezone": "pst",
+                  "updated_at": "2024-10-28T21:08:02.266189"
+                }
+              },
+              "ack_id": "4c9ded3f-20b3-46e2-8487-b910655fba04"
+            }
+          ]
+        }
+        ```
+
+    3. Run the request again right away. Importantly, even though you haven't yet acknowledged the last message you received, you should receive a different message. This is because the last message you pulled is currently "in flight," and will not be made visible to other consumers until after the visibility timeout (which defaults to 30 seconds).
+
+    4. Wait for the visibility timeout to elapse. Run the request again, and you'll see the first message you pulled is re-delivered to you.
+
+    5. Now, acknowledge the message using the `/ack` endpoint. Copy the "Acknowledge messages" command from your dashboard and replace the `<ack_id>` placeholder with the `ack_id` from the message you received:
+
+        ```bash
+        curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/pst_regions/ack' \
+          -H "Authorization: Bearer YOUR_API_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "ack_ids": ["<ack_id>"]
+          }'
+        ```
+
+     6. You should see the dashbboard indicate that one message has been processed:
+
+        <Frame>
+          <img src="/images/quickstart/consume-api-one-message-processed.png" alt="Sequin console, displaying one message processed" />
+        </Frame> 
+
+        <Check>
+        You've successfully received and acknowledged a message.
+        </Check>
+  </Step>
+
+  <Step title="Insert and update rows" icon="play">
+    To learn how Sequin works, run a couple of `insert` and `update` operations on the `public.regions` table:
+
+    1. Open a terminal and connect to the `sequin_playground` database:
+
+        ```bash
+        psql 'postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmode=disable'
+        ```
+
+    2. Create a new region in the `public.regions` table:
+
+        ```sql
+        insert into public.regions (name, timezone) values ('us-west-2', 'pst');
+        ```
+
+    3. Make another request to the `/receive` endpoint. This time, add a query parameter to the end of your request, `?batch_size=100`. You should see the new row in the response:
+
+        ```json
+        {
+          "data": [
+            {
+              "ack_id": "MTYyeJ7abUjl2pO",
+              "data": {
+                "record": {
+                  "id": 5,
+                  "name": "us-west-2",
+                  "timezone": "pst"
+                }
+              }
+            }
+          ]
+        }
+        ```
+
+    4. Finally, create a new region that doesn't match the filter:
+
+        ```sql
+        insert into public.regions (name, timezone) values ('eu-west-1', 'cet');
+        ```
+
+    5. Make another request to `/receive`. You won't see this row since it doesn't match your filter.
+
+    <Check>
+    You've seen how changes in your database flow through Sequin and how you can trace your messages end to end.
+    </Check>
+  </Step>
+</Steps>
+
+## Next steps
+
+You are running Sequin and have setup a Consume API Endpoint that both backfilled a table and will send you rows as they are created or updated. Now you can see how to instead receive webhooks or how to capture every discrete change that happens to tables in your database:
+
+<CardGroup cols={1}>
+  <Card title="Quickstart: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">
+    See how to subscribe to your Sequence and receive rows as they change.
+  </Card>
+  <Card title="Quickstart: Capture changes" icon="gauge-max" href="/quickstart/capture-changes">
+    See how to capture every discrete change that happens to tables in your database.
+  </Card>
+</CardGroup>

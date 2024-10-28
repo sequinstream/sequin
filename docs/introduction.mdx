@@ -7,7 +7,7 @@ iconType: "solid"
 
 Sequin is a tool for capturing changes and streaming data out of your Postgres database.
 
-To stream data, you'll create [sequences](/how-sequin-works#sequences) for each table you want to stream. Then, you'll consume rows from the sequence using Sequin's [Consume API](/how-sequin-works#consume-api), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
+To stream data, you'll create [Sequences](/how-sequin-works#sequences) for each table you want to stream. Then, you'll consume rows from the Sequence using Sequin's [Consume API](/how-sequin-works#consume-api), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
 
 Sequin is great for:
 
@@ -76,14 +76,16 @@ Watch a recent demo of Sequin in action:
 
 ## Getting started
 
-Sequin is available as a cloud version or self-hosted. See the following docs to get up and running:
+Sequin is available as a Docker image or cloud service. See the following docs to get up and running:
+
+<Card title="Quickstart" icon="docker" href="/quickstart/setup" horizontal>
+  Install and setup Sequin in about 5 minutes.
+</Card>
 
 <Card title="Cloud Quickstart" icon="cloud" href="/quickstart" horizontal>
-  Get started in about 3 minutes.
+  Get started in about 3 minutes with no installation.
 </Card>
-<Card title="Self-hosted Quickstart" icon="docker" href="/self-hosting/docker-compose" horizontal>
-  Self-host Sequin and start with a local Postgres database.
-</Card>
+
 
 ## Getting help
 <CardGroup>

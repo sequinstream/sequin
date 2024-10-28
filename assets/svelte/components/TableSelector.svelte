@@ -175,7 +175,7 @@ create index on ${destinationTableName} (committed_at);
 comment on table ${destinationTableName} is '$sequin-events$';
 `;
 
-  let retentionPolicyPgCronDDL = `
+  let retentionPolicyDDL = `
 -- create required extension
 create extension if not exists pg_cron;
 
@@ -183,34 +183,6 @@ create extension if not exists pg_cron;
 select cron.schedule('retention_policy_10min', '*/10 * * * *', $$
   delete from ${destinationTableName}
   where committed_at < now() - interval '${retentionDays} days';
-$$);
-`;
-
-  $: retentionPolicyPgPartmanDDL = `
--- create required extensions
-create extension if not exists pg_partman;
-create extension if not exists pg_cron;
-
--- set up pg_partman for time-based partitioning
-select partman.create_parent(
-  p_parent_table => '${destinationTableName}',
-  p_control => 'committed_at',
-  p_type => 'native',
-  p_interval => 'daily',
-  p_premake => 30
-);
-
--- set up retention policy
-select partman.add_to_part_config(
-  p_parent_table => '${destinationTableName}',
-  p_retention => '${retentionDays} days',
-  p_retention_keep_table => false
-);
-
--- setup cron job to run maintenance for pg_partman every hour
--- this is necessary to clean up old partitions (i.e. drop stale data)
-select cron.schedule('partman_maintenance', '0 * * * *', $$
-  select partman.run_maintenance(p_analyze := false);
 $$);
 `;
 </script>
@@ -418,33 +390,16 @@ $$);
         <div class="flex flex-col gap-4">
           <p><strong>Create your retention policy</strong></p>
           <p>
-            We recommend either the <code>pg_cron</code> or
-            <code>pg_partman</code>
-            extensions for enforcing a retention policy. <code>pg_cron</code> is
-            fine if your change volume will rarely exceed 10 writes/sec or 1M
-            writes/day. For higher volumes, we recommend
-            <code>pg_partman</code>:
+            If you want to enforce a retention policy, use the <code
+              >pg_cron</code
+            >
+            extension. You can setup <code>pg_cron</code> to remove old records:
           </p>
-          <Tabs.Root value="pg_cron" class="w-full">
-            <Tabs.List>
-              <Tabs.Trigger value="pg_cron">pg_cron</Tabs.Trigger>
-              <Tabs.Trigger value="pg_partman">pg_partman</Tabs.Trigger>
-            </Tabs.List>
-            <Tabs.Content value="pg_cron">
-              <CodeWithCopy
-                language="sql"
-                code={retentionPolicyPgCronDDL}
-                copyIconPosition="top"
-              />
-            </Tabs.Content>
-            <Tabs.Content value="pg_partman">
-              <CodeWithCopy
-                language="sql"
-                code={retentionPolicyPgPartmanDDL}
-                copyIconPosition="top"
-              />
-            </Tabs.Content>
-          </Tabs.Root>
+          <CodeWithCopy
+            language="sql"
+            code={retentionPolicyDDL}
+            copyIconPosition="top"
+          />
         </div>
       {/if}
     </div>

@@ -301,16 +301,12 @@ defmodule SequinWeb.ConsumersLive.Show do
     table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
     table = %Table{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
 
-    dbg(new_cursor_position)
-
     initial_min_cursor =
       if new_cursor_position do
         KeysetCursor.min_cursor(table, new_cursor_position)
       else
         KeysetCursor.min_cursor(table)
       end
-
-    dbg(initial_min_cursor)
 
     new_record_consumer_state =
       Map.from_struct(%{

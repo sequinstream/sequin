@@ -1,0 +1,117 @@
+---
+title: 'Install & setup'
+sidebarTitle: 'Install & setup'
+description: 'Run Sequin, connect a database, and start streaming rows in about 5 minutes'
+---
+
+<Steps titleSize="h2">
+  <Step title="Run Sequin" icon="server">
+    The easiest way to run and test Sequin is with our Docker Compose file. This file starts a Postgres database, Redis instance, and Sequin server:
+
+    1. Git clone the repository:
+
+        ```bash
+        git clone git@github.com:sequinstream/sequin.git
+        ```
+
+    2. Navigate to the `docker` directory:
+
+        ```bash
+        cd sequin/docker
+        ```
+
+    3. Run `docker compose up -d`:
+
+        ```bash
+        docker compose up -d
+        ```
+
+    4. Verify the containers are running:
+
+        ```bash
+        docker compose ps
+        ```
+
+    <Note>
+    For more configuration options, including running Sequin on an existing Postgres and Redis instance or within an existing project, see our [Docker setup](/self-hosting/docker-setup).
+    </Note>
+  </Step>
+  <Step title="Create an account" icon="key">
+    1. After starting the Docker Compose services, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
+
+        <Frame>
+          <img src="/images/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
+        </Frame>
+
+    2. Click the **Get started** button to provision a user and an account.
+    3. On the login page, you can login with the default credentials:
+        - Email: `admin@sequinstream.com`
+        - Password: `sequinpassword!`
+
+    <Check>
+    Sequin is up and running.
+    </Check>
+  </Step>
+  <Step title="Connect the playground database" icon="database">
+    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it:
+
+    1. In the Sequin web console, click **Connect Database**.
+    2. Click the **Autofill with Connection String** button and paste in the connection string for the `sequin_playground` database:
+        ```bash
+        postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
+        ```
+
+        The playground database comes pre-configured with a publication and replication slot so you can skip to the end of the form.
+
+    3. Click **Connect Database**.
+
+        <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
+          <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
+            <iframe
+              src="https://fast.wistia.net/embed/iframe/awrhv0r6ah?seo=false&videoFoam=true"
+              title="connect-db Video"
+              allow="autoplay; fullscreen"
+              allowTransparency={true}
+              frameBorder="0"
+              scrolling="no"
+              className="wistia_embed"
+              name="wistia_embed"
+              msallowfullscreen
+              style={{width: '100%', height: '100%'}}
+            ></iframe>
+          </div>
+        </div>
+        <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+
+  </Step>
+  <Step title="Create a Sequence" icon="list">
+    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table:
+
+    1. Navigate to the **Sequences** tab and click the **Create Sequence** button.
+
+    2. The `public.regions` table should already be selected by default.
+    
+    3. Select the column Sequin should use to order changes. In this case select the `updated_at` column:
+
+        <Frame>
+          <img src="/images/quickstart/create-sequence.png" alt="Create Sequence" />
+        </Frame>
+
+    4. Click **Create Sequence**.
+
+   
+  </Step>
+</Steps>
+
+## Ready to stream
+
+You are running Sequin, connected to a playground database, and have a Sequence setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consume API:
+
+<CardGroup cols={1}>
+  <Card title="Quickstart continued: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">
+    See how to subscribe to your Sequence and receive rows as they change.
+  </Card>
+  <Card title="Quickstart continued: Consume rows via the Consume API" icon="gauge-max" href="/quickstart/consume-with-api">
+    See how to use the Consume API to receive rows as they change.
+  </Card>
+</CardGroup>

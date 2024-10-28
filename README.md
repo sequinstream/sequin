@@ -51,7 +51,7 @@ Our [cloud quickstart](https://sequinstream.com/docs/quickstart) and [database s
 
 ### Self-hosting
 
-If you prefer to self-host, follow our [self-hosted quickstart](https://sequinstream.com/docs/self-hosting/docker-compose).
+If you prefer to self-host, follow our [self-hosted quickstart](https://sequinstream.com/docs/quickstart/setup).
 
 You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
 
@@ -74,7 +74,7 @@ You can run Sequin in its own Docker container or as a sidecar container in your
 
 Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
 
-Sequin connects to any Postgres database. To stream data, you'll create [sequences](https://sequinstream.com/docs/how-sequin-works#sequences) for each table you want to stream. Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this sequence to consume rows by:
+Sequin connects to any Postgres database. To stream data, you'll create [Sequences](https://sequinstream.com/docs/how-sequin-works#Sequences) for each table you want to stream. Sequences present a strictly ordered view of rows from one or more tables. Then, you can use this Sequence to consume rows by:
 
   1. Using the [Consume API](https://sequinstream.com/docs/how-sequin-works#consume-api)
   2. Receiving [webhooks](https://sequinstream.com/docs/how-sequin-works#webhooks)
@@ -87,7 +87,7 @@ With [WAL Pipelines](#wal-pipelines), you can capture discrete changes to your t
 Sequin comes with a web console/UI for configuration:
 
 1. Connect any Postgres database to Sequin (Sequin uses logical replication).
-2. Add sequences and consumers to tables you want to stream.
+2. Add Sequences and consumers to tables you want to stream.
 3. Consume messages using Sequin's APIs.
 
 You can configure Sequin as code using TOML config files ([coming soon](https://github.com/sequinstream/sequin/issues/315)).

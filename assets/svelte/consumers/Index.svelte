@@ -88,7 +88,7 @@
       <h1 class="text-2xl font-bold">
         {consumerKind === "push"
           ? "Webhook Subscriptions"
-          : "Consume Endpoints"}
+          : "Consume API Endpoints"}
       </h1>
     </div>
     {#if hasDatabases}
@@ -100,7 +100,7 @@
             data-phx-link-state="push"
           >
             <Button variant="default">
-              Create {consumerKind === "push" ? "Subscription" : "Endpoint"}
+              Create {consumerKind === "push" ? "Subscription" : "API Endpoint"}
             </Button>
           </a>
         </div>
@@ -121,8 +121,8 @@
             Webhook Subscriptions filter, transform, and send messages from a
             table in your database to your application or another service.
           {:else}
-            Consume Endpoints let you filter, transform, and pull messages from
-            a table in your database into your application.
+            Consume API Endpoints let you filter, transform, and pull messages
+            from a table in your database into your application.
           {/if}
         </p>
         <div class="relative inline-block text-left">
@@ -132,7 +132,7 @@
             data-phx-link-state="push"
           >
             <Button variant="default">
-              Create {consumerKind === "push" ? "Subscription" : "Endpoint"}
+              Create {consumerKind === "push" ? "Subscription" : "API Endpoint"}
             </Button>
           </a>
         </div>

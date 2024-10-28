@@ -160,7 +160,7 @@
           </h2>
           <div class="space-y-4">
             <div>
-              <h3 class="text-md font-semibold mb-2">Receive Messages</h3>
+              <h3 class="text-md font-semibold mb-2">Receive messages</h3>
               <CodeWithSecret
                 tabs={[
                   {
@@ -173,7 +173,7 @@
               />
             </div>
             <div>
-              <h3 class="text-md font-semibold mb-2">Acknowledge Messages</h3>
+              <h3 class="text-md font-semibold mb-2">Acknowledge messages</h3>
               <CodeWithSecret
                 tabs={[
                   {

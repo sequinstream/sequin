@@ -46,7 +46,8 @@ export function parsePostgresURL(url: string): {
     throw new Error("Invalid PostgreSQL URL");
   }
 
-  const [, , , username, password, hostname, port, database, queryString] = match;
+  const [, , , username, password, hostname, port, database, queryString] =
+    match;
 
   const params = new URLSearchParams(queryString || "");
   const ssl = params.get("sslmode");

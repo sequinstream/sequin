@@ -12,6 +12,9 @@ create table regions(
   updated_at timestamp default now()
 );
 
+alter table regions replica identity
+  full;
+
 create or replace function public.update_timestamp()
   returns trigger
   language plpgsql
@@ -28,14 +31,12 @@ create trigger update_timestamp
   before update on regions for each row
   execute procedure update_timestamp();
 
-insert into
-  regions (name, timezone)
-values
-  ('us-east-1', 'est'),
-  ('us-west-1', 'pst'),
-  ('us-west-2', 'pst'),
-  ('us-east-2', 'est'),
-  ('us-central-1', 'cst');
+insert into regions(name, timezone)
+  values ('us-east-1', 'est'),
+('us-west-1', 'pst'),
+('us-west-2', 'pst'),
+('us-east-2', 'est'),
+('us-central-1', 'cst');
 
 create publication sequin_pub for all tables;
 

@@ -43,7 +43,7 @@
       heading: "Stream",
       items: [
         { path: "/sequences", text: "Sequences", icon: ListOrdered },
-        { path: "/consumers/pull", text: "Consume Endpoints", icon: Radio },
+        { path: "/consumers/pull", text: "Consume API", icon: Radio },
         {
           path: "/consumers/push",
           text: "Webhook Subscriptions",

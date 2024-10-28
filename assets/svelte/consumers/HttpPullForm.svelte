@@ -154,7 +154,9 @@
 </script>
 
 <FullPageModal
-  title={isEditMode ? "Edit Consumer Endpoint" : "Create Consumer Endpoint"}
+  title={isEditMode
+    ? "Edit Consume API Endpoint"
+    : "Create Consume API Endpoint"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   showConfirmOnExit={isDirty}

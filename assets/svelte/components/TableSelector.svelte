@@ -32,7 +32,6 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import CodeWithCopy from "./CodeWithCopy.svelte";
   import { Label } from "$lib/components/ui/label";
-  import * as Tabs from "$lib/components/ui/tabs";
 
   type Table = {
     oid: number;
@@ -139,6 +138,14 @@
   onMount(() => {
     if (databases.length === 1 && !selectedDatabaseId) {
       handleDbChange({ value: databases[0].id });
+    }
+
+    if (selectedDatabaseId) {
+      selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
+    }
+
+    if (selectedDatabase && selectedDatabase.tables.length === 1) {
+      handleTableSelect(selectedDatabase.tables[0]);
     }
   });
 

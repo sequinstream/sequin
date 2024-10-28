@@ -49,18 +49,6 @@
   let selectedDatabase = null;
   let selectedTable = null;
 
-  function updateSelectedDatabase(event) {
-    if (event.value) {
-      selectedDatabase = databases.find((db) => db.id === event.value);
-    } else {
-      selectedDatabase = null;
-    }
-
-    // Reset table and sort column when database changes
-    form.table_oid = null;
-    form.sort_column_attnum = null;
-  }
-
   function pushEvent(
     event: string,
     payload = {},

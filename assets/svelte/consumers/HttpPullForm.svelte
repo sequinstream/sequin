@@ -254,6 +254,8 @@
       {isEditMode}
       {selectedTable}
       groupColumnAttnums={form.groupColumnAttnums}
+      defaultGroupColumnAttnums={consumer.defaultGroupColumnAttnums}
+      usingDefaultGrouping={consumer.usingDefaultGrouping}
       onGroupColumnAttnumsChange={handleGroupColumnAttnumsChange}
     />
 

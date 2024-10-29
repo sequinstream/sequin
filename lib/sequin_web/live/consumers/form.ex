@@ -206,6 +206,26 @@ defmodule SequinWeb.ConsumersLive.Form do
     |> maybe_put_record_consumer_state(form, socket)
   end
 
+  defp default_group_columns(%Table{} = table) do
+    cond do
+      Sequin.Postgres.is_event_table?(table) ->
+        table.columns
+        |> Enum.filter(&(&1.name in ["source_database_id", "source_table_oid", "record_pk"]))
+        |> Enum.sort_by(& &1.name)
+        |> Enum.map(& &1.attnum)
+
+      # Use primary keys as default for regular tables
+      Enum.any?(table.columns, & &1.is_pk?) ->
+        table.columns
+        |> Enum.filter(& &1.is_pk?)
+        |> Enum.sort_by(& &1.attnum)
+        |> Enum.map(& &1.attnum)
+
+      true ->
+        []
+    end
+  end
+
   defp maybe_delete_http_endpoint(params) do
     if params["http_endpoint_id"] do
       Map.delete(params, "http_endpoint")
@@ -264,22 +284,38 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp encode_consumer(nil), do: nil
 
   defp encode_consumer(%{__struct__: consumer_type} = consumer) do
-    postgres_database_id =
-      if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
+    database =
+      if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database
 
     source_table = Consumers.source_table(consumer)
+
+    table =
+      if source_table && database do
+        Sequin.Enum.find!(database.tables, &(&1.oid == source_table.oid))
+      end
+
+    default_group_columns = if table, do: default_group_columns(table), else: []
+
+    group_column_attnums =
+      if source_table && source_table.group_column_attnums != [] do
+        source_table.group_column_attnums
+      else
+        default_group_columns
+      end
 
     base = %{
       "id" => consumer.id,
       "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
-      "group_column_attnums" => source_table && source_table.group_column_attnums,
+      "group_column_attnums" => group_column_attnums,
+      "default_group_column_attnums" => default_group_columns,
+      "using_default_grouping" => Enum.sort(default_group_columns) == group_column_attnums,
       "max_ack_pending" => consumer.max_ack_pending,
       "max_deliver" => consumer.max_deliver,
       "max_waiting" => consumer.max_waiting,
       "message_kind" => consumer.message_kind,
       "status" => consumer.status,
-      "postgres_database_id" => postgres_database_id,
+      "postgres_database_id" => database && database.id,
       "table_oid" => source_table && source_table.oid,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
@@ -341,6 +377,7 @@ defmodule SequinWeb.ConsumersLive.Form do
             "oid" => table.oid,
             "schema" => table.schema,
             "name" => table.name,
+            "isEventTable" => Postgres.is_event_table?(table),
             "columns" =>
               Enum.map(table.columns, fn %Table.Column{} = column ->
                 %{

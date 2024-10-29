@@ -421,7 +421,12 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
     <Dialog.Header>
       <Dialog.Title>Create event table</Dialog.Title>
       <Dialog.Description>
-        Set up your event table with the correct schema and retention policy.
+        Set up an event table for your WAL Pipeline to write to. For more
+        information, <a
+          href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
+          target="_blank"
+          class="text-blue-500 underline">see the docs ↗</a
+        >.
       </Dialog.Description>
     </Dialog.Header>
     <div class="flex flex-col gap-4 flex-grow overflow-y-auto mt-4">

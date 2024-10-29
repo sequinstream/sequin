@@ -12,11 +12,11 @@ When you insert a new user into your database, you might want to send them a wel
   <img src="/images/use-cases/side-effects/send-with-sequin.svg" alt="Send welcome email with Sequin" />
 </Frame>
 
-1. Sequin captures every `insert` on your `users` table using a durable replication slot.
-2. It then asynchronously queues and delivers messages to the `sendWelcomeEmail` function. Messages are retried until they are acknowledged by the function.
+1. Sequin captures and streams every `insert` on your `users` table using a durable replication slot.
+2. It then delivers each row to the `sendWelcomeEmail` function using Webhooks. Messages are retried until they are acknowledged by the function.
 3. With a simple HTTP interface, replays, and observability built in you can easily scale this implementation.
 
-This guide shows you how to implement side effects with Sequin.
+Here is how to implement side effects with Sequin.
 
 ## Example
 
@@ -32,22 +32,48 @@ This guide shows you how to implement side effects with Sequin.
     </Check>
 
   </Step>
-  <Step title="Create a consumer to capture `inserts` on the `users` table" icon="signal-stream">
-       Create a [webhook subscription](/how-sequin-works#webhooks) that captures changes from the `users` table. It'll then send an HTTP request to your application with the new user's information (which you'll handle in the next step).
+  <Step title="Setup a WAL Pipeline" icon="timeline">
+    Create a WAL pipeline to capture every new user added to your database:
 
-    1. Click the **Create Consumer** button and then select the `users` table.
-    2. Because you want to capture every `insert` you can leave the **Filter** field blank.
-    3. Select the **Changes** option and then choose **Push** for the consumer type.
-    4. Enter the the HTTP endpoint where Sequin will send the changes. Add any headers you need to authenticate the request.
-    5. Click **Create Consumer** to finish.
+    1. Navigate to the **WAL Pipelines** tab and click **Create WAL Pipeline**.
+    2. Select the `users` table in the database you just connected to Sequin.
+    3. In the **Operations to capture** section, only select `insert`.
+    4. In the **Destination** section, click **+ Create new event table** and follow the instructions to add an event table to your database.
+    5. Give your pipeline a name and click **Create WAL Pipeline**.
 
     <Check>
-      Your consumer is now created. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+      Sequin will now capture every `insert` on the `users` table and store it in your new events table.
+    </Check>
+  </Step>
+  <Step title="Create a Sequence" icon="list-ol">
+    Add a Sequence to your `events` table to stream changes to your application:
+
+    1. Navigate to the **Sequences** tab and click **Create Sequence**.
+    2. Select the `events` table connected to your WAL pipeline. Sequin will automatically detect the correct columns to use for ordering.
+    3. Click **Create Sequence**.
+
+    <Check>
+      Sequin is now set up to stream changes from your `events` table.
+    </Check>
+  </Step>
+  <Step title="Create a Webhook Subscription" icon="webhook">
+    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `events` sequence to an endpoint in your application (which you'll handle in the next step).
+
+    1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
+    2. Select the `events` sequence you just created.
+    3. Right now, you don't need to filter the messages you want to capture.
+    4. In the next section, have the consumer group start **At the end of the table** so you only send a welcome email to new users.
+    5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for your application and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
+    6. Back in the Webhook Subscription window, click the refresh button and select the endpoint you just created. Add a specific path for your webhook (e.g. `/webhook/new-user`) if you need to.
+    7. Name your webhook subscription and click **Create webhook subscription**.
+
+    <Check>
+      You've set up a webhook subscription to deliver rows from your `events` sequence to your application's endpoint.
     </Check>
 
   </Step>
   <Step title="Handle messages in your application" icon="code">
-    Sequin is now capturing every `insert` on the `users` table and sending it to your HTTP endpoint. When a new user is inserted:
+    Sequin is now sending every `insert` on the `users` table to your HTTP endpoint. When a new user is inserted:
 
     ```sql
     insert into users (name, email) values ('John Doe', 'john.doe@example.com');
@@ -58,23 +84,31 @@ This guide shows you how to implement side effects with Sequin.
     ```json
     {
       "record": {
+        "action": "insert",
+        "changes": null,
+        "committed_at": "2024-10-29T18:12:38.363829Z",
         "id": 1,
-        "name": "Chani",
-        "title": "Fremen Warrior",
-        "email": "chani@arrakis.gov",
-        "spice_allocation": 500,
-        "is_sayyadina": true
+        "inserted_at": "2024-10-29T18:12:38.402773Z",
+        "record": {
+          "email": "john.doe@example.com",
+          "id": 12,
+          "inserted_at": "2024-10-29T18:12:38Z",
+          "name": "John Doe",
+          "updated_at": "2024-10-29T18:12:38Z"
+        },
+        "record_pk": "12",
+        "seq": 1730225558363829,
+        "source_database_id": "4ceb004f-9e5c-4688-9f9e-3453ee68e268",
+        "source_table_name": "users",
+        "source_table_oid": 32784,
+        "source_table_schema": "public"
       },
-      "changes": null,
-      "action": "insert",
       "metadata": {
-        "table_schema": "public",
-        "table_name": "users",
-        "commit_timestamp": "2023-10-15T14:30:00Z",
         "consumer": {
-          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-          "name": "send_welcome_email_consumer"
-        }
+          "id": "5ae83088-8fac-492d-9c4d-73786808b01e"
+        },
+        "table_schema": "public",
+        "table_name": "sequin_events"
       }
     }
     ```
@@ -84,7 +118,7 @@ This guide shows you how to implement side effects with Sequin.
     ```js
     // Webhook handler for new user registration
     app.post('/webhook/new-user', async (req, res) => {
-      const { name, email } = req.body;
+      const { name, email } = req.body.record.record;
 
       try {
         // Send welcome email
@@ -97,6 +131,10 @@ This guide shows you how to implement side effects with Sequin.
     ```
 
     Importantly, to ensure every new user receives an email, Sequin will retry the message until the HTTP request is acknowledged with a `200` status.
+
+    <Check>
+      You're set up to ensure every new user receives a welcome email!
+    </Check>
   </Step>
 </Steps>
 
@@ -118,5 +156,14 @@ Sequin handles the hard parts for you:
 
 To add a side effect to your application, you might want to:
 
-* Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
-* Learn more about [how Sequin works](/how-sequin-works).
+<CardGroup cols={1}>
+  <Card title="Learn more about how Sequin works" icon="book-open" href="/how-sequin-works">
+    See how Sequin works and how all the components fit together.
+  </Card>
+  <Card title="Go through our Quickstart" icon="gauge-max" href="/quickstart">
+    Get step-by-step instructions for connecting your database to Sequin and streaming changes to your application.
+  </Card>
+  <Card title="Check out our guides" icon="lambda" href="/guides/lambda">
+    Learn how to set up lambda functions, vercel functions, and other serverless functions to run your side effects.
+  </Card>
+</CardGroup>

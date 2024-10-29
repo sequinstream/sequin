@@ -50,14 +50,13 @@
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">No WAL Pipelines found</h2>
         <p class="text-gray-600 mb-6">
-          WAL Pipelines use the
+          With a
           <a
-            href="https://www.postgresql.org/docs/current/wal-intro.html"
+            href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
             target="_blank"
-            class="text-blue-500 hover:underline">Write Ahead Log (WAL)</a
-          >
-          to capture changes from one table in your database and replicate them to
-          another table in the same or different database.
+            class="text-blue-500 hover:underline">WAL Pipeline</a
+          >, Sequin captures all of a table's insert, update, and delete events
+          and stores them in an event log table.
         </p>
         {#if hasDatabases}
           <a

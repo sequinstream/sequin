@@ -77,6 +77,10 @@
       ]
     },
     {
+      "group": "Capture changes",
+      "pages": ["capture-changes/wal-pipelines"]
+    },
+    {
       "group": "Database setup",
       "pages": [
         "guides/gcp",

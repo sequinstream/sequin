@@ -4,7 +4,7 @@ sidebarTitle: 'Capture changes'
 description: 'Capture every change to your tables using WAL Pipelines'
 ---
 
-Sequin streams the latest versions of rows from your tables. But sometimes you want to capture every discrete change to your tables, not just the latest state of each row. With [**WAL Pipelines**](/how-sequin-works#wal-pipelines), Sequin can capture inserts, updates, and deletes as they happen, storing them in an event log table in your database. You can then stream these events to your applications using Sequin's existing consumption methods.
+Sequin streams the latest versions of rows from your tables. But sometimes you want to capture every discrete change to your tables, not just the latest state of each row. With [**WAL Pipelines**](/capture-changes/wal-pipelines), Sequin can capture inserts, updates, and deletes as they happen, storing them in an event log table in your database. You can then stream these events to your applications using Sequin's existing consumption methods.
 
 <Info>
 This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.

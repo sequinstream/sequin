@@ -1,0 +1,311 @@
+---
+title: "WAL Pipelines"
+sidebarTitle: "WAL Pipelines"
+description: "Capture changes with WAL Pipelines"
+icon: "timeline"
+iconType: "solid"
+---
+
+Sequin streams the latest version of rows out of Postgres tables. But sometimes you need to capture every discrete change to your tables, not just the latest state of each row.
+
+**WAL Pipelines** allow you to capture every insert, update, and delete event that happens in your database, storing them in an event log table. That event log table can live in the same database or a different one. Then, you can stream these events using Sequin's standard consumption methods:
+
+<Frame>
+  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of WAL Pipelines, with the source table on the left and the event log table on the right" />
+</Frame>
+
+## Overview
+
+WAL Pipelines:
+
+- Capture discrete change events (inserts, updates, and/or deletes)
+- Write changes to an event log table in your database
+- Store both new and old values for updates
+- Store old values for deleted rows
+- Allow SQL filtering on changes
+- Support configurable retention policies
+
+## Creating WAL Pipelines
+
+You can create WAL Pipelines in the Sequin console by navigating to the **WAL Pipelines** tab and clicking **Create WAL Pipeline**.
+
+Under **Source configuration**, select the table you want to capture changes from:
+
+<Frame>
+  <img style={{maxWidth: "500px"}} src="/images/guides/wal-pipelines/source-configuration.png" alt="Source configuration widget, showing a list of tables to choose from" />
+</Frame>
+
+You can specify which operations to capture (i.e. inserts, updates, and/or deletes). And you can filter the changes to capture with one or more column filters:
+
+<Frame>
+  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/filter-configuration.png" alt="Insert, delete, and update radio group, followed by a column filter widget" />
+</Frame>
+
+Sequin writes events to an [event table](#event-table) with a Sequin-specified schema. If you already have an event table ready to go, you can select it under **Destination configuration**. Otherwise, click **Create new event table** to create a new table:
+
+<Frame>
+  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/destination-configuration.png" alt="Destination configuration widget, showing a list of tables to choose from, and a button to create a new event table" />
+</Frame>
+
+Clicking **Create new event table** will open a modal that will provide instructions for creating an event table in your database:
+
+<Frame>
+  <img style={{maxWidth: "500px"}} src="/images/guides/wal-pipelines/create-event-table-modal.png" alt="The create event table modal, showing some configuration options and a series of SQL DDL commands to create the table" />
+</Frame>
+
+After creating your event table, click **Done** to close the modal. Your new table should now appear in the destination list. Select it and click **Create** to finish creating your WAL Pipeline.
+
+## Event table
+
+### Schema
+
+WAL Pipelines write changes to an **event table** in your database. This event table has a schema specified by Sequin.
+
+Event tables look like this:
+
+```sql
+create table sequin_events (
+  id serial primary key,
+  seq bigint not null,
+  source_database_id uuid not null,
+  source_table_oid bigint not null,
+  source_table_schema text not null,
+  source_table_name text not null,
+  record_pk text not null,
+  record jsonb not null,
+  changes jsonb,
+  action text not null,
+  committed_at timestamp with time zone not null,
+  inserted_at timestamp with time zone not null default now()
+);
+```
+
+<Note>
+  The schema of this table varies slightly if you're using [`pg_partman`](#pg_partman) to manage retention. In particular, `id` and `committed_at` are a composite primary key, and the `create table` DDL includes a `partition by range` clause.
+</Note>
+
+<ResponseField name="id" type="integer" required>
+  Auto-generated, auto-incrementing ID for the event entry.
+</ResponseField>
+
+<ResponseField name="seq" type="bigint" required>
+  (internal) A Sequin sequence for the event entry.
+</ResponseField>
+
+<ResponseField name="source_database_id" type="uuid" required>
+  (internal) The Sequin ID for your source database.
+</ResponseField>
+
+<ResponseField name="source_table_oid" type="bigint" required>
+  The OID for the source table.
+</ResponseField>
+
+<ResponseField name="source_table_schema" type="text" required>
+  The schema of the source table.
+</ResponseField>
+
+<ResponseField name="source_table_name" type="text" required>
+  The name of the source table.
+</ResponseField>
+
+<ResponseField name="record_pk" type="text" required>
+  The primary key for the source row. It's `text`, regardless of the type of the source's primary key type.
+</ResponseField>
+
+<ResponseField name="record" type="jsonb" required>
+  For inserts and updates, this contains all the latest field values for the row (i.e. `new`). For deletes, this contains all the field values prior to deletion (i.e. `old`).
+</ResponseField>
+
+<ResponseField name="changes" type="jsonb">
+  For updates, this is a JSON of all the `old` fields _that changed_ in this update. `changes` does not include unchanged values. So, to get the entire `old` row, just merge `changes` on top of `record`. (`null` for insert and delete operations.)
+</ResponseField>
+
+<ResponseField name="action" type="text" required>
+  One of `insert`, `update`, or `delete`.
+</ResponseField>
+
+<ResponseField name="committed_at" type="timestamp with time zone" required>
+  The time the change was committed.
+</ResponseField>
+
+<ResponseField name="inserted_at" type="timestamp with time zone" required>
+  The time this event was inserted into the event table.
+</ResponseField>
+
+### Creating an event table
+
+The Sequin web console will provide you with the SQL commands you need to create an event table in your database.
+
+## Retention policies
+
+You can configure retention policies for your event tables using extensions like `pg_cron` or `pg_partman`. This means old events will be automatically deleted from your event table.
+
+We generally recommend using `pg_cron` if your write volume isn't too high (less than 1M writes per day). `pg_cron` is easier to setup. Otherwise, `pg_partman` is a more scalable solution.
+
+### `pg_cron`
+
+`pg_cron` is an extension that allows you to run SQL commands on a schedule. It is supported by all major Postgres providers.
+
+When creating an event table, the Sequin web console will provide you with the SQL commands you need to create a `pg_cron` job to delete old events.
+
+The commands look like this:
+
+```sql
+-- create required extension
+-- you need to run this in the database that pg_cron is installed in
+-- (usually in `postgres`)
+create extension if not exists pg_cron;
+
+-- setup cron job to run every 10 minutes and delete old data
+select cron.schedule('retention_policy_10min', '*/10 * * * *', $$
+  delete from public.sequin_events
+  where committed_at < now() - interval '30 days';
+$$);
+```
+
+### `pg_partman`
+
+`pg_partman` is a Postgres extension that allows you to manage retention policies for your event tables using Postgres partitions. `pg_partman` creates a new partition for each "bucket" of time you specify (e.g. one partition per day). To evict old data, `pg_partman` drops old partitions that fall outside of your retention window. This operation is very fast and efficient.
+
+Like `pg_cron`, `pg_partman` is supported by all major Postgres providers. While it's more efficient, it's also more complicated, so we generally recommend using `pg_cron` unless you have a very high write volume (greater than 1M writes per day).
+
+When creating an event table, the Sequin web console will provide you with the SQL commands you need to create a `pg_partman` retention policy.
+
+It looks like this:
+
+```sql
+-- You'll need to setup pg_partman in your database, including adding this to postgresql.conf:
+-- shared_preload_libraries = 'pg_partman_bgw'     # (change requires restart)
+
+-- create required extensions
+create schema partman;
+create extension pg_partman schema partman;
+
+-- set up pg_partman for time-based partitioning
+select partman.create_parent(
+  p_parent_table => 'public.sequin_events',
+  p_template_table => 'public.sequin_events',
+  p_control => 'committed_at',
+  p_interval => '1 day',
+  p_automatic_maintenance => 'on',
+  p_default_table := false
+);
+
+-- set up retention policy
+update partman.part_config
+set
+  retention = '30 days',
+  retention_keep_table = false,
+  infinite_time_partitions = true
+where parent_table = 'public.sequin_events';
+```
+
+`create_parent` sets up the partitions and inserts a record into `partman.part_config`. The record in `partman.part_config` is used by the `pg_partman` background worker to determine which tables to manage. The `update ... part_config` command is used to set the retention policy. (You need to run the `update` after the `create_parent` command, as `create_parent` does not accept configuration options such as `retention`.)
+
+A brief explanation of the options:
+
+<ResponseField name="p_parent_table" type="text" required>
+  The fully qualified name of the table to partition (e.g. 'public.sequin_events').
+</ResponseField>
+
+<ResponseField name="p_template_table" type="text" required>
+  The table to use as a template for new partitions. When set to the parent table, ensures all partitions have the same schema as the parent.
+</ResponseField>
+
+<ResponseField name="p_control" type="text" required>
+  The column to partition by. For time-based partitioning, this should be a timestamp column (e.g. 'committed_at').
+</ResponseField>
+
+<ResponseField name="p_interval" type="text" required>
+  A Postgres interval value specifying the size of each partition (e.g. '1 day'). Each partition will contain data for this time period.
+</ResponseField>
+
+<ResponseField name="p_automatic_maintenance" type="boolean" required>
+  When 'on', uses the pg_partman background worker to automatically create new partitions and manage retention. Requires proper setup in postgresql.conf. (See [`pg_partman`'s README](https://github.com/pgpartman/pg_partman))
+</ResponseField>
+
+<ResponseField name="p_default_table" type="boolean" required>
+  When false, disables the default partition table. Generally recommended to set to false for time-based partitioning.
+</ResponseField>
+
+<ResponseField name="retention" type="text">
+  How long to retain partitions before dropping them (e.g. '30 days'). Set via update to partman.part_config after creation.
+</ResponseField>
+
+<ResponseField name="retention_keep_table" type="boolean">
+  When false, physically drops old partitions. When true, only detaches them from the parent table. Default is true.
+</ResponseField>
+
+<ResponseField name="infinite_time_partitions" type="boolean">
+  When true, ensures pg_partman continues creating future partitions indefinitely. Recommended to set to true for time-based partitioning.
+</ResponseField>
+
+## Consuming Events
+
+After capturing changes in your event table, you can stream these events using any of Sequin's standard consumption methods:
+
+- [Consume API](/consume/consume-api/overview)
+- [Webhooks](/how-sequin-works#webhook-subscriptions)
+- Sync API (coming soon)
+
+Create a Sequence for your event table to begin streaming the changes to your applications.
+
+## Event Examples
+
+Below are some examples of events that WAL Pipelines capture:
+
+### Insert Event
+
+`record` contains the `new` values for the row. `changes` is `null` for insert events:
+
+```
+action                | insert
+record_pk             | 9
+record                | {
+                      |   "id": 9,
+                      |   "name": "us-gov-west-1",
+                      |   "timezone": "pst",
+                      |   "updated_at": "2024-10-28T21:37:53",
+                      |   "inserted_at": "2024-10-28T21:37:53"
+                      | }
+changes               | 
+```
+
+### Update Event
+
+`record` contains the `new` values for the row. `changes` contains the `old` values that changed:
+
+```
+action                | update
+record_pk             | 9
+record                | {
+                      |   "id": 9,
+                      |   "name": "us-gov-west-1",
+                      |   "timezone": "mst",
+                      |   "updated_at": "2024-10-28T21:39:21",
+                      |   "inserted_at": "2024-10-28T21:37:53"
+                      | }
+changes               | {
+                      |   "timezone": "pst",
+                      |   "updated_at": "2024-10-28T21:37:53"
+                      | }
+```
+
+So, if you want the entire `new` row, just use `record`. If you want the entire `old` row, merge `changes` on top of `record`.
+
+### Delete Event
+
+`record` contains the `old` values for the row. `changes` is `null` for delete events:
+
+```
+action                | delete
+record_pk             | 9
+record                | {
+                      |   "id": 9,
+                      |   "name": "us-gov-west-1",
+                      |   "timezone": "mst",
+                      |   "updated_at": "2024-10-28T21:39:21",
+                      |   "inserted_at": "2024-10-28T21:37:53"
+                      | }
+changes               | 
+```

@@ -12,8 +12,8 @@ When you update a product description, you might want to update your search inde
   <img src="/images/use-cases/replicate/replicate.svg" alt="Replicate changes with Sequin" />
 </Frame>
 
-1. Sequin captures every row on your `products` table using a durable replication slot.
-2. It then delivers the changes to your search index.
+1. Sequin streams every row, as they change, from your `products` table.
+2. It then delivers the rows to your search index.
 3. With a simple HTTP interface, replays, and observability built in you can ensure the search index is always up to date.
 
 This is a common replication pattern. This guide shows you how to implement replication with Sequin.
@@ -23,31 +23,40 @@ This is a common replication pattern. This guide shows you how to implement repl
 <Steps titleSize="h3">
   <Step title="Connect your database to Sequin" icon="database">
     1. Login to your Sequin account and click the **Connect Database** button on the dashboard.
-    2. Paste the connection string for your database (or enter your connection credentials).
+    2.  Paste the connection string for your database (or enter your connection credentials).
     3. Create a replication slot and publication for Sequin using the SQL commands in the console.
-    4. Name your database and click **Connect Database** to finish.
+    4.  Name your database and click **Connect Database** to finish.
 
     <Check>
       Your database is now connected to Sequin. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
     </Check>
 
   </Step>
-  <Step title="Create a webhook subscription to capture row changes" icon="signal-stream">
-       Create a [webhook subscription](/how-sequin-works#webhooks) that captures every [row](/how-sequin-works#rows) in your `products` table:
+  <Step title="Create a Sequence" icon="list-ol">
+    Add a Sequence to your `products` table to stream rows to your search index:
 
-    1. Click the **Create Consumer** button and then select the `users` table.
-    2. Because you want to capture every row change you can leave the **Filter** field blank.
-    3. Select the **Rows** option and then choose **Push** for the consumer type.
-
-    <Note>
-      By configuring the consumer to capture **Rows** Sequin will send a message for every row change in the table. You can also replay and backfill the entire table to ensure your search index is up to date.
-    </Note>
-
-    4. Enter the the HTTP endpoint where Sequin will send the changes. Add any headers you need to authenticate the request.
-    5. Click **Create Consumer** to finish.
+    1. Navigate to the **Sequences** tab and click **Create Sequence**.
+    2. Select the `products` table connected to your WAL pipeline.
+    3. Select a column to use for ordering, like `updated_at`.
+    3. Click **Create Sequence**.
 
     <Check>
-      Your consumer is now created. If you'd like a step-by-step guide, check out our [Quickstart](/quickstart).
+      Sequin is now set up to stream changes from your `products` table.
+    </Check>
+  </Step>
+  <Step title="Create a Webhook Subscription" icon="webhook">
+    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `products` sequence to your search index (which you'll handle in the next step).
+
+    1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
+    2. Select the `products` sequence you just created.
+    3. Right now, you don't need to filter the messages you want to capture.
+    4. In the next section, have the consumer group start **At the beginning of the table** so you can backfill your search index.
+    5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for your application and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
+    6. Back in the Webhook Subscription window, click the refresh button and select the endpoint you just created. Add a specific path for your webhook (e.g. `/webhook/search-index`) if you need to.
+    7. Name your webhook subscription and click **Create webhook subscription**.
+
+    <Check>
+      You've set up a webhook subscription to deliver rows from your `products` sequence to your application's endpoint.
     </Check>
 
   </Step>
@@ -67,10 +76,10 @@ This is a common replication pattern. This guide shows you how to implement repl
       },
       "metadata": {
         "table_schema": "public",
-        "table_name": "house_atreides_members",
+        "table_name": "products",
         "consumer": {
           "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-          "name": "dune_characters_consumer"
+          "name": "search_index_consumer"
         }
       }
     }
@@ -110,9 +119,11 @@ This is a common replication pattern. This guide shows you how to implement repl
 
 ## Benefits
 
-Sequin captures every change in your `products` table via the WAL and then ensure that each change is processed to update your search index. Sequin handles the hard parts for you:
+Sequin captures and streams every row, as they change, from your `products` table. You then use a simple webhook interface to update your search index to ensure it's always up to date.
 
-* **Transactional guarantees**: Sequin ensures that every new order is processed by each service.
+Sequin handles the hard parts for you:
+
+* **Transactional guarantees**: Sequin ensures that every change to your products is captured and sent to your search index.
 * **Reliable retries**: Sequin will retry failed HTTP requests until they are acknowledged.
 * **No custom infrastructure**: You don't need to run any custom infrastructure to send emails.
 * **Backfill**: Sequin can replay the entire table to ensure your search index is up to date.
@@ -121,7 +132,16 @@ Sequin captures every change in your `products` table via the WAL and then ensur
 
 ## Next steps
 
-To add a fan out pattern to your application, you might want to:
+From here, you might want to:
 
-* Go through our [Quickstart](/quickstart) guide to connect your database to Sequin and create a consumer.
-* Learn more about [how Sequin works](/how-sequin-works).
+<CardGroup cols={1}>
+  <Card title="Learn more about how Sequin works" icon="book-open" href="/how-sequin-works">
+    See how Sequin works and how all the components fit together.
+  </Card>
+  <Card title="Go through our Quickstart" icon="gauge-max" href="/quickstart">
+    Get step-by-step instructions for connecting your database to Sequin and streaming changes to your application.
+  </Card>
+  <Card title="See why Sequin is a good fit for your application" icon="list-check" href="/compare">
+    See how Sequin compares to other tools you might use for this pattern.
+  </Card>
+</CardGroup>

@@ -59,7 +59,8 @@
         "how-sequin-works",
         "compare",
         "cli",
-        "self-hosting/docker-setup"
+        "self-hosting/docker-setup",
+        "terraform"
       ]
     },
     {

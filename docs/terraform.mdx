@@ -1,0 +1,232 @@
+---
+title: Terraform
+description: Deploy Sequin with Terraform for development and production
+icon: "network-wired"
+iconType: "solid"
+---
+
+This guide shows you how to use Terraform to manage your Sequin infrastructure across development and production environments. You'll learn how to set up a workflow that allows multiple developers to work with consistent infrastructure while supporting production stability.
+
+## Why use Infrastructure as Code with Sequin?
+
+Using Terraform to manage your Sequin infrastructure offers several key benefits:
+
+1. **Consistent Environments:** Every developer on your team works with identical Sequin configurations, eliminating "works on my machine" problems.
+2. **Development/Production Parity:** Your development environment closely mirrors production, helping catch issues early.
+3. **Version Control:** Track changes to your Sequin infrastructure alongside your application code.
+4. **Automated Setup:** New team members can spin up their development environment with a single command.
+5. **Documentation as Code:** Your Terraform configurations serve as living documentation of your Sequin setup.
+
+## Project Structure
+
+Based on [HashiCorp's recommended practices](https://www.hashicorp.com/blog/structuring-hashicorp-terraform-configuration-for-production), a project structure for managing Sequin with Terraform utilizes modules to promote reusability and isolate environments:
+
+```bash
+terraform/
+├── modules/
+│   ├── sequin-core/           # Core Sequin infrastructure
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── sequin-consumer/       # Reusable consumer configuration
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── sequin-sequence/       # Reusable sequence configuration
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+├── environments/
+    ├── dev/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── terraform.tfvars
+    ├── staging/
+    │   ├── main.tf
+    │   ├── variables.tf
+    │   └── terraform.tfvars
+    └── prod/
+        ├── main.tf
+        ├── variables.tf
+        └── terraform.tfvars
+```
+
+## Setting Up the Sequin Module
+
+## Module Organization
+
+Let's break down the Sequin configuration into focused, reusable modules:
+
+```
+# modules/sequin-core/variables.tf
+variable "environment" {
+  description = "Environment name (dev/prod)"
+  type        = string
+}
+
+variable "database_name" {
+  description = "Name of the database to connect to"
+  type        = string
+}
+
+variable "replication_slot" {
+  description = "Name of the replication slot"
+  type        = string
+  default     = "sequin_slot"
+}
+
+variable "publication_name" {
+  description = "Name of the publication"
+  type        = string
+  default     = "sequin_pub"
+}
+
+# modules/sequin-core/main.tf
+resource "sequin_database" "main" {
+  name              = "${var.database_name}-${var.environment}"
+  replication_slot  = var.replication_slot
+  publication_name  = var.publication_name
+}
+
+resource "sequin_sequence" "users" {
+  database_id = sequin_database.main.id
+  table_name  = "users"
+  sort_column = "updated_at"
+}
+
+resource "sequin_consumer" "user_changes" {
+  database_id = sequin_database.main.id
+  sequence_id = sequin_sequence.users.id
+  name        = "user-changes-${var.environment}"
+  
+  filters {
+    column    = "status"
+    operator  = "eq"
+    value     = "active"
+  }
+  
+  http_endpoint {
+    url     = "https://api.example.com/webhooks/users"
+    headers = {
+      "Authorization" = "Bearer ${var.webhook_token}"
+    }
+  }
+}
+```
+
+## Environment-Specific Configurations
+
+Create separate configurations for development and production:
+
+```
+# environments/dev/main.tf
+module "sequin" {
+  source = "../../modules/sequin"
+  
+  environment     = "dev"
+  database_name   = "myapp"
+  webhook_token   = var.webhook_token
+}
+
+# environments/dev/terraform.tfvars
+webhook_token = "dev-token"
+
+# environments/prod/main.tf
+module "sequin" {
+  source = "../../modules/sequin"
+  
+  environment     = "prod"
+  database_name   = "myapp"
+  webhook_token   = var.webhook_token
+}
+
+# environments/prod/terraform.tfvars
+webhook_token = "prod-token"
+```
+
+## Developer Workflow
+
+Here's how to set up a workflow for multiple developers:
+
+1. Backend Configuration: Use a shared backend to store Terraform state:
+
+```hcl
+# environments/dev/main.tf
+terraform {
+  backend "s3" {
+    bucket = "mycompany-terraform-state"
+    key    = "sequin/dev"
+    region = "us-west-2"
+  }
+}
+```
+
+2. Workspace Management: Use Terraform workspaces for developer-specific resources:
+
+```bash
+# Create a personal workspace
+terraform workspace new alice-dev
+
+# Switch to your workspace
+terraform workspace select alice-dev
+
+# Apply your changes
+terraform apply
+```
+
+3. Local Development Variables: Create a terraform.tfvars.local file (gitignored) for developer-specific values:
+
+```hcl
+# terraform.tfvars.local
+webhook_endpoint = "http://localhost:3000/webhook"
+```
+
+## CI/CD Integration
+
+Integrate Terraform with your CI/CD pipeline:
+
+```yaml
+# .github/workflows/terraform.yml
+name: Terraform
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        
+      - name: Terraform Init
+        run: terraform init
+        working-directory: terraform/environments/prod
+        
+      - name: Terraform Plan
+        run: terraform plan -out=changes.tfplan
+        working-directory: terraform/environments/prod
+        
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply "changes.tfplan"
+        working-directory: terraform/environments/prod
+```
+
+## Next Steps
+After setting up your Terraform configuration:
+
+1. Document your setup in your team's wiki or README
+2. Create onboarding documentation for new team members
+3. Set up monitoring and alerting for your Sequin infrastructure
+4. Implement a change management process for production changes
+5. Regular testing of your infrastructure code
+
+Remember to always test changes in development before applying them to production, and maintain a clear change management process for production modifications.
+

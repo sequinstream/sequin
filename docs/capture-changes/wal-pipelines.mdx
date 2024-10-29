@@ -140,7 +140,9 @@ The Sequin web console will provide you with the SQL commands you need to create
 
 You can configure retention policies for your event tables using extensions like `pg_cron` or `pg_partman`. This means old events will be automatically deleted from your event table.
 
-We generally recommend using `pg_cron` if your write volume isn't too high (less than 1M writes per day). `pg_cron` is easier to setup. Otherwise, `pg_partman` is a more scalable solution.
+We generally recommend using `pg_cron`, especially if you're just starting out. It's simple to setup and maintain and can handle high volume. We've benched a `pg_cron` retention solution on a 16 CPU/64GB machine at 100M writes/day (≈1K writes/sec) and it's worked just fine.
+
+For very high volumes, you might consider `pg_partman`.
 
 ### `pg_cron`
 

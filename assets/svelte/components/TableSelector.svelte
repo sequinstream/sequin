@@ -447,9 +447,9 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
             >pg_cron</code
           >
           or
-          <code>pg_partman</code> to do so. <code>pg_cron</code> is fine if your
-          change volume will rarely exceed 10 writes/sec or 1M writes/day. For
-          higher volumes, we recommend
+          <code>pg_partman</code> to do so. We've benched a <code>pg_cron</code>
+          solution on a 16 CPU/64GB machine at 100M writes/day (≈1K writes/sec) and
+          it's worked just fine. But for very high volumes, you might consider using
           <code>pg_partman</code>. You can change this in the future.
         </p>
         <RadioGroup.Root
@@ -466,7 +466,7 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
           </div>
           <div class="flex items-center space-x-2">
             <RadioGroup.Item value="pg_partman" id="pg_partman" />
-            <Label for="pg_partman">pg_partman (&gt;1M writes/day)</Label>
+            <Label for="pg_partman">pg_partman (&gt;10M writes/day)</Label>
           </div>
         </RadioGroup.Root>
       </div>

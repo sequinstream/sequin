@@ -132,6 +132,13 @@ defmodule Sequin.Databases do
     end
   end
 
+  def print_connection_url(id) do
+    with {:ok, db} <- get_db(id) do
+      url = PostgresDatabase.connection_url(db)
+      IO.puts("'#{url}'")
+    end
+  end
+
   # Sequences
 
   def get_sequence_for_account(account_id, sequence_id) do

@@ -174,6 +174,10 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   def with_local_tunnel(pd), do: pd
 
+  def connection_url(%PostgresDatabase{} = pd) do
+    "postgres://#{pd.username}:#{pd.password}@#{pd.hostname}:#{pd.port}/#{pd.database}"
+  end
+
   def to_postgrex_opts(%PostgresDatabase{} = pd) do
     opts =
       pd

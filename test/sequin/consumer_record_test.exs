@@ -248,6 +248,24 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
                :available
              ]
     end
+
+    test "inserts only one record when multiple records have the same unique constraint values" do
+      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+
+      attrs =
+        ConsumersFactory.consumer_record_attrs(
+          consumer_id: consumer.id,
+          table_oid: 1000,
+          record_pks: ["1", "2"]
+        )
+
+      duplicate_records = [attrs, attrs]
+
+      assert {:ok, 1} = Consumers.insert_consumer_records(duplicate_records)
+
+      inserted_records = Repo.all(ConsumerRecord)
+      assert length(inserted_records) == 1
+    end
   end
 
   describe "delete_consumer_records/1" do

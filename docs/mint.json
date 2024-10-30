@@ -72,8 +72,11 @@
             "consume/consume-api/receive",
             "consume/consume-api/ack",
             "consume/consume-api/nack"
-          ]
-        }
+          ],
+          "icon": "wifi"
+        },
+        "consume/webhooks",
+        "consume/sync-api"
       ]
     },
     {

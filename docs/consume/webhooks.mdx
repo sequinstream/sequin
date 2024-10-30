@@ -1,0 +1,102 @@
+---
+title: 'Webhook Subscriptions'
+description: "Exactly-once processing of rows from your database, delivered via webhook"
+icon: "webhook"
+iconType: "solid"
+---
+
+With Webhook Subscriptions, Sequin delivers each row from your [Sequence](/how-sequin-works#sequences) to any webhook endpoint, with exactly-once processing.
+
+Webhook Subscriptions are built on top of the same consumer group system as the [Consume API](/consume/consume-api/overview) and offers the following guarantees:
+
+- **One row per payload**: Each webhook payload contains one row.
+    ```json payload.json
+    {
+    "record": {
+        "id": 1,
+        "name": "Paul Atreides",
+        "title": "Duke of Arrakis",
+        "spice_allocation": 1000,
+        "is_kwisatz_haderach": true
+        },
+        "metadata": {
+            "table_schema": "public",
+            "table_name": "house_atreides_members",
+            "consumer": {
+                "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                "name": "dune_characters_consumer"
+            }
+        }
+    }
+    ```
+- **Exactly-once processing**: Rows are processed exactly-once per subscription. If your webhook returns a non-200 status code or fails to process the webhook within a configurable timeout, Sequin will retry the row (with an exponential backoff) until it is successfully processed.
+
+    <Frame>
+      <img src="/images/consume/webhooks/sequence-diagram.png" alt="Exactly-once processing" />
+    </Frame>
+
+
+- **Strict ordering**: Messages with the same [group](how-sequin-works#grouping) are delivered in order. No subsequent messages with the same group will be delivered until a previous message in the group is acknowledged.
+
+## Creating a Webhook Subscription
+
+You can create a Webhook Subscription in the web console by navigating to the **Webhook Subscriptions** tab and clicking **Create Webhook Subscription**:
+
+<Frame>
+  <img src="/images/consume/webhooks/webhook-tab.png" alt="Navigate to the Webhook Subscriptions tab" />
+</Frame>
+
+
+You'll then select the Sequence you'd like to subscribe to, and configure the following:
+
+### Records to process
+
+You can [filter](/how-sequin-works#filtering) the rows delivered to your webhook by adding a filter to any column in the underlying table. Any row that matches the filter will be delivered to your webhook.
+
+Additionally, you'll indicate where in the Sequence you'd like to start receiving rows:
+- **At the beginning**: Start from the oldest row in the Sequence.
+- **At the end**: Start from the newest row in the Sequence.
+- **At a specific position**: Start from a specific row in the Sequence.
+
+<Frame>
+  <img src="/images/consume/webhooks/records-to-process.png" alt="Configure the records to process" />
+</Frame>
+
+### Group
+
+By default, rows are delivered to your webhook in a strict order based on primary key.
+
+You can optionally group rows by any combination of columns in the underlying table. If you do, all rows with the same value in the group column will be delivered in order. For instance, if you group an orders table by `store_id` and `order_id`, all the rows for a given store and order id will be delivered in order.
+
+<Frame>
+  <img src="/images/consume/webhooks/grouping.png" alt="Configure the group" />
+</Frame>
+
+### Webhook subscription configuration
+
+Depending on your message volume and the performance of your webhook endpoint, you may want to configure the following settings:
+
+- **Request timeout**: This is the maximum amount of time the webhook subscription will wait for a response from your webhook endpoint. If your webhook endpoint does not respond within this time, Sequin will retry the row (with an exponential backoff).
+- **Max ack pending**: The maximum number of messages that can be pending acknowledgement (i.e. a 200 response has been received from your webhook endpoint). If this limit is reached, Sequin will pause delivery of new messages until some messages are acknowledged.
+
+<Frame>
+  <img src="/images/consume/webhooks/config.png" alt="Configure the webhook subscription" />
+</Frame>
+
+### HTTP endpoint
+
+The HTTP endpoint where the Webhook Subscription will deliver (i.e. `POST`) the rows.
+
+<Frame>
+  <img src="/images/consume/webhooks/http-endpoint.png" alt="Configure the HTTP endpoint" />
+</Frame>
+
+You'll provide the base URL of the endpoint and any headers that should be included in the request. Use the **Encrypted Headers** to store any sensitive information (like API keys).
+
+After you create the HTTP Endpoint, you can specify a path for each webhook subscription:
+
+<Frame>
+  <img src="/images/consume/webhooks/path.png" alt="Specify a path for the HTTP endpoint" />
+</Frame>
+
+

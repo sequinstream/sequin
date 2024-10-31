@@ -5,10 +5,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Test.Support.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
     setup do
@@ -251,7 +254,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       account = AccountsFactory.insert_account!()
       http_endpoint = ConsumersFactory.http_endpoint(account_id: account.id, id: UUID.uuid4())
 
-      database = DatabasesFactory.postgres_database(account_id: account.id)
+      database = DatabasesFactory.postgres_database(account_id: account.id, tables: :character_tables)
+      ConnectionCache.cache_connection(database, Repo)
       sequence = DatabasesFactory.sequence(postgres_database_id: database.id)
       replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
 
@@ -261,6 +265,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
           account_id: account.id,
           http_endpoint_id: http_endpoint.id,
           replication_slot_id: replication.id,
+          postgres_database: database,
+          postgres_database_id: database.id,
           sequence_id: sequence.id,
           message_kind: :record
         )
@@ -268,6 +274,55 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       :ok = Consumers.create_consumer_partition(consumer)
 
       {:ok, %{consumer: %{consumer | http_endpoint: http_endpoint, http_endpoint_id: http_endpoint.id}}}
+    end
+
+    test "messages are sent from postgres to http endpoint", %{consumer: consumer} do
+      test_pid = self()
+
+      # Mock the HTTP adapter
+      adapter = fn %Req.Request{} = req ->
+        send(test_pid, {:http_request, req})
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Start the pipeline
+      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
+      # Insert a detailed character record
+      character = CharacterFactory.insert_character_detailed!()
+
+      # Insert a consumer record referencing the character
+      consumer_record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          record_pks: [character.id],
+          table_oid: CharacterDetailed.table_oid()
+        )
+
+      # Wait for the message to be processed
+      assert_receive {:http_request, req}, 5_000
+
+      # Assert the request details
+      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
+      json = Jason.decode!(req.body)
+
+      # Assert the record data matches
+      assert json["record"]["id"] == character.id
+      assert json["record"]["name"] == character.name
+      assert json["record"]["age"] == character.age
+      assert json["record"]["height"] == character.height
+      assert json["record"]["is_hero"] == character.is_hero
+      assert json["record"]["biography"] == character.biography
+      assert json["record"]["avatar"] == Base.encode64(character.avatar)
+
+      # Assert metadata
+      assert json["metadata"]["table_name"] == "characters_detailed"
+      assert json["metadata"]["table_schema"] == "public"
+
+      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
+
+      # Verify that the consumer record has been processed (deleted on ack)
+      refute Consumers.reload(consumer_record)
     end
 
     @tag skip: true

@@ -645,6 +645,11 @@ defmodule Sequin.Postgres do
               Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
               nil
 
+            # Binary data types
+            col.type in ["bytea", "bit", "varbit"] and not is_nil(value) ->
+              Base.encode64(value)
+
+            # UUID handling
             col.type == "uuid" and not is_nil(value) ->
               Sequin.String.binary_to_string!(value)
 

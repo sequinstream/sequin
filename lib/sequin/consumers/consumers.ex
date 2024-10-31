@@ -682,7 +682,7 @@ defmodule Sequin.Consumers do
   end
 
   def receive_for_consumer(%{message_kind: :record} = consumer, opts) do
-    consumer = Repo.preload(consumer, :postgres_database)
+    consumer = Repo.lazy_preload(consumer, [:postgres_database])
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()

@@ -24,6 +24,16 @@ defmodule Sequin.Factory.DatabasesFactory do
         end
       end)
 
+    tables =
+      if tables == :character_tables do
+        :character_tables
+        |> :ets.lookup(:tables)
+        |> List.first()
+        |> elem(1)
+      else
+        tables
+      end
+
     {tables_refreshed_at, attrs} =
       Map.pop_lazy(attrs, :tables_refreshed_at, fn -> unless tables == [], do: Factory.timestamp() end)
 

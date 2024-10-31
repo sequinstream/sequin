@@ -432,10 +432,7 @@ defmodule Sequin.Databases do
   end
 
   defp update_tables(conn, %PostgresDatabase{} = db) do
-    with {:ok, schemas} <- list_schemas(conn),
-         {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
-      tables = Postgres.tables_to_map(tables)
-
+    with {:ok, tables} <- list_tables(conn) do
       res =
         db
         |> PostgresDatabase.changeset(%{tables: tables, tables_refreshed_at: DateTime.utc_now()})
@@ -457,6 +454,13 @@ defmodule Sequin.Databases do
     case update_tables(db) do
       {:ok, db} -> db
       {:error, error} -> raise error
+    end
+  end
+
+  def list_tables(conn) do
+    with {:ok, schemas} <- list_schemas(conn),
+         {:ok, tables} <- Postgres.fetch_tables_with_columns(conn, schemas) do
+      {:ok, Postgres.tables_to_map(tables)}
     end
   end
 

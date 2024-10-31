@@ -519,14 +519,17 @@ defmodule Sequin.Consumers do
     now = DateTime.utc_now()
 
     records =
-      Enum.map(consumer_records, fn record ->
+      consumer_records
+      |> Enum.map(fn record ->
         record
         |> Map.put(:inserted_at, now)
         |> Map.put(:updated_at, now)
         |> ConsumerRecord.from_map()
-        # insert_all expects a plain outer-map, but struct embeds
-        |> Sequin.Map.from_ecto()
       end)
+      |> Enum.sort_by(& &1.commit_lsn, :desc)
+      |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
+      # insert_all expects a plain outer-map, but struct embeds
+      |> Enum.map(&Sequin.Map.from_ecto/1)
 
     conflict_target = [:consumer_id, :record_pks, :table_oid]
 
@@ -679,7 +682,7 @@ defmodule Sequin.Consumers do
   end
 
   def receive_for_consumer(%{message_kind: :record} = consumer, opts) do
-    consumer = Repo.preload(consumer, :postgres_database)
+    consumer = Repo.lazy_preload(consumer, [:postgres_database])
     batch_size = Keyword.get(opts, :batch_size, 100)
     not_visible_until = DateTime.add(DateTime.utc_now(), consumer.ack_wait_ms, :millisecond)
     now = NaiveDateTime.utc_now()

@@ -7,7 +7,7 @@ description: 'Consume rows from your Sequence using a Webhook Subscription'
 With Sequin's **Webhook Subscriptions**, you can receive rows from your Sequences as HTTP POST requests to your endpoints. Webhook Subscriptions offer exactly-once processing and automatic retries and backoffs if your endpoint is unavailable.
 
 <Info>
-This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
+This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.groceries` table from that guide.
 </Info>
 
 <Steps titleSize="h2">
@@ -16,13 +16,13 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     1. Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-    2. The Sequence you created for the `public.regions` table should already be selected:
+    2. The Sequence you created for the `public.groceries` table should already be selected:
 
         <Frame>
           <img src="/images/quickstart/setup-consumer-source.png" alt="Select webhook source" />
         </Frame>
 
-    3. Click "Add filter" and add a filter to only capture rows where the `timezone` is `pst`:
+    3. Click"Add filter" to only capture rows where `checked` is `false` and the `section` is `produce`:
 
         <Frame>
           <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
@@ -45,7 +45,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
         This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for testing purposes.
 
-    6. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `pst_regions`) and click **Create Webhook Subscription**.
+    6. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `produce_groceries`) and click **Create Webhook Subscription**.
 
         <Check>
           Sequin will now send rows that match your filter to your endpoint.
@@ -78,17 +78,17 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         </Check>
   </Step>
   <Step title="Insert and update rows" icon="play">
-    To learn how Sequin works, perform some `insert` and `update` operations on the `public.regions` table:
+    To learn how Sequin works, perform some `insert` and `update` operations on the `public.groceries` table:
 
     1. Open a terminal and connect to the `sequin_playground` database:
 
         ```bash
         psql 'postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmode=disable'
         ```
-    2. Create a new region in the `public.regions` table:
+    2. Add a new produce item to your grocery list:
 
         ```bash
-        INSERT INTO public.regions (name, timezone) VALUES ('us-gov-west-1', 'pst');
+        INSERT INTO public.groceries (name, section, checked) VALUES ('Avocado', 'produce', false);
         ```
 
         This row matches the filter of your Webhook Subscription, so it will be delivered to your endpoint. You can verify this by checking the **Messages** tab in the Sequin web console:
@@ -97,18 +97,10 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
           <img src="/images/quickstart/new-message-after-insert.png" alt="Messages tab" />
         </Frame>
 
-    3. Update an existing region:
+    3. Mark the Avocado as checked:
 
         ```bash
-        UPDATE public.regions SET timezone = 'pst' WHERE id = 1;
-        ```
-
-        Again, this row also matches the filter of your webhook subscription, so it will be delivered to your endpoint.
-
-    4. Finally, create a new region that doesn't match the filter:
-
-        ```bash
-        INSERT INTO public.regions (name, timezone) VALUES ('ca-west-1', 'mst');
+        UPDATE public.groceries SET checked = true WHERE name = 'Avocado';
         ```
 
         This row doesn't match the filter of your Webhook Subscription, so it won't be delivered to your endpoint. You can verify this by navigating to the **Databases** tab, selecting the `playground` database, and then clicking on the **Messages** tab:

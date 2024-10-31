@@ -7,7 +7,7 @@ description: 'Consume rows from your Sequence using the Consume API'
 With Sequin's **Consume API**, you can pull rows from your Sequences using HTTP endpoints. You'll create a **Consume API Endpoint** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
 
 <Info>
-This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
+This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.groceries` table from that guide.
 </Info>
 
 <Steps titleSize="h2">
@@ -16,13 +16,13 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     1. Navigate to the **Consume API** tab and click the **Create API Endpoint** button.
 
-    2. The Sequence you created for the `public.regions` table should already be selected:
+    2. The Sequence you created for the `public.groceries` table should already be selected:
 
         <Frame>
           <img src="/images/quickstart/setup-consumer-source.png" alt="Select consumer source" />
         </Frame>
 
-    3. Click "Add filter" and add a filter to only capture rows where the `timezone` is `pst`:
+    3. Click"Add filter" to only capture rows where `checked` is `false` and the `section` is `produce`:
 
         <Frame>
           <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
@@ -36,7 +36,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     4. Jump ahead to the **Consumer endpoint name** section (you can use the defaults for message grouping and consumer configuration).
 
-    5. Give your Consume API Endpoint a name (i.e. `pst_regions`) and click **Create Consume API Endpoint**.
+    5. Give your Consume API Endpoint a name (i.e. `produce_groceries`) and click **Create Consume API Endpoint**.
 
         <Check>
           Sequin will now make rows that match your filter available via the Consume API.
@@ -53,7 +53,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
     1. Copy the "Receive messages" curl command from the **Overview** tab. It looks like this:
 
         ```bash
-        curl -X GET 'https://api.sequinstream.com/api/http_pull_consumers/pst_regions/receive?batch_size=10' \
+        curl -X GET 'https://api.sequinstream.com/api/http_pull_consumers/produce_groceries/receive?batch_size=10' \
           -H "Authorization: Bearer YOUR_API_TOKEN"
         ```
 
@@ -85,7 +85,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
     5. Now, acknowledge the message using the `/ack` endpoint. Copy the "Acknowledge messages" command from your dashboard and replace the `<ack_id>` placeholder with the `ack_id` from the message you received:
 
         ```bash
-        curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/pst_regions/ack' \
+        curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/produce_groceries/ack' \
           -H "Authorization: Bearer YOUR_API_TOKEN" \
           -H "Content-Type: application/json" \
           -d '{
@@ -97,7 +97,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
         <Frame>
           <img src="/images/quickstart/consume-api-one-message-processed.png" alt="Sequin console, displaying one message processed" />
-        </Frame> 
+        </Frame>
 
         <Check>
         You've successfully received and acknowledged a message.
@@ -105,7 +105,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
   </Step>
 
   <Step title="Insert and update rows" icon="play">
-    To learn how Sequin works, run a couple of `insert` and `update` operations on the `public.regions` table:
+    To learn how Sequin works, run a couple of `insert` and `update` operations on the `public.groceries` table:
 
     1. Open a terminal and connect to the `sequin_playground` database:
 
@@ -113,10 +113,10 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         psql 'postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmode=disable'
         ```
 
-    2. Create a new region in the `public.regions` table:
+    2. Add a new produce item to your grocery list:
 
-        ```sql
-        insert into public.regions (name, timezone) values ('us-west-2', 'pst');
+        ```bash
+        INSERT INTO public.groceries (name, section, checked) VALUES ('Grapes', 'produce', false);
         ```
 
     3. Make another request to the `/receive` endpoint. This time, add a query parameter to the end of your request, `?batch_size=100`. You should see the new row in the response:
@@ -138,10 +138,10 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         }
         ```
 
-    4. Finally, create a new region that doesn't match the filter:
+    4. Mark the Grapes as checked:
 
-        ```sql
-        insert into public.regions (name, timezone) values ('eu-west-1', 'cet');
+        ```bash
+        UPDATE public.groceries SET checked = true WHERE name = 'Grapes';
         ```
 
     5. Make another request to `/receive`. You won't see this row since it doesn't match your filter.

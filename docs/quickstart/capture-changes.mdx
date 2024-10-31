@@ -7,7 +7,7 @@ description: 'Capture every change to your tables using WAL Pipelines'
 Sequin streams the latest versions of rows from your tables. But sometimes you want to capture every discrete change to your tables, not just the latest state of each row. With [**WAL Pipelines**](/capture-changes/wal-pipelines), Sequin can capture inserts, updates, and deletes as they happen, storing them in an event log table in your database. You can then stream these events to your applications using Sequin's existing consumption methods.
 
 <Info>
-This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
+This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.groceries` table from that guide.
 </Info>
 
 <Steps titleSize="h2">
@@ -16,7 +16,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     1. Navigate to the **WAL Pipelines** tab and click the **Create WAL Pipeline** button.
 
-    2. Under "Source configuration", the `public.regions` table should be selected already:
+    2. Under "Source configuration", the `public.groceries` table should be selected already:
 
         <Frame>
           <img src="/images/quickstart/wal-pipeline-source-config.png" alt="Select WAL Pipeline source" />
@@ -47,14 +47,14 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
     7. After creating your event table, click "Done" to close the modal. Your new table should now appear in the destination list. Select it:
 
         <Frame>
-          <img style={{maxWidth: "500px"}} 
+          <img style={{maxWidth: "500px"}}
           src="/images/quickstart/wal-pipeline-destination-config.png" alt="Select destination table" />
         </Frame>
 
-    8. Give your WAL Pipeline a name (i.e. `region_to_sequin_events`) and click **Create WAL Pipeline**.
+    8. Give your WAL Pipeline a name (i.e. `groceries_to_sequin_events`) and click **Create WAL Pipeline**.
 
     <Check>
-    Sequin will now capture every change to the `regions` table and write it to your event log.
+    Sequin will now capture every change to the `groceries` table and write it to your event log.
     </Check>
   </Step>
 
@@ -69,19 +69,18 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     2. Turn on "extended display" mode by typing `\x` and pressing `Enter`.
 
-    3. Insert a new region:
+    3. Insert a new produce item:
 
-        ```sql
-        insert into public.regions (name, timezone) 
-        values ('us-gov-west-1', 'pst');
+        ```bash
+        INSERT INTO public.groceries (name, section, checked) VALUES ('Kale', 'produce', false);
         ```
 
     3. Query your event log table to see the insert:
 
         ```sql
-        select action, record_pk, record, changes 
-        from sequin_events 
-        order by id desc 
+        select action, record_pk, record, changes
+        from sequin_events
+        order by id desc
         limit 1;
         ```
 
@@ -90,24 +89,22 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         ```json
         action    | insert
         record_pk | 9
-        record    | {"id": 9, "name": "us-gov-west-1", "timezone": "pst", "updated_at": "2024-10-28T21:37:53", "inserted_at": "2024-10-28T21:37:53"}
+        record    | {"id": 9, "name": "Kale", "section": "produce", "checked": false, "updated_at": "2024-10-28T21:37:53", "inserted_at": "2024-10-28T21:37:53"}
         changes   |
         ```
 
-    4. Update the region:
+    4. Mark the Kale as checked:
 
-        ```sql
-        update public.regions 
-        set timezone = 'mst' 
-        where name = 'us-gov-west-1';
+        ```bash
+        UPDATE public.groceries SET checked = true WHERE name = 'Grapes';
         ```
 
     5. Query your event log again:
 
         ```sql
-        select action, record_pk, record, changes 
-        from sequin_events 
-        order by id desc 
+        select action, record_pk, record, changes
+        from sequin_events
+        order by id desc
         limit 1;
         ```
 
@@ -116,23 +113,22 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         ```json
         action    | update
         record_pk | 9
-        record    | {"id": 9, "name": "us-gov-west-1", "timezone": "mst", "updated_at": "2024-10-28T21:39:21", "inserted_at": "2024-10-28T21:37:53"}
-        changes   | {"timezone": "pst", "updated_at": "2024-10-28T21:37:53"}
+        record    | {"id": 9, "name": "Kale", "section": "produce", "checked": true, "updated_at": "2024-10-28T21:39:21", "inserted_at": "2024-10-28T21:37:53"}
+        changes   | {"checked": "true", "updated_at": "2024-10-28T21:37:53"}
         ```
 
     6. Finally, delete the region:
 
-        ```sql
-        delete from public.regions 
-        where name = 'us-gov-west-1';
+        ```bash
+        DELETE FROM public.groceries WHERE name = 'Kale';
         ```
 
     7. Query your event log one more time to see the delete event:
 
         ```sql
-        select action, record_pk, record, changes 
-        from sequin_events 
-        order by id desc 
+        select action, record_pk, record, changes
+        from sequin_events
+        order by id desc
         limit 1;
         ```
 
@@ -141,7 +137,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         ```json
         action    | delete
         record_pk | 9
-        record    | {"id": 9, "name": "us-gov-west-1", "timezone": "mst", "updated_at": "2024-10-28T21:39:21", "inserted_at": "2024-10-28T21:37:53"}
+        record    | {"id": 9, "name": "Kale", "section": "produce", "checked": true, "updated_at": "2024-10-28T21:39:21", "inserted_at": "2024-10-28T21:37:53"}
         changes   |
         ```
 

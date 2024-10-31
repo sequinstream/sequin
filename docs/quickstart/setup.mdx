@@ -53,7 +53,7 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
     </Check>
   </Step>
   <Step title="Connect the playground database" icon="database">
-    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it:
+    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.groceries` table. Let's connect to it:
 
     1. In the Sequin web console, click **Connect Database**.
     2. Click the **Autofill with Connection String** button and paste in the connection string for the `sequin_playground` database:
@@ -85,12 +85,12 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
 
   </Step>
   <Step title="Create a Sequence" icon="list">
-    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table:
+    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.groceries` table:
 
     1. Navigate to the **Sequences** tab and click the **Create Sequence** button.
 
-    2. The `public.regions` table should already be selected by default.
-    
+    2. The `public.groceries` table should already be selected by default.
+
     3. Select the column Sequin should use to order changes. In this case select the `updated_at` column:
 
         <Frame>
@@ -99,13 +99,13 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
 
     4. Click **Create Sequence**.
 
-   
+
   </Step>
 </Steps>
 
 ## Ready to stream
 
-You are running Sequin, connected to a playground database, and have a Sequence setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consume API:
+You are running Sequin, connected to a playground database, and have a Sequence setup for the `groceries` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consume API:
 
 <CardGroup cols={1}>
   <Card title="Quickstart continued: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">

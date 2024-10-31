@@ -74,27 +74,26 @@ defmodule Sequin.Tracer.Server do
   end
 
   def handle_cast({:replicated, %PostgresDatabase{} = db, %Message{} = message}, state) do
-    Logger.info("Replicated message: #{inspect(message)}")
+    message = State.erase_fields(message)
+
     {:noreply, State.message_replicated(state, db, message)}
   end
 
   def handle_cast({:filtered, consumer, %Message{} = message}, state) do
-    Logger.info("Filtered message: #{inspect(message)}")
+    message = State.erase_fields(message)
+
     {:noreply, State.message_filtered(state, consumer.id, message)}
   end
 
   def handle_cast({:ingested, consumer, event_or_records}, state) do
-    Logger.info("Ingested messages: #{inspect(event_or_records)}")
     {:noreply, State.messages_ingested(state, consumer.id, event_or_records)}
   end
 
   def handle_cast({:received, consumer, event_or_records}, state) do
-    Logger.info("Received messages: #{inspect(event_or_records)}")
     {:noreply, State.messages_received(state, consumer.id, event_or_records)}
   end
 
   def handle_cast({:acked, consumer, ack_ids}, state) do
-    Logger.info("Acked messages: #{inspect(ack_ids)}")
     {:noreply, State.messages_acked(state, consumer.id, ack_ids)}
   end
 

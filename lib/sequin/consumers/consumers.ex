@@ -1486,7 +1486,8 @@ defmodule Sequin.Consumers do
   defp column_filters_match_record?(column_filters, record_attnums_to_values) do
     Enum.all?(column_filters, fn filter ->
       field_value = Map.get(record_attnums_to_values, filter.column_attnum)
-      field_value && apply_filter(filter.operator, get_field_value(field_value, filter.jsonb_path), filter.value)
+
+      apply_filter(filter.operator, get_field_value(field_value, filter.jsonb_path), filter.value)
     end)
   end
 

@@ -81,7 +81,7 @@ defmodule Sequin.Replication.MessageHandler do
     res =
       Repo.transact(fn ->
         with {:ok, count} <- insert_or_delete_consumer_messages(messages),
-             {:ok, wal_event_count} <- Replication.insert_wal_events(wal_events) do
+             {:ok, wal_event_count} <- insert_wal_events(wal_events) do
           # Update Consumer Health
           consumers
           |> Enum.uniq_by(& &1.id)
@@ -238,6 +238,17 @@ defmodule Sequin.Replication.MessageHandler do
          {:ok, delete_count} <- Consumers.delete_consumer_records(record_deletes) do
       {:ok, event_count + record_count + delete_count}
     end
+  end
+
+  defp insert_wal_events(wal_events) do
+    wal_events
+    |> Enum.chunk_every(1000)
+    |> Enum.reduce_while({:ok, 0}, fn batch, {:ok, acc} ->
+      case Replication.insert_wal_events(batch) do
+        {:ok, count} -> {:cont, {:ok, acc + count}}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   defp wal_event(pipeline, message) do

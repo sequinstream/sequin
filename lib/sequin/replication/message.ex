@@ -25,6 +25,7 @@ defmodule Sequin.Replication.Message do
     field :action, :insert | :update | :delete
     field :columns, list(map())
     field :commit_timestamp, DateTime.t()
+    field :commit_seq, integer()
     field :errors, any()
     field :ids, list()
     field :table_schema, String.t()

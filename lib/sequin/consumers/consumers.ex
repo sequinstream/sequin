@@ -2,7 +2,6 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
-  alias Ecto.Type
   alias Sequin.Accounts
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
@@ -811,7 +810,7 @@ defmodule Sequin.Consumers do
       |> Enum.map(fn record ->
         record.record_pks
         |> Enum.zip(pk_types)
-        |> Enum.map(fn {value, type} -> cast_value(value, type) end)
+        |> Enum.map(fn {value, type} -> Postgres.cast_value(value, type) end)
       end)
       |> List.flatten()
 
@@ -904,24 +903,6 @@ defmodule Sequin.Consumers do
     end
 
     {:ok, valid_records}
-  end
-
-  # Helper function to cast values using Ecto's type system
-  defp cast_value(value, "uuid"), do: Sequin.String.string_to_binary!(value)
-
-  defp cast_value(value, pg_type) do
-    ecto_type = Postgres.pg_type_to_ecto_type(pg_type)
-
-    case Type.cast(ecto_type, value) do
-      {:ok, casted_value} ->
-        casted_value
-
-      :error ->
-        Logger.warning("Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}")
-
-        # Return original value if casting fails
-        value
-    end
   end
 
   @spec ack_messages(consumer(), [integer()]) :: :ok

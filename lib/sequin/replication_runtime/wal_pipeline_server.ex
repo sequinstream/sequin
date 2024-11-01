@@ -4,11 +4,15 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabase.Table
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Postgres
   alias Sequin.Replication
+  alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
+  alias Sequin.Repo
 
   require Logger
 
@@ -82,7 +86,12 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
     replication_slot_id = Keyword.fetch!(opts, :replication_slot_id)
 
     wal_pipeline_ids = Keyword.fetch!(opts, :wal_pipeline_ids)
-    wal_pipelines = Enum.map(wal_pipeline_ids, &Replication.get_wal_pipeline!(&1))
+
+    wal_pipelines =
+      wal_pipeline_ids
+      |> Enum.map(&Replication.get_wal_pipeline!(&1))
+      |> Repo.preload(:source_database)
+
     database = Databases.get_db!(destination_database_id)
     {:ok, tables} = Databases.tables(database)
     table = Sequin.Enum.find!(tables, &(&1.oid == destination_oid))
@@ -136,7 +145,10 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
         Sequin.TaskSupervisor,
         fn ->
           maybe_setup_allowances(state.test_pid)
-          Replication.list_wal_events(wal_pipeline_ids, limit: state.batch_size, order_by: [asc: :commit_lsn])
+
+          wal_pipeline_ids
+          |> Replication.list_wal_events(limit: state.batch_size, order_by: [asc: :commit_lsn])
+          |> load_unchanged_toasts(state)
         end,
         timeout: 60_000
       )
@@ -450,5 +462,172 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  defp load_unchanged_toasts(wal_events, %State{} = state) do
+    events_with_toast = Enum.filter(wal_events, &has_unchanged_toast?/1)
+
+    case events_with_toast do
+      [] ->
+        wal_events
+
+      events ->
+        loaded_toasts = fetch_all_toast_values(events, state)
+        replace_toast_values(wal_events, loaded_toasts)
+    end
+  end
+
+  defp fetch_all_toast_values(events, state) do
+    events
+    |> Enum.group_by(&{&1.wal_pipeline_id, &1.source_table_oid})
+    |> Enum.map(&fetch_toast_values_for_table(&1, state))
+    |> Enum.reduce(%{}, &Map.merge/2)
+  end
+
+  defp fetch_toast_values_for_table({{pipeline_id, table_oid}, events}, state) do
+    source_database = get_source_database(state.wal_pipelines, pipeline_id)
+    table = get_table(source_database, table_oid)
+    pk_names = get_primary_key_names(table)
+
+    events
+    |> fetch_toast_values(table, source_database)
+    |> build_toast_values_map(table.oid, pk_names)
+  end
+
+  defp get_source_database(pipelines, pipeline_id) do
+    pipelines
+    |> Enum.find(&(&1.id == pipeline_id))
+    |> Map.fetch!(:source_database)
+  end
+
+  defp get_table(source_database, table_oid) do
+    source_database
+    |> Map.fetch!(:tables)
+    |> Enum.find(&(&1.oid == table_oid))
+  end
+
+  defp get_primary_key_names(table) do
+    table.columns
+    |> Enum.filter(& &1.is_pk?)
+    |> Enum.map(& &1.name)
+  end
+
+  defp build_toast_values_map(toast_values, table_oid, pk_names) do
+    Map.new(toast_values, fn toast_value ->
+      pk_values =
+        pk_names
+        |> Enum.map(&Map.get(toast_value, &1))
+        |> Enum.map(&to_string/1)
+
+      {{table_oid, pk_values}, toast_value}
+    end)
+  end
+
+  defp replace_toast_values(wal_events, loaded_toasts) do
+    Enum.map(wal_events, fn event ->
+      if has_unchanged_toast?(event) do
+        update_toast_values(event, loaded_toasts)
+      else
+        event
+      end
+    end)
+  end
+
+  defp has_unchanged_toast?(%WalEvent{record: record}) when is_map(record) do
+    Enum.any?(record, fn {_key, value} -> value == "unchanged_toast" end)
+  end
+
+  defp fetch_toast_values(events, %Table{} = table, %PostgresDatabase{} = source_database) do
+    table_name = Postgres.quote_name(table.schema, table.name)
+    pk_columns = get_sorted_pk_columns(table)
+
+    query = build_toast_query(table_name, events, table)
+    casted_pks = cast_primary_keys(events, pk_columns)
+
+    case execute_toast_query(source_database, query, casted_pks) do
+      {:ok, result} ->
+        process_toast_results(result, table.columns)
+
+      {:error, error} ->
+        Logger.error("[WalPipelineServer] Failed to fetch TOAST values: #{inspect(error)}")
+        raise error
+    end
+  end
+
+  defp get_sorted_pk_columns(table) do
+    table.columns
+    |> Enum.filter(& &1.is_pk?)
+    |> Enum.sort_by(& &1.attnum)
+  end
+
+  defp build_toast_query(table_name, events, table) do
+    pk_conditions = build_pk_conditions(events, table)
+
+    """
+    SELECT *
+    FROM #{table_name}
+    WHERE #{pk_conditions}
+    """
+  end
+
+  defp cast_primary_keys(events, pk_columns) do
+    Enum.flat_map(events, fn %WalEvent{record_pks: pks} ->
+      pks
+      |> Enum.zip(pk_columns)
+      |> Enum.map(fn {pk, col} -> Postgres.cast_value(pk, col.type) end)
+    end)
+  end
+
+  defp execute_toast_query(source_database, query, casted_pks) do
+    Postgres.query(source_database, query, casted_pks)
+  end
+
+  defp process_toast_results(%Postgrex.Result{} = result, columns) do
+    column_types = build_column_type_map(columns)
+
+    result
+    |> Postgres.result_to_maps()
+    |> Enum.map(&process_row(&1, column_types))
+  end
+
+  defp build_column_type_map(columns) do
+    Map.new(columns, fn col -> {col.name, col.type} end)
+  end
+
+  defp process_row(row, column_types) do
+    Map.new(row, fn {col_name, value} ->
+      {col_name, cast_column_value(value, Map.fetch!(column_types, col_name))}
+    end)
+  end
+
+  defp cast_column_value(value, "uuid"), do: Sequin.String.binary_to_string!(value)
+  defp cast_column_value(value, _), do: value
+
+  defp build_pk_conditions(events, %Table{} = table) do
+    pk_columns = Enum.filter(table.columns, & &1.is_pk?)
+
+    events
+    |> Enum.map_join(" OR ", fn _event ->
+      pk_columns
+      |> Enum.map_join(" AND ", &"#{&1.name} = ?")
+      |> then(&"(#{&1})")
+    end)
+    |> Postgres.parameterize_sql()
+  end
+
+  defp update_toast_values(event, toast_values) do
+    case Map.get(toast_values, {event.source_table_oid, event.record_pks}) do
+      nil ->
+        event
+
+      values ->
+        updated_record =
+          Map.new(event.record, fn
+            {key, "unchanged_toast"} -> {key, Map.fetch!(values, key)}
+            entry -> entry
+          end)
+
+        %{event | record: updated_record}
+    end
   end
 end

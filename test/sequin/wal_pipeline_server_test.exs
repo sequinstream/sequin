@@ -4,18 +4,25 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
   alias Sequin.ReplicationRuntime.WalPipelineServer
+  alias Sequin.Test.Support.Models.Character
+  alias Sequin.Test.Support.Models.CharacterMultiPK
   alias Sequin.Test.Support.Models.TestEventLog
 
   setup do
     account = AccountsFactory.insert_account!()
-    source_database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-    destination_database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: [])
+    source_database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
+
+    ConnectionCache.cache_connection(source_database, Sequin.Repo)
+
+    destination_database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id)
 
     replication_slot =
       ReplicationFactory.insert_postgres_replication!(
@@ -33,6 +40,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
 
     {:ok,
      %{
+       source_database: source_database,
        destination_database: destination_database,
        replication_slot: replication_slot,
        wal_pipeline: wal_pipeline
@@ -174,6 +182,135 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServerTest do
 
       # Verify that the WAL event was deleted after processing
       assert Replication.list_wal_events(wal_pipeline.id) == []
+    end
+  end
+
+  describe "TOAST handling" do
+    test "loads unchanged toast values when processing WAL events", %{
+      wal_pipeline: wal_pipeline
+    } do
+      character = CharacterFactory.insert_character!(planet: "Tatooine")
+
+      # Insert a WAL event with an unchanged toast value
+      ReplicationFactory.insert_wal_event!(
+        wal_pipeline_id: wal_pipeline.id,
+        record: %{
+          "id" => character.id,
+          "planet" => :unchanged_toast
+        },
+        source_table_schema: "public",
+        source_table_name: "characters",
+        source_table_oid: Character.table_oid(),
+        record_pks: [to_string(character.id)]
+      )
+
+      start_supervised!(
+        {WalPipelineServer,
+         [
+           replication_slot_id: wal_pipeline.replication_slot_id,
+           destination_oid: wal_pipeline.destination_oid,
+           destination_database_id: wal_pipeline.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline.id],
+           test_pid: self()
+         ]}
+      )
+
+      # Wait for the WalPipelineServer to process events
+      assert_receive {WalPipelineServer, :wrote_events, 1}, 1000
+
+      # Verify that the TOAST value was loaded correctly
+      [log] = Repo.all(TestEventLog)
+
+      assert log.record["planet"] == "Tatooine",
+             "Expected TOAST value to be loaded found #{inspect(log.record["description"])}"
+    end
+
+    test "handles multiple TOAST values in a single batch", %{
+      wal_pipeline: wal_pipeline
+    } do
+      character1 = CharacterFactory.insert_character!(planet: "Tatooine1")
+      character2 = CharacterFactory.insert_character!(planet: "Tatooine2")
+
+      # Insert WAL events with unchanged toast values
+      Enum.each(
+        [character1, character2],
+        fn character ->
+          ReplicationFactory.insert_wal_event!(
+            wal_pipeline_id: wal_pipeline.id,
+            record: %{
+              "id" => character.id,
+              "planet" => :unchanged_toast
+            },
+            source_table_schema: "public",
+            source_table_name: "characters",
+            source_table_oid: Character.table_oid(),
+            record_pks: [to_string(character.id)]
+          )
+        end
+      )
+
+      start_supervised!(
+        {WalPipelineServer,
+         [
+           replication_slot_id: wal_pipeline.replication_slot_id,
+           destination_oid: wal_pipeline.destination_oid,
+           destination_database_id: wal_pipeline.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline.id],
+           test_pid: self()
+         ]}
+      )
+
+      # Wait for the WalPipelineServer to process events
+      assert_receive {WalPipelineServer, :wrote_events, 2}, 1000
+
+      # Verify that both TOAST values were loaded correctly
+      logs = Repo.all(TestEventLog)
+      assert length(logs) == 2
+
+      [log1, log2] = Enum.sort_by(logs, & &1.record["id"])
+
+      assert log1.record["planet"] == "Tatooine1",
+             "Expected TOAST value to be loaded found #{inspect(log1.record["planet"])}"
+
+      assert log2.record["planet"] == "Tatooine2",
+             "Expected TOAST value to be loaded found #{inspect(log2.record["planet"])}"
+    end
+
+    test "handles TOAST values with multiple primary keys", %{
+      wal_pipeline: wal_pipeline
+    } do
+      character = CharacterFactory.insert_character_multi_pk!()
+      attrs = character |> Sequin.Map.from_ecto() |> Map.new(fn {k, v} -> {to_string(k), v} end)
+
+      # Insert WAL event with composite primary key
+      ReplicationFactory.insert_wal_event!(
+        wal_pipeline_id: wal_pipeline.id,
+        record: %{attrs | "name" => :unchanged_toast},
+        source_table_schema: "public",
+        source_table_name: "characters_multi_pk",
+        source_table_oid: CharacterMultiPK.table_oid(),
+        record_pks: [character.id_integer, character.id_string, character.id_uuid]
+      )
+
+      start_supervised!(
+        {WalPipelineServer,
+         [
+           replication_slot_id: wal_pipeline.replication_slot_id,
+           destination_oid: wal_pipeline.destination_oid,
+           destination_database_id: wal_pipeline.destination_database_id,
+           wal_pipeline_ids: [wal_pipeline.id],
+           test_pid: self()
+         ]}
+      )
+
+      # Wait for the WalPipelineServer to process events
+      assert_receive {WalPipelineServer, :wrote_events, 1}, 1000
+
+      # Verify that the TOAST value was loaded correctly
+      [log] = Repo.all(TestEventLog)
+
+      assert log.record["name"] == character.name,
+             "Expected TOAST value to be loaded found #{inspect(log.record["name"])}"
     end
   end
 end

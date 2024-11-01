@@ -54,7 +54,7 @@ defmodule Sequin.Extensions.Replication do
       field :test_pid, pid()
       field :connection, map()
       field :schemas, %{}, default: %{}
-      field :accumulated_messages, [Message.t()], default: []
+      field :accumulated_messages, {non_neg_integer(), [Message.t()]}, default: {0, []}
       field :connect_attempts, non_neg_integer(), default: 0
     end
   end
@@ -187,17 +187,16 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    next_state =
-      msg
-      |> Decoder.decode_message()
-      |> process_message(state)
+    msg = Decoder.decode_message(msg)
+    next_state = process_message(msg, state)
 
     Health.update(state.postgres_database, :replication_messages, :healthy)
 
-    if next_state.last_committed_lsn == state.last_committed_lsn do
-      {:noreply, next_state}
-    else
+    if is_struct(msg, Commit) do
+      next_state = flush_messages(next_state)
       {:noreply, ack_message(next_state.last_committed_lsn), next_state}
+    else
+      {:noreply, next_state}
     end
   rescue
     e ->
@@ -309,7 +308,10 @@ defmodule Sequin.Extensions.Replication do
     %{state | schemas: updated_schemas}
   end
 
-  defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{accumulated_messages: []} = state) do
+  defp process_message(
+         %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
+         %State{accumulated_messages: {0, []}} = state
+       ) do
     %{state | current_commit_ts: ts, current_commit_seq: 0, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
   end
 
@@ -326,24 +328,13 @@ defmodule Sequin.Extensions.Replication do
 
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
 
-    # Reverse the messages because we accumulate them with list prepending
-    messages = Enum.reverse(state.accumulated_messages)
-
-    # Flush accumulated messages
-    state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-
-    if state.test_pid do
-      send(state.test_pid, {__MODULE__, :flush_messages})
-    end
-
     %{
       state
       | last_committed_lsn: lsn,
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
-        current_commit_seq: 0,
-        accumulated_messages: []
+        current_commit_seq: 0
     }
   end
 
@@ -365,11 +356,7 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{
-      state
-      | accumulated_messages: [record | state.accumulated_messages],
-        current_commit_seq: state.current_commit_seq + 1
-    }
+    put_message(state, record)
   end
 
   defp process_message(%Update{} = msg, %State{} = state) do
@@ -396,11 +383,7 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{
-      state
-      | accumulated_messages: [record | state.accumulated_messages],
-        current_commit_seq: state.current_commit_seq + 1
-    }
+    put_message(state, record)
   end
 
   defp process_message(%Delete{} = msg, %State{} = state) do
@@ -428,16 +411,39 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{
-      state
-      | accumulated_messages: [record | state.accumulated_messages],
-        current_commit_seq: state.current_commit_seq + 1
-    }
+    put_message(state, record)
   end
 
   defp process_message(msg, state) do
     Logger.error("Unknown message: #{inspect(msg)}")
     state
+  end
+
+  defp flush_messages(%State{} = state) do
+    {_, messages} = state.accumulated_messages
+
+    # Reverse the messages because we accumulate them with list prepending
+    messages = Enum.reverse(messages)
+
+    # Flush accumulated messages
+    state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :flush_messages})
+    end
+
+    %{state | accumulated_messages: {0, []}}
+  end
+
+  defp put_message(%State{} = state, message) do
+    {acc_size, acc_messages} = state.accumulated_messages
+    new_size = acc_size + :erlang.external_size(message)
+
+    %{
+      state
+      | accumulated_messages: {new_size, [message | acc_messages]},
+        current_commit_seq: state.current_commit_seq + 1
+    }
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

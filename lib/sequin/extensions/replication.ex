@@ -40,6 +40,7 @@ defmodule Sequin.Extensions.Replication do
 
     typedstruct do
       field :current_commit_ts, nil | integer()
+      field :current_commit_seq, nil | integer()
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
       field :message_handler_ctx, any()
@@ -309,7 +310,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp process_message(%Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid}, %State{accumulated_messages: []} = state) do
-    %{state | current_commit_ts: ts, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
+    %{state | current_commit_ts: ts, current_commit_seq: 0, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
@@ -341,6 +342,7 @@ defmodule Sequin.Extensions.Replication do
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
+        current_commit_seq: 0,
         accumulated_messages: []
     }
   end
@@ -351,6 +353,7 @@ defmodule Sequin.Extensions.Replication do
     record = %Message{
       action: :insert,
       commit_timestamp: state.current_commit_ts,
+      commit_seq: state.current_commit_seq,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
@@ -362,7 +365,11 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{state | accumulated_messages: [record | state.accumulated_messages]}
+    %{
+      state
+      | accumulated_messages: [record | state.accumulated_messages],
+        current_commit_seq: state.current_commit_seq + 1
+    }
   end
 
   defp process_message(%Update{} = msg, %State{} = state) do
@@ -376,6 +383,7 @@ defmodule Sequin.Extensions.Replication do
     record = %Message{
       action: :update,
       commit_timestamp: state.current_commit_ts,
+      commit_seq: state.current_commit_seq,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
@@ -388,7 +396,11 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{state | accumulated_messages: [record | state.accumulated_messages]}
+    %{
+      state
+      | accumulated_messages: [record | state.accumulated_messages],
+        current_commit_seq: state.current_commit_seq + 1
+    }
   end
 
   defp process_message(%Delete{} = msg, %State{} = state) do
@@ -404,6 +416,7 @@ defmodule Sequin.Extensions.Replication do
     record = %Message{
       action: :delete,
       commit_timestamp: state.current_commit_ts,
+      commit_seq: state.current_commit_seq,
       errors: nil,
       ids: data_tuple_to_ids(columns, prev_tuple_data),
       table_schema: schema,
@@ -415,7 +428,11 @@ defmodule Sequin.Extensions.Replication do
 
     TracerServer.message_replicated(state.postgres_database, record)
 
-    %{state | accumulated_messages: [record | state.accumulated_messages]}
+    %{
+      state
+      | accumulated_messages: [record | state.accumulated_messages],
+        current_commit_seq: state.current_commit_seq + 1
+    }
   end
 
   defp process_message(msg, state) do

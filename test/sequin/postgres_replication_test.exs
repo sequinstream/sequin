@@ -584,12 +584,22 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert is_action(insert1, :insert)
       assert get_field_value(insert1.fields, "name") == "Paul Atreides"
+      assert insert1.commit_seq == 0
 
       assert is_action(insert2, :insert)
       assert get_field_value(insert2.fields, "name") == "Leto Atreides"
+      assert insert2.commit_seq == 1
 
       assert is_action(insert3, :insert)
       assert get_field_value(insert3.fields, "name") == "Chani"
+      assert insert3.commit_seq == 2
+
+      # Insert another character
+      CharacterFactory.insert_character!([name: "Duncan Idaho"], repo: UnboxedRepo)
+
+      assert_receive {:changes, [insert4]}, :timer.seconds(1)
+      # commit_seq resets
+      assert insert4.commit_seq == 0
     end
 
     @tag capture_log: true

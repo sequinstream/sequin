@@ -81,7 +81,15 @@ defmodule Sequin.Factory.DatabasesFactory do
   end
 
   def configured_postgres_database_attrs(attrs \\ []) do
-    attrs = Map.new(attrs)
+    attrs =
+      attrs
+      |> Map.new()
+      |> Map.put_new_lazy(:tables, fn ->
+        :character_tables
+        |> :ets.lookup(:tables)
+        |> List.first()
+        |> elem(1)
+      end)
 
     Repo.config()
     |> Map.new()

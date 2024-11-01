@@ -2,6 +2,7 @@ defmodule Sequin.Postgres do
   @moduledoc false
   import Ecto.Query, only: [from: 2]
 
+  alias Ecto.Type
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
@@ -211,6 +212,30 @@ defmodule Sequin.Postgres do
     Enum.map(rows, fn row ->
       columns |> Enum.zip(row) |> Map.new()
     end)
+  end
+
+  # Helper function to cast values using Ecto's type system
+  def cast_value(value, "uuid") do
+    if Sequin.String.is_uuid?(value) do
+      Sequin.String.string_to_binary!(value)
+    else
+      value
+    end
+  end
+
+  def cast_value(value, pg_type) do
+    ecto_type = pg_type_to_ecto_type(pg_type)
+
+    case Type.cast(ecto_type, value) do
+      {:ok, casted_value} ->
+        casted_value
+
+      :error ->
+        Logger.warning("Failed to cast value #{inspect(value)} (pg_type: #{pg_type}) to ecto_type: #{ecto_type}")
+
+        # Return original value if casting fails
+        value
+    end
   end
 
   def parameterized_tuple(count, offset \\ 0) do

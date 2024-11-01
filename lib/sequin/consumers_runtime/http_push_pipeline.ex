@@ -149,7 +149,12 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       {:ok, response} ->
         ensure_status(response)
 
-      {:error, %Mint.TransportError{reason: reason}} ->
+      {:error, %Mint.TransportError{reason: reason} = error} ->
+        Logger.error(
+          "[HttpPushPipeline] POST to webhook endpoint failed with Mint.TransportError: #{Exception.message(error)}",
+          error: error
+        )
+
         {:error,
          Error.service(
            service: :http_endpoint,
@@ -158,7 +163,12 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
            details: reason
          )}
 
-      {:error, %Req.TransportError{reason: reason}} ->
+      {:error, %Req.TransportError{reason: reason} = error} ->
+        Logger.error(
+          "[HttpPushPipeline] POST to webhook endpoint failed with Req.TransportError: #{Exception.message(error)}",
+          error: error
+        )
+
         {:error,
          Error.service(
            service: :http_endpoint,

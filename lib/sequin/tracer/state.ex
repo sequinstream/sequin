@@ -122,7 +122,6 @@ defmodule Sequin.Tracer.State do
   defp update_message_trace(%State{} = state, identifier, update_fn) do
     case find_message_trace_index(state, identifier) do
       nil ->
-        Logger.debug("Trace message not found for #{inspect(identifier)}")
         state
 
       index ->

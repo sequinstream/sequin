@@ -285,9 +285,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      # Start the pipeline
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
-
       # Insert a detailed character record
       character = CharacterFactory.insert_character_detailed!()
 
@@ -296,8 +293,12 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         ConsumersFactory.insert_consumer_record!(
           consumer_id: consumer.id,
           record_pks: [character.id],
-          table_oid: CharacterDetailed.table_oid()
+          table_oid: CharacterDetailed.table_oid(),
+          state: :available
         )
+
+      # Start the pipeline
+      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000

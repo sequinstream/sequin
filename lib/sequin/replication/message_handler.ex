@@ -197,7 +197,7 @@ defmodule Sequin.Replication.MessageHandler do
 
     old_map
     |> Enum.reduce(%{}, fn {k, v}, acc ->
-      if v == Map.get(new_map, k) do
+      if Map.get(new_map, k) in [:unchanged_toast, v] do
         acc
       else
         Map.put(acc, k, v)

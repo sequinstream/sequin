@@ -32,6 +32,9 @@ defmodule Sequin.Extensions.Replication do
 
   require Logger
 
+  # 200MB
+  @max_accumulated_bytes 200 * 1024 * 1024
+
   def ets_table, do: __MODULE__
 
   defmodule State do
@@ -189,14 +192,21 @@ defmodule Sequin.Extensions.Replication do
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     msg = Decoder.decode_message(msg)
     next_state = process_message(msg, state)
+    {acc_size, _acc_messages} = next_state.accumulated_messages
 
     Health.update(state.postgres_database, :replication_messages, :healthy)
 
-    if is_struct(msg, Commit) do
-      next_state = flush_messages(next_state)
-      {:noreply, ack_message(next_state.last_committed_lsn), next_state}
-    else
-      {:noreply, next_state}
+    cond do
+      is_struct(msg, Commit) ->
+        next_state = flush_messages(next_state)
+        {:noreply, ack_message(next_state.last_committed_lsn), next_state}
+
+      acc_size > @max_accumulated_bytes ->
+        next_state = flush_messages(next_state)
+        {:noreply, next_state}
+
+      true ->
+        {:noreply, next_state}
     end
   rescue
     e ->

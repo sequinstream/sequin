@@ -25,7 +25,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       receive_timer: nil,
       batch_size: Keyword.get(opts, :batch_size, 10),
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
-      test_pid: test_pid
+      test_pid: test_pid,
+      scheduled_handle_demand: false
     }
 
     # Subscribe to PubSub
@@ -38,8 +39,15 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @impl GenStage
   def handle_demand(incoming_demand, %{demand: demand} = state) do
-    new_state = %{state | demand: demand + incoming_demand}
-    handle_receive_messages(new_state)
+    new_state = maybe_schedule_demand(state)
+    new_state = %{new_state | demand: demand + incoming_demand}
+
+    {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_info(:handle_demand, state) do
+    handle_receive_messages(%{state | scheduled_handle_demand: false})
   end
 
   @impl GenStage
@@ -50,7 +58,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @impl GenStage
   def handle_info(:messages_ingested, state) do
-    handle_receive_messages(state)
+    new_state = maybe_schedule_demand(state)
+    {:noreply, [], new_state}
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
@@ -118,4 +127,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     :ok
   end
+
+  defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do
+    send(self(), :handle_demand)
+    %{state | scheduled_handle_demand: true}
+  end
+
+  defp maybe_schedule_demand(state), do: state
 end

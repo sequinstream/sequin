@@ -2,7 +2,7 @@ name: sequin-dev
 
 services:
   postgres:
-    image: "postgres:16"
+    image: "postgres:17"
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048 -c wal_level=logical
     ports:
       - "5432:5432"

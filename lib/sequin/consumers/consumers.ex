@@ -207,8 +207,8 @@ defmodule Sequin.Consumers do
     Repo.transact(fn ->
       case delete_consumer(consumer) do
         {:ok, _} ->
-          :ok = delete_consumer_partition(consumer)
           notify_consumer_delete(consumer)
+          :ok = delete_consumer_partition(consumer)
           {:ok, consumer}
 
         {:error, error} ->

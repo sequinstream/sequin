@@ -6,6 +6,17 @@ YELLOW='\033[0;33m'
 GREEN='\033[0;32m'
 RESET='\033[0m'
 
+# Function to check if Docker daemon is running
+check_docker() {
+    if ! docker info >/dev/null 2>&1; then
+        echo -e "${RED}Error: Docker daemon is not running.${RESET}"
+        exit 1
+    fi
+}
+
+# Check Docker daemon status early
+check_docker
+
 # Parse command line arguments
 DIRTY=false
 DRY_RUN=false

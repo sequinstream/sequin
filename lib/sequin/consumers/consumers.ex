@@ -12,6 +12,8 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.CiStringValue
+  alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SourceTable
@@ -1461,23 +1463,30 @@ defmodule Sequin.Consumers do
     Enum.all?(column_filters, fn filter ->
       fields = if message.action == :delete, do: message.old_fields, else: message.fields
       field = Enum.find(fields, &(&1.column_attnum == filter.column_attnum))
-      field && apply_filter(filter.operator, get_field_value(field.value, filter.jsonb_path), filter.value)
+      field && apply_filter(filter.operator, coerce_field_value(field.value, filter), filter.value)
     end)
   end
 
   defp column_filters_match_record?([], _message), do: true
 
   defp column_filters_match_record?(column_filters, record_attnums_to_values) do
-    Enum.all?(column_filters, fn filter ->
-      field_value = Map.get(record_attnums_to_values, filter.column_attnum)
+    Enum.all?(column_filters, fn %ColumnFilter{} = filter ->
+      field_value =
+        record_attnums_to_values
+        |> Map.get(filter.column_attnum)
+        |> coerce_field_value(filter)
 
-      apply_filter(filter.operator, get_field_value(field_value, filter.jsonb_path), filter.value)
+      apply_filter(filter.operator, field_value, filter.value)
     end)
   end
 
-  defp get_field_value(value, jsonb_path) when jsonb_path in [nil, ""], do: value
+  defp coerce_field_value(value, %ColumnFilter{value: %CiStringValue{}}) when is_binary(value) do
+    String.downcase(value)
+  end
 
-  defp get_field_value(value, jsonb_path) when is_map(value) do
+  defp coerce_field_value(value, %ColumnFilter{jsonb_path: jsonb_path}) when jsonb_path in [nil, ""], do: value
+
+  defp coerce_field_value(value, %ColumnFilter{jsonb_path: jsonb_path}) when is_map(value) do
     path = String.split(jsonb_path, ".")
     get_in(value, path)
   rescue
@@ -1488,8 +1497,6 @@ defmodule Sequin.Consumers do
     FunctionClauseError ->
       nil
   end
-
-  defp get_field_value(value, _jsonb_path), do: value
 
   defp apply_filter(operator, %Date{} = field_value, %DateTimeValue{} = filter_value) do
     field_value_as_datetime = DateTime.new!(field_value, ~T[00:00:00])
@@ -1551,7 +1558,17 @@ defmodule Sequin.Consumers do
   defp notify_consumer_update(%HttpPullConsumer{} = consumer) do
     if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
 
-    ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+    with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      restart_table_producer? =
+        consumer.status == :active and consumer.message_kind == :record and
+          consumer.record_consumer_state.producer == :table_and_wal and env() != :test
+
+      if restart_table_producer? do
+        DatabasesRuntimeSupervisor.restart_table_producer(consumer)
+      end
+
+      :ok
+    end
   end
 
   defp notify_consumer_update(%HttpPushConsumer{} = consumer) do

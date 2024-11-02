@@ -275,7 +275,19 @@ defmodule Sequin.Factory.ConsumersFactory do
   def column_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    value_type = Map.get(attrs, :value_type, Enum.random([:string, :number, :boolean, :null, :list]))
+    value_type =
+      Map.get(
+        attrs,
+        :value_type,
+        Enum.random([
+          :string,
+          :cistring,
+          :number,
+          :boolean,
+          :null,
+          :list
+        ])
+      )
 
     merge_attributes(
       %ColumnFilter{
@@ -294,6 +306,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   defp generate_value(:string), do: Faker.Lorem.sentence()
+  defp generate_value(:cistring), do: Faker.Internet.email()
   defp generate_value(:number), do: Enum.random([Factory.integer(), Factory.float()])
   defp generate_value(:boolean), do: Factory.boolean()
   defp generate_value(:null), do: nil

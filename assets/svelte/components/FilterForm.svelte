@@ -42,6 +42,7 @@
     { value: "boolean", label: "Boolean" },
     { value: "datetime", label: "Datetime" },
     { value: "list", label: "List" },
+    { value: "cistring", label: "Case-insensitive text" },
   ];
 
   // TableFilters component logic

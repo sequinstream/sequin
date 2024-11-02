@@ -1206,8 +1206,8 @@ defmodule Sequin.PostgresReplicationTest do
               column_attnum: CharacterDetailed.column_attnum("email"),
               column_name: "email",
               operator: :==,
-              value_type: :string,
-              value: %{__type__: :string, value: "test@example.com"}
+              value_type: :cistring,
+              value: %{__type__: :cistring, value: "TEST@EXAMPLE.COM"}
             )
           ]
         )

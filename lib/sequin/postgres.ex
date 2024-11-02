@@ -202,6 +202,7 @@ defmodule Sequin.Postgres do
       "numeric" -> :number
       "date" -> :datetime
       "jsonb" -> :jsonb
+      "citext" -> :cistring
       _ -> :string
     end
   end

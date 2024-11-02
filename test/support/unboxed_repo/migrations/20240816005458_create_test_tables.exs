@@ -54,6 +54,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :avatar, :binary
       add :house_id, :uuid
       add :net_worth, :money
+      add :email, :citext
 
       timestamps()
     end

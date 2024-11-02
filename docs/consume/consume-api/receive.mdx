@@ -57,44 +57,22 @@ curl --request GET \
 </ RequestExample>
 
 <ResponseExample>
-```json Consumer processing changes
+```json Response
 {
   "data": [
     {
-      "ack_id": "MTYyeJ7abUjl1pO",
-      "data": {
-        "record": {
-          "id": 2,
-          "name": "Chani",
-          "title": "Fremen Warrior",
-          "spice_allocation": 500,
-          "is_sayyadina": true
-        },
-        "changes": null,
-        "action": "insert",
-      }
-    },
-    // more messages...
-  ]
-}
-```
-
-```json Consumer processing rows
-{
-  "data": [
-    {
-      "ack_id": "MTYyeJ7abUjl1pO",
+      "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
       "data": {
         "record": {
           "id": 1,
-          "name": "Paul Atreides",
-          "title": "Duke of Arrakis",
-          "spice_allocation": 1000,
-          "is_kwisatz_haderach": true
+          "name": "Lady Jessica",
+          "title": "Bene Gesserit",
+          "spice_allocation": 750,
+          "inserted_at": "2024-10-31T17:02:38.058807",
+          "updated_at": "2024-10-31T17:02:38.058807"
         }
       }
-    },
-    // more messages...
+    }
   ]
 }
 ```

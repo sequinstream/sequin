@@ -15,6 +15,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
@@ -496,6 +497,12 @@ defmodule Sequin.Factory.ConsumersFactory do
             record_pks: TestEventLog.record_pks(event_log),
             table_oid: TestEventLog.table_oid()
           })
+
+        # Feel free to add more source record types here
+        # Or, accept a struct instead of an atom
+        :character ->
+          character = CharacterFactory.insert_character!(%{}, repo: Sequin.Repo)
+          Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
 
         nil ->
           attrs

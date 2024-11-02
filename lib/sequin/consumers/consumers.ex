@@ -497,6 +497,12 @@ defmodule Sequin.Consumers do
 
       {:is_delivered, true}, query ->
         ConsumerRecord.where_not_visible(query)
+
+      {:is_deliverable, true}, query ->
+        ConsumerRecord.where_deliverable(query)
+
+      {:limit, limit}, query ->
+        limit(query, ^limit)
     end)
   end
 

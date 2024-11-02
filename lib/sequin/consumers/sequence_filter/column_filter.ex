@@ -159,6 +159,25 @@ defmodule Sequin.Consumers.SequenceFilter.NullValue do
   end
 end
 
+defmodule Sequin.Consumers.SequenceFilter.CiStringValue do
+  @moduledoc false
+  use Ecto.Schema
+
+  import Ecto.Changeset
+
+  @primary_key false
+  embedded_schema do
+    field :value, :string
+  end
+
+  def changeset(struct, params) do
+    struct
+    |> cast(params, [:value])
+    |> update_change(:value, &String.downcase/1)
+    |> validate_required([:value])
+  end
+end
+
 defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
   @moduledoc false
   use Ecto.Schema
@@ -167,6 +186,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
   import PolymorphicEmbed
 
   alias Sequin.Consumers.SequenceFilter.BooleanValue
+  alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
   alias Sequin.Consumers.SequenceFilter.ListValue
   alias Sequin.Consumers.SequenceFilter.NullValue
@@ -265,6 +285,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
     polymorphic_embeds_one(:value,
       types: [
         string: StringValue,
+        cistring: CiStringValue,
         number: NumberValue,
         boolean: BooleanValue,
         datetime: DateTimeValue,
@@ -309,6 +330,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
   defp to_external_value(value) do
     case value do
       %StringValue{value: value} -> value
+      %CiStringValue{value: value} -> value
       %NumberValue{value: value} -> value
       %BooleanValue{value: value} -> value
       %DateTimeValue{value: value} -> DateTime.to_iso8601(value)
@@ -335,6 +357,7 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
   defp get_value_type(value) do
     case value do
       %StringValue{} -> "string"
+      %CiStringValue{} -> "cistring"
       %NumberValue{} -> "number"
       %BooleanValue{} -> "boolean"
       %DateTimeValue{} -> "datetime"

@@ -2,8 +2,11 @@ defmodule SequinWeb.PullControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
+  alias Sequin.Factory.ReplicationFactory
 
   setup :authenticated_conn
 
@@ -11,15 +14,19 @@ defmodule SequinWeb.PullControllerTest do
 
   setup %{account: account} do
     other_account = AccountsFactory.insert_account!()
+    db = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+    ConnectionCache.cache_connection(db, Sequin.Repo)
+    rep_slot = ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
 
     consumer =
       ConsumersFactory.insert_http_pull_consumer!(
-        message_kind: :event,
+        message_kind: :record,
         account_id: account.id,
-        backfill_completed_at: @one_day_ago
+        backfill_completed_at: @one_day_ago,
+        replication_slot_id: rep_slot.id
       )
 
-    other_consumer = ConsumersFactory.insert_http_pull_consumer!(message_kind: :event, account_id: other_account.id)
+    other_consumer = ConsumersFactory.insert_http_pull_consumer!(message_kind: :record, account_id: other_account.id)
     %{consumer: consumer, other_consumer: other_consumer}
   end
 
@@ -38,29 +45,35 @@ defmodule SequinWeb.PullControllerTest do
     end
 
     test "returns available messages if mix of available and delivered", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+      record =
+        ConsumersFactory.insert_deliverable_consumer_record!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          source_record: :character
+        )
 
-      ConsumersFactory.insert_consumer_event!(
+      ConsumersFactory.insert_consumer_record!(
         consumer_id: consumer.id,
-        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        source_record: :character
       )
 
       conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
-      assert message["ack_id"] == event.ack_id
+      assert message["ack_id"] == record.ack_id
     end
 
     test "returns an available message by consumer name", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
       conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.name}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
-      assert message["ack_id"] == event.ack_id
+      assert message["ack_id"] == record.ack_id
     end
 
     test "respects batch_size parameter", %{conn: conn, consumer: consumer} do
       for _ <- 1..3 do
-        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
       end
 
       conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", batch_size: 1)
@@ -69,11 +82,114 @@ defmodule SequinWeb.PullControllerTest do
     end
   end
 
+  describe "receive, wait_for behavior" do
+    test "returns immediately when messages are available", %{conn: conn, consumer: consumer} do
+      ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+
+      assert_elapsed_under(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", wait_for: 5000)
+        assert %{"data" => [_message]} = json_response(conn, 200)
+      end)
+    end
+
+    test "waits up to specified time when no messages available", %{conn: conn, consumer: consumer} do
+      assert_elapsed_at_least(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", wait_for: 101)
+        assert %{"data" => []} = json_response(conn, 200)
+      end)
+    end
+
+    test "returns early when messages become available during wait", %{
+      conn: conn,
+      consumer: consumer
+    } do
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        # Wait briefly then insert a message
+        Process.sleep(10)
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      end)
+
+      assert_elapsed_under(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", wait_for: 5000)
+        assert %{"data" => [_message]} = json_response(conn, 200)
+      end)
+    end
+  end
+
+  describe "receive, batch size behavior with wait" do
+    test "returns immediately when full batch is available", %{conn: conn, consumer: consumer} do
+      # Insert 3 messages
+      for _ <- 1..3 do
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      end
+
+      assert_elapsed_under(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", max_batch_size: 3, wait_for: 5000)
+        assert %{"data" => messages} = json_response(conn, 200)
+        assert length(messages) == 3
+      end)
+    end
+
+    test "returns partial batch if any available", %{conn: conn, consumer: consumer} do
+      # Insert just 1 message when max_batch_size is 3
+      ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+
+      assert_elapsed_under(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", max_batch_size: 3, wait_for: 5000)
+        assert %{"data" => messages} = json_response(conn, 200)
+        assert length(messages) == 1
+      end)
+    end
+
+    test "returns as soon as any messages are available during wait", %{conn: conn, consumer: consumer} do
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        Process.sleep(10)
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      end)
+
+      assert_elapsed_under(100, fn ->
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", max_batch_size: 3, wait_for: 5000)
+        assert %{"data" => messages} = json_response(conn, 200)
+        assert length(messages) == 1
+      end)
+    end
+
+    test "supports legacy batch_size parameter for backwards compatibility", %{conn: conn, consumer: consumer} do
+      for _ <- 1..3 do
+        ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
+      end
+
+      conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", batch_size: 2)
+      assert %{"data" => messages} = json_response(conn, 200)
+      assert length(messages) == 2
+    end
+  end
+
+  describe "receive, wait_for, and batch_size parameter validation" do
+    test "rejects invalid wait_for values", %{conn: conn, consumer: consumer} do
+      invalid_values = [-1, "abc", 1_000_000]
+
+      for value <- invalid_values do
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", wait_for: value)
+        assert json_response(conn, 400)
+      end
+    end
+
+    test "rejects invalid legacy batch_size values", %{conn: conn, consumer: consumer} do
+      invalid_values = [0, -1, "abc", 10_001]
+
+      for value <- invalid_values do
+        conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive", batch_size: value)
+        assert json_response(conn, 400)
+      end
+    end
+  end
+
   describe "ack" do
     test "successfully acks a message", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
 
       # Verify the message can't be pulled again
@@ -85,19 +201,19 @@ defmodule SequinWeb.PullControllerTest do
     end
 
     test "successfully acks a message by consumer name", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.name}/ack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.name}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows acking a message twice", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_deliverable_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
 
-      conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [event.ack_id])
+      conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(conn, 200) == %{"success" => true}
     end
 
@@ -105,39 +221,39 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       other_consumer: other_consumer
     } do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id)
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, source_record: :character)
 
-      conn = post(conn, ~p"/api/http_pull_consumers/#{other_consumer.id}/ack", ack_ids: [event.ack_id])
+      conn = post(conn, ~p"/api/http_pull_consumers/#{other_consumer.id}/ack", ack_ids: [record.ack_id])
       assert json_response(conn, 404)
     end
   end
 
   describe "nack" do
     test "successfully nacks a message", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
       # Verify the message reappears
       conn = get(conn, ~p"/api/http_pull_consumers/#{consumer.id}/receive")
       assert %{"data" => [nacked_message]} = json_response(conn, 200)
-      assert nacked_message["ack_id"] == event.ack_id
+      assert nacked_message["ack_id"] == record.ack_id
     end
 
     test "successfully nacks a message by consumer name", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.name}/nack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.name}/nack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
     end
 
     test "allows nacking a message twice", %{conn: conn, consumer: consumer} do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, source_record: :character)
 
-      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [event.ack_id])
+      res_conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(res_conn, 200) == %{"success" => true}
 
-      conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [event.ack_id])
+      conn = post(conn, ~p"/api/http_pull_consumers/#{consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(conn, 200) == %{"success" => true}
     end
 
@@ -145,10 +261,24 @@ defmodule SequinWeb.PullControllerTest do
       conn: conn,
       other_consumer: other_consumer
     } do
-      event = ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id)
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, source_record: :character)
 
-      conn = post(conn, ~p"/api/http_pull_consumers/#{other_consumer.id}/nack", ack_ids: [event.ack_id])
+      conn = post(conn, ~p"/api/http_pull_consumers/#{other_consumer.id}/nack", ack_ids: [record.ack_id])
       assert json_response(conn, 404)
     end
+  end
+
+  defp assert_elapsed_under(elapsed, fun, fun_desc \\ "function") do
+    {time_us, value} = :timer.tc(fun)
+    time = time_us / 1000
+    assert time < elapsed, "Expected #{fun_desc} to complete in #{elapsed}ms, but it took #{time}ms"
+    value
+  end
+
+  defp assert_elapsed_at_least(elapsed, fun, fun_desc \\ "function") do
+    {time_us, value} = :timer.tc(fun)
+    time = time_us / 1000
+    assert time >= elapsed, "Expected #{fun_desc} to complete in at least #{elapsed}ms, but it took #{time}ms"
+    value
   end
 end

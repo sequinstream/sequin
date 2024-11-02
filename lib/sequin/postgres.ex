@@ -699,6 +699,7 @@ defmodule Sequin.Postgres do
     "character varying",
     "cidr",
     "circle",
+    "citext",
     "date",
     "double precision",
     "float4",

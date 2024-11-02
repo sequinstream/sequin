@@ -120,7 +120,8 @@ if Mix.env() == :test do
           },
           rating: Decimal.from_float(Factory.float(max: 10)),
           avatar: :crypto.strong_rand_bytes(16),
-          house_id: UUID.uuid4()
+          house_id: UUID.uuid4(),
+          email: Faker.Internet.email()
         },
         attrs
       )

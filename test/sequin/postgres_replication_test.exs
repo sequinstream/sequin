@@ -1193,6 +1193,53 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_message.table_oid == CharacterDetailed.table_oid()
       assert consumer_message.record_pks == [to_string(matching_character.id)]
     end
+
+    test "consumer with citext column filter matches case-insensitively", %{
+      consumer: consumer
+    } do
+      # Create a consumer with a citext column filter
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          actions: [:insert],
+          column_filters: [
+            ConsumersFactory.sequence_filter_column_filter_attrs(
+              column_attnum: CharacterDetailed.column_attnum("email"),
+              column_name: "email",
+              operator: :==,
+              value_type: :string,
+              value: %{__type__: :string, value: "test@example.com"}
+            )
+          ]
+        )
+
+      # Update consumer with new filter
+      Repo.update!(
+        consumer
+        |> Ecto.Changeset.cast(%{sequence_filter: sequence_filter}, [])
+        |> Ecto.Changeset.cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
+      )
+
+      # Restart the consumer to apply changes
+      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{})
+
+      {:ok, matching_character} =
+        UnboxedRepo.transaction(fn ->
+          # Insert character with different case email
+          CharacterFactory.insert_character_detailed!(
+            [email: "test@example.com"],
+            repo: UnboxedRepo
+          )
+        end)
+
+      # Wait for message handling
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Verify message was created and matched case-insensitively
+      [consumer_message] = list_messages(consumer)
+      assert consumer_message.consumer_id == consumer.id
+      assert consumer_message.table_oid == CharacterDetailed.table_oid()
+      assert consumer_message.record_pks == [to_string(matching_character.id)]
+    end
   end
 
   @server_id __MODULE__

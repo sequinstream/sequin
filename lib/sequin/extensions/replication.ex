@@ -424,6 +424,12 @@ defmodule Sequin.Extensions.Replication do
     put_message(state, record)
   end
 
+  # Ignore citext messages, we receive them before citext columns:
+  # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 551312, namespace: "public", name: "citext"}
+  defp process_message(%Decoder.Messages.Type{name: "citext"}, state) do
+    state
+  end
+
   defp process_message(msg, state) do
     Logger.error("Unknown message: #{inspect(msg)}")
     state

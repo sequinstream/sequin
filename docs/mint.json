@@ -7,8 +7,9 @@
     "href": "https://sequinstream.com"
   },
   "favicon": "/favicon.png",
+  "theme": "quill",
   "colors": {
-    "primary": "#0E0E0E",
+    "primary": "#7855FF",
     "light": "#474747",
     "dark": "#0E0E0E"
   },

@@ -10,7 +10,7 @@
   "theme": "quill",
   "colors": {
     "primary": "#7855FF",
-    "light": "#474747",
+    "light": "#F5F5F5",
     "dark": "#0E0E0E"
   },
   "topbarCtaButton": {

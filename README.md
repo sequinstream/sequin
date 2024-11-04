@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Stream Postgres
+### Capture changes and stream data out of Postgres
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
@@ -24,8 +24,8 @@ Sequin is a tool for capturing changes and streaming data out of your Postgres d
 
 Sequin is great for:
 
-1. **[Replicating data](#replication-use-case)** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
-2. **[Building event driven workflows](#event-driven-use-case)** such as triggering side effects when data in Postgres changes.
+1. **Replicating data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
+2. **Building event driven workflows** such as triggering side effects when data in Postgres changes.
 
 Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like [Debezium](#sequin-vs-debezium--kafka) and [Kafka](#sequin-vs-kafka).
 
@@ -43,6 +43,18 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 - **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
+## Use cases
+
+- **Triggering a workflow when data changes in Postgres:** Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
+- **Making events available to downstream services:** Stream changes from your database tables as events that other services can consume.
+- **Informing downstream services when rows change:** Notify dependent services about data changes to keep systems in sync.
+- **Audit logging:** Track and record all changes made to data in your database for compliance or feature development.
+- **Sync a table from one database to another:** Keep tables synchronized across different database instances in real-time.
+- **Materializing another table in your database:** Create and maintain derived tables based on changes to source tables.
+- **Maintaining an in-memory cache:** Keep application caches up-to-date by streaming database changes.
+- **Syncing a Redis cache:** Automatically update Redis when your Postgres data changes.
+- **Refreshing search indexes like Elastic:** Keep search indexes fresh by streaming updates from your database.
+
 ## Getting started
 
 The quickest way to get started is to create an account on [Sequin Cloud](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
@@ -54,19 +66,6 @@ Our [cloud quickstart](https://sequinstream.com/docs/quickstart) and [database s
 If you prefer to self-host, follow our [self-hosted quickstart](https://sequinstream.com/docs/quickstart/setup).
 
 You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
-
-## Use cases
-
-<a name="replication-use-case"></a>
-**Replication:** Sync data to other systems to update search indexes, invalidate caches, and generate denormalized views.
-![Sync](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-replication.svg?)
-
-<a name="event-driven-use-case"></a>
-**Trigger side-effects:** Never miss a change in your database for processing by other systems.
-![Queue email](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-side-effect.svg?)
-
-**Fan out:** Broadcast events, distribute workloads, and decouple services.
-![Fan out order](https://github.com/sequinstream/sequin/blob/main/docs/images/readme/use-case-fan-out.svg?)
 
 ## How Sequin works
 

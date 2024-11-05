@@ -90,7 +90,7 @@
 <Card>
   <CardHeader>
     <div class="flex items-center justify-between">
-      <CardTitle>Message Grouping</CardTitle>
+      <CardTitle>Message grouping</CardTitle>
       {#if !isEditMode}
         <div class="flex items-center space-x-2">
           <Switch

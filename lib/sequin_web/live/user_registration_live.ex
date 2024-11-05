@@ -83,18 +83,25 @@ defmodule SequinWeb.UserRegistrationLive do
   end
 
   def mount(_params, session, socket) do
-    changeset = Accounts.change_user_registration(%User{})
+    if Sequin.feature_enabled?(:account_self_signup) do
+      changeset = Accounts.change_user_registration(%User{})
 
-    socket =
-      socket
-      |> assign(trigger_submit: false)
-      |> assign(github_loading: false)
-      |> assign(github_disabled: github_disabled?())
-      |> assign(redirect_to: session["user_return_to"])
-      |> assign(accepting_invite?: accepting_invite?(session))
-      |> assign_form(changeset)
+      socket =
+        socket
+        |> assign(trigger_submit: false)
+        |> assign(github_loading: false)
+        |> assign(github_disabled: github_disabled?())
+        |> assign(redirect_to: session["user_return_to"])
+        |> assign(accepting_invite?: accepting_invite?(session))
+        |> assign_form(changeset)
 
-    {:ok, socket, temporary_assigns: [form: nil]}
+      {:ok, socket, temporary_assigns: [form: nil]}
+    else
+      {:ok,
+       socket
+       |> put_flash(:toast, %{kind: :error, title: "Account creation is disabled"})
+       |> redirect(to: ~p"/login")}
+    end
   end
 
   def handle_event("save", %{"user" => user_params}, socket) do

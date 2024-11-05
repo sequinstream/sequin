@@ -103,10 +103,10 @@
   {#if sequences.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No streams found</h2>
+        <h2 class="text-xl font-semibold mb-4">No Streams found</h2>
         <p class="text-gray-600 mb-6">
-          Streams allow you to stream data from specific tables in your
-          PostgreSQL database.
+          Streams allow you to stream data from tables in your Postgres
+          database.
         </p>
         {#if hasDatabases}
           <a

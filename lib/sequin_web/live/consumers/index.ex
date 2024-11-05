@@ -108,7 +108,7 @@ defmodule SequinWeb.ConsumersLive.Index do
 
   defp apply_action(socket, :list_push, _params) do
     socket
-    |> assign(:page_title, "Webhook subscriptions")
+    |> assign(:page_title, "Webhook Subscriptions")
     |> assign(:live_action, :list_push)
   end
 

@@ -1,20 +1,20 @@
 ---
 title: 'Consume with API'
 sidebarTitle: 'Consume with API'
-description: 'Consume rows from your Stream using the Consume API'
+description: 'Consume rows from your Stream using the Consumer Group API'
 ---
 
-With Sequin's **Consume API**, you can pull rows from your Streams using HTTP endpoints. You'll create a **Consume API Endpoint** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
+With Sequin's **Consumer Group API**, you can pull rows from your Streams using HTTP endpoints. You'll create a **Consumer Group** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
 
 <Info>
 This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
 </Info>
 
 <Steps titleSize="h2">
-  <Step title="Create a Consume API Endpoint" icon="users">
-    After connecting a database and creating a Stream, you can consume rows from your Stream using a Consume API Endpoint:
+  <Step title="Create a Consumer Group" icon="users">
+    After connecting a database and creating a Stream, you can consume rows from your Stream using a Consumer Group:
 
-    1. Navigate to the **Consume API** tab and click the **Create API Endpoint** button.
+    1. Navigate to the **Consumer Group** tab and click the **Create Consumer Group** button.
 
     2. The Stream you created for the `public.regions` table should already be selected:
 
@@ -36,10 +36,10 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
     4. Jump ahead to the **Consumer endpoint name** section (you can use the defaults for message grouping and consumer configuration).
 
-    5. Give your Consume API Endpoint a name (i.e. `pst_regions`) and click **Create Consume API Endpoint**.
+    5. Give your Consumer Group a name (i.e. `pst_regions`) and click **Create Consumer Group**.
 
         <Check>
-          Sequin will now make rows that match your filter available via the Consume API.
+          Sequin will now make rows that match your filter available to your Consumer Group.
         </Check>
 
         <Frame>
@@ -48,7 +48,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
   </Step>
 
   <Step title="Receive messages" icon="arrow-down-to-line">
-    Now, use the Consume API to receive messages:
+    Now, use the Consumer Group API to receive messages:
 
     1. Copy the "Receive messages" curl command from the **Overview** tab. It looks like this:
 
@@ -154,7 +154,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
 ## Next steps
 
-You are running Sequin and have setup a Consume API Endpoint that both backfilled a table and will send you rows as they are created or updated. Now you can see how to instead receive webhooks or how to capture every discrete change that happens to tables in your database:
+You are running Sequin and have setup a Consumer Group that both backfilled a table and will send you rows as they are created or updated. Now you can see how to instead receive webhooks or how to capture every discrete change that happens to tables in your database:
 
 <CardGroup cols={1}>
   <Card title="Quickstart: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">

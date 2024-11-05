@@ -60,8 +60,8 @@ This guide shows you how to implement fan outs with Sequin.
       Sequin is now set up to stream changes from your `events` table.
     </Check>
   </Step>
-  <Step title="Create three webhook subscriptions to fan out messages" icon="signal-stream">
-    Create three [webhook subscriptions](/how-sequin-works#webhooks) (one for inventory, one for shipping, and one for invoicing) that deliver new orders to the relevant services:
+  <Step title="Create three Webhook Subscriptions to fan out messages" icon="signal-stream">
+    Create three [Webhook Subscriptions](/how-sequin-works#webhooks) (one for inventory, one for shipping, and one for invoicing) that deliver new orders to the relevant services:
 
     1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
     2. Select the `events` stream you just created.
@@ -69,12 +69,12 @@ This guide shows you how to implement fan outs with Sequin.
     4. In the next section, have the consumer group start **At the end of the table** so you only process new orders.
     5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for the relevant service and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
     6. Back in the Webhook Subscription window, click the refresh button and select the endpoint you just created. Add a specific path for your webhook (e.g. `/webhook/inventory`) if you need to.
-    7. Name your webhook subscription and click **Create webhook subscription**.
+    7. Name your Webhook Subscription and click **Create Webhook Subscription**.
 
     Repeat this process for the other two services.
 
     <Check>
-      Sequin will now deliver new orders to your application using Webhooks.You could easily use [Consume API](/consume/consume-api/overview) to pull orders into your services as well.
+      Sequin will now deliver new orders to your application using Webhooks.You could easily use [Consumer Group API](/consume/consume-api/overview) to pull orders into your services as well.
     </Check>
 
   </Step>

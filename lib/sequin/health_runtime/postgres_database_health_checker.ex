@@ -1,35 +1,29 @@
-defmodule Sequin.Health.PostgresDatabaseHealthChecker do
+defmodule Sequin.HealthRuntime.PostgresDatabaseHealthChecker do
   @moduledoc false
-  use GenServer
+
+  use Oban.Worker,
+    queue: :health_checks,
+    max_attempts: 1,
+    unique: [states: [:available, :scheduled, :retryable]]
 
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
+  alias Sequin.Repo
 
-  require Logger
-
-  @check_interval :timer.seconds(5)
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"postgres_database_id" => postgres_database_id}}) do
+    database = Repo.get!(PostgresDatabase, postgres_database_id)
+    check_database(database)
+    enqueue_next_run(postgres_database_id)
   end
 
-  @impl true
-  def init(_opts) do
-    schedule_check()
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_info(:check_reachability, state) do
-    perform_check()
-    schedule_check()
-    {:noreply, state}
-  end
-
-  defp perform_check do
-    Enum.each(Databases.list_dbs(), &check_database/1)
+  defp enqueue_next_run(postgres_database_id) do
+    %{postgres_database_id: postgres_database_id}
+    |> new(schedule_in: 5)
+    |> Oban.insert()
   end
 
   defp check_database(database) do
@@ -48,9 +42,5 @@ defmodule Sequin.Health.PostgresDatabaseHealthChecker do
     error ->
       error = Error.service(service: :postgres_database, message: Exception.message(error))
       Health.update(database, :reachable, :error, error)
-  end
-
-  defp schedule_check do
-    Process.send_after(self(), :check_reachability, @check_interval)
   end
 end

@@ -9,6 +9,12 @@ migrate() {
   echo 'Migrations complete'
 }
 
+apply_config() {
+  echo "Applying config"
+  ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.load"
+  echo "Config applied"
+}
+
 start_application() {
   echo "Starting the app"
   PHX_SERVER=true ./prod/rel/sequin/bin/sequin start
@@ -18,4 +24,5 @@ start_application() {
 echo "Starting: start_commands.sh"
 
 migrate
+apply_config
 start_application

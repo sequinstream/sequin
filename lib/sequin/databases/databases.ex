@@ -141,10 +141,13 @@ defmodule Sequin.Databases do
 
   # Sequences
 
-  def get_sequence_for_account(account_id, sequence_id) do
-    account_id
-    |> Sequence.where_account()
-    |> Sequence.where_id(sequence_id)
+  def find_sequence_for_account(account_id, params \\ []) do
+    params
+    |> Enum.reduce(Sequence.where_account(account_id), fn
+      {:id, id}, query -> Sequence.where_id(query, id)
+      {:table_schema, table_schema}, query -> Sequence.where_table_schema(query, table_schema)
+      {:table_name, table_name}, query -> Sequence.where_table_name(query, table_name)
+    end)
     |> Repo.one()
     |> case do
       nil -> {:error, Error.not_found(entity: :sequence)}

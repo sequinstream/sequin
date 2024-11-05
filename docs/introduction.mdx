@@ -7,7 +7,7 @@ iconType: "solid"
 
 Sequin is a tool for capturing changes and streaming data out of your Postgres database.
 
-To stream data, you'll create [Streams](/how-sequin-works#streams) for each table you want to stream. Then, you'll consume rows from the Stream using Sequin's [Consume API](/how-sequin-works#consume-api), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
+To stream data, you'll create [Streams](/how-sequin-works#streams) for each table you want to stream. Then, you'll consume rows from the Stream using Sequin's [Consume Groups](/how-sequin-works#consumer-groups), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
 
 Sequin is great for:
 
@@ -47,7 +47,7 @@ So, **Sequin adds streaming features to Postgres.** And importantly, Sequin keep
 
 With Sequin, you can:
 
-1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/how-sequin-works#consume-api).
+1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/how-sequin-works#consumer-groups).
 2. Receive [webhooks](/how-sequin-works#webhooks) whenever rows change, with retries and backoff.
 3. [Capture changes](/how-sequin-works#wal-pipelines) to Postgres tables as a series of events.
 

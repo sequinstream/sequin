@@ -103,7 +103,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         UPDATE public.regions SET timezone = 'pst' WHERE id = 1;
         ```
 
-        Again, this row also matches the filter of your webhook subscription, so it will be delivered to your endpoint.
+        Again, this row also matches the filter of your Webhook Subscription, so it will be delivered to your endpoint.
 
     4. Finally, create a new region that doesn't match the filter:
 
@@ -125,11 +125,11 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
 ## Next steps
 
-You are running Sequin and have setup a Webhook Subscription that both backfilled a table and will send you rows as they are created or updated. Now you can see how to instead _pull_ changes with the Consume API. Or, you can skip ahead to see how to capture every discrete change that happens to tables in your database:
+You are running Sequin and have setup a Webhook Subscription that both backfilled a table and will send you rows as they are created or updated. Now you can see how to instead _pull_ changes with the Consumer Group API. Or, you can skip ahead to see how to capture every discrete change that happens to tables in your database:
 
 <CardGroup cols={1}>
-  <Card title="Quickstart continued: Consume rows via the Consume API" icon="gauge-max" href="/quickstart/consume-with-api">
-    See how to use the Consume API to receive rows as they change.
+  <Card title="Quickstart continued: Consume rows via the Consumer Group API" icon="gauge-max" href="/quickstart/consume-with-api">
+    See how to use the Consumer Group API to receive rows as they change.
   </Card>
   <Card title="Quickstart continued: Capture changes" icon="gauge-max" href="/quickstart/capture-changes">
     See how to capture every discrete change that happens to tables in your database.

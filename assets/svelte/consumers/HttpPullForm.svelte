@@ -154,9 +154,7 @@
 </script>
 
 <FullPageModal
-  title={isEditMode
-    ? "Edit Consume API Endpoint"
-    : "Create Consume API Endpoint"}
+  title={isEditMode ? "Edit Consumer Group" : "Create Consumer Group"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   showConfirmOnExit={isDirty}
@@ -259,7 +257,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Consumer endpoint configuration</CardTitle>
+        <CardTitle>Consumer Group configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -334,7 +332,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Consumer endpoint name</CardTitle>
+        <CardTitle>Consumer Group name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -368,7 +366,7 @@
           type="submit"
           disabled={isCreateConsumerDisabled}
         >
-          {isEditMode ? "Update" : "Create"} consumer endpoint
+          {isEditMode ? "Update" : "Create"} Consumer Group
           <span slot="loading"
             >{isEditMode ? "Updating..." : "Creating..."}</span
           >

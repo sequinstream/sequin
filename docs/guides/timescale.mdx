@@ -109,9 +109,9 @@ select create_hypertable('sensor_data', 'time');
 
 ## Consuming TimescaleDB Data with Sequin
 
-Now that you have a Stream set up, you can consume data using Sequin's [Consume API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
+Now that you have a Stream set up, you can consume data using Sequin's [Consumer Group API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
 
-Here's an example of how to consume data using the Consume API:
+Here's an example of how to consume data using the Consumer Group API:
 
 ```bash
 curl -X GET 'https://api.sequinstream.com/api/http_pull_consumers/sensor_data_consumer/receive?batch_size=10' \
@@ -150,7 +150,7 @@ curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/sensor_data_c
 }'
 ```
 
-With Sequin's Consume API or webhook subscriptions, you can process your TimescaleDB data in real-time, with exactly-once delivery guarantees.
+With Sequin's Consumer Group API or Webhook Subscriptions, you can process your TimescaleDB data in real-time, with exactly-once delivery guarantees.
 
 ## Next steps
 

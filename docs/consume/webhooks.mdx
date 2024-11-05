@@ -7,7 +7,7 @@ iconType: "solid"
 
 With Webhook Subscriptions, Sequin delivers each row from your [Stream](/how-sequin-works#streams) to any webhook endpoint, with exactly-once processing.
 
-Webhook Subscriptions are built on top of the same consumer group system as the [Consume API](/consume/consume-api/overview) and offers the following guarantees:
+Webhook Subscriptions are built on top of the same consumer group system as the [Consumer Group API](/consume/consume-api/overview) and offers the following guarantees:
 
 - **One row per payload**: Each webhook payload contains one row.
     ```json payload.json
@@ -72,15 +72,15 @@ You can optionally group rows by any combination of columns in the underlying ta
   <img src="/images/consume/webhooks/grouping.png" alt="Configure the group" />
 </Frame>
 
-### Webhook subscription configuration
+### Webhook Subscription configuration
 
 Depending on your message volume and the performance of your webhook endpoint, you may want to configure the following settings:
 
-- **Request timeout**: This is the maximum amount of time the webhook subscription will wait for a response from your webhook endpoint. If your webhook endpoint does not respond within this time, Sequin will retry the row (with an exponential backoff).
+- **Request timeout**: This is the maximum amount of time the Webhook Subscription will wait for a response from your webhook endpoint. If your webhook endpoint does not respond within this time, Sequin will retry the row (with an exponential backoff).
 - **Max ack pending**: The maximum number of messages that can be pending acknowledgement (i.e. a 200 response has been received from your webhook endpoint). If this limit is reached, Sequin will pause delivery of new messages until some messages are acknowledged.
 
 <Frame>
-  <img src="/images/consume/webhooks/config.png" alt="Configure the webhook subscription" />
+  <img src="/images/consume/webhooks/config.png" alt="Configure the Webhook Subscription" />
 </Frame>
 
 ### HTTP endpoint
@@ -93,7 +93,7 @@ The HTTP endpoint where the Webhook Subscription will deliver (i.e. `POST`) the 
 
 You'll provide the base URL of the endpoint and any headers that should be included in the request. Use the **Encrypted Headers** to store any sensitive information (like API keys).
 
-After you create the HTTP Endpoint, you can specify a path for each webhook subscription:
+After you create the HTTP Endpoint, you can specify a path for each Webhook Subscription:
 
 <Frame>
   <img src="/images/consume/webhooks/path.png" alt="Specify a path for the HTTP endpoint" />

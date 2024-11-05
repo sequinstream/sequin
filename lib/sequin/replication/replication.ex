@@ -105,17 +105,88 @@ defmodule Sequin.Replication do
     pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
     last_committed_at = ReplicationExt.get_last_committed_at(pg_replication.id)
-    # key_pattern = "#{pg_replication.postgres_database.name}.>"
 
-    # total_ingested_messages =
-    #   Streams.fast_count_messages_for_stream(pg_replication.stream_id, key_pattern: key_pattern)
+    query = """
+    -- Logical replication lag monitoring
+    WITH slots AS (
+      SELECT
+        slot_name,
+        pg_current_wal_lsn () AS current_lsn,
+        confirmed_flush_lsn,
+        pg_current_wal_lsn () - confirmed_flush_lsn AS lag_bytes,
+        active,
+        active_pid
+      FROM
+        pg_replication_slots
+      WHERE
+        slot_type = 'logical'
+        AND slot_name = $1
+    ),
+    lag_size AS (
+      SELECT
+        slots.*,
+        pg_size_pretty(lag_bytes) AS lag_size,
+        -- Join with pg_stat_replication for active connections
+        pg_stat_replication.pid,
+        pg_stat_replication.state,
+        pg_stat_replication.write_lag,
+        pg_stat_replication.flush_lag,
+        pg_stat_replication.replay_lag
+      FROM
+        slots
+      LEFT JOIN pg_stat_replication ON pg_stat_replication.pid = slots.active_pid
+    )
+    SELECT
+      slot_name,
+      active,
+      lag_size,
+      write_lag,
+      flush_lag,
+      replay_lag,
+      state,
+      pid AS client_pid
+    FROM
+      lag_size
+    ORDER BY
+      lag_bytes DESC;
+    """
+
+    {flush_lag_ms, active} =
+      case Postgres.query(pg_replication.postgres_database, query, [pg_replication.slot_name]) do
+        {:ok, %Postgrex.Result{num_rows: 0}} ->
+          {nil, false}
+
+        {:ok, %Postgrex.Result{num_rows: 1} = result} ->
+          [%{"flush_lag" => flush_lag, "active" => active}] = Postgres.result_to_maps(result)
+          {interval_to_ms(flush_lag), active}
+
+        {:error, error} ->
+          Logger.error("Error adding replication slot info: #{inspect(error)}")
+          {nil, false}
+      end
 
     info = %PostgresReplicationSlot.Info{
       last_committed_at: last_committed_at,
-      total_ingested_messages: nil
+      total_ingested_messages: nil,
+      flush_lag_ms: flush_lag_ms,
+      active: active
     }
 
     %{pg_replication | info: info}
+  end
+
+  defp interval_to_ms(nil), do: nil
+
+  defp interval_to_ms(%Postgrex.Interval{} = interval) do
+    # Convert all units to milliseconds
+    # Approximate month as 30 days
+    months_ms = interval.months * 30 * 24 * 60 * 60 * 1000
+    days_ms = interval.days * 24 * 60 * 60 * 1000
+    secs_ms = interval.secs * 1000
+    microsecs_ms = div(interval.microsecs, 1000)
+
+    # Sum all milliseconds
+    months_ms + days_ms + secs_ms + microsecs_ms
   end
 
   # Helper Functions

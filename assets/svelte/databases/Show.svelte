@@ -54,7 +54,9 @@
   export let live: any;
   export let parent: string;
   export let metrics: {
-    avg_latency: number;
+    database_ping_ms: number;
+    replication_lag_ms: number;
+    replication_active: boolean;
   };
 
   let refreshingTables = writable(false);
@@ -74,7 +76,7 @@
 <div class="min-h-screen font-sans">
   <main class="container mx-auto px-4 py-8">
     <!-- Existing overview content -->
-    <div class="grid gap-6 md:grid-cols-3 mb-6">
+    <div class="grid gap-6 lg:grid-cols-3 mb-6">
       <HealthComponent health={database.health} />
 
       <Card>
@@ -102,18 +104,77 @@
 
       <Card>
         <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
-            <Clock class="h-5 w-5 text-blue-500" />
-          </div>
-          {#if metrics.avg_latency}
-            <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
-          {:else}
-            <div class="flex items-center">
-              <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
-              <span class="text-4xl font-bold text-gray-500">ms</span>
+          <div class="grid grid-cols-2 gap-6">
+            <!-- Database Ping -->
+            <div class="flex flex-col justify-between">
+              <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-medium text-gray-500"
+                  >Database Ping</span
+                >
+              </div>
+              {#if metrics.database_ping_ms}
+                <div class="text-4xl font-bold">
+                  {metrics.database_ping_ms} ms
+                </div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <span class="text-4xl font-bold text-gray-500">ms</span>
+                </div>
+              {/if}
             </div>
-          {/if}
+
+            <!-- Replication Lag -->
+            <div class="flex flex-col justify-between">
+              <div class="flex justify-between items-center mb-4">
+                <span class="text-sm font-medium text-gray-500"
+                  >Replication Lag</span
+                >
+                <Clock
+                  class={metrics.replication_lag_ms > 300000
+                    ? "h-5 w-5 text-yellow-500"
+                    : "h-5 w-5 text-blue-500"}
+                />
+              </div>
+              {#if !metrics.replication_active}
+                <div class="text-4xl font-bold text-gray-500">N/A</div>
+              {:else if metrics.replication_lag_ms != null}
+                <div class="relative group">
+                  <div
+                    class="text-4xl font-bold {metrics.replication_lag_ms >
+                    300000
+                      ? 'text-yellow-600'
+                      : ''}"
+                  >
+                    {#if metrics.replication_lag_ms < 1000}
+                      {metrics.replication_lag_ms}ms
+                    {:else if metrics.replication_lag_ms < 60000}
+                      {(metrics.replication_lag_ms / 1000).toFixed(0)}s
+                    {:else if metrics.replication_lag_ms < 3600000}
+                      {(metrics.replication_lag_ms / 60000).toFixed(0)}m
+                    {:else if metrics.replication_lag_ms < 86400000}
+                      {(metrics.replication_lag_ms / 3600000).toFixed(0)}h
+                    {:else}
+                      {(metrics.replication_lag_ms / 86400000).toFixed(0)}d
+                    {/if}
+                  </div>
+                  {#if metrics.replication_lag_ms > 300000}
+                    <div
+                      class="invisible group-hover:visible absolute z-10 w-64 p-2 mt-2 text-sm text-white bg-gray-800 rounded-lg"
+                    >
+                      High replication lag detected. This indicates that Sequin
+                      is behind the primary database. Messages may be delayed.
+                    </div>
+                  {/if}
+                </div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <span class="text-4xl font-bold text-gray-500">ms</span>
+                </div>
+              {/if}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

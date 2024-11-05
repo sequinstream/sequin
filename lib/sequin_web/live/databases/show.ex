@@ -6,6 +6,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Databases
   alias Sequin.Health
   alias Sequin.Metrics
+  alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Tracer
   alias Sequin.Tracer.Server
@@ -227,8 +228,21 @@ defmodule SequinWeb.DatabasesLive.Show do
         {:error, _} -> nil
       end
 
+    replication_slot = Replication.add_info(database.replication_slot)
+
+    unless replication_slot.info.active do
+      Health.update(
+        database,
+        :replication_connected,
+        :error,
+        Sequin.Error.service(service: :replication, message: "Replication slot is not active")
+      )
+    end
+
     metrics = %{
-      avg_latency: avg_latency
+      database_ping_ms: avg_latency,
+      replication_lag_ms: replication_slot.info.flush_lag_ms,
+      replication_active: replication_slot.info.active
     }
 
     assign(socket, :metrics, metrics)

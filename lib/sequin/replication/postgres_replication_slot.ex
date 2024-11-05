@@ -16,6 +16,8 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     typedstruct do
       field :last_committed_at, nil | DateTime.t()
       field :total_ingested_messages, nil | non_neg_integer()
+      field :flush_lag_ms, nil | non_neg_integer()
+      field :active, boolean()
     end
   end
 

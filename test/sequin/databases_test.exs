@@ -141,14 +141,14 @@ defmodule Sequin.DatabasesTest do
       assert sequence.sort_column_name == attrs.sort_column_name
     end
 
-    test "get_sequence_for_account/2 retrieves a sequence", %{account: account, database: database} do
+    test "find_sequence_for_account/2 retrieves a sequence", %{account: account, database: database} do
       sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
-      assert {:ok, retrieved_sequence} = Databases.get_sequence_for_account(account.id, sequence.id)
+      assert {:ok, retrieved_sequence} = Databases.find_sequence_for_account(account.id, id: sequence.id)
       assert retrieved_sequence.id == sequence.id
     end
 
-    test "get_sequence_for_account/2 returns error for non-existent sequence", %{account: account} do
-      assert {:error, _} = Databases.get_sequence_for_account(account.id, Ecto.UUID.generate())
+    test "find_sequence_for_account/2 returns error for non-existent sequence", %{account: account} do
+      assert {:error, _} = Databases.find_sequence_for_account(account.id, id: Ecto.UUID.generate())
     end
 
     test "list_sequences_for_account/1 lists all sequences for an account", %{account: account, database: database} do
@@ -164,7 +164,7 @@ defmodule Sequin.DatabasesTest do
       sequence = DatabasesFactory.insert_sequence!(postgres_database_id: database.id)
       assert {:ok, deleted_sequence} = Databases.delete_sequence(sequence)
       assert deleted_sequence.id == sequence.id
-      assert {:error, _} = Databases.get_sequence_for_account(database.account_id, sequence.id)
+      assert {:error, _} = Databases.find_sequence_for_account(database.account_id, id: sequence.id)
     end
 
     test "delete_sequence/1 returns error when sequence is used by consumers", %{database: database} do

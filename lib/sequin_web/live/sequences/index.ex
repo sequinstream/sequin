@@ -131,7 +131,7 @@ defmodule SequinWeb.SequencesLive.Index do
   def handle_event("delete_sequence", %{"id" => id}, socket) do
     account_id = current_account_id(socket)
 
-    case Databases.get_sequence_for_account(account_id, id) do
+    case Databases.find_sequence_for_account(account_id, id: id) do
       {:ok, sequence} ->
         case Databases.delete_sequence(sequence) do
           {:ok, _} ->

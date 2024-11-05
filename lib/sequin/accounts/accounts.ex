@@ -502,6 +502,18 @@ defmodule Sequin.Accounts do
     |> Repo.all()
   end
 
+  def find_account(params \\ []) do
+    params
+    |> Enum.reduce(Account, fn
+      {:name, name}, acc -> where(acc, name: ^name)
+    end)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :account, params: params)}
+      account -> {:ok, account}
+    end
+  end
+
   def get_account_for_user(user_id, account_id) do
     account_id
     |> Account.where_id()

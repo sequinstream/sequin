@@ -73,12 +73,14 @@ defmodule SequinWeb.UserLoginLive do
           </.simple_form>
         </div>
 
-        <p class="mt-6 text-center text-sm">
-          Don't have an account?
-          <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
-            Sign up
-          </.link>
-        </p>
+        <%= if @account_self_signup? do %>
+          <p class="mt-6 text-center text-sm">
+            Don't have an account?
+            <.link navigate={~p"/register"} class="font-semibold text-brand hover:underline">
+              Sign up
+            </.link>
+          </p>
+        <% end %>
       </div>
     </div>
     """
@@ -95,6 +97,7 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(github_disabled: github_disabled?())
       |> assign(redirect_to: session["user_return_to"])
       |> assign(accepting_invite?: accepting_invite?(session))
+      |> assign(account_self_signup?: Sequin.feature_enabled?(:account_self_signup))
 
     {:ok, socket, temporary_assigns: [form: form]}
   end

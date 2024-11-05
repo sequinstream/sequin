@@ -61,20 +61,26 @@ defmodule SequinWeb.UserSessionController do
   defp handle_oauth_callback(conn, user_data, _token) do
     %{"email" => email, "sub" => github_id} = user_data
     github_id = to_string(github_id)
+    user = Accounts.get_user_by_auth_provider_id(:github, github_id)
 
-    case Accounts.get_user_by_auth_provider_id(:github, github_id) do
-      nil ->
+    case {user, Sequin.feature_enabled?(:account_self_signup)} do
+      {nil, false} ->
+        conn
+        |> put_flash(:toast, %{kind: :error, title: "Account creation is disabled"})
+        |> redirect(to: ~p"/login")
+
+      {nil, true} ->
         {:ok, user} =
           Accounts.register_user(:github, %{
             email: email,
             name: Map.get(user_data, "name"),
-            auth_provider_id: to_string(github_id),
+            auth_provider_id: github_id,
             extra: user_data
           })
 
         UserAuth.log_in_user(conn, user)
 
-      user ->
+      {user, _} ->
         {:ok, updated_user} =
           Accounts.update_user_github_profile(user, %{
             name: Map.get(user_data, "name"),

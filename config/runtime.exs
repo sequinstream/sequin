@@ -34,10 +34,17 @@ end
 ecto_socket_opts = if (System.get_env("ECTO_IPV6") || System.get_env("PG_IPV6")) in ~w(true 1), do: [:inet6], else: []
 
 if config_env() == :prod and self_hosted do
+  enabled_feature_value = ~w(true 1 enabled ENABLED)
+
+  account_self_signup =
+    if System.get_env("FEATURE_ACCOUNT_SELF_SIGNUP", "enabled") in enabled_feature_value, do: :enabled, else: :disabled
+
+  provision_default_user =
+    if System.get_env("FEATURE_PROVISION_DEFAULT_USER", "enabled") in enabled_feature_value, do: :enabled, else: :disabled
+
   database_url =
     case System.get_env("PG_URL") do
       nil ->
-        # Construct database_url from individual env variables
         hostname = System.get_env("PG_HOSTNAME")
         database = System.get_env("PG_DATABASE")
         port = System.get_env("PG_PORT")
@@ -70,7 +77,6 @@ if config_env() == :prod and self_hosted do
 
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
-    # These are public tokens
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     frontend_api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
@@ -81,22 +87,17 @@ if config_env() == :prod and self_hosted do
     url: database_url,
     socket_options: ecto_socket_opts
 
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
   config :sequin, SequinWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
     secret_key_base: secret_key_base
+
+  config :sequin, :features,
+    account_self_signup: account_self_signup,
+    provision_default_user: provision_default_user
 
   config :sequin,
     api_base_url: "http://#{host || "localhost"}:#{port}"
@@ -121,7 +122,6 @@ if config_env() == :prod and not self_hosted do
 
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
-    # These are public tokens
     api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY",
     frontend_api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
 
@@ -137,22 +137,15 @@ if config_env() == :prod and not self_hosted do
       ]
     ]
 
-  # The secret key base is used to sign/encrypt cookies and other secrets.
-  # A default value is used in config/dev.exs and config/test.exs but you
-  # want to use a different value for prod and you most likely don't want
-  # to check this value into version control, so we use an environment
-  # variable instead.
   config :sequin, SequinWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [
-      # Enable IPv6 and bind on all interfaces.
-      # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
-      # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
-      # for details about using IPv6 vs IPv4 and loopback vs public addresses.
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: port
     ],
     secret_key_base: secret_key_base
+
+  config :sequin, :features, account_self_signup: :enabled
 
   config :sequin,
     api_base_url: "https://api.sequinstream.com"

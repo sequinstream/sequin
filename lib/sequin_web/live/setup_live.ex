@@ -128,7 +128,16 @@ defmodule SequinWeb.SetupLive do
   end
 
   def handle_event("get_started", _, socket) do
-    create_account_with_user!()
+    if Sequin.feature_enabled?(:provision_default_user) do
+      create_account_with_user!()
+    end
+
+    description =
+      if Sequin.feature_enabled?(:provision_default_user) do
+        "Please login with the user `#{@stub_user_email}` and password `#{@stub_user_password}`"
+      else
+        "Please create an account to continue"
+      end
 
     socket =
       socket
@@ -136,7 +145,7 @@ defmodule SequinWeb.SetupLive do
       |> put_flash(:toast, %{
         kind: :info,
         title: "Instance is ready",
-        description: "Please login with the user `#{@stub_user_email}` and password `#{@stub_user_password}`",
+        description: description,
         duration: 60_000
       })
 

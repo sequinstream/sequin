@@ -32,23 +32,23 @@ This is a common replication pattern. This guide shows you how to implement repl
     </Check>
 
   </Step>
-  <Step title="Create a Sequence" icon="list-ol">
-    Add a Sequence to your `products` table to stream rows to your search index:
+  <Step title="Create a Stream" icon="list-ol">
+    Add a Stream to your `products` table to stream rows to your search index:
 
-    1. Navigate to the **Sequences** tab and click **Create Sequence**.
+    1. Navigate to the **Streams** tab and click **Create Stream**.
     2. Select the `products` table connected to your WAL pipeline.
     3. Select a column to use for ordering, like `updated_at`.
-    3. Click **Create Sequence**.
+    3. Click **Create Stream**.
 
     <Check>
       Sequin is now set up to stream changes from your `products` table.
     </Check>
   </Step>
   <Step title="Create a Webhook Subscription" icon="webhook">
-    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `products` sequence to your search index (which you'll handle in the next step).
+    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `products` stream to your search index (which you'll handle in the next step).
 
     1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
-    2. Select the `products` sequence you just created.
+    2. Select the `products` stream you just created.
     3. Right now, you don't need to filter the messages you want to capture.
     4. In the next section, have the consumer group start **At the beginning of the table** so you can backfill your search index.
     5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for your application and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
@@ -56,7 +56,7 @@ This is a common replication pattern. This guide shows you how to implement repl
     7. Name your webhook subscription and click **Create webhook subscription**.
 
     <Check>
-      You've set up a webhook subscription to deliver rows from your `products` sequence to your application's endpoint.
+      You've set up a webhook subscription to deliver rows from your `products` stream to your application's endpoint.
     </Check>
 
   </Step>

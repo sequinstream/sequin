@@ -7,7 +7,7 @@ defmodule SequinWeb.HomeLive do
     if Application.get_env(:sequin, :self_hosted) do
       cond do
         Sequin.Accounts.any_accounts?() ->
-          {:ok, push_navigate(socket, to: "/sequences")}
+          {:ok, push_navigate(socket, to: "/streams")}
 
         Sequin.Consumers.any_unmigrated_consumers?() ->
           {:ok, push_navigate(socket, to: "/migration-oct-2024")}
@@ -16,7 +16,7 @@ defmodule SequinWeb.HomeLive do
           {:ok, push_navigate(socket, to: "/setup")}
       end
     else
-      {:ok, push_navigate(socket, to: ~p"/sequences")}
+      {:ok, push_navigate(socket, to: ~p"/streams")}
     end
   end
 end

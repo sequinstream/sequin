@@ -55,7 +55,7 @@
 
   function closeDialog() {
     dialogOpen = false;
-    window.history.pushState({}, "", "/sequences");
+    window.history.pushState({}, "", "/streams");
   }
 
   function handleFormSubmit(event: CustomEvent) {
@@ -69,12 +69,12 @@
   }
 
   function handleDelete(sequenceId) {
-    if (confirm("Are you sure you want to remove this sequence?")) {
+    if (confirm("Are you sure you want to remove this stream?")) {
       pushEvent("delete_sequence", { id: sequenceId }, (reply) => {
         if (reply.ok) {
           sequences = sequences.filter((seq) => seq.id !== sequenceId);
         } else {
-          alert("Failed to remove sequence. Please try again.");
+          alert("Failed to remove stream. Please try again.");
         }
       });
     }
@@ -82,20 +82,20 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert show={!hasDatabases} entityName="sequence" />
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="stream" />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <ListOrdered class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">Sequences</h1>
+      <h1 class="text-2xl font-bold">Streams</h1>
     </div>
     {#if sequences.length > 0 && hasDatabases}
       <a
-        href="/sequences/new"
+        href="/streams/new"
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create Sequence</Button>
+        <Button>Create Stream</Button>
       </a>
     {/if}
   </div>
@@ -103,24 +103,24 @@
   {#if sequences.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No sequences found</h2>
+        <h2 class="text-xl font-semibold mb-4">No streams found</h2>
         <p class="text-gray-600 mb-6">
-          Sequences allow you to stream data from specific tables in your
+          Streams allow you to stream data from specific tables in your
           PostgreSQL database.
         </p>
         {#if hasDatabases}
           <a
-            href="/sequences/new"
+            href="/streams/new"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
-            <Button>Create Sequence</Button>
+            <Button>Create Stream</Button>
           </a>
         {:else}
-          <Button disabled>Create Sequence</Button>
+          <Button disabled>Create Stream</Button>
           <p class="text-gray-600 mt-4">
             You need to connect a database to Sequin before you can create a
-            sequence.
+            stream.
           </p>
         {/if}
       </div>
@@ -167,7 +167,7 @@
                   <Button variant="ghost" builders={[builder]}>
                     <MoreHorizontal class="h-4 w-4" />
                     <span class="sr-only">
-                      Sequence Menu for {sequence.table_schema}.{sequence.table_name}
+                      Stream Menu for {sequence.table_schema}.{sequence.table_name}
                     </span>
                   </Button>
                 </DropdownMenuTrigger>
@@ -181,14 +181,14 @@
                           disabled={sequence.consumer_count > 0}
                         >
                           <Trash2 class="h-4 w-4" />
-                          Remove Sequence
+                          Remove Stream
                         </DropdownMenuItem>
                       </div>
                     </Tooltip.Trigger>
                     {#if sequence.consumer_count > 0}
                       <Tooltip.Content>
                         <p class="text-sm text-muted-foreground">
-                          This sequence cannot be removed because it has active
+                          This stream cannot be removed because it has active
                           consumers.
                         </p>
                       </Tooltip.Content>

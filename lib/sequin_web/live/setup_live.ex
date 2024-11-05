@@ -10,7 +10,7 @@ defmodule SequinWeb.SetupLive do
 
     case check_user_setup() do
       {:ok, :complete} ->
-        {:ok, push_navigate(socket, to: ~p"/sequences")}
+        {:ok, push_navigate(socket, to: ~p"/streams")}
 
       {:ok, :incomplete, account} ->
         {:ok,
@@ -148,7 +148,7 @@ defmodule SequinWeb.SetupLive do
 
     case check_user_setup() do
       {:ok, :complete} ->
-        {:noreply, push_navigate(socket, to: ~p"/sequences")}
+        {:noreply, push_navigate(socket, to: ~p"/streams")}
 
       {:ok, :incomplete, account} ->
         {:noreply, assign(socket, step: :welcome_connected, replication_form: %{}, account: account, db_info: db_info)}

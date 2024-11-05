@@ -84,20 +84,20 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
         <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
   </Step>
-  <Step title="Create a Sequence" icon="list">
-    Now, create a [Sequence](/how-sequin-works#sequences) to stream changes from the `public.regions` table:
+  <Step title="Create a Stream" icon="list">
+    Now, create a [Stream](/how-sequin-works#streams) to stream changes from the `public.regions` table:
 
-    1. Navigate to the **Sequences** tab and click the **Create Sequence** button.
+    1. Navigate to the **Streams** tab and click the **Create Stream** button.
 
     2. The `public.regions` table should already be selected by default.
     
     3. Select the column Sequin should use to order changes. In this case select the `updated_at` column:
 
         <Frame>
-          <img src="/images/quickstart/create-sequence.png" alt="Create Sequence" />
+          <img src="/images/quickstart/create-sequence.png" alt="Create Stream" />
         </Frame>
 
-    4. Click **Create Sequence**.
+    4. Click **Create Stream**.
 
    
   </Step>
@@ -105,11 +105,11 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
 
 ## Ready to stream
 
-You are running Sequin, connected to a playground database, and have a Sequence setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consume API:
+You are running Sequin, connected to a playground database, and have a Stream setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consume API:
 
 <CardGroup cols={1}>
   <Card title="Quickstart continued: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">
-    See how to subscribe to your Sequence and receive rows as they change.
+    See how to subscribe to your Stream and receive rows as they change.
   </Card>
   <Card title="Quickstart continued: Consume rows via the Consume API" icon="gauge-max" href="/quickstart/consume-with-api">
     See how to use the Consume API to receive rows as they change.

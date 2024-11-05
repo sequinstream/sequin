@@ -20,7 +20,7 @@
 <Card>
   <CardContent class="p-6 space-y-6">
     <div class="flex justify-between items-center">
-      <h2 class="text-lg font-semibold">Sequence</h2>
+      <h2 class="text-lg font-semibold">Stream</h2>
       <LinkPushNavigate href="/databases/{consumer.postgres_database.id}">
         <Button variant="outline" size="sm">
           <ExternalLink class="h-4 w-4 mr-2" />
@@ -53,11 +53,11 @@
           </Tooltip.Trigger>
           <Tooltip.Content class="max-w-xs space-y-2">
             <p class="text-xs text-gray-500">
-              The columns of the sequence table used to group messages. Messages
+              The columns of the stream table used to group messages. Messages
               in a group are processed in FIFO order.
               <br />
               <br />
-              By default, the primary key columns of the sequence table are used.
+              By default, the primary key columns of the stream table are used.
               <br />
               <br />
               See the

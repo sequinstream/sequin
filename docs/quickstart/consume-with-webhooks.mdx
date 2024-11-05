@@ -1,10 +1,10 @@
 ---
 title: 'Consume with webhooks'
 sidebarTitle: 'Consume with webhooks'
-description: 'Consume rows from your Sequence using a Webhook Subscription'
+description: 'Consume rows from your Stream using a Webhook Subscription'
 ---
 
-With Sequin's **Webhook Subscriptions**, you can receive rows from your Sequences as HTTP POST requests to your endpoints. Webhook Subscriptions offer exactly-once processing and automatic retries and backoffs if your endpoint is unavailable.
+With Sequin's **Webhook Subscriptions**, you can receive rows from your Streams as HTTP POST requests to your endpoints. Webhook Subscriptions offer exactly-once processing and automatic retries and backoffs if your endpoint is unavailable.
 
 <Info>
 This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
@@ -12,11 +12,11 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
 <Steps titleSize="h2">
   <Step title="Create a Webhook Subscription" icon="webhook">
-    After connecting a database and creating a Sequence, you can consume rows from your Sequence using a Webhook Subscription:
+    After connecting a database and creating a Stream, you can consume rows from your Stream using a Webhook Subscription:
 
     1. Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-    2. The Sequence you created for the `public.regions` table should already be selected:
+    2. The Stream you created for the `public.regions` table should already be selected:
 
         <Frame>
           <img src="/images/quickstart/setup-consumer-source.png" alt="Select webhook source" />
@@ -28,7 +28,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
           <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
         </Frame>
 
-    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Sequence, playing the whole table from the beginning:
+    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Stream, playing the whole table from the beginning:
 
 
         <Frame>

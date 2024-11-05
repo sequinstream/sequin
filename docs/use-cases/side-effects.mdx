@@ -45,22 +45,22 @@ Here is how to implement side effects with Sequin.
       Sequin will now capture every `insert` on the `users` table and store it in your new events table.
     </Check>
   </Step>
-  <Step title="Create a Sequence" icon="list-ol">
-    Add a Sequence to your `events` table to stream changes to your application:
+  <Step title="Create a Stream" icon="list-ol">
+    Add a Stream to your `events` table to stream changes to your application:
 
-    1. Navigate to the **Sequences** tab and click **Create Sequence**.
+    1. Navigate to the **Streams** tab and click **Create Stream**.
     2. Select the `events` table connected to your WAL pipeline. Sequin will automatically detect the correct columns to use for ordering.
-    3. Click **Create Sequence**.
+    3. Click **Create Stream**.
 
     <Check>
       Sequin is now set up to stream changes from your `events` table.
     </Check>
   </Step>
   <Step title="Create a Webhook Subscription" icon="webhook">
-    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `events` sequence to an endpoint in your application (which you'll handle in the next step).
+    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `events` stream to an endpoint in your application (which you'll handle in the next step).
 
     1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
-    2. Select the `events` sequence you just created.
+    2. Select the `events` stream you just created.
     3. Right now, you don't need to filter the messages you want to capture.
     4. In the next section, have the consumer group start **At the end of the table** so you only send a welcome email to new users.
     5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for your application and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
@@ -68,7 +68,7 @@ Here is how to implement side effects with Sequin.
     7. Name your webhook subscription and click **Create webhook subscription**.
 
     <Check>
-      You've set up a webhook subscription to deliver rows from your `events` sequence to your application's endpoint.
+      You've set up a webhook subscription to deliver rows from your `events` stream to your application's endpoint.
     </Check>
 
   </Step>

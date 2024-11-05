@@ -3,7 +3,7 @@ title: 'Overview'
 description: "Exactly-once processing of rows from your database"
 ---
 
-The **Consume API** allows you to pull rows from your Sequin Sequences using HTTP endpoints. It follows the popular **consumer group** pattern, providing scalable and fault-tolerant processing of your data.
+The **Consume API** allows you to pull rows from your Sequin Streams using HTTP endpoints. It follows the popular **consumer group** pattern, providing scalable and fault-tolerant processing of your data.
 
 In the consumer group pattern, each message (i.e. row from your table) goes to only one worker in the group. If a worker fails, other workers can pick up its messages, making sure nothing is missed.
 

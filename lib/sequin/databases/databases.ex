@@ -170,7 +170,7 @@ defmodule Sequin.Databases do
         Repo.delete(sequence)
 
       _ ->
-        {:error, Error.invariant(message: "Cannot delete sequence that's used by consumers")}
+        {:error, Error.invariant(message: "Cannot delete stream that's used by consumers")}
     end
   end
 
@@ -195,7 +195,7 @@ defmodule Sequin.Databases do
           {ok_count + 1, error_count}
 
         {:error, error} ->
-          Logger.error("Failed to update sequence #{sequence.id} from database: #{inspect(error)}", error: error)
+          Logger.error("Failed to update stream #{sequence.id} from database: #{inspect(error)}", error: error)
           {ok_count, error_count + 1}
       end
     end)

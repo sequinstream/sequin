@@ -49,12 +49,12 @@ This guide shows you how to implement fan outs with Sequin.
       Sequin will now capture every `insert` on the `orders` table and store it in your new events table.
     </Check>
   </Step>
-  <Step title="Create a Sequence" icon="list-ol">
-    Add a Sequence to your `events` table to stream changes to your application:
+  <Step title="Create a Stream" icon="list-ol">
+    Add a Stream to your `events` table to stream changes to your application:
 
-    1. Navigate to the **Sequences** tab and click **Create Sequence**.
+    1. Navigate to the **Streams** tab and click **Create Stream**.
     2. Select the `events` table connected to your WAL pipeline. Sequin will automatically detect the correct columns to use for ordering.
-    3. Click **Create Sequence**.
+    3. Click **Create Stream**.
 
     <Check>
       Sequin is now set up to stream changes from your `events` table.
@@ -64,7 +64,7 @@ This guide shows you how to implement fan outs with Sequin.
     Create three [webhook subscriptions](/how-sequin-works#webhooks) (one for inventory, one for shipping, and one for invoicing) that deliver new orders to the relevant services:
 
     1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
-    2. Select the `events` sequence you just created.
+    2. Select the `events` stream you just created.
     3. Right now, you don't need to filter the messages you want to capture.
     4. In the next section, have the consumer group start **At the end of the table** so you only process new orders.
     5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for the relevant service and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.

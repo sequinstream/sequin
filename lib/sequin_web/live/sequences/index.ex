@@ -59,13 +59,13 @@ defmodule SequinWeb.SequencesLive.Index do
 
   defp apply_action(socket, :new, _params) do
     socket
-    |> assign(:page_title, "New Sequence")
+    |> assign(:page_title, "New Stream")
     |> assign(:sequence, %Databases.Sequence{})
   end
 
   defp apply_action(socket, :index, _params) do
     socket
-    |> assign(:page_title, "Sequences")
+    |> assign(:page_title, "Streams")
     |> assign(:sequence, nil)
   end
 
@@ -83,7 +83,7 @@ defmodule SequinWeb.SequencesLive.Index do
     {:noreply,
      socket
      |> assign(:changeset, Databases.Sequence.changeset(%Databases.Sequence{}, %{}))
-     |> push_navigate(to: "/sequences")}
+     |> push_navigate(to: "/streams")}
   end
 
   def handle_event("form_submitted", %{"form" => %{"postgres_database_id" => nil} = params}, socket) do
@@ -110,8 +110,8 @@ defmodule SequinWeb.SequencesLive.Index do
 
       {:noreply,
        socket
-       |> put_flash(:toast, %{kind: :success, title: "Sequence created successfully"})
-       |> push_navigate(to: "/sequences")}
+       |> put_flash(:toast, %{kind: :success, title: "Stream created"})
+       |> push_navigate(to: "/streams")}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, changeset: changeset)}
@@ -137,7 +137,7 @@ defmodule SequinWeb.SequencesLive.Index do
           {:ok, _} ->
             {:noreply,
              socket
-             |> put_flash(:toast, %{kind: :success, title: "Sequence deleted successfully"})
+             |> put_flash(:toast, %{kind: :success, title: "Stream deleted"})
              |> assign(:sequences, list_sequences(account_id))}
 
           {:error, _} ->
@@ -145,7 +145,7 @@ defmodule SequinWeb.SequencesLive.Index do
         end
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Sequence not found"})}
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Stream not found"})}
     end
   end
 

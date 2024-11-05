@@ -106,7 +106,7 @@
 </script>
 
 <FullPageModal
-  title="Create Sequence"
+  title="Create Stream"
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -114,7 +114,7 @@
   <form on:submit={handleSubmit} class="space-y-6 max-w-4xl mx-auto mt-6">
     <Card>
       <CardHeader>
-        <CardTitle>Sequence details</CardTitle>
+        <CardTitle>Stream details</CardTitle>
       </CardHeader>
       <CardContent class="space-y-6">
         <TableSelector
@@ -198,7 +198,7 @@
               !form.sort_column_attnum}
           >
             <span slot="loading">Validating...</span>
-            Create Sequence
+            Create Stream
           </Button>
         </div>
       </CardContent>

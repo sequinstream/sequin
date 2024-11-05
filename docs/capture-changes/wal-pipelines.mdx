@@ -89,7 +89,7 @@ create table sequin_events (
 </ResponseField>
 
 <ResponseField name="seq" type="bigint" required>
-  (internal) A Sequin sequence for the event entry.
+  (internal) A Sequin stream for the event entry.
 </ResponseField>
 
 <ResponseField name="source_database_id" type="uuid" required>
@@ -250,7 +250,7 @@ After capturing changes in your event table, you can stream these events using a
 - [Webhooks](/how-sequin-works#webhook-subscriptions)
 - Sync API (coming soon)
 
-Create a Sequence for your event table to begin streaming the changes to your applications.
+Create a Stream for your event table to begin streaming the changes to your applications.
 
 ## Event Examples
 

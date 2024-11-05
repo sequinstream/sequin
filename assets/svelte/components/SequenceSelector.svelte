@@ -185,7 +185,7 @@
             />
             <Input
               type="search"
-              placeholder="Search sequences..."
+              placeholder="Search streams..."
               class="pl-8"
               bind:value={searchQuery}
             />
@@ -213,7 +213,7 @@
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sequences</TableHead>
+                <TableHead>Streams</TableHead>
                 <TableHead>Sort Column</TableHead>
               </TableRow>
             </TableHeader>
@@ -222,7 +222,7 @@
                 <TableRow>
                   <TableCell colspan={2} class="text-center py-8">
                     <p class="text-gray-500">
-                      No sequences found in the database.
+                      No streams found in the database.
                     </p>
                   </TableCell>
                 </TableRow>

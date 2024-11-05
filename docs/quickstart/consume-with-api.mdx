@@ -1,10 +1,10 @@
 ---
 title: 'Consume with API'
 sidebarTitle: 'Consume with API'
-description: 'Consume rows from your Sequence using the Consume API'
+description: 'Consume rows from your Stream using the Consume API'
 ---
 
-With Sequin's **Consume API**, you can pull rows from your Sequences using HTTP endpoints. You'll create a **Consume API Endpoint** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
+With Sequin's **Consume API**, you can pull rows from your Streams using HTTP endpoints. You'll create a **Consume API Endpoint** that can have multiple consumers (processes or workers) pulling rows in parallel. Each consumer acknowledges rows after processing them, and if a consumer fails, the rows will be made available to other consumers.
 
 <Info>
 This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
@@ -12,11 +12,11 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
 
 <Steps titleSize="h2">
   <Step title="Create a Consume API Endpoint" icon="users">
-    After connecting a database and creating a Sequence, you can consume rows from your Sequence using a Consume API Endpoint:
+    After connecting a database and creating a Stream, you can consume rows from your Stream using a Consume API Endpoint:
 
     1. Navigate to the **Consume API** tab and click the **Create API Endpoint** button.
 
-    2. The Sequence you created for the `public.regions` table should already be selected:
+    2. The Stream you created for the `public.regions` table should already be selected:
 
         <Frame>
           <img src="/images/quickstart/setup-consumer-source.png" alt="Select consumer source" />
@@ -28,7 +28,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
           <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
         </Frame>
 
-    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Sequence, playing the whole table from the beginning:
+    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Stream, playing the whole table from the beginning:
 
         <Frame>
           <img src="/images/quickstart/set-consumer-start.png" alt="Set consumer start" style={{ maxWidth: '400px' }} />
@@ -158,7 +158,7 @@ You are running Sequin and have setup a Consume API Endpoint that both backfille
 
 <CardGroup cols={1}>
   <Card title="Quickstart: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">
-    See how to subscribe to your Sequence and receive rows as they change.
+    See how to subscribe to your Stream and receive rows as they change.
   </Card>
   <Card title="Quickstart: Capture changes" icon="gauge-max" href="/quickstart/capture-changes">
     See how to capture every discrete change that happens to tables in your database.

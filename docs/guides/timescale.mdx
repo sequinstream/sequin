@@ -77,9 +77,9 @@ Name your database connection in Sequin and click the **Connect Database** butto
 </Step>
 </Steps>
 
-## Creating a Sequence for a TimescaleDB Hypertable
+## Creating a Stream for a TimescaleDB Hypertable
 
-TimescaleDB uses hypertables to optimize time-series data storage. Hypertables work like any other table in Sequin. Let's create a Sequence for a hypertable:
+TimescaleDB uses hypertables to optimize time-series data storage. Hypertables work like any other table in Sequin. Let's create a Stream for a hypertable:
 
 <Steps>
 <Step title="Create a hypertable">
@@ -99,17 +99,17 @@ select create_hypertable('sensor_data', 'time');
 ```
 </Step>
 
-<Step title="Create a Sequence in Sequin">
-1. In the Sequin console, go to the **Sequences** tab and click **Create Sequence**.
+<Step title="Create a Stream in Sequin">
+1. In the Sequin console, go to the **Streams** tab and click **Create Stream**.
 2. Select the `sensor_data` hypertable.
 3. Choose `time` as the sort column.
-4. Click **Create Sequence**.
+4. Click **Create Stream**.
 </Step>
 </Steps>
 
 ## Consuming TimescaleDB Data with Sequin
 
-Now that you have a Sequence set up, you can consume data using Sequin's [Consume API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
+Now that you have a Stream set up, you can consume data using Sequin's [Consume API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
 
 Here's an example of how to consume data using the Consume API:
 

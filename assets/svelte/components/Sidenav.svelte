@@ -22,7 +22,6 @@
     Cog,
     Logs,
     ListOrdered,
-    RefreshCw,
   } from "lucide-svelte";
 
   export let live;
@@ -42,18 +41,17 @@
     {
       heading: "Stream",
       items: [
-        { path: "/sequences", text: "Sequences", icon: ListOrdered },
-        { path: "/consumers/pull", text: "Consume API", icon: Radio },
+        { path: "/streams", text: "Streams", icon: ListOrdered },
+        { path: "/consumers/pull", text: "Consumer Groups", icon: Radio },
+      ],
+    },
+    {
+      heading: "Destinations",
+      items: [
         {
           path: "/consumers/push",
           text: "Webhook Subscriptions",
           icon: Webhook,
-        },
-        {
-          path: "/sync-endpoints",
-          text: "Sync Endpoints",
-          icon: RefreshCw,
-          disabledText: "Sync Endpoints are coming soon",
         },
       ],
     },
@@ -152,55 +150,25 @@
           </h3>
         {/if}
         {#each group.items as item}
-          {#if item.disabledText}
-            <Tooltip.Root>
-              <Tooltip.Trigger asChild>
-                <div
-                  class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 text-carbon-300 cursor-not-allowed"
-                >
-                  <svelte:component
-                    this={item.icon}
-                    class="h-4 w-4 flex-shrink-0 {$isNavCollapsed
-                      ? ''
-                      : 'mr-2'}"
-                  />
-                  {#if !$isNavCollapsed}
-                    <span class="text-sm leading-tight truncate"
-                      >{item.text}</span
-                    >
-                    <span
-                      class="px-2 py-1 rounded-full bg-carbon-100 text-carbon-600 ml-2"
-                      style="font-size: 0.5em">SOON</span
-                    >
-                  {/if}
-                </div>
-              </Tooltip.Trigger>
-              <Tooltip.Content class="max-w-xs">
-                <p class="text-xs text-gray-500">{item.disabledText}</p>
-              </Tooltip.Content>
-            </Tooltip.Root>
-          {:else}
-            <a
-              href={item.path}
-              data-phx-link="redirect"
-              data-phx-link-state="push"
+          <a
+            href={item.path}
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <div
+              class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
+                item.path,
+              )}"
             >
-              <div
-                class="my-1 flex h-8 w-full flex-row items-center rounded px-1.5 {navLink(
-                  item.path,
-                )}"
-              >
-                <svelte:component
-                  this={item.icon}
-                  class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
-                />
-                {#if !$isNavCollapsed}
-                  <span class="text-sm leading-tight truncate">{item.text}</span
-                  >
-                {/if}
-              </div>
-            </a>
-          {/if}
+              <svelte:component
+                this={item.icon}
+                class="h-4 w-4 flex-shrink-0 {$isNavCollapsed ? '' : 'mr-2'}"
+              />
+              {#if !$isNavCollapsed}
+                <span class="text-sm leading-tight truncate">{item.text}</span>
+              {/if}
+            </div>
+          </a>
         {/each}
       {/each}
     </div>

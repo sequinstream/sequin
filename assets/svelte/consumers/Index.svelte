@@ -56,16 +56,15 @@
       <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
         <AlertCircle class="h-5 w-5 text-carbon-600" />
         <AlertTitle class="text-lg font-semibold text-carbon-900">
-          First, you need to create a sequence
+          First, you need to create a stream
         </AlertTitle>
         <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must have at least one sequence before you can create a
-          consumer.
+          Sequin must have at least one stream before you can create a consumer.
         </AlertDescription>
 
         <div class="flex mt-2 gap-4 col-start-2">
           <a
-            href="/sequences/new"
+            href="/streams/new"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
@@ -74,7 +73,7 @@
               class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
             >
               <Database class="inline-block h-4 w-4 mr-2" />
-              Create sequence
+              Create stream
             </Button>
           </a>
         </div>

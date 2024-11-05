@@ -127,7 +127,7 @@
         );
         if (selectedSequence) {
           const tableName = selectedSequence.table_name;
-          const newName = `${tableName}_pull_consumer`;
+          const newName = `${tableName}_group`;
           form.name = newName;
         }
       }
@@ -172,7 +172,7 @@
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
-          <Label>Sequence</Label>
+          <Label>Stream</Label>
           {#if isEditMode}
             <Select
               disabled

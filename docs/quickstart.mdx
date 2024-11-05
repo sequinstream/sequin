@@ -37,37 +37,37 @@ iconType: "solid"
     Your database is now connected to Sequin!
     </Check>
   </Step>
-  <Step title="Create a Sequence">
-    Now, create a [Sequence](/how-sequin-works#sequences) to enable your database to stream changes.
+  <Step title="Create a Stream">
+    Now, create a [Stream](/how-sequin-works#streams) to enable your database to stream changes.
 
-    Navigate to the **Sequences** tab and click the **Create Sequence** button.
+    Navigate to the **Streams** tab and click the **Create Stream** button.
 
     Select the table you want to stream. Then, select the column Sequin should use to order changes, like an `updated_at` column or an incrementing `id` column:
 
     <Frame>
-      <img src="/images/cloud-getting-started/create-sequence.png" alt="Create Sequence" />
+      <img src="/images/cloud-getting-started/create-sequence.png" alt="Create Stream" />
     </Frame>
 
-    Click **Create Sequence**.
+    Click **Create Stream**.
 
      <Check>
-    You've created a Sequence and your table is setup to stream.
+    You've created a Stream and your table is setup to stream.
     </Check>
   </Step>
   <Step title="Consume rows">
-    Sequin is setup to stream rows from your table. Now, consume rows from your Sequence using the consume API, the sync API, or webhooks subscriptions.
+    Sequin is setup to stream rows from your table. Now, consume rows from your Stream using the consume API, the sync API, or webhooks subscriptions.
 
     <Tabs>
       <Tab title="Consume API">
         Navigate to the **Consume Endpoints** tab and click the **Create Endpoint** button.
 
-        Select the Sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
+        Select the Stream you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
         <Frame>
           <img src="/images/cloud-getting-started/set-filters.png" alt="Select filters" />
         </Frame>
 
-        Here, we've selected the `public.orders` Sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
+        Here, we've selected the `public.orders` Stream and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
         Now, enter the final details for your consume endpoint:
 
@@ -113,13 +113,13 @@ iconType: "solid"
       <Tab title="Webhook subscriptions">
         Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
-        Select the Sequence you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
+        Select the Stream you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
         <Frame>
           <img src="/images/cloud-getting-started/set-filters.png" alt="Select filters" />
         </Frame>
 
-        Here, we've selected the `public.orders` Sequence and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
+        Here, we've selected the `public.orders` Stream and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
         Now, enter the final details for your webhook subscription:
 
@@ -177,7 +177,7 @@ iconType: "solid"
 
 ## Next steps
 
-You've now walked through the basics of connecting your database, creating a Sequence, and consume rows. Now you can write the business logic in your application.
+You've now walked through the basics of connecting your database, creating a Stream, and consume rows. Now you can write the business logic in your application.
 
 <CardGroup cols={2}>
   <Card title="Learn more about how Sequin works" icon="wrench" href="/how-sequin-works">

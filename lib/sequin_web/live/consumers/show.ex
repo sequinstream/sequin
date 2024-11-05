@@ -66,7 +66,7 @@ defmodule SequinWeb.ConsumersLive.Show do
         {:ok,
          socket
          |> put_flash(:error, "Consumer not found")
-         |> push_navigate(to: ~p"/sequences")}
+         |> push_navigate(to: ~p"/streams")}
     end
   end
 

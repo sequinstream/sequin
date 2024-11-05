@@ -5,7 +5,7 @@ icon: "webhook"
 iconType: "solid"
 ---
 
-With Webhook Subscriptions, Sequin delivers each row from your [Sequence](/how-sequin-works#sequences) to any webhook endpoint, with exactly-once processing.
+With Webhook Subscriptions, Sequin delivers each row from your [Stream](/how-sequin-works#streams) to any webhook endpoint, with exactly-once processing.
 
 Webhook Subscriptions are built on top of the same consumer group system as the [Consume API](/consume/consume-api/overview) and offers the following guarantees:
 
@@ -47,16 +47,16 @@ You can create a Webhook Subscription in the web console by navigating to the **
 </Frame>
 
 
-You'll then select the Sequence you'd like to subscribe to, and configure the following:
+You'll then select the Stream you'd like to subscribe to, and configure the following:
 
 ### Records to process
 
 You can [filter](/how-sequin-works#filtering) the rows delivered to your webhook by adding a filter to any column in the underlying table. Any row that matches the filter will be delivered to your webhook.
 
-Additionally, you'll indicate where in the Sequence you'd like to start receiving rows:
-- **At the beginning**: Start from the oldest row in the Sequence.
-- **At the end**: Start from the newest row in the Sequence.
-- **At a specific position**: Start from a specific row in the Sequence.
+Additionally, you'll indicate where in the Stream you'd like to start receiving rows:
+- **At the beginning**: Start from the oldest row in the Stream.
+- **At the end**: Start from the newest row in the Stream.
+- **At a specific position**: Start from a specific row in the Stream.
 
 <Frame>
   <img src="/images/consume/webhooks/records-to-process.png" alt="Configure the records to process" />

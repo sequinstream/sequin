@@ -89,6 +89,12 @@
       "pages": ["capture-changes/change-capture-pipelines"]
     },
     {
+      "group": "How-to guides",
+      "pages": [
+        "how-tos/audit-logging"
+      ]
+    },
+    {
       "group": "Database setup",
       "pages": [
         "guides/gcp",
@@ -96,15 +102,6 @@
         "guides/azure",
         "guides/neon",
         "guides/supabase"
-      ]
-    },
-    {
-      "group": "Common patterns",
-      "pages": [
-        "use-cases/side-effects",
-        "use-cases/fan-out",
-        "use-cases/replication",
-        "use-cases/audit-logs"
       ]
     },
     {

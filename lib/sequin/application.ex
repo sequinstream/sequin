@@ -38,8 +38,7 @@ defmodule Sequin.Application do
         Sequin.ConsumersRuntime.Supervisor,
         Sequin.DatabasesRuntime.Supervisor,
         Sequin.Tracer.Starter,
-        Sequin.Health.HttpEndpointHealthChecker,
-        Sequin.Health.PostgresDatabaseHealthChecker
+        Sequin.Health.HttpEndpointHealthChecker
       ]
   end
 

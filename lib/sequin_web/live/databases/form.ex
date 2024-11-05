@@ -10,7 +10,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.Health
+  alias Sequin.HealthRuntime.PostgresDatabaseHealthChecker
   alias Sequin.Name
   alias Sequin.Posthog
   alias Sequin.Replication
@@ -121,6 +121,17 @@ defmodule SequinWeb.DatabasesLive.Form do
     socket = maybe_allocate_bastion_port(socket)
 
     {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("test_connection", %{"form" => form}, socket) do
+    params = decode_params(form)
+
+    case test_db_conn(params, socket) do
+      :ok -> {:reply, %{ok: true}, socket}
+      {:error, error} ->
+        {:reply, %{ok: false, error: error_msg(error, false)}, socket}
+    end
   end
 
   @impl Phoenix.LiveView
@@ -294,6 +305,12 @@ defmodule SequinWeb.DatabasesLive.Form do
       :unknown_privileges ->
         "Unable to determine user privileges. Please ensure the user has necessary permissions."
 
+      %ArgumentError{message: message} ->
+        message
+
+      %Sequin.Error.ValidationError{summary: summary} ->
+        summary
+
       unexpected ->
         Logger.error("Unexpected error in databases/form.ex:error_msg/1: #{inspect(unexpected)}")
         "An unexpected error occurred. Please try again or contact us."
@@ -332,21 +349,41 @@ defmodule SequinWeb.DatabasesLive.Form do
             create_database(account_id, db_params, replication_params)
           end
 
-        with {:ok, db} <- res,
-             :ok <- Databases.test_tcp_reachability(db),
-             :ok <- Databases.test_connect(db, 10_000),
-             :ok <- Databases.test_permissions(db),
-             :ok <- Databases.test_slot_permissions(db, db.replication_slot) do
+        with {:ok, db} <- res do
           # It's now safe to start the replication slot
           ReplicationSupervisor.start_replication(db.replication_slot)
-          # Safe to update health here because we just validated that the database is reachable
-          # TODO: Implement background health updates for reachability
-          Health.update(db, :reachable, :healthy)
+
+          %{postgres_database_id: db.id}
+          |> PostgresDatabaseHealthChecker.new(
+            scheduled_at: DateTime.utc_now(),
+            replace: [:scheduled_at]
+          )
+          |> Oban.insert()
+
           {:ok, db}
         end
       end,
       timeout: :timer.seconds(30)
     )
+  end
+
+  defp test_db_conn(params, socket) do
+    db =
+      params["database"]
+      |> Sequin.Map.atomize_keys()
+      |> Map.put(:account_id, current_account_id(socket))
+      |> then(&struct(PostgresDatabase, &1))
+
+    replication_slot =
+      params["replication_slot"]
+      |> Sequin.Map.atomize_keys()
+      |> then(&struct(PostgresReplicationSlot, &1))
+
+    with :ok <- Databases.test_tcp_reachability(db),
+         :ok <- Databases.test_connect(db, 10_000),
+         :ok <- Databases.test_permissions(db) do
+      Databases.test_slot_permissions(db, replication_slot)
+    end
   end
 
   defp put_ipv6(%{"use_local_tunnel" => true} = db_params), do: db_params

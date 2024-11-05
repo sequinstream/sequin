@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { slide } from "svelte/transition";
+  import { slide, fade } from "svelte/transition";
   import FullPageModal from "../components/FullPageModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Switch } from "$lib/components/ui/switch";
+  import { CircleX } from "lucide-svelte";
   import {
     Card,
     CardContent,
@@ -197,6 +198,44 @@
         showSupabasePoolerPrompt = false;
       }
     });
+  }
+
+  type TestConnectionReply =
+    | { ok: true; error: undefined }
+    | { ok: false; error: string };
+
+  type TestConnectionState =
+    | { displayStatus?: boolean; status: "initial" }
+    | { displayStatus?: boolean; status: "loading" }
+    | { displayStatus?: boolean; status: "success" }
+    | { displayStatus?: boolean; status: "error"; error: string };
+
+  let testConnectionState: TestConnectionState = { status: "initial" };
+
+  function onTestConnection() {
+    testConnectionState = { status: "loading" };
+
+    pushEvent("test_connection", { form }, (reply: TestConnectionReply) => {
+      if (reply.ok) {
+        testConnectionState = { displayStatus: true, status: "success" };
+        setTimeout(() => {
+          testConnectionState = { status: "initial" };
+        }, 3000);
+      } else {
+        testConnectionState = {
+          displayStatus: true,
+          status: "error",
+          error: reply.error,
+        };
+        setTimeout(() => {
+          testConnectionState.displayStatus = false;
+        }, 3000);
+      }
+    });
+  }
+
+  function resetTestConnection() {
+    testConnectionState = { status: "initial" };
   }
 
   let urlInput = "";
@@ -422,7 +461,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           {/if}
         </div>
 
-        <div class="flex items-center space-x-2">
+        <div class="flex items-center gap-2">
           {#if form.useLocalTunnel}
             <Switch id="ssl" checked={false} disabled />
           {:else}
@@ -631,22 +670,59 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
 
-        <div class="flex justify-between items-center">
+        <div class="flex justify-between items-center gap-2">
           <Button type="button" variant="outline" on:click={clearForm}>
             Clear Form
           </Button>
-          <Button type="submit" loading={validating} variant="default">
-            <span slot="loading"> Validating... </span>
-            {#if isEdit}
-              Update Database
-            {:else}
-              Connect Database
-            {/if}
-          </Button>
+          <div class="flex gap-2">
+            <Button
+              loading={testConnectionState.status === "loading"}
+              type="button"
+              variant="outline"
+              class="self-end"
+              on:click={onTestConnection}
+            >
+              {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
+                <span
+                  class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
+                ></span>
+                Connection succeeded
+              {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
+                <span
+                  class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
+                ></span>
+                Connection failed
+              {:else}
+                Test Connection
+              {/if}
+            </Button>
+            <Button type="submit" loading={validating} variant="default">
+              <span slot="loading"> Validating... </span>
+              {#if isEdit}
+                Update Database
+              {:else}
+                Connect Database
+              {/if}
+            </Button>
+          </div>
         </div>
 
         {#if validating}
           <Progress class="mt-4" value={$progress} />
+        {/if}
+
+        {#if testConnectionState.status === "error"}
+          <div
+            class="flex items-center justify-end gap-2"
+            transition:fade={{ duration: 200 }}
+          >
+            <p class="text-destructive text-sm">
+              Test connection failed: {testConnectionState.error}
+            </p>
+            <Button variant="ghost" size="icon" on:click={resetTestConnection}>
+              <CircleX class="h-4 w-4 text-gray-500" />
+            </Button>
+          </div>
         {/if}
       </CardContent>
     </Card>

@@ -13,6 +13,7 @@ defmodule Sequin.Databases do
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
+  alias Sequin.ObanQuery
 
   require Logger
 
@@ -99,11 +100,18 @@ defmodule Sequin.Databases do
   def delete_db_with_replication_slot(%PostgresDatabase{} = db) do
     Repo.transact(fn ->
       db = Repo.preload(db, [:replication_slot, :sequences])
+
+      health_checker_query =
+        Oban.Job
+        |> ObanQuery.where_args(%{postgres_database_id: db.id})
+        |> ObanQuery.where_worker(Sequin.HealthRuntime.PostgresDatabaseHealthChecker)
+
       # Check for related entities that need to be removed first
       with :ok <- check_related_entities(db),
            {:ok, _} <- Replication.delete_pg_replication_with_lifecycle(db.replication_slot),
            {:ok, _} <- delete_sequences(db),
-           {:ok, _} <- Repo.delete(db) do
+           {:ok, _} <- Repo.delete(db),
+           {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
         :ok
       end
     end)

@@ -1,7 +1,7 @@
 ---
 title: 'Ack messages'
 description: "Ack messages for a Consume endpoint"
-api: 'POST /http_pull_consumers/{consumer_name_or_id}/ack'
+api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/ack'
 ---
 
 ## Request parameters
@@ -28,7 +28,7 @@ curl --request POST \
 </RequestExample>
 
 <ResponseExample>
-```json 204 OK
-<No content>
+```json 200 OK
+{ "success": true }
 ```
 </ResponseExample>

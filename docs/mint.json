@@ -67,7 +67,7 @@
       "group": "Consume",
       "pages": [
         {
-          "group": "Consume API",
+          "group": "Consumer Group API",
           "pages": [
             "consume/consume-api/overview",
             "consume/consume-api/receive",

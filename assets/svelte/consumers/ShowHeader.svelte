@@ -140,7 +140,10 @@
 <Dialog.Root bind:open={showDeleteConfirmDialog}>
   <Dialog.Content>
     <Dialog.Header>
-      <Dialog.Title>Are you sure you want to delete this consumer?</Dialog.Title
+      <Dialog.Title class="leading-6"
+        >Are you sure you want to delete this {kind === "pull"
+          ? "Consumer Group"
+          : "Webhook Subscription"}?</Dialog.Title
       >
       <Dialog.Description>This action cannot be undone.</Dialog.Description>
     </Dialog.Header>

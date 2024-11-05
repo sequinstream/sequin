@@ -88,7 +88,7 @@
 <Card class="mb-8">
   <CardContent class="p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold">Cursor Position</h2>
+      <h2 class="text-lg font-semibold">Cursor position</h2>
       <div class="flex items-center">
         {#if isBackfilling}
           <div class="mr-2 text-blue-500 flex items-center" title="Backfilling">
@@ -206,7 +206,7 @@
       {#if cursor_position.min_active_cursor === null && cursor_position.max_active_cursor === null && cursor_position.to_process_count > 0}
         <Alert.Root class="mt-4">
           <AlertCircle class="h-4 w-4" />
-          <Alert.Title>No Active Cursors</Alert.Title>
+          <Alert.Title>No active cursors</Alert.Title>
           <Alert.Description>
             The consumer is not currently processing any records.
           </Alert.Description>
@@ -214,7 +214,7 @@
       {:else if cursor_position.to_process_count === 0}
         <Alert.Root class="mt-4" variant="default">
           <CheckCircle class="h-4 w-4" />
-          <Alert.Title>All Records Processed</Alert.Title>
+          <Alert.Title>All records processed</Alert.Title>
           <Alert.Description>
             The consumer has processed all available records.
           </Alert.Description>
@@ -227,7 +227,7 @@
 <Dialog.Root bind:open={showDialog}>
   <Dialog.Content class="md:max-w-4xl overflow-visible">
     <Dialog.Header>
-      <Dialog.Title>Update Cursor Position</Dialog.Title>
+      <Dialog.Title>Update cursor position</Dialog.Title>
       <Dialog.Description>
         Choose where you want the consumer to start processing.
       </Dialog.Description>

@@ -44,7 +44,7 @@
     </div>
     <div class="">
       <div class="flex items-center space-x-2">
-        <h3 class="text-md font-semibold">Group Columns</h3>
+        <h3 class="text-md font-semibold">Group columns</h3>
         <Tooltip.Root openDelay={200}>
           <Tooltip.Trigger>
             <HelpCircle

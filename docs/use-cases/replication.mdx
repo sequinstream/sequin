@@ -45,7 +45,7 @@ This is a common replication pattern. This guide shows you how to implement repl
     </Check>
   </Step>
   <Step title="Create a Webhook Subscription" icon="webhook">
-    Create a [webhook subscription](/how-sequin-works#webhooks) to deliver rows from your `products` stream to your search index (which you'll handle in the next step).
+    Create a [Webhook Subscription](/how-sequin-works#webhooks) to deliver rows from your `products` stream to your search index (which you'll handle in the next step).
 
     1. Navigate to the **Webhook Subscriptions** tab and click **Create Subscription**.
     2. Select the `products` stream you just created.
@@ -53,10 +53,10 @@ This is a common replication pattern. This guide shows you how to implement repl
     4. In the next section, have the consumer group start **At the beginning of the table** so you can backfill your search index.
     5. Jump ahead to the **HTTP Endpoint** section and click to create a new endpoint. In the new window, enter the base URL for your application and add any headers you need to authenticate the request. Then click **Create HTTPEndpoint**.
     6. Back in the Webhook Subscription window, click the refresh button and select the endpoint you just created. Add a specific path for your webhook (e.g. `/webhook/search-index`) if you need to.
-    7. Name your webhook subscription and click **Create webhook subscription**.
+    7. Name your Webhook Subscription and click **Create Webhook Subscription**.
 
     <Check>
-      You've set up a webhook subscription to deliver rows from your `products` stream to your application's endpoint.
+      You've set up a Webhook Subscription to deliver rows from your `products` stream to your application's endpoint.
     </Check>
 
   </Step>

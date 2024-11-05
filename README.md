@@ -75,7 +75,7 @@ Sequin keeps your data in your Postgres database. You can use your existing data
 
 Sequin connects to any Postgres database. To stream data, you'll create [Streams](https://sequinstream.com/docs/how-sequin-works#Streams) for each table you want to stream. Streams present a strictly ordered view of rows from one or more tables. Then, you can use this Stream to consume rows by:
 
-  1. Using the [Consume API](https://sequinstream.com/docs/how-sequin-works#consume-api)
+  1. Using [Consumer Groups](https://sequinstream.com/docs/how-sequin-works#consumer-groups)
   2. Receiving [webhooks](https://sequinstream.com/docs/how-sequin-works#webhooks)
   3. Using the [Sync API](https://sequinstream.com/docs/how-sequin-works#sync-api) ([coming soon](https://github.com/sequinstream/sequin/issues/345))
 

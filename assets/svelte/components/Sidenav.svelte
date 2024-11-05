@@ -4,7 +4,6 @@
   import * as Command from "$lib/components/ui/command";
   import * as Popover from "$lib/components/ui/popover";
   import * as Dialog from "$lib/components/ui/dialog";
-  import * as Tooltip from "$lib/components/ui/tooltip";
   import { Label } from "$lib/components/ui/label";
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";

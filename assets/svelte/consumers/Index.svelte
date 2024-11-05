@@ -9,6 +9,7 @@
     CirclePlay,
     CircleStop,
     Database,
+    Webhook,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
@@ -47,8 +48,8 @@
   <DatabaseConnectionAlert
     show={!hasDatabases}
     entityName={consumerKind === "push"
-      ? "webhook subscription"
-      : "consume endpoint"}
+      ? "Webhook Subscription"
+      : "Consumer Group"}
   />
 
   {#if hasDatabases && !hasSequences}
@@ -56,10 +57,13 @@
       <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
         <AlertCircle class="h-5 w-5 text-carbon-600" />
         <AlertTitle class="text-lg font-semibold text-carbon-900">
-          First, you need to create a stream
+          First, you need to create a Stream
         </AlertTitle>
         <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must have at least one stream before you can create a consumer.
+          Sequin must have at least one Stream before you can create {consumerKind ===
+          "push"
+            ? "a Webhook Subscription"
+            : "a Consumer Group"}.
         </AlertDescription>
 
         <div class="flex mt-2 gap-4 col-start-2">
@@ -73,7 +77,7 @@
               class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
             >
               <Database class="inline-block h-4 w-4 mr-2" />
-              Create stream
+              Create Stream
             </Button>
           </a>
         </div>
@@ -83,11 +87,13 @@
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
-      <Radio class="h-6 w-6 mr-2" />
+      {#if consumerKind === "pull"}
+        <Radio class="h-6 w-6 mr-2" />
+      {:else}
+        <Webhook class="h-6 w-6 mr-2" />
+      {/if}
       <h1 class="text-2xl font-bold">
-        {consumerKind === "push"
-          ? "Webhook Subscriptions"
-          : "Consume API Endpoints"}
+        {consumerKind === "push" ? "Webhook Subscriptions" : "Consumer Groups"}
       </h1>
     </div>
     {#if hasDatabases}
@@ -99,7 +105,9 @@
             data-phx-link-state="push"
           >
             <Button variant="default">
-              Create {consumerKind === "push" ? "Subscription" : "API Endpoint"}
+              Create {consumerKind === "push"
+                ? "Subscription"
+                : "Consumer Group"}
             </Button>
           </a>
         </div>
@@ -113,27 +121,37 @@
         <h2 class="text-xl font-semibold mb-4">
           {consumerKind === "push"
             ? "No Webhook Subscriptions"
-            : "No Consume Endpoints"}
+            : "No Consumer Groups"}
         </h2>
         <p class="text-gray-600 mb-6">
           {#if consumerKind === "push"}
             Webhook Subscriptions filter, transform, and send messages from a
             table in your database to your application or another service.
           {:else}
-            Consume API Endpoints let you filter, transform, and pull messages
-            from a table in your database into your application.
+            Consumer Groups let you filter, transform, and pull messages from
+            your tables into your application with exactly-once processing.
           {/if}
         </p>
         <div class="relative inline-block text-left">
-          <a
-            href={`/consumers/new?kind=${consumerKind}`}
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button variant="default">
-              Create {consumerKind === "push" ? "Subscription" : "API Endpoint"}
-            </Button>
-          </a>
+          {#if hasSequences}
+            <a
+              href={`/consumers/new?kind=${consumerKind}`}
+              data-phx-link="redirect"
+              data-phx-link-state="push"
+            >
+              <Button variant="default">
+                Create {consumerKind === "push"
+                  ? "Subscription"
+                  : "Consumer Group"}
+              </Button>
+            </a>
+          {:else}
+            <Button disabled
+              >Create {consumerKind === "push"
+                ? "Subscription"
+                : "Consumer Group"}</Button
+            >
+          {/if}
         </div>
       </div>
     </div>
@@ -149,9 +167,8 @@
               <span>Database</span>
             </div>
           </Table.Head>
-          <Table.Head>Type</Table.Head>
           <Table.Head>Status</Table.Head>
-          <Table.Head>Created at</Table.Head>
+          <Table.Head>Created</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -165,19 +182,6 @@
               <HealthPill status={consumer.health.status} />
             </Table.Cell>
             <Table.Cell>{consumer.database_name}</Table.Cell>
-            <Table.Cell>
-              {#if consumer.type === "pull"}
-                <Badge variant="default">
-                  <ArrowLeftFromLine class="h-4 w-4 mr-1" />
-                  Pull consumer
-                </Badge>
-              {:else if consumer.type === "push"}
-                <Badge variant="default">
-                  <ArrowRightToLine class="h-4 w-4 mr-1" />
-                  Push consumer
-                </Badge>
-              {/if}
-            </Table.Cell>
             <Table.Cell>
               {#if consumer.status === "active"}
                 <Badge variant="default"

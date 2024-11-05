@@ -331,7 +331,7 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>Webhook subscription configuration</CardTitle>
+        <CardTitle>Webhook Subscription configuration</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -528,7 +528,7 @@
     </Card>
     <Card>
       <CardHeader>
-        <CardTitle>Webhook subscription name</CardTitle>
+        <CardTitle>Webhook Subscription name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -562,7 +562,7 @@
           type="submit"
           disabled={isCreateConsumerDisabled}
         >
-          {isEditMode ? "Update" : "Create"} webhook subscription
+          {isEditMode ? "Update" : "Create"} Webhook Subscription
           <span slot="loading"
             >{isEditMode ? "Updating..." : "Creating..."}</span
           >

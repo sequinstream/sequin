@@ -55,11 +55,11 @@ iconType: "solid"
     </Check>
   </Step>
   <Step title="Consume rows">
-    Sequin is setup to stream rows from your table. Now, consume rows from your Stream using the consume API, the sync API, or webhooks subscriptions.
+    Sequin is setup to stream rows from your table. Now, consume rows from your Stream using the Consumer Group API, the Sync API, or Webhooks Subscriptions.
 
     <Tabs>
-      <Tab title="Consume API">
-        Navigate to the **Consume Endpoints** tab and click the **Create Endpoint** button.
+      <Tab title="Consume Group API">
+        Navigate to the **Consumer Groups** tab and click the **Create Consumer Group** button.
 
         Select the Stream you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
 
@@ -110,7 +110,7 @@ iconType: "solid"
           You can now consume rows from your table!
         </Check>
       </Tab>
-      <Tab title="Webhook subscriptions">
+      <Tab title="Webhook Subscriptions">
         Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
 
         Select the Stream you want to consume changes from. Then add any filters to narrow down the changes you want to capture:
@@ -121,7 +121,7 @@ iconType: "solid"
 
         Here, we've selected the `public.orders` Stream and applied a filter to only capture orders where the `total_amount` is greater than `100`. We're also configuring the consumer to process all the rows in the table.
 
-        Now, enter the final details for your webhook subscription:
+        Now, enter the final details for your Webhook Subscription:
 
         <Frame>
           <img src="/images/cloud-getting-started/create-webhook.png" alt="Set endpoint" />
@@ -132,13 +132,13 @@ iconType: "solid"
 
         <Note>You can setup custom endpoints, paths, and headers by clicking the **New HTTP Endpoint** button.</Note>
 
-        Finally, give your webhook subscription a name and click **Create Consumer**:
+        Finally, give your Webhook Subscription a name and click **Create Consumer**:
 
         <Frame>
           <img src="/images/cloud-getting-started/consumer-created.png" alt="Consumer created" />
         </Frame>
 
-        To test your webhook subscription, insert a new row on your table. You'll see a new message arrive at your endpoint:
+        To test your Webhook Subscription, insert a new row on your table. You'll see a new message arrive at your endpoint:
 
         <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
           <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
@@ -158,7 +158,7 @@ iconType: "solid"
         </div>
         <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
 
-        You can see every row processed by your webhook subscription in the **Messages** tab.
+        You can see every row processed by your Webhook Subscription in the **Messages** tab.
 
         <Check>
         Sequin is now sending rows from your table to your endpoint.

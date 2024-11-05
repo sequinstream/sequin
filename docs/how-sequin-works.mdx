@@ -7,8 +7,8 @@ iconType: "solid"
 
 With Sequin, you can stream Postgres by creating [**Streams**](#streams). Streams present a strictly ordered view of rows from one or more tables. Then, you can use this Stream to consume a table's rows by:
 
-1. Using the [Consume API](#consume-api)
-2. [Receiving webhooks](#webhooks)
+1. Using [Consumer Groups](#consumer-groups)
+2. Receiving [webhooks](#webhooks)
 3. Using the [Sync API](#sync-api) (coming soon)
 
 Whether you're pulling rows or having them pushed to you, Sequin always delivers the latest version of rows in order. When new rows are inserted or when rows are updated, they're re-delivered to you.
@@ -160,9 +160,9 @@ For example:
 
 After creating a Stream, you have a few options for consuming rows with Sequin:
 
-### Consume API
+### Consumer Groups
 
-With the [**Consume API**](/consume/consume-api/overview), you can setup an HTTP endpoint that your apps and services pull rows from. The endpoint follows the popular **consumer group** pattern of other queues and streams:
+With [**Consumer Groups**](/consume/consume-api/overview), you can setup an HTTP endpoint that your apps and services pull rows from. The endpoint follows the popular consumer group pattern of other queues and streams:
 
 1. You can have many **consumers** (processes or workers) all pulling from the consume endpoint at the same time.
 2. After a batch of rows is delivered to a consumer in the group, that consumer has a certain period of time to process the rows. This **visibility timeout** is configurable at the group level.
@@ -172,7 +172,7 @@ With the [**Consume API**](/consume/consume-api/overview), you can setup an HTTP
 
 You can setup many consumer groups for a single table.
 
-[Read more](/consume/consume-api/overview) about the Consume API endpoints.
+[Read more](/consume/consume-api/overview) about the Consumer Group API endpoints.
 
 <Frame>
   <img src="/images/core/pull-instructions.png" alt="The Sequin UI, displaying instructions for pulling messages from a consumer. The instructions are curl requests to the consumer's endpoint." style={{ maxWidth: '500px' }} />
@@ -180,7 +180,7 @@ You can setup many consumer groups for a single table.
 
 ### Webhooks
 
-Sequin's webhook subscriptions are powered by the same consumer group system as the [Consume API](#consume-api). Each webhook payload contains one row. Rows are processed exactly once per subscription.
+Sequin's Webhook Subscriptions are powered by [Consumer Groups](#consumer-groups). Each webhook payload contains one row. Rows are processed exactly once per subscription.
 
 If your webhook endpoint returns a non-200 status code or fails to process the webhook within a configurable timeout, the row will be re-delivered.
 
@@ -200,7 +200,7 @@ You can monitor webhook status on the Sequin dashboard, including failing and ou
 The sync API is still in development.
 </Note>
 
-The **Sync API** is a simple alternative to the [Consume API](#consume-api). With the Sync API, Sequin presents your table as a paginateable endpoint. You can start paginating from any point in the table. When you reach the end, you can long-poll to receive new and updated rows in real-time.
+The **Sync API** is a simple alternative to [Consumer Groups](#consumer-groups). With the Sync API, Sequin presents your table as a paginateable endpoint. You can start paginating from any point in the table. When you reach the end, you can long-poll to receive new and updated rows in real-time.
 
 The Sync API is great for situations where you want to manage the state of the cursor and don't need multiple consumers to process a stream in parallel.
 
@@ -273,10 +273,10 @@ Replication slots ensure Sequin never misses a change, even if Sequin is disconn
 
 Sequin guarantees that messages with the same primary key are processed in order for a given consumer.
 
-Sync endpoints are strictly ordered. For the Consume API and webhooks, Sequin will not deliver messages to a consumer until the previous messages for that primary key has been acknowledged.
+Sync endpoints are strictly ordered. For the Consumer Group API and webhooks, Sequin will not deliver messages to a consumer until the previous messages for that primary key has been acknowledged.
 
 This is useful for applications that need to process changes to a single record in order. For example, if you're processing changes to a user's profile, you want to make sure that the changes are applied in order.
 
 ### Exactly-one processing
 
-Both the Consume API and webhooks have exactly-once processing guarantees.
+Both the Consume Groups and Webhook Subscriptions have exactly-once processing guarantees.

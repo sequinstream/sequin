@@ -76,21 +76,6 @@
         <CardContent class="p-6">
           <div class="flex items-center space-x-4 mb-4">
             <h2 class="text-lg font-semibold">Configuration</h2>
-            <Badge variant="default">
-              <ArrowLeftFromLine class="h-4 w-4 mr-1" />
-              Pull consumer
-            </Badge>
-            {#if consumer.message_kind === "event"}
-              <Badge variant="default">
-                <SquareStack class="h-4 w-4 mr-1" />
-                Changes
-              </Badge>
-            {:else if consumer.message_kind === "record"}
-              <Badge variant="default">
-                <SquareStack class="h-4 w-4 mr-1" />
-                Rows
-              </Badge>
-            {/if}
           </div>
           <div class="grid md:grid-cols-2 gap-4">
             <div>
@@ -156,7 +141,7 @@
       <Card>
         <CardContent class="p-6">
           <h2 class="text-lg font-semibold mb-4">
-            Receive and Acknowledge Messages
+            Receive and acknowledge messages
           </h2>
           <div class="space-y-4">
             <div>

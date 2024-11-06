@@ -62,7 +62,8 @@ config :sequin,
   portal_hostname: "portal.sequin.test",
   datadog_req_opts: [
     plug: {Req.Test, Sequin.Datadog}
-  ]
+  ],
+  features: [account_self_signup: :enabled]
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

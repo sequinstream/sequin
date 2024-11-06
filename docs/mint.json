@@ -64,7 +64,7 @@
       ]
     },
     {
-      "group": "Consume",
+      "group": "Stream",
       "pages": [
         {
           "group": "Consumer Group API",
@@ -75,9 +75,13 @@
             "consume/consume-api/nack"
           ],
           "icon": "wifi"
-        },
-        "consume/webhooks",
-        "consume/sync-api"
+        }
+      ]
+    },
+    {
+      "group": "Destinations",
+      "pages": [
+        "consume/webhooks"
       ]
     },
     {
@@ -104,7 +108,7 @@
       ]
     },
     {
-      "group": "Guides",
+      "group": "Tutorials",
       "pages": [
         "guides/timescale",
         "guides/cloudflare",

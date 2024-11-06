@@ -18,7 +18,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
 
     case Replication.get_wal_pipeline_for_account(account_id, id) do
       nil ->
-        {:ok, push_navigate(socket, to: ~p"/wal-pipelines")}
+        {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines")}
 
       wal_pipeline ->
         wal_pipeline = Repo.preload(wal_pipeline, [:source_database, :destination_database])
@@ -43,7 +43,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   def handle_event("delete_wal_pipeline", _, socket) do
     case Replication.delete_wal_pipeline_with_lifecycle(socket.assigns.wal_pipeline) do
       {:ok, _} ->
-        {:noreply, push_navigate(socket, to: ~p"/wal-pipelines")}
+        {:noreply, push_navigate(socket, to: ~p"/change-capture-pipelines")}
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "Failed to delete WAL Pipeline")}

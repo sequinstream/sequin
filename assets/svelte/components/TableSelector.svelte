@@ -421,8 +421,8 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
     <Dialog.Header>
       <Dialog.Title>Create event table</Dialog.Title>
       <Dialog.Description>
-        Set up an event table for your WAL Pipeline to write to. For more
-        information, <a
+        Set up an event table for your Change Capture Pipeline to write to. For
+        more information, <a
           href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
           target="_blank"
           class="text-blue-500 underline">see the docs ↗</a

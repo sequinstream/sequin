@@ -58,7 +58,11 @@
       heading: "Resources",
       items: [
         { path: "/databases", text: "Databases", icon: Database },
-        { path: "/wal-pipelines", text: "WAL Pipelines", icon: Logs },
+        {
+          path: "/change-capture-pipelines",
+          text: "Change Capture Pipelines",
+          icon: Logs,
+        },
         { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
       ],
     },

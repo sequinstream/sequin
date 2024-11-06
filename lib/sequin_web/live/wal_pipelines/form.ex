@@ -33,7 +33,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
          |> assign_changeset(%{})}
 
       {:error, _reason} ->
-        {:ok, push_navigate(socket, to: ~p"/wal-pipelines")}
+        {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines")}
     end
   end
 
@@ -99,7 +99,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :info, title: toast_title})
-         |> push_navigate(to: ~p"/wal-pipelines/#{wal_pipeline.id}")}
+         |> push_navigate(to: ~p"/change-capture-pipelines/#{wal_pipeline.id}")}
       else
         {:error, %Ecto.Changeset{} = changeset} ->
           {:noreply, assign(socket, changeset: changeset, show_errors?: true)}
@@ -139,9 +139,9 @@ defmodule SequinWeb.WalPipelinesLive.Form do
   def handle_event("form_closed", _params, socket) do
     socket =
       if socket.assigns.is_edit do
-        push_navigate(socket, to: ~p"/wal-pipelines/#{socket.assigns.wal_pipeline.id}")
+        push_navigate(socket, to: ~p"/change-capture-pipelines/#{socket.assigns.wal_pipeline.id}")
       else
-        push_navigate(socket, to: ~p"/wal-pipelines")
+        push_navigate(socket, to: ~p"/change-capture-pipelines")
       end
 
     {:noreply, socket}

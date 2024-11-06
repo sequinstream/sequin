@@ -7,23 +7,39 @@ iconType: "solid"
 
 Sequin is a tool for capturing changes and streaming data out of your Postgres database.
 
-To stream data, you'll create [Streams](/how-sequin-works#streams) for each table you want to stream. Then, you'll consume rows from the Stream using Sequin's [Consume Groups](/how-sequin-works#consumer-groups), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
-
-Sequin is great for:
-
-1. **Replicating data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
-2. **Building event processing workflows** such as triggering side effects when data in Postgres changes.
+To use Sequin, you'll create [Streams](/how-sequin-works#streams) for one or more tables in your database. Then, you'll consume rows from the Stream using Sequin's [Consume Groups](/how-sequin-works#consumer-groups), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
 
 Sequin guarantees exactly-once processing. That means you can use it to:
 
-* Replace `listen`/`notify` with something more reliable.
-* Fan-out data to other services.
-* Replace Postgres triggers with functions in your app.
-* Guarantee functions in your code are called given certain changes in Postgres.
-* Streamline workflows by converting them to an event-driven model.
-* Provide webhooks or sync endpoints to your customers.
-* Replace Debezium/Kafka pipelines.
-* Use Postgres instead of Kafka for streaming use cases.
+<CardGroup cols={3}>
+  <Card title="Trigger Workflows" icon="bolt">
+    Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
+  </Card>
+  <Card title="Stream Events" icon="arrow-right">
+    Stream changes from your database tables as events that other services can consume.
+  </Card>
+  <Card title="Keep Services in Sync" icon="arrows-rotate">
+    Notify dependent services about data changes to keep systems in sync.
+  </Card>
+  <Card title="Audit Logging" icon="clipboard-list">
+    Track and record all changes made to data in your database for compliance or feature development.
+  </Card>
+  <Card title="Database Sync" icon="database">
+    Keep tables synchronized across different database instances in real-time.
+  </Card>
+  <Card title="Derived Tables" icon="table">
+    Create and maintain derived tables based on changes to source tables.
+  </Card>
+  <Card title="Cache Management" icon="memory">
+    Keep application caches up-to-date by streaming database changes.
+  </Card>
+  <Card title="Redis Integration" icon="server">
+    Automatically update Redis when your Postgres data changes.
+  </Card>
+  <Card title="Search Indexing" icon="magnifying-glass">
+    Keep search indexes fresh by streaming updates from your database.
+  </Card>
+</CardGroup>
 
 Sequin is a Docker image you can run next to your Postgres database. Sequin itself is built on Postgres and uses Postgres to store consumer state.
 
@@ -47,9 +63,9 @@ So, **Sequin adds streaming features to Postgres.** And importantly, Sequin keep
 
 With Sequin, you can:
 
-1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/how-sequin-works#consumer-groups).
-2. Receive [webhooks](/how-sequin-works#webhooks) whenever rows change, with retries and backoff.
-3. [Capture changes](/how-sequin-works#wal-pipelines) to Postgres tables as a series of events.
+1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/consume/consume-api/overview).
+2. Receive [webhooks](/consume/webhooks) whenever rows change, with retries and backoff.
+3. [Capture changes](/capture-changes/change-capture-pipelines) to Postgres tables as a series of events.
 
 ## Watch
 
@@ -89,11 +105,11 @@ Sequin is available as a Docker image or cloud service. See the following docs t
 
 ## Getting help
 <CardGroup>
-  <Card title="Open an issue" icon="github" href="https://github.com/sequinstream/sequin">
-    Report bugs or request features on our GitHub repository.
-  </Card>
   <Card title="Join our Discord" icon="discord" href="https://discord.gg/BV8wFXvNtY">
     Chat with the Sequin team and get help from the community.
+  </Card>
+  <Card title="Open an issue" icon="github" href="https://github.com/sequinstream/sequin">
+    Report bugs or request features on our GitHub repository.
   </Card>
   <Card title="Schedule a call" icon="phone" href="https://calendly.com/sequin_io/vip-meeting">
     Book a call with one of the founders to discuss your needs.

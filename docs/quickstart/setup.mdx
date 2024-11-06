@@ -6,7 +6,7 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
 
 <Steps titleSize="h2">
   <Step title="Run Sequin" icon="server">
-    The easiest way to run and test Sequin is with our Docker Compose file. This file starts a Postgres database, Redis instance, and Sequin server:
+    The easiest way to run and test Sequin is with our Docker Compose file. This file starts a Postgres database, Redis instance, and Sequin server.
 
     1. Git clone the repository:
 
@@ -36,74 +36,54 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
     For more configuration options, including running Sequin on an existing Postgres and Redis instance or within an existing project, see our [Docker setup](/self-hosting/docker-setup).
     </Note>
   </Step>
-  <Step title="Create an account" icon="key">
+  <Step title="Login" icon="key">
+    The Docker Compose file automatically configures Sequin with an admin user, a playground database, and a sample stream.
+
+    <Note>
+    The Docker Compose uses a configuration file to provision these resources. You can view the file at `/docker/playground.yml`.
+    </Note>
+
     1. After starting the Docker Compose services, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
 
         <Frame>
-          <img src="/images/quickstart/setup-page.png" alt="Sequin setup page, indicating the database is connected and the instance is ready to use" />
+          <img src="/images/quickstart/login-page.png" alt="Sequin login page, allowing login with default credentials" />
         </Frame>
 
-    2. Click the **Get started** button to provision a user and an account.
-    3. On the login page, you can login with the default credentials:
+    2. Login with the default credentials:
         - Email: `admin@sequinstream.com`
         - Password: `sequinpassword!`
-
-    <Check>
-    Sequin is up and running.
-    </Check>
   </Step>
-  <Step title="Connect the playground database" icon="database">
-    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. Let's connect to it:
+  <Step title="View the playground database" icon="database">
+    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. The Sequin server automatically connects to this database.
 
-    1. In the Sequin web console, click **Connect Database**.
-    2. Click the **Autofill with Connection String** button and paste in the connection string for the `sequin_playground` database:
-        ```bash
-        postgresql://postgres:postgres@sequin_postgres:5432/sequin_playground?sslmode=disable
-        ```
+    1. In the Sequin web console, click **Databases** in the sidebar.
+    2. Click on the pre-configured `sequin-playground` database.
 
-        The playground database comes pre-configured with a publication and replication slot so you can skip to the end of the form.
+    <Frame>
+      <img src="/images/quickstart/playground-database.png" alt="Playground database" />
+    </Frame>
 
-    3. Click **Connect Database**.
-
-        <div className="wistia_responsive_padding" style={{padding: '56.25% 0 0 0', position: 'relative'}}>
-          <div className="wistia_responsive_wrapper" style={{height: '100%', left: 0, position: 'absolute', top: 0, width: '100%'}}>
-            <iframe
-              src="https://fast.wistia.net/embed/iframe/awrhv0r6ah?seo=false&videoFoam=true"
-              title="connect-db Video"
-              allow="autoplay; fullscreen"
-              allowTransparency={true}
-              frameBorder="0"
-              scrolling="no"
-              className="wistia_embed"
-              name="wistia_embed"
-              msallowfullscreen
-              style={{width: '100%', height: '100%'}}
-            ></iframe>
-          </div>
-        </div>
-        <script src="https://fast.wistia.net/assets/external/E-v1.js" async></script>
+    The database should be healthy and ready to use.
 
   </Step>
-  <Step title="Create a Stream" icon="list">
-    Now, create a [Stream](/how-sequin-works#streams) to stream changes from the `public.regions` table:
+  <Step title="View the regions stream" icon="list">
+    Now, view the pre-configured `regions` stream:
 
-    1. Navigate to the **Streams** tab and click the **Create Stream** button.
+    1. In the Sequin web console, click **Streams** in the sidebar.
 
-    2. The `public.regions` table should already be selected by default.
-    
-    3. Select the column Sequin should use to order changes. In this case select the `updated_at` column:
+    2. The `public.regions` table should already have a [Stream](/how-sequin-works#streams) configured.
 
-        <Frame>
-          <img src="/images/quickstart/create-sequence.png" alt="Create Stream" />
-        </Frame>
-
-    4. Click **Create Stream**.
-
-   
+    <Frame>
+      <img src="/images/quickstart/regions-stream.png" alt="Regions stream" />
+    </Frame>
   </Step>
 </Steps>
 
 ## Ready to stream
+
+<Check>
+You are ready to stream!
+</Check>
 
 You are running Sequin, connected to a playground database, and have a Stream setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consumer Group API:
 

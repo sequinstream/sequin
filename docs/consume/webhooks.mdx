@@ -7,7 +7,7 @@ iconType: "solid"
 
 With Webhook Subscriptions, Sequin delivers each row from your [Stream](/how-sequin-works#streams) to any webhook endpoint, with exactly-once processing.
 
-Webhook Subscriptions are built on top of the same consumer group system as the [Consumer Group API](/consume/consume-api/overview) and offers the following guarantees:
+Webhook Subscriptions are built on top of the same consumer group system as the [Consumer Group API](/consume/consume-api/overview) and offer the following guarantees:
 
 - **One row per payload**: Each webhook payload contains one row.
     ```json payload.json
@@ -37,6 +37,49 @@ Webhook Subscriptions are built on top of the same consumer group system as the 
 
 
 - **Strict ordering**: Messages with the same [group](how-sequin-works#grouping) are delivered in order. No subsequent messages with the same group will be delivered until a previous message in the group is acknowledged.
+
+## Shape of incoming webhooks
+
+Webhook payloads contain a single record and its associated metadata:
+
+```typescript
+type WebhookPayload = {
+  record: {
+    [key: string]: any;  // The current state of the row
+  };
+  metadata: {
+    table_schema: string;
+    table_name: string;
+    consumer: {
+      id: string;
+      name: string;
+    };
+  };
+};
+```
+
+### Example
+
+```json
+POST /your-webhook-endpoint
+{
+  "record": {
+    "id": 1,
+    "name": "Paul Atreides",
+    "title": "Duke of Arrakis",
+    "spice_allocation": 1000,
+    "is_kwisatz_haderach": true
+  },
+  "metadata": {
+    "table_schema": "public",
+    "table_name": "house_atreides_members",
+    "consumer": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "dune_characters_consumer"
+    }
+  }
+}
+```
 
 ## Creating a Webhook Subscription
 

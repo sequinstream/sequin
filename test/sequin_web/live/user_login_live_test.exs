@@ -3,6 +3,7 @@ defmodule SequinWeb.UserLoginLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Sequin.Accounts
   alias Sequin.Factory.AccountsFactory
 
   describe "Log in page" do
@@ -12,6 +13,50 @@ defmodule SequinWeb.UserLoginLiveTest do
       assert html =~ "Welcome back"
       assert html =~ "Sign up"
       assert html =~ "Forgot your password?"
+    end
+
+    test "shows default credentials when only default user exists", %{conn: conn} do
+      # Create default user but don't log them in
+      AccountsFactory.insert_user!(%{
+        email: Sequin.Accounts.default_user_email(),
+        password: Sequin.Accounts.default_user_password()
+      })
+
+      {:ok, _lv, html} = live(conn, ~p"/login")
+
+      assert html =~ "Default Login Credentials"
+      assert html =~ Sequin.Accounts.default_user_email()
+      assert html =~ Sequin.Accounts.default_user_password()
+    end
+
+    test "does not show default credentials when default user has logged in", %{conn: conn} do
+      user =
+        AccountsFactory.insert_user!(%{
+          email: Sequin.Accounts.default_user_email(),
+          password: Sequin.Accounts.default_user_password()
+        })
+
+      # Update the user to have a last_login_at timestamp
+      Accounts.update_user(user, %{last_login_at: DateTime.utc_now()})
+
+      {:ok, _lv, html} = live(conn, ~p"/login")
+
+      refute html =~ "Default Login Credentials"
+    end
+
+    test "does not show default credentials when other users exist", %{conn: conn} do
+      # Create default user
+      AccountsFactory.insert_user!(%{
+        email: Sequin.Accounts.default_user_email(),
+        password: Sequin.Accounts.default_user_password()
+      })
+
+      # Create another user
+      AccountsFactory.insert_user!()
+
+      {:ok, _lv, html} = live(conn, ~p"/login")
+
+      refute html =~ "Default Login Credentials"
     end
 
     test "redirects if already logged in", %{conn: conn} do

@@ -52,7 +52,8 @@ defmodule Sequin.Factory.AccountsFactory do
         auth_provider: auth_provider,
         auth_provider_id: auth_provider_id,
         inserted_at: Factory.utc_datetime(),
-        updated_at: Factory.utc_datetime()
+        updated_at: Factory.utc_datetime(),
+        last_login_at: Enum.random([nil, Factory.utc_datetime()])
       },
       attrs
     )

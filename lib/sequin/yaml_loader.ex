@@ -4,6 +4,7 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error.NotFoundError
+  alias Sequin.Replication
   alias Sequin.Repo
 
   require Logger
@@ -19,15 +20,22 @@ defmodule Sequin.YamlLoader do
       not self_hosted?() ->
         Logger.info("Not self-hosted, skipping config loading")
 
-      not config_file_path() ->
-        Logger.info("No config file path, skipping config loading")
+      not is_nil(config_file_yaml()) ->
+        Logger.info("Loading from config file YAML")
 
-      true ->
-        Logger.info("Loading config from #{config_file_path()}")
+        config_file_yaml()
+        |> Base.decode64!()
+        |> load_from_yml()
+
+      not is_nil(config_file_path()) ->
+        Logger.info("Loading from config file path")
 
         config_file_path()
         |> File.read!()
         |> load_from_yml()
+
+      true ->
+        Logger.info("No config file YAML or path, skipping config loading")
     end
 
     :ok
@@ -39,6 +47,7 @@ defmodule Sequin.YamlLoader do
         result =
           Repo.transaction(fn ->
             account = find_or_create_account!(config)
+            _users = find_or_create_users!(account, config)
             databases = upsert_databases!(account.id, config)
             _sequences = find_or_create_sequences!(account.id, config, databases)
 
@@ -74,16 +83,55 @@ defmodule Sequin.YamlLoader do
   defp do_find_or_create_account!(%{"account" => %{"name" => name}}) do
     case Accounts.find_account(name: name) do
       {:ok, account} ->
+        Logger.info("Found account: #{inspect(account, pretty: true)}")
         account
 
       {:error, %NotFoundError{}} ->
         {:ok, account} = Accounts.create_account(%{name: name})
+        Logger.info("Created account: #{inspect(account, pretty: true)}")
         account
     end
   end
 
   defp do_find_or_create_account!(%{}) do
     raise "Account configuration is required."
+  end
+
+  ###########
+  ## Users ##
+  ###########
+
+  defp find_or_create_users!(account, %{"users" => users}) do
+    Logger.info("Creating users: #{inspect(users, pretty: true)}")
+    Enum.map(users, &find_or_create_user!(account, &1))
+  end
+
+  defp find_or_create_users!(_account, %{}) do
+    Logger.info("No users found in config")
+    []
+  end
+
+  defp find_or_create_user!(account, %{"email" => email} = user_attrs) do
+    case Accounts.get_user_by_email(:identity, email) do
+      nil -> create_user!(account, user_attrs)
+      user -> user
+    end
+  end
+
+  defp create_user!(account, %{"email" => email, "password" => password}) do
+    user_params = %{
+      email: email,
+      password: password,
+      password_confirmation: password
+    }
+
+    case Accounts.register_user(:identity, user_params, account) do
+      {:ok, user} ->
+        user
+
+      {:error, error} ->
+        raise "Failed to create user: #{inspect(error)}"
+    end
   end
 
   ###############
@@ -110,27 +158,54 @@ defmodule Sequin.YamlLoader do
     account_id
     |> Databases.get_db_for_account(name)
     |> case do
-      {:ok, database} -> update_database!(database, database_attrs)
-      {:error, %NotFoundError{}} -> create_database!(account_id, database_attrs)
+      {:ok, database} ->
+        Logger.info("Found database: #{inspect(database, pretty: true)}")
+        update_database!(database, database_attrs)
+
+      {:error, %NotFoundError{}} ->
+        database = create_database_with_replication!(account_id, database_attrs)
+        Logger.info("Created database: #{inspect(database, pretty: true)}")
+        database
     end
   end
 
-  defp create_database!(account_id, database) do
+  defp create_database_with_replication!(account_id, database) do
     database = Map.merge(@database_defaults, database)
 
     account_id
     |> Databases.create_db_for_account_with_lifecycle(database)
     |> case do
-      {:ok, database} -> database
-      {:error, error} when is_exception(error) -> raise "Failed to create database: #{Exception.message(error)}"
-      {:error, %Ecto.Changeset{} = changeset} -> raise "Failed to create database: #{inspect(changeset)}"
+      {:ok, db} ->
+        replication_params = Map.put(database, "postgres_database_id", db.id)
+
+        case Replication.create_pg_replication_for_account_with_lifecycle(account_id, replication_params) do
+          {:ok, replication} ->
+            Logger.info("Created database: #{inspect(db, pretty: true)}")
+            %PostgresDatabase{db | replication_slot: replication}
+
+          {:error, error} when is_exception(error) ->
+            raise "Failed to create replication: #{Exception.message(error)}"
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            raise "Failed to create replication: #{inspect(changeset)}"
+        end
+
+      {:error, error} when is_exception(error) ->
+        raise "Failed to create database: #{Exception.message(error)}"
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        raise "Failed to create database: #{inspect(changeset)}"
     end
   end
 
   defp update_database!(database, attrs) do
     case Databases.update_db(database, attrs) do
-      {:ok, database} -> database
-      {:error, error} when is_exception(error) -> raise "Failed to update database: #{Exception.message(error)}"
+      {:ok, database} ->
+        Logger.info("Updated database: #{inspect(database, pretty: true)}")
+        database
+
+      {:error, error} when is_exception(error) ->
+        raise "Failed to update database: #{Exception.message(error)}"
     end
   end
 
@@ -166,8 +241,12 @@ defmodule Sequin.YamlLoader do
          %{"table_schema" => table_schema, "table_name" => table_name} = sequence_attrs
        ) do
     case Databases.find_sequence_for_account(account_id, table_schema: table_schema, table_name: table_name) do
-      {:ok, sequence} -> sequence
-      {:error, %NotFoundError{}} -> create_sequence!(database, sequence_attrs)
+      {:ok, sequence} ->
+        Logger.info("Found sequence: #{inspect(sequence, pretty: true)}")
+        sequence
+
+      {:error, %NotFoundError{}} ->
+        create_sequence!(database, sequence_attrs)
     end
   end
 
@@ -181,9 +260,15 @@ defmodule Sequin.YamlLoader do
     |> Map.put("sort_column_attnum", sort_column_attnum)
     |> Databases.create_sequence()
     |> case do
-      {:ok, sequence} -> sequence
-      {:error, error} when is_exception(error) -> raise "Failed to create sequence: #{Exception.message(error)}"
-      {:error, %Ecto.Changeset{} = changeset} -> raise "Failed to create sequence: #{inspect(changeset)}"
+      {:ok, sequence} ->
+        Logger.info("Created sequence: #{inspect(sequence, pretty: true)}")
+        sequence
+
+      {:error, error} when is_exception(error) ->
+        raise "Failed to create sequence: #{Exception.message(error)}"
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        raise "Failed to create sequence: #{inspect(changeset)}"
     end
   end
 
@@ -236,6 +321,10 @@ defmodule Sequin.YamlLoader do
   ###############
   ## Utilities ##
   ###############
+
+  defp config_file_yaml do
+    Application.get_env(@app, :config_file_yaml)
+  end
 
   defp config_file_path do
     Application.get_env(@app, :config_file_path)

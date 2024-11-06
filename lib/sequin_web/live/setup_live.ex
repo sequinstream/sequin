@@ -2,8 +2,10 @@ defmodule SequinWeb.SetupLive do
   @moduledoc false
   use SequinWeb, :live_view
 
-  @stub_user_email "admin@sequinstream.com"
-  @stub_user_password "sequinpassword!"
+  alias Sequin.Accounts
+
+  @default_user_email Accounts.default_user_email()
+  @default_user_password Accounts.default_user_password()
 
   def mount(_params, _session, socket) do
     db_info = get_db_info()
@@ -134,7 +136,7 @@ defmodule SequinWeb.SetupLive do
 
     description =
       if Sequin.feature_enabled?(:provision_default_user) do
-        "Please login with the user `#{@stub_user_email}` and password `#{@stub_user_password}`"
+        "Please login with the user `#{@default_user_email}` and password `#{@default_user_password}`"
       else
         "Please create an account to continue"
       end
@@ -193,7 +195,8 @@ defmodule SequinWeb.SetupLive do
   end
 
   defp create_account_with_user! do
-    {:ok, _user} = Sequin.Accounts.register_user(:identity, %{email: @stub_user_email, password: @stub_user_password})
+    {:ok, _user} =
+      Sequin.Accounts.register_user(:identity, %{email: @default_user_email, password: @default_user_password})
   end
 
   defp schedule_db_check do

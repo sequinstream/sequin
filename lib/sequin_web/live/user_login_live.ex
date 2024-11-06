@@ -13,6 +13,17 @@ defmodule SequinWeb.UserLoginLive do
           </.alert_description>
         </.alert>
 
+        <.alert :if={@display_default_user_login?} class="mb-4">
+          <.alert_title>Default Login Credentials</.alert_title>
+          <.alert_description>
+            Use these credentials for your first login:
+            <div class="mt-2">
+              <strong>Email:</strong> <%= Sequin.Accounts.default_user_email() %><br />
+              <strong>Password:</strong> <%= Sequin.Accounts.default_user_password() %>
+            </div>
+          </.alert_description>
+        </.alert>
+
         <.header class="text-center">
           Welcome back
           <:subtitle :if={!@accepting_invite?}>Sign in to your account</:subtitle>
@@ -88,7 +99,18 @@ defmodule SequinWeb.UserLoginLive do
 
   def mount(_params, session, socket) do
     email = Phoenix.Flash.get(socket.assigns.flash, :email)
-    form = to_form(%{"email" => email}, as: "user")
+
+    form =
+      cond do
+        email ->
+          to_form(%{"email" => email}, as: "user")
+
+        Sequin.Accounts.only_default_user_and_first_login?() ->
+          to_form(%{"email" => Sequin.Accounts.default_user_email()}, as: "user")
+
+        true ->
+          to_form(%{"email" => email}, as: "user")
+      end
 
     socket =
       socket
@@ -98,6 +120,7 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(redirect_to: session["user_return_to"])
       |> assign(accepting_invite?: accepting_invite?(session))
       |> assign(account_self_signup?: Sequin.feature_enabled?(:account_self_signup))
+      |> assign(display_default_user_login?: Sequin.Accounts.only_default_user_and_first_login?())
 
     {:ok, socket, temporary_assigns: [form: form]}
   end

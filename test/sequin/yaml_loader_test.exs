@@ -4,6 +4,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.Account
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
   alias Sequin.YamlLoader
@@ -15,8 +16,12 @@ defmodule Sequin.YamlLoaderTest do
   def replication_slot, do: ReplicationSlots.slot_name(__MODULE__)
 
   setup do
+    Application.put_env(:sequin, :self_hosted, true)
+
     # Fast-forward the replication slot to the current WAL position
     :ok = ReplicationSlots.reset_slot(UnboxedRepo, replication_slot())
+
+    :ok
   end
 
   def playground_yml do
@@ -24,14 +29,18 @@ defmodule Sequin.YamlLoaderTest do
     account:
       name: "Playground"
 
+    users:
+      - email: "admin@sequinstream.com"
+        password: "sequinpassword!"
+
     databases:
       - name: "test-db"
         username: "postgres"
         password: "postgres"
         hostname: "localhost"
         database: "sequin_test"
-        replication_slot: "#{replication_slot()}"
-        publication: "#{@publication}"
+        slot_name: "#{replication_slot()}"
+        publication_name: "#{@publication}"
 
     sequences:
       - name: "characters"
@@ -53,6 +62,11 @@ defmodule Sequin.YamlLoaderTest do
       assert db.account_id == account.id
       assert db.name == "test-db"
 
+      assert [%PostgresReplicationSlot{} = replication] = Repo.all(PostgresReplicationSlot)
+      assert replication.postgres_database_id == db.id
+      assert replication.slot_name == replication_slot()
+      assert replication.publication_name == @publication
+
       assert [%Sequence{} = sequence] = Repo.all(Sequence)
       assert sequence.postgres_database_id == db.id
       assert sequence.table_name == "Characters"
@@ -70,6 +84,11 @@ defmodule Sequin.YamlLoaderTest do
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
       assert db.account_id == account.id
       assert db.name == "test-db"
+
+      assert [%PostgresReplicationSlot{} = replication] = Repo.all(PostgresReplicationSlot)
+      assert replication.postgres_database_id == db.id
+      assert replication.slot_name == replication_slot()
+      assert replication.publication_name == @publication
 
       assert [%Sequence{} = sequence] = Repo.all(Sequence)
       assert sequence.postgres_database_id == db.id
@@ -90,6 +109,8 @@ defmodule Sequin.YamlLoaderTest do
                    password: "postgres"
                    hostname: "localhost"
                    database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
                """)
 
       assert [account] = Repo.all(Account)
@@ -112,6 +133,8 @@ defmodule Sequin.YamlLoaderTest do
                    password: "postgres"
                    hostname: "localhost"
                    database: "sequin_test"
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
                """)
 
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
@@ -129,6 +152,8 @@ defmodule Sequin.YamlLoaderTest do
                    hostname: "localhost"
                    database: "sequin_test"
                    pool_size: 5
+                   slot_name: "#{replication_slot()}"
+                   publication_name: "#{@publication}"
                """)
 
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)

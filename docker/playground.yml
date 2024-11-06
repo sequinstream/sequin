@@ -1,0 +1,24 @@
+account:
+  name: "Playground"
+
+users:
+  - account: "Playground"
+    email: "admin@sequinstream.com"
+    password: "sequinpassword!"
+
+databases:
+  - name: "sequin-playground"
+    username: "postgres"
+    password: "postgres"
+    hostname: "sequin_postgres"
+    database: "sequin_playground"
+    port: 5432
+    slot_name: "sequin_slot"
+    publication_name: "sequin_pub"
+
+sequences:
+  - name: "regions"
+    database: "sequin-playground"
+    table_schema: "public"
+    table_name: "regions"
+    sort_column_name: "updated_at"

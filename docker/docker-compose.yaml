@@ -3,7 +3,6 @@ name: sequin
 services:
   sequin:
     image: sequin/sequin:latest
-    pull_policy: always
     ports:
       - "7376:7376"
     environment:
@@ -16,6 +15,9 @@ services:
       - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
       - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
       - REDIS_URL=redis://sequin_redis:6379
+      - CONFIG_FILE_PATH=/config/playground.yml
+    volumes:
+      - ./playground.yml:/config/playground.yml
     depends_on:
       - sequin_postgres
       - sequin_redis

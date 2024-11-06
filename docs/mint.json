@@ -86,7 +86,7 @@
     },
     {
       "group": "Capture changes",
-      "pages": ["capture-changes/wal-pipelines"]
+      "pages": ["capture-changes/change-capture-pipelines"]
     },
     {
       "group": "Database setup",
@@ -145,6 +145,11 @@
     {
       "source": "/self-hosting/docker-compose",
       "destination": "/quickstart/setup",
+      "permanent": true
+    },
+    {
+      "source": "capture-changes/wal-pipelines",
+      "destination": "capture-changes/change-capture-pipelines",
       "permanent": true
     }
   ]

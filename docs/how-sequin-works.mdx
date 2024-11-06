@@ -5,7 +5,7 @@ icon: "wrench"
 iconType: "solid"
 ---
 
-With Sequin, you can stream Postgres by creating [**Streams**](#streams). Streams present a strictly ordered view of rows from one or more tables. Then, you can use this Stream to consume a table's rows by:
+With Sequin, you'll create [Streams](#streams). Streams present a strictly ordered view of rows from one or more tables. Then, you'll consume rows from the Stream:
 
 1. Using [Consumer Groups](#consumer-groups)
 2. Receiving [webhooks](#webhooks)
@@ -13,7 +13,7 @@ With Sequin, you can stream Postgres by creating [**Streams**](#streams). Stream
 
 Whether you're pulling rows or having them pushed to you, Sequin always delivers the latest version of rows in order. When new rows are inserted or when rows are updated, they're re-delivered to you.
 
-If you want to capture discrete change events to rows, you can use a [WAL Pipeline](#wal-pipeline). With a WAL Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then create a Stream to consume the rows in your event table.
+If you want to capture discrete change events to rows, you can use a [Change Capture Pipeline](#change-capture-pipelines). With a Change Capture Pipeline, Sequin will capture all inserts, updates, and deletes along with `new` and `old` values, and store them in an event log table in your database. You can then create a Stream for the event log table and consume each change.
 
 You can also filter and transform rows before they're delivered to your application:
 
@@ -23,7 +23,7 @@ You can also filter and transform rows before they're delivered to your applicat
 
 ## Streams
 
-Sequin produces a **Stream** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [¹](https://blog.sequinstream.com/postgres-streams-can-commit-out-of-order/). This makes them difficult to stream properly without skipping rows [²](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/).
+Sequin produces a **Stream** for every table you connect. Due to Postgres' multiversion concurrency control, tables do not provide strict ordering guarantees [¹](https://blog.sequinstream.com/postgres-sequences-can-commit-out-of-order/). This makes them difficult to stream properly without skipping rows [²](https://blog.sequinstream.com/build-your-own-sqs-or-kafka-with-postgres/).
 
 To produce a stricly ordered Stream, Sequin uses a combination of the source table and a replication slot to produce a Stream. This makes it possible to [consume rows](#consuming-rows) from a table. When rows are inserted or updated, Sequin adds the rows to the end of the Stream so consumers will process them. Sequin stores Stream information in its internal catalog tables.
 
@@ -180,7 +180,7 @@ You can setup many consumer groups for a single table.
 
 ### Webhooks
 
-Sequin's Webhook Subscriptions are powered by [Consumer Groups](#consumer-groups). Each webhook payload contains one row. Rows are processed exactly once per subscription.
+Sequin's [Webhook Subscriptions](/consume/webhooks) are powered by [Consumer Groups](#consumer-groups). Each webhook payload contains one row. Rows are processed exactly once per subscription.
 
 If your webhook endpoint returns a non-200 status code or fails to process the webhook within a configurable timeout, the row will be re-delivered.
 
@@ -230,13 +230,13 @@ Transforms are still under development and coming soon.
 
 You can **transform** messages before they're delivered to your consumers using a Lua function. This is useful for transforming data into a format more suitable for your application.
 
-## WAL Pipelines
+## Change Capture Pipelines
 
 Sequin streams rows directly from your tables. But sometimes, you want to log every discrete change to rows, and capture the `old` and `new` values of that change. Or, you want to retain a log of deleted rows.
 
-With **WAL Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can setup a Stream for your event table to stream its rows.
+With **Change Capture Pipelines**, Sequin captures changes from tables you specify. Sequin will write each change as it happens to a table in your database. Then, you can setup a Stream for your event table to stream its rows.
 
-WAL Pipelines can indicate which operations to capture (i.e. `insert`, `update`, `delete`) as well as apply SQL filtering on changes.
+Change Capture Pipelines can indicate which operations to capture (i.e. `insert`, `update`, `delete`) as well as apply SQL filtering on changes.
 
 If you don't want to keep every change indefinitely, you can setup your target event table with a retention policy using extensions such as `pg_cron` or `pg_partman`. By retaining recent changes in a Postgres table, you get to use Sequin features like replay and rewind.
 
@@ -259,7 +259,7 @@ create table your_event_log (
 );
 ```
 
-[Learn more about WAL Pipelines](/capture-changes/wal-pipelines).
+[Learn more about Change Capture Pipelines](/capture-changes/change-capture-pipelines).
 
 ## Replication slots
 

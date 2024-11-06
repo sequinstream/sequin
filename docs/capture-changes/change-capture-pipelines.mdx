@@ -11,7 +11,7 @@ Sequin streams the latest version of rows out of Postgres tables. But sometimes 
 **Change Capture Pipelines** allow you to capture every insert, update, and delete event that happens in your database, storing them in an event log table. That event log table can live in the same database or a different one. Then, you can stream these events using Sequin's standard consumption methods:
 
 <Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of Change Capture Pipelines, with the source table on the left and the event log table on the right" />
+  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of Change Capture Pipelines, with the source table on the left and the event log table on the right" />
 </Frame>
 
 ## Overview
@@ -32,25 +32,25 @@ You can create Change Capture Pipelines in the Sequin console by navigating to t
 Under **Source configuration**, select the table you want to capture changes from:
 
 <Frame>
-  <img style={{maxWidth: "500px"}} src="/images/guides/wal-pipelines/source-configuration.png" alt="Source configuration widget, showing a list of tables to choose from" />
+  <img style={{maxWidth: "500px"}} src="/images/guides/change-capture-pipelines/source-configuration.png" alt="Source configuration widget, showing a list of tables to choose from" />
 </Frame>
 
 You can specify which operations to capture (i.e. inserts, updates, and/or deletes). And you can filter the changes to capture with one or more column filters:
 
 <Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/filter-configuration.png" alt="Insert, delete, and update radio group, followed by a column filter widget" />
+  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/filter-configuration.png" alt="Insert, delete, and update radio group, followed by a column filter widget" />
 </Frame>
 
 Sequin writes events to an [event table](#event-table) with a Sequin-specified schema. If you already have an event table ready to go, you can select it under **Destination configuration**. Otherwise, click **Create new event table** to create a new table:
 
 <Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/destination-configuration.png" alt="Destination configuration widget, showing a list of tables to choose from, and a button to create a new event table" />
+  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/destination-configuration.png" alt="Destination configuration widget, showing a list of tables to choose from, and a button to create a new event table" />
 </Frame>
 
 Clicking **Create new event table** will open a modal that will provide instructions for creating an event table in your database:
 
 <Frame>
-  <img style={{maxWidth: "500px"}} src="/images/guides/wal-pipelines/create-event-table-modal.png" alt="The create event table modal, showing some configuration options and a series of SQL DDL commands to create the table" />
+  <img style={{maxWidth: "500px"}} src="/images/guides/change-capture-pipelines/create-event-table-modal.png" alt="The create event table modal, showing some configuration options and a series of SQL DDL commands to create the table" />
 </Frame>
 
 After creating your event table, click **Done** to close the modal. Your new table should now appear in the destination list. Select it and click **Create** to finish creating your Change Capture Pipeline.

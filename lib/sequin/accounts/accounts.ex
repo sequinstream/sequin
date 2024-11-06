@@ -2,7 +2,6 @@ defmodule Sequin.Accounts do
   @moduledoc """
   The Accounts context.
   """
-
   import Ecto.Query, warn: false
 
   alias Sequin.Accounts.Account
@@ -20,6 +19,9 @@ defmodule Sequin.Accounts do
   alias Sequin.Repo
 
   require Logger
+
+  def default_user_email, do: "admin@sequinstream.com"
+  def default_user_password, do: "sequinpassword!"
 
   # Add this to the list of alias statements at the top of the file
   @doc """
@@ -116,10 +118,13 @@ defmodule Sequin.Accounts do
       {:error, %Ecto.Changeset{}}
 
   """
-  def register_user(:identity, attrs) do
+  def register_user(auth_provider, attrs, account \\ nil)
+
+  def register_user(:identity, attrs, account) do
     Repo.transact(fn ->
-      with {:ok, account} <- create_account(%{}),
-           {:ok, user} <-
+      account = account || create_account!(%{})
+
+      with {:ok, user} <-
              %User{}
              |> User.registration_changeset(attrs)
              |> Repo.insert(),
@@ -130,10 +135,11 @@ defmodule Sequin.Accounts do
     end)
   end
 
-  def register_user(auth_provider, attrs) do
+  def register_user(auth_provider, attrs, account) do
     Repo.transact(fn ->
-      with {:ok, account} <- create_account(%{}),
-           {:ok, user} <-
+      account = account || create_account!(%{})
+
+      with {:ok, user} <-
              %User{}
              |> User.provider_registration_changeset(Map.put(attrs, :auth_provider, auth_provider))
              |> Repo.insert(),
@@ -502,6 +508,10 @@ defmodule Sequin.Accounts do
     |> Repo.all()
   end
 
+  def count_accounts do
+    Repo.aggregate(Account, :count)
+  end
+
   def find_account(params \\ []) do
     params
     |> Enum.reduce(Account, fn
@@ -540,6 +550,13 @@ defmodule Sequin.Accounts do
           {:error, changeset}
       end
     end)
+  end
+
+  def create_account!(attrs) do
+    case create_account(attrs) do
+      {:ok, account} -> account
+      {:error, error} -> raise "Failed to create account: #{inspect(error)}"
+    end
   end
 
   def update_account(%Account{} = account, attrs) do
@@ -846,6 +863,25 @@ defmodule Sequin.Accounts do
 
       user_token ->
         Repo.delete(user_token)
+    end
+  end
+
+  @doc """
+  Checks if only the user exists and has not yet logged in.
+  Returns true if exactly one account exists with exactly one user
+  with email "admin@sequinstream.com" and password "sequinpassword!"
+  and the user has not yet logged in.
+  """
+  @spec only_default_user_and_first_login?() :: boolean()
+  def only_default_user_and_first_login? do
+    default_user_email = default_user_email()
+
+    with 1 <- Repo.aggregate(Account, :count),
+         1 <- Repo.aggregate(User, :count),
+         [%User{email: ^default_user_email, last_login_at: nil} = user] <- list_users() do
+      User.valid_password?(user, default_user_password())
+    else
+      _ -> false
     end
   end
 end

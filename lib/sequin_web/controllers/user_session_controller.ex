@@ -114,6 +114,8 @@ defmodule SequinWeb.UserSessionController do
     if user = Accounts.get_user_by_email_and_password(email, password) do
       conn = if flash_info, do: put_flash(conn, :toast, %{kind: :info, title: flash_info}), else: conn
 
+      Accounts.update_user(user, %{last_login_at: DateTime.utc_now()})
+
       UserAuth.log_in_user(conn, user, user_params)
     else
       redirect_to = params["redirect_to"] || ~p"/login"

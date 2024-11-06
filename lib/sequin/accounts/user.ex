@@ -36,6 +36,8 @@ defmodule Sequin.Accounts.User do
     has_many :accounts, through: [:accounts_users, :account]
     field :impersonating_user, :map, virtual: true
 
+    field :last_login_at, :utc_datetime
+
     timestamps(type: :utc_datetime)
   end
 
@@ -112,7 +114,7 @@ defmodule Sequin.Accounts.User do
   end
 
   def update_changeset(user, attrs) do
-    cast(user, attrs, [:name])
+    cast(user, attrs, [:name, :last_login_at])
   end
 
   defp validate_email(changeset, opts) do

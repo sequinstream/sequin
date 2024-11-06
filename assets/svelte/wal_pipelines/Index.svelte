@@ -27,20 +27,23 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert show={!hasDatabases} entityName="WAL pipeline" />
+  <DatabaseConnectionAlert
+    show={!hasDatabases}
+    entityName="Change Capture Pipeline"
+  />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Logs class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">WAL Pipelines</h1>
+      <h1 class="text-2xl font-bold">Change Capture Pipelines</h1>
     </div>
     {#if walPipelines.length > 0 && hasDatabases}
       <a
-        href="/wal-pipelines/new"
+        href="/change-capture-pipelines/new"
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create WAL Pipeline</Button>
+        <Button>Create Change Capture Pipeline</Button>
       </a>
     {/if}
   </div>
@@ -48,29 +51,31 @@
   {#if walPipelines.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No WAL Pipelines found</h2>
+        <h2 class="text-xl font-semibold mb-4">
+          No Change Capture Pipelines found
+        </h2>
         <p class="text-gray-600 mb-6">
           With a
           <a
             href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
             target="_blank"
-            class="text-blue-500 hover:underline">WAL Pipeline</a
+            class="text-blue-500 hover:underline">Change Capture Pipeline</a
           >, Sequin captures all of a table's insert, update, and delete events
           and stores them in an event log table.
         </p>
         {#if hasDatabases}
           <a
-            href="/wal-pipelines/new"
+            href="/change-capture-pipelines/new"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
-            <Button>Create WAL Pipeline</Button>
+            <Button>Create Change Capture Pipeline</Button>
           </a>
         {:else}
-          <Button disabled>Create WAL Pipeline</Button>
+          <Button disabled>Create Change Capture Pipeline</Button>
           <p class="text-gray-600 mt-4">
-            You need to connect a database to Sequin before you can create a WAL
-            pipeline.
+            You need to connect a database to Sequin before you can create a
+            Change Capture Pipeline.
           </p>
         {/if}
       </div>
@@ -91,7 +96,7 @@
           <Table.Row
             class="cursor-pointer"
             on:click={() => {
-              const url = `/wal-pipelines/${pipeline.id}`;
+              const url = `/change-capture-pipelines/${pipeline.id}`;
               window.history.pushState({}, "", url);
               dispatchEvent(new PopStateEvent("popstate"));
             }}

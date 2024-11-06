@@ -27,18 +27,18 @@
 
 <div class="container mx-auto px-4 py-8">
   <div class="flex justify-between items-center mb-6">
-    <h2 class="text-2xl font-semibold">WAL Pipelines</h2>
+    <h2 class="text-2xl font-semibold">Change Capture Pipelines</h2>
     <Button on:click={() => pushEvent("new_wal_pipeline", {})}>
       <Plus class="h-4 w-4 mr-2" />
-      Create WAL Pipeline
+      Create Change Capture Pipeline
     </Button>
   </div>
 
   {#if walPipelines.length === 0}
     <div class="text-center py-12">
-      <p class="text-gray-600 mb-4">No WAL Pipelines found</p>
+      <p class="text-gray-600 mb-4">No Change Capture Pipelines found</p>
       <Button on:click={() => pushEvent("new_wal_pipeline", {})}>
-        Create WAL Pipeline
+        Create Change Capture Pipeline
       </Button>
     </div>
   {:else}

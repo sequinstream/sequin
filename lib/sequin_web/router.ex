@@ -109,10 +109,10 @@ defmodule SequinWeb.Router do
       live "/http-endpoints/:id", HttpEndpointsLive.Show, :show
       live "/http-endpoints/:id/edit", HttpEndpointsLive.Form, :edit
 
-      live "/wal-pipelines", WalPipelinesLive.Index, :index
-      live "/wal-pipelines/new", WalPipelinesLive.Form, :new
-      live "/wal-pipelines/:id", WalPipelinesLive.Show, :show
-      live "/wal-pipelines/:id/edit", WalPipelinesLive.Form, :edit
+      live "/change-capture-pipelines", WalPipelinesLive.Index, :index
+      live "/change-capture-pipelines/new", WalPipelinesLive.Form, :new
+      live "/change-capture-pipelines/:id", WalPipelinesLive.Show, :show
+      live "/change-capture-pipelines/:id/edit", WalPipelinesLive.Form, :edit
 
       live "/streams", SequencesLive.Index, :index
       live "/streams/new", SequencesLive.Index, :new

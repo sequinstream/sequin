@@ -63,7 +63,7 @@
   function handleRefreshReplicaWarning() {
     refreshReplicaWarningLoading = true;
     live.pushEventTo(
-      "#wal-pipeline-show",
+      "#change-capture-pipeline-show",
       "refresh_replica_warning",
       {},
       () => {
@@ -73,7 +73,11 @@
   }
 
   function handleDismissReplicaWarning() {
-    live.pushEventTo("#wal-pipeline-show", "dismiss_replica_warning", {});
+    live.pushEventTo(
+      "#change-capture-pipeline-show",
+      "dismiss_replica_warning",
+      {},
+    );
   }
 </script>
 
@@ -82,7 +86,7 @@
     <div class="container mx-auto px-4 py-4">
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <LinkPushNavigate href="/wal-pipelines">
+          <LinkPushNavigate href="/change-capture-pipelines">
             <Button variant="ghost" size="sm">
               <ArrowLeft class="h-4 w-4" />
             </Button>
@@ -112,7 +116,7 @@
             </div>
           </div>
           <a
-            href="/wal-pipelines/{walPipeline.id}/edit"
+            href="/change-capture-pipelines/{walPipeline.id}/edit"
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
@@ -304,7 +308,8 @@
                 No filters applied
               </h4>
               <p class="text-sm text-gray-500 mb-4">
-                This WAL Pipeline will process all data from the source table.
+                This Change Capture Pipeline will process all data from the
+                source table.
               </p>
             </div>
           {/if}
@@ -318,7 +323,7 @@
   <Dialog.Content>
     <Dialog.Header>
       <Dialog.Title
-        >Are you sure you want to delete this WAL Pipeline?</Dialog.Title
+        >Are you sure you want to delete this Change Capture Pipeline?</Dialog.Title
       >
       <Dialog.Description>This action cannot be undone.</Dialog.Description>
     </Dialog.Header>

@@ -1,22 +1,22 @@
 ---
-title: "WAL Pipelines"
-sidebarTitle: "WAL Pipelines"
-description: "Capture changes with WAL Pipelines"
+title: "Change Capture Pipelines"
+sidebarTitle: "Change Capture Pipelines"
+description: "Capture changes with Change Capture Pipelines"
 icon: "timeline"
 iconType: "solid"
 ---
 
 Sequin streams the latest version of rows out of Postgres tables. But sometimes you need to capture every discrete change to your tables, not just the latest state of each row.
 
-**WAL Pipelines** allow you to capture every insert, update, and delete event that happens in your database, storing them in an event log table. That event log table can live in the same database or a different one. Then, you can stream these events using Sequin's standard consumption methods:
+**Change Capture Pipelines** allow you to capture every insert, update, and delete event that happens in your database, storing them in an event log table. That event log table can live in the same database or a different one. Then, you can stream these events using Sequin's standard consumption methods:
 
 <Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of WAL Pipelines, with the source table on the left and the event log table on the right" />
+  <img style={{maxWidth: "800px"}} src="/images/guides/wal-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of Change Capture Pipelines, with the source table on the left and the event log table on the right" />
 </Frame>
 
 ## Overview
 
-WAL Pipelines:
+Change Capture Pipelines:
 
 - Capture discrete change events (inserts, updates, and/or deletes)
 - Write changes to an event log table in your database
@@ -25,9 +25,9 @@ WAL Pipelines:
 - Allow SQL filtering on changes
 - Support configurable retention policies
 
-## Creating WAL Pipelines
+## Creating Change Capture Pipelines
 
-You can create WAL Pipelines in the Sequin console by navigating to the **WAL Pipelines** tab and clicking **Create WAL Pipeline**.
+You can create Change Capture Pipelines in the Sequin console by navigating to the **Change Capture Pipelines** tab and clicking **Create Change Capture Pipeline**.
 
 Under **Source configuration**, select the table you want to capture changes from:
 
@@ -53,13 +53,13 @@ Clicking **Create new event table** will open a modal that will provide instruct
   <img style={{maxWidth: "500px"}} src="/images/guides/wal-pipelines/create-event-table-modal.png" alt="The create event table modal, showing some configuration options and a series of SQL DDL commands to create the table" />
 </Frame>
 
-After creating your event table, click **Done** to close the modal. Your new table should now appear in the destination list. Select it and click **Create** to finish creating your WAL Pipeline.
+After creating your event table, click **Done** to close the modal. Your new table should now appear in the destination list. Select it and click **Create** to finish creating your Change Capture Pipeline.
 
 ## Event table
 
 ### Schema
 
-WAL Pipelines write changes to an **event table** in your database. This event table has a schema specified by Sequin.
+Change Capture Pipelines write changes to an **event table** in your database. This event table has a schema specified by Sequin.
 
 Event tables look like this:
 
@@ -254,7 +254,7 @@ Create a Stream for your event table to begin streaming the changes to your appl
 
 ## Event Examples
 
-Below are some examples of events that WAL Pipelines capture:
+Below are some examples of events that Change Capture Pipelines capture:
 
 ### Insert Event
 
@@ -270,7 +270,7 @@ record                | {
                       |   "updated_at": "2024-10-28T21:37:53",
                       |   "inserted_at": "2024-10-28T21:37:53"
                       | }
-changes               | 
+changes               |
 ```
 
 ### Update Event
@@ -309,5 +309,5 @@ record                | {
                       |   "updated_at": "2024-10-28T21:39:21",
                       |   "inserted_at": "2024-10-28T21:37:53"
                       | }
-changes               | 
+changes               |
 ```

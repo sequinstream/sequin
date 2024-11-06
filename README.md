@@ -81,7 +81,7 @@ Sequin connects to any Postgres database. To stream data, you'll create [Streams
 
 As rows are inserted or updated, Sequin will redeliver them to consumers until acknowledged.
 
-With [WAL Pipelines](#wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
+With [Change Capture Pipelines](https://sequinstream.com/docs/capture-changes/wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
 
 Sequin comes with a web console/UI for configuration:
 
@@ -127,7 +127,7 @@ Like Sequin, you can use Debezium + Kafka to replicate data or build event proce
 
 Debezium is a complex system that requires a lot of setup and configuration.
 
-Sequin is simpler to setup and operate, yet is quickly becoming as comprehensive as Debezium. Sequin comes with a much more comprehensive UI for configuration and monitoring. And Sequin doesn't require another messaging system like Kafka to learn and operate. With [WAL Pipelines](#wal-pipelines) you can capture the same changes that Debezium does.
+Sequin is simpler to setup and operate, yet is quickly becoming as comprehensive as Debezium. Sequin comes with a much more comprehensive UI for configuration and monitoring. And Sequin doesn't require another messaging system like Kafka to learn and operate. With [Change Capture Pipelines](https://sequinstream.com/docs/capture-changes/wal-pipelines) you can capture the same changes that Debezium does.
 
 </details>
 

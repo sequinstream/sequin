@@ -8,7 +8,7 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
 
   @primary_key false
   schema "test_event_logs" do
-    field :id, :integer, primary_key: true
+    field :id, :integer, primary_key: true, read_after_writes: true
     field :seq, :integer
     field :source_database_id, Ecto.UUID
     field :source_table_oid, :integer
@@ -32,6 +32,10 @@ defmodule Sequin.Test.Support.Models.TestEventLog do
 
   def table_name do
     "test_event_logs"
+  end
+
+  def record_pks(test_event_log) do
+    [test_event_log.id]
   end
 
   def column_attnums do

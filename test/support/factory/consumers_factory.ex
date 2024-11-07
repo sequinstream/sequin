@@ -15,12 +15,13 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
   alias Sequin.Test.Support.Models.Character
+  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.Test.Support.Models.TestEventLog
 
   # Consumer
   def consumer(attrs \\ []) do
@@ -481,11 +482,20 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     attrs =
       case source_record do
-        # Feel free to add more source record types here
-        # Or, accept a struct instead of an atom
-        :character ->
-          character = CharacterFactory.insert_character!(%{}, repo: Sequin.Repo)
+        %Character{} = character ->
           Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
+
+        %CharacterDetailed{} = character_detailed ->
+          Map.merge(attrs, %{
+            record_pks: CharacterDetailed.record_pks(character_detailed),
+            table_oid: CharacterDetailed.table_oid()
+          })
+
+        %TestEventLog{} = event_log ->
+          Map.merge(attrs, %{
+            record_pks: TestEventLog.record_pks(event_log),
+            table_oid: TestEventLog.table_oid()
+          })
 
         nil ->
           attrs

@@ -11,6 +11,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Test.Support.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
@@ -326,7 +327,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       refute Consumers.reload(consumer_record)
     end
 
-    @tag skip: true
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
       test_pid = self()
 
@@ -335,6 +335,14 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         send(test_pid, {:http_request, req})
         {req, Req.Response.new(status: 200)}
       end
+
+      source_record = TestEventLogFactory.insert_test_event_log!(%{}, repo: Repo)
+
+      consumer_event =
+        ConsumersFactory.insert_deliverable_consumer_record!(
+          consumer_id: consumer.id,
+          source_record: source_record
+        )
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
@@ -347,47 +355,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
          ]}
       )
 
-      # Insert a consumer record
-      record = %{
-        "id" => Faker.UUID.v4(),
-        "house_id" => 102,
-        "house_name" => "House Harkonnen!!",
-        "planet_id" => 1,
-        "ruler_name" => "Baron Vladimir Harkonnen",
-        "updated_at" => "2024-10-17T16:41:01"
-      }
-
-      changes = %{
-        "house_name" => "House Harkonnen!",
-        "updated_at" => "2024-10-10T14:58:00"
-      }
-
-      consumer_event =
-        ConsumersFactory.insert_consumer_record!(
-          consumer_id: consumer.id,
-          record_pks: [record["id"]],
-          data:
-            ConsumersFactory.consumer_record_data(
-              record: %{
-                "action" => "update",
-                "changes" => changes,
-                "committed_at" => "2024-10-17T23:42:07.382672Z",
-                "record" => record,
-                "record_pk" => "1,102",
-                "seq" => 1_729_208_527_382_672,
-                "source_database_id" => "307f9b5e-99c9-4e46-abea-c996dcaeb919",
-                "source_table_name" => "rulers",
-                "source_table_oid" => 16_310_038,
-                "source_table_schema" => "public"
-              },
-              metadata: %{
-                table_schema: "public",
-                table_name: "event_logs",
-                commit_timestamp: DateTime.utc_now()
-              }
-            )
-        )
-
       # Wait for the message to be processed
       assert_receive {:http_request, req}, 5_000
 
@@ -396,13 +363,14 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       json = Jason.decode!(req.body)
 
       # Assert the transformed structure
-      assert json["record"] == record
-      assert json["metadata"]["table_name"] == "rulers"
-      assert json["metadata"]["table_schema"] == "public"
+      assert json["record"] == source_record.record
+
+      assert json["metadata"]["table_name"] == source_record.source_table_name
+      assert json["metadata"]["table_schema"] == source_record.source_table_schema
       assert json["metadata"]["consumer"]["id"] == consumer.id
       assert json["metadata"]["consumer"]["name"] == consumer.name
-      assert json["action"] == "update"
-      assert json["changes"] == changes
+      assert json["action"] == source_record.action
+      assert json["changes"] == source_record.changes
 
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 

@@ -7,6 +7,7 @@ defmodule Sequin.Databases.PostgresDatabase do
 
   alias __MODULE__
   alias Ecto.Queryable
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
@@ -47,19 +48,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :ipv6, :boolean, default: false
     field :use_local_tunnel, :boolean, default: false
 
-    embeds_many :tables, Table, on_replace: :delete, primary_key: false do
-      field :oid, :integer, primary_key: true
-      field :schema, :string
-      field :name, :string
-      field :sort_column_attnum, :integer, virtual: true
-
-      embeds_many :columns, Column, on_replace: :delete, primary_key: false do
-        field :attnum, :integer, primary_key: true
-        field :is_pk?, :boolean
-        field :name, :string
-        field :type, :string
-      end
-    end
+    embeds_many :tables, PostgresDatabaseTable
 
     field :health, :map, virtual: true
 
@@ -91,7 +80,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     |> validate_required([:database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)
     |> validate_not_supabase_pooled()
-    |> cast_embed(:tables, with: &tables_changeset/2, required: false)
+    |> cast_embed(:tables, with: &PostgresDatabaseTable.changeset/2, required: false)
     |> unique_constraint([:account_id, :name],
       name: :postgres_databases_account_id_name_index,
       message: "Database name must be unique",
@@ -123,19 +112,6 @@ defmodule Sequin.Databases.PostgresDatabase do
     else
       changeset
     end
-  end
-
-  def tables_changeset(table, attrs) do
-    table
-    |> cast(attrs, [:oid, :schema, :name])
-    |> validate_required([:oid, :schema, :name])
-    |> cast_embed(:columns, with: &columns_changeset/2, required: true)
-  end
-
-  def columns_changeset(column, attrs) do
-    column
-    |> cast(attrs, [:attnum, :name, :type, :is_pk?])
-    |> validate_required([:attnum, :name, :type, :is_pk?])
   end
 
   @spec where_account(Queryable.t(), String.t()) :: Queryable.t()

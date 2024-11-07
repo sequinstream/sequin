@@ -417,7 +417,7 @@ defmodule Sequin.Databases do
     end)
   end
 
-  @spec tables(%PostgresDatabase{}) :: {:ok, [PostgresDatabase.Table.t()]} | {:error, term()}
+  @spec tables(%PostgresDatabase{}) :: {:ok, [PostgresDatabaseTable.t()]} | {:error, term()}
   def tables(%PostgresDatabase{tables: []} = db) do
     with {:ok, updated_db} <- update_tables(db) do
       {:ok, updated_db.tables}

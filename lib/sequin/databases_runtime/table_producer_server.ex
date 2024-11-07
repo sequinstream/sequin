@@ -7,7 +7,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.TableProducer
   alias Sequin.Health
@@ -316,9 +316,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     res
   end
 
-  defp records_by_column_attnum(%Table{} = table, records) do
+  defp records_by_column_attnum(%PostgresDatabaseTable{} = table, records) do
     Enum.map(records, fn record ->
-      Map.new(table.columns, fn %Table.Column{} = column ->
+      Map.new(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
         {column.attnum, Map.get(record, column.name)}
       end)
     end)
@@ -329,7 +329,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     initial_min_cursor
   end
 
-  defp record_pks(%Table{} = table, record_attnums_to_values) do
+  defp record_pks(%PostgresDatabaseTable{} = table, record_attnums_to_values) do
     table.columns
     |> Enum.filter(& &1.is_pk?)
     |> Enum.sort_by(& &1.attnum)

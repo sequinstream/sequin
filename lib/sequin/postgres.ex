@@ -7,7 +7,7 @@ defmodule Sequin.Postgres do
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.Repo
@@ -32,8 +32,8 @@ defmodule Sequin.Postgres do
   @doc """
   Checks if the given table is an event table by verifying it has all the required columns.
   """
-  @spec is_event_table?(PostgresDatabase.Table.t()) :: boolean()
-  def is_event_table?(%PostgresDatabase.Table{} = table) do
+  @spec is_event_table?(PostgresDatabaseTable.t()) :: boolean()
+  def is_event_table?(%PostgresDatabaseTable{} = table) do
     required_column_names = MapSet.new(@event_table_columns, & &1.name)
     table_column_names = MapSet.new(table.columns, & &1.name)
     MapSet.subset?(required_column_names, table_column_names)
@@ -42,8 +42,8 @@ defmodule Sequin.Postgres do
   @doc """
   Compares the given table with the expected event table structure and returns a list of errors.
   """
-  @spec event_table_errors(PostgresDatabase.Table.t()) :: [String.t()]
-  def event_table_errors(%PostgresDatabase.Table{} = table) do
+  @spec event_table_errors(PostgresDatabaseTable.t()) :: [String.t()]
+  def event_table_errors(%PostgresDatabaseTable{} = table) do
     table_columns = Map.new(table.columns, &{&1.name, &1})
 
     @event_table_columns
@@ -371,13 +371,13 @@ defmodule Sequin.Postgres do
     rows
     |> Enum.group_by(fn [schema, table_name, table_oid | _] -> {schema, table_name, table_oid} end)
     |> Enum.map(fn {{schema, table_name, table_oid}, columns} ->
-      %PostgresDatabase.Table{
+      %PostgresDatabaseTable{
         oid: table_oid,
         schema: schema,
         name: table_name,
         columns:
           Enum.map(columns, fn [_, _, _, attnum, column_name, column_type, is_pk] ->
-            %PostgresDatabase.Table.Column{
+            %PostgresDatabaseTable.Column{
               attnum: attnum,
               name: column_name,
               type: column_type,
@@ -552,7 +552,7 @@ defmodule Sequin.Postgres do
   For crafting a `select *`, but only selecting columns that are considered "safe"
   (i.e. we have a Postgrex encoder available)
   """
-  def safe_select_columns(%Table{} = table) do
+  def safe_select_columns(%PostgresDatabaseTable{} = table) do
     table.columns
     |> Enum.filter(&has_encoder?/1)
     |> Enum.map_join(", ", &quote_name(&1.name))
@@ -659,7 +659,7 @@ defmodule Sequin.Postgres do
     end)
   end
 
-  def load_rows(%Table{} = table, rows) do
+  def load_rows(%PostgresDatabaseTable{} = table, rows) do
     Enum.map(rows, fn row ->
       Map.new(table.columns, fn col ->
         value = row[col.name]
@@ -735,11 +735,11 @@ defmodule Sequin.Postgres do
   ]
 
   # Catch-all for time formats
-  defp has_encoder?(%Table.Column{type: "time" <> _rest}) do
+  defp has_encoder?(%PostgresDatabaseTable.Column{type: "time" <> _rest}) do
     true
   end
 
-  defp has_encoder?(%Table.Column{type: type} = column) do
+  defp has_encoder?(%PostgresDatabaseTable.Column{type: type} = column) do
     type = String.trim_trailing(type, "[]")
 
     if type in @safe_types do

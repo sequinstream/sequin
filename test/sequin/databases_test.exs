@@ -3,6 +3,7 @@ defmodule Sequin.DatabasesTest do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -14,7 +15,7 @@ defmodule Sequin.DatabasesTest do
 
       assert {:ok, tables} = Databases.tables(db)
       assert length(tables) > 0
-      assert %PostgresDatabase.Table{} = hd(tables)
+      assert %PostgresDatabaseTable{} = hd(tables)
     end
 
     test "fetches and returns tables for a database without existing tables" do
@@ -22,7 +23,7 @@ defmodule Sequin.DatabasesTest do
 
       assert {:ok, tables} = Databases.tables(db)
       assert length(tables) > 0
-      assert %PostgresDatabase.Table{} = hd(tables)
+      assert %PostgresDatabaseTable{} = hd(tables)
     end
   end
 
@@ -32,7 +33,7 @@ defmodule Sequin.DatabasesTest do
 
       assert {:ok, updated_db} = Databases.update_tables(db)
       assert length(updated_db.tables) > 0
-      assert %PostgresDatabase.Table{} = hd(updated_db.tables)
+      assert %PostgresDatabaseTable{} = hd(updated_db.tables)
       assert updated_db.tables_refreshed_at != nil
 
       # Verify that the Characters table is present

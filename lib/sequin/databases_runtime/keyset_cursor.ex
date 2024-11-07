@@ -1,6 +1,6 @@
 defmodule Sequin.DatabasesRuntime.KeysetCursor do
   @moduledoc false
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.Postgres
 
   @spec attnums_to_names(Table.t(), map()) :: map()

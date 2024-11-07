@@ -9,24 +9,28 @@ With Webhook Subscriptions, Sequin delivers each row from your [Stream](/how-seq
 
 Webhook Subscriptions are built on top of the same consumer group system as the [Consumer Group API](/consume/consume-api/overview) and offer the following guarantees:
 
-- **One row per payload**: Each webhook payload contains one row.
+- **Batched row delivery**: Each webhook payload contains one or more rows in a batch (configurable with the "batch size" setting):
     ```json payload.json
     {
-    "record": {
-        "id": 1,
-        "name": "Paul Atreides",
-        "title": "Duke of Arrakis",
-        "spice_allocation": 1000,
-        "is_kwisatz_haderach": true
-        },
-        "metadata": {
+      "data": [
+        {
+          "record": {
+            "id": 1,
+            "name": "Paul Atreides",
+            "title": "Duke of Arrakis",
+            "spice_allocation": 1000,
+            "is_kwisatz_haderach": true
+          },
+          "metadata": {
             "table_schema": "public",
             "table_name": "house_atreides_members",
             "consumer": {
-                "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-                "name": "dune_characters_consumer"
+              "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+              "name": "dune_characters_consumer"
             }
+          }
         }
+      ]
     }
     ```
 - **Exactly-once processing**: Rows are processed exactly-once per subscription. If your webhook returns a non-200 status code or fails to process the webhook within a configurable timeout, Sequin will retry the row (with an exponential backoff) until it is successfully processed.
@@ -40,21 +44,23 @@ Webhook Subscriptions are built on top of the same consumer group system as the 
 
 ## Shape of incoming webhooks
 
-Webhook payloads contain a single record and its associated metadata:
+Webhook payloads contain a batch of records and their associated metadata:
 
 ```typescript
 type WebhookPayload = {
-  record: {
-    [key: string]: any;  // The current state of the row
-  };
-  metadata: {
-    table_schema: string;
-    table_name: string;
-    consumer: {
-      id: string;
-      name: string;
+  data: Array<{
+    record: {
+      [key: string]: any;  // The current state of the row
     };
-  };
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      consumer: {
+        id: string;
+        name: string;
+      };
+    };
+  }>;
 };
 ```
 
@@ -63,21 +69,25 @@ type WebhookPayload = {
 ```json
 POST /your-webhook-endpoint
 {
-  "record": {
-    "id": 1,
-    "name": "Paul Atreides",
-    "title": "Duke of Arrakis",
-    "spice_allocation": 1000,
-    "is_kwisatz_haderach": true
-  },
-  "metadata": {
-    "table_schema": "public",
-    "table_name": "house_atreides_members",
-    "consumer": {
-      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
-      "name": "dune_characters_consumer"
+  "data": [
+    {
+      "record": {
+        "id": 1,
+        "name": "Paul Atreides",
+        "title": "Duke of Arrakis",
+        "spice_allocation": 1000,
+        "is_kwisatz_haderach": true
+      },
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "house_atreides_members",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "dune_characters_consumer"
+        }
+      }
     }
-  }
+  ]
 }
 ```
 

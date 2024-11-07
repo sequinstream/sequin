@@ -37,9 +37,10 @@
 
   $: isBackfilling = cursor_position?.producer === "table_and_wal";
 
-  $: backfillCondition = cursor_position
-    ? `${cursor_position.sort_column_name} >= ${cursor_position.initial_min_cursor.value}`
-    : null;
+  $: backfillCondition =
+    cursor_position && cursor_position.initial_min_cursor
+      ? `${cursor_position.sort_column_name} >= ${cursor_position.initial_min_cursor.value}`
+      : null;
 
   function openDialog() {
     newCursorPosition = initial_min_cursor;

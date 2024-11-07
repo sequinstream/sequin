@@ -34,6 +34,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
     sequence =
       DatabasesFactory.insert_sequence!(
+        account_id: database.account_id,
         postgres_database_id: database.id,
         table_oid: table_oid,
         sort_column_attnum: Character.column_attnum("updated_at")

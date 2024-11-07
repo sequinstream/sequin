@@ -45,7 +45,8 @@ defmodule SequinWeb.SequencesLive.Index do
         sequences: sequences,
         sequence_frequencies: sequence_frequencies,
         changeset: Databases.Sequence.changeset(%Databases.Sequence{}, %{}),
-        submit_error: nil
+        submit_error: nil,
+        errors: %{}
       )
       |> assign_databases()
 
@@ -76,13 +77,15 @@ defmodule SequinWeb.SequencesLive.Index do
       |> Databases.Sequence.changeset(sequence_params)
       |> Map.put(:action, :validate)
 
-    {:noreply, assign(socket, :changeset, changeset)}
+    {:noreply, assign(socket, changeset: changeset, errors: %{}, submit_error: nil)}
   end
 
   def handle_event("form_closed", _, socket) do
     {:noreply,
      socket
      |> assign(:changeset, Databases.Sequence.changeset(%Databases.Sequence{}, %{}))
+     |> assign(:errors, %{})
+     |> assign(:submit_error, nil)
      |> push_navigate(to: "/streams")}
   end
 
@@ -96,6 +99,8 @@ defmodule SequinWeb.SequencesLive.Index do
   end
 
   def handle_event("form_submitted", %{"form" => sequence_params}, socket) do
+    account_id = current_account_id(socket)
+
     # It's okay if this raises on 404, because the form doesn't let you select a database that doesn't exist
     database = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == sequence_params["postgres_database_id"]))
 
@@ -104,7 +109,7 @@ defmodule SequinWeb.SequencesLive.Index do
     sequence_params = Map.put(sequence_params, "postgres_database_id", database.id)
 
     with :ok <- Databases.verify_table_in_publication(database, sequence_params["table_oid"]),
-         {:ok, sequence} <- Databases.create_sequence(sequence_params) do
+         {:ok, sequence} <- Databases.create_sequence(account_id, sequence_params) do
       # This will populate the sequence with the correct table and column names
       Databases.update_sequence_from_db(sequence, database)
 
@@ -114,7 +119,7 @@ defmodule SequinWeb.SequencesLive.Index do
        |> push_navigate(to: "/streams")}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, changeset: changeset)}
+        {:noreply, assign(socket, changeset: changeset, errors: Sequin.Error.errors_on(changeset))}
 
       {:error, %NotFoundError{entity: :publication_membership}} ->
         submit_error =
@@ -180,7 +185,8 @@ defmodule SequinWeb.SequencesLive.Index do
             sequences: @encoded_sequences,
             databases: @encoded_databases,
             liveAction: @live_action,
-            submitError: @submit_error
+            submitError: @submit_error,
+            errors: @errors
           }
         }
         socket={@socket}
@@ -192,6 +198,7 @@ defmodule SequinWeb.SequencesLive.Index do
   defp encode_sequence(sequence, sequence_frequencies) do
     %{
       id: sequence.id,
+      name: sequence.name,
       table_name: sequence.table_name,
       table_schema: sequence.table_schema,
       sort_column_name: sequence.sort_column_name,

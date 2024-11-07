@@ -465,6 +465,7 @@ defmodule Sequin.ConsumersTest do
 
       sequence =
         DatabasesFactory.insert_sequence!(
+          account_id: account.id,
           postgres_database_id: database.id,
           table_oid: TestEventLogPartitioned.table_oid(),
           sort_column_attnum: TestEventLogPartitioned.column_attnum("committed_at")

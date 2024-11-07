@@ -169,8 +169,8 @@ defmodule Sequin.Databases do
     |> Repo.all()
   end
 
-  def create_sequence(attrs) do
-    %Sequence{}
+  def create_sequence(account_id, attrs) do
+    %Sequence{account_id: account_id}
     |> Sequence.changeset(attrs)
     |> Repo.insert()
   end

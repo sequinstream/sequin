@@ -22,6 +22,7 @@
   export let liveAction: string;
   export let parent: string;
   export let submitError: string;
+  export let errors: Record<string, any> = {};
   export let sequences: Array<{
     id: string;
     table_name: string;
@@ -33,6 +34,7 @@
       id: string;
       name: string;
     };
+    name: string;
   }>;
   export let databases: Array<{
     id: string;
@@ -129,6 +131,7 @@
     <Table.Root>
       <Table.Header>
         <Table.Row>
+          <Table.Head>Name</Table.Head>
           <Table.Head>Table</Table.Head>
           <Table.Head>Sort column</Table.Head>
           <Table.Head>Consumer count</Table.Head>
@@ -140,6 +143,7 @@
       <Table.Body>
         {#each sequences as sequence}
           <Table.Row>
+            <Table.Cell>{sequence.name}</Table.Cell>
             <Table.Cell
               >{sequence.table_schema}.{sequence.table_name}</Table.Cell
             >
@@ -210,6 +214,7 @@
       {live}
       {parent}
       {submitError}
+      {errors}
     />
   {/if}
 </div>

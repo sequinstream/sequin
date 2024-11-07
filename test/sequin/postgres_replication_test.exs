@@ -758,6 +758,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       sequence =
         DatabasesFactory.insert_sequence!(
+          account_id: account_id,
           postgres_database_id: source_db.id,
           table_oid: Character.table_oid()
         )
@@ -1090,15 +1091,16 @@ defmodule Sequin.PostgresReplicationTest do
       # Create PostgresReplicationSlot entity
       pg_replication =
         ReplicationFactory.insert_postgres_replication!(
+          account_id: account_id,
           postgres_database_id: source_db.id,
           slot_name: replication_slot(),
           publication_name: @publication,
-          account_id: account_id,
           status: :active
         )
 
       sequence =
         DatabasesFactory.insert_sequence!(
+          account_id: account_id,
           postgres_database_id: source_db.id,
           table_oid: CharacterDetailed.table_oid()
         )

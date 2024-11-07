@@ -202,6 +202,8 @@ defmodule Sequin.Factory.DatabasesFactory do
     merge_attributes(
       %Sequence{
         id: Factory.uuid(),
+        account_id: Factory.uuid(),
+        name: Factory.name(),
         table_oid: Factory.unique_integer(),
         table_schema: Factory.postgres_object(),
         table_name: Factory.postgres_object(),
@@ -222,11 +224,12 @@ defmodule Sequin.Factory.DatabasesFactory do
   def insert_sequence!(attrs \\ []) do
     attrs = Map.new(attrs)
 
-    attrs = Map.put_new_lazy(attrs, :postgres_database_id, fn -> insert_postgres_database!().id end)
+    {account_id, attrs} = Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+    attrs = Map.put_new_lazy(attrs, :postgres_database_id, fn -> insert_postgres_database!(account_id: account_id).id end)
 
     attrs = sequence_attrs(attrs)
 
-    %Sequence{}
+    %Sequence{account_id: account_id}
     |> Sequence.changeset(attrs)
     |> Repo.insert!()
   end

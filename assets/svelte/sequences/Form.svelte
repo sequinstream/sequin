@@ -17,6 +17,7 @@
     SelectValue,
   } from "$lib/components/ui/select";
   import TableSelector from "../components/TableSelector.svelte";
+  import { Input } from "$lib/components/ui/input";
 
   export let databases: Array<{
     id: string;
@@ -41,6 +42,7 @@
     postgres_database_id: "",
     table_oid: null,
     sort_column_attnum: null,
+    name: "",
   };
   let dialogOpen = true;
   let showConfirmDialog = false;
@@ -97,6 +99,12 @@
     } else {
       // Reset sort column when table changes
       form.sort_column_attnum = null;
+    }
+
+    if (selectedTable) {
+      form.name = `${selectedDatabase.name}.${selectedTable.schema}.${selectedTable.name}`;
+    } else {
+      form.name = "";
     }
   }
 
@@ -178,6 +186,29 @@
               <p class="text-destructive text-sm">
                 {errors.sort_column_attnum}
               </p>
+            {/if}
+          </div>
+        {/if}
+
+        {#if selectedTable && form.sort_column_attnum}
+          <div class="space-y-2">
+            <Label for="name">Stream name</Label>
+            <div class="flex flex-col gap-1">
+              <Input
+                id="name"
+                bind:value={form.name}
+                placeholder="Enter a unique name for your stream"
+                data-1p-ignore
+                data-lpignore="true"
+                data-form-type="other"
+              />
+              <p class="text-xs font-light">
+                Must contain only alphanumeric characters, underscores, hyphens,
+                or dots.
+              </p>
+            </div>
+            {#if errors.name}
+              <p class="text-destructive text-sm">{errors.name}</p>
             {/if}
           </div>
         {/if}

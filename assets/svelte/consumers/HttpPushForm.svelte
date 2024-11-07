@@ -68,7 +68,7 @@
       initialMinSortCol: null,
     },
     sequenceId: consumer.sequence_id || null,
-    groupColumnAttnums: consumer.group_column_attnums || null,
+    groupColumnAttnums: consumer.group_column_attnums || [],
   };
 
   let form = { ...initialForm };
@@ -325,8 +325,7 @@
       {errors}
       {isEditMode}
       {selectedTable}
-      groupColumnAttnums={form.groupColumnAttnums}
-      onGroupColumnAttnumsChange={handleGroupColumnsChange}
+      bind:groupColumnAttnums={form.groupColumnAttnums}
     />
 
     <Card>

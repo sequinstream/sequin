@@ -10,6 +10,7 @@
   } from "$lib/components/ui/select";
   import { Label } from "$lib/components/ui/label";
   import { Button } from "$lib/components/ui/button";
+  import LinkPatchNavigate from "./LinkPatchNavigate.svelte";
   export let tabs;
   export let apiTokens = [];
   export let containerClass = "";
@@ -104,9 +105,9 @@
           <CopyIcon content={codeForCopy} />
         </div>
       {:else}
-        <Button href="/settings/accounts" variant="link" size="sm">
-          Add an API token
-        </Button>
+        <LinkPatchNavigate href="/settings/accounts">
+          <Button variant="link" size="sm">Add an API token</Button>
+        </LinkPatchNavigate>
       {/if}
     </div>
   </div>

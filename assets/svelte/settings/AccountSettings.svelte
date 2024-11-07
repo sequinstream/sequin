@@ -58,6 +58,7 @@
 
   let showCreateApiTokenDialog = false;
   let createApiTokenLoading = false;
+  let deleteApiTokenLoading = false;
   let createApiTokenError: string | null = null;
 
   let showInviteMember = false;
@@ -77,14 +78,6 @@
 
   function closeInviteMemberDialog() {
     showInviteMember = false;
-  }
-
-  function openCreateApiTokenDialog() {
-    showCreateApiTokenDialog = true;
-  }
-
-  function closeCreateApiTokenDialog() {
-    showCreateApiTokenDialog = false;
   }
 
   function handleAccountSelect(accountId: string) {
@@ -153,7 +146,6 @@
       `#${parent}`,
       "create_api_token",
       {
-        accountId: selectedAccount.id,
         name: (event.target as HTMLFormElement).token_name.value,
       },
       (res?: { error?: string }) => {
@@ -161,19 +153,24 @@
         if (res?.error) {
           createApiTokenError = res.error;
         } else {
-          closeCreateApiTokenDialog();
+          showCreateApiTokenDialog = false;
         }
       },
     );
   }
 
   function handleDeleteToken(tokenId: string) {
+    deleteApiTokenLoading = true;
+
     live.pushEventTo(
       `#${parent}`,
       "delete_api_token",
-      { tokenId: tokenId, accountId: selectedAccount.id },
+      { tokenId: tokenId },
       (res: { error?: string }) => {
-        // TODO: toaster error or open dialog?!
+        deleteApiTokenLoading = false;
+        if (res?.error) {
+          // TODO: toaster error or open dialog?!
+        }
       },
     );
   }
@@ -420,15 +417,15 @@
         <h3 class="text-lg font-semibold leading-none tracking-tight">
           API tokens
         </h3>
-        {#if apiTokens.length}
-          <Button on:click={openCreateApiTokenDialog}>
+        {#if apiTokens.length > 0}
+          <Button on:click={() => (showCreateApiTokenDialog = true)}>
             <Plus class="h-4 w-4 mr-2" />
             Create token
           </Button>
         {/if}
       </div>
 
-      {#if !apiTokens.length}
+      {#if apiTokens.length === 0}
         <div
           class="flex flex-col gap-4 items-center text-center py-12 mx-auto my-auto px-6"
         >
@@ -439,7 +436,7 @@
           </p>
           <Button
             class="flex items-center gap-2"
-            on:click={openCreateApiTokenDialog}
+            on:click={() => (showCreateApiTokenDialog = true)}
           >
             <Plus class="h-4 w-4" />
             Create token
@@ -476,7 +473,11 @@
                 <Table.Cell class="flex justify-end">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild let:builder>
-                      <Button variant="ghost" builders={[builder]}>
+                      <Button
+                        variant="ghost"
+                        builders={[builder]}
+                        loading={deleteApiTokenLoading}
+                      >
                         <Ellipsis class="h-4 w-4" />
                         <span class="sr-only">Token Menu for {token.name}</span>
                       </Button>
@@ -634,7 +635,10 @@
         {/if}
       </div>
       <Dialog.Footer>
-        <Button variant="outline" on:click={closeCreateApiTokenDialog}>
+        <Button
+          variant="outline"
+          on:click={() => (showCreateApiTokenDialog = false)}
+        >
           Cancel
         </Button>
         <Button

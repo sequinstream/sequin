@@ -23,7 +23,7 @@ defmodule SequinWeb.ApiKeyController do
   def delete(conn, %{"id" => id}) do
     account_id = conn.assigns.account_id
 
-    with {:ok, _} <- ApiTokens.delete_token_for_account(id, account_id) do
+    with {:ok, _} <- ApiTokens.delete_token_for_account(account_id, id) do
       json(conn, %{success: true})
     end
   end

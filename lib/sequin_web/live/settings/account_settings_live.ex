@@ -50,13 +50,12 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
     end
   end
 
-  def handle_event("create_api_token", %{"accountId" => account_id, "name" => name}, socket) do
-    user = current_user(socket)
-    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+  def handle_event("create_api_token", %{"name" => name}, socket) do
+    account_id = current_account_id(socket)
 
-    case ApiTokens.create_for_account(account.id, %{name: name}) do
+    case ApiTokens.create_for_account(account_id, %{name: name}) do
       {:ok, _token} ->
-        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account.id)))}
+        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account_id)))}
 
       {:error, %Ecto.ConstraintError{}} ->
         {:reply, %{error: "A token with this name already exists"}, socket}
@@ -70,13 +69,12 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
     end
   end
 
-  def handle_event("delete_api_token", %{"tokenId" => token_id, "accountId" => account_id}, socket) do
-    user = current_user(socket)
-    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+  def handle_event("delete_api_token", %{"tokenId" => token_id}, socket) do
+    account_id = current_account_id(socket)
 
-    case ApiTokens.delete_token_for_account(token_id, account.id) do
+    case ApiTokens.delete_token_for_account(account_id, token_id) do
       {:ok, _} ->
-        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account.id)))}
+        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account_id)))}
 
       {:error, _} ->
         {:reply, %{error: "Failed to delete token"}, socket}

@@ -2,7 +2,7 @@ name: sequin
 
 services:
   sequin:
-    image: sequin:playground-yml
+    image: sequin/sequin:latest
     ports:
       - "7376:7376"
     environment:

@@ -113,6 +113,10 @@
     databaseId: string;
     sequenceId: string;
   }) {
+    if (form.sequenceId !== event.sequenceId) {
+      form.groupColumnAttnums = [];
+    }
+
     form.postgresDatabaseId = event.databaseId;
     form.sequenceId = event.sequenceId;
 

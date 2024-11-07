@@ -21,7 +21,11 @@
   $: defaultGroupColumns = selectedTable?.default_group_columns || [];
 
   $: {
-    if (!isEditMode && groupColumnAttnums.length === 0) {
+    if (
+      !isEditMode &&
+      groupColumnAttnums.length === 0 &&
+      defaultGroupColumns.length > 0
+    ) {
       groupColumnAttnums = defaultGroupColumns;
       if (!useCustomGroupingChanged) {
         useCustomGrouping = false;
@@ -70,7 +74,7 @@
       </div>
     </CardHeader>
     <CardContent>
-      {#if !useCustomGrouping}
+      {#if !useCustomGrouping && !selectedTable.is_event_table}
         <p class="text-sm text-muted-foreground">
           Using primary keys for grouping.
         </p>
@@ -123,10 +127,17 @@
       </div>
     </CardHeader>
     <CardContent>
-      {#if !useCustomGrouping}
+      {#if !useCustomGrouping && !selectedTable.is_event_table}
         <p class="text-sm text-muted-foreground">
           By default, Sequin uses primary keys to group messages. This ensures
           that records are processed serially for each individual record.
+        </p>
+      {:else if !useCustomGrouping && selectedTable.is_event_table}
+        <p class="text-sm text-muted-foreground">
+          By default, Sequin uses these columns to group event table messages:
+          <code>source_database_id</code>, <code>source_table_oid</code>, and
+          <code>record_pk</code>. This ensures that records are processed
+          serially.
         </p>
       {:else}
         <p class="text-sm text-muted-foreground mb-4">

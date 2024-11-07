@@ -31,10 +31,6 @@ This guide assumes you already have Sequin installed and have a database connect
 
 This guide shows you how to create an audit log of discrete changes in your database. For example, if you have a `subscriptions` table and you want to capture every single update that happens to `subscriptions`, along with the old and new values of fields like `status`, `value`, `start_date`, etc.
 
-<Info>
-  If you only care about replicating the latest version of each row from one table to another, the guide "[Sync a table from one database to another](/guides/sync-table)" might be more appropriate.
-</Info>
-
 As you'll see, the destination table can be in the same database as the source table, or a different database.
 
 Sequin will capture changes to your tables in a `sequin_events` table. The `sequin_events` table might be sufficient for your audit log needs. If that's the case, you'll perform the following steps:
@@ -194,7 +190,7 @@ Select the `sequin_events` table as the source and click "Create Stream".
 
 Sequin is capturing changes to your tables into the `sequin_events` table, which is connected to a Stream. You can setup a worker to process these changes, transforming them as needed before [upserting them into your audit table](#upserting-into-your-audit-table).
 
-This section will show you how to consume the rows in the `sequin_events` table with a Consumer Group via the [Consumer Group API](/consume-api/overview).
+This section will show you how to consume the rows in the `sequin_events` table with a Consumer Group via the [Consumer Group API](/consume/consume-api/overview).
 
 <Info>
   If you'd prefer to receive webhooks, skip down to the [Consume events with webhooks](#consume-events-with-webhooks) section.

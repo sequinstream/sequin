@@ -45,6 +45,16 @@
       ],
     },
     {
+      heading: "Change Capture",
+      items: [
+        {
+          path: "/change-capture-pipelines",
+          text: "Change Capture Pipelines",
+          icon: Logs,
+        },
+      ],
+    },
+    {
       heading: "Destinations",
       items: [
         {
@@ -58,11 +68,6 @@
       heading: "Resources",
       items: [
         { path: "/databases", text: "Databases", icon: Database },
-        {
-          path: "/change-capture-pipelines",
-          text: "Change Capture Pipelines",
-          icon: Logs,
-        },
         { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
       ],
     },

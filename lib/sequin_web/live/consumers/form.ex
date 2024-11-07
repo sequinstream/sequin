@@ -337,17 +337,14 @@ defmodule SequinWeb.ConsumersLive.Form do
       "sequences" => Enum.map(sequences_with_sort_column_type, &encode_sequence/1),
       "tables" =>
         Enum.map(database.tables, fn %PostgresDatabaseTable{} = table ->
-          default_group_columns =
-            table
-            |> Map.get(:columns, [])
-            |> Enum.filter(& &1.is_pk?)
-            |> Enum.map(& &1.attnum)
+          default_group_columns = PostgresDatabaseTable.default_group_column_attnums(table)
 
           %{
             "oid" => table.oid,
             "schema" => table.schema,
             "name" => table.name,
             "default_group_columns" => default_group_columns,
+            "is_event_table" => Postgres.is_event_table?(table),
             "columns" =>
               Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
                 %{

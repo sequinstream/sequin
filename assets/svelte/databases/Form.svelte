@@ -64,7 +64,7 @@
   export let parent: string;
   export let live;
   export let showSupabasePoolerPrompt: boolean = false;
-  export let api_token: { name: string; token: string };
+  export let api_tokens: any[];
   export let showLocalTunnelPrompt: boolean = true;
 
   let form = { ...database, ssl: true }; // Set default SSL to true
@@ -518,7 +518,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                     value: setupTunnelCode,
                   },
                 ]}
-                secret={api_token.token}
+                apiTokens={api_tokens}
               />
             </div>
           </div>

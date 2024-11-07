@@ -11,7 +11,6 @@
   import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
   import CodeWithSecret from "../components/CodeWithSecret.svelte";
-  import { Badge } from "$lib/components/ui/badge";
   import ShowSequence from "./ShowSequence.svelte";
   import Cursor from "./Cursor.svelte";
 
@@ -20,7 +19,7 @@
   export let consumer;
   export let metrics;
   export let apiBaseUrl;
-  export let api_token;
+  export let api_tokens;
   export let cursor_position;
 
   function onRewind(
@@ -154,7 +153,7 @@
        -H "Authorization: Bearer {{secret}}"`,
                   },
                 ]}
-                secret={api_token.token}
+                apiTokens={api_tokens}
               />
             </div>
             <div>
@@ -169,7 +168,7 @@
        -d '{"ack_ids": ["<ack_id>"]}'`,
                   },
                 ]}
-                secret={api_token.token}
+                apiTokens={api_tokens}
               />
             </div>
           </div>

@@ -11,7 +11,7 @@ defmodule Sequin.ApiTokens.ApiToken do
   @rand_bytes 48
   @hash_algo :sha256
 
-  @derive {Jason.Encoder, only: [:id, :name]}
+  @derive {Jason.Encoder, only: [:id, :name, :inserted_at]}
   schema "api_tokens" do
     belongs_to :account, Account
     field :name, :string
@@ -26,6 +26,7 @@ defmodule Sequin.ApiTokens.ApiToken do
     |> cast(params, [:name, :token])
     |> validate_required([:name, :token])
     |> Sequin.Changeset.validate_name()
+    |> unique_constraint([:name, :account_id], name: "api_tokens_account_id_name_index")
   end
 
   def build_token(account_id) do

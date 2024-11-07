@@ -5,6 +5,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Accounts
+  alias Sequin.Accounts.User
   alias Sequin.ApiTokens
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -22,11 +23,12 @@ defmodule SequinWeb.DatabasesLive.Form do
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
+    current_account = User.current_account(socket.assigns.current_user)
     id = Map.get(params, "id")
 
     case fetch_or_build_database(socket, id) do
       {:ok, database} ->
-        {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
+        api_tokens = encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id))
 
         socket =
           socket
@@ -35,7 +37,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             show_errors?: false,
             submit_error: nil,
             database: database,
-            api_token: api_token,
+            api_tokens: api_tokens,
             allocated_bastion_port: nil,
             update_allocated_bastion_port_timer: nil
           )
@@ -86,7 +88,6 @@ defmodule SequinWeb.DatabasesLive.Form do
           replication: Error.errors_on(replication_changeset)
         }
       )
-      |> assign(:encoded_api_token, encode_api_token(assigns.api_token))
       |> assign(:show_local_tunnel_prompt, not Application.get_env(:sequin, :self_hosted))
 
     ~H"""
@@ -101,7 +102,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             parent: @parent_id,
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
-            api_token: @encoded_api_token,
+            api_tokens: @api_tokens,
             showLocalTunnelPrompt: @show_local_tunnel_prompt
           }
         }
@@ -446,6 +447,17 @@ defmodule SequinWeb.DatabasesLive.Form do
       "slot_name" => database.replication_slot.slot_name || "sequin_slot",
       "useLocalTunnel" => database.use_local_tunnel || false
     }
+  end
+
+  defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
+    Enum.map(api_tokens, fn api_token ->
+      %{
+        id: api_token.id,
+        name: api_token.name,
+        inserted_at: api_token.inserted_at,
+        token: api_token.token
+      }
+    end)
   end
 
   defp decode_params(form) do

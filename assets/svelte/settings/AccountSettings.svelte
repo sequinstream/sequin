@@ -6,6 +6,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Trash, Cog, Plus, Ellipsis, UserMinus } from "lucide-svelte";
   import * as Table from "$lib/components/ui/table";
+  import { formatRelativeTimestamp } from "$lib/utils";
   import {
     DropdownMenu,
     DropdownMenuContent,
@@ -13,6 +14,7 @@
     DropdownMenuTrigger,
   } from "$lib/components/ui/dropdown-menu";
   import { Label } from "$lib/components/ui/label";
+  import CopyIcon from "$lib/components/CopyIcon.svelte";
 
   interface Account {
     id: string;
@@ -30,7 +32,15 @@
     sent_to: string;
   }
 
+  interface ApiToken {
+    id: string;
+    name: string;
+    inserted_at: string;
+    token: string;
+  }
+
   export let accounts: Account[];
+  export let apiTokens: ApiToken[];
   export let pendingInvites: PendingInvite[];
   export let selectedAccount: Account;
   export let currentAccountUsers: User[];
@@ -45,6 +55,10 @@
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
   let deleteErrorMessage: string | null = null;
+
+  let showCreateApiTokenDialog = false;
+  let createApiTokenLoading = false;
+  let createApiTokenError: string | null = null;
 
   let showInviteMember = false;
   let inviteMemberLoading = false;
@@ -63,6 +77,14 @@
 
   function closeInviteMemberDialog() {
     showInviteMember = false;
+  }
+
+  function openCreateApiTokenDialog() {
+    showCreateApiTokenDialog = true;
+  }
+
+  function closeCreateApiTokenDialog() {
+    showCreateApiTokenDialog = false;
   }
 
   function handleAccountSelect(accountId: string) {
@@ -115,11 +137,43 @@
       (res: any) => {
         deleteConfirmDialogLoading = false;
         if (res.error) {
-          console.error(res.error);
           deleteErrorMessage = res.error;
         } else {
           showDeleteConfirmDialog = false;
         }
+      },
+    );
+  }
+
+  function handleCreateApiToken(event: SubmitEvent) {
+    createApiTokenLoading = true;
+    createApiTokenError = null;
+
+    live.pushEventTo(
+      `#${parent}`,
+      "create_api_token",
+      {
+        accountId: selectedAccount.id,
+        name: (event.target as HTMLFormElement).token_name.value,
+      },
+      (res?: { error?: string }) => {
+        createApiTokenLoading = false;
+        if (res?.error) {
+          createApiTokenError = res.error;
+        } else {
+          closeCreateApiTokenDialog();
+        }
+      },
+    );
+  }
+
+  function handleDeleteToken(tokenId: string) {
+    live.pushEventTo(
+      `#${parent}`,
+      "delete_api_token",
+      { tokenId: tokenId, accountId: selectedAccount.id },
+      (res: { error?: string }) => {
+        // TODO: toaster error or open dialog?!
       },
     );
   }
@@ -361,6 +415,90 @@
       {/if}
     </div>
 
+    <div class="bg-card text-card-foreground rounded-lg border shadow-sm">
+      <div class="flex p-6 justify-between items-center">
+        <h3 class="text-lg font-semibold leading-none tracking-tight">
+          API tokens
+        </h3>
+        {#if apiTokens.length}
+          <Button on:click={openCreateApiTokenDialog}>
+            <Plus class="h-4 w-4 mr-2" />
+            Create token
+          </Button>
+        {/if}
+      </div>
+
+      {#if !apiTokens.length}
+        <div
+          class="flex flex-col gap-4 items-center text-center py-12 mx-auto my-auto px-6"
+        >
+          <h2 class="text-xl font-semibold">No API tokens</h2>
+          <p class="text-gray-600">
+            Create API Tokens to authenticate the Sequin CLI and requests to the
+            Consumer Group API.
+          </p>
+          <Button
+            class="flex items-center gap-2"
+            on:click={openCreateApiTokenDialog}
+          >
+            <Plus class="h-4 w-4" />
+            Create token
+          </Button>
+        </div>
+      {:else}
+        <Table.Root>
+          <Table.Header>
+            <Table.Row>
+              <Table.Head>Name</Table.Head>
+              <Table.Head>Token</Table.Head>
+              <Table.Head>Created At</Table.Head>
+              <Table.Head />
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {#each apiTokens as token}
+              <Table.Row>
+                <Table.Cell>{token.name}</Table.Cell>
+                <Table.Cell>
+                  <div
+                    class="bg-gray-50 rounded-xl border border-border p-2 flex items-center gap-4 font-mono w-fit"
+                  >
+                    {token.token.slice(0, 4)}*****{token.token.slice(-4)}
+                    <CopyIcon
+                      content={token.token}
+                      class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2"
+                    />
+                  </div>
+                </Table.Cell>
+                <Table.Cell
+                  >{formatRelativeTimestamp(token.inserted_at)}</Table.Cell
+                >
+                <Table.Cell class="flex justify-end">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild let:builder>
+                      <Button variant="ghost" builders={[builder]}>
+                        <Ellipsis class="h-4 w-4" />
+                        <span class="sr-only">Token Menu for {token.name}</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        class="cursor-pointer flex gap-2 items-center text-destructive"
+                        on:click={() => handleDeleteToken(token.id)}
+                      >
+                        <Trash class="size-4" />
+                        Delete token
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </Table.Cell>
+              </Table.Row>
+            {/each}
+          </Table.Body>
+        </Table.Root>
+      {/if}
+    </div>
+
     <Card.Root>
       <Card.Header>
         <Card.Title>Delete this account</Card.Title>
@@ -468,5 +606,46 @@
         Remove
       </Button>
     </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showCreateApiTokenDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title
+        >Create a new API token for {selectedAccount.name}</Dialog.Title
+      >
+    </Dialog.Header>
+    <form on:submit|preventDefault={handleCreateApiToken}>
+      <div class="flex flex-col gap-2 py-4 my-4">
+        <div class="grid grid-cols-4 items-center gap-4">
+          <Label for="token_name" class="text-right">Name</Label>
+          <Input
+            id="token_name"
+            placeholder="Token name"
+            class="col-span-3"
+            autocomplete="off"
+          />
+        </div>
+        {#if createApiTokenError}
+          <p class="text-destructive text-sm mt-2 mb-4">
+            {createApiTokenError}
+          </p>
+        {/if}
+      </div>
+      <Dialog.Footer>
+        <Button variant="outline" on:click={closeCreateApiTokenDialog}>
+          Cancel
+        </Button>
+        <Button
+          variant="default"
+          type="submit"
+          disabled={createApiTokenLoading}
+          loading={createApiTokenLoading}
+        >
+          Create
+        </Button>
+      </Dialog.Footer>
+    </form>
   </Dialog.Content>
 </Dialog.Root>

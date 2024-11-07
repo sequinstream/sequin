@@ -4,6 +4,7 @@ defmodule SequinWeb.PullController do
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.String, as: SequinString
+  alias Sequin.Time
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -81,16 +82,28 @@ defmodule SequinWeb.PullController do
   defp parse_batch_size(_params), do: {:ok, 1}
 
   # This is a silly way to respect the wait_for parameter. We'll make it more sophisticated soon.
-  defp maybe_wait(%{"wait_for" => wait_for}, consumer) do
-    with {:ok, int} <- maybe_parse_int(wait_for),
-         true <- int >= min_wait_for() and int <= :timer.minutes(5) do
-      wait(consumer, int)
-    else
-      _ ->
+  defp maybe_wait(%{"wait_for" => wait_for}, consumer) when is_binary(wait_for) do
+    case Time.parse_duration(wait_for) do
+      {:ok, ms} ->
+        maybe_wait(%{"wait_for" => ms}, consumer)
+
+      {:error, %Error.InvariantError{}} ->
         {:error,
          Error.bad_request(
-           message: "Invalid `wait_for`. `wait_for` must be an integer between 500 and 300,000 (milliseconds)."
+           message: "Invalid `wait_for`. When using duration strings, format must be like '60s', '5m', or '1000ms'."
          )}
+    end
+  end
+
+  defp maybe_wait(%{"wait_for" => wait_for}, consumer) when is_number(wait_for) do
+    if wait_for >= min_wait_for() and wait_for <= :timer.minutes(5) do
+      wait(consumer, wait_for)
+    else
+      {:error,
+       Error.bad_request(
+         message:
+           "Invalid `wait_for`. Must be between #{min_wait_for()} and 300,000 milliseconds, or use duration format like '60s', '5m', '1000ms'."
+       )}
     end
   end
 

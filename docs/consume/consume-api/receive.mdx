@@ -17,12 +17,14 @@ api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
 
   The count of returned messages may be less than the requested batch size if there are fewer messages available for the consumer.
 </ParamField>
-<ParamField body="wait_for" type="integer" placeholder={0}>
+<ParamField body="wait_for" type="integer | string" placeholder={0}>
   Amount of time to wait for messages to become available in the consumer, in milliseconds. Defaults to `0`.
 
-  When `wait_for` is greater than `0`, the request will block until either `batch_size` messages are available or `wait_for` milliseconds have passed.
+  When `wait_for` is greater than `0`, the request will block until any messages are available or `wait_for` milliseconds have passed.
 
   Therefore, you can use `wait_for` to implement long polling.
+
+  Instead of passing in an integer, you can also pass in a duration string, like `"60s"`, `"5000ms"`, or `"5m"`.
 </ParamField>
 
 ## Response fields

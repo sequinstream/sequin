@@ -2940,7 +2940,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "does not return legacy_event_transform feature when account doesn't have the feature" do
-      account = AccountsFactory.account(features: [])
+      account = AccountsFactory.account(features: [], inserted_at: DateTime.utc_now())
       event_table = DatabasesFactory.event_table()
       database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
 
@@ -2960,16 +2960,16 @@ defmodule Sequin.ConsumersTest do
       assert Consumers.consumer_features(consumer) == []
     end
 
-    @tag :skip
-    test "does not return legacy_event_transform feature when table is not an event table" do
-      account = AccountsFactory.account(features: ["legacy_event_transform"])
-      regular_table = DatabasesFactory.table()
-      database = DatabasesFactory.postgres_database(account: account, tables: [regular_table])
+    test "returns legacy_event_singleton_transform when account is old enough" do
+      account = AccountsFactory.account(features: [], inserted_at: ~D[2024-11-01])
+
+      event_table = DatabasesFactory.event_table()
+      database = DatabasesFactory.postgres_database(account: account, tables: [event_table])
 
       sequence =
         DatabasesFactory.sequence(
           postgres_database_id: database.id,
-          table_oid: regular_table.oid
+          table_oid: event_table.oid
         )
 
       consumer =
@@ -2979,7 +2979,7 @@ defmodule Sequin.ConsumersTest do
           sequence: sequence
         )
 
-      assert Consumers.consumer_features(consumer) == []
+      assert Consumers.consumer_features(consumer) == [{:legacy_event_singleton_transform, true}]
     end
   end
 

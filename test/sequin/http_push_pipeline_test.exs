@@ -33,10 +33,10 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       adapter = fn %Req.Request{} = req ->
         assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
-        json = Jason.decode!(req.body)
+        %{"data" => [event_json]} = Jason.decode!(req.body)
 
         assert_maps_equal(
-          json,
+          event_json,
           %{
             "record" => event.data.record,
             "changes" => nil,
@@ -46,7 +46,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
         assert_maps_equal(
-          json["metadata"],
+          event_json["metadata"],
           %{
             "table_name" => event.data.metadata.table_name,
             "table_schema" => event.data.metadata.table_schema,
@@ -61,8 +61,72 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_event(consumer, event)
-      assert_receive {:ack, ^ref, [%{data: %{data: %{action: :insert}}}], []}, 1_000
+      ref = send_test_events(consumer, [event])
+      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
+      assert_receive :sent, 1_000
+    end
+
+    test "batched messages are processed together", %{consumer: consumer, http_endpoint: http_endpoint} do
+      test_pid = self()
+
+      # Create multiple events
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :update)
+
+      # Set batch size to 2
+      consumer = %{consumer | batch_size: 2}
+
+      adapter = fn %Req.Request{} = req ->
+        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
+        %{"data" => [json1, json2]} = Jason.decode!(req.body)
+
+        assert json1["action"] == "insert"
+        assert json2["action"] == "update"
+
+        send(test_pid, :sent)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      start_pipeline!(consumer, adapter)
+
+      ref = send_test_events(consumer, [event1, event2])
+
+      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}, %{data: %{action: :update}}]}], []}, 1_000
+      assert_receive :sent, 1_000
+    end
+
+    test "legacy_event_singleton_transform sends unwrapped single messages", %{
+      consumer: consumer,
+      http_endpoint: http_endpoint
+    } do
+      test_pid = self()
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert)
+
+      adapter = fn %Req.Request{} = req ->
+        assert to_string(req.url) == HttpEndpoint.url(http_endpoint)
+        json = Jason.decode!(req.body)
+
+        # Should NOT be wrapped in a list
+        refute is_list(json)
+        assert json["action"] == "insert"
+
+        send(test_pid, :sent)
+        {req, Req.Response.new(status: 200)}
+      end
+
+      # Start pipeline with legacy_event_singleton_transform enabled
+      start_supervised!(
+        {HttpPushPipeline,
+         [
+           consumer: consumer,
+           req_opts: [adapter: adapter],
+           test_pid: test_pid,
+           features: [legacy_event_singleton_transform: true]
+         ]}
+      )
+
+      ref = send_test_events(consumer, [event])
+      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
       assert_receive :sent, 1_000
     end
 
@@ -74,7 +138,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_event(consumer)
+      ref = send_test_events(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
@@ -86,7 +150,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_event(consumer)
+      ref = send_test_events(consumer)
       assert_receive {:ack, ^ref, [], [_failed]}, 2_000
     end
 
@@ -101,7 +165,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       start_pipeline!(consumer, adapter)
 
-      ref = send_test_event(consumer)
+      ref = send_test_events(consumer)
 
       assert_receive {:ack, ^ref, [], [_failed]}, 2000
     end
@@ -170,7 +234,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       # Assert the request details
       assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
-      json = Jason.decode!(req.body)
+      %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["record"] == record
       assert json["metadata"]["table_name"] == "users"
@@ -220,8 +284,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
       # Send the test events
-      send_test_event(consumer, event1)
-      send_test_event(consumer, event2)
+      send_test_events(consumer, [event1])
+      send_test_events(consumer, [event2])
 
       # Assert that the ack receives the failed events
       assert_receive :sent, 1_000
@@ -306,7 +370,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       # Assert the request details
       assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
-      json = Jason.decode!(req.body)
+      %{"data" => [json]} = Jason.decode!(req.body)
 
       # Assert the record data matches
       assert json["record"]["id"] == character.id
@@ -391,9 +455,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
     )
   end
 
-  defp send_test_event(consumer, event \\ nil) do
-    event = event || ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
-    Broadway.test_message(broadway(consumer), event, metadata: %{topic: "test_topic", headers: []})
+  defp send_test_events(consumer, events \\ nil) do
+    events = events || [ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)]
+    Broadway.test_message(broadway(consumer), events, metadata: %{topic: "test_topic", headers: []})
   end
 
   defp broadway(consumer) do

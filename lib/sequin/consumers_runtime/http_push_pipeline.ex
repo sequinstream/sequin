@@ -18,7 +18,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
     test_pid = Keyword.get(opts, :test_pid)
-    legacy_event_transform = opts |> Keyword.get(:features, []) |> Keyword.get(:legacy_event_transform, false)
+    features = Keyword.get(opts, :features, [])
+    legacy_event_transform = features[:legacy_event_transform]
+    legacy_event_singleton_transform = features[:legacy_event_singleton_transform]
 
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
@@ -35,7 +37,10 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         consumer: consumer,
         http_endpoint: consumer.http_endpoint,
         req_opts: req_opts,
-        legacy_event_transform: legacy_event_transform
+        features: [
+          legacy_event_transform: legacy_event_transform,
+          legacy_event_singleton_transform: legacy_event_singleton_transform
+        ]
       }
     )
   end
@@ -51,11 +56,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   end
 
   @impl Broadway
-  def handle_message(_, %Broadway.Message{data: consumer_event} = message, %{
+  def handle_message(_, %Broadway.Message{data: messages} = message, %{
         consumer: consumer,
         http_endpoint: http_endpoint,
         req_opts: req_opts,
-        legacy_event_transform: legacy_event_transform
+        features: features
       }) do
     Logger.metadata(
       account_id: consumer.account_id,
@@ -63,19 +68,33 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       http_endpoint_id: http_endpoint.id
     )
 
-    message_data = maybe_transform_message(legacy_event_transform, consumer, consumer_event.data)
+    message_data =
+      cond do
+        features[:legacy_event_transform] ->
+          [message] = messages
+          legacy_event_transform_message(consumer, message.data)
+
+        features[:legacy_event_singleton_transform] ->
+          [message] = messages
+          message.data
+
+        true ->
+          %{data: Enum.map(messages, & &1.data)}
+      end
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
         Health.update(consumer, :push, :healthy)
         Metrics.incr_http_endpoint_throughput(http_endpoint)
 
-        Sequin.Logs.log_for_consumer_message(
-          :info,
-          consumer.account_id,
-          consumer_event.replication_message_trace_id,
-          "Pushed message successfully"
-        )
+        Enum.each(messages, fn msg ->
+          Sequin.Logs.log_for_consumer_message(
+            :info,
+            consumer.account_id,
+            msg.replication_message_trace_id,
+            "Pushed message successfully"
+          )
+        end)
 
         message
 
@@ -84,18 +103,20 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
         Health.update(consumer, :push, :error, reason)
 
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer_event.replication_message_trace_id,
-          "Failed to push message: #{Exception.message(reason)}"
-        )
+        Enum.each(messages, fn msg ->
+          Sequin.Logs.log_for_consumer_message(
+            :error,
+            consumer.account_id,
+            msg.replication_message_trace_id,
+            "Failed to push message: #{Exception.message(reason)}"
+          )
+        end)
 
         Broadway.Message.failed(message, reason)
     end
   end
 
-  defp maybe_transform_message(true, consumer, message_data) do
+  defp legacy_event_transform_message(consumer, message_data) do
     case message_data do
       %ConsumerRecordData{
         record: %{
@@ -126,8 +147,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         message_data
     end
   end
-
-  defp maybe_transform_message(false, _consumer, message_data), do: message_data
 
   defp push_message(%HttpEndpoint{} = http_endpoint, %HttpPushConsumer{} = consumer, message_data, req_opts) do
     headers = http_endpoint.headers

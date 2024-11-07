@@ -66,14 +66,16 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand)
 
     broadway_messages =
-      Enum.map(messages, fn message ->
+      messages
+      |> Enum.chunk_every(state.consumer.batch_size)
+      |> Enum.map(fn batch ->
         %Message{
-          data: message,
+          data: batch,
           acknowledger: {__MODULE__, {state.consumer, state.test_pid}, nil}
         }
       end)
 
-    new_demand = demand - length(broadway_messages)
+    new_demand = demand - length(messages)
     new_demand = if new_demand < 0, do: 0, else: new_demand
 
     {:noreply, broadway_messages, %{state | demand: new_demand}}
@@ -96,8 +98,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @exponential_backoff_max :timer.minutes(3)
   def ack({consumer, test_pid}, successful, failed) do
-    successful_ids = Enum.map(successful, & &1.data.ack_id)
-    failed_ids = Enum.map(failed, & &1.data.ack_id)
+    successful_ids = successful |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
+    failed_ids = failed |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
 
     if test_pid do
       Sandbox.allow(Sequin.Repo, test_pid, self())
@@ -108,12 +110,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     end
 
     failed
-    |> Enum.map(fn message ->
-      deliver_count = message.data.deliver_count
-      backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
-      not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
+    |> Enum.flat_map(fn message ->
+      Enum.map(message.data, fn record ->
+        deliver_count = record.deliver_count
+        backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+        not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
 
-      {message.data.ack_id, not_visible_until}
+        {record.ack_id, not_visible_until}
+      end)
     end)
     |> Enum.chunk_every(1000)
     |> Enum.each(fn chunk ->

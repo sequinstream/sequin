@@ -58,6 +58,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
 
     field :health, :map, virtual: true
 
+    field :batch_size, :integer, default: 1
+
     timestamps()
   end
 
@@ -74,12 +76,14 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :http_endpoint_id,
       :replication_slot_id,
       :status,
-      :sequence_id
+      :sequence_id,
+      :batch_size
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])
-    |> validate_required([:name, :status, :replication_slot_id, :http_endpoint_id])
+    |> validate_required([:name, :status, :replication_slot_id, :http_endpoint_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_http_endpoint_path()
+    |> validate_number(:batch_size, greater_than: 0)
     |> cast_assoc(:http_endpoint,
       with: fn _struct, attrs ->
         HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)

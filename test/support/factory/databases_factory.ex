@@ -3,6 +3,7 @@ defmodule Sequin.Factory.DatabasesFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -127,7 +128,7 @@ defmodule Sequin.Factory.DatabasesFactory do
       end)
 
     merge_attributes(
-      %PostgresDatabase.Table{
+      %PostgresDatabaseTable{
         schema: Factory.postgres_object(),
         name: Factory.postgres_object(),
         oid: Factory.unique_integer(),
@@ -165,7 +166,7 @@ defmodule Sequin.Factory.DatabasesFactory do
     ]
 
     merge_attributes(
-      %PostgresDatabase.Table{
+      %PostgresDatabaseTable{
         schema: Map.get(attrs, :schema, "public"),
         name: Map.get(attrs, :name, "sequin_events"),
         oid: Factory.unique_integer(),
@@ -177,7 +178,7 @@ defmodule Sequin.Factory.DatabasesFactory do
 
   def column(attrs \\ []) do
     merge_attributes(
-      %PostgresDatabase.Table.Column{
+      %PostgresDatabaseTable.Column{
         name: Factory.postgres_object(),
         type: Factory.one_of(["integer", "text", "boolean", "timestamp", "uuid"]),
         attnum: Factory.unique_integer(),

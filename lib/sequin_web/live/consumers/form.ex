@@ -10,7 +10,7 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
@@ -336,7 +336,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       "name" => database.name,
       "sequences" => Enum.map(sequences_with_sort_column_type, &encode_sequence/1),
       "tables" =>
-        Enum.map(database.tables, fn %Table{} = table ->
+        Enum.map(database.tables, fn %PostgresDatabaseTable{} = table ->
           default_group_columns =
             table
             |> Map.get(:columns, [])
@@ -349,7 +349,7 @@ defmodule SequinWeb.ConsumersLive.Form do
             "name" => table.name,
             "default_group_columns" => default_group_columns,
             "columns" =>
-              Enum.map(table.columns, fn %Table.Column{} = column ->
+              Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
                 %{
                   "attnum" => column.attnum,
                   "isPk?" => column.is_pk?,

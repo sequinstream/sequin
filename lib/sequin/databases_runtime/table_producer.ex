@@ -1,7 +1,7 @@
 defmodule Sequin.DatabasesRuntime.TableProducer do
   @moduledoc false
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Postgres
 

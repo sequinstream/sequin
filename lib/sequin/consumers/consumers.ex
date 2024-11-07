@@ -20,6 +20,7 @@ defmodule Sequin.Consumers do
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
@@ -792,7 +793,7 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabase.Table{} = table, records) do
+  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabaseTable{} = table, records) do
     record_count = length(records)
     # Get the primary key columns and their types
     pk_columns =

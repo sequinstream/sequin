@@ -4,7 +4,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
 
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
@@ -147,7 +147,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
     {:noreply, socket}
   end
 
-  defp verify_source_not_event_table(%Table{} = table) do
+  defp verify_source_not_event_table(%PostgresDatabaseTable{} = table) do
     if Postgres.is_event_table?(table) do
       {:error, Error.invariant(message: "Source table cannot be an event table.")}
     else
@@ -273,7 +273,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
       "id" => database.id,
       "name" => database.name,
       "tables" =>
-        Enum.map(database.tables, fn %Table{} = table ->
+        Enum.map(database.tables, fn %PostgresDatabaseTable{} = table ->
           %{
             "oid" => table.oid,
             "schema" => table.schema,
@@ -281,7 +281,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
             "isEventTable" => Postgres.is_event_table?(table),
             "eventTableErrors" => if(Postgres.is_event_table?(table), do: Postgres.event_table_errors(table)),
             "columns" =>
-              Enum.map(table.columns, fn %Table.Column{} = column ->
+              Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
                 %{
                   "attnum" => column.attnum,
                   "isPk?" => column.is_pk?,

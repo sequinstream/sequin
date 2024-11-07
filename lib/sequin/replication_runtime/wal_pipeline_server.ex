@@ -5,7 +5,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Postgres
@@ -62,7 +62,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
 
     typedstruct do
       field :replication_slot, Replication.PostgresReplicationSlot.t()
-      field :destination_table, PostgresDatabase.Table.t()
+      field :destination_table, PostgresDatabaseTable.t()
       field :destination_database, PostgresDatabase.t()
       field :wal_pipelines, [Replication.WalPipeline.t()]
       field :task_ref, reference()
@@ -537,7 +537,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
     Enum.any?(record, fn {_key, value} -> value == "unchanged_toast" end)
   end
 
-  defp fetch_toast_values(events, %Table{} = table, %PostgresDatabase{} = source_database) do
+  defp fetch_toast_values(events, %PostgresDatabaseTable{} = table, %PostgresDatabase{} = source_database) do
     table_name = Postgres.quote_name(table.schema, table.name)
     pk_columns = get_sorted_pk_columns(table)
 
@@ -603,7 +603,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
   defp cast_column_value(value, "uuid"), do: Sequin.String.binary_to_string!(value)
   defp cast_column_value(value, _), do: value
 
-  defp build_pk_conditions(events, %Table{} = table) do
+  defp build_pk_conditions(events, %PostgresDatabaseTable{} = table) do
     pk_columns = Enum.filter(table.columns, & &1.is_pk?)
 
     events

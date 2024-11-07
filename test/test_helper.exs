@@ -1,4 +1,4 @@
-alias Sequin.Databases.PostgresDatabase
+alias Sequin.Databases.PostgresDatabaseTable
 alias Sequin.Test.UnboxedRepo
 
 UnboxedRepo.start_link()
@@ -21,9 +21,9 @@ UnboxedRepo.delete_all(Sequin.Test.Support.Models.TestEventLogPartitioned)
 
 tables =
   Enum.map(tables, fn table ->
-    table = Map.update!(table, :columns, fn columns -> Enum.map(columns, &struct!(PostgresDatabase.Table.Column, &1)) end)
+    table = Map.update!(table, :columns, fn columns -> Enum.map(columns, &struct!(PostgresDatabaseTable.Column, &1)) end)
 
-    struct!(PostgresDatabase.Table, table)
+    struct!(PostgresDatabaseTable, table)
   end)
 
 :character_tables

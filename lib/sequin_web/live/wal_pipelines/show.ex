@@ -6,7 +6,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Health
   alias Sequin.Postgres
   alias Sequin.Replication
@@ -160,7 +160,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
     }
   end
 
-  defp encode_source_table(%SourceTable{} = table, %Table{} = source_table_info) do
+  defp encode_source_table(%SourceTable{} = table, %PostgresDatabaseTable{} = source_table_info) do
     %{
       oid: table.oid,
       name: "#{source_table_info.schema}.#{source_table_info.name}",

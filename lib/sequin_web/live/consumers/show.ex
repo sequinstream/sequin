@@ -16,7 +16,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Databases.PostgresDatabase.Table
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
@@ -299,7 +299,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   def handle_event("rewind", %{"new_cursor_position" => new_cursor_position}, socket) do
     consumer = socket.assigns.consumer
     table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
-    table = %Table{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
+    table = %PostgresDatabaseTable{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
 
     initial_min_cursor =
       if new_cursor_position do

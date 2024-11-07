@@ -86,4 +86,48 @@ defmodule Sequin.Time do
       trunc(backoff * jitter)
     end
   end
+
+  @doc """
+  Parse a duration string into milliseconds.
+  Supports formats like "60s", "5m", "100ms", or "1000" (assumed milliseconds)
+
+  ## Examples
+      iex> Sequin.Time.parse_duration("60s")
+      {:ok, 60000}
+      iex> Sequin.Time.parse_duration("5m")
+      {:ok, 300000}
+      iex> Sequin.Time.parse_duration("100ms")
+      {:ok, 100}
+      iex> Sequin.Time.parse_duration("1000")
+      {:ok, 1000}
+      iex> Sequin.Time.parse_duration("invalid")
+      {:error, %Sequin.Error.InvariantError{message: "Invalid duration format"}}
+  """
+  @spec parse_duration(String.t()) :: {:ok, non_neg_integer()} | {:error, Error.InvariantError.t()}
+  def parse_duration(str) when is_binary(str) do
+    case Regex.run(~r/^(\d+)(ms|s|m)?$/, str, capture: :all_but_first) do
+      [number, unit] ->
+        case Integer.parse(number) do
+          {num, ""} -> {:ok, convert_to_ms(num, unit)}
+          _ -> {:error, Error.invariant(message: "Invalid duration format")}
+        end
+
+      [number] ->
+        case Integer.parse(number) do
+          {num, ""} -> {:ok, num}
+          _ -> {:error, Error.invariant(message: "Invalid duration format")}
+        end
+
+      _ ->
+        {:error, Error.invariant(message: "Invalid duration format")}
+    end
+  end
+
+  def parse_duration(num) when is_integer(num), do: {:ok, num}
+
+  def parse_duration(_), do: {:error, Error.invariant(message: "Invalid duration format")}
+
+  defp convert_to_ms(num, "ms"), do: num
+  defp convert_to_ms(num, "s"), do: num * 1000
+  defp convert_to_ms(num, "m"), do: num * 60 * 1000
 end

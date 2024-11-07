@@ -493,7 +493,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
       href: RouteHelpers.consumer_path(consumer),
-      group_column_names: encode_group_column_names(consumer)
+      group_column_names: encode_group_column_names(consumer),
+      batch_size: consumer.batch_size
     }
   end
 

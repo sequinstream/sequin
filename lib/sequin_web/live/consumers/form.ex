@@ -200,7 +200,9 @@ defmodule SequinWeb.ConsumersLive.Form do
         "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
         "actions" => form["sourceTableActions"],
         "group_column_attnums" => form["groupColumnAttnums"]
-      }
+      },
+      # Only set for HttpPushConsumer
+      "batch_size" => form["batchSize"]
     }
     |> maybe_delete_http_endpoint()
     |> maybe_put_record_consumer_state(form, socket)
@@ -285,7 +287,9 @@ defmodule SequinWeb.ConsumersLive.Form do
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
       "sort_column_attnum" => source_table && source_table.sort_column_attnum,
       "sequence_id" => consumer.sequence_id,
-      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter)
+      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
+      # Only set for HttpPushConsumer
+      "batch_size" => Map.get(consumer, :batch_size)
     }
 
     case consumer_type do

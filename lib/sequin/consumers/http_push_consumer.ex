@@ -109,7 +109,8 @@ defmodule Sequin.Consumers.HttpPushConsumer do
       :backfill_completed_at,
       :http_endpoint_id,
       :status,
-      :message_kind
+      :message_kind,
+      :batch_size
     ])
     |> cast(attrs, [:http_endpoint_path], empty_values: [])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)

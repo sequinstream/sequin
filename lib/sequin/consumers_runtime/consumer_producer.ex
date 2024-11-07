@@ -75,7 +75,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         }
       end)
 
-    new_demand = demand - length(messages)
+    new_demand = demand - length(broadway_messages)
     new_demand = if new_demand < 0, do: 0, else: new_demand
 
     {:noreply, broadway_messages, %{state | demand: new_demand}}

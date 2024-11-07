@@ -69,6 +69,7 @@
     },
     sequenceId: consumer.sequence_id || null,
     groupColumnAttnums: consumer.group_column_attnums || [],
+    batchSize: consumer.batch_size || 1,
   };
 
   let form = { ...initialForm };
@@ -351,6 +352,27 @@
           </p>
           {#if errors.ack_wait_ms}
             <p class="text-destructive text-sm">{errors.ack_wait_ms}</p>
+          {/if}
+        </div>
+
+        <div class="space-y-2">
+          <Label for="batch-size">Batch size</Label>
+          <div class="flex items-center space-x-2">
+            <Input
+              id="batch-size"
+              type="number"
+              bind:value={form.batchSize}
+              class="w-24"
+              min="1"
+            />
+            <span class="text-sm text-muted-foreground">records</span>
+          </div>
+          <p class="text-sm text-muted-foreground">
+            The number of records to include in each webhook request. Default is
+            1 record per request.
+          </p>
+          {#if errors.batch_size}
+            <p class="text-destructive text-sm">{errors.batch_size}</p>
           {/if}
         </div>
 

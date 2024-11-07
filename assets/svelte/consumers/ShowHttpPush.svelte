@@ -138,6 +138,30 @@
                 {formatNumberWithCommas(consumer.ack_wait_ms)} ms
               </p>
             </div>
+
+            <div>
+              <span class="text-sm text-gray-500">Batch Size</span>
+              <Tooltip.Root openDelay={200}>
+                <Tooltip.Trigger>
+                  <HelpCircle
+                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
+                  />
+                </Tooltip.Trigger>
+                <Tooltip.Content class="max-w-xs">
+                  <p class="text-xs text-gray-500">
+                    <b>Batch Size</b>
+                    <br />
+                    The number of records included in each webhook request. A larger
+                    batch size can improve throughput but increases the payload size
+                    of each request.
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+              <p class="font-medium">
+                {consumer.batch_size || 1}
+              </p>
+            </div>
+
             <div>
               <span class="text-sm text-gray-500">Max Pending Messages</span>
               <Tooltip.Root openDelay={200}>

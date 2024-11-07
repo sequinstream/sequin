@@ -21,6 +21,10 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
     Postgres.ecto_model_oid(__MODULE__)
   end
 
+  def record_pks(%__MODULE__{} = character_multi_pk) do
+    [character_multi_pk.id_integer, character_multi_pk.id_string, character_multi_pk.id_uuid]
+  end
+
   def where_id(query \\ base_query(), id_integer, id_string, id_uuid) do
     from(c in query, where: c.id_integer == ^id_integer and c.id_string == ^id_string and c.id_uuid == ^id_uuid)
   end

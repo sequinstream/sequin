@@ -15,10 +15,12 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
+  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
+  alias Sequin.Test.Support.Models.Character
 
   # Consumer
   def consumer(attrs \\ []) do
@@ -465,8 +467,29 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Sequin.Map.from_ecto()
   end
 
+  def insert_deliverable_consumer_record!(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.merge(%{state: :available, not_visible_until: nil})
+    |> insert_consumer_record!()
+  end
+
   def insert_consumer_record!(attrs \\ []) do
     attrs = Map.new(attrs)
+
+    {source_record, attrs} = Map.pop(attrs, :source_record)
+
+    attrs =
+      case source_record do
+        # Feel free to add more source record types here
+        # Or, accept a struct instead of an atom
+        :character ->
+          character = CharacterFactory.insert_character!(%{}, repo: Sequin.Repo)
+          Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
+
+        nil ->
+          attrs
+      end
 
     {consumer_id, attrs} =
       Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :record).id end)

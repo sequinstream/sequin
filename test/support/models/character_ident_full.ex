@@ -20,6 +20,10 @@ defmodule Sequin.Test.Support.Models.CharacterIdentFull do
     Postgres.ecto_model_oid(__MODULE__)
   end
 
+  def record_pks(%__MODULE__{} = character_ident_full) do
+    [character_ident_full.id]
+  end
+
   def where_id(query \\ base_query(), id) do
     from(cf in query, where: cf.id == ^id)
   end

@@ -575,12 +575,16 @@ defmodule SequinWeb.ConsumersLive.Show do
          sequence_filter: %SequenceFilter{group_column_attnums: nil},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+      %PostgresDatabaseTable{} = table ->
+        table.columns
+        |> Enum.filter(& &1.is_pk?)
+        |> Enum.sort_by(& &1.attnum)
+        |> Enum.map(& &1.name)
 
-    table.columns
-    |> Enum.filter(& &1.is_pk?)
-    |> Enum.sort_by(& &1.attnum)
-    |> Enum.map(& &1.name)
+      nil ->
+        []
+    end
   end
 
   defp encode_group_column_names(%{
@@ -588,12 +592,16 @@ defmodule SequinWeb.ConsumersLive.Show do
          sequence_filter: %SequenceFilter{group_column_attnums: group_column_attnums},
          postgres_database: %PostgresDatabase{} = postgres_database
        }) do
-    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+      %PostgresDatabaseTable{} = table ->
+        table.columns
+        |> Enum.filter(&(&1.attnum in group_column_attnums))
+        |> Enum.sort_by(& &1.attnum)
+        |> Enum.map(& &1.name)
 
-    table.columns
-    |> Enum.filter(&(&1.attnum in group_column_attnums))
-    |> Enum.sort_by(& &1.attnum)
-    |> Enum.map(& &1.name)
+      nil ->
+        []
+    end
   end
 
   # Function to load messages for the consumer

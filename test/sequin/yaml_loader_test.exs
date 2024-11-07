@@ -2,6 +2,7 @@ defmodule Sequin.YamlLoaderTest do
   use Sequin.DataCase
 
   alias Sequin.Accounts.Account
+  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
@@ -159,6 +160,130 @@ defmodule Sequin.YamlLoaderTest do
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
       assert db.name == "test-db"
       assert db.pool_size == 5
+    end
+  end
+
+  describe "http_endpoints" do
+    test "creates webhook.site endpoint" do
+      assert :ok =
+               YamlLoader.load_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+
+               http_endpoints:
+                 - name: "webhook-endpoint"
+                   webhook.site: "true"
+               """)
+
+      assert [endpoint] = Repo.all(HttpEndpoint)
+      assert endpoint.name == "webhook-endpoint"
+      assert endpoint.scheme == :https
+      assert endpoint.host == "webhook.site"
+      assert "/" <> uuid = endpoint.path
+      assert Sequin.String.is_uuid?(uuid)
+    end
+
+    test "creates local endpoint" do
+      assert :ok =
+               YamlLoader.load_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+
+               http_endpoints:
+                 - name: "local-endpoint"
+                   local: "true"
+               """)
+
+      assert [endpoint] = Repo.all(HttpEndpoint)
+      assert endpoint.name == "local-endpoint"
+      assert endpoint.use_local_tunnel == true
+      refute endpoint.path
+      assert endpoint.headers == %{}
+      assert endpoint.encrypted_headers == %{}
+    end
+
+    test "creates local endpoint with options" do
+      assert :ok =
+               YamlLoader.load_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+
+               http_endpoints:
+                 - name: "local-endpoint"
+                   local: "true"
+                   path: "/webhook"
+                   headers:
+                     - key: "X-Test"
+                       value: "test-value"
+                   encrypted_headers:
+                     - key: "X-Secret"
+                       value: "secret-value"
+               """)
+
+      assert [endpoint] = Repo.all(HttpEndpoint)
+      assert endpoint.name == "local-endpoint"
+      assert endpoint.use_local_tunnel == true
+      assert endpoint.path == "/webhook"
+      assert endpoint.headers == %{"X-Test" => "test-value"}
+      assert endpoint.encrypted_headers == %{"X-Secret" => "secret-value"}
+    end
+
+    test "creates external endpoint" do
+      assert :ok =
+               YamlLoader.load_from_yml("""
+               account:
+                 name: "Configured by Sequin"
+
+               http_endpoints:
+                 - name: "external-endpoint"
+                   url: "https://api.example.com:8443/webhooks?key=value#fragment"
+                   headers:
+                     - key: "Authorization"
+                       value: "Bearer token"
+                   encrypted_headers:
+                     - key: "X-Secret"
+                       value: "secret-value"
+               """)
+
+      assert [endpoint] = Repo.all(HttpEndpoint)
+      assert endpoint.name == "external-endpoint"
+      assert endpoint.scheme == :https
+      assert endpoint.host == "api.example.com"
+      assert endpoint.port == 8443
+      assert endpoint.path == "/webhooks"
+      assert endpoint.query == "key=value"
+      assert endpoint.fragment == "fragment"
+      assert endpoint.headers == %{"Authorization" => "Bearer token"}
+      assert endpoint.encrypted_headers == %{"X-Secret" => "secret-value"}
+    end
+
+    test "applying yml twice creates no duplicates" do
+      yaml = """
+      account:
+        name: "Configured by Sequin"
+
+      http_endpoints:
+        - name: "test-endpoint"
+          url: "https://api.example.com/webhook"
+      """
+
+      assert :ok = YamlLoader.load_from_yml(yaml)
+      assert :ok = YamlLoader.load_from_yml(yaml)
+
+      assert [endpoint] = Repo.all(HttpEndpoint)
+      assert endpoint.name == "test-endpoint"
+    end
+
+    test "validates required fields" do
+      assert_raise RuntimeError, ~r/Invalid HTTP endpoint configuration/, fn ->
+        YamlLoader.load_from_yml("""
+        account:
+          name: "Configured by Sequin"
+
+        http_endpoints:
+          - name: "invalid-endpoint"
+        """)
+      end
     end
   end
 end

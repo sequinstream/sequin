@@ -1,6 +1,7 @@
 defmodule Sequin.YamlLoader do
   @moduledoc false
   alias Sequin.Accounts
+  alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error.NotFoundError
@@ -50,9 +51,9 @@ defmodule Sequin.YamlLoader do
             _users = find_or_create_users!(account, config)
             databases = upsert_databases!(account.id, config)
             _sequences = find_or_create_sequences!(account.id, config, databases)
+            _http_endpoints = upsert_http_endpoints!(account.id, config)
 
             # Not implemented
-            _http_endpoints = create_http_endpoints!(config, databases)
             _http_push_consumers = create_http_push_consumers!(config, databases)
             _http_pull_consumers = create_http_pull_consumers!(config, databases)
           end)
@@ -292,11 +293,157 @@ defmodule Sequin.YamlLoader do
   ## HTTP Endpoints ##
   ####################
 
-  defp create_http_endpoints!(%{"http_endpoints" => _http_endpoints}, _databases) do
-    raise "Not implemented: create_http_endpoints!/2"
+  @http_endpoint_docs """
+  HTTP Endpoints are destinations for Webhook Subscriptions.
+
+  They can be configured in one of three ways:
+
+  1. Configure an internet accessible URL:
+
+  http_endpoints:
+    - name: "external-endpoint"
+      url: "https://api.example.com/webhook"
+
+  2. Configure a local endpoint that uses the Sequin CLI to create a secure tunnel:
+
+  http_endpoints:
+    - name: "local-endpoint"
+      local: "true"
+      path: "/webhook"
+
+  3. Configure a Webhook.site endpoint for development purposes:
+
+  http_endpoints:
+    - name: "webhook.site-endpoint"
+      webhook.site: "true"
+
+
+  Shared options:
+
+  - name: "some-name"
+  - headers:
+      - key: "X-Header"
+        value: "my-value"
+  - encrypted_headers:
+      - key: "X-Secret-Header"
+        value: "super-secret"
+  """
+
+  defp upsert_http_endpoints!(account_id, %{"http_endpoints" => http_endpoints}) do
+    Logger.info("Creating HTTP endpoints: #{inspect(http_endpoints, pretty: true)}")
+    Enum.map(http_endpoints, &upsert_http_endpoint!(account_id, &1))
   end
 
-  defp create_http_endpoints!(%{}, _databases), do: []
+  defp upsert_http_endpoints!(_account_id, %{}) do
+    Logger.info("No HTTP endpoints found in config")
+    []
+  end
+
+  defp upsert_http_endpoint!(account_id, %{"name" => name} = attrs) do
+    case Sequin.Consumers.find_http_endpoint_for_account(account_id, name: name) do
+      {:ok, endpoint} ->
+        update_http_endpoint!(endpoint, attrs)
+
+      {:error, %NotFoundError{}} ->
+        create_http_endpoint!(account_id, attrs)
+    end
+  end
+
+  defp create_http_endpoint!(account_id, attrs) do
+    endpoint_params = parse_http_endpoint_attrs(attrs)
+
+    case Sequin.Consumers.create_http_endpoint_for_account(account_id, endpoint_params) do
+      {:ok, endpoint} ->
+        Logger.info("Created HTTP endpoint: #{inspect(endpoint, pretty: true)}")
+        endpoint
+
+      {:error, error} when is_exception(error) ->
+        raise "Failed to create HTTP endpoint: #{Exception.message(error)}"
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        raise "Failed to create HTTP endpoint: #{inspect(changeset)}"
+    end
+  end
+
+  defp update_http_endpoint!(endpoint, attrs) do
+    endpoint_params = parse_http_endpoint_attrs(attrs)
+
+    case Sequin.Consumers.update_http_endpoint(endpoint, endpoint_params) do
+      {:ok, endpoint} ->
+        Logger.info("Updated HTTP endpoint: #{inspect(endpoint, pretty: true)}")
+        endpoint
+
+      {:error, error} when is_exception(error) ->
+        raise "Failed to update HTTP endpoint: #{Exception.message(error)}"
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        raise "Failed to update HTTP endpoint: #{inspect(changeset)}"
+    end
+  end
+
+  defp parse_http_endpoint_attrs(%{"name" => name} = attrs) do
+    case attrs do
+      # Webhook.site endpoint
+      %{"webhook.site" => "true"} ->
+        %{
+          name: name,
+          scheme: :https,
+          host: "webhook.site",
+          path: "/" <> generate_webhook_site_id()
+        }
+
+      # Local endpoint
+      %{"local" => "true"} = local_attrs ->
+        %{
+          name: name,
+          use_local_tunnel: true,
+          path: local_attrs["path"],
+          headers: parse_headers(local_attrs["headers"]),
+          encrypted_headers: parse_headers(local_attrs["encrypted_headers"])
+        }
+
+      # External endpoint with URL
+      %{"url" => url} = external_attrs ->
+        uri = URI.parse(url)
+
+        %{
+          name: name,
+          scheme: String.to_existing_atom(uri.scheme),
+          host: uri.host,
+          port: uri.port,
+          path: uri.path,
+          query: uri.query,
+          fragment: uri.fragment,
+          headers: parse_headers(external_attrs["headers"]),
+          encrypted_headers: parse_headers(external_attrs["encrypted_headers"])
+        }
+
+      _ ->
+        raise "Invalid HTTP endpoint configuration\n\n#{@http_endpoint_docs}"
+    end
+  end
+
+  # Helper functions
+
+  defp parse_headers(nil), do: %{}
+
+  defp parse_headers(headers) when is_list(headers) do
+    Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)
+  end
+
+  defp generate_webhook_site_id do
+    if env() == :test do
+      UUID.uuid4()
+    else
+      case WebhookSiteGenerator.generate() do
+        {:ok, uuid} ->
+          uuid
+
+        {:error, reason} ->
+          raise "Failed to create webhook.site endpoint: #{reason}"
+      end
+    end
+  end
 
   #########################
   ## HTTP Push Consumers ##
@@ -340,5 +487,9 @@ defmodule Sequin.YamlLoader do
 
   defp self_hosted? do
     Application.get_env(@app, :self_hosted, false)
+  end
+
+  defp env do
+    Application.fetch_env!(@app, :env)
   end
 end

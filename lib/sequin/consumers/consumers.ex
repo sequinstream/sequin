@@ -1293,10 +1293,13 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def get_http_endpoint_for_account(account_id, id) do
-    account_id
-    |> HttpEndpoint.where_account_id()
-    |> Repo.get(id)
+  def find_http_endpoint_for_account(account_id, params \\ []) do
+    params
+    |> Enum.reduce(HttpEndpoint.where_account_id(account_id), fn
+      {:id, id}, query -> HttpEndpoint.where_id(query, id)
+      {:name, name}, query -> HttpEndpoint.where_name(query, name)
+    end)
+    |> Repo.one()
     |> case do
       %HttpEndpoint{} = http_endpoint -> {:ok, http_endpoint}
       nil -> {:error, Error.not_found(entity: :http_endpoint)}

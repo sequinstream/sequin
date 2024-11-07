@@ -43,7 +43,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   end
 
   defp fetch_or_build_http_endpoint(socket, %{"id" => id}) do
-    case Consumers.get_http_endpoint_for_account(current_account_id(socket), id) do
+    case Consumers.find_http_endpoint_for_account(current_account_id(socket), id: id) do
       {:ok, http_endpoint} ->
         {:ok, http_endpoint}
 

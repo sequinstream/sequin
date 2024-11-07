@@ -9,7 +9,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
-    case Consumers.get_http_endpoint_for_account(current_account_id(socket), id) do
+    case Consumers.find_http_endpoint_for_account(current_account_id(socket), id: id) do
       {:ok, http_endpoint} ->
         if connected?(socket) do
           Process.send_after(self(), :update_health, 1000)

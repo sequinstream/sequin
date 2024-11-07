@@ -486,19 +486,8 @@ defmodule SequinWeb.ConsumersLive.Form do
   end
 
   defp generate_webhook_site_endpoint(socket) do
-    url = "https://webhook.site/token"
-    headers = [{"Content-Type", "application/json"}]
-
-    body =
-      Jason.encode!(%{
-        default_status: 200,
-        default_content: Jason.encode!(%{ok: true}),
-        default_content_type: "application/json",
-        cors: true
-      })
-
-    case Req.post(url, headers: headers, body: body) do
-      {:ok, %Req.Response{status: 201, body: %{"uuid" => uuid}}} ->
+    case Consumers.WebhookSiteGenerator.generate() do
+      {:ok, uuid} ->
         Consumers.create_http_endpoint_for_account(current_account_id(socket), %{
           name: "webhook-site-#{String.slice(uuid, 0, 8)}",
           scheme: :https,
@@ -507,10 +496,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         })
 
       {:error, reason} ->
-        {:error, "Failed to generate Webhook.site URL: #{inspect(reason)}"}
-
-      _ ->
-        {:error, "Unexpected response from Webhook.site"}
+        {:error, reason}
     end
   end
 

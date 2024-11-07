@@ -111,8 +111,16 @@ defmodule Sequin.Consumers.HttpEndpoint do
     end
   end
 
+  def where_id(query \\ base_query(), id) do
+    from([http_endpoint: he] in query, where: he.id == ^id)
+  end
+
   def where_account_id(query \\ base_query(), account_id) do
     from([http_endpoint: he] in query, where: he.account_id == ^account_id)
+  end
+
+  def where_name(query \\ base_query(), name) do
+    from([http_endpoint: he] in query, where: he.name == ^name)
   end
 
   def where_use_local_tunnel(query \\ base_query()) do

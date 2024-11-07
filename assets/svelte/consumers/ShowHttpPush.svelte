@@ -14,7 +14,6 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
-  import { Badge } from "$lib/components/ui/badge";
   import { concatenateUrl } from "../databases/utils";
   import ShowSequence from "./ShowSequence.svelte";
   import Cursor from "./Cursor.svelte";
@@ -60,7 +59,10 @@
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
-      <HealthComponent health={consumer.health} />
+      <HealthComponent
+        health={consumer.health}
+        paused={consumer.status === "disabled"}
+      />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
@@ -112,21 +114,6 @@
         <CardContent class="p-6">
           <div class="flex items-center space-x-4 mb-4">
             <h2 class="text-lg font-semibold">Configuration</h2>
-            <Badge variant="default">
-              <ArrowRightToLine class="h-4 w-4 mr-1" />
-              Push consumer
-            </Badge>
-            {#if consumer.message_kind === "event"}
-              <Badge variant="default">
-                <SquareStack class="h-4 w-4 mr-1" />
-                Changes
-              </Badge>
-            {:else if consumer.message_kind === "record"}
-              <Badge variant="default">
-                <SquareStack class="h-4 w-4 mr-1" />
-                Rows
-              </Badge>
-            {/if}
           </div>
           <div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-4">
             <div>

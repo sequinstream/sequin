@@ -329,6 +329,34 @@ defmodule SequinWeb.ConsumersLive.Show do
     end
   end
 
+  def handle_event("disable", _params, socket) do
+    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :disabled}) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription paused"})}
+
+      {:error, error} ->
+        Logger.error("Failed to disable consumer: #{inspect(error)}", error: error)
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to disable consumer"})}
+    end
+  end
+
+  def handle_event("enable", _params, socket) do
+    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :active}) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription resumed"})}
+
+      {:error, error} ->
+        Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to enable consumer"})}
+    end
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end

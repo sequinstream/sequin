@@ -7,7 +7,8 @@
     CirclePlay,
     CircleStop,
     Radio,
-    AlertCircle, // Import the red radar icon
+    AlertCircle,
+    Pause,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
@@ -21,7 +22,33 @@
   export let messages_failing;
   export let kind;
   let showDeleteConfirmDialog = false;
+  let showPauseConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
+
+  let statusTransitioning = false;
+  let statusTransitionTimeout: NodeJS.Timeout | null = null;
+  let displayStatus = consumer.status;
+
+  $: {
+    if (!statusTransitioning) {
+      displayStatus = consumer.status;
+    }
+  }
+
+  // Add a debounce to prevent the status from flickering
+  // After the timeout is up, we will allow consumer.status to update displayStatus (above)
+  function handleStatusTransition() {
+    // Clear any existing timeout
+    if (statusTransitionTimeout) {
+      clearTimeout(statusTransitionTimeout);
+    }
+
+    // Set minimum transition time
+    statusTransitionTimeout = setTimeout(() => {
+      statusTransitioning = false;
+      statusTransitionTimeout = null;
+    }, 2000);
+  }
 
   function handleEdit() {
     live.pushEventTo("#" + parent, "edit", {});
@@ -40,6 +67,23 @@
     live.pushEventTo("#" + parent, "delete", {}, () => {
       showDeleteConfirmDialog = false;
       deleteConfirmDialogLoading = false;
+    });
+  }
+
+  function confirmPause() {
+    displayStatus = "disabled";
+    statusTransitioning = true;
+    live.pushEventTo("#" + parent, "disable", {}, () => {
+      showPauseConfirmDialog = false;
+      handleStatusTransition();
+    });
+  }
+
+  function enableConsumer() {
+    displayStatus = "active";
+    statusTransitioning = true;
+    live.pushEventTo("#" + parent, "enable", {}, () => {
+      handleStatusTransition();
     });
   }
 
@@ -68,15 +112,6 @@
           <Radio class="h-6 w-6 mr-2" />
           <h1 class="text-xl font-semibold">{consumer.name}</h1>
         </div>
-        {#if consumer.status === "active"}
-          <Badge variant="default">
-            <CirclePlay class="h-4 w-4 mr-1" />Active
-          </Badge>
-        {:else}
-          <Badge variant="disabled">
-            <CircleStop class="h-4 w-4 mr-1" />Disabled
-          </Badge>
-        {/if}
       </div>
       <div class="flex items-center space-x-4">
         <div
@@ -91,6 +126,35 @@
             <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span>
           </div>
         </div>
+        {#if kind === "push"}
+          {#if statusTransitioning}
+            {#if displayStatus === "active"}
+              <Button variant="outline" size="sm" disabled>
+                <CirclePlay class="h-4 w-4 mr-1" />
+                Resuming...
+              </Button>
+            {:else}
+              <Button variant="outline" size="sm" disabled>
+                <Pause class="h-4 w-4 mr-1" />
+                Pausing...
+              </Button>
+            {/if}
+          {:else if displayStatus === "active"}
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => (showPauseConfirmDialog = true)}
+            >
+              <Pause class="h-4 w-4 mr-1" />
+              Pause
+            </Button>
+          {:else}
+            <Button variant="outline" size="sm" on:click={enableConsumer}>
+              <CirclePlay class="h-4 w-4 mr-1" />
+              Resume
+            </Button>
+          {/if}
+        {/if}
         <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button>
         <Button
           variant="outline"
@@ -158,6 +222,34 @@
           Deleting...
         {:else}
           Delete
+        {/if}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showPauseConfirmDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title class="leading-6">Pause Webhook Subscription?</Dialog.Title>
+      <Dialog.Description class="mb-6"
+        >The webhook endpoint will stop receiving new messages until resumed.</Dialog.Description
+      >
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button
+        variant="outline"
+        on:click={() => (showPauseConfirmDialog = false)}>Cancel</Button
+      >
+      <Button
+        variant="secondary"
+        on:click={confirmPause}
+        disabled={statusTransitioning}
+      >
+        {#if statusTransitioning}
+          Pausing...
+        {:else}
+          Pause
         {/if}
       </Button>
     </Dialog.Footer>

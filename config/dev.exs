@@ -63,7 +63,13 @@ config :sequin, SequinWeb.Endpoint,
     ]
   ]
 
-config :sequin, api_base_url: "http://localhost:4000"
+config :sequin,
+  api_base_url: "http://localhost:4000",
+  features: [
+    account_self_signup: :enabled,
+    provision_default_user: :disabled
+  ]
+
 # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
 
 # ## SSL Support

@@ -1,5 +1,4 @@
 defmodule SequinWeb.Components.Sidenav do
-  # Change this line
   @moduledoc false
   use SequinWeb, :live_component
 

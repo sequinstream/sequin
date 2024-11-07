@@ -75,7 +75,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {sequence_id, attrs} =
       Map.pop_lazy(attrs, :sequence_id, fn ->
-        DatabasesFactory.insert_sequence!(postgres_database_id: postgres_database_id).id
+        DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
       end)
 
     {sequence_filter, attrs} =
@@ -179,7 +179,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {sequence_id, attrs} =
       Map.pop_lazy(attrs, :sequence_id, fn ->
-        DatabasesFactory.insert_sequence!(postgres_database_id: postgres_database_id).id
+        DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
       end)
 
     {sequence_filter, attrs} =

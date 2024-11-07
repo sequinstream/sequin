@@ -385,19 +385,22 @@ defmodule Sequin.YamlLoader do
         sequence
 
       {:error, %NotFoundError{}} ->
-        create_sequence!(database, sequence_attrs)
+        create_sequence!(account_id, database, sequence_attrs)
     end
   end
 
-  defp create_sequence!(%PostgresDatabase{id: id} = database, sequence) do
+  defp create_sequence!(account_id, %PostgresDatabase{id: id} = database, sequence) do
     table = table_for_sequence!(database, sequence)
     sort_column_attnum = sort_column_attnum_for_sequence!(table, sequence)
 
-    sequence
-    |> Map.put("postgres_database_id", id)
-    |> Map.put("table_oid", table.oid)
-    |> Map.put("sort_column_attnum", sort_column_attnum)
-    |> Databases.create_sequence()
+    attrs =
+      sequence
+      |> Map.put("postgres_database_id", id)
+      |> Map.put("table_oid", table.oid)
+      |> Map.put("sort_column_attnum", sort_column_attnum)
+
+    account_id
+    |> Databases.create_sequence(attrs)
     |> case do
       {:ok, sequence} ->
         Logger.info("Created sequence: #{inspect(sequence, pretty: true)}")

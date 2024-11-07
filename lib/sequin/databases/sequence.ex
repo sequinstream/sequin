@@ -8,6 +8,7 @@ defmodule Sequin.Databases.Sequence do
   alias Sequin.Databases.PostgresDatabase
 
   typed_schema "sequences" do
+    field :name, :string
     field :table_oid, :integer
     field :table_schema, :string
     field :table_name, :string
@@ -15,6 +16,7 @@ defmodule Sequin.Databases.Sequence do
     field :sort_column_name, :string
     field :sort_column_type, :string, virtual: true
 
+    belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
 
     timestamps()
@@ -23,6 +25,7 @@ defmodule Sequin.Databases.Sequence do
   def changeset(sequence, attrs) do
     sequence
     |> cast(attrs, [
+      :name,
       :table_oid,
       :table_schema,
       :table_name,
@@ -31,10 +34,12 @@ defmodule Sequin.Databases.Sequence do
       :postgres_database_id
     ])
     |> validate_required([
+      :name,
       :table_oid,
       :sort_column_attnum,
       :postgres_database_id
     ])
+    |> unique_constraint([:account_id, :name], error_key: :name)
     |> unique_constraint([:postgres_database_id, :table_oid], error_key: :table_oid)
   end
 

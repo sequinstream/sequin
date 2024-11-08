@@ -13,10 +13,10 @@ defmodule SequinWeb.YamlController do
 
   action_fallback ApiFallbackPlug
 
-  def apply(conn, %{"yml" => yml}) do
+  def apply(conn, %{"yaml" => yaml}) do
     account_id = conn.assigns.account_id
 
-    case YamlLoader.apply_from_yml(account_id, yml) do
+    case YamlLoader.apply_from_yml(account_id, yaml) do
       {:ok, {:ok, resources}} ->
         json(conn, resources)
 
@@ -28,13 +28,13 @@ defmodule SequinWeb.YamlController do
     end
   end
 
-  def plan(conn, %{"yml" => yml}) do
+  def plan(conn, %{"yaml" => yaml}) do
     account_id = conn.assigns.account_id
 
-    case YamlLoader.plan_from_yml(account_id, yml) do
+    case YamlLoader.plan_from_yml(account_id, yaml) do
       {:ok, planned_resources, current_resources} ->
         envelopes = diff_resources(planned_resources, current_resources)
-        json(conn, envelopes)
+        json(conn, %{changes: envelopes})
 
       {:error, error} ->
         {:error, error}

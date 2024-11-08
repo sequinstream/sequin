@@ -47,66 +47,68 @@ defmodule SequinWeb.YamlControllerTest do
           sort_column_name: "updated_at"
       """
 
-      conn = post(conn, ~p"/api/config/plan", %{yml: yaml})
+      conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
 
-      assert [
-               %{
-                 "action" => "create",
-                 "resource_type" => "user",
-                 "new" => %{
-                   "auth_provider" => "identity",
-                   "auth_provider_id" => nil,
-                   "email" => "admin@sequinstream.com",
-                   "name" => nil,
-                   "id" => user_id
+      assert %{
+               "changes" => [
+                 %{
+                   "action" => "create",
+                   "resource_type" => "user",
+                   "new" => %{
+                     "auth_provider" => "identity",
+                     "auth_provider_id" => nil,
+                     "email" => "admin@sequinstream.com",
+                     "name" => nil,
+                     "id" => user_id
+                   },
+                   "old" => nil
                  },
-                 "old" => nil
-               },
-               %{
-                 "action" => "create",
-                 "resource_type" => "postgres_database",
-                 "new" => %{
-                   "database" => "sequin_test",
-                   "hostname" => "localhost",
-                   "ipv6" => false,
-                   "name" => "test-db",
-                   "password" => "postgres",
-                   "pool_size" => 10,
-                   "port" => 5432,
-                   "ssl" => false,
-                   "use_local_tunnel" => false,
-                   "username" => "postgres",
-                   "id" => postgres_database_id
+                 %{
+                   "action" => "create",
+                   "resource_type" => "postgres_database",
+                   "new" => %{
+                     "database" => "sequin_test",
+                     "hostname" => "localhost",
+                     "ipv6" => false,
+                     "name" => "test-db",
+                     "password" => "postgres",
+                     "pool_size" => 10,
+                     "port" => 5432,
+                     "ssl" => false,
+                     "use_local_tunnel" => false,
+                     "username" => "postgres",
+                     "id" => postgres_database_id
+                   },
+                   "old" => nil
                  },
-                 "old" => nil
-               },
-               %{
-                 "action" => "create",
-                 "resource_type" => "sequence",
-                 "new" => %{
-                   "name" => "characters",
-                   "sort_column_attnum" => sort_column_attnum,
-                   "sort_column_name" => "updated_at",
-                   "table_name" => "Characters",
-                   "table_oid" => table_oid,
-                   "table_schema" => "public",
-                   "id" => sequence_id
+                 %{
+                   "action" => "create",
+                   "resource_type" => "sequence",
+                   "new" => %{
+                     "name" => "characters",
+                     "sort_column_attnum" => sort_column_attnum,
+                     "sort_column_name" => "updated_at",
+                     "table_name" => "Characters",
+                     "table_oid" => table_oid,
+                     "table_schema" => "public",
+                     "id" => sequence_id
+                   },
+                   "old" => nil
                  },
-                 "old" => nil
-               },
-               %{
-                 "action" => "update",
-                 "new" => %{
-                   "id" => account_id,
-                   "name" => account_name
-                 },
-                 "old" => %{
-                   "id" => account_id,
-                   "name" => account_name
-                 },
-                 "resource_type" => "account"
-               }
-             ] = json_response(conn, 200)
+                 %{
+                   "action" => "update",
+                   "new" => %{
+                     "id" => account_id,
+                     "name" => account_name
+                   },
+                   "old" => %{
+                     "id" => account_id,
+                     "name" => account_name
+                   },
+                   "resource_type" => "account"
+                 }
+               ]
+             } = json_response(conn, 200)
 
       assert Sequin.String.is_uuid?(account_id)
       assert Sequin.String.is_uuid?(user_id)
@@ -122,7 +124,7 @@ defmodule SequinWeb.YamlControllerTest do
         - name: "test-db"
       """
 
-      conn = post(conn, ~p"/api/config/plan", %{yml: yaml})
+      conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
 
       assert json_response(conn, 422) == %{
                "code" => nil,

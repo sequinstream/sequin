@@ -135,4 +135,84 @@ defmodule SequinWeb.YamlControllerTest do
              }
     end
   end
+
+  describe "apply/2" do
+    test "successfully applies valid yaml configuration", %{conn: conn} do
+      yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "postgres"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+
+      sequences:
+        - name: "characters"
+          database: "test-db"
+          table_schema: "public"
+          table_name: "Characters"
+          sort_column_name: "updated_at"
+      """
+
+      conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
+
+      assert %{
+               "resources" => [
+                 %{
+                   "id" => account_id,
+                   "name" => account_name
+                 },
+                 %{
+                   "auth_provider" => "identity",
+                   "email" => "admin@sequinstream.com",
+                   "id" => user_id
+                 },
+                 %{
+                   "database" => "sequin_test",
+                   "hostname" => "localhost",
+                   "id" => database_id,
+                   "name" => "test-db"
+                 },
+                 %{
+                   "id" => sequence_id,
+                   "name" => "characters",
+                   "sort_column_name" => "updated_at",
+                   "table_name" => "Characters",
+                   "table_schema" => "public"
+                 }
+               ]
+             } = json_response(conn, 200)
+
+      assert is_binary(account_name)
+      assert Sequin.String.is_uuid?(account_id)
+      assert Sequin.String.is_uuid?(user_id)
+      assert Sequin.String.is_uuid?(database_id)
+      assert Sequin.String.is_uuid?(sequence_id)
+    end
+
+    test "returns error for invalid yaml", %{conn: conn} do
+      yaml = """
+      databases:
+        - name: "test-db"
+      """
+
+      conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
+
+      assert json_response(conn, 422) == %{
+               "code" => nil,
+               "summary" => nil,
+               "validation_errors" => %{
+                 "database" => ["can't be blank"]
+               }
+             }
+    end
+  end
 end

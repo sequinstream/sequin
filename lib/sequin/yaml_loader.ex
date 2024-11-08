@@ -58,7 +58,12 @@ defmodule Sequin.YamlLoader do
   def apply_from_yml(account_id \\ nil, yml) do
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
-        Repo.transaction(fn -> apply_config(account_id, config) end)
+        Repo.transaction(fn ->
+          case apply_config(account_id, config) do
+            {:ok, resources} -> {:ok, resources}
+            {:error, error} -> Repo.rollback(error)
+          end
+        end)
 
       {:error, error} ->
         Logger.error("Error reading config file: #{inspect(error)}")

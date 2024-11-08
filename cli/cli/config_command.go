@@ -40,6 +40,39 @@ func AddConfigCommands(app *fisk.Application, cfg *Config) {
 	apply.Action(cmd.applyAction)
 }
 
+func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
+	// First run plan to show changes
+	if err := c.planAction(nil); err != nil {
+		return err
+	}
+
+	// Ask for confirmation
+	fmt.Print("\nDo you want to apply these changes? Only 'yes' will be accepted to confirm: ")
+	var response string
+	fmt.Scanln(&response)
+
+	if response != "yes" {
+		fmt.Println("Apply cancelled.")
+		return nil
+	}
+
+	// Call apply
+	ctx, err := context.LoadContext("")
+	if err != nil {
+		return fmt.Errorf("failed to load context: %w", err)
+	}
+
+	applyResp, err := config.Apply(ctx, c.yamlPath)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Applied %d resources\n", len(applyResp.Resources))
+
+	fmt.Println("\nApply complete!")
+	return nil
+}
+
 func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 	// Load current context
 	ctx, err := context.LoadContext("")
@@ -71,15 +104,6 @@ func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 	fmt.Printf("\nSequin will perform the following actions:\n\n")
 
 	for _, change := range planResp.Changes {
-		// Update counts
-		switch change.Action {
-		case "create":
-			creates++
-		case "update":
-			updates++
-		case "delete":
-			deletes++
-		}
 
 		// Print resource header with appropriate symbol
 		symbol := tilde
@@ -105,6 +129,18 @@ func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 			fmt.Print(diff)
 		}
 		fmt.Println()
+
+		// Update counts only if there are actual changes
+		if len(PrettyDiff(oldMap, newMap)) > 0 && PrettyDiff(oldMap, newMap) != "No changes detected" {
+			switch change.Action {
+			case "create":
+				creates++
+			case "update":
+				updates++
+			case "delete":
+				deletes++
+			}
+		}
 	}
 
 	// Print summary
@@ -128,11 +164,6 @@ func convertToMap(v interface{}) map[string]interface{} {
 	}
 
 	return result
-}
-
-func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
-	// TODO: Implement apply logic
-	return nil
 }
 
 // PrettyDiff generates a colored diff output between two maps
@@ -195,42 +226,76 @@ func PrettyDiff(oldMap, newMap map[string]interface{}) string {
 		}
 		sort.Strings(keys)
 
+		// Helper function to format nested maps
+		var formatMap func(m map[string]interface{}, indent string) string
+		formatMap = func(m map[string]interface{}, indent string) string {
+			var b strings.Builder
+			var keys []string
+			for k := range m {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+
+			for _, k := range keys {
+				v := m[k]
+				if nested, ok := v.(map[string]interface{}); ok {
+					b.WriteString(fmt.Sprintf("%s%s:\n%s", indent, k, formatMap(nested, indent+"  ")))
+				} else {
+					b.WriteString(fmt.Sprintf("%s%s: %v\n", indent, k, formatValue(v)))
+				}
+			}
+			return b.String()
+		}
+
 		for _, k := range keys {
 			oldVal, oldOk := oldMap[k]
 			newVal, newOk := newMap[k]
 
 			if !oldOk {
 				// New field
-				builder.WriteString(fmt.Sprintf("  %s: %v\n",
-					added(k), added(formatValue(newVal))))
+				if nested, ok := newVal.(map[string]interface{}); ok {
+					builder.WriteString(fmt.Sprintf("  %s:\n%s",
+						added(k), added(formatMap(nested, "    "))))
+				} else {
+					builder.WriteString(fmt.Sprintf("  %s: %v\n",
+						added(k), added(formatValue(newVal))))
+				}
 			} else if !newOk {
 				// Deleted field
-				builder.WriteString(fmt.Sprintf("  %s: %v\n",
-					removed(k), removed(formatValue(oldVal))))
-			} else if oldVal != newVal {
+				if nested, ok := oldVal.(map[string]interface{}); ok {
+					builder.WriteString(fmt.Sprintf("  %s:\n%s",
+						removed(k), removed(formatMap(nested, "    "))))
+				} else {
+					builder.WriteString(fmt.Sprintf("  %s: %v\n",
+						removed(k), removed(formatValue(oldVal))))
+				}
+			} else if !reflect.DeepEqual(oldVal, newVal) {
 				// Changed field
-				builder.WriteString(fmt.Sprintf("  %s: %v → %v\n",
-					modified(k), modified(formatValue(oldVal)), modified(formatValue(newVal))))
+				if oldNested, oldOk := oldVal.(map[string]interface{}); oldOk {
+					if newNested, newOk := newVal.(map[string]interface{}); newOk {
+						builder.WriteString(fmt.Sprintf("  %s:\n    %s → %s",
+							modified(k),
+							modified(strings.TrimSpace(formatMap(oldNested, "    "))),
+							modified(strings.TrimSpace(formatMap(newNested, "    ")))))
+					}
+				} else {
+					builder.WriteString(fmt.Sprintf("  %s: %v → %v\n",
+						modified(k), modified(formatValue(oldVal)), modified(formatValue(newVal))))
+				}
 			} else {
 				// Unchanged field
-				builder.WriteString(fmt.Sprintf("  %s: %v\n",
-					unchanged(k), unchanged(formatValue(oldVal))))
+				if nested, ok := oldVal.(map[string]interface{}); ok {
+					builder.WriteString(fmt.Sprintf("  %s:\n%s",
+						unchanged(k), unchanged(formatMap(nested, "    "))))
+				} else {
+					builder.WriteString(fmt.Sprintf("  %s: %v\n",
+						unchanged(k), unchanged(formatValue(oldVal))))
+				}
 			}
 		}
 	}
 
 	return builder.String()
-}
-
-// filterChangesByPath returns all changes that start with the given path
-func filterChangesByPath(changes []diff.Change, path string) []diff.Change {
-	var filtered []diff.Change
-	for _, change := range changes {
-		if len(change.Path) > 0 && change.Path[0] == path {
-			filtered = append(filtered, change)
-		}
-	}
-	return filtered
 }
 
 // formatValue converts a value to a readable string

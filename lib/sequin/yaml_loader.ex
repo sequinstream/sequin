@@ -139,7 +139,8 @@ defmodule Sequin.YamlLoader do
   end
 
   defp find_or_create_account(account_id, %{"account" => _}) when not is_nil(account_id) do
-    {:error, Error.bad_request(message: "Account configuration is not supported in Sequin Cloud")}
+    {:error,
+     Error.bad_request(message: "Account configuration only supported when self hosting and using a config file on boot.")}
   end
 
   defp find_or_create_account(account_id, _config) when not is_nil(account_id) do

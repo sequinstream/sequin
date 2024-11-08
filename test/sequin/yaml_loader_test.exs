@@ -12,6 +12,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
+  alias Sequin.Error.ValidationError
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
@@ -115,15 +116,16 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "returns invalid changeset for invalid database" do
-      assert_raise RuntimeError, fn ->
-        YamlLoader.plan_from_yml("""
-        account:
-          name: "Test Account"
+      assert {:error, %ValidationError{} = error} =
+               YamlLoader.plan_from_yml("""
+               account:
+                 name: "Test Account"
 
-        databases:
-          - name: "invalid-db"
-        """)
-      end
+               databases:
+                 - name: "invalid-db"
+               """)
+
+      assert Exception.message(error) =~ "database: can't be blank"
     end
   end
 

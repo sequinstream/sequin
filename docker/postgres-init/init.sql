@@ -4,15 +4,16 @@ create database sequin_playground;
 -- Connect to the new database
 \c sequin_playground
 -- Create tables and seed data
-create table regions(
+create table groceries(
   id serial primary key,
   name varchar(100),
-  timezone text,
+  section varchar(100),
+  checked boolean default false,
   inserted_at timestamp default now(),
   updated_at timestamp default now()
 );
 
-alter table regions replica identity
+alter table groceries replica identity
   full;
 
 create or replace function public.update_timestamp()
@@ -28,15 +29,14 @@ end;
 $function$;
 
 create trigger update_timestamp
-  before update on regions for each row
+  before update on groceries for each row
   execute procedure update_timestamp();
 
-insert into regions(name, timezone)
-  values ('us-east-1', 'est'),
-('us-west-1', 'pst'),
-('us-west-2', 'pst'),
-('us-east-2', 'est'),
-('us-central-1', 'cst');
+insert into groceries(name, section)
+  values ('Apple', 'produce'),
+  ('Banana', 'produce'),
+  ('Bread', 'bakery'),
+  ('Milk', 'dairy');
 
 create publication sequin_pub for all tables;
 

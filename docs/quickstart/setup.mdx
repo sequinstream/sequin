@@ -26,22 +26,16 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
         docker compose up -d
         ```
 
-    4. Verify the containers are running:
-
-        ```bash
-        docker compose ps
-        ```
-
-    <Note>
+    <Info>
     For more configuration options, including running Sequin on an existing Postgres and Redis instance or within an existing project, see our [Docker setup](/self-hosting/docker-setup).
-    </Note>
+    </Info>
   </Step>
   <Step title="Login" icon="key">
     The Docker Compose file automatically configures Sequin with an admin user, a playground database, and a sample stream.
 
-    <Note>
+    <Info>
     The Docker Compose uses a configuration file to provision these resources. You can view the file at `/docker/playground.yml`.
-    </Note>
+    </Info>
 
     1. After starting the Docker Compose services, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
 
@@ -54,28 +48,41 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
         - Password: `sequinpassword!`
   </Step>
   <Step title="View the playground database" icon="database">
-    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.regions` table. The Sequin server automatically connects to this database.
+    To help you try Sequin quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.groceries` table:
+
+    ```bash public.groceries
+    id |  name  | section | checked |        inserted_at         |         updated_at
+----+--------+---------+---------+----------------------------+----------------------------
+  1 | Apple  | produce | f       | 2024-11-08 23:35:30.021632 | 2024-11-08 23:35:30.021632
+  2 | Banana | produce | f       | 2024-11-08 23:35:30.021632 | 2024-11-08 23:35:30.021632
+  3 | Bread  | bakery  | f       | 2024-11-08 23:35:30.021632 | 2024-11-08 23:35:30.021632
+  4 | Milk   | dairy   | f       | 2024-11-08 23:35:30.021632 | 2024-11-08 23:35:30.021632
+(4 rows)
+    ```
+
+
+    The Sequin server automatically connects to this database. Go take a look:
 
     1. In the Sequin web console, click **Databases** in the sidebar.
     2. Click on the pre-configured `sequin-playground` database.
 
-    <Frame>
-      <img src="/images/quickstart/playground-database.png" alt="Playground database" />
-    </Frame>
+        <Frame>
+          <img src="/images/quickstart/playground-database.png" alt="Playground database" />
+        </Frame>
 
     The database should be healthy and ready to use.
 
   </Step>
-  <Step title="View the regions stream" icon="list">
-    Now, view the pre-configured `regions` stream:
+  <Step title="View the groceries stream" icon="list">
+    Now, view the pre-configured `groceries` stream:
 
     1. In the Sequin web console, click **Streams** in the sidebar.
 
-    2. The `public.regions` table should already have a [Stream](/how-sequin-works#streams) configured.
+    2. The `public.groceries` table should already have a [Stream](/how-sequin-works#streams) configured:
 
-    <Frame>
-      <img src="/images/quickstart/regions-stream.png" alt="Regions stream" />
-    </Frame>
+        <Frame>
+          <img src="/images/quickstart/grocerie-stream.png" alt="Regions stream" />
+        </Frame>
   </Step>
 </Steps>
 
@@ -85,7 +92,7 @@ description: 'Run Sequin, connect a database, and start streaming rows in about 
 You are ready to stream!
 </Check>
 
-You are running Sequin, connected to a playground database, and have a Stream setup for the `regions` table. Now for the fun part – streaming! You can stream rows via a Webhook Subscription or the Consumer Group API:
+You are running Sequin, connected to a playground database, and have a Stream setup for the `groceries` table. Now for the fun part – streaming! You can consume rows from the stream using a Webhook Subscription or the Consumer Group API:
 
 <CardGroup cols={1}>
   <Card title="Quickstart continued: Consume rows via webhooks" icon="gauge-max" href="/quickstart/consume-with-webhooks">

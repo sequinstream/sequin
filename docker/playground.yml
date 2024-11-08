@@ -17,8 +17,43 @@ databases:
     publication_name: "sequin_pub"
 
 sequences:
-  - name: "regions"
+  - name: "groceries"
     database: "sequin-playground"
     table_schema: "public"
-    table_name: "regions"
+    table_name: "groceries"
     sort_column_name: "updated_at"
+
+http_endpoints:
+  - name: "groceries-webhook"
+    webhook.site: "true"
+
+webhook_subscriptions:
+  - name: "groceries-webhooks"
+    sequence: "groceries"
+    http_endpoint: "groceries-webhook"
+    status: "disabled"
+    batch_size: 1
+    consumer_start:
+      position: "beginning"
+    filters:
+      - column_name: "checked"
+        operator: "="
+        comparison_value: false
+      - column_name: "section"
+        operator: "="
+        comparison_value: "produce"
+
+consumer_groups:
+  - name: "groceries-consumer"
+    sequence: "groceries"
+    status: "disabled"
+    max_ack_pending: 100
+    consumer_start:
+      position: "beginning"
+    filters:
+      - column_name: "checked"
+        operator: "="
+        comparison_value: false
+      - column_name: "section"
+        operator: "="
+        comparison_value: "produce"

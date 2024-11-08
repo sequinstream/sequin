@@ -7,108 +7,105 @@ description: 'Consume rows from your Stream using a Webhook Subscription'
 With Sequin's **Webhook Subscriptions**, you can receive rows from your Streams as HTTP POST requests to your endpoints. Webhook Subscriptions offer exactly-once processing and automatic retries and backoffs if your endpoint is unavailable.
 
 <Info>
-This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.regions` table from that guide.
+This quickstart assumes you've already [installed and setup Sequin](/quickstart/setup) in the prior quickstart. It refers to the `public.groceries` table from that guide.
 </Info>
 
 <Steps titleSize="h2">
-  <Step title="Create a Webhook Subscription" icon="webhook">
-    After connecting a database and creating a Stream, you can consume rows from your Stream using a Webhook Subscription:
+  <Step title="View the webhook subscription" icon="webhook">
+    The playground comes with a pre-configured Webhook Subscription that is connected to the `pulic.groceries` stream. Go take a look:
 
-    1. Navigate to the **Webhook Subscriptions** tab and click the **Create Subscription** button.
+    1. Navigate to the **Webhook Subscriptions** tab. Select the`groceries-webhooks` subscription.
 
-    2. The Stream you created for the `public.regions` table should already be selected:
-
-        <Frame>
-          <img src="/images/quickstart/setup-consumer-source.png" alt="Select webhook source" />
-        </Frame>
-
-    3. Click "Add filter" and add a filter to only capture rows where the `timezone` is `pst`:
+    2. Get a sense of the subscription's current state. When you first view the subscription, you'll see that it's been created in the `paused` state. No messages have been acked:
 
         <Frame>
-          <img src="/images/quickstart/set-consumer-filter.png" alt="Select filters" />
+          <img src="/images/quickstart/webhook-paused.png" alt="Webhook subscription in paused state" />
         </Frame>
 
-    3. You can leave the consumer starting point at the default value of "At the beginning of the table." This will start the consumer at the first row in the Stream, playing the whole table from the beginning:
-
+    3. Scroll down, you'll also see that the subscription has 4 rows to process (e.g. all 4 rows in the `public.groceries` table):
 
         <Frame>
-          <img src="/images/quickstart/set-consumer-start.png" alt="Set consumer start" style={{ maxWidth: '400px' }} />
+          <img src="/images/quickstart/webhook-cursor-position.png" alt="Webhook subscription showing 4 unprocessed messages at cursor position" />
         </Frame>
 
-    4. Jump ahead to the **HTTP Endpoint** section (you can use the defaults for message grouping and configuration).
-
-    5. Click the blue **Create and use a new Webhook.site endpoint** link:
+    4. Finally, at the bottom of the page, you'll see the subscription has been created with two filters.
 
         <Frame>
-          <img src="/images/quickstart/create-http-endpoint.png" alt="Create Webhook Subscription" />
+          <img src="/images/quickstart/webhook-filters.png" alt="Webhook with filters" />
         </Frame>
 
-        This will generate a new HTTP endpoint on [Webhook.site](https://webhook.site) that you can use for testing purposes.
-
-    6. Finally, at the bottom of the form give your Webhook Subscription a name (i.e. `pst_regions`) and click **Create Webhook Subscription**.
-
-        <Check>
-          Sequin will now send rows that match your filter to your endpoint.
-        </Check>
-
-        <Frame>
-          <img src="/images/quickstart/create-webhook-subscription.png" alt="Consumer created" />
-        </Frame>
-
-    7. Open the **Messages** tab to see the rows that have been sent:
-
-        <Frame>
-          <img src="/images/quickstart/webhook-messages.png" alt="Messages" />
-        </Frame>
-
-    8. Click on one of the messages to see the delivery details including the logs for the message:
-
-        <Frame>
-          <img src="/images/quickstart/message-logs.png" alt="Message logs" />
-        </Frame>
-
-    9. Go back to the **Overview** tab, and click the **View on Webhook.site** button to open the Webhook.site dashboard:
-
-        <Frame>
-          <img src="/images/quickstart/webhook-dot-site.png" alt="Webhook.site" />
-        </Frame>
-
-        <Check>
-        You'll see that Sequin processed every row in the table, sending each row to your endpoint!
-        </Check>
+        Only rows in the `public.groceries` table that have not been checked and are in the `produce` section will be delivered to your endpoint:
   </Step>
-  <Step title="Insert and update rows" icon="play">
-    To learn how Sequin works, perform some `insert` and `update` operations on the `public.regions` table:
+  <Step title="Turn on the subscription" icon="play">
+    Now that you understand the how the subscription is configured, turn on the subscription so that it can begin processing messages:
+
+    1. Scroll to the top of the page and click the **Resume** button to start processing messages.
+
+        <Check>
+        In a blink, you'll see that the subscription turns on, processes all 4 rows, and that 2 of the rows match the filters and are acked.
+        </Check>
+
+    2. To see the messages that were delivered to your endpoint, scroll down to the **HTTP Endpoint** section and click the **View on Webhook.site** button:
+
+        <Frame>
+          <img src="/images/quickstart/webhook-site-messages.png" alt="Webhook.site showing two delivered messages - one for Apple and one for Banana, both matching the produce section and unchecked filters" />
+        </Frame>
+
+        You'll see that two messages were delivered to your endpoint. The first message is for an Apple and the second is for a Banana. Both messages match both filters on your Webhook Subscription.
+
+    3. Back in the Sequin web console, you can also inspect the rows that were acked by clicking on the **Messages** tab:
+
+        <Frame>
+          <img src="/images/quickstart/webhook-messages.png" alt="Messages tab showing two acked messages - one for Apple and one for Banana, both matching the produce section and unchecked filters" />
+        </Frame>
+
+        You can click into each message to see the logs for each message.
+  </Step>
+  <Step title="Replay messages" icon="repeat">
+    Now, let's see how you can replay messages.
+
+    1. Scroll down to the **Cursor Position** section and click the **Repwind** button:
+
+        <Frame>
+          <img src="/images/quickstart/webhook-rewind.png" alt="Rewind button that allows rewinding the cursor position to replay messages from an earlier point in time" />
+        </Frame>
+
+    2. In the dialog that appears, select to update the cursor to the beginning of the table. Click **Update**:
+
+        <Frame>
+          <img src="/images/quickstart/webhook-rewind-dialogue.png" alt="Dialog showing options to rewind cursor position to beginning of table or specific timestamp" />
+        </Frame>
+
+    3. You'll see the subscription immediately reprocess all 4 rows in the table, and redelivers the the two matching rows to your endpoint, and now indicates that 4 messages have been acked.
+
+    <Check>
+      You've seen how you can replay messages to your endpoint. This is useful if you need to reprocess messages for any reason.
+    </Check>
+  </Step>
+  <Step title="Insert and update rows" icon="music">
+    To learn how Sequin works, perform some `insert` and `update` operations on the `public.groceries` table:
 
     1. Open a terminal and connect to the `sequin_playground` database:
 
         ```bash
         psql 'postgresql://postgres:postgres@localhost:7377/sequin_playground?sslmode=disable'
         ```
-    2. Create a new region in the `public.regions` table:
+    2. Add a new produce item to your grocery list:
 
-        ```bash
-        INSERT INTO public.regions (name, timezone) VALUES ('us-gov-west-1', 'pst');
+         ```bash
+        INSERT INTO public.groceries (name, section, checked) VALUES ('Avocado', 'produce', false);
         ```
 
         This row matches the filter of your Webhook Subscription, so it will be delivered to your endpoint. You can verify this by checking the **Messages** tab in the Sequin web console:
 
         <Frame>
-          <img src="/images/quickstart/new-message-after-insert.png" alt="Messages tab" />
+          <img src="/images/quickstart/new-message-after-insert.png" alt="Messages tab showing a new message for the Avocado row that was just inserted, matching both the produce section and unchecked filters" />
         </Frame>
 
-    3. Update an existing region:
+    3. Mark the Avocado as checked:
 
         ```bash
-        UPDATE public.regions SET timezone = 'pst' WHERE id = 1;
-        ```
-
-        Again, this row also matches the filter of your Webhook Subscription, so it will be delivered to your endpoint.
-
-    4. Finally, create a new region that doesn't match the filter:
-
-        ```bash
-        INSERT INTO public.regions (name, timezone) VALUES ('ca-west-1', 'mst');
+        UPDATE public.groceries SET checked = true WHERE name = 'Avocado';
         ```
 
         This row doesn't match the filter of your Webhook Subscription, so it won't be delivered to your endpoint. You can verify this by navigating to the **Databases** tab, selecting the `playground` database, and then clicking on the **Messages** tab:
@@ -118,7 +115,7 @@ This quickstart assumes you've already [installed and setup Sequin](/quickstart/
         </Frame>
 
     <Check>
-    You've seen how changes in your database flow through Sequin and how you can trace your messages end to end.
+      You've seen how changes in your database flow through Sequin and how you can trace your messages end to end.
     </Check>
   </Step>
 </Steps>

@@ -1,4 +1,4 @@
-defmodule SequinWeb.ConfigController do
+defmodule SequinWeb.YamlController do
   use SequinWeb, :controller
 
   alias Sequin.Accounts.Account

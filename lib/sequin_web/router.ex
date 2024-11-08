@@ -162,8 +162,8 @@ defmodule SequinWeb.Router do
     post("/http_pull_consumers/:id_or_name/ack", PullController, :ack)
     post("/http_pull_consumers/:id_or_name/nack", PullController, :nack)
 
-    post("/config/apply", ConfigController, :apply)
-    post("/config/plan", ConfigController, :plan)
+    post("/config/apply", YamlController, :apply)
+    post("/config/plan", YamlController, :plan)
   end
 
   # Other scopes may use custom stacks.

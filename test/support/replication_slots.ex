@@ -20,7 +20,7 @@ defmodule Sequin.Test.Support.ReplicationSlots do
       Sequin.PostgresReplicationTest => "__postgres_replication_test_slot__",
       SequinWeb.PostgresReplicationControllerTest => "__postgres_rep_controller_test_slot__",
       Sequin.YamlLoaderTest => "__yaml_loader_test_slot__",
-      SequinWeb.ConfigControllerTest => "__config_controller_test_slot__"
+      SequinWeb.YamlControllerTest => "__yaml_controller_test_slot__"
     }
   end
 

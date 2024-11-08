@@ -1,4 +1,4 @@
-defmodule SequinWeb.ConfigControllerTest do
+defmodule SequinWeb.YamlControllerTest do
   use SequinWeb.ConnCase, async: true
 
   alias Sequin.Test.Support.ReplicationSlots

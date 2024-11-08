@@ -69,7 +69,7 @@ defmodule Sequin.YamlLoader do
 
             # Not implemented
             _http_push_consumers = upsert_http_push_consumers!(account.id, config, databases, http_endpoints)
-            _http_pull_consumers = create_http_pull_consumers!(config, databases)
+            _http_pull_consumers = upsert_http_pull_consumers!(account.id, config, databases)
           end)
 
         case result do
@@ -706,7 +706,7 @@ defmodule Sequin.YamlLoader do
     %{
       name: name,
       status: parse_status(consumer_attrs["status"]),
-      batch_size: Map.get(consumer_attrs, "batch_size", 1),
+      size: Map.get(consumer_attrs, "batch_size", 1),
       sequence_id: sequence.id,
       replication_slot_id: database.replication_slot.id,
       http_endpoint_id: http_endpoint.id,
@@ -832,11 +832,78 @@ defmodule Sequin.YamlLoader do
   ## HTTP Pull Consumers ##
   ########################
 
-  defp create_http_pull_consumers!(%{"http_pull_consumers" => _http_pull_consumers}, _databases) do
-    raise "Not implemented: create_http_pull_consumers!/2"
+  defp upsert_http_pull_consumers!(account_id, %{"consumer_groups" => consumers}, databases) do
+    Logger.info("Creating HTTP pull consumers: #{inspect(consumers, pretty: true)}")
+    Enum.map(consumers, &upsert_http_pull_consumer!(account_id, &1, databases))
   end
 
-  defp create_http_pull_consumers!(%{}, _databases), do: []
+  defp upsert_http_pull_consumers!(_account_id, %{}, _databases), do: []
+
+  defp upsert_http_pull_consumer!(account_id, %{"name" => name} = consumer_attrs, databases) do
+    case Sequin.Consumers.find_http_pull_consumer(account_id, name: name) do
+      {:ok, existing_consumer} ->
+        params = parse_http_pull_consumer_params(consumer_attrs, databases)
+
+        case Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
+          {:ok, consumer} ->
+            Logger.info("Updated HTTP pull consumer: #{inspect(consumer, pretty: true)}")
+            consumer
+
+          {:error, error} when is_exception(error) ->
+            raise "Failed to update HTTP pull consumer: #{Exception.message(error)}"
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            raise "Failed to update HTTP pull consumer: #{inspect(changeset)}"
+        end
+
+      {:error, %NotFoundError{}} ->
+        params = parse_http_pull_consumer_params(consumer_attrs, databases)
+
+        case Sequin.Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params) do
+          {:ok, consumer} ->
+            Logger.info("Created HTTP pull consumer: #{inspect(consumer, pretty: true)}")
+            consumer
+
+          {:error, error} when is_exception(error) ->
+            raise "Failed to create HTTP pull consumer: #{Exception.message(error)}"
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            raise "Failed to create HTTP pull consumer: #{inspect(changeset)}"
+        end
+    end
+  end
+
+  defp parse_http_pull_consumer_params(%{"name" => name, "sequence" => sequence_name} = consumer_attrs, databases) do
+    # Find the sequence and its associated database
+    sequence =
+      Enum.find_value(databases, fn database ->
+        Enum.find(database.sequences, &(&1.name == sequence_name))
+      end)
+
+    unless sequence do
+      raise "Sequence '#{sequence_name}' not found for consumer group '#{name}'"
+    end
+
+    database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end)
+    table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
+    table = %{table | sort_column_attnum: sequence.sort_column_attnum}
+
+    record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
+
+    %{
+      name: name,
+      status: parse_status(consumer_attrs["status"]),
+      sequence_id: sequence.id,
+      max_ack_pending: Map.get(consumer_attrs, "max_ack_pending", 100),
+      replication_slot_id: database.replication_slot.id,
+      record_consumer_state: record_consumer_state,
+      sequence_filter: %{
+        actions: ["insert", "update", "delete"],
+        group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
+        column_filters: column_filters(consumer_attrs["filters"], table)
+      }
+    }
+  end
 
   ###############
   ## Utilities ##

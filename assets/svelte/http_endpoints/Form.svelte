@@ -30,7 +30,7 @@
   export let errors: Record<string, any> = {};
   export let parent: string;
   export let live;
-  export let api_token: { name: string; token: string };
+  export let api_tokens: any[];
 
   const url = httpEndpoint.id ? new URL(httpEndpoint.baseUrl) : ({} as any);
   let baseUrl = httpEndpoint.useLocalTunnel
@@ -219,7 +219,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                         value: setupTunnelCode,
                       },
                     ]}
-                    secret={api_token.token}
+                    apiTokens={api_tokens}
                   />
                 </div>
               </div>

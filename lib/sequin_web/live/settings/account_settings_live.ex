@@ -6,6 +6,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
 
   alias Sequin.Accounts
   alias Sequin.Accounts.User
+  alias Sequin.ApiTokens
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
 
@@ -46,6 +47,37 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
       {:error, changeset} ->
         error = Error.validation(changeset: changeset)
         {:reply, %{error: Exception.message(error)}, socket}
+    end
+  end
+
+  def handle_event("create_api_token", %{"name" => name}, socket) do
+    account_id = current_account_id(socket)
+
+    case ApiTokens.create_for_account(account_id, %{name: name}) do
+      {:ok, _token} ->
+        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account_id)))}
+
+      {:error, %Ecto.ConstraintError{}} ->
+        {:reply, %{error: "A token with this name already exists"}, socket}
+
+      {:error, %Error.InvariantError{} = error} ->
+        {:reply, %{error: Exception.message(error)}, socket}
+
+      {:error, changeset} ->
+        error = Error.validation(changeset: changeset)
+        {:reply, %{error: Exception.message(error)}, socket}
+    end
+  end
+
+  def handle_event("delete_api_token", %{"tokenId" => token_id}, socket) do
+    account_id = current_account_id(socket)
+
+    case ApiTokens.delete_token_for_account(account_id, token_id) do
+      {:ok, _} ->
+        {:noreply, assign(socket, :api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(account_id)))}
+
+      {:error, _} ->
+        {:reply, %{error: "Failed to delete token"}, socket}
     end
   end
 
@@ -129,6 +161,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
       |> assign(:current_account, current_account)
       |> assign(:current_account_users, Accounts.list_users_for_account(current_account.id))
       |> assign(:pending_invites, Accounts.list_pending_invites_for_account(current_account))
+      |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
 
     ~H"""
     <div id={@parent_id}>
@@ -137,6 +170,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
         props={
           %{
             accounts: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
+            apiTokens: @api_tokens,
             selectedAccount: @current_account,
             currentAccountUsers: @current_account_users,
             currentUser: @current_user,
@@ -148,5 +182,16 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
       />
     </div>
     """
+  end
+
+  defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
+    Enum.map(api_tokens, fn api_token ->
+      %{
+        id: api_token.id,
+        name: api_token.name,
+        inserted_at: api_token.inserted_at,
+        token: api_token.token
+      }
+    end)
   end
 end

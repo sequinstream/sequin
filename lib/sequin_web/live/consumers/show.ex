@@ -2,8 +2,8 @@ defmodule SequinWeb.ConsumersLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
+  alias Sequin.Accounts.User
   alias Sequin.ApiTokens
-  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
@@ -33,10 +33,10 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id} = params, _session, socket) do
+    current_account = User.current_account(socket.assigns.current_user)
+
     case load_consumer(id, socket) do
       {:ok, consumer} ->
-        {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
-
         if connected?(socket) do
           send(self(), :update_health)
           send(self(), :update_metrics)
@@ -48,7 +48,7 @@ defmodule SequinWeb.ConsumersLive.Show do
         socket =
           socket
           |> assign(:consumer, consumer)
-          |> assign(:api_token, api_token)
+          |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign_metrics()
           |> assign(:paused, false)
@@ -168,7 +168,7 @@ defmodule SequinWeb.ConsumersLive.Show do
                   parent: "consumer-show",
                   metrics: @metrics,
                   apiBaseUrl: @api_base_url,
-                  api_token: encode_api_token(@api_token),
+                  api_tokens: @api_tokens,
                   cursor_position: encode_cursor_position(@cursor_position, @consumer)
                 }
               }
@@ -563,11 +563,15 @@ defmodule SequinWeb.ConsumersLive.Show do
     }
   end
 
-  defp encode_api_token(%ApiToken{} = api_token) do
-    %{
-      name: api_token.name,
-      token: api_token.token
-    }
+  defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
+    Enum.map(api_tokens, fn api_token ->
+      %{
+        id: api_token.id,
+        name: api_token.name,
+        inserted_at: api_token.inserted_at,
+        token: api_token.token
+      }
+    end)
   end
 
   defp encode_group_column_names(%{

@@ -590,7 +590,7 @@ defmodule Sequin.Accounts do
       # Delete associated API keys
       account.id
       |> ApiTokens.list_tokens_for_account()
-      |> Enum.each(&ApiTokens.delete_token_for_account(&1.id, account.id))
+      |> Enum.each(&ApiTokens.delete_token_for_account(account.id, &1.id))
 
       # Delete associated HTTP push and pull consumers
       account.id

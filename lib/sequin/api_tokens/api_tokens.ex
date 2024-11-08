@@ -49,7 +49,7 @@ defmodule Sequin.ApiTokens do
     end
   end
 
-  def delete_token_for_account(token_id, account_id) do
+  def delete_token_for_account(account_id, token_id) do
     case get_token_by(id: token_id, account_id: account_id) do
       {:ok, token} ->
         Repo.delete(token)

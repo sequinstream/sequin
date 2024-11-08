@@ -4,6 +4,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
 
   alias Ecto.Changeset
   alias Sequin.Accounts
+  alias Sequin.Accounts.User
   alias Sequin.ApiTokens
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
@@ -16,12 +17,11 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
 
   @impl Phoenix.LiveView
   def mount(params, _session, socket) do
+    current_account = User.current_account(socket.assigns.current_user)
     is_edit? = Map.has_key?(params, "id")
 
     case fetch_or_build_http_endpoint(socket, params) do
       {:ok, http_endpoint} ->
-        {:ok, api_token} = ApiTokens.get_token_by(account_id: current_account_id(socket), name: "Default")
-
         socket =
           socket
           |> assign(
@@ -30,9 +30,9 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
             allocated_bastion_port: nil,
             submit_error: nil,
             http_endpoint: http_endpoint,
-            api_token: api_token,
             update_allocated_bastion_port_timer: nil
           )
+          |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
           |> put_changeset(%{"http_endpoint" => %{}})
 
         {:ok, socket}
@@ -63,7 +63,6 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
       |> assign(:encoded_http_endpoint, encode_http_endpoint(assigns.http_endpoint))
       |> assign(:parent_id, @parent_id)
       |> assign(:form_errors, Error.errors_on(assigns.changeset))
-      |> assign(:encoded_api_token, encode_api_token(assigns.api_token))
 
     ~H"""
     <div id={@parent_id}>
@@ -75,7 +74,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
             httpEndpoint: @encoded_http_endpoint,
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
-            api_token: @encoded_api_token
+            api_tokens: @api_tokens
           }
         }
       />
@@ -188,6 +187,17 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     }
   end
 
+  defp encode_api_tokens(api_tokens) when is_list(api_tokens) do
+    Enum.map(api_tokens, fn api_token ->
+      %{
+        id: api_token.id,
+        name: api_token.name,
+        inserted_at: api_token.inserted_at,
+        token: api_token.token
+      }
+    end)
+  end
+
   defp decode_params(form, http_endpoint) do
     use_local_tunnel = form["useLocalTunnel"]
     uri = URI.parse(form["baseUrl"])
@@ -209,13 +219,6 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
         "encrypted_headers" => form["encryptedHeaders"] || %{},
         "use_local_tunnel" => use_local_tunnel
       }
-    }
-  end
-
-  defp encode_api_token(api_token) do
-    %{
-      name: api_token.name,
-      token: api_token.token
     }
   end
 

@@ -4,7 +4,12 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SequenceFilter.NullValue
+  alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
@@ -414,12 +419,12 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "characters"
 
-      assert %Sequin.Consumers.RecordConsumerState{
+      assert %RecordConsumerState{
                initial_min_cursor: %{1 => 0, 9 => "0001-01-01T00:00:00"},
                producer: :table_and_wal
              } = consumer.record_consumer_state
 
-      assert consumer.sequence_filter == %Sequin.Consumers.SequenceFilter{
+      assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
                column_filters: [],
                group_column_attnums: [1]
@@ -470,14 +475,14 @@ defmodule Sequin.YamlLoaderTest do
 
       # Name filter
       name_filter = Enum.find(filters, &(&1.operator == :not_null))
-      assert name_filter.value == %Sequin.Consumers.SequenceFilter.NullValue{value: nil}
+      assert name_filter.value == %NullValue{value: nil}
       assert name_filter.is_jsonb == false
 
       # Metadata filter
       metadata_filter = Enum.find(filters, &(&1.jsonb_path == "rank.title"))
       assert metadata_filter.operator == :==
       assert metadata_filter.is_jsonb == true
-      assert metadata_filter.value == %Sequin.Consumers.SequenceFilter.StringValue{value: "Lord"}
+      assert metadata_filter.value == %StringValue{value: "Lord"}
 
       # Is active filter
       active_filter = Enum.find(filters, &(&1.value.value == true))
@@ -552,6 +557,143 @@ defmodule Sequin.YamlLoaderTest do
 
       assert updated_consumer.name == "sequin-playground-webhook"
       assert updated_consumer.http_endpoint.name == "new-http-endpoint"
+    end
+  end
+
+  describe "consumer_groups" do
+    test "creates basic consumer group" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               consumer_groups:
+                 - name: "sequin-playground-consumer"
+                   sequence: "characters"
+                   consumer_start:
+                     position: "beginning"
+               """)
+
+      assert [consumer] = Repo.all(HttpPullConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sequin-playground-consumer"
+      assert consumer.sequence.name == "characters"
+
+      assert %RecordConsumerState{
+               initial_min_cursor: %{1 => 0, 9 => "0001-01-01T00:00:00"},
+               producer: :table_and_wal
+             } = consumer.record_consumer_state
+
+      assert consumer.sequence_filter == %SequenceFilter{
+               actions: [:insert, :update, :delete],
+               column_filters: [],
+               group_column_attnums: [1]
+             }
+    end
+
+    test "creates consumer group with filters" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               consumer_groups:
+                 - name: "sequin-playground-consumer"
+                   sequence: "characters"
+                   filters:
+                     - column_name: "house"
+                       operator: "="
+                       comparison_value: "Stark"
+                     - column_name: "name"
+                       operator: "is not null"
+                     - column_name: "metadata"
+                       field_path: "rank.title"
+                       operator: "="
+                       comparison_value: "Lord"
+                       field_type: "string"
+                     - column_name: "is_active"
+                       operator: "="
+                       comparison_value: true
+                   consumer_start:
+                     position: "end"
+               """)
+
+      assert [consumer] = Repo.all(HttpPullConsumer)
+      assert consumer.name == "sequin-playground-consumer"
+
+      filters = consumer.sequence_filter.column_filters
+      assert length(filters) == 4
+
+      # House filter
+      house_filter = Enum.find(filters, &(&1.value.value == "Stark"))
+      assert house_filter.operator == :==
+      assert house_filter.is_jsonb == false
+
+      # Name filter
+      name_filter = Enum.find(filters, &(&1.operator == :not_null))
+      assert name_filter.value == %NullValue{value: nil}
+      assert name_filter.is_jsonb == false
+
+      # Metadata filter
+      metadata_filter = Enum.find(filters, &(&1.jsonb_path == "rank.title"))
+      assert metadata_filter.operator == :==
+      assert metadata_filter.is_jsonb == true
+      assert metadata_filter.value == %StringValue{value: "Lord"}
+
+      # Is active filter
+      active_filter = Enum.find(filters, &(&1.value.value == true))
+      assert active_filter.operator == :==
+      assert active_filter.is_jsonb == false
+    end
+
+    test "applying yml twice creates no duplicates" do
+      yaml = """
+      #{account_db_and_sequence_yml()}
+
+      consumer_groups:
+        - name: "sequin-playground-consumer"
+          sequence: "characters"
+          consumer_start:
+            position: "beginning"
+      """
+
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
+
+      assert [consumer] = Repo.all(HttpPullConsumer)
+      assert consumer.name == "sequin-playground-consumer"
+    end
+
+    test "updates consumer group" do
+      create_yaml = """
+      #{account_db_and_sequence_yml()}
+
+      consumer_groups:
+        - name: "sequin-playground-consumer"
+          sequence: "characters"
+          max_ack_pending: 100
+      """
+
+      assert :ok = YamlLoader.apply_from_yml!(create_yaml)
+
+      assert [consumer] = Repo.all(HttpPullConsumer)
+      assert consumer.name == "sequin-playground-consumer"
+      assert consumer.max_ack_pending == 100
+
+      update_yaml = """
+      #{account_db_and_sequence_yml()}
+
+      consumer_groups:
+        - name: "sequin-playground-consumer"
+          sequence: "characters"
+          max_ack_pending: 200
+      """
+
+      # Update with different batch size
+      assert :ok = YamlLoader.apply_from_yml!(update_yaml)
+
+      assert [updated_consumer] = Repo.all(HttpPullConsumer)
+      assert updated_consumer.name == "sequin-playground-consumer"
+      assert updated_consumer.max_ack_pending == 200
     end
   end
 end

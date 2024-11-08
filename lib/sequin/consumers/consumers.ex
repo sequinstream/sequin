@@ -240,6 +240,19 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def find_http_pull_consumer(account_id, params \\ []) do
+    params
+    |> Enum.reduce(HttpPullConsumer.where_account_id(account_id), fn
+      {:name, name}, query -> HttpPullConsumer.where_name(query, name)
+      {:sequence_id, sequence_id}, query -> HttpPullConsumer.where_sequence_id(query, sequence_id)
+    end)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
   def get_http_pull_consumer_for_account(account_id, id_or_name) do
     res =
       account_id

@@ -18,7 +18,7 @@ defmodule SequinWeb.YamlController do
 
     case YamlLoader.apply_from_yml(account_id, yaml) do
       {:ok, {:ok, resources}} ->
-        json(conn, resources)
+        json(conn, %{resources: resources})
 
       {:ok, {:error, error}} ->
         {:error, error}

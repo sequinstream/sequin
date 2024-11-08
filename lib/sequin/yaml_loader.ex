@@ -55,10 +55,10 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  def apply_from_yml(yml) do
+  def apply_from_yml(account_id \\ nil, yml) do
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
-        Repo.transaction(fn -> apply_config(config) end)
+        Repo.transaction(fn -> apply_config(account_id, config) end)
 
       {:error, error} ->
         Logger.error("Error reading config file: #{inspect(error)}")
@@ -66,14 +66,14 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  def plan_from_yml(yml) do
+  def plan_from_yml(account_id \\ nil, yml) do
     ## return a list of changesets
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
         result =
           Repo.transaction(fn ->
-            config
-            |> apply_config()
+            account_id
+            |> apply_config(config)
             |> Repo.rollback()
           end)
 
@@ -104,8 +104,8 @@ defmodule Sequin.YamlLoader do
     end
   end
 
-  defp apply_config(config) do
-    with {:ok, account} <- find_or_create_account(config),
+  defp apply_config(account_id, config) do
+    with {:ok, account} <- find_or_create_account(account_id, config),
          {:ok, _users} <- find_or_create_users(account, config),
          {:ok, _databases} <- upsert_databases(account.id, config),
          databases = Databases.list_dbs_for_account(account.id),
@@ -123,12 +123,22 @@ defmodule Sequin.YamlLoader do
   ## Account ##
   #############
 
-  defp find_or_create_account(config) do
+  # account_id is nil here if we are loading directly from the config file
+  # if the yml is passed in from the API, we expect the account_id to be passed in as well
+  defp find_or_create_account(nil, config) do
     if self_hosted?() do
       do_find_or_create_account(config)
     else
       {:error, Error.unauthorized(message: "account configuration is not supported in Sequin Cloud")}
     end
+  end
+
+  defp find_or_create_account(account_id, %{"account" => _}) when not is_nil(account_id) do
+    {:error, Error.bad_request(message: "Account configuration is not supported in Sequin Cloud")}
+  end
+
+  defp find_or_create_account(account_id, _config) when not is_nil(account_id) do
+    Accounts.get_account(account_id)
   end
 
   defp do_find_or_create_account(%{"account" => %{"name" => name}}) do

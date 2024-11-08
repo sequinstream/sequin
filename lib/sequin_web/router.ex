@@ -161,6 +161,9 @@ defmodule SequinWeb.Router do
     get("/http_pull_consumers/:id_or_name/receive", PullController, :receive)
     post("/http_pull_consumers/:id_or_name/ack", PullController, :ack)
     post("/http_pull_consumers/:id_or_name/nack", PullController, :nack)
+
+    post("/config/apply", ConfigController, :apply)
+    post("/config/plan", ConfigController, :plan)
   end
 
   # Other scopes may use custom stacks.

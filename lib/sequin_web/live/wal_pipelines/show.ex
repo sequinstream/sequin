@@ -52,7 +52,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_replica_warning", _params, socket) do
-    {:noreply, assign_replica_identity(socket)}
+    {:reply, %{ok: true}, assign_replica_identity(socket)}
   end
 
   @impl Phoenix.LiveView

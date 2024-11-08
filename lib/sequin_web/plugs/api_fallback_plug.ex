@@ -67,6 +67,22 @@ defmodule SequinWeb.ApiFallbackPlug do
     |> halt()
   end
 
+  def call(conn, {:error, [%Changeset{} | _rest] = changesets}) do
+    errors = Enum.map(changesets, &Sequin.Error.errors_on/1)
+
+    response = %{
+      summary: "Validation failed",
+      validation_errors: errors
+    }
+
+    Logger.metadata(response: response)
+
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(response)
+    |> halt()
+  end
+
   defp render_error(conn, status, error) do
     response = %{summary: Exception.message(error)}
 

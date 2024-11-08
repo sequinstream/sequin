@@ -180,6 +180,12 @@ defmodule Sequin.Replication do
     Repo.all(WalPipeline)
   end
 
+  def list_wal_pipelines_for_account(account_id) do
+    account_id
+    |> WalPipeline.where_account_id()
+    |> Repo.all()
+  end
+
   def list_wal_pipelines_for_replication_slot(replication_slot_id) do
     replication_slot_id
     |> WalPipeline.where_replication_slot_id()

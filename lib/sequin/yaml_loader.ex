@@ -6,6 +6,8 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Accounts
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -14,6 +16,7 @@ defmodule Sequin.YamlLoader do
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication
+  alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
   require Logger
@@ -84,35 +87,49 @@ defmodule Sequin.YamlLoader do
   end
 
   def plan_from_yml(yml) do
-    ## return a list of changesets
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
         with %Changeset{valid?: true} = account_changeset <- parse_account_config(config),
-             database_changesets = parse_databases_config(account_changeset.data.id, config),
-             [] <- Enum.reject(database_changesets, & &1.valid?) do
-          users_changesets = parse_users_config(account_changeset.data.id, config)
-          sequence_changesets = parse_sequences_config(account_changeset.data.id, config, database_changesets)
-          http_endpoint_changesets = parse_http_endpoints_config(account_changeset.data.id, config)
-
-          valid_changesets =
-            [account_changeset] ++
-              users_changesets ++
-              database_changesets ++
-              sequence_changesets ++
-              http_endpoint_changesets
-
-          {:ok, valid_changesets}
-        else
-          %Changeset{valid?: false} = invalid_changeset ->
-            {:error, [invalid_changeset]}
-
-          invalid_changesets when is_list(invalid_changesets) ->
-            {:error, invalid_changesets}
+             {:ok, changesets} <- plan_from_config(account_changeset.data.id, config) do
+          {:ok, [account_changeset | changesets]}
         end
 
       {:error, error} ->
         Logger.error("Error reading config file: #{inspect(error)}")
         raise "Error reading config file: #{inspect(error)}"
+    end
+  end
+
+  def plan_from_config(account_id, config) do
+    database_changesets = parse_databases_config(account_id, config)
+
+    case Enum.reject(database_changesets, & &1.valid?) do
+      [] ->
+        users_changesets = parse_users_config(account_id, config)
+        sequence_changesets = parse_sequences_config(account_id, config, database_changesets)
+        http_endpoint_changesets = parse_http_endpoints_config(account_id, config)
+
+        # Add new changesets
+        http_push_consumer_changesets = parse_http_push_consumers_config(account_id, config)
+        http_pull_consumer_changesets = parse_http_pull_consumers_config(account_id, config)
+        wal_pipeline_changesets = parse_wal_pipelines_config(account_id, config)
+
+        valid_changesets =
+          users_changesets ++
+            database_changesets ++
+            sequence_changesets ++
+            http_endpoint_changesets ++
+            http_push_consumer_changesets ++
+            http_pull_consumer_changesets ++
+            wal_pipeline_changesets
+
+        {:ok, valid_changesets}
+
+      %Changeset{valid?: false} = invalid_changeset ->
+        {:error, [invalid_changeset]}
+
+      invalid_changesets when is_list(invalid_changesets) ->
+        {:error, invalid_changesets}
     end
   end
 
@@ -232,6 +249,10 @@ defmodule Sequin.YamlLoader do
     databases = if account_id, do: Databases.list_dbs_for_account(account_id), else: []
 
     Enum.map(database_attrs, &parse_database_config(&1, databases))
+  end
+
+  defp parse_databases_config(_account_id, %{}) do
+    []
   end
 
   defp parse_database_config(%{"name" => name} = database_attrs, databases) do
@@ -904,6 +925,55 @@ defmodule Sequin.YamlLoader do
       }
     }
   end
+
+  # Add new parsing functions
+  defp parse_http_push_consumers_config(account_id, %{"http_push_consumers" => consumers}) do
+    existing = Consumers.list_consumers_for_account(account_id)
+
+    Enum.map(consumers, fn %{"name" => name} = attrs ->
+      case Enum.find(existing, &(&1.name == name)) do
+        %HttpPushConsumer{} = consumer ->
+          %{HttpPushConsumer.update_changeset(consumer, attrs) | action: :update}
+
+        nil ->
+          %{HttpPushConsumer.create_changeset(%HttpPushConsumer{account_id: account_id}, attrs) | action: :create}
+      end
+    end)
+  end
+
+  defp parse_http_push_consumers_config(_account_id, _), do: []
+
+  defp parse_http_pull_consumers_config(account_id, %{"http_pull_consumers" => consumers}) do
+    existing = Consumers.list_consumers_for_account(account_id)
+
+    Enum.map(consumers, fn %{"name" => name} = attrs ->
+      case Enum.find(existing, &(&1.name == name)) do
+        %HttpPullConsumer{} = consumer ->
+          %{HttpPullConsumer.update_changeset(consumer, attrs) | action: :update}
+
+        nil ->
+          %{HttpPullConsumer.create_changeset(%HttpPullConsumer{account_id: account_id}, attrs) | action: :create}
+      end
+    end)
+  end
+
+  defp parse_http_pull_consumers_config(_account_id, _), do: []
+
+  defp parse_wal_pipelines_config(account_id, %{"wal_pipelines" => pipelines}) do
+    existing = Replication.list_wal_pipelines_for_account(account_id)
+
+    Enum.map(pipelines, fn %{"name" => name} = attrs ->
+      case Enum.find(existing, &(&1.name == name)) do
+        %WalPipeline{} = pipeline ->
+          %{WalPipeline.update_changeset(pipeline, attrs) | action: :update}
+
+        nil ->
+          %{WalPipeline.create_changeset(%WalPipeline{account_id: account_id}, attrs) | action: :create}
+      end
+    end)
+  end
+
+  defp parse_wal_pipelines_config(_account_id, _), do: []
 
   ###############
   ## Utilities ##

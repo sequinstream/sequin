@@ -1,7 +1,8 @@
 defmodule Sequin.YamlLoaderTest do
-  use Sequin.DataCase
+  use Sequin.DataCase, async: false
 
   alias Sequin.Accounts.Account
+  alias Sequin.Accounts.User
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
@@ -52,9 +53,89 @@ defmodule Sequin.YamlLoaderTest do
     """
   end
 
+  describe "plan_from_yml" do
+    test "returns a list of changesets" do
+      assert {:ok, changesets} =
+               YamlLoader.plan_from_yml("""
+                account:
+                  name: "Playground"
+
+                users:
+                 - email: "admin@sequinstream.com"
+                   password: "sequinpassword!"
+
+                databases:
+                  - name: "test-db"
+                    username: "postgres"
+                    password: "postgres"
+                    hostname: "localhost"
+                    database: "sequin_test"
+                    slot_name: "#{replication_slot()}"
+                    publication_name: "#{@publication}"
+
+                sequences:
+                  - name: "characters"
+                    database: "test-db"
+                    table_schema: "public"
+                    table_name: "Characters"
+                    sort_column_name: "updated_at"
+
+                http_endpoints:
+                  - name: "test-endpoint"
+                    url: "https://api.example.com/webhook"
+               """)
+
+      account_changeset = Enum.find(changesets, &is_struct(&1.data, Account))
+      assert account_changeset.action == :create
+      assert account_changeset.changes.name == "Playground"
+
+      [user_changeset] = Enum.filter(changesets, &is_struct(&1.data, User))
+      assert user_changeset.action == :create
+      assert user_changeset.changes.email == "admin@sequinstream.com"
+
+      [database_changeset] = Enum.filter(changesets, &is_struct(&1.data, PostgresDatabase))
+      assert database_changeset.action == :create
+      assert database_changeset.changes.name == "test-db"
+
+      [sequence_changeset] = Enum.filter(changesets, &is_struct(&1.data, Sequence))
+      assert sequence_changeset.action == :create
+      assert sequence_changeset.changes.table_schema == "public"
+      assert sequence_changeset.changes.table_name == "Characters"
+      assert sequence_changeset.changes.sort_column_name == "updated_at"
+      assert get_field(sequence_changeset, :postgres_database_id) == database_changeset.data.id
+
+      [http_endpoint_changeset] = Enum.filter(changesets, &is_struct(&1.data, HttpEndpoint))
+      assert http_endpoint_changeset.action == :create
+      assert http_endpoint_changeset.changes.name == "test-endpoint"
+      assert http_endpoint_changeset.changes.scheme == :https
+      assert http_endpoint_changeset.changes.host == "api.example.com"
+      assert http_endpoint_changeset.changes.path == "/webhook"
+      assert http_endpoint_changeset.changes.port == 443
+    end
+
+    test "returns invalid changeset for invalid database" do
+      assert {:error, [invalid_changeset]} =
+               YamlLoader.plan_from_yml("""
+               account:
+                 name: "Test Account"
+
+               databases:
+                 - name: "invalid-db"
+               """)
+
+      refute invalid_changeset.valid?
+
+      assert invalid_changeset.errors == [
+               database: {"can't be blank", [{:validation, :required}]},
+               username: {"can't be blank", [validation: :required]},
+               password: {"can't be blank", [validation: :required]}
+             ]
+    end
+  end
+
   describe "playground.yml" do
     test "creates database and sequence with no existing account" do
-      assert :ok = YamlLoader.load_from_yml(playground_yml())
+      assert :ok = YamlLoader.apply_from_yml!(playground_yml())
 
       assert [account] = Repo.all(Account)
       assert account.name == "Playground"
@@ -76,8 +157,8 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "applying yml twice creates no duplicates" do
-      assert :ok = YamlLoader.load_from_yml(playground_yml())
-      assert :ok = YamlLoader.load_from_yml(playground_yml())
+      assert :ok = YamlLoader.apply_from_yml!(playground_yml())
+      assert :ok = YamlLoader.apply_from_yml!(playground_yml())
 
       assert [account] = Repo.all(Account)
       assert account.name == "Playground"
@@ -100,7 +181,7 @@ defmodule Sequin.YamlLoaderTest do
   describe "databases" do
     test "creates a database" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -124,7 +205,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "updates a database" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -142,7 +223,7 @@ defmodule Sequin.YamlLoaderTest do
       assert db.pool_size == 3
 
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -166,7 +247,7 @@ defmodule Sequin.YamlLoaderTest do
   describe "http_endpoints" do
     test "creates webhook.site endpoint" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -185,7 +266,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "creates local endpoint" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -204,7 +285,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "creates local endpoint with options" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -230,7 +311,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "creates external endpoint" do
       assert :ok =
-               YamlLoader.load_from_yml("""
+               YamlLoader.apply_from_yml!("""
                account:
                  name: "Configured by Sequin"
 
@@ -267,8 +348,8 @@ defmodule Sequin.YamlLoaderTest do
           url: "https://api.example.com/webhook"
       """
 
-      assert :ok = YamlLoader.load_from_yml(yaml)
-      assert :ok = YamlLoader.load_from_yml(yaml)
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
 
       assert [endpoint] = Repo.all(HttpEndpoint)
       assert endpoint.name == "test-endpoint"
@@ -276,7 +357,7 @@ defmodule Sequin.YamlLoaderTest do
 
     test "validates required fields" do
       assert_raise RuntimeError, ~r/Invalid HTTP endpoint configuration/, fn ->
-        YamlLoader.load_from_yml("""
+        YamlLoader.apply_from_yml!("""
         account:
           name: "Configured by Sequin"
 

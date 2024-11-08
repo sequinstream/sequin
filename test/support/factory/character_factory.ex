@@ -20,6 +20,10 @@ if Mix.env() == :test do
           planet: Faker.Airports.name(),
           is_active: Enum.random([true, false]),
           tags: Enum.take_random(["warrior", "seer", "royal", "compound"], Enum.random(1..3)),
+          metadata: %{
+            "origin" => Faker.Address.country(),
+            "alignment" => Factory.one_of(["good", "neutral", "evil"])
+          },
           inserted_at: Factory.naive_timestamp(),
           updated_at: Factory.naive_timestamp()
         },

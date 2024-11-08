@@ -11,7 +11,7 @@ migrate() {
 
 apply_config() {
   echo "Applying config"
-  ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.load"
+  ./prod/rel/sequin/bin/sequin eval "Sequin.YamlLoader.apply!"
   echo "Config applied"
 }
 

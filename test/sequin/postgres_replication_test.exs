@@ -200,6 +200,7 @@ defmodule Sequin.PostgresReplicationTest do
                "planet" => "Arrakis",
                "is_active" => character.is_active,
                "tags" => character.tags,
+               "metadata" => character.metadata,
                "inserted_at" => NaiveDateTime.to_iso8601(character.inserted_at),
                "updated_at" => NaiveDateTime.to_iso8601(character.updated_at)
              }
@@ -306,6 +307,7 @@ defmodule Sequin.PostgresReplicationTest do
                "name" => nil,
                "planet" => nil,
                "tags" => nil,
+               "metadata" => nil,
                "inserted_at" => nil,
                "updated_at" => nil
              }
@@ -877,6 +879,7 @@ defmodule Sequin.PostgresReplicationTest do
                "planet" => "Arrakis",
                "is_active" => character.is_active,
                "tags" => character.tags,
+               "metadata" => character.metadata,
                "inserted_at" => NaiveDateTime.to_iso8601(character.inserted_at),
                "updated_at" => NaiveDateTime.to_iso8601(character.updated_at)
              }
@@ -932,6 +935,7 @@ defmodule Sequin.PostgresReplicationTest do
                "name" => nil,
                "planet" => nil,
                "tags" => nil,
+               "metadata" => nil,
                "inserted_at" => nil,
                "updated_at" => nil
              }

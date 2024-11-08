@@ -4,6 +4,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
@@ -365,6 +366,192 @@ defmodule Sequin.YamlLoaderTest do
           - name: "invalid-endpoint"
         """)
       end
+    end
+  end
+
+  describe "webhook_subscriptions" do
+    def account_db_and_sequence_yml do
+      """
+      account:
+        name: "Configured by Sequin"
+
+      databases:
+        - name: "test-db"
+          hostname: "localhost"
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+
+      sequences:
+        - name: "characters"
+          database: "test-db"
+          table_schema: "public"
+          table_name: "Characters"
+          sort_column_name: "updated_at"
+      """
+    end
+
+    test "creates basic webhook subscription" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               webhook_subscriptions:
+                 - name: "sequin-playground-webhook"
+                   sequence: "characters"
+                   http_endpoint: "sequin-playground-http"
+                   consumer_start:
+                     position: "beginning"
+               """)
+
+      assert [consumer] = Repo.all(HttpPushConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.sequence.name == "characters"
+
+      assert %Sequin.Consumers.RecordConsumerState{
+               initial_min_cursor: %{1 => 0, 9 => "0001-01-01T00:00:00"},
+               producer: :table_and_wal
+             } = consumer.record_consumer_state
+
+      assert consumer.sequence_filter == %Sequin.Consumers.SequenceFilter{
+               actions: [:insert, :update, :delete],
+               column_filters: [],
+               group_column_attnums: [1]
+             }
+    end
+
+    test "creates webhook subscription with filters" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               http_endpoints:
+                 - name: "sequin-playground-http"
+                   url: "https://api.example.com/webhook"
+
+               webhook_subscriptions:
+                 - name: "sequin-playground-webhook"
+                   sequence: "characters"
+                   http_endpoint: "sequin-playground-http"
+                   filters:
+                     - column_name: "house"
+                       operator: "="
+                       comparison_value: "Stark"
+                     - column_name: "name"
+                       operator: "is not null"
+                     - column_name: "metadata"
+                       field_path: "rank.title"
+                       operator: "="
+                       comparison_value: "Lord"
+                       field_type: "string"
+                     - column_name: "is_active"
+                       operator: "="
+                       comparison_value: true
+                   consumer_start:
+                     position: "end"
+               """)
+
+      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert consumer.name == "sequin-playground-webhook"
+
+      filters = consumer.sequence_filter.column_filters
+      assert length(filters) == 4
+
+      # House filter
+      house_filter = Enum.find(filters, &(&1.value.value == "Stark"))
+      assert house_filter.operator == :==
+      assert house_filter.is_jsonb == false
+
+      # Name filter
+      name_filter = Enum.find(filters, &(&1.operator == :not_null))
+      assert name_filter.value == %Sequin.Consumers.SequenceFilter.NullValue{value: nil}
+      assert name_filter.is_jsonb == false
+
+      # Metadata filter
+      metadata_filter = Enum.find(filters, &(&1.jsonb_path == "rank.title"))
+      assert metadata_filter.operator == :==
+      assert metadata_filter.is_jsonb == true
+      assert metadata_filter.value == %Sequin.Consumers.SequenceFilter.StringValue{value: "Lord"}
+
+      # Is active filter
+      active_filter = Enum.find(filters, &(&1.value.value == true))
+      assert active_filter.operator == :==
+      assert active_filter.is_jsonb == false
+    end
+
+    test "applying yml twice creates no duplicates" do
+      yaml = """
+      #{account_db_and_sequence_yml()}
+
+      http_endpoints:
+        - name: "sequin-playground-http"
+          url: "https://api.example.com/webhook"
+
+      webhook_subscriptions:
+        - name: "sequin-playground-webhook"
+          sequence: "characters"
+          http_endpoint: "sequin-playground-http"
+          consumer_start:
+            position: "beginning"
+      """
+
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
+      assert :ok = YamlLoader.apply_from_yml!(yaml)
+
+      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert consumer.name == "sequin-playground-webhook"
+    end
+
+    test "updates webhook subscription" do
+      create_yaml = """
+      #{account_db_and_sequence_yml()}
+
+      http_endpoints:
+        - name: "sequin-playground-http"
+          url: "https://api.example.com/webhook"
+
+      webhook_subscriptions:
+        - name: "sequin-playground-webhook"
+          sequence: "characters"
+          http_endpoint: "sequin-playground-http"
+      """
+
+      assert :ok =
+               YamlLoader.apply_from_yml!(create_yaml)
+
+      assert [consumer] = Repo.all(HttpPushConsumer)
+      consumer = Repo.preload(consumer, :http_endpoint)
+
+      assert consumer.name == "sequin-playground-webhook"
+      assert consumer.http_endpoint.name == "sequin-playground-http"
+
+      update_yaml = """
+      #{account_db_and_sequence_yml()}
+
+      http_endpoints:
+        - name: "new-http-endpoint"
+          url: "https://api.example.com/webhook"
+
+      webhook_subscriptions:
+        - name: "sequin-playground-webhook"
+          sequence: "characters"
+          http_endpoint: "new-http-endpoint"
+      """
+
+      # Update with different filters
+      assert :ok = YamlLoader.apply_from_yml!(update_yaml)
+
+      assert [updated_consumer] = Repo.all(HttpPushConsumer)
+      updated_consumer = Repo.preload(updated_consumer, :http_endpoint)
+
+      assert updated_consumer.name == "sequin-playground-webhook"
+      assert updated_consumer.http_endpoint.name == "new-http-endpoint"
     end
   end
 end

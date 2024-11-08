@@ -12,6 +12,7 @@ defmodule Sequin.Test.Support.Models.Character do
     field :planet, :string
     field :is_active, :boolean
     field :tags, {:array, :string}
+    field :metadata, :map
 
     timestamps()
   end
@@ -47,6 +48,6 @@ defmodule Sequin.Test.Support.Models.Character do
   end
 
   def changeset(character, attrs) do
-    Ecto.Changeset.cast(character, attrs, [:name, :house, :planet, :is_active, :tags])
+    Ecto.Changeset.cast(character, attrs, [:name, :house, :planet, :is_active, :tags, :metadata])
   end
 end

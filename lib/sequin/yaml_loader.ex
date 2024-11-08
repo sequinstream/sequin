@@ -1,16 +1,12 @@
 defmodule Sequin.YamlLoader do
   @moduledoc false
-  import Ecto.Changeset, only: [get_field: 2]
-
-  alias Ecto.Changeset
   alias Sequin.Accounts
+  alias Sequin.Accounts.Account
   alias Sequin.Consumers
-  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication
@@ -53,24 +49,7 @@ defmodule Sequin.YamlLoader do
   def apply_from_yml!(yml) do
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
-        result =
-          Repo.transaction(fn ->
-            account = find_or_create_account!(config)
-            _users = find_or_create_users!(account, config)
-
-            _databases = upsert_databases!(account.id, config)
-            databases = Databases.list_dbs_for_account(account.id)
-
-            _sequences = find_or_create_sequences!(account.id, config, databases)
-            databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot])
-
-            _http_endpoints = upsert_http_endpoints!(account.id, config)
-            http_endpoints = Consumers.list_http_endpoints_for_account(account.id)
-
-            # Not implemented
-            _http_push_consumers = upsert_http_push_consumers!(account.id, config, databases, http_endpoints)
-            _http_pull_consumers = upsert_http_pull_consumers!(account.id, config, databases)
-          end)
+        result = Repo.transaction(fn -> apply_config(config) end)
 
         case result do
           {:ok, _} -> :ok
@@ -87,27 +66,32 @@ defmodule Sequin.YamlLoader do
     ## return a list of changesets
     case YamlElixir.read_from_string(yml) do
       {:ok, config} ->
-        with %Changeset{valid?: true} = account_changeset <- parse_account_config(config),
-             database_changesets = parse_databases_config(account_changeset.data.id, config),
-             [] <- Enum.reject(database_changesets, & &1.valid?) do
-          users_changesets = parse_users_config(account_changeset.data.id, config)
-          sequence_changesets = parse_sequences_config(account_changeset.data.id, config, database_changesets)
-          http_endpoint_changesets = parse_http_endpoints_config(account_changeset.data.id, config)
+        result =
+          Repo.transaction(fn ->
+            config
+            |> apply_config()
+            |> Repo.rollback()
+          end)
 
-          valid_changesets =
-            [account_changeset] ++
-              users_changesets ++
-              database_changesets ++
-              sequence_changesets ++
-              http_endpoint_changesets
+        case result do
+          {:error, {:ok, planned_resources}} ->
+            # Get the account id from the planned resources if it exists
+            # account_id is nil if the account is not found, ie. it's a new account
+            account_id =
+              planned_resources
+              |> Sequin.Enum.find!(&is_struct(&1, Account))
+              |> Map.fetch!(:id)
+              |> Accounts.get_account()
+              |> case do
+                {:ok, account} -> account.id
+                {:error, %NotFoundError{}} -> nil
+              end
 
-          {:ok, valid_changesets}
-        else
-          %Changeset{valid?: false} = invalid_changeset ->
-            {:error, [invalid_changeset]}
+            current_resources = all_resources(account_id)
+            {:ok, planned_resources, current_resources}
 
-          invalid_changesets when is_list(invalid_changesets) ->
-            {:error, invalid_changesets}
+          {:error, error} ->
+            raise "Failed to plan config: #{inspect(error)}"
         end
 
       {:error, error} ->
@@ -116,27 +100,29 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  defp apply_config(config) do
+    account = find_or_create_account!(config)
+    _users = find_or_create_users!(account, config)
+
+    _databases = upsert_databases!(account.id, config)
+    databases = Databases.list_dbs_for_account(account.id)
+
+    _sequences = find_or_create_sequences!(account.id, config, databases)
+    databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot])
+
+    _http_endpoints = upsert_http_endpoints!(account.id, config)
+    http_endpoints = Consumers.list_http_endpoints_for_account(account.id)
+
+    # Not implemented
+    _http_push_consumers = upsert_http_push_consumers!(account.id, config, databases, http_endpoints)
+    _http_pull_consumers = upsert_http_pull_consumers!(account.id, config, databases)
+
+    {:ok, all_resources(account.id)}
+  end
+
   #############
   ## Account ##
   #############
-
-  defp parse_account_config(config) do
-    if self_hosted?() do
-      do_parse_account_config(config)
-    else
-      raise "account configuration is not supported in Sequin Cloud"
-    end
-  end
-
-  defp do_parse_account_config(%{"account" => %{"name" => name}}) do
-    case Accounts.find_account(name: name) do
-      {:ok, account} ->
-        %{Accounts.Account.changeset(account, %{}) | action: :update}
-
-      {:error, %NotFoundError{}} ->
-        %{Accounts.Account.changeset(%Accounts.Account{}, %{name: name}) | action: :create}
-    end
-  end
 
   defp find_or_create_account!(config) do
     if self_hosted?() do
@@ -166,24 +152,6 @@ defmodule Sequin.YamlLoader do
   ###########
   ## Users ##
   ###########
-
-  defp parse_users_config(account_id, %{"users" => user_attrs}) do
-    users = if account_id, do: Accounts.list_users_for_account(account_id), else: []
-
-    Enum.map(user_attrs, &parse_user_config(&1, users))
-  end
-
-  defp parse_users_config(_account_id, %{}) do
-    Logger.info("No users found in config")
-    []
-  end
-
-  defp parse_user_config(%{"email" => email} = user_attrs, users) do
-    case Enum.find(users, fn user -> user.email == email end) do
-      nil -> %{Accounts.User.registration_changeset(%Accounts.User{}, user_attrs) | action: :create}
-      user -> %{Accounts.User.update_changeset(user, user_attrs) | action: :update}
-    end
-  end
 
   defp find_or_create_users!(account, %{"users" => users}) do
     Logger.info("Creating users: #{inspect(users, pretty: true)}")
@@ -227,23 +195,6 @@ defmodule Sequin.YamlLoader do
     "password" => "postgres",
     "port" => 5432
   }
-
-  defp parse_databases_config(account_id, %{"databases" => database_attrs}) do
-    databases = if account_id, do: Databases.list_dbs_for_account(account_id), else: []
-
-    Enum.map(database_attrs, &parse_database_config(&1, databases))
-  end
-
-  defp parse_database_config(%{"name" => name} = database_attrs, databases) do
-    case Enum.find(databases, fn database -> database.name == name end) do
-      nil -> %{PostgresDatabase.changeset(%PostgresDatabase{}, database_attrs) | action: :create}
-      database -> %{PostgresDatabase.changeset(database, database_attrs) | action: :update}
-    end
-  end
-
-  defp parse_database_config(_database_attrs, _databases) do
-    PostgresDatabase.changeset(%PostgresDatabase{}, %{name: nil})
-  end
 
   defp upsert_databases!(account_id, %{"databases" => databases}) do
     Logger.info("Upserting databases: #{inspect(databases, pretty: true)}")
@@ -313,53 +264,6 @@ defmodule Sequin.YamlLoader do
   ###############
   ## Sequences ##
   ###############
-  defp parse_sequences_config(account_id, %{"sequences" => sequences}, database_changesets) do
-    existing_sequences = if account_id, do: Databases.list_sequences_for_account(account_id), else: []
-
-    Enum.map(sequences, fn sequence ->
-      database_changeset = find_database_changeset_for_sequence!(sequence, database_changesets)
-      parse_sequence_config(sequence, database_changeset, existing_sequences)
-    end)
-  end
-
-  defp parse_sequences_config(_account_id, %{}, _database_changesets), do: []
-
-  defp find_database_changeset_for_sequence!(%{"database" => database_name}, database_changesets) do
-    Enum.find(database_changesets, fn changeset ->
-      get_field(changeset, :name) == database_name
-    end) || raise "`database` must reference a valid database name"
-  end
-
-  defp parse_sequence_config(
-         %{"table_schema" => table_schema, "table_name" => table_name} = sequence_attrs,
-         database_changeset,
-         existing_sequences
-       ) do
-    case Enum.find(existing_sequences, fn sequence ->
-           sequence.table_schema == table_schema && sequence.table_name == table_name
-         end) do
-      nil ->
-        # Create new sequence
-        %{
-          Sequence.changeset(%Sequence{}, %{
-            table_schema: table_schema,
-            table_name: table_name,
-            sort_column_name: sequence_attrs["sort_column_name"],
-            postgres_database_id: database_changeset.data.id
-          })
-          | action: :create
-        }
-
-      sequence ->
-        # Update existing sequence
-        %{
-          Sequence.changeset(sequence, %{
-            sort_column_name: sequence_attrs["sort_column_name"]
-          })
-          | action: :update
-        }
-    end
-  end
 
   defp find_or_create_sequences!(account_id, %{"sequences" => sequences}, databases) do
     Logger.info("Creating sequences: #{inspect(sequences, pretty: true)}")
@@ -478,40 +382,6 @@ defmodule Sequin.YamlLoader do
       - key: "X-Secret-Header"
         value: "super-secret"
   """
-
-  defp parse_http_endpoints_config(account_id, %{"http_endpoints" => http_endpoints}) do
-    endpoints = if account_id, do: Sequin.Consumers.list_http_endpoints_for_account(account_id), else: []
-
-    Enum.map(http_endpoints, fn endpoint_attrs ->
-      parse_http_endpoint_config(endpoint_attrs, endpoints)
-    end)
-  end
-
-  defp parse_http_endpoints_config(_account_id, %{}), do: []
-
-  defp parse_http_endpoint_config(%{"name" => name} = attrs, endpoints) do
-    case Enum.find(endpoints, fn endpoint -> endpoint.name == name end) do
-      nil ->
-        # Create new endpoint
-        %{
-          HttpEndpoint.create_changeset(
-            %HttpEndpoint{},
-            parse_http_endpoint_attrs(attrs)
-          )
-          | action: :create
-        }
-
-      endpoint ->
-        # Update existing endpoint
-        %{
-          HttpEndpoint.update_changeset(
-            endpoint,
-            parse_http_endpoint_attrs(attrs)
-          )
-          | action: :update
-        }
-    end
-  end
 
   defp upsert_http_endpoints!(account_id, %{"http_endpoints" => http_endpoints}) do
     Logger.info("Creating HTTP endpoints: #{inspect(http_endpoints, pretty: true)}")
@@ -931,5 +801,18 @@ defmodule Sequin.YamlLoader do
 
   defp env do
     Application.fetch_env!(@app, :env)
+  end
+
+  defp all_resources(nil), do: []
+
+  defp all_resources(account_id) do
+    account = Accounts.get_account!(account_id)
+    users = Accounts.list_users_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id)
+    sequences = Databases.list_sequences_for_account(account_id)
+    http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
+    consumers = Consumers.list_consumers_for_account(account_id)
+
+    [account | users] ++ databases ++ sequences ++ http_endpoints ++ consumers
   end
 end

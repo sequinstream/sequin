@@ -9,7 +9,7 @@ defmodule SequinWeb.UserRegistrationLiveTest do
     test "renders registration page", %{conn: conn} do
       {:ok, _lv, html} = live(conn, ~p"/register")
 
-      assert html =~ "Register"
+      assert html =~ "Welcome! Create your account"
       assert html =~ "Log in"
     end
 
@@ -29,7 +29,7 @@ defmodule SequinWeb.UserRegistrationLiveTest do
       form = form(lv, "#registration_form", user: %{"email" => "with spaces", "password" => "too short"})
       result = render_submit(form)
 
-      assert result =~ "Register"
+      assert result =~ "Welcome! Create your account"
       assert result =~ "must have the @ sign and no spaces"
       assert result =~ "should be at least 12 character"
     end

@@ -111,7 +111,7 @@ defmodule SequinWeb.UserLoginLiveTest do
         |> render_click()
         |> follow_redirect(conn, ~p"/register")
 
-      assert login_html =~ "Register"
+      assert login_html =~ "Welcome! Create your account"
     end
 
     test "redirects to forgot password page when the Forgot Password button is clicked", %{

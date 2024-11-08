@@ -299,8 +299,11 @@ defmodule Sequin.YamlLoader do
       database = database_for_sequence!(sequence, databases)
 
       case find_or_create_sequence(account_id, database, sequence) do
-        {:ok, sequence} -> {:cont, {:ok, [sequence | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
+        {:ok, sequence} ->
+          {:cont, {:ok, [sequence | acc]}}
+
+        {:error, error} ->
+          {:halt, {:error, Error.bad_request(message: "Failed to create sequence: #{Exception.message(error)}")}}
       end
     end)
   end
@@ -334,44 +337,57 @@ defmodule Sequin.YamlLoader do
   end
 
   defp create_sequence(account_id, %PostgresDatabase{id: id} = database, sequence) do
-    table = table_for_sequence!(database, sequence)
-    sort_column_attnum = sort_column_attnum_for_sequence!(table, sequence)
+    with {:ok, table} <- table_for_sequence(database, sequence),
+         {:ok, sort_column_attnum} <- sort_column_attnum_for_sequence(table, sequence) do
+      attrs =
+        sequence
+        |> Map.put("postgres_database_id", id)
+        |> Map.put("table_oid", table.oid)
+        |> Map.put("sort_column_attnum", sort_column_attnum)
 
-    attrs =
-      sequence
-      |> Map.put("postgres_database_id", id)
-      |> Map.put("table_oid", table.oid)
-      |> Map.put("sort_column_attnum", sort_column_attnum)
+      account_id
+      |> Databases.create_sequence(attrs)
+      |> case do
+        {:ok, sequence} ->
+          Logger.info("Created sequence: #{inspect(sequence, pretty: true)}")
+          {:ok, sequence}
 
-    account_id
-    |> Databases.create_sequence(attrs)
-    |> case do
-      {:ok, sequence} ->
-        Logger.info("Created sequence: #{inspect(sequence, pretty: true)}")
-        {:ok, sequence}
+        {:error, error} when is_exception(error) ->
+          {:error, error}
 
-      {:error, error} when is_exception(error) ->
-        {:error, error}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, changeset}
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error, changeset}
+      end
     end
   end
 
-  defp table_for_sequence!(database, %{"table_schema" => table_schema, "table_name" => table_name}) do
-    Sequin.Enum.find!(database.tables, fn table -> table.name == table_name and table.schema == table_schema end)
+  defp table_for_sequence(database, %{"table_schema" => table_schema, "table_name" => table_name}) do
+    case Enum.find(database.tables, fn table -> table.name == table_name and table.schema == table_schema end) do
+      nil -> {:error, Error.not_found(entity: :table, params: %{table_schema: table_schema, table_name: table_name})}
+      table -> {:ok, table}
+    end
   end
 
-  defp table_for_sequence!(_, %{}) do
-    raise "`table` and `schema` are required for each sequence"
+  defp table_for_sequence(_, %{}) do
+    {:error, Error.bad_request(message: "`table` and `schema` are required for each sequence")}
   end
 
-  defp sort_column_attnum_for_sequence!(table, %{"sort_column_name" => sort_column_name}) do
-    Sequin.Enum.find!(table.columns, fn column -> column.name == sort_column_name end).attnum
+  defp sort_column_attnum_for_sequence(table, %{"sort_column_name" => sort_column_name}) do
+    case Enum.find(table.columns, fn column -> column.name == sort_column_name end) do
+      nil ->
+        {:error,
+         Error.not_found(
+           entity: :column,
+           params: %{table_schema: table.schema, table_name: table.name, column_name: sort_column_name}
+         )}
+
+      column ->
+        {:ok, column.attnum}
+    end
   end
 
-  defp sort_column_attnum_for_sequence!(_, %{}) do
-    raise "`sort_column_name` is required for each sequence"
+  defp sort_column_attnum_for_sequence(_, %{}) do
+    {:error, Error.bad_request(message: "`sort_column_name` is required for each sequence")}
   end
 
   ####################

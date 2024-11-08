@@ -266,6 +266,9 @@ defmodule Sequin.YamlLoader do
             {:error, changeset}
         end
 
+      {:error, %DBConnection.ConnectionError{}} ->
+        {:error, Error.bad_request(message: "Failed to connect to database. Please check your database credentials.")}
+
       {:error, error} when is_exception(error) ->
         {:error, error}
 

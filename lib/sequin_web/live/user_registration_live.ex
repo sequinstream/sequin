@@ -7,7 +7,7 @@ defmodule SequinWeb.UserRegistrationLive do
 
   def render(assigns) do
     ~H"""
-    <div class="w-full h-[92vh] mx-auto my-auto flex flex-col md:flex-row bg-white rounded-lg shadow-lg overflow-hidden">
+    <div class="w-full md:h-[92vh] mx-auto my-auto flex flex-col md:flex-row bg-white rounded-lg shadow-lg">
       <div class="md:w-1/2 bg-black p-12 text-white flex flex-col max-w-[800px]">
         <div class="flex justify-between items-center mb-12">
           <.link href="https://sequinstream.com">

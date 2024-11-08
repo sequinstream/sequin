@@ -5,6 +5,7 @@ defmodule Sequin.Consumers.RecordConsumerState do
 
   import Ecto.Changeset
 
+  @derive {Jason.Encoder, only: [:producer, :initial_min_cursor]}
   @primary_key false
   typed_embedded_schema do
     field :producer, Ecto.Enum, values: [:table_and_wal, :wal]

@@ -52,6 +52,7 @@ See 'sequin cheat' for a quick cheatsheet of commands`
 
 	cli.AddContextCommands(scli, &config)
 	cli.AddTunnelCommands(scli, &config)
+	cli.AddConfigCommands(scli, &config)
 
 	scli.MustParseWithUsage(os.Args[1:])
 }

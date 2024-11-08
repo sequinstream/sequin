@@ -493,13 +493,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   defp maybe_trim(nil), do: nil
   defp maybe_trim(value), do: String.trim(value)
 
-  defp encode_api_token(api_token) do
-    %{
-      name: api_token.name,
-      token: api_token.token
-    }
-  end
-
   defp detect_supabase_pooled(%{"username" => username, "hostname" => hostname}) do
     username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase")
   end

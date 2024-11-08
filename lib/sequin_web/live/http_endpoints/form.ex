@@ -222,13 +222,6 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     }
   end
 
-  defp encode_api_token(api_token) do
-    %{
-      name: api_token.name,
-      token: api_token.token
-    }
-  end
-
   defp maybe_allocate_bastion_port(socket) do
     %Changeset{} = changeset = socket.assigns.changeset
     use_local_tunnel = Changeset.get_change(changeset, :use_local_tunnel, false)

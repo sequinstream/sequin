@@ -1,5 +1,5 @@
 defmodule Sequin.YamlLoaderTest do
-  use Sequin.DataCase, async: false
+  use Sequin.DataCase, async: true
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
@@ -60,8 +60,8 @@ defmodule Sequin.YamlLoaderTest do
   end
 
   describe "plan_from_yml" do
-    test "returns a list of changesets" do
-      assert {:ok, changesets} =
+    test "returns lists of planned and current resources" do
+      assert {:ok, planned_resources, [] = _current_resources} =
                YamlLoader.plan_from_yml("""
                 account:
                   name: "Playground"
@@ -91,51 +91,39 @@ defmodule Sequin.YamlLoaderTest do
                     url: "https://api.example.com/webhook"
                """)
 
-      account_changeset = Enum.find(changesets, &is_struct(&1.data, Account))
-      assert account_changeset.action == :create
-      assert account_changeset.changes.name == "Playground"
+      account = Enum.find(planned_resources, &is_struct(&1, Account))
+      assert account.name == "Playground"
 
-      [user_changeset] = Enum.filter(changesets, &is_struct(&1.data, User))
-      assert user_changeset.action == :create
-      assert user_changeset.changes.email == "admin@sequinstream.com"
+      user = Enum.find(planned_resources, &is_struct(&1, User))
+      assert user.email == "admin@sequinstream.com"
 
-      [database_changeset] = Enum.filter(changesets, &is_struct(&1.data, PostgresDatabase))
-      assert database_changeset.action == :create
-      assert database_changeset.changes.name == "test-db"
+      database = Enum.find(planned_resources, &is_struct(&1, PostgresDatabase))
+      assert database.name == "test-db"
 
-      [sequence_changeset] = Enum.filter(changesets, &is_struct(&1.data, Sequence))
-      assert sequence_changeset.action == :create
-      assert sequence_changeset.changes.table_schema == "public"
-      assert sequence_changeset.changes.table_name == "Characters"
-      assert sequence_changeset.changes.sort_column_name == "updated_at"
-      assert get_field(sequence_changeset, :postgres_database_id) == database_changeset.data.id
+      sequence = Enum.find(planned_resources, &is_struct(&1, Sequence))
+      assert sequence.table_schema == "public"
+      assert sequence.table_name == "Characters"
+      assert sequence.sort_column_name == "updated_at"
+      assert sequence.postgres_database_id == database.id
 
-      [http_endpoint_changeset] = Enum.filter(changesets, &is_struct(&1.data, HttpEndpoint))
-      assert http_endpoint_changeset.action == :create
-      assert http_endpoint_changeset.changes.name == "test-endpoint"
-      assert http_endpoint_changeset.changes.scheme == :https
-      assert http_endpoint_changeset.changes.host == "api.example.com"
-      assert http_endpoint_changeset.changes.path == "/webhook"
-      assert http_endpoint_changeset.changes.port == 443
+      http_endpoint = Enum.find(planned_resources, &is_struct(&1, HttpEndpoint))
+      assert http_endpoint.name == "test-endpoint"
+      assert http_endpoint.scheme == :https
+      assert http_endpoint.host == "api.example.com"
+      assert http_endpoint.path == "/webhook"
+      assert http_endpoint.port == 443
     end
 
     test "returns invalid changeset for invalid database" do
-      assert {:error, [invalid_changeset]} =
-               YamlLoader.plan_from_yml("""
-               account:
-                 name: "Test Account"
+      assert_raise RuntimeError, fn ->
+        YamlLoader.plan_from_yml("""
+        account:
+          name: "Test Account"
 
-               databases:
-                 - name: "invalid-db"
-               """)
-
-      refute invalid_changeset.valid?
-
-      assert invalid_changeset.errors == [
-               database: {"can't be blank", [{:validation, :required}]},
-               username: {"can't be blank", [validation: :required]},
-               password: {"can't be blank", [validation: :required]}
-             ]
+        databases:
+          - name: "invalid-db"
+        """)
+      end
     end
   end
 

@@ -4,8 +4,7 @@
   import {
     AlertCircle,
     Radio,
-    ArrowRightToLine,
-    ArrowLeftFromLine,
+    ListOrdered,
     CirclePlay,
     CircleStop,
     Database,
@@ -76,7 +75,7 @@
               variant="default"
               class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
             >
-              <Database class="inline-block h-4 w-4 mr-2" />
+              <ListOrdered class="inline-block h-4 w-4 mr-2" />
               Create Stream
             </Button>
           </a>

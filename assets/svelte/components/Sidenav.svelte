@@ -21,6 +21,7 @@
     Cog,
     Logs,
     ListOrdered,
+    ChevronsLeftRightEllipsis,
   } from "lucide-svelte";
 
   export let live;
@@ -68,7 +69,11 @@
       heading: "Resources",
       items: [
         { path: "/databases", text: "Databases", icon: Database },
-        { path: "/http-endpoints", text: "HTTP Endpoints", icon: Webhook },
+        {
+          path: "/http-endpoints",
+          text: "HTTP Endpoints",
+          icon: ChevronsLeftRightEllipsis,
+        },
       ],
     },
   ];

@@ -2,7 +2,7 @@
   import * as Table from "$lib/components/ui/table";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import { Database, Radio } from "lucide-svelte";
+  import { Database, ListOrdered, Logs } from "lucide-svelte";
   import HealthPill from "../health/HealthPill.svelte";
 
   export let databases: Array<{
@@ -11,7 +11,8 @@
     insertedAt: string;
     hostname: string;
     port: number;
-    consumers: number;
+    streams: number;
+    pipelines: number;
     health: {
       status: "healthy" | "warning" | "error" | "initializing";
     };
@@ -62,8 +63,14 @@
           <Table.Head>Created at</Table.Head>
           <Table.Head>
             <div class="flex items-center">
-              <Radio class="h-4 w-4 mr-2" />
-              <span>Consumers</span>
+              <ListOrdered class="h-4 w-4 mr-2" />
+              <span>Streams</span>
+            </div>
+          </Table.Head>
+          <Table.Head>
+            <div class="flex items-center">
+              <Logs class="h-4 w-4 mr-2" />
+              <span>Pipelines</span>
             </div>
           </Table.Head>
         </Table.Row>
@@ -89,10 +96,17 @@
               {formatRelativeTimestamp(database.insertedAt)}
             </Table.Cell>
             <Table.Cell>
-              {#if database.consumers === 0}
-                <span class="text-gray-400">No consumers</span>
+              {#if database.streams === 0}
+                <span class="text-gray-400">No streams</span>
               {:else}
-                {database.consumers}
+                {database.streams}
+              {/if}
+            </Table.Cell>
+            <Table.Cell>
+              {#if database.pipelines === 0}
+                <span class="text-gray-400">No pipelines</span>
+              {:else}
+                {database.pipelines}
               {/if}
             </Table.Cell>
           </Table.Row>

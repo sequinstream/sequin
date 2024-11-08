@@ -8,7 +8,9 @@ defmodule SequinWeb.DatabasesLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    databases = Databases.list_dbs_for_account(account_id, replication_slot: [:http_pull_consumers, :http_push_consumers])
+
+    databases = Databases.list_dbs_for_account(account_id, [:sequences, :wal_pipelines])
+
     databases = load_database_health(databases)
 
     if connected?(socket) do
@@ -59,8 +61,8 @@ defmodule SequinWeb.DatabasesLive.Index do
       insertedAt: database.inserted_at,
       hostname: database.hostname,
       port: database.port,
-      consumers:
-        length(database.replication_slot.http_pull_consumers) + length(database.replication_slot.http_push_consumers),
+      streams: length(database.sequences),
+      pipelines: length(database.wal_pipelines),
       health: Health.to_external(database.health)
     }
   end

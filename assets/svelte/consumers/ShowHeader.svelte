@@ -5,8 +5,8 @@
     Clock,
     RefreshCw,
     CirclePlay,
-    CircleStop,
     Radio,
+    Webhook,
     AlertCircle,
     Pause,
   } from "lucide-svelte";
@@ -21,6 +21,7 @@
   export let parent;
   export let messages_failing;
   export let kind;
+
   let showDeleteConfirmDialog = false;
   let showPauseConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
@@ -109,7 +110,11 @@
           </Button>
         </LinkPushNavigate>
         <div class="flex items-center">
-          <Radio class="h-6 w-6 mr-2" />
+          {#if kind === "push"}
+            <Webhook class="h-6 w-6 mr-2" />
+          {:else}
+            <Radio class="h-6 w-6 mr-2" />
+          {/if}
           <h1 class="text-xl font-semibold">{consumer.name}</h1>
         </div>
       </div>

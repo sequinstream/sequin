@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     ArrowLeft,
-    Webhook,
+    ChevronsLeftRightEllipsis,
     Braces,
     Clock,
     RefreshCw,
@@ -83,7 +83,7 @@
             </Button>
           </LinkPushNavigate>
           <div class="flex items-center">
-            <Webhook class="h-6 w-6 mr-2" />
+            <ChevronsLeftRightEllipsis class="h-6 w-6 mr-2" />
             <h1 class="text-xl font-semibold">{http_endpoint.name}</h1>
           </div>
         </div>

@@ -1,12 +1,10 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    Webhook,
+    ChevronsLeftRightEllipsis,
     ExternalLink,
     ArrowUpRight,
-    ArrowRightToLine,
     HelpCircle,
-    SquareStack,
     XCircle,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
@@ -269,7 +267,7 @@
             </div>
           </div>
           <div class="flex items-center space-x-2 overflow-x-auto">
-            <Webhook class="h-5 w-5 text-gray-400" />
+            <ChevronsLeftRightEllipsis class="h-5 w-5 text-gray-400" />
             <span
               class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
               >{fullEndpointUrl}</span

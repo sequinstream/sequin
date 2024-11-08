@@ -7,6 +7,8 @@ defmodule Sequin.Databases.Sequence do
 
   alias Sequin.Databases.PostgresDatabase
 
+  @derive {Jason.Encoder,
+           only: [:id, :name, :table_oid, :table_schema, :table_name, :sort_column_attnum, :sort_column_name]}
   typed_schema "sequences" do
     field :name, :string
     field :table_oid, :integer

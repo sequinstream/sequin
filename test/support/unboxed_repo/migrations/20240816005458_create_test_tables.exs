@@ -9,6 +9,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :planet, :text
       add :is_active, :boolean
       add :tags, {:array, :text}
+      add :metadata, :map
 
       timestamps()
     end

@@ -962,63 +962,64 @@ defmodule Sequin.YamlLoader do
   defp upsert_http_pull_consumer(account_id, %{"name" => name} = consumer_attrs, databases) do
     case Sequin.Consumers.find_http_pull_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
-        params = parse_http_pull_consumer_params(consumer_attrs, databases)
-
-        case Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
-          {:ok, consumer} ->
-            Logger.info("Updated HTTP pull consumer: #{inspect(consumer, pretty: true)}")
-            {:ok, consumer}
-
-          {:error, error} ->
+        with {:ok, params} <- parse_http_pull_consumer_params(consumer_attrs, databases),
+             {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
+          Logger.info("Updated HTTP pull consumer: #{inspect(consumer, pretty: true)}")
+          {:ok, consumer}
+        else
+          {:error, error} when is_exception(error) ->
             {:error,
              Error.bad_request(message: "Error updating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:error,
+             Error.bad_request(
+               message: "Error updating HTTP pull consumer '#{name}': #{inspect(changeset, pretty: true)}"
+             )}
         end
 
       {:error, %NotFoundError{}} ->
-        params = parse_http_pull_consumer_params(consumer_attrs, databases)
-
-        case Sequin.Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params) do
-          {:ok, consumer} ->
-            Logger.info("Created HTTP pull consumer: #{inspect(consumer, pretty: true)}")
-            {:ok, consumer}
-
-          {:error, error} ->
+        with {:ok, params} <- parse_http_pull_consumer_params(consumer_attrs, databases),
+             {:ok, consumer} <- Sequin.Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params) do
+          Logger.info("Created HTTP pull consumer: #{inspect(consumer, pretty: true)}")
+          {:ok, consumer}
+        else
+          {:error, error} when is_exception(error) ->
             {:error,
              Error.bad_request(message: "Error creating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
+
+          {:error, %Ecto.Changeset{} = changeset} ->
+            {:error,
+             Error.bad_request(
+               message: "Error creating HTTP pull consumer '#{name}': #{inspect(changeset, pretty: true)}"
+             )}
         end
     end
   end
 
   defp parse_http_pull_consumer_params(%{"name" => name, "sequence" => sequence_name} = consumer_attrs, databases) do
-    # Find the sequence and its associated database
-    sequence =
-      Enum.find_value(databases, fn database ->
-        Enum.find(database.sequences, &(&1.name == sequence_name))
-      end)
+    with {:ok, sequence} <- sequence_by_name(databases, sequence_name) do
+      database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end)
+      table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
+      table = %{table | sort_column_attnum: sequence.sort_column_attnum}
 
-    unless sequence do
-      raise "Sequence '#{sequence_name}' not found for consumer group '#{name}'"
+      record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
+
+      {:ok,
+       %{
+         name: name,
+         status: parse_status(consumer_attrs["status"]),
+         sequence_id: sequence.id,
+         max_ack_pending: Map.get(consumer_attrs, "max_ack_pending", 100),
+         replication_slot_id: database.replication_slot.id,
+         record_consumer_state: record_consumer_state,
+         sequence_filter: %{
+           actions: ["insert", "update", "delete"],
+           group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
+           column_filters: column_filters(consumer_attrs["filters"], table)
+         }
+       }}
     end
-
-    database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end)
-    table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
-    table = %{table | sort_column_attnum: sequence.sort_column_attnum}
-
-    record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
-
-    %{
-      name: name,
-      status: parse_status(consumer_attrs["status"]),
-      sequence_id: sequence.id,
-      max_ack_pending: Map.get(consumer_attrs, "max_ack_pending", 100),
-      replication_slot_id: database.replication_slot.id,
-      record_consumer_state: record_consumer_state,
-      sequence_filter: %{
-        actions: ["insert", "update", "delete"],
-        group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
-        column_filters: column_filters(consumer_attrs["filters"], table)
-      }
-    }
   end
 
   ###############

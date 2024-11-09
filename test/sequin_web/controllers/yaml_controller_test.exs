@@ -154,6 +154,15 @@ defmodule SequinWeb.YamlControllerTest do
           publication_name: "#{@publication}"
           pool_size: 10
 
+      change_capture_pipelines:
+        - name: "characters"
+          source_database: "test-db"
+          source_table_schema: "public"
+          source_table_name: "Characters"
+          destination_database: "test-db"
+          destination_table_schema: "public"
+          destination_table_name: "Characters"
+
       sequences:
         - name: "characters"
           database: "test-db"
@@ -168,24 +177,58 @@ defmodule SequinWeb.YamlControllerTest do
                "resources" => [
                  %{
                    "id" => account_id,
-                   "name" => account_name
+                   "name" => account_name,
+                   "inserted_at" => _,
+                   "updated_at" => _
                  },
                  %{
                    "auth_provider" => "identity",
                    "email" => "admin@sequinstream.com",
-                   "id" => user_id
+                   "id" => user_id,
+                   "auth_provider_id" => nil,
+                   "inserted_at" => _,
+                   "name" => nil,
+                   "updated_at" => _
                  },
                  %{
                    "database" => "sequin_test",
                    "hostname" => "localhost",
                    "id" => database_id,
-                   "name" => "test-db"
+                   "name" => "test-db",
+                   "ipv6" => false,
+                   "password" => "postgres",
+                   "pool_size" => 10,
+                   "port" => 5432,
+                   "ssl" => false,
+                   "use_local_tunnel" => false,
+                   "username" => "postgres"
+                 },
+                 %{
+                   "destination_database_id" => database_id,
+                   "destination_oid" => _,
+                   "id" => wal_pipeline_id,
+                   "name" => "characters",
+                   "seq" => _,
+                   "source_tables" => [
+                     %{
+                       "actions" => ["insert", "update", "delete"],
+                       "column_filters" => [],
+                       "group_column_attnums" => nil,
+                       "oid" => _,
+                       "schema_name" => nil,
+                       "sort_column_attnum" => nil,
+                       "table_name" => nil
+                     }
+                   ],
+                   "status" => "active"
                  },
                  %{
                    "id" => sequence_id,
                    "name" => "characters",
+                   "sort_column_attnum" => sort_column_attnum,
                    "sort_column_name" => "updated_at",
                    "table_name" => "Characters",
+                   "table_oid" => table_oid,
                    "table_schema" => "public"
                  }
                ]
@@ -196,6 +239,9 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.is_uuid?(user_id)
       assert Sequin.String.is_uuid?(database_id)
       assert Sequin.String.is_uuid?(sequence_id)
+      assert Sequin.String.is_uuid?(wal_pipeline_id)
+      assert is_integer(sort_column_attnum)
+      assert is_integer(table_oid)
     end
 
     test "returns error for invalid yaml", %{conn: conn} do

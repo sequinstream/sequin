@@ -107,5 +107,19 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
 
     execute "create publication characters_publication for table \"Characters\", characters_ident_full, characters_multi_pk, characters_detailed, test_event_logs_partitioned",
             "drop publication characters_publication"
+
+    create table(:sequin_events) do
+      add :seq, :bigint, null: false
+      add :source_database_id, :uuid, null: false
+      add :source_table_oid, :bigint, null: false
+      add :source_table_schema, :text, null: false
+      add :source_table_name, :text, null: false
+      add :record_pk, :text, null: false
+      add :record, :map, null: false
+      add :changes, :map
+      add :action, :text, null: false
+      add :committed_at, :utc_datetime, null: false
+      add :inserted_at, :utc_datetime, null: false, default: fragment("NOW()")
+    end
   end
 end

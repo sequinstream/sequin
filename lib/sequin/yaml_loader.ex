@@ -116,6 +116,7 @@ defmodule Sequin.YamlLoader do
          databases = Databases.list_dbs_for_account(account.id),
          {:ok, _sequences} <- find_or_create_sequences(account.id, config, databases),
          databases = Databases.list_dbs_for_account(account.id, [:sequences, :replication_slot]),
+         {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
          {:ok, _http_push_consumers} <- upsert_http_push_consumers(account.id, config, databases, http_endpoints),
@@ -388,6 +389,129 @@ defmodule Sequin.YamlLoader do
 
   defp sort_column_attnum_for_sequence(_, %{}) do
     {:error, Error.bad_request(message: "`sort_column_name` is required for each sequence")}
+  end
+
+  ##############################
+  ## Change Capture Pipelines ##
+  ##############################
+
+  defp upsert_wal_pipelines(account_id, %{"change_capture_pipelines" => wal_pipelines}, databases) do
+    Logger.info("Creating change capture pipelines: #{inspect(wal_pipelines, pretty: true)}")
+
+    Enum.reduce_while(wal_pipelines, {:ok, []}, fn wal_pipeline, {:ok, acc} ->
+      case upsert_wal_pipeline(account_id, wal_pipeline, databases) do
+        {:ok, wal_pipeline} -> {:cont, {:ok, [wal_pipeline | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
+  defp upsert_wal_pipelines(_account_id, %{}, _databases) do
+    Logger.info("No change capture pipelines found in config")
+    {:ok, []}
+  end
+
+  defp upsert_wal_pipeline(account_id, %{"name" => name} = attrs, databases) do
+    case Replication.find_wal_pipeline_for_account(account_id, name: name) do
+      {:ok, wal_pipeline} ->
+        update_wal_pipeline(wal_pipeline, attrs, databases)
+
+      {:error, %NotFoundError{}} ->
+        create_wal_pipeline(account_id, attrs, databases)
+    end
+  end
+
+  defp upsert_wal_pipeline(_account_id, %{}, _databases) do
+    {:error, Error.bad_request(message: "`name` is required for each change capture pipeline")}
+  end
+
+  defp create_wal_pipeline(account_id, attrs, databases) do
+    params = parse_wal_pipeline_attrs(attrs, databases)
+
+    account_id
+    |> Replication.create_wal_pipeline_with_lifecycle(params)
+    |> case do
+      {:ok, wal_pipeline} -> {:ok, wal_pipeline}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp update_wal_pipeline(wal_pipeline, attrs, databases) do
+    params = parse_wal_pipeline_attrs(attrs, databases)
+
+    Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params)
+  end
+
+  defp parse_wal_pipeline_attrs(
+         %{
+           "name" => name,
+           "source_database" => source_db_name,
+           "source_table_schema" => source_schema,
+           "source_table_name" => source_table,
+           "destination_database" => dest_db_name,
+           "destination_table_schema" => dest_schema,
+           "destination_table_name" => dest_table
+         } = attrs,
+         databases
+       ) do
+    # Find source database
+    source_database = Enum.find(databases, &(&1.name == source_db_name))
+    unless source_database, do: raise("Source database '#{source_db_name}' not found")
+
+    # Find destination database
+    destination_database = Enum.find(databases, &(&1.name == dest_db_name))
+    unless destination_database, do: raise("Destination database '#{dest_db_name}' not found")
+
+    # Find destination table
+    destination_table =
+      Enum.find(destination_database.tables, fn table ->
+        table.schema == dest_schema && table.name == dest_table
+      end)
+
+    unless destination_table, do: raise("Destination table '#{dest_schema}.#{dest_table}' not found")
+
+    # Find source table
+    source_table_struct =
+      Enum.find(source_database.tables, fn t ->
+        t.schema == source_schema && t.name == source_table
+      end)
+
+    unless source_table_struct, do: raise("Table '#{source_schema}.#{source_table}' not found")
+
+    # Build source_tables config
+    source_table_config = %{
+      "schema_name" => source_schema,
+      "table_name" => source_table,
+      "oid" => source_table_struct.oid,
+      # Default to all actions
+      "actions" => ["insert", "update", "delete"],
+      "column_filters" => parse_column_filters(attrs["filters"], source_database, source_schema, source_table)
+    }
+
+    %{
+      name: name,
+      status: parse_status(attrs["status"]),
+      replication_slot_id: source_database.replication_slot.id,
+      destination_database_id: destination_database.id,
+      destination_oid: destination_table.oid,
+      source_tables: [source_table_config]
+    }
+  end
+
+  # Helper to parse column filters for WAL pipeline
+  defp parse_column_filters(nil, _database, _schema, _table), do: []
+
+  defp parse_column_filters(filters, database, schema, table_name) when is_list(filters) do
+    # Find the table
+    table =
+      Enum.find(database.tables, fn t ->
+        t.schema == schema && t.name == table_name
+      end)
+
+    unless table, do: raise("Table '#{schema}.#{table_name}' not found")
+
+    # Parse each filter
+    Enum.map(filters, &parse_column_filter(&1, table))
   end
 
   ####################
@@ -849,10 +973,11 @@ defmodule Sequin.YamlLoader do
     account = Accounts.get_account!(account_id)
     users = Accounts.list_users_for_account(account_id)
     databases = Databases.list_dbs_for_account(account_id)
+    wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
     sequences = Databases.list_sequences_for_account(account_id)
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
     consumers = Consumers.list_consumers_for_account(account_id)
 
-    [account | users] ++ databases ++ sequences ++ http_endpoints ++ consumers
+    [account | users] ++ databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ consumers
   end
 end

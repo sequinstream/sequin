@@ -13,7 +13,7 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
-  alias Sequin.Error.ValidationError
+  alias Sequin.Error.BadRequestError
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Test.Support.Models.Character
@@ -144,7 +144,7 @@ defmodule Sequin.YamlLoaderTest do
     end
 
     test "returns invalid changeset for invalid database" do
-      assert {:error, %ValidationError{} = error} =
+      assert {:error, %BadRequestError{} = error} =
                YamlLoader.plan_from_yml("""
                account:
                  name: "Test Account"

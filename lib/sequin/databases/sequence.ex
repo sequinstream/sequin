@@ -49,6 +49,10 @@ defmodule Sequin.Databases.Sequence do
     from(s in query, where: s.id == ^id)
   end
 
+  def where_name(query \\ base_query(), name) do
+    from(s in query, where: s.name == ^name)
+  end
+
   def where_table_schema(query \\ base_query(), table_schema) do
     from(s in query, where: s.table_schema == ^table_schema)
   end

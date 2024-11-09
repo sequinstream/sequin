@@ -155,6 +155,7 @@ defmodule Sequin.Databases do
       {:id, id}, query -> Sequence.where_id(query, id)
       {:table_schema, table_schema}, query -> Sequence.where_table_schema(query, table_schema)
       {:table_name, table_name}, query -> Sequence.where_table_name(query, table_name)
+      {:name, name}, query -> Sequence.where_name(query, name)
     end)
     |> Repo.one()
     |> case do

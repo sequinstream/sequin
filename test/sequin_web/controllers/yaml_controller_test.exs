@@ -1,6 +1,8 @@
 defmodule SequinWeb.YamlControllerTest do
   use SequinWeb.ConnCase, async: true
 
+  alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.Sequence
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
 
@@ -62,7 +64,7 @@ defmodule SequinWeb.YamlControllerTest do
                  },
                  %{
                    "action" => "create",
-                   "resource_type" => "postgres_database",
+                   "resource_type" => "database",
                    "new" => %{
                      "database" => "sequin_test",
                      "hostname" => "localhost",
@@ -119,12 +121,8 @@ defmodule SequinWeb.YamlControllerTest do
 
       conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
 
-      assert json_response(conn, 422) == %{
-               "code" => nil,
-               "summary" => nil,
-               "validation_errors" => %{
-                 "database" => ["can't be blank"]
-               }
+      assert json_response(conn, 400) == %{
+               "summary" => "Error creating database 'test-db': - database: can't be blank"
              }
     end
   end
@@ -245,12 +243,78 @@ defmodule SequinWeb.YamlControllerTest do
 
       conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
 
-      assert json_response(conn, 422) == %{
-               "code" => nil,
-               "summary" => nil,
-               "validation_errors" => %{
-                 "database" => ["can't be blank"]
-               }
+      assert json_response(conn, 400) == %{
+               "summary" => "Error creating database 'test-db': - database: can't be blank"
+             }
+    end
+  end
+
+  describe "export/2" do
+    test "returns yaml representation of existing resources", %{conn: conn} do
+      # First apply some configuration
+      yaml = """
+      users:
+        - email: "admin@sequinstream.com"
+          password: "sequinpassword!"
+
+      databases:
+        - name: "test-db"
+          username: "postgres"
+          password: "postgres"
+          hostname: "localhost"
+          port: 5432
+          database: "sequin_test"
+          slot_name: "#{replication_slot()}"
+          publication_name: "#{@publication}"
+          pool_size: 10
+
+      sequences:
+        - name: "characters"
+          database: "test-db"
+          table_schema: "public"
+          table_name: "Characters"
+          sort_column_name: "updated_at"
+      """
+
+      # Apply the configuration first
+      post(conn, ~p"/api/config/apply", %{yaml: yaml})
+
+      # Now test the export endpoint
+      conn = get(conn, ~p"/api/config/export")
+
+      assert %{"yaml" => exported_yaml} = json_response(conn, 200)
+
+      [database] = Repo.all(PostgresDatabase)
+      [sequence] = Repo.all(Sequence)
+
+      # Parse the exported YAML to verify its structure
+      parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
+
+      assert get_in(parsed_yaml, ["users", Access.at(0), "email"]) == "admin@sequinstream.com"
+
+      assert get_in(parsed_yaml, ["databases", Access.at(0)]) == %{
+               "id" => database.id,
+               "database" => "sequin_test",
+               "hostname" => "localhost",
+               "name" => "test-db",
+               "password" => "********",
+               "pool_size" => 10,
+               "port" => 5432,
+               "publication_name" => @publication,
+               "slot_name" => replication_slot(),
+               "ssl" => false,
+               "ipv6" => false,
+               "use_local_tunnel" => false,
+               "username" => "postgres"
+             }
+
+      assert get_in(parsed_yaml, ["sequences", Access.at(0)]) == %{
+               "id" => sequence.id,
+               "database" => "test-db",
+               "name" => "characters",
+               "sort_column_name" => "updated_at",
+               "table_name" => "Characters",
+               "table_schema" => "public"
              }
     end
   end

@@ -278,8 +278,17 @@ defmodule Sequin.TransformsTest do
 
   test "returns a map of the http push consumer" do
     account = AccountsFactory.insert_account!()
-    database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-    sequence = DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id)
+    database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+    [table] = database.tables
+    [column | _] = table.columns
+
+    sequence =
+      DatabasesFactory.insert_sequence!(
+        account_id: account.id,
+        postgres_database_id: database.id,
+        table_oid: table.oid
+      )
+
     endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, name: "test-endpoint")
 
     consumer =
@@ -300,7 +309,7 @@ defmodule Sequin.TransformsTest do
           actions: [:insert, :update],
           column_filters: [
             ConsumersFactory.sequence_filter_column_filter_attrs(
-              column_attnum: 1,
+              column_attnum: column.attnum,
               operator: :==,
               value: %{__type__: :string, value: "test"}
             )
@@ -312,7 +321,7 @@ defmodule Sequin.TransformsTest do
 
     assert %{
              name: name,
-             endpoint: endpoint_name,
+             http_endpoint: endpoint_name,
              sequence: sequence_name,
              status: status,
              max_deliver: max_deliver,

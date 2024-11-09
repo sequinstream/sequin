@@ -38,6 +38,10 @@ func AddConfigCommands(app *fisk.Application, cfg *Config) {
 		Default("sequin.yaml").
 		StringVar(&cmd.yamlPath)
 	apply.Action(cmd.applyAction)
+
+	// Export command
+	export := config.Command("export", "Export current configuration as YAML")
+	export.Action(cmd.exportAction)
 }
 
 func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
@@ -304,4 +308,25 @@ func formatValue(v interface{}) string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("%v", v)
+}
+
+// Add the export action
+func (c *ConfigCommands) exportAction(_ *fisk.ParseContext) error {
+	ctx, err := context.LoadContext("")
+	if err != nil {
+		return fmt.Errorf("failed to load context: %w", err)
+	}
+
+	exportResp, err := config.Export(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(exportResp.YAML)
+	fmt.Println("\nTo apply this configuration to another environment:")
+	fmt.Println("1. Save the above YAML to a file (e.g., sequin.yaml)")
+	fmt.Println("2. Review changes with: sequin config plan sequin.yaml")
+	fmt.Println("3. Apply changes with: sequin config apply sequin.yaml")
+
+	return nil
 }

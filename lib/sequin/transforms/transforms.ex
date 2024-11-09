@@ -142,12 +142,20 @@ defmodule Sequin.Transforms do
   end
 
   def to_external(%HttpPushConsumer{} = consumer) do
-    consumer = Repo.preload(consumer, [:http_endpoint, :sequence])
+    consumer = Repo.preload(consumer, [:http_endpoint, sequence: [:postgres_database]])
+    table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+
     filters = consumer.sequence_filter.column_filters || []
+
+    filters =
+      Enum.map(filters, fn %ColumnFilter{} = filter ->
+        column = Sequin.Enum.find!(table.columns, &(&1.attnum == filter.column_attnum))
+        %ColumnFilter{filter | column_name: column.name}
+      end)
 
     %{
       name: consumer.name,
-      endpoint: consumer.http_endpoint.name,
+      http_endpoint: consumer.http_endpoint.name,
       sequence: consumer.sequence.name,
       status: consumer.status,
       max_deliver: consumer.max_deliver,

@@ -164,6 +164,7 @@ defmodule SequinWeb.Router do
 
     post("/config/apply", YamlController, :apply)
     post("/config/plan", YamlController, :plan)
+    get("/config/export", YamlController, :export)
   end
 
   # Other scopes may use custom stacks.

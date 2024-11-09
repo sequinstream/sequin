@@ -43,6 +43,20 @@ defmodule SequinWeb.YamlController do
     end
   end
 
+  def export(conn, _params) do
+    yaml =
+      conn.assigns.account_id
+      |> YamlLoader.all_resources()
+      |> Enum.group_by(&get_resource_type/1)
+      |> Map.new(fn {resource_type, resources} ->
+        resource_type = if resource_type == "account", do: "account", else: resource_type <> "s"
+        {resource_type, Enum.map(resources, &Transforms.to_external/1)}
+      end)
+      |> Ymlr.document!()
+
+    json(conn, %{yaml: yaml})
+  end
+
   defp diff_resources(planned_resources, current_resources) do
     creates =
       planned_resources
@@ -98,7 +112,7 @@ defmodule SequinWeb.YamlController do
   defp get_resource_type(%HttpEndpoint{}), do: "http_endpoint"
   defp get_resource_type(%HttpPullConsumer{}), do: "consumer_group"
   defp get_resource_type(%HttpPushConsumer{}), do: "webhook_subscription"
-  defp get_resource_type(%PostgresDatabase{}), do: "postgres_database"
+  defp get_resource_type(%PostgresDatabase{}), do: "database"
   defp get_resource_type(%Sequence{}), do: "sequence"
   defp get_resource_type(%User{}), do: "user"
   defp get_resource_type(%WalPipeline{}), do: "change_capture_pipeline"

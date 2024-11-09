@@ -125,6 +125,24 @@ defmodule Sequin.YamlLoader do
     end
   end
 
+  def all_resources(nil), do: []
+
+  def all_resources(account_id) do
+    account = Accounts.get_account!(account_id)
+    users = Accounts.list_users_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
+    wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
+    sequences = Databases.list_sequences_for_account(account_id, [:postgres_database])
+    http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
+    http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
+
+    http_push_consumers =
+      Consumers.list_http_push_consumers_for_account(account_id, [:http_endpoint, sequence: [:postgres_database]])
+
+    [account | users] ++
+      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ http_push_consumers
+  end
+
   #############
   ## Account ##
   #############
@@ -161,7 +179,7 @@ defmodule Sequin.YamlLoader do
             {:ok, account}
 
           {:error, error} ->
-            {:error, error}
+            {:error, Error.bad_request(message: "Error creating account '#{name}': #{Exception.message(error)}")}
         end
     end
   end
@@ -261,20 +279,30 @@ defmodule Sequin.YamlLoader do
             {:ok, %PostgresDatabase{db | replication_slot: replication}}
 
           {:error, error} when is_exception(error) ->
-            {:error, error}
+            {:error,
+             Error.bad_request(
+               message: "Error creating replication slot for database '#{db.name}': #{Exception.message(error)}"
+             )}
 
           {:error, %Ecto.Changeset{} = changeset} ->
-            {:error, changeset}
+            {:error,
+             Error.bad_request(
+               message: "Error creating replication slot for database '#{db.name}': #{inspect(changeset, pretty: true)}"
+             )}
         end
 
       {:error, %DBConnection.ConnectionError{}} ->
-        {:error, Error.bad_request(message: "Failed to connect to database. Please check your database credentials.")}
+        {:error,
+         Error.bad_request(
+           message: "Failed to connect to database '#{database["name"]}'. Please check your database credentials."
+         )}
 
       {:error, error} when is_exception(error) ->
-        {:error, error}
+        {:error, Error.bad_request(message: "Error creating database '#{database["name"]}': #{Exception.message(error)}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:error, changeset}
+        {:error,
+         Error.bad_request(message: "Error creating database '#{database["name"]}': #{inspect(changeset, pretty: true)}")}
     end
   end
 
@@ -285,7 +313,11 @@ defmodule Sequin.YamlLoader do
         {:ok, database}
 
       {:error, error} when is_exception(error) ->
-        {:error, error}
+        {:error, Error.bad_request(message: "Error updating database '#{database.name}': #{Exception.message(error)}")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         Error.bad_request(message: "Error updating database '#{database.name}': #{inspect(changeset, pretty: true)}")}
     end
   end
 
@@ -300,11 +332,8 @@ defmodule Sequin.YamlLoader do
       database = database_for_sequence!(sequence, databases)
 
       case find_or_create_sequence(account_id, database, sequence) do
-        {:ok, sequence} ->
-          {:cont, {:ok, [sequence | acc]}}
-
-        {:error, error} ->
-          {:halt, {:error, Error.bad_request(message: "Failed to create sequence: #{Exception.message(error)}")}}
+        {:ok, sequence} -> {:cont, {:ok, [sequence | acc]}}
+        {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
@@ -322,12 +351,8 @@ defmodule Sequin.YamlLoader do
     raise "`database` is required for each sequence and must be a valid database name"
   end
 
-  defp find_or_create_sequence(
-         account_id,
-         %PostgresDatabase{} = database,
-         %{"table_schema" => table_schema, "table_name" => table_name} = sequence_attrs
-       ) do
-    case Databases.find_sequence_for_account(account_id, table_schema: table_schema, table_name: table_name) do
+  defp find_or_create_sequence(account_id, %PostgresDatabase{} = database, %{"name" => name} = sequence_attrs) do
+    case Databases.find_sequence_for_account(account_id, name: name) do
       {:ok, sequence} ->
         Logger.info("Found sequence: #{inspect(sequence, pretty: true)}")
         {:ok, sequence}
@@ -354,10 +379,14 @@ defmodule Sequin.YamlLoader do
           {:ok, sequence}
 
         {:error, error} when is_exception(error) ->
-          {:error, error}
+          {:error,
+           Error.bad_request(message: "Error creating sequence '#{sequence["name"]}': #{Exception.message(error)}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
-          {:error, changeset}
+          {:error,
+           Error.bad_request(
+             message: "Error creating sequence '#{sequence["name"]}': #{inspect(changeset, pretty: true)}"
+           )}
       end
     end
   end
@@ -431,15 +460,43 @@ defmodule Sequin.YamlLoader do
     account_id
     |> Replication.create_wal_pipeline_with_lifecycle(params)
     |> case do
-      {:ok, wal_pipeline} -> {:ok, wal_pipeline}
-      {:error, error} -> {:error, error}
+      {:ok, wal_pipeline} ->
+        {:ok, wal_pipeline}
+
+      {:error, error} when is_exception(error) ->
+        {:error,
+         Error.bad_request(
+           message: "Error creating change capture pipeline '#{attrs["name"]}': #{Exception.message(error)}"
+         )}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         Error.bad_request(
+           message: "Error creating change capture pipeline '#{attrs["name"]}': #{inspect(changeset, pretty: true)}"
+         )}
     end
   end
 
   defp update_wal_pipeline(wal_pipeline, attrs, databases) do
     params = parse_wal_pipeline_attrs(attrs, databases)
 
-    Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params)
+    case Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params) do
+      {:ok, wal_pipeline} ->
+        Logger.info("Updated change capture pipeline: #{inspect(wal_pipeline, pretty: true)}")
+        {:ok, wal_pipeline}
+
+      {:error, error} when is_exception(error) ->
+        {:error,
+         Error.bad_request(
+           message: "Error updating change capture pipeline '#{wal_pipeline.name}': #{Exception.message(error)}"
+         )}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         Error.bad_request(
+           message: "Error updating change capture pipeline '#{wal_pipeline.name}': #{inspect(changeset, pretty: true)}"
+         )}
+    end
   end
 
   defp parse_wal_pipeline_attrs(
@@ -559,8 +616,12 @@ defmodule Sequin.YamlLoader do
 
     Enum.reduce_while(http_endpoints, {:ok, []}, fn http_endpoint, {:ok, acc} ->
       case upsert_http_endpoint(account_id, http_endpoint) do
-        {:ok, http_endpoint} -> {:cont, {:ok, [http_endpoint | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
+        {:ok, http_endpoint} ->
+          {:cont, {:ok, [http_endpoint | acc]}}
+
+        {:error, error} ->
+          {:halt,
+           {:error, Error.bad_request(message: "Invalid HTTP endpoint configuration: #{Exception.message(error)}")}}
       end
     end)
   end
@@ -585,6 +646,10 @@ defmodule Sequin.YamlLoader do
          {:ok, endpoint} <- Sequin.Consumers.create_http_endpoint_for_account(account_id, endpoint_params) do
       Logger.info("Created HTTP endpoint: #{inspect(endpoint, pretty: true)}")
       {:ok, endpoint}
+    else
+      {:error, error} ->
+        {:error,
+         Error.bad_request(message: "Error creating HTTP endpoint '#{attrs["name"]}': #{Exception.message(error)}")}
     end
   end
 
@@ -593,6 +658,10 @@ defmodule Sequin.YamlLoader do
          {:ok, endpoint} <- Sequin.Consumers.update_http_endpoint(endpoint, endpoint_params) do
       Logger.info("Updated HTTP endpoint: #{inspect(endpoint, pretty: true)}")
       {:ok, endpoint}
+    else
+      {:error, error} ->
+        {:error,
+         Error.bad_request(message: "Error updating HTTP endpoint '#{endpoint.name}': #{Exception.message(error)}")}
     end
   end
 
@@ -610,43 +679,57 @@ defmodule Sequin.YamlLoader do
 
       # Local endpoint
       %{"local" => "true"} = local_attrs ->
-        {:ok,
-         %{
-           name: name,
-           use_local_tunnel: true,
-           path: local_attrs["path"],
-           headers: parse_headers(local_attrs["headers"]),
-           encrypted_headers: parse_headers(local_attrs["encrypted_headers"])
-         }}
+        with {:ok, headers} <- parse_headers(local_attrs["headers"]),
+             {:ok, encrypted_headers} <- parse_headers(local_attrs["encrypted_headers"]) do
+          {:ok,
+           %{
+             name: name,
+             use_local_tunnel: true,
+             path: local_attrs["path"],
+             headers: headers,
+             encrypted_headers: encrypted_headers
+           }}
+        end
 
       # External endpoint with URL
       %{"url" => url} = external_attrs ->
         uri = URI.parse(url)
 
-        {:ok,
-         %{
-           name: name,
-           scheme: String.to_existing_atom(uri.scheme),
-           host: uri.host,
-           port: uri.port,
-           path: uri.path,
-           query: uri.query,
-           fragment: uri.fragment,
-           headers: parse_headers(external_attrs["headers"]),
-           encrypted_headers: parse_headers(external_attrs["encrypted_headers"])
-         }}
+        with {:ok, headers} <- parse_headers(external_attrs["headers"]),
+             {:ok, encrypted_headers} <- parse_headers(external_attrs["encrypted_headers"]) do
+          {:ok,
+           %{
+             name: name,
+             scheme: String.to_existing_atom(uri.scheme),
+             host: uri.host,
+             port: uri.port,
+             path: uri.path,
+             query: uri.query,
+             fragment: uri.fragment,
+             headers: headers,
+             encrypted_headers: encrypted_headers
+           }}
+        end
 
       _ ->
-        {:error, Error.validation(summary: "Invalid HTTP endpoint configuration\n\n#{@http_endpoint_docs}")}
+        {:error, Error.validation(summary: "Invalid HTTP endpoint configuration for '#{name}'\n\n#{@http_endpoint_docs}")}
     end
   end
 
   # Helper functions
 
-  defp parse_headers(nil), do: %{}
+  defp parse_headers(nil), do: {:ok, %{}}
+
+  defp parse_headers(headers) when headers == %{} do
+    {:ok, %{}}
+  end
 
   defp parse_headers(headers) when is_list(headers) do
-    Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)
+    {:ok, Map.new(headers, fn %{"key" => key, "value" => value} -> {key, value} end)}
+  end
+
+  defp parse_headers(headers) when is_binary(headers) do
+    {:error, Error.validation(summary: "Invalid headers configuration. Must be a list of key-value pairs.")}
   end
 
   defp generate_webhook_site_id do
@@ -684,27 +767,17 @@ defmodule Sequin.YamlLoader do
     # Find existing consumer first
     case Sequin.Consumers.find_http_push_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
-        params = parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints)
-
-        case Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
-          {:ok, consumer} ->
-            Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
-            {:ok, consumer}
-
-          {:error, error} ->
-            {:error, error}
+        with {:ok, params} <- parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints),
+             {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
+          Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
+          {:ok, consumer}
         end
 
       {:error, %NotFoundError{}} ->
-        params = parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints)
-
-        case Sequin.Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params) do
-          {:ok, consumer} ->
-            Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
-            {:ok, consumer}
-
-          {:error, error} ->
-            {:error, error}
+        with {:ok, params} <- parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints),
+             {:ok, consumer} <- Sequin.Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params) do
+          Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
+          {:ok, consumer}
         end
     end
   end
@@ -715,42 +788,49 @@ defmodule Sequin.YamlLoader do
          http_endpoints
        ) do
     # Find the sequence and its associated database
-    sequence =
-      Enum.find_value(databases, fn database ->
-        Enum.find(database.sequences, &(&1.name == sequence_name))
-      end)
+    with {:ok, sequence} <- sequence_by_name(databases, sequence_name),
+         database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end),
+         table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid)),
+         table = %{table | sort_column_attnum: sequence.sort_column_attnum},
+         {:ok, http_endpoint} <- http_endpoint_by_name(http_endpoints, http_endpoint_name) do
+      record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
 
-    unless sequence do
-      raise "Sequence '#{sequence_name}' not found for webhook subscription '#{name}'"
+      {:ok,
+       %{
+         name: name,
+         status: parse_status(consumer_attrs["status"]),
+         size: Map.get(consumer_attrs, "batch_size", 1),
+         sequence_id: sequence.id,
+         replication_slot_id: database.replication_slot.id,
+         http_endpoint_id: http_endpoint.id,
+         record_consumer_state: record_consumer_state,
+         sequence_filter: %{
+           actions: ["insert", "update", "delete"],
+           group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
+           column_filters: column_filters(consumer_attrs["filters"], table)
+         }
+       }}
     end
+  end
 
-    database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end)
-    table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
-    table = %{table | sort_column_attnum: sequence.sort_column_attnum}
-
-    http_endpoint =
-      Enum.find(http_endpoints, fn endpoint -> endpoint.name == http_endpoint_name end)
-
-    unless http_endpoint do
-      raise "HTTP endpoint '#{http_endpoint_name}' not found for webhook subscription '#{name}'"
+  defp sequence_by_name(databases, sequence_name) do
+    databases
+    |> Enum.find_value(fn database ->
+      Enum.find(database.sequences, &(&1.name == sequence_name))
+    end)
+    |> case do
+      nil -> {:error, Error.not_found(summary: "Sequence '#{sequence_name}' not found")}
+      sequence -> {:ok, sequence}
     end
+  end
 
-    record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
-
-    %{
-      name: name,
-      status: parse_status(consumer_attrs["status"]),
-      size: Map.get(consumer_attrs, "batch_size", 1),
-      sequence_id: sequence.id,
-      replication_slot_id: database.replication_slot.id,
-      http_endpoint_id: http_endpoint.id,
-      record_consumer_state: record_consumer_state,
-      sequence_filter: %{
-        actions: ["insert", "update", "delete"],
-        group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
-        column_filters: column_filters(consumer_attrs["filters"], table)
-      }
-    }
+  defp http_endpoint_by_name(http_endpoints, http_endpoint_name) do
+    http_endpoints
+    |> Enum.find(fn endpoint -> endpoint.name == http_endpoint_name end)
+    |> case do
+      nil -> {:error, Error.not_found(summary: "HTTP endpoint '#{http_endpoint_name}' not found")}
+      endpoint -> {:ok, endpoint}
+    end
   end
 
   defp build_record_consumer_state(nil, table, sequence) do
@@ -789,7 +869,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp group_column_attnums(attnums, _table) when is_list(attnums) do
-    Enum.map(attnums, &String.to_integer/1)
+    attnums
   end
 
   defp parse_status(nil), do: :active
@@ -890,7 +970,8 @@ defmodule Sequin.YamlLoader do
             {:ok, consumer}
 
           {:error, error} ->
-            {:error, error}
+            {:error,
+             Error.bad_request(message: "Error updating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
         end
 
       {:error, %NotFoundError{}} ->
@@ -902,7 +983,8 @@ defmodule Sequin.YamlLoader do
             {:ok, consumer}
 
           {:error, error} ->
-            {:error, error}
+            {:error,
+             Error.bad_request(message: "Error creating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
         end
     end
   end
@@ -965,21 +1047,5 @@ defmodule Sequin.YamlLoader do
 
   defp env do
     Application.fetch_env!(@app, :env)
-  end
-
-  defp all_resources(nil), do: []
-
-  defp all_resources(account_id) do
-    account = Accounts.get_account!(account_id)
-    users = Accounts.list_users_for_account(account_id)
-    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
-    wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
-    sequences = Databases.list_sequences_for_account(account_id, [:postgres_database])
-    http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
-    http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
-    http_push_consumers = Consumers.list_http_push_consumers_for_account(account_id, [:http_endpoint, :sequence])
-
-    [account | users] ++
-      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ http_push_consumers
   end
 end

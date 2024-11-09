@@ -26,6 +26,10 @@ type ApplyResponse struct {
 	Resources []interface{} `json:"resources"`
 }
 
+type ExportResponse struct {
+	YAML string `json:"yaml"`
+}
+
 func Plan(ctx *context.Context, yamlPath string) (*PlanResponse, error) {
 	// Read YAML file
 	yamlContent, err := os.ReadFile(yamlPath)
@@ -148,4 +152,46 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	}
 
 	return &applyResp, nil
+}
+
+func Export(ctx *context.Context) (*ExportResponse, error) {
+	// Get server URL
+	serverURL, err := context.GetServerURL(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/api/config/export", serverURL)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", ctx.ApiToken))
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned error: %s", string(body))
+	}
+
+	// Parse response
+	var exportResp ExportResponse
+	if err := json.Unmarshal(body, &exportResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &exportResp, nil
 }

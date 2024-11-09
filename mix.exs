@@ -79,7 +79,8 @@ defmodule Sequin.MixProject do
       {:sentry, "~> 10.0"},
       {:observer_cli, "~> 1.7"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
-      {:yaml_elixir, "~> 2.11"}
+      {:yaml_elixir, "~> 2.11"},
+      {:ymlr, "~> 5.0"}
     ]
   end
 

@@ -123,6 +123,7 @@ func ListContexts() ([]Context, error) {
 
 	dir := filepath.Join(home, ".sequin", "contexts")
 	files, err := os.ReadDir(dir)
+	
 	if err != nil {
 		return nil, fmt.Errorf("could not read contexts directory: %w", err)
 	}

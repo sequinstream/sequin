@@ -61,7 +61,7 @@ func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
 	}
 
 	// Call apply
-	ctx, err := context.LoadContext("")
+	ctx, err := context.LoadContext(c.config.ContextName)
 	if err != nil {
 		return fmt.Errorf("failed to load context: %w", err)
 	}
@@ -79,7 +79,7 @@ func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
 
 func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 	// Load current context
-	ctx, err := context.LoadContext("")
+	ctx, err := context.LoadContext(c.config.ContextName)
 	if err != nil {
 		return fmt.Errorf("failed to load context: %w", err)
 	}
@@ -312,7 +312,7 @@ func formatValue(v interface{}) string {
 
 // Add the export action
 func (c *ConfigCommands) exportAction(_ *fisk.ParseContext) error {
-	ctx, err := context.LoadContext("")
+	ctx, err := context.LoadContext(c.config.ContextName)
 	if err != nil {
 		return fmt.Errorf("failed to load context: %w", err)
 	}
@@ -321,12 +321,16 @@ func (c *ConfigCommands) exportAction(_ *fisk.ParseContext) error {
 	if err != nil {
 		return err
 	}
-
 	fmt.Println(exportResp.YAML)
-	fmt.Println("\nTo apply this configuration to another environment:")
-	fmt.Println("1. Save the above YAML to a file (e.g., sequin.yaml)")
-	fmt.Println("2. Review changes with: sequin config plan sequin.yaml")
-	fmt.Println("3. Apply changes with: sequin config apply sequin.yaml")
+	fmt.Println("\n`export` is *experimental*. You will need to make modifications to the document before using it in `plan`/`apply`. Notably:")
+	fmt.Println("\n- `account` and `user` are not exported. If you need them, add them manually.")
+	fmt.Println("\n- You will need to replace values for encrypted fields, like `password` and `encrypted_headers`.")
+	fmt.Println("- The field `consumer_start` is not properly exported. So, you'll have to specify it. (Your consumer will *not* be rewound to the specified position. It only indicates where new consumers should be started.)")
+	fmt.Println("\nSo:")
+	fmt.Println("\n1. Save the above to a YAML file (e.g., `sequin.yaml`)")
+	fmt.Println("2. Make tweaks as necessary, per above.")
+	fmt.Println("3. Review the changes with `sequin config plan sequin.yaml`.")
+	fmt.Println("4. Apply changes in the future with `sequin config apply sequin.yaml`.")
 
 	return nil
 }

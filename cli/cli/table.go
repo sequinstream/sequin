@@ -22,7 +22,8 @@ func NewTable(columns []table.Column, rows []table.Row, tableType TableType) *Ta
 	options := []table.Option{
 		table.WithColumns(columns),
 		table.WithRows(rows),
-		table.WithHeight(len(rows)),
+		// Add extra height to accommodate header and borders
+		table.WithHeight(len(rows) + 2),
 	}
 
 	if tableType == InteractiveTable {

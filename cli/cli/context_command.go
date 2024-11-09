@@ -167,6 +167,7 @@ func (c *ctxCommand) listAction(_ *fisk.ParseContext) error {
 			isDefault,
 		})
 	}
+
 	t := NewTable(columns, rows, PrintableTable)
 	fmt.Println("Contexts")
 	return t.Render()

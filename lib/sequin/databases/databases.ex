@@ -163,9 +163,10 @@ defmodule Sequin.Databases do
     end
   end
 
-  def list_sequences_for_account(account_id) do
+  def list_sequences_for_account(account_id, preload \\ []) do
     account_id
     |> Sequence.where_account()
+    |> preload(^preload)
     |> Repo.all()
   end
 

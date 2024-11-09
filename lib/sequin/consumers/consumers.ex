@@ -152,6 +152,20 @@ defmodule Sequin.Consumers do
     Enum.sort_by(pull_consumers ++ push_consumers, & &1.inserted_at, {:desc, DateTime})
   end
 
+  def list_http_push_consumers_for_account(account_id, preload \\ []) do
+    account_id
+    |> HttpPushConsumer.where_account_id()
+    |> preload(^preload)
+    |> Repo.all()
+  end
+
+  def list_http_pull_consumers_for_account(account_id, preload \\ []) do
+    account_id
+    |> HttpPullConsumer.where_account_id()
+    |> preload(^preload)
+    |> Repo.all()
+  end
+
   def list_consumers_for_replication_slot(replication_slot_id) do
     pull = HttpPullConsumer.where_replication_slot_id(replication_slot_id)
     push = HttpPushConsumer.where_replication_slot_id(replication_slot_id)
@@ -1691,20 +1705,22 @@ defmodule Sequin.Consumers do
   end
 
   def enrich_source_tables(source_tables, %PostgresDatabase{} = postgres_database) do
-    table_oids = Enum.map(source_tables, & &1.oid)
+    Enum.map(source_tables, fn source_table ->
+      table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == source_table.oid))
 
-    postgres_database.tables
-    |> Enum.filter(&(&1.oid in table_oids))
-    |> Enum.map(fn table ->
       %Sequin.Consumers.SourceTable{
-        oid: table.oid,
-        schema_name: table.schema,
-        table_name: table.name,
-        # Default empty list for actions
-        actions: [],
-        # Default empty list for column_filters
-        column_filters: []
+        source_table
+        | schema_name: table.schema,
+          table_name: table.name,
+          column_filters: enrich_column_filters(source_table.column_filters, table.columns)
       }
+    end)
+  end
+
+  defp enrich_column_filters(column_filters, columns) do
+    Enum.map(column_filters, fn column_filter ->
+      column = Sequin.Enum.find!(columns, &(&1.attnum == column_filter.column_attnum))
+      %{column_filter | column_name: column.name}
     end)
   end
 

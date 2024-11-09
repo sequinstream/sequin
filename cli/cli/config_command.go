@@ -16,6 +16,7 @@ import (
 type ConfigCommands struct {
 	config   *Config
 	yamlPath string
+	changes  int
 }
 
 // AddYamlCommands adds the 'plan' and 'apply' commands for YAML-based operations
@@ -48,6 +49,12 @@ func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
 	// First run plan to show changes
 	if err := c.planAction(nil); err != nil {
 		return err
+	}
+
+	// Exit if no changes
+	if c.changes == 0 {
+		fmt.Println("No changes detected, exiting.")
+		return nil
 	}
 
 	// Ask for confirmation
@@ -92,7 +99,8 @@ func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 
 	// Display results
 	if len(planResp.Changes) == 0 {
-		fmt.Println("No changes detected\r")
+		fmt.Println("No changes detected")
+		c.changes = 0
 		return nil
 	}
 
@@ -151,6 +159,7 @@ func (c *ConfigCommands) planAction(_ *fisk.ParseContext) error {
 	fmt.Printf("\nPlan: %d to add, %d to change, %d to destroy.\n",
 		creates, updates, deletes)
 
+	c.changes = creates + updates + deletes
 	return nil
 }
 

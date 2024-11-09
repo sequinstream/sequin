@@ -8,6 +8,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.HealthRuntime.PostgresDatabaseHealthChecker
   alias Sequin.NetworkUtils
   alias Sequin.ObanQuery
   alias Sequin.Postgres
@@ -75,8 +76,16 @@ defmodule Sequin.Databases do
 
   def create_db_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
-      with {:ok, db} <- create_db_for_account(account_id, attrs) do
-        update_tables(db)
+      with {:ok, db} <- create_db_for_account(account_id, attrs),
+           {:ok, db} <- update_tables(db) do
+        %{postgres_database_id: db.id}
+        |> PostgresDatabaseHealthChecker.new(
+          scheduled_at: DateTime.utc_now(),
+          replace: [:scheduled_at]
+        )
+        |> Oban.insert()
+
+        {:ok, db}
       end
     end)
   end

@@ -290,8 +290,6 @@ defmodule SequinWeb.YamlControllerTest do
       # Parse the exported YAML to verify its structure
       parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
 
-      assert get_in(parsed_yaml, ["users", Access.at(0), "email"]) == "admin@sequinstream.com"
-
       assert get_in(parsed_yaml, ["databases", Access.at(0)]) == %{
                "id" => database.id,
                "database" => "sequin_test",

@@ -668,7 +668,7 @@ defmodule Sequin.YamlLoader do
   defp parse_http_endpoint_attrs(%{"name" => name} = attrs) do
     case attrs do
       # Webhook.site endpoint
-      %{"webhook.site" => "true"} ->
+      %{"webhook.site" => t} when t in [true, "true"] ->
         {:ok,
          %{
            name: name,

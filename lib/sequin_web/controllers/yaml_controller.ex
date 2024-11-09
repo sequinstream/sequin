@@ -48,9 +48,10 @@ defmodule SequinWeb.YamlController do
       conn.assigns.account_id
       |> YamlLoader.all_resources()
       |> Enum.group_by(&get_resource_type/1)
+      # Skip support at this time
+      |> Enum.reject(fn {resource_type, _resources} -> resource_type in ["account", "user"] end)
       |> Map.new(fn {resource_type, resources} ->
-        resource_type = if resource_type == "account", do: "account", else: resource_type <> "s"
-        {resource_type, Enum.map(resources, &Transforms.to_external/1)}
+        {"#{resource_type}s", Enum.map(resources, &Transforms.to_external/1)}
       end)
       |> Ymlr.document!()
 

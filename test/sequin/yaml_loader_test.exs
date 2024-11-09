@@ -54,7 +54,7 @@ defmodule Sequin.YamlLoaderTest do
         slot_name: "#{replication_slot()}"
         publication_name: "#{@publication}"
 
-    sequences:
+    streams:
       - name: "characters"
         database: "test-db"
         table_schema: "public"
@@ -83,7 +83,7 @@ defmodule Sequin.YamlLoaderTest do
                     slot_name: "#{replication_slot()}"
                     publication_name: "#{@publication}"
 
-                sequences:
+                streams:
                   - name: "characters"
                     database: "test-db"
                     table_schema: "public"
@@ -405,7 +405,7 @@ defmodule Sequin.YamlLoaderTest do
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
 
-      sequences:
+      streams:
         - name: "characters"
           database: "test-db"
           table_schema: "public"

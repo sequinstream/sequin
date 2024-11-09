@@ -41,7 +41,7 @@ defmodule SequinWeb.YamlControllerTest do
           publication_name: "#{@publication}"
           pool_size: 10
 
-      sequences:
+      streams:
         - name: "characters"
           database: "test-db"
           table_schema: "public"
@@ -82,7 +82,7 @@ defmodule SequinWeb.YamlControllerTest do
                  },
                  %{
                    "action" => "create",
-                   "resource_type" => "sequence",
+                   "resource_type" => "stream",
                    "new" => %{
                      "name" => "characters",
                      "sort_column_name" => "updated_at",
@@ -154,7 +154,7 @@ defmodule SequinWeb.YamlControllerTest do
           destination_table_schema: "public"
           destination_table_name: "Characters"
 
-      sequences:
+      streams:
         - name: "characters"
           database: "test-db"
           table_schema: "public"
@@ -268,7 +268,7 @@ defmodule SequinWeb.YamlControllerTest do
           publication_name: "#{@publication}"
           pool_size: 10
 
-      sequences:
+      streams:
         - name: "characters"
           database: "test-db"
           table_schema: "public"
@@ -306,7 +306,7 @@ defmodule SequinWeb.YamlControllerTest do
                "username" => "postgres"
              }
 
-      assert get_in(parsed_yaml, ["sequences", Access.at(0)]) == %{
+      assert get_in(parsed_yaml, ["streams", Access.at(0)]) == %{
                "id" => sequence.id,
                "database" => "test-db",
                "name" => "characters",

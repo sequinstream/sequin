@@ -114,7 +114,7 @@ defmodule SequinWeb.YamlController do
   defp get_resource_type(%HttpPullConsumer{}), do: "consumer_group"
   defp get_resource_type(%HttpPushConsumer{}), do: "webhook_subscription"
   defp get_resource_type(%PostgresDatabase{}), do: "database"
-  defp get_resource_type(%Sequence{}), do: "sequence"
+  defp get_resource_type(%Sequence{}), do: "stream"
   defp get_resource_type(%User{}), do: "user"
   defp get_resource_type(%WalPipeline{}), do: "change_capture_pipeline"
 

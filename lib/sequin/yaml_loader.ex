@@ -325,8 +325,8 @@ defmodule Sequin.YamlLoader do
   ## Sequences ##
   ###############
 
-  defp find_or_create_sequences(account_id, %{"sequences" => sequences}, databases) do
-    Logger.info("Creating sequences: #{inspect(sequences, pretty: true)}")
+  defp find_or_create_sequences(account_id, %{"streams" => sequences}, databases) do
+    Logger.info("Creating streams: #{inspect(sequences, pretty: true)}")
 
     Enum.reduce_while(sequences, {:ok, []}, fn sequence, {:ok, acc} ->
       database = database_for_sequence!(sequence, databases)
@@ -339,7 +339,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp find_or_create_sequences(_account_id, _config, _databases) do
-    Logger.info("No sequences found in config")
+    Logger.info("No streams found in config")
     {:ok, []}
   end
 
@@ -348,13 +348,13 @@ defmodule Sequin.YamlLoader do
   end
 
   defp database_for_sequence!(%{}, _databases) do
-    raise "`database` is required for each sequence and must be a valid database name"
+    raise "`database` is required for each stream and must be a valid database name"
   end
 
   defp find_or_create_sequence(account_id, %PostgresDatabase{} = database, %{"name" => name} = sequence_attrs) do
     case Databases.find_sequence_for_account(account_id, name: name) do
       {:ok, sequence} ->
-        Logger.info("Found sequence: #{inspect(sequence, pretty: true)}")
+        Logger.info("Found stream: #{inspect(sequence, pretty: true)}")
         {:ok, sequence}
 
       {:error, %NotFoundError{}} ->
@@ -375,18 +375,15 @@ defmodule Sequin.YamlLoader do
       |> Databases.create_sequence(attrs)
       |> case do
         {:ok, sequence} ->
-          Logger.info("Created sequence: #{inspect(sequence, pretty: true)}")
+          Logger.info("Created stream: #{inspect(sequence, pretty: true)}")
           {:ok, sequence}
 
         {:error, error} when is_exception(error) ->
-          {:error,
-           Error.bad_request(message: "Error creating sequence '#{sequence["name"]}': #{Exception.message(error)}")}
+          {:error, Error.bad_request(message: "Error creating stream '#{sequence["name"]}': #{Exception.message(error)}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->
           {:error,
-           Error.bad_request(
-             message: "Error creating sequence '#{sequence["name"]}': #{inspect(changeset, pretty: true)}"
-           )}
+           Error.bad_request(message: "Error creating stream '#{sequence["name"]}': #{inspect(changeset, pretty: true)}")}
       end
     end
   end
@@ -399,7 +396,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp table_for_sequence(_, %{}) do
-    {:error, Error.bad_request(message: "`table` and `schema` are required for each sequence")}
+    {:error, Error.bad_request(message: "`table` and `schema` are required for each stream")}
   end
 
   defp sort_column_attnum_for_sequence(table, %{"sort_column_name" => sort_column_name}) do
@@ -417,7 +414,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp sort_column_attnum_for_sequence(_, %{}) do
-    {:error, Error.bad_request(message: "`sort_column_name` is required for each sequence")}
+    {:error, Error.bad_request(message: "`sort_column_name` is required for each stream")}
   end
 
   ##############################

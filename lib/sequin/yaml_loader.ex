@@ -819,7 +819,7 @@ defmodule Sequin.YamlLoader do
       Enum.find(database.sequences, &(&1.name == sequence_name))
     end)
     |> case do
-      nil -> {:error, Error.not_found(summary: "Sequence '#{sequence_name}' not found")}
+      nil -> {:error, Error.not_found(entity: :sequence, params: %{name: sequence_name})}
       sequence -> {:ok, sequence}
     end
   end
@@ -828,7 +828,7 @@ defmodule Sequin.YamlLoader do
     http_endpoints
     |> Enum.find(fn endpoint -> endpoint.name == http_endpoint_name end)
     |> case do
-      nil -> {:error, Error.not_found(summary: "HTTP endpoint '#{http_endpoint_name}' not found")}
+      nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: http_endpoint_name})}
       endpoint -> {:ok, endpoint}
     end
   end

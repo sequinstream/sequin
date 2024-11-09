@@ -180,6 +180,12 @@ defmodule Sequin.Replication do
     Repo.all(WalPipeline)
   end
 
+  def list_wal_pipelines_for_account(account_id) do
+    account_id
+    |> WalPipeline.where_account_id()
+    |> Repo.all()
+  end
+
   def list_wal_pipelines_for_replication_slot(replication_slot_id) do
     replication_slot_id
     |> WalPipeline.where_replication_slot_id()
@@ -192,6 +198,22 @@ defmodule Sequin.Replication do
     |> WalPipeline.where_id_or_name(id_or_name)
     |> preload(^preloads)
     |> Repo.one()
+  end
+
+  def find_wal_pipeline_for_account(account_id, params \\ []) do
+    params
+    |> Enum.reduce(WalPipeline.where_account_id(account_id), fn
+      {:name, name}, query ->
+        WalPipeline.where_name(query, name)
+
+      {:id, id}, query ->
+        WalPipeline.where_id(query, id)
+    end)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :wal_pipeline, params: params)}
+      wal_pipeline -> {:ok, wal_pipeline}
+    end
   end
 
   def get_wal_pipeline(id) do

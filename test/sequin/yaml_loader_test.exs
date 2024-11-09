@@ -10,10 +10,13 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.Consumers.SourceTable
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error.ValidationError
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.WalPipeline
+  alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
   alias Sequin.YamlLoader
@@ -90,6 +93,19 @@ defmodule Sequin.YamlLoaderTest do
                 http_endpoints:
                   - name: "test-endpoint"
                     url: "https://api.example.com/webhook"
+
+                change_capture_pipelines:
+                  - name: "test-pipeline"
+                    source_database: "test-db"
+                    source_table_schema: "public"
+                    source_table_name: "Characters"
+                    destination_database: "test-db"
+                    destination_table_schema: "public"
+                    destination_table_name: "sequin_events"
+                    filters:
+                      - column_name: "house"
+                        operator: "="
+                        comparison_value: "Atreides"
                """)
 
       account = Enum.find(planned_resources, &is_struct(&1, Account))
@@ -99,6 +115,7 @@ defmodule Sequin.YamlLoaderTest do
       assert user.email == "admin@sequinstream.com"
 
       database = Enum.find(planned_resources, &is_struct(&1, PostgresDatabase))
+      database = Repo.preload(database, [:replication_slot])
       assert database.name == "test-db"
 
       sequence = Enum.find(planned_resources, &is_struct(&1, Sequence))
@@ -113,6 +130,13 @@ defmodule Sequin.YamlLoaderTest do
       assert http_endpoint.host == "api.example.com"
       assert http_endpoint.path == "/webhook"
       assert http_endpoint.port == 443
+
+      change_capture_pipeline = Enum.find(planned_resources, &is_struct(&1, WalPipeline))
+
+      assert change_capture_pipeline.name == "test-pipeline"
+      assert change_capture_pipeline.status == :active
+      assert [%SourceTable{} = source_table] = change_capture_pipeline.source_tables
+      assert source_table.oid == Character.table_oid()
     end
 
     test "returns invalid changeset for invalid database" do

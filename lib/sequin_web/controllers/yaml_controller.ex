@@ -8,6 +8,7 @@ defmodule SequinWeb.YamlController do
   alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
+  alias Sequin.Replication.WalPipeline
   alias Sequin.YamlLoader
   alias SequinWeb.ApiFallbackPlug
 
@@ -92,20 +93,22 @@ defmodule SequinWeb.YamlController do
     creates ++ updates ++ deletes
   end
 
-  defp get_resource_type(%User{}), do: "user"
   defp get_resource_type(%Account{}), do: "account"
-  defp get_resource_type(%PostgresDatabase{}), do: "postgres_database"
-  defp get_resource_type(%Sequence{}), do: "sequence"
   defp get_resource_type(%HttpEndpoint{}), do: "http_endpoint"
   defp get_resource_type(%HttpPullConsumer{}), do: "consumer_group"
   defp get_resource_type(%HttpPushConsumer{}), do: "webhook_subscription"
+  defp get_resource_type(%PostgresDatabase{}), do: "postgres_database"
+  defp get_resource_type(%Sequence{}), do: "sequence"
+  defp get_resource_type(%User{}), do: "user"
+  defp get_resource_type(%WalPipeline{}), do: "change_capture_pipeline"
 
-  defp same_resource?(%User{email: email}, %User{email: email}), do: true
   defp same_resource?(%Account{name: name}, %Account{name: name}), do: true
-  defp same_resource?(%PostgresDatabase{name: name}, %PostgresDatabase{name: name}), do: true
-  defp same_resource?(%Sequence{name: name}, %Sequence{name: name}), do: true
   defp same_resource?(%HttpEndpoint{name: name}, %HttpEndpoint{name: name}), do: true
   defp same_resource?(%HttpPullConsumer{name: name}, %HttpPullConsumer{name: name}), do: true
   defp same_resource?(%HttpPushConsumer{name: name}, %HttpPushConsumer{name: name}), do: true
+  defp same_resource?(%PostgresDatabase{name: name}, %PostgresDatabase{name: name}), do: true
+  defp same_resource?(%Sequence{name: name}, %Sequence{name: name}), do: true
+  defp same_resource?(%User{email: email}, %User{email: email}), do: true
+  defp same_resource?(%WalPipeline{name: name}, %WalPipeline{name: name}), do: true
   defp same_resource?(_, _), do: false
 end

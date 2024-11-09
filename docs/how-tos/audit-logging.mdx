@@ -17,7 +17,7 @@ Here's how Sequin's audit logging approach compares to alternatives:
 
 - **Triggers**: Traditional Postgres triggers require writing PL/pgSQL and can impact database performance. Sequin moves the processing logic to your application code where it's easier to maintain.
 
-- **`listen`/`notify`**: While lightweight, Postgres' built-in pub/sub is unreliable - messages can be missed if consumers are down. Sequin guarantees exactly-once delivery.
+- **`listen`/`notify`**: While lightweight, Postgres' built-in pub/sub is unreliable - messages can be missed if consumers are down. Sequin guarantees exactly-once processing.
 
 - **Debezium/Kafka**: These solutions require running and maintaining additional infrastructure. Sequin keeps your data in Postgres and runs as a single Docker container.
 
@@ -468,6 +468,8 @@ Importantly, we recommend using a `do update` clause as opposed to a `do nothing
 
 Assuming you've followed the steps so far in your local environment, the next step is to deploy your implementation to production.
 
+You can use the Sequin CLI to export your local configuration and apply it to your production environment.
+
 <Steps>
   <Step title="Perform migrations in your production database">
     You'll need to ensure your production database has a `sequin_events` table to write to. If you're using a migration system, add that table to your migrations.
@@ -491,17 +493,27 @@ Assuming you've followed the steps so far in your local environment, the next st
     After [setting up the Sequin CLI](/cli), run the following command to export your local configuration:
 
     ```bash
-    sequin export --context=local
+    sequin config export --context=local
     ```
 
     This will create a `sequin.yaml` file in your current working directory. You can commit this file to your repository to share the configuration with your team.
+
+    <Info>
+      You might consider having different `sequin.yaml` files for different environments (local, staging, production). For example, you might have `sequin.staging.yaml` and `sequin.production.yaml`.
+
+      That's because you may name things differently in your local environment vs. production. For example, your database may be called `my_db_dev` in local but `my_db_prod` in production.
+    </Info>
+
+    <Warning>
+      The `sequin config export` command is experimental. You'll need to manually tweak the exported file before using it. See the warning in the CLI output.
+    </Warning>
   </Step>
 
   <Step title="Apply the configuration to your production environment">
     To apply the configuration to your production environment, in the same directory as your `sequin.yaml` file, run the following command:
 
     ```bash
-    sequin apply --context=production
+    sequin config apply sequin.yaml --context=production
     ```
   </Step>
 </Steps>

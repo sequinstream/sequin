@@ -17,7 +17,7 @@ Key features of the Consumer Group API include:
 
 - **Multiple consumers**: You can have many processes or workers pulling from the same endpoint simultaneously.
 - **Visibility timeout**: After receiving a batch of rows, a consumer has a configurable period to process them before they become available to other consumers.
-- **Acknowledgment**: Consumers explicitly acknowledge processed rows to ensure exactly-once delivery.
+- **Acknowledgment**: Consumers explicitly acknowledge processed rows to ensure exactly-once processing.
 - **Automatic retries**: If a consumer fails to process or acknowledge a batch, those rows become available for redelivery.
 - **Receive inserts and updates right away**: When a row is inserted in the database, it is delivered to the consumer group. If it is updated, it is re-delivered to the consumer group.
 

@@ -9,6 +9,7 @@ defmodule SequinWeb.YamlController do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.WalPipeline
+  alias Sequin.Transforms
   alias Sequin.YamlLoader
   alias SequinWeb.ApiFallbackPlug
 
@@ -54,7 +55,7 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(resource),
           action: "create",
-          new: resource,
+          new: Transforms.to_external(resource),
           old: nil
         }
       end)
@@ -69,7 +70,7 @@ defmodule SequinWeb.YamlController do
           resource_type: get_resource_type(resource),
           action: "delete",
           new: nil,
-          old: resource
+          old: Transforms.to_external(resource)
         }
       end)
 
@@ -85,8 +86,8 @@ defmodule SequinWeb.YamlController do
         %{
           resource_type: get_resource_type(current_resource),
           action: "update",
-          new: planned_resource,
-          old: current_resource
+          new: Transforms.to_external(planned_resource),
+          old: Transforms.to_external(current_resource)
         }
       end)
 

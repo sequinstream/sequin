@@ -102,6 +102,9 @@ defmodule Sequin.YamlLoaderTest do
                     destination_database: "test-db"
                     destination_table_schema: "public"
                     destination_table_name: "sequin_events"
+                    actions:
+                      - insert
+                      - delete
                     filters:
                       - column_name: "house"
                         operator: "="
@@ -137,6 +140,7 @@ defmodule Sequin.YamlLoaderTest do
       assert change_capture_pipeline.status == :active
       assert [%SourceTable{} = source_table] = change_capture_pipeline.source_tables
       assert source_table.oid == Character.table_oid()
+      assert source_table.actions == [:insert, :delete]
     end
 
     test "returns invalid changeset for invalid database" do

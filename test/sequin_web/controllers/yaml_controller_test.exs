@@ -55,10 +55,7 @@ defmodule SequinWeb.YamlControllerTest do
                    "action" => "create",
                    "resource_type" => "user",
                    "new" => %{
-                     "auth_provider" => "identity",
-                     "auth_provider_id" => nil,
                      "email" => "admin@sequinstream.com",
-                     "name" => nil,
                      "id" => user_id
                    },
                    "old" => nil
@@ -71,7 +68,7 @@ defmodule SequinWeb.YamlControllerTest do
                      "hostname" => "localhost",
                      "ipv6" => false,
                      "name" => "test-db",
-                     "password" => "postgres",
+                     "password" => "********",
                      "pool_size" => 10,
                      "port" => 5432,
                      "ssl" => false,
@@ -86,10 +83,8 @@ defmodule SequinWeb.YamlControllerTest do
                    "resource_type" => "sequence",
                    "new" => %{
                      "name" => "characters",
-                     "sort_column_attnum" => sort_column_attnum,
                      "sort_column_name" => "updated_at",
                      "table_name" => "Characters",
-                     "table_oid" => table_oid,
                      "table_schema" => "public",
                      "id" => sequence_id
                    },
@@ -114,8 +109,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.is_uuid?(user_id)
       assert Sequin.String.is_uuid?(postgres_database_id)
       assert Sequin.String.is_uuid?(sequence_id)
-      assert is_integer(table_oid)
-      assert is_integer(sort_column_attnum)
     end
 
     test "returns error for invalid yaml", %{conn: conn} do

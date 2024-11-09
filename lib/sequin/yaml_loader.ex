@@ -484,7 +484,7 @@ defmodule Sequin.YamlLoader do
       "table_name" => source_table,
       "oid" => source_table_struct.oid,
       # Default to all actions
-      "actions" => ["insert", "update", "delete"],
+      "actions" => attrs["actions"] || [:insert, :update, :delete],
       "column_filters" => parse_column_filters(attrs["filters"], source_database, source_schema, source_table)
     }
 
@@ -972,12 +972,14 @@ defmodule Sequin.YamlLoader do
   defp all_resources(account_id) do
     account = Accounts.get_account!(account_id)
     users = Accounts.list_users_for_account(account_id)
-    databases = Databases.list_dbs_for_account(account_id)
+    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
-    sequences = Databases.list_sequences_for_account(account_id)
+    sequences = Databases.list_sequences_for_account(account_id, [:postgres_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
-    consumers = Consumers.list_consumers_for_account(account_id)
+    http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
+    http_push_consumers = Consumers.list_http_push_consumers_for_account(account_id, [:http_endpoint, :sequence])
 
-    [account | users] ++ databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ consumers
+    [account | users] ++
+      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ http_push_consumers
   end
 end

@@ -118,6 +118,8 @@ You can use a Consumer Group to pull rows from your stream and write them to you
 
 In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your destination table.
 
+For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
 Here's a basic example using Sequin's Go SDK:
 
 ```go
@@ -171,6 +173,10 @@ Instead of pulling rows with a Consumer Group, you can have Sequin push them to 
 
   <Step title="Configure the webhook">
     Under "Webhook configuration", enter your endpoint URL. This is where Sequin will send the webhook payloads.
+
+    For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
+    Remember, you'll want to insert all rows you receive in a webhook payload in a single statement.
   </Step>
 
   <Step title="Configure message grouping">

@@ -22,7 +22,7 @@ You'll perform these steps:
 
 1. **[Create a stream](#create-a-stream)**: The stream will contain rows from your source table
 2. **[Setup the destination table](#setup-the-destination-table)**: Create the table you want to replicate to
-3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Use either tool to process the rows
+3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Use either tool to process rows
 4. **[Upsert rows to the destination](#upserting-into-the-destination)**: Write the upsert logic in your worker code
 
 ### Start locally
@@ -31,7 +31,7 @@ You can start by following all the steps below in your local environment. At the
 
 ## Create a stream
 
-First, create a stream of your source table:
+First, create a stream of your source table. Streams connect your table to Sequin's Consumer Groups or Webhook Subscriptions:
 
 <Steps>
   <Step title="Navigate to Streams">
@@ -39,12 +39,16 @@ First, create a stream of your source table:
   </Step>
 
   <Step title="Select your source table">
-    Under "Source configuration", select the table you want to replicate.
+    Select the table you want to replicate.
 
-    You can optionally add filters to narrow down which rows you want to replicate. For example, maybe you only want to replicate `users` that have made a purchase:
+    Under "Sort and start", choose a good sort column. `updated_at` is a good choice for most tables, while `created_at` is fine for append-only tables.
+
+    <Info>
+      The sort column will be used to order rows in your stream whenever you're playing historical data. [Read more about sort columns](/how-sequin-works#streams).
+    </Info>
 
     <Frame>
-      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/source-config.png" alt="Source configuration" />
+      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/create-stream.png" alt="Stream configuration" />
     </Frame>
   </Step>
 
@@ -59,20 +63,20 @@ Next, create the table you want to replicate to. This can be in the same databas
 
 The most important consideration is that you'll want your [upsert logic](#upserting-into-the-destination) to be idempotent. That means you'll use an `insert into ... on conflict` statement.
 
-We recommend adding a column to your destination table that corresponds to the primary key of your source table. For example, if your source table has a `user_id` primary key:
+We recommend adding a column to your destination table that corresponds to the primary key of your source table. For example, if your source table has a `product_id` primary key:
 
 ```sql
-create table replicated_users (
-  user_id uuid primary key,  -- matches source table PK
+create table replicated_products (
+  product_id uuid primary key,  -- matches source table PK
   name text,
-  email text,
+  price decimal,
   created_at timestamp
 );
 ```
 
 ## Create a Consumer Group
 
-You can use a Consumer Group to pull rows from your stream and write them to your destination table.
+You can use a Consumer Group to pull rows from your stream and write them to your destination table:
 
 <Steps>
   <Step title="Create a Consumer Group">
@@ -82,11 +86,25 @@ You can use a Consumer Group to pull rows from your stream and write them to you
   <Step title="Configure the source">
     Under "Source", select the stream you created.
 
-    For "Where should the Consumer Group start?", leave the default option selected, "At the beginning of the table." This means your Consumer Group will process all existing rows, as well as any new ones.
+    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. You can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
+
+    <Frame>
+      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/records-to-process.png" alt="Records to process" />
+    </Frame>
+
+    You can always change these filters later and [re-backfill the destination(#re-backfill-the-destination).
+
+    For "Where should the consumer group start?", you can indicate how far back in time you want to sync rows from the source table. Rows are ordered by the sort column you chose when you created the stream. So if you chose a field like `updated_at`, you can choose to sync rows from the beginning of the table, from the last few months, etc.
+
+    If you want the destination to contain all rows from the source, choose "At the beginning of the table." If you want to sync only new rows, choose "At the end of the table." Otherwise, choose a specific point in time according to your needs.
   </Step>
 
   <Step title="Configure message grouping">
-    Under "Message grouping", leave the default option selected to ensure rows are processed in order.
+    Under "Message grouping", leave the default option selected.
+
+    <Info>
+      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to the destination.
+    </Info>
   </Step>
 
   <Step title="Create and test the Consumer Group">
@@ -297,3 +315,4 @@ You can use the Sequin CLI to export your local configuration and apply it to yo
   </Step>
 </Steps>
 
+## Re-backfilling

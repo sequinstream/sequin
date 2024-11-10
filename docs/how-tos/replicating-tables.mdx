@@ -1,229 +1,78 @@
 ---
-title: "How to use Sequin to create audit logs"
-sidebarTitle: "Create audit logs"
-description: "Create a reliable log of all changes in your database"
+title: "How to replicate tables with Sequin"
+sidebarTitle: "Replicate tables"
+description: "Stream and replicate tables between databases"
 ---
 
-Audit logs are an essential tool for tracking and recording changes in your database. With Sequin, you can create comprehensive audit logs that help you:
+Sequin makes it easy to replicate tables between databases. This guide shows you how to:
 
-- **Maintain compliance**: Meet regulatory requirements by tracking all data modifications
-- **Debug issues**: Trace the history of changes to investigate problems
-- **Build customer features**: Create activity feeds, change history views, and even undo/redo functionality for your users
-- **Data recovery**: Maintain a backup of deleted or modified data, enabling recovery from accidental deletions or unwanted changes
-
-### Comparison with other solutions
-
-Here's how Sequin's audit logging approach compares to alternatives:
-
-- **Triggers**: Traditional Postgres triggers require writing PL/pgSQL and can impact database performance. Sequin moves the processing logic to your application code where it's easier to maintain.
-
-- **`listen`/`notify`**: While lightweight, Postgres' built-in pub/sub is unreliable - messages can be missed if consumers are down. Sequin guarantees exactly-once processing.
-
-- **Debezium/Kafka**: These solutions require running and maintaining additional infrastructure. Sequin keeps your data in Postgres and runs as a single Docker container.
-
-- **Manual application logging**: Implementing audit logging in your application code is error-prone and can miss database changes that happen outside your app. Sequin captures all changes directly from Postgres' WAL.
+- **Stream an existing table**: Copy all rows from a source table
+- **Keep tables in sync**: Maintain an up-to-date copy as the source changes
+- **Transform data**: Modify the data before writing to the destination
 
 ## Prerequisites
 
-This guide assumes you already have Sequin installed and have a database connected. If you don't, see the [quickstart guide](/quickstart).
+This guide assumes you already have Sequin installed and have databases connected. If you don't, see the [quickstart guide](/quickstart).
 
 ## Overview
 
-This guide shows you how to create an audit log of discrete changes in your database. For example, if you have a `subscriptions` table and you want to capture every single update that happens to `subscriptions`, along with the old and new values of fields like `status`, `value`, `start_date`, etc.
+This guide shows you how to replicate a table from one database to another. For example, if you have a `users` table in your primary database and want to maintain a copy in your analytics database.
 
-As you'll see, the destination table can be in the same database as the source table, or a different database.
+You'll perform these steps:
 
-Sequin will capture changes to your tables in a `sequin_events` table. The `sequin_events` table might be sufficient for your audit log needs. If that's the case, you'll perform the following steps:
-
-1. **[Create a Change Capture Pipeline](#create-a-change-capture-pipeline)**: The Pipeline will capture changes to tables in your database to a `sequin_events` table.
-2. (Optional) **[Create a View](#create-a-view)**: Use a Postgres view to shape the schema into a format convenient for your use case.
-
-However, if you need to transform the data before writing it to an audit table you control, you'll perform the following steps:
-
-1. **[Create a Change Capture Pipeline](#create-a-change-capture-pipeline)**: The Pipeline will capture changes to tables in your database to a `sequin_events` table.
-2. **[Setup the audit table](#setup-the-audit-table)**: Create the audit table you want to write the changes to.
-3. **[Create a stream](#create-a-stream)**: The stream will contain events from the `sequin_events` table.
-4. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-events-with-webhooks)**: Use either tool to process the changes from the stream.
-5. **[Upsert events to the audit table](#upsert-events-to-the-audit-table)**: Write the upsert logic in your worker code.
+1. **[Create a stream](#create-a-stream)**: The stream will contain rows from your source table
+2. **[Setup the destination table](#setup-the-destination-table)**: Create the table you want to replicate to
+3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Use either tool to process the rows
+4. **[Upsert rows to the destination](#upserting-into-the-destination)**: Write the upsert logic in your worker code
 
 ### Start locally
 
 You can start by following all the steps below in your local environment. At the end of this guide are instructions for [deploying to production](#deploying-to-production).
 
-## Create a Change Capture Pipeline
+## Create a stream
 
-You can use Sequin's [Change Capture Pipeline](/capture-changes) to stream changes from your table(s) to an event table in your database.
-
-You'll create a Change Capture Pipeline for each table you want to create an audit log for. You can have multiple pipelines write to the same `sequin_events` table. Then, later, you can stream `sequin_events` to your application in order to ingest the changes into your audit table:
-
-  <Frame>
-    <img src="/images/how-tos/audit-logging/end-to-end-diagram.png" alt="Overview of the Change Capture Pipeline" />
-  </Frame>
+First, create a stream of your source table:
 
 <Steps>
-  <Step title="Create a Change Capture Pipeline">
+  <Step title="Navigate to Streams">
+    In the Sequin web console, click on the "Streams" tab. Click "Create Stream".
+  </Step>
 
-    In the Sequin web console, click on the "Change Capture Pipelines" tab. Click "Create Pipeline".
+  <Step title="Select your source table">
+    Under "Source configuration", select the table you want to replicate.
 
-    Under "Source configuration", select the first table you want to create an audit log for.
-
-    You can specify which operations you want to capture. For an audit log, you'll most likely want to capture every operation (e.g. `insert`, `update`, `delete`):
+    You can optionally add filters to narrow down which rows you want to replicate. For example, maybe you only want to replicate `users` that have made a purchase:
 
     <Frame>
-      <img style={{maxWidth: '500px'}} src="/images/how-tos/audit-logging/source-config.png" alt="Source configuration" />
+      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/source-config.png" alt="Source configuration" />
     </Frame>
-
-    You can also specify filters to narrow down the changes you want to capture. For example, maybe you only want to capture changes for `subscriptions` that currently have an `mrr` greater than $100.
   </Step>
-  <Step title="Create an event table">
 
-    For the destination, assuming you don't have a `sequin_events` table yet, click "Create new event table". That will open a modal with instructions for creating the table:
-
-    <Frame>
-      <img style={{maxWidth: '500px'}} src="/images/how-tos/audit-logging/create-event-table-modal.png" alt="Create event table modal" />
-    </Frame>
-
-    One important decision you need to make is what **retention policy** to use for the `sequin_events` table. The retention policy specifies how long Postgres should keep event data in the `sequin_events` table.
-
-    If you're going to use the `sequin_events` table as your audit log, your retention policy will be dictated by your product's requirements. For example, if you're showing a user a history of changes in their account, do you want to show them just the changes from the last 30 days? Or all the changes ever?
-
-    If you're going to use the `sequin_events` table as an intermediate table that you'll stream to your system before writing it to your audit table, you can use a shorter retention policy. In this instance, the events table is a _buffer_. It's advisable to give yourself a lenient buffer, such as 14 days. This means your system/pipeline can be down for a few days without losing data. Or, if you discover that you recently deployed a bug to your processing pipeline, you can rewind and re-process data from the last 14 days.
-
-    We recommend using `pg_cron` to manage your retention policy starting out, unless you anticipate you'll be starting with >10M writes to the `sequin_events` table per day. (Even then, `pg_cron` can handle it on a decent-sized machine!)
-
-  </Step>
-  <Step title="Create Change Capture Pipelines for other tables">
-
-    After creating your first Change Capture Pipeline, you can create additional pipelines for other tables.
-
-    You can have all tables write to the same `sequin_events` table. That's usually the simplest way to start. Even if later you plan on writing each table to its own destination audit table, you can easily filter the `sequin_events` table by source table as needed.
-  </Step>
-  <Step title="Confirm your Change Capture Pipelines are working">
-
-    To confirm your pipelines are working, you can make some changes to your source tables. When you query the `sequin_events` table, you should see the changes reflected there.
-
-    <Check>
-      You've setup Change Capture Pipelines for all your tables. Changes to your tables should now be captured in the `sequin_events` table.
-    </Check>
+  <Step title="Create the stream">
+    Click "Create Stream" to make your table available for replication.
   </Step>
 </Steps>
 
-## (Optional) Create a view
+## Setup the destination table
 
-It's possible the schema of Sequin's `sequin_events` table is sufficient to serve as your audit log. If that's the case, you can stop here! There's no need to stream the `sequin_events` table to your workers to ingest the changes into another audit table.
+Next, create the table you want to replicate to. This can be in the same database as the source table, or a different database.
 
-Or, the `sequin_events` table might be _close_, but you just want to make a few tweaks. If that's the case, you can create a Postgres view to shape the schema into a format convenient for your use case.
+The most important consideration is that you'll want your [upsert logic](#upserting-into-the-destination) to be idempotent. That means you'll use an `insert into ... on conflict` statement.
 
-For example, maybe you want to make a view called `subscription_logs` that contains only the logs for the `subscriptions` table. And maybe you want to pull a few fields out of the `record` JSONB column in `sequin_events` and into a top-level column in the view, like `subscription_id` and `status`:
-
-```sql
-create view subscription_logs as
-select
-    id,
-    seq,
-    action,
-    record_pk,
-    record->>'id' as subscription_id,
-    record->>'status' as status,
-    record,
-    changes,
-    created_at
-from sequin_events
--- or, you can use the `source_table_oid` column instead, which is
--- silghtly more robust
-where table_name = 'subscriptions'
-order by seq desc;
-```
-
-`subscription_logs` might be a bit more ergonomic to query with your ORM or internal tooling.
-
-### Indexes
-
-If you'll be making a lot of queries against your audit log/view, you might consider adding indexes to improve performance.
-
-For example, if you'll be querying by `record->>'subscription_id'`, you might consider adding an index on that column:
+We recommend adding a column to your destination table that corresponds to the primary key of your source table. For example, if your source table has a `user_id` primary key:
 
 ```sql
-create index on sequin_events ((record->>'status')) 
-where table_name = 'subscriptions';
+create table replicated_users (
+  user_id uuid primary key,  -- matches source table PK
+  name text,
+  email text,
+  created_at timestamp
+);
 ```
 
-Notably, you'll want to create **partial indexes** like this (e.g. `where table_name = 'subscriptions'`). That's because non-subscription entries in the `sequin_events` table will have a different shape. If you won't be querying them by `status`, you don't need to include them in that index.
+## Create a Consumer Group
 
-### Generated columns
-
-You might be tempted to add generated columns to your `sequin_events` table to hoist fields out of the `record` JSONB column (for example, hoisting up `record->>'status'` to a top-level column).
-
-We generally recommend against using generated columns, as they're harder to manage. To add a generated column to a table, Postgres needs to exclusively lock the table while the column is being added. This can take a while on large tables.
-
-Instead, see how far you can get with views and indexes. If you start to hit limits there, you may have reached a point where you should stream the `sequin_events` table to your application to ingest the changes into another audit table with a schema you fully control.
-
-<Check>
-   If the `sequin_events` table is sufficient for your audit log needs, you can stop here. Otherwise, continue on to [Setup your audit table](#setup-your-audit-table) so you can consume the changes into your audit table.
-</Check>
-
-## Setup your audit table
-
-If you want to ingest the changes from the `sequin_events` table into an audit table you own, create that audit table.
-
-The most important consideration is that you'll want your [upsert logic](#upserting-into-your-audit-table) to be idempotent. That means you'll use an `insert into ... on conflict` statement.
-
-We recommend adding a column to your audit table, such as `event_id` or `sequin_event_id` which corresponds to the `id` column in the `sequin_events` table.
-
-Then, you can add a unique constraint on this column:
-
-```sql
-create unique index my_audit_logs_event_id_idx on my_audit_logs(event_id);
-```
-
-This ensures that events can only be written to your audit table once.
-
-## Create a stream
-
-In order to consume the rows in the `sequin_events` table, you can create a stream. Creating a stream of a table makes it available to consumer groups or destinations like webhooks:
-
-Navigate to the "Streams" tab in the Sequin web console and click "Create Stream".
-
-Select the `sequin_events` table as the source and click "Create Stream".
-
-## Consume events with a Consumer Group
-
-Sequin is capturing changes to your tables into the `sequin_events` table, which is connected to a Stream. You can setup a worker to process these changes, transforming them as needed before [upserting them into your audit table](#upserting-into-your-audit-table).
-
-This section will show you how to consume the rows in the `sequin_events` table with a Consumer Group via the [Consumer Group API](/consume/consume-api/overview).
-
-<Info>
-  If you'd prefer to receive webhooks, skip down to the [Consume events with webhooks](#consume-events-with-webhooks) section.
-</Info>
-
-### How many Consumer Groups do you need?
-
-A Consumer Group lets you consume from a Sequin Stream in parallel, safely. You can have 1 or 100 workers all pulling from the same Stream. Rows from your `sequin_events` table will be processed by the group only once, distributing the load across your workers.
-
-Should you have one Consumer Group process the entire `sequin_events` table? Or split it up, perhaps creating one Consumer Group for each source table?
-
-The right design depends on two factors:
-
-- How high is your event volume?
-- Will you have one destination audit table, or multiple?
-
-If your event volume is low, it may be sufficient to have a single Consumer Group process the entire `sequin_events` table – even if you're writing to multiple destination audit tables. Workers can pull a batch of events, group them by destination table, and fan out upserts to each destination table.
-
-Otherwise, you may consider having a separate Consumer Group for each destination audit table. Workers will pull a batch of events, write them to the appropriate destination table, and then grab the next batch.
-
-**Advantages of one Consumer Group:**
-
-- less setup
-- potentially fewer worker clusters to manage
-
-**Advantages of multiple Consumer Groups:**
-
-- higher throughput
-- pipelines for each table can be scaled independently
-- pipelines for each table have their own health
-- the worker code is simpler, since there is no grouping and fan-out logic
-
-### Create a Consumer Group
+You can use a Consumer Group to pull rows from your stream and write them to your destination table.
 
 <Steps>
   <Step title="Create a Consumer Group">
@@ -231,65 +80,40 @@ Otherwise, you may consider having a separate Consumer Group for each destinatio
   </Step>
 
   <Step title="Configure the source">
-    Under "Source", select the `sequin_events` Stream.
+    Under "Source", select the stream you created.
 
-    Under "Records to process", optionally add a filter. For example, if you want this Consumer Group to only process events for the `subscriptions` table, you can add a filter on `table_name = 'subscriptions'`:
-
-    <Frame>
-      <img style={{maxWidth: '500px'}} src="/images/how-tos/audit-logging/records-to-process.png" alt="List of available filters to apply to the changes you want to capture" />
-    </Frame>
-
-    For "Where should the Consumer Group start?", you can leave the default option selected, "At the beginning of the table." This means your Consumer Group will process anything already in the `sequin_events` table, as well as any new changes.
+    For "Where should the Consumer Group start?", leave the default option selected, "At the beginning of the table." This means your Consumer Group will process all existing rows, as well as any new ones.
   </Step>
 
   <Step title="Configure message grouping">
-    Under "Message grouping", leave the default option selected to ensure events for the same row are processed in order.
-  </Step>
-
-  <Step title="Configure Consumer Group settings">
-    Under "Consumer Group configuration", you can tweak settings like the "visibility timeout" as desired.
-    
-    The visibility timeout specifies how long workers/consumers in your consumer group should be given to process their batch of messages. If they don't finish processing within the visibility timeout, the messages will be made available to other consumers in the group.
-
-    Pick a value that makes sense given how long your upserts to your audit table will take. The default is 30 seconds, which should be more than reasonable for most use cases.
-
-    <Info>
-      As you'll see, inserting into your audit table should be an idempotent operation. So it's OK if messages are processed more than once.
-    </Info>
+    Under "Message grouping", leave the default option selected to ensure rows are processed in order.
   </Step>
 
   <Step title="Create and test the Consumer Group">
     Click "Create Consumer Group".
 
-    To make sure things are working end-to-end, you can copy the example `curl` request on the Consumer Group's page and run it. The endpoint should return a batch of messages from your `sequin_events` table.
+    To make sure things are working end-to-end, you can copy the example `curl` request on the Consumer Group's page and run it. The endpoint should return a batch of rows from your source table.
   </Step>
 </Steps>
 
-<Check>
-  You're ready to consume from the `sequin_events` Stream in your application.
-</Check>
-
 ### Setup your application
 
-In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your audit table.
+In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your destination table.
 
-Here's a basic example using Sequin's Go SDK to consume events:
+Here's a basic example using Sequin's Go SDK:
 
 ```go
-// Example worker that processes events from a Sequin consumer group
-// and upserts them into an audit log table
 func main() {
     client := sequin.NewClient(&sequin.ClientOptions{
         Token: os.Getenv("SEQUIN_TOKEN"),
     })
 
-    // Create a new processor for the consumer group
     processor, err := sequin.NewProcessor(
         client,
         "my-consumer-group",
-        processEvents,
+        processRows,
         sequin.ProcessorOptions{
-            MaxBatchSize: 100, // Process up to 100 events at once
+            MaxBatchSize: 100,  // Process up to 100 rows at once
             MaxConcurrent: 10,
         },
     )
@@ -297,41 +121,26 @@ func main() {
         log.Fatalf("Failed to create processor: %v", err)
     }
 
-    // Start processing events
     if err := processor.Start(); err != nil {
         log.Fatalf("Processor failed: %v", err)
     }
 }
 
-// processEvents handles a batch of events from the consumer group
-// for simplicity, it doesn't batch the upserts into one statement
-func processEvents(ctx context.Context, msgs []sequin.Message) error {
-    // See below for the logic to upsert events into your audit table
-    res, err := upsert_events(ctx, msgs)
+func processRows(ctx context.Context, msgs []sequin.Message) error {
+    // See below for the logic to upsert rows into your destination
+    res, err := upsertRows(ctx, msgs)
     if err != nil {
         return err
     }
 
-    log.Printf("Successfully processed %d events", len(msgs))
+    log.Printf("Successfully processed %d rows", len(msgs))
     return nil
 }
 ```
 
-{/* TODO: Link to example repo */}
+## Consume with webhooks
 
-See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the implementation details of `upsert_events`.
-
-### Repeat for other tables
-
-If you're creating consumer groups for multiple tables, repeat the process for each table.
-
-## Consume events with webhooks
-
-{/* {{TODO: Introduce batching for webhooks}} */}
-
-Instead of pulling events from a consumer group, you can have Sequin push events to a webhook endpoint. Each webhook payload will contain one event. Events are processed exactly once per subscription.
-
-### Create a webhook subscription
+Instead of pulling rows with a Consumer Group, you can have Sequin push them to a webhook endpoint. Each webhook payload will contain one row. Rows are processed exactly once per subscription.
 
 <Steps>
   <Step title="Navigate to Webhook Subscriptions">
@@ -339,9 +148,7 @@ Instead of pulling events from a consumer group, you can have Sequin push events
   </Step>
 
   <Step title="Configure the source">
-    Under Source, select the `sequin_events` Stream.
-
-    Under "Records to process", optionally add a filter. For example, if you want this Webhook Subscription to only receive events for the `subscriptions` table, you can add a filter on `table_name = 'subscriptions'`.
+    Under Source, select your stream.
   </Step>
 
   <Step title="Configure the webhook">
@@ -349,7 +156,7 @@ Instead of pulling events from a consumer group, you can have Sequin push events
   </Step>
 
   <Step title="Configure message grouping">
-    Under "Message grouping", leave the default option selected to ensure events for the same row are processed in order.
+    Under "Message grouping", leave the default option selected to ensure rows are processed in order.
   </Step>
 
   <Step title="Create the subscription">
@@ -359,28 +166,17 @@ Instead of pulling events from a consumer group, you can have Sequin push events
 
 ### Handle webhooks in your application
 
-{/* TODO: Add elsewhere typed examples of shapes when eg coming from a sequin_events table */}
-
-Your webhook endpoint will receive POST requests with [event payloads](/consume/webhooks).
+Your webhook endpoint will receive POST requests with [row payloads](/consume/webhooks).
 
 Here's an example of handling webhooks with Node.js and Express:
 
 ```javascript
-app.post('/webhooks/audit-events', async (req, res) => {
+app.post('/webhooks/replicate-users', async (req, res) => {
   try {
-    // The webhook payload contains a record and metadata
-    // The record is the event row itself
-    const event = req.body.record;
-    const { id: eventId, record: newValues, action, changes: oldValues } = event;
+    const row = req.body.record;
     
-    // Upsert the event into your audit table
-    // We'll go into the details of upserting events below
-    await upsertEvent({
-      eventId,
-      action,
-      oldValues,
-      newValues
-    });
+    // Upsert the row into your destination table
+    await upsertRow(row);
 
     // Return 200 to acknowledge successful processing
     res.sendStatus(200);
@@ -392,51 +188,50 @@ app.post('/webhooks/audit-events', async (req, res) => {
 });
 ```
 
-If your endpoint returns a non-200 status code or fails to respond within the configured timeout, Sequin will retry the webhook indefintely with an exponential backoff.
+If your endpoint returns a non-200 status code or fails to respond within the configured timeout, Sequin will retry the webhook indefinitely with an exponential backoff.
 
-## Upserting into your audit table
+## Upserting into the destination
 
-You'll upsert events into your audit table using an `insert into ... on conflict` statement. This will ensure that events can only be written to your audit table once.
+You'll upsert rows into your destination table using an `insert into ... on conflict` statement. This ensures idempotency - the same row can only be written once.
 
-The conflict key will be the `event_id` column you [added to your audit table](#setup-your-audit-table).
+The conflict key will be the primary key column that matches your source table.
 
 The process will be:
 
-1. Map events to your audit table
+1. Map rows to your destination schema
 2. Perform the upsert, ideally in a single statement
 
-### Map events to your audit table
+### Map rows to your schema
 
-You'll flatten events from a nested JSON structure into a flat structure that matches your audit table.
+You'll need to map the source table's schema to your destination schema. This might involve:
 
-Sequin sends events to your consumer in JSON. JSON's types are not as rich as Postgres' types. So you may need to cast the types appropriately.
+- Renaming columns
+- Transforming values
+- Adding/removing columns
+- Type conversions
 
-Here's a list of JSON types that you might need to cast before upserting into Postgres:
+Sequin sends rows to your consumer in JSON. JSON's types are not as rich as Postgres' types. So you may need to cast the types appropriately:
 
 - **Timestamps/dates**: Transported in JSON as strings, need casting to `timestamp` or `date`
 - **UUIDs**: Transported in JSON as strings, need casting to `uuid`
-- **Numeric types**: Transported in JSON as numbers, might need explicit casting to `decimal`, `bigint`, etc. depending on precision requirements
+- **Numeric types**: Transported in JSON as numbers, might need explicit casting to `decimal`, `bigint`, etc.
 
 ### Batch upserts
 
-Ideally, you batch your upserts. For example, if you're processing a batch of 100 events, you'll upsert all 100 events in a single statement. This is far more efficient than upserting 100 individual events.
+Ideally, you batch your upserts. For example, if you're processing 100 rows, you'll upsert all 100 in a single statement. This is far more efficient than upserting individual rows.
 
 If you're using an ORM, consult your ORM's documentation for how to perform batched upserts. For example, here's what upserts look like with `ActiveRecord`:
 
 ```ruby
-class Event < ApplicationRecord
-  def self.batch_upsert_events(events_data)
-    # Convert array of hashes to array of Event objects if needed
-    events = events_data.map { |data| new(data) }
+class User < ApplicationRecord
+  def self.batch_upsert_users(users_data)
+    users = users_data.map { |data| new(data) }
     
-    # Perform the upsert
-    Event.upsert_all(
-      events.map(&:attributes),
-      unique_by: :event_id,
-      # Update all columns except id and created_at
-      update_only: Event.column_names - ['id', 'created_at'],
-      # Optional: returns the event_ids that were affected
-      returning: :event_id
+    User.upsert_all(
+      users.map(&:attributes),
+      unique_by: :user_id,
+      update_only: User.column_names - ['id', 'created_at'],
+      returning: :user_id
     )
   end
 end
@@ -445,72 +240,56 @@ end
 In raw SQL, that looks something like:
 
 ```sql
-insert into events (
-  event_id,
+insert into replicated_users (
+  user_id,
   name,
-  status,
-  metadata,
-  updated_at
+  email,
+  created_at
 ) values 
-  ($1, $2, $3, $4, $5),
-  ($6, $7, $8, $9, $10),
-  ($11, $12, $13, $14, $15)
-on conflict (event_id) do update set
+  ($1, $2, $3, $4),
+  ($5, $6, $7, $8),
+  ($9, $10, $11, $12)
+on conflict (user_id) do update set
   name = excluded.name,
-  status = excluded.status,
-  metadata = excluded.metadata,
-  updated_at = excluded.updated_at;
+  email = excluded.email,
+  created_at = excluded.created_at;
 ```
-
-Importantly, we recommend using a `do update` clause as opposed to a `do nothing` clause. This means that if the event already exists in your audit table, you'll update it with new values. This can be handy if you deployed a bug to your worker code, and are now replaying events in order to "patch over" old, incorrect event values.
 
 ## Deploying to production
 
-Assuming you've followed the steps so far in your local environment, the next step is to deploy your implementation to production.
+Once you've tested your replication pipeline locally, you can deploy it to production.
 
-You can use the Sequin CLI to export your local configuration and apply it to your production environment.
+You can use the Sequin CLI to export your local configuration and apply it to your production environment:
 
 <Steps>
-  <Step title="Perform migrations in your production database">
-    You'll need to ensure your production database has a `sequin_events` table to write to. If you're using a migration system, add that table to your migrations.
-
-    Likewise, you'll need to ensure your production database has any audit tables that you'll want your system to write to.
+  <Step title="Perform migrations">
+    Ensure your production destination database has the tables you want to replicate to.
     
     We recommend deploying and migrating before proceeding.
   </Step>
 
-  <Step title="Ensure your Sequin token is set in production">
-    If you're using a Consumer Group to pull messages from Sequin, that request uses a Sequin token.
-
-    Ensure the token is configurable, e.g. controlled by an environment variable.
-
-    Then, ensure your production environment has the token set.
+  <Step title="Set your Sequin token">
+    If you're using a Consumer Group, ensure your Sequin token is configured in your production environment.
   </Step>
 
-  <Step title="Export your local configuration">
-    You can use Sequin's YAML configuration file to export your local configuration and import it into your production environment.
-
-    After [setting up the Sequin CLI](/cli), run the following command to export your local configuration:
+  <Step title="Export your configuration">
+    After [setting up the Sequin CLI](/cli), export your local configuration:
 
     ```bash
     sequin config export --context=local
     ```
 
-    This will create a `sequin.yaml` file in your current working directory. You can commit this file to your repository to share the configuration with your team.
+    This creates a `sequin.yaml` file you can commit to your repository.
 
     <Info>
-      You might consider having different `sequin.yaml` files for different environments (local, staging, production). For example, you might have `sequin.staging.yaml` and `sequin.production.yaml`.
+      Consider having different YAML files for different environments. For example, `sequin.staging.yaml` and `sequin.production.yaml`.
 
-      That's because you may name things differently in your local environment vs. production. For example, your database may be called `my_db_dev` in local but `my_db_prod` in production.
+      Database names often differ between environments (e.g. `my_db_dev` vs `my_db_prod`).
     </Info>
-
-    <Warning>
-      The `sequin config export` command is experimental. You'll need to manually tweak the exported file before using it. See the warning in the CLI output.
-    </Warning>
   </Step>
 
-  <Step title="Apply the configuration to your production environment">
-    To apply the configuration to your production environment, in the same directory as your `sequin.yaml` file, run the following command:
+  <Step title="Apply to production">
+    Apply your configuration to production:
 
     ```bash
     sequin config apply sequin.yaml --context=production

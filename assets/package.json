@@ -19,6 +19,7 @@
     "typescript": "^5.5.4"
   },
   "dependencies": {
+    "@getkoala/browser": "^1.22.1",
     "@intercom/messenger-js-sdk": "^0.0.13",
     "bits-ui": "^0.21.16",
     "clsx": "^2.1.1",

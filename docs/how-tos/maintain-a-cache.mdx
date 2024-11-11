@@ -52,7 +52,7 @@ Start by testing your cache maintenance pipeline locally. Later, we'll cover [pr
 
 ## Create a stream
 
-First, create a stream of your source table. Streams connect your table to Sequin's Consumer Groups or Webhook Subscriptions:
+First, create a stream of your source data. This stream will provide real-time updates to keep your cache fresh:
 
 <Steps>
   <Step title="Navigate to Streams">
@@ -60,12 +60,12 @@ First, create a stream of your source table. Streams connect your table to Sequi
   </Step>
 
   <Step title="Select your source table">
-    Select the table you want to replicate.
+    Select the table containing the data you want to cache.
 
-    Under "Sort and start", choose a good sort column. `updated_at` is a good choice for most tables, while `created_at` is fine for append-only tables.
+    Under "Sort and start", choose a sort column that reflects when data changes. `updated_at` works well for most cases since it captures both new and modified data.
 
     <Info>
-      The sort column will be used to order rows in your stream whenever you're playing historical data. [Read more about sort columns](/how-sequin-works#streams).
+      The sort column determines the order of updates to your cache when processing historical data. [Read more about sort columns](/how-sequin-works#streams).
     </Info>
 
     <Frame>
@@ -74,64 +74,73 @@ First, create a stream of your source table. Streams connect your table to Sequi
   </Step>
 
   <Step title="Create the stream">
-    Click "Create Stream" to make your table available for replication.
+    Click "Create Stream" to start tracking changes to your source data.
   </Step>
 </Steps>
 
-## Setup the destination table
+## Configure your cache
 
-Next, create the table you want to replicate to. This can be in the same database as the source table, or a different database.
+Next, set up your caching system to store the data efficiently. The configuration depends on your chosen cache technology:
 
-The most important consideration is that you'll want your [upsert logic](#upserting-into-the-destination) to be idempotent. That means you'll use an `insert into ... on conflict` statement.
+### Redis configuration
 
-We recommend adding a column to your destination table that corresponds to the primary key of your source table. For example, if your source table has a `product_id` primary key:
+For Redis, consider these key patterns and data structures:
 
-```sql
-create table replicated_products (
-  product_id uuid primary key,  -- matches source table PK
-  name text,
-  price decimal,
-  created_at timestamp
-);
+```ruby
+# Key pattern examples
+"product:{id}"              # Single product cache
+"products:recent"           # List of recent products
+"products:category:{name}"  # Products by category
+
+# TTL configuration
+SETEX "product:123" 3600 "{json_data}"  # 1-hour expiration
 ```
 
-### Fanning in multiple tables
+### In-memory cache configuration
 
-If you're fanning in multiple tables into a single destination table, you have a few options for primary keys and unique constraints.
+For application memory or Memcached:
 
-One option is to use a composite key using the source table identifier and the source table's primary key:
-
-```sql
--- Option 1: Composite key using source table identifier
-create table combined_records (
-  source_table text,
-  record_id uuid,
-  data jsonb,
-  primary key (source_table, record_id)
-);
+```javascript
+const cache = new Map();  // Simple in-memory cache
+const memcached = new Memcached('localhost:11211', {
+  retries: 3,
+  retry: 3000,
+  remove: true
+});
 ```
 
-Option 1 is simple, and works so long as all source tables have the same primary key kind.
+### Multiple data sources
 
-A second option is to have columns for each of the source tables' primary keys. You can even have a constraint to ensure that only one of the columns can be non-null:
+When caching from multiple sources:
 
-```sql
--- Option 2: Separate PK columns with constraint
-create table combined_records (
-  id serial primary key,
-  users_id uuid,
-  orders_id uuid,
-  products_id uuid,
-  data jsonb,
-  constraint exactly_one_pk check (
-    (users_id is not null)::integer +
-    (orders_id is not null)::integer +
-    (products_id is not null)::integer = 1
-  )
-);
+1. **Namespace your keys**: Use prefixes to avoid collisions
+```ruby
+"users:{id}"     # User data
+"orders:{id}"    # Order data
+"products:{id}"  # Product data
 ```
 
-You can add a unique constraint on each column, which you can use as the conflict key during upserts.
+2. **Set appropriate TTLs**: Different data types may need different expiration times
+```ruby
+# Critical data: shorter TTL
+SETEX "orders:active:{id}" 300 "{data}"    # 5 minutes
+
+# Reference data: longer TTL
+SETEX "products:{id}" 86400 "{data}"       # 24 hours
+```
+
+3. **Consider cache hierarchies**: Layer your caches for optimal performance
+```javascript
+// Check local memory first, then Redis
+async function getProduct(id) {
+  let product = localCache.get(`product:${id}`);
+  if (!product) {
+    product = await redis.get(`product:${id}`);
+    localCache.set(`product:${id}`, product, {ttl: 300}); // 5min local cache
+  }
+  return product;
+}
+```
 
 ## Create a Consumer Group
 

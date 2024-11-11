@@ -27,10 +27,10 @@
       end
     }
     data-ko-token={
-      if Application.get_env(:sequin, Sequin.Koala, [])[:is_disabled] do
+      if Application.get_env(:sequin, :koala, [])[:is_disabled] do
         nil
       else
-        Application.get_env(:sequin, Sequin.Koala, [])[:public_key]
+        Application.get_env(:sequin, :koala, [])[:public_key]
       end
     }
   >

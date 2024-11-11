@@ -1,0 +1,410 @@
+---
+title: "How to replicate tables with Sequin"
+sidebarTitle: "Replicate tables"
+description: "Replicate tables between databases"
+---
+
+Sequin makes it easy to replicate tables between databases. Common use cases include:
+
+- **Analytics & reporting**: Maintain a dedicated analytics database with transformed data optimized for complex queries and reporting
+- **Data warehousing**: Consolidate data from multiple sources into a central warehouse while preserving real-time updates
+- **Read replicas**: Create read-optimized copies of tables to improve application performance and reduce load on primary databases
+- **Data integration**: Sync data between different systems while applying transformations to match each system's schema
+
+With Sequin, you can turn tables in your Postgres database into streams. Your application can pull rows from a stream using a Consumer Group or receive rows via a Webhook Subscription. Then, your application can upsert rows into a destination table.
+
+Sequin makes it easy for your app to stream all the historical rows in a table, then subscribe to receive updated and inserted rows in real-time. Sequin ensures ordered delivery and exactly-once processing, so you don't need to worry about race conditions or missing rows.
+
+This guide shows you how to:
+
+- **Stream an existing table**: Copy all rows from a source table
+- **Keep tables in sync**: Maintain an up-to-date copy as the source changes
+- **Transform data**: Modify the data before writing to the destination
+
+## Prerequisites
+
+This guide assumes you already have Sequin installed and have databases connected. If you don't, see the [quickstart guide](/quickstart).
+
+## Overview
+
+To replicate tables between databases, you'll perform these steps:
+
+1. **[Create a stream](#create-a-stream)**: The stream will contain rows from your source table
+2. **[Setup the destination table](#setup-the-destination-table)**: Create the table you want to replicate to
+3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Use either tool to process rows
+4. **[Upsert rows to the destination](#upserting-into-the-destination)**: Write the upsert logic in your worker code
+
+### Deletes
+
+Sequin streams the latest version of rows as they're created and updated in a table. Because it streams rows from tables, and deleted rows are removed from tables, Sequin can't "see" deleted rows.
+
+You have two options for propagating deletes to downstream Postgres tables:
+
+1. **Soft delete**: Instead of deleting rows, use a `status` or `deleted_at` column to mark rows as deleted instead. Then, when replicating to your destination table, you can optionally soft- or hard-delete rows.
+2. **Use a Change Capture Pipeline**: [Change Capture Pipelines](/capture-changes) capture discrete changes to rows. You can use a Change Capture Pipeline to capture deletes to your source table(s) to an event table, like `sequin_events`. Then, you can use a Consumer Group or Webhook Subscription to process delete events from the event table and remove rows in your destination table.
+
+### Start locally
+
+You can start by following all the steps below in your local environment. At the end of this guide are instructions for [deploying to production](#deploying-to-production).
+
+## Create a stream
+
+First, create a stream of your source table. Streams connect your table to Sequin's Consumer Groups or Webhook Subscriptions:
+
+<Steps>
+  <Step title="Navigate to Streams">
+    In the Sequin web console, click on the "Streams" tab. Click "Create Stream".
+  </Step>
+
+  <Step title="Select your source table">
+    Select the table you want to replicate.
+
+    Under "Sort and start", choose a good sort column. `updated_at` is a good choice for most tables, while `created_at` is fine for append-only tables.
+
+    <Info>
+      The sort column will be used to order rows in your stream whenever you're playing historical data. [Read more about sort columns](/how-sequin-works#streams).
+    </Info>
+
+    <Frame>
+      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/create-stream.png" alt="Stream configuration" />
+    </Frame>
+  </Step>
+
+  <Step title="Create the stream">
+    Click "Create Stream" to make your table available for replication.
+  </Step>
+</Steps>
+
+## Setup the destination table
+
+Next, create the table you want to replicate to. This can be in the same database as the source table, or a different database.
+
+The most important consideration is that you'll want your [upsert logic](#upserting-into-the-destination) to be idempotent. That means you'll use an `insert into ... on conflict` statement.
+
+We recommend adding a column to your destination table that corresponds to the primary key of your source table. For example, if your source table has a `product_id` primary key:
+
+```sql
+create table replicated_products (
+  product_id uuid primary key,  -- matches source table PK
+  name text,
+  price decimal,
+  created_at timestamp
+);
+```
+
+### Fanning in multiple tables
+
+If you're fanning in multiple tables into a single destination table, you have a few options for primary keys and unique constraints.
+
+One option is to use a composite key using the source table identifier and the source table's primary key:
+
+```sql
+-- Option 1: Composite key using source table identifier
+create table combined_records (
+  source_table text,
+  record_id uuid,
+  data jsonb,
+  primary key (source_table, record_id)
+);
+```
+
+Option 1 is simple, and works so long as all source tables have the same primary key kind.
+
+A second option is to have columns for each of the source tables' primary keys. You can even have a constraint to ensure that only one of the columns can be non-null:
+
+```sql
+-- Option 2: Separate PK columns with constraint
+create table combined_records (
+  id serial primary key,
+  users_id uuid,
+  orders_id uuid,
+  products_id uuid,
+  data jsonb,
+  constraint exactly_one_pk check (
+    (users_id is not null)::integer +
+    (orders_id is not null)::integer +
+    (products_id is not null)::integer = 1
+  )
+);
+```
+
+You can add a unique constraint on each column, which you can use as the conflict key during upserts.
+
+## Create a Consumer Group
+
+You can use a Consumer Group to pull rows from your stream and write them to your destination table:
+
+<Steps>
+  <Step title="Create a Consumer Group">
+    Click on the "Consumer Groups" tab in the Sequin web console. Click "Create Consumer Group".
+  </Step>
+
+  <Step title="Configure the source">
+    Under "Source", select the stream you created.
+
+    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. You can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
+
+    <Frame>
+      <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/records-to-process.png" alt="Records to process" />
+    </Frame>
+
+    You can always change these filters later and [re-backfill the destination(#re-backfill-the-destination).
+
+    For "Where should the consumer group start?", you can indicate how far back in time you want to sync rows from the source table. Rows are ordered by the sort column you chose when you created the stream. So if you chose a field like `updated_at`, you can choose to sync rows from the beginning of the table, from the last few months, etc.
+
+    If you want the destination to contain all rows from the source, choose "At the beginning of the table." If you want to sync only new rows, choose "At the end of the table." Otherwise, choose a specific point in time according to your needs.
+  </Step>
+
+  <Step title="Configure message grouping">
+    Under "Message grouping", leave the default option selected.
+
+    <Info>
+      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to the destination.
+    </Info>
+  </Step>
+
+  <Step title="Create and test the Consumer Group">
+    Click "Create Consumer Group".
+
+    To make sure things are working end-to-end, you can copy the example `curl` request on the Consumer Group's page and run it. The endpoint should return a batch of rows from your source table.
+  </Step>
+</Steps>
+
+### Setup your application
+
+In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your destination table.
+
+For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
+Here's a basic example using Sequin's Go SDK:
+
+```go
+func main() {
+    client := sequin.NewClient(&sequin.ClientOptions{
+        Token: os.Getenv("SEQUIN_TOKEN"),
+    })
+
+    processor, err := sequin.NewProcessor(
+        client,
+        "my-consumer-group",
+        processRows,
+        sequin.ProcessorOptions{
+            MaxBatchSize: 100,  // Process up to 100 rows at once
+            MaxConcurrent: 10,
+        },
+    )
+    if err != nil {
+        log.Fatalf("Failed to create processor: %v", err)
+    }
+
+    if err := processor.Start(); err != nil {
+        log.Fatalf("Processor failed: %v", err)
+    }
+}
+
+func processRows(ctx context.Context, msgs []sequin.Message) error {
+    // See below for the logic to upsert rows into your destination
+    res, err := upsertRows(ctx, msgs)
+    if err != nil {
+        return err
+    }
+
+    log.Printf("Successfully processed %d rows", len(msgs))
+    return nil
+}
+```
+
+For `MaxBatchSize`, if you think it will difficult for you to [batch upsert rows](#upserting-into-your-audit-table) with your ORM or database adapter, set it to `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
+See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the implementation details of `upsert_events`.
+
+<Info>
+  See the [Go SDK](https://github.com/sequinstream/sequin-go/tree/main/examples/audit_logging) for a complete example of consuming events from a Consumer Group with Go.
+</Info>
+
+### Rewind as needed
+
+Remember, when you're in development, you can rewind your Consumer Group to any point in time. As you're tweaking your pipeline and your destination table, you can rewind your Consumer Group in the Sequin web console.
+
+## Consume with webhooks
+
+Instead of pulling rows with a Consumer Group, you can have Sequin push them to a webhook endpoint. Each webhook payload will contain one row. Rows are processed exactly once per subscription.
+
+### Handle webhooks in your application
+
+Your webhook endpoint will receive POST requests with [row payloads](/consume/webhooks).
+
+Here's an example of handling webhooks with Node.js and Express:
+
+```javascript
+app.post('/webhooks/replicate-users', async (req, res) => {
+  try {
+    // Webhook payload contains a data array of rows
+    const rows = req.body.data;
+    
+    await upsertRows(rows);
+
+    // Return 200 to acknowledge successful processing
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    // Return 500 to trigger a retry
+    res.sendStatus(500);
+  }
+});
+```
+
+If your endpoint returns a non-200 status code or fails to respond within the configured timeout, Sequin will retry the webhook indefinitely with an exponential backoff.
+
+### Setup your subscription
+
+With your webhook endpoint ready, you can create a subscription:
+
+<Steps>
+  <Step title="Navigate to Webhook Subscriptions">
+    In the Sequin web console, under destinations, navigate to the Webhook Subscriptions tab and click "Create Webhook Subscription".
+  </Step>
+
+  <Step title="Configure the source">
+    Under Source, select your stream.
+  </Step>
+
+  <Step title="Configure the webhook">
+    Under "Webhook configuration", enter your endpoint URL. This is where Sequin will send the webhook payloads.
+
+    For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
+    Remember, you'll want to insert all rows you receive in a webhook payload in a single statement.
+  </Step>
+
+  <Step title="Configure message grouping">
+    Under "Message grouping", leave the default option selected to ensure rows are processed in order.
+
+    <Info>
+      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to the destination.
+    </Info>
+  </Step>
+
+  <Step title="Create the subscription">
+    Click "Create Webhook Subscription".
+  </Step>
+</Steps>
+
+### Rewind as needed
+
+Remember, when you're in development, you can rewind your Webhook Subscription to any point in time. As you're tweaking your pipeline and your destination table, you can rewind your Webhook Subscription in the Sequin web console.
+
+You can also pause and resume your Webhook Subscription in the Sequin web console.
+
+## Upserting into the destination
+
+You'll upsert rows into your destination table using an `insert into ... on conflict` statement. This ensures idempotency - the same row can only be written once.
+
+The conflict key will be the primary key column that matches your source table.
+
+The process will be:
+
+1. Map rows to your destination schema
+2. Perform the upsert, ideally in a single statement
+
+### Map rows to your schema
+
+You'll need to map the source table's schema to your destination schema. This might involve:
+
+- Renaming columns
+- Transforming values
+- Adding/removing columns
+- Type conversions
+
+Sequin sends rows to your consumer in JSON. JSON's types are not as rich as Postgres' types. So you may need to cast the types appropriately:
+
+- **Timestamps/dates**: Transported in JSON as strings, need casting to `timestamp` or `date`
+- **UUIDs**: Transported in JSON as strings, need casting to `uuid`
+- **Numeric types**: Transported in JSON as numbers, might need explicit casting to `decimal`, `bigint`, etc.
+
+### Batch upserts
+
+Ideally, you batch your upserts. For example, if you're processing 100 rows, you'll upsert all 100 in a single statement. This is far more efficient than upserting individual rows.
+
+If you're using an ORM, consult your ORM's documentation for how to perform batched upserts. For example, here's what upserts look like with `ActiveRecord`:
+
+```ruby
+class Product < ApplicationRecord
+  def self.batch_upsert_products(products_data)
+    products = products_data.map { |data| new(data) }
+    
+    Product.upsert_all(
+      products.map(&:attributes),
+      unique_by: :product_id,
+      update_only: Product.column_names - ['id', 'created_at'],
+      returning: :product_id
+    )
+  end
+end
+```
+
+In raw SQL, that looks something like:
+
+```sql
+insert into replicated_products (
+  product_id,
+  name,
+  price,
+  created_at
+) values 
+  ($1, $2, $3, $4),
+  ($5, $6, $7, $8),
+  ($9, $10, $11, $12)
+on conflict (product_id) do update set
+  name = excluded.name,
+  price = excluded.price,
+  created_at = excluded.created_at;
+```
+
+## Deploying to production
+
+Once you've tested your replication pipeline locally, you can deploy it to production.
+
+You can use the Sequin CLI to export your local configuration and apply it to your production environment:
+
+<Steps>
+  <Step title="Perform migrations">
+    Ensure your production destination database has the tables you want to replicate to.
+    
+    We recommend deploying and migrating before proceeding.
+  </Step>
+
+  <Step title="Set your Sequin token">
+    If you're using a Consumer Group, ensure your Sequin token is configured in your production environment.
+  </Step>
+
+  <Step title="Export your configuration">
+    After [setting up the Sequin CLI](/cli), export your local configuration:
+
+    ```bash
+    sequin config export --context=local
+    ```
+
+    This creates a `sequin.yaml` file you can commit to your repository.
+
+    <Info>
+      Consider having different YAML files for different environments. For example, `sequin.staging.yaml` and `sequin.production.yaml`.
+
+      Database names often differ between environments (e.g. `my_db_dev` vs `my_db_prod`).
+    </Info>
+  </Step>
+
+  <Step title="Apply to production">
+    Apply your configuration to production:
+
+    ```bash
+    sequin config apply sequin.yaml --context=production
+    ```
+  </Step>
+</Steps>
+
+## Re-backfilling
+
+You can re-backfill your destination table at any time. For example, if you've fixed a bug in your upsert logic or changed the schema of your destination table, you might want to "play back" all source rows to re-run your upserts.
+
+You can re-backfill at any time in the Sequin web console. Go to the page for your Consumer Group or Webhook Subscription and click "Rewind".

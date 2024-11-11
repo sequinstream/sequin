@@ -23,29 +23,32 @@ This guide shows you how to:
 
 ## Prerequisites
 
-This guide assumes you already have Sequin installed and have databases connected. If you don't, see the [quickstart guide](/quickstart).
+This guide assumes you have:
+
+- Sequin installed and databases connected (if not, see the [quickstart guide](/quickstart))
+- A caching system ready (Redis, Memcached, etc.)
+- Access to modify your application code
 
 ## Overview
 
-To replicate tables between databases, you'll perform these steps:
+To maintain a cache with Sequin, you'll:
 
-1. **[Create a stream](#create-a-stream)**: The stream will contain rows from your source table
-2. **[Setup the destination table](#setup-the-destination-table)**: Create the table you want to replicate to
-3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Use either tool to process rows
-4. **[Upsert rows to the destination](#upserting-into-the-destination)**: Write the upsert logic in your worker code
+1. **[Create a stream](#create-a-stream)**: Stream changes from your source data
+2. **[Configure your cache](#configure-your-cache)**: Setup your caching system
+3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Choose how to receive updates
+4. **[Write cache operations](#writing-cache-operations)**: Implement cache update logic
 
-### Deletes
+### Cache invalidation
 
-Sequin streams the latest version of rows as they're created and updated in a table. Because it streams rows from tables, and deleted rows are removed from tables, Sequin can't "see" deleted rows.
+When data is deleted from your source, you'll want to remove it from your cache. You have several options:
 
-You have two options for propagating deletes to downstream Postgres tables:
+1. **Soft delete tracking**: Use a `status` or `deleted_at` column in your source data. When this indicates deletion, remove the corresponding cache entry.
+2. **Change Capture Pipeline**: Use [Change Capture Pipelines](/capture-changes) to track explicit delete operations. Process these events to remove entries from your cache.
+3. **TTL-based expiration**: Set appropriate Time-To-Live (TTL) values on cache entries. This works well for data that naturally expires.
 
-1. **Soft delete**: Instead of deleting rows, use a `status` or `deleted_at` column to mark rows as deleted instead. Then, when replicating to your destination table, you can optionally soft- or hard-delete rows.
-2. **Use a Change Capture Pipeline**: [Change Capture Pipelines](/capture-changes) capture discrete changes to rows. You can use a Change Capture Pipeline to capture deletes to your source table(s) to an event table, like `sequin_events`. Then, you can use a Consumer Group or Webhook Subscription to process delete events from the event table and remove rows in your destination table.
+### Development workflow
 
-### Start locally
-
-You can start by following all the steps below in your local environment. At the end of this guide are instructions for [deploying to production](#deploying-to-production).
+Start by testing your cache maintenance pipeline locally. Later, we'll cover [production deployment](#deploying-to-production) and monitoring.
 
 ## Create a stream
 

@@ -1,7 +1,7 @@
 ---
 title: "How to maintain a cache with Sequin"
 sidebarTitle: "Maintain a cache"
-description: "Keep your cache warm and up-to-date using Sequin streams"
+description: "Keep your cache warm and up-to-date using Sequin"
 ---
 
 Sequin makes it easy to maintain caches that stay in sync with your database. Common use cases include:
@@ -9,7 +9,6 @@ Sequin makes it easy to maintain caches that stay in sync with your database. Co
 - **Redis caching**: Keep frequently accessed data cached in Redis for fast retrieval
 - **In-memory caches**: Maintain application-level caches like Memcached or application memory
 - **Search indexes**: Keep search indexes like Elasticsearch up-to-date with your database
-- **CDN caching**: Warm and maintain CDN caches for static or semi-static content
 
 With Sequin, you can turn tables in your Postgres database into streams. Your application can pull rows from a stream using a Consumer Group or receive rows via a Webhook Subscription. Then, your application can update your cache with the latest data.
 
@@ -27,32 +26,32 @@ This guide assumes you have:
 
 - Sequin installed and databases connected (if not, see the [quickstart guide](/quickstart))
 - A caching system ready (Redis, Memcached, etc.)
-- Access to modify your application code
+- An application that can pull rows from a Consumer Group or receive rows via a Webhook Subscription
 
 ## Overview
 
 To maintain a cache with Sequin, you'll:
 
 1. **[Create a stream](#create-a-stream)**: Stream changes from your source data
-2. **[Configure your cache](#configure-your-cache)**: Setup your caching system
-3. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Choose how to receive updates
-4. **[Write cache operations](#writing-cache-operations)**: Implement cache update logic
+2. Either **[Create a Consumer Group](#create-a-consumer-group)** or **[Create a Webhook Subscription](#consume-with-webhooks)**: Choose how to receive updates
+3. **[Write cache operations](#writing-cache-operations)**: Implement cache update logic
 
 ### Cache invalidation
 
-When data is deleted from your source, you'll want to remove it from your cache. You have several options:
+Sequin streams the latest version of rows as they're created and updated in a table. Because Sequin streams rows from tables, and deleted rows are removed from tables, Sequin can't "see" deleted rows.
 
-1. **Soft delete tracking**: Use a `status` or `deleted_at` column in your source data. When this indicates deletion, remove the corresponding cache entry.
+When data is deleted from your source, you might want to remove it from your cache. You have several options:
+
+1. **Soft delete tracking**: Use something like a `status` or `deleted_at` column in your source table. Then, when processing rows from your stream, you can remove the corresponding cache entry.
 2. **Change Capture Pipeline**: Use [Change Capture Pipelines](/capture-changes) to track explicit delete operations. Process these events to remove entries from your cache.
-3. **TTL-based expiration**: Set appropriate Time-To-Live (TTL) values on cache entries. This works well for data that naturally expires.
 
 ### Development workflow
 
-Start by testing your cache maintenance pipeline locally. Later, we'll cover [production deployment](#deploying-to-production) and monitoring.
+Start by testing your cache maintenance pipeline locally. Later, we'll cover [production deployment](#deploying-to-production).
 
 ## Create a stream
 
-First, create a stream of your source data. This stream will provide real-time updates to keep your cache fresh:
+First, create a stream for each one of your source tables. This stream will let you backfill your cache with historical data, and provide real-time updates to keep your cache fresh:
 
 <Steps>
   <Step title="Navigate to Streams">
@@ -74,77 +73,13 @@ First, create a stream of your source data. This stream will provide real-time u
   </Step>
 
   <Step title="Create the stream">
-    Click "Create Stream" to start tracking changes to your source data.
+    Click "Create Stream".
   </Step>
 </Steps>
 
-## Configure your cache
-
-Next, set up your caching system to store the data efficiently. The configuration depends on your chosen cache technology:
-
-### Redis configuration
-
-For Redis, consider these key patterns and data structures:
-
-```ruby
-# Key pattern examples
-"product:{id}"              # Single product cache
-"products:recent"           # List of recent products
-"products:category:{name}"  # Products by category
-
-# TTL configuration
-SETEX "product:123" 3600 "{json_data}"  # 1-hour expiration
-```
-
-### In-memory cache configuration
-
-For application memory or Memcached:
-
-```javascript
-const cache = new Map();  // Simple in-memory cache
-const memcached = new Memcached('localhost:11211', {
-  retries: 3,
-  retry: 3000,
-  remove: true
-});
-```
-
-### Multiple data sources
-
-When caching from multiple sources:
-
-1. **Namespace your keys**: Use prefixes to avoid collisions
-```ruby
-"users:{id}"     # User data
-"orders:{id}"    # Order data
-"products:{id}"  # Product data
-```
-
-2. **Set appropriate TTLs**: Different data types may need different expiration times
-```ruby
-# Critical data: shorter TTL
-SETEX "orders:active:{id}" 300 "{data}"    # 5 minutes
-
-# Reference data: longer TTL
-SETEX "products:{id}" 86400 "{data}"       # 24 hours
-```
-
-3. **Consider cache hierarchies**: Layer your caches for optimal performance
-```javascript
-// Check local memory first, then Redis
-async function getProduct(id) {
-  let product = localCache.get(`product:${id}`);
-  if (!product) {
-    product = await redis.get(`product:${id}`);
-    localCache.set(`product:${id}`, product, {ttl: 300}); // 5min local cache
-  }
-  return product;
-}
-```
-
 ## Create a Consumer Group
 
-You can use a Consumer Group to pull rows from your stream and write them to your destination table:
+You can use a Consumer Group to pull rows from your stream and write them to your cache. You'll need one Consumer Group per stream:
 
 <Steps>
   <Step title="Create a Consumer Group">
@@ -154,24 +89,24 @@ You can use a Consumer Group to pull rows from your stream and write them to you
   <Step title="Configure the source">
     Under "Source", select the stream you created.
 
-    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. You can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
+    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. For example, you can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
 
     <Frame>
       <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/records-to-process.png" alt="Records to process" />
     </Frame>
 
-    You can always change these filters later and [re-backfill the destination(#re-backfill-the-destination).
+    You can always change these filters later and [re-backfill your cache](#re-backfill-the-destination).
 
     For "Where should the consumer group start?", you can indicate how far back in time you want to sync rows from the source table. Rows are ordered by the sort column you chose when you created the stream. So if you chose a field like `updated_at`, you can choose to sync rows from the beginning of the table, from the last few months, etc.
 
-    If you want the destination to contain all rows from the source, choose "At the beginning of the table." If you want to sync only new rows, choose "At the end of the table." Otherwise, choose a specific point in time according to your needs.
+    If you want your cache to contain all rows from the source, choose "At the beginning of the table." If you want to sync only new rows, choose "At the end of the table." Otherwise, choose a specific point in time according to your needs.
   </Step>
 
   <Step title="Configure message grouping">
     Under "Message grouping", leave the default option selected.
 
     <Info>
-      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to the destination.
+      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to your cache.
     </Info>
   </Step>
 
@@ -184,9 +119,9 @@ You can use a Consumer Group to pull rows from your stream and write them to you
 
 ### Setup your application
 
-In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your destination table.
+In your application, you'll setup a worker that pulls messages from the Consumer Group and upserts them into your cache.
 
-For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+For `MaxBatchSize`, because cache update operations are usually idempotent, it's usually safe to process batches ([see more below](#updating-your-cache)). A `MaxBatchSize` of 100 is a good place to start.
 
 Here's a basic example using Sequin's Go SDK:
 
@@ -215,8 +150,8 @@ func main() {
 }
 
 func processRows(ctx context.Context, msgs []sequin.Message) error {
-    // See below for the logic to upsert rows into your destination
-    res, err := upsertRows(ctx, msgs)
+    // See below for the logic to update your cache
+    res, err := updateCache(ctx, msgs)
     if err != nil {
         return err
     }
@@ -226,251 +161,31 @@ func processRows(ctx context.Context, msgs []sequin.Message) error {
 }
 ```
 
-For `MaxBatchSize`, if you think it will difficult for you to [batch upsert rows](#upserting-into-your-audit-table) with your ORM or database adapter, set it to `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
-
-See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the implementation details of `upsert_events`.
-
 <Info>
   See the [Go SDK](https://github.com/sequinstream/sequin-go/tree/main/examples/audit_logging) for a complete example of consuming events from a Consumer Group with Go.
 </Info>
 
-## Error handling and recovery
-
-When maintaining a cache, you need robust error handling to ensure data consistency:
-
-### Common failure scenarios
-
-1. **Cache connection failures**
-```javascript
-try {
-  await cache.set(key, value);
-} catch (error) {
-  if (error.code === 'ECONNREFUSED') {
-    // Implement circuit breaker pattern
-    await circuitBreaker.recordFailure();
-    // Fall back to database
-    return await fetchFromDatabase(key);
-  }
-}
-```
-
-2. **Cache eviction handling**
-```ruby
-def get_with_fallback(key)
-  value = cache.get(key)
-  if value.nil?
-    # Cache miss - reload from source
-    value = load_from_source(key)
-    cache.set(key, value, ttl: 1.hour)
-  end
-  value
-end
-```
-
-3. **Inconsistency detection**
-```python
-def verify_cache_consistency(key):
-    cache_value = cache.get(key)
-    db_value = db.get(key)
-    
-    if cache_value != db_value:
-        # Log inconsistency
-        logger.warn(f"Cache inconsistency detected for {key}")
-        # Update cache with correct value
-        cache.set(key, db_value)
-        # Track metric
-        metrics.increment('cache.inconsistency')
-```
-
-### Recovery strategies
-
-<Steps>
-  <Step title="Circuit breaker implementation">
-    Protect your system when cache becomes unavailable:
-    
-    ```javascript
-    class CacheCircuitBreaker {
-      constructor() {
-        this.failures = 0;
-        this.lastFailure = null;
-        this.threshold = 5;
-        this.resetTimeout = 60000; // 1 minute
-      }
-    
-      async execute(operation) {
-        if (this.isOpen()) {
-          throw new Error('Circuit breaker is open');
-        }
-        
-        try {
-          const result = await operation();
-          this.recordSuccess();
-          return result;
-        } catch (error) {
-          this.recordFailure();
-          throw error;
-        }
-      }
-    }
-    ```
-  </Step>
-
-  <Step title="Fallback mechanisms">
-    Implement graceful degradation:
-    
-    ```ruby
-    def get_cached_data(key)
-      begin
-        # Try cache first
-        cached = cache.get(key)
-        return cached if cached
-      rescue Redis::CannotConnectError => e
-        # Log cache failure
-        logger.error("Cache connection failed: #{e.message}")
-      end
-    
-      # Fallback to database
-      db_value = database.fetch(key)
-      
-      # Attempt to update cache in background
-      async do
-        cache.set(key, db_value)
-      end
-      
-      db_value
-    end
-    ```
-  </Step>
-</Steps>
-
-## Advanced caching patterns
-
-### Cache-aside pattern
-
-Implement the cache-aside pattern for better control:
-
-```javascript
-async function getCachedData(key) {
-  // Try cache first
-  let data = await cache.get(key);
-  
-  if (!data) {
-    // Cache miss - load from database
-    data = await database.fetch(key);
-    
-    // Write to cache with TTL
-    await cache.set(key, data, 'EX', 3600); // 1 hour TTL
-  }
-  
-  return data;
-}
-```
-
-### Write-through caching
-
-Maintain consistency with write-through caching:
-
-```python
-def update_data(key, value):
-    # Update database first
-    database.update(key, value)
-    
-    # Then update cache
-    cache.set(key, value)
-    
-    # Invalidate related cache entries
-    related_keys = find_related_keys(key)
-    cache.delete_many(related_keys)
-```
-
-### Cache warming strategies
-
-1. **Predictive warming**:
-```ruby
-def warm_cache_for_user(user_id)
-  # Warm frequently accessed data
-  common_queries = [
-    [:recent_orders, 10],
-    [:preferences],
-    [:notifications, 5]
-  ]
-  
-  common_queries.each do |query, limit|
-    data = database.fetch_user_data(user_id, query, limit)
-    cache.set("user:#{user_id}:#{query}", data)
-  end
-end
-```
-
-2. **Background refresh**:
-```javascript
-async function backgroundRefresh() {
-  const keys = await cache.keys('*');
-  
-  for (const key of keys) {
-    const ttl = await cache.ttl(key);
-    
-    // Refresh keys nearing expiration
-    if (ttl < 300) { // Less than 5 minutes
-      const newData = await fetchFreshData(key);
-      await cache.set(key, newData);
-    }
-  }
-}
-```
-
-### Monitoring and alerting
-
-Set up comprehensive monitoring:
-
-```yaml
-# Example Prometheus alerts
-groups:
-- name: CacheAlerts
-  rules:
-  - alert: HighCacheMissRate
-    expr: rate(cache_misses_total[5m]) / rate(cache_requests_total[5m]) > 0.2
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: High cache miss rate detected
-      
-  - alert: CacheMemoryNearLimit
-    expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
-    for: 5m
-    labels:
-      severity: warning
-    annotations:
-      summary: Cache memory usage approaching limit
-```
-
-Remember to:
-- Set appropriate thresholds for your use case
-- Configure notification channels
-- Document recovery procedures
-
 ### Rewind as needed
 
-Remember, when you're in development, you can rewind your Consumer Group to any point in time. As you're tweaking your pipeline and your destination table, you can rewind your Consumer Group in the Sequin web console.
+Remember, when you're in development, you can rewind your Consumer Group to any point in time. As you're tweaking your pipeline and cache update logic, you can rewind your Consumer Group in the Sequin web console.
 
 ## Consume with webhooks
 
-Instead of pulling rows with a Consumer Group, you can have Sequin push them to a webhook endpoint. Each webhook payload will contain one row. Rows are processed exactly once per subscription.
+Instead of pulling rows with a Consumer Group, you can have Sequin push them to a webhook endpoint:
 
 ### Handle webhooks in your application
 
-Your webhook endpoint will receive POST requests with [row payloads](/consume/webhooks).
+Your webhook endpoint will receive POST requests with a [batch of one or more rows](/consume/webhooks).
 
 Here's an example of handling webhooks with Node.js and Express:
 
 ```javascript
-app.post('/webhooks/replicate-users', async (req, res) => {
+app.post('/webhooks/cache', async (req, res) => {
   try {
     // Webhook payload contains a data array of rows
     const rows = req.body.data;
     
-    await upsertRows(rows);
+    await updateCache(rows);
 
     // Return 200 to acknowledge successful processing
     res.sendStatus(200);
@@ -500,7 +215,7 @@ With your webhook endpoint ready, you can create a subscription:
   <Step title="Configure the webhook">
     Under "Webhook configuration", enter your endpoint URL. This is where Sequin will send the webhook payloads.
 
-    For "Batch size", if you think it will be difficult for you to [batch upsert rows](#upserting-into-the-destination) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+    For "Batch size", because cache update operations are usually idempotent, it's usually safe to process batches ([see more below](#updating-your-cache)). A batch size of 100 is a good place to start.
 
     Remember, you'll want to insert all rows you receive in a webhook payload in a single statement.
   </Step>
@@ -509,7 +224,7 @@ With your webhook endpoint ready, you can create a subscription:
     Under "Message grouping", leave the default option selected to ensure rows are processed in order.
 
     <Info>
-      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to the destination.
+      Sequin will group messages by primary key. This means that if a consumer pull or webhook push is outstanding for a row, Sequin will not deliver that row until the outstanding message is processed. This ensures there's no risk of a race condition as you write rows to your cache.
     </Info>
   </Step>
 
@@ -520,170 +235,101 @@ With your webhook endpoint ready, you can create a subscription:
 
 ### Rewind as needed
 
-Remember, when you're in development, you can rewind your Webhook Subscription to any point in time. As you're tweaking your pipeline and your destination table, you can rewind your Webhook Subscription in the Sequin web console.
+Remember, when you're in development, you can rewind your Webhook Subscription to any point in time. As you're tweaking your pipeline and cache update logic, you can rewind your Webhook Subscription in the Sequin web console.
 
 You can also pause and resume your Webhook Subscription in the Sequin web console.
 
-## Upserting into the destination
+## Writing to your cache
 
-You'll upsert rows into your destination table using an `insert into ... on conflict` statement. This ensures idempotency - the same row can only be written once.
+Because cache update operations are usually idempotent, you can process batches of rows. If your worker dies mid-way through processing a batch, it's safe for another worker to re-process the same batch from the beginning.
 
-The conflict key will be the primary key column that matches your source table.
+Here's an example using Redis:
 
-The process will be:
-
-1. Map rows to your destination schema
-2. Perform the upsert, ideally in a single statement
-
-### Map rows to your schema
-
-You'll need to map the source table's schema to your destination schema. This might involve:
-
-- Renaming columns
-- Transforming values
-- Adding/removing columns
-- Type conversions
-
-Sequin sends rows to your consumer in JSON. JSON's types are not as rich as Postgres' types. So you may need to cast the types appropriately:
-
-- **Timestamps/dates**: Transported in JSON as strings, need casting to `timestamp` or `date`
-- **UUIDs**: Transported in JSON as strings, need casting to `uuid`
-- **Numeric types**: Transported in JSON as numbers, might need explicit casting to `decimal`, `bigint`, etc.
-
-### Batch upserts
-
-Ideally, you batch your upserts. For example, if you're processing 100 rows, you'll upsert all 100 in a single statement. This is far more efficient than upserting individual rows.
-
-If you're using an ORM, consult your ORM's documentation for how to perform batched upserts. For example, here's what upserts look like with `ActiveRecord`:
-
-```ruby
-class Product < ApplicationRecord
-  def self.batch_upsert_products(products_data)
-    products = products_data.map { |data| new(data) }
+```javascript
+async function updateCache(rows) {
+  // Process one row at a time if your cache doesn't support batch operations
+  for (const row of rows) {
+    const { id, ...data } = row.record;
     
-    Product.upsert_all(
-      products.map(&:attributes),
-      unique_by: :product_id,
-      update_only: Product.column_names - ['id', 'created_at'],
-      returning: :product_id
-    )
-  end
-end
+    // Use SET to update the cache
+    // The key is derived from the table's primary key
+    await redis.set(
+      `users:${id}`,
+      JSON.stringify(data),
+      // Optional: Set expiration
+      'EX', 
+      86400 // 24 hours
+    );
+  }
+}
 ```
 
-In raw SQL, that looks something like:
+For search indexes like Elasticsearch:
 
-```sql
-insert into replicated_products (
-  product_id,
-  name,
-  price,
-  created_at
-) values 
-  ($1, $2, $3, $4),
-  ($5, $6, $7, $8),
-  ($9, $10, $11, $12)
-on conflict (product_id) do update set
-  name = excluded.name,
-  price = excluded.price,
-  created_at = excluded.created_at;
+```javascript
+async function updateCache(rows) {
+  for (const row of rows) {
+    const { id, ...data } = row.record;
+    
+    // Index/update document
+    await elasticsearch.index({
+      index: 'users',
+      id: id,
+      body: data,
+      // Refresh immediately for testing
+      refresh: true
+    });
+  }
+}
 ```
+
+The key principles are:
+
+1. Use the primary key from the source table to generate cache keys
+2. Handle one row at a time if batching isn't supported
+3. Use operations that are idempotent (SET vs APPEND)
 
 ## Deploying to production
 
-When deploying your cache maintenance pipeline to production, consider these key aspects:
+Once you've tested your cache maintenance pipeline locally, you can deploy it to production.
 
-### Cache infrastructure setup
+You can use the Sequin CLI to export your local configuration and apply it to your production environment:
 
 <Steps>
-  <Step title="Scale your cache">
-    Ensure your cache infrastructure can handle production load:
+  <Step title="Perform migrations">
+    Ensure your production destination database has the tables you want to replicate to.
     
-    - Configure appropriate memory allocation
-    - Set up cache clustering if needed
-    - Enable persistence for Redis/similar caches
+    We recommend deploying and migrating before proceeding.
   </Step>
 
-  <Step title="Configure monitoring">
-    Setup monitoring for:
-    
-    - Cache hit/miss rates
-    - Memory usage
-    - Eviction rates
-    - Response times
+  <Step title="Set your Sequin token">
+    If you're using a Consumer Group, ensure your Sequin token is configured in your production environment.
   </Step>
 
-  <Step title="Set up Sequin">
-    Configure your Sequin pipeline:
+  <Step title="Export your configuration">
+    After [setting up the Sequin CLI](/cli), export your local configuration:
 
     ```bash
     sequin config export --context=local
     ```
 
-    Create environment-specific configurations:
-    
-    ```yaml
-    # sequin.production.yaml
-    cache:
-      redis:
-        url: ${REDIS_PRODUCTION_URL}
-        maxMemory: "2gb"
-        maxMemoryPolicy: "allkeys-lru"
-    ```
+    This creates a `sequin.yaml` file you can commit to your repository.
+
+    <Info>
+      Consider having different YAML files for different environments. For example, `sequin.staging.yaml` and `sequin.production.yaml`.
+
+      Database names often differ between environments (e.g. `my_db_dev` vs `my_db_prod`).
+    </Info>
   </Step>
 
-  <Step title="Deploy configurations">
-    Apply your production settings:
+  <Step title="Apply to production">
+    Apply your configuration to production:
 
     ```bash
-    sequin config apply sequin.production.yaml --context=production
+    sequin config apply sequin.yaml --context=production
     ```
   </Step>
 </Steps>
-
-### Production best practices
-
-1. **Graceful degradation**: Implement fallbacks if cache becomes unavailable
-2. **Circuit breakers**: Prevent cascade failures if cache is overloaded
-3. **Cache warming**: Schedule periodic cache warming to maintain performance
-4. **Monitoring alerts**: Set up alerts for cache health metrics
-
-## Monitoring and maintenance
-
-Keep your cache healthy with proper monitoring and maintenance:
-
-### Key metrics to track
-
-- **Hit rate**: Aim for >80% cache hits
-- **Memory usage**: Monitor for approaching limits
-- **Eviction rate**: Watch for unexpected spikes
-- **Latency**: Track read/write times
-- **Stale entries**: Monitor TTL expiration patterns
-
-### Common maintenance tasks
-
-1. **Regular health checks**:
-   ```bash
-   redis-cli --stat  # For Redis monitoring
-   ```
-
-2. **Cache analysis**:
-   ```bash
-   redis-cli --bigkeys  # Find large keys
-   ```
-
-3. **Performance tuning**:
-   ```bash
-   redis-cli info | grep used_memory  # Memory usage
-   ```
-
-### Automated maintenance
-
-Set up automated tasks for:
-- Periodic cache warming
-- Memory usage optimization
-- Stale entry cleanup
-- Performance reporting
 
 ## Re-warming caches
 
@@ -692,34 +338,5 @@ You may need to re-warm your cache in these scenarios:
 1. **After infrastructure changes**: Cache server upgrades/migrations
 2. **Data model updates**: Schema or business logic changes
 3. **Cache eviction**: Unexpected cache flushes
-4. **Performance optimization**: Improving cache patterns
 
-To re-warm your cache:
-
-<Steps>
-  <Step title="Prepare for re-warming">
-    1. Identify affected cache keys
-    2. Estimate data volume
-    3. Plan for increased database load
-  </Step>
-
-  <Step title="Execute re-warming">
-    Use Sequin's rewind feature to replay data:
-    
-    1. Go to your Consumer Group/Webhook Subscription
-    2. Click "Rewind"
-    3. Choose the appropriate time range
-  </Step>
-
-  <Step title="Monitor progress">
-    Track re-warming progress:
-    
-    - Cache hit rates
-    - Memory usage
-    - System performance
-  </Step>
-</Steps>
-
-<Info>
-  Consider implementing a gradual re-warming strategy for large datasets to minimize system impact.
-</Info>
+To re-warm your cache, go to your Consumer Group or Webhook Subscription. Click "Rewind". Indicate how far back in time you want to re-warm your cache. You can choose to replay the entire table in the stream, or just rows from the last few days, etc.

@@ -36,7 +36,7 @@ To replicate tables between databases, you'll perform these steps:
 
 ### Deletes
 
-Sequin streams the latest version of rows as they're created and updated in a table. Because it streams rows from tables, and deleted rows are removed from tables, Sequin can't "see" deleted rows.
+Sequin streams the latest version of rows as they're created and updated in a table. Because Sequin streams rows from tables, and deleted rows are removed from tables, Sequin can't "see" deleted rows.
 
 You have two options for propagating deletes to downstream Postgres tables:
 
@@ -142,13 +142,13 @@ You can use a Consumer Group to pull rows from your stream and write them to you
   <Step title="Configure the source">
     Under "Source", select the stream you created.
 
-    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. You can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
+    For "Records to process", you can optionally add filters to sync a subset of your source table to the destination. For example, you can filter for `subscriptions` with a certain `status` or orders over a certain `total_amount`:
 
     <Frame>
       <img style={{maxWidth: '500px'}} src="/images/how-tos/replicating-tables/records-to-process.png" alt="Records to process" />
     </Frame>
 
-    You can always change these filters later and [re-backfill the destination(#re-backfill-the-destination).
+    You can always change these filters later and [re-backfill the destination](#re-backfill-the-destination).
 
     For "Where should the consumer group start?", you can indicate how far back in time you want to sync rows from the source table. Rows are ordered by the sort column you chose when you created the stream. So if you chose a field like `updated_at`, you can choose to sync rows from the beginning of the table, from the last few months, etc.
 
@@ -214,8 +214,6 @@ func processRows(ctx context.Context, msgs []sequin.Message) error {
 }
 ```
 
-For `MaxBatchSize`, if you think it will difficult for you to [batch upsert rows](#upserting-into-your-audit-table) with your ORM or database adapter, set it to `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
-
 See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the implementation details of `upsert_events`.
 
 <Info>
@@ -232,7 +230,7 @@ Instead of pulling rows with a Consumer Group, you can have Sequin push them to 
 
 ### Handle webhooks in your application
 
-Your webhook endpoint will receive POST requests with [row payloads](/consume/webhooks).
+Your webhook endpoint will receive POST requests with a [batch of one or more rows](/consume/webhooks).
 
 Here's an example of handling webhooks with Node.js and Express:
 

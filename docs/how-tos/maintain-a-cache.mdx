@@ -1,25 +1,25 @@
 ---
-title: "How to replicate tables with Sequin"
-sidebarTitle: "Replicate tables"
-description: "Replicate tables between databases"
+title: "How to maintain a cache with Sequin"
+sidebarTitle: "Maintain a cache"
+description: "Keep your cache warm and up-to-date using Sequin streams"
 ---
 
-Sequin makes it easy to replicate tables between databases. Common use cases include:
+Sequin makes it easy to maintain caches that stay in sync with your database. Common use cases include:
 
-- **Analytics & reporting**: Maintain a dedicated analytics database with transformed data optimized for complex queries and reporting
-- **Data warehousing**: Consolidate data from multiple sources into a central warehouse while preserving real-time updates
-- **Read replicas**: Create read-optimized copies of tables to improve application performance and reduce load on primary databases
-- **Data integration**: Sync data between different systems while applying transformations to match each system's schema
+- **Redis caching**: Keep frequently accessed data cached in Redis for fast retrieval
+- **In-memory caches**: Maintain application-level caches like Memcached or application memory
+- **Search indexes**: Keep search indexes like Elasticsearch up-to-date with your database
+- **CDN caching**: Warm and maintain CDN caches for static or semi-static content
 
-With Sequin, you can turn tables in your Postgres database into streams. Your application can pull rows from a stream using a Consumer Group or receive rows via a Webhook Subscription. Then, your application can upsert rows into a destination table.
+With Sequin, you can turn tables in your Postgres database into streams. Your application can pull rows from a stream using a Consumer Group or receive rows via a Webhook Subscription. Then, your application can update your cache with the latest data.
 
-Sequin makes it easy for your app to stream all the historical rows in a table, then subscribe to receive updated and inserted rows in real-time. Sequin ensures ordered delivery and exactly-once processing, so you don't need to worry about race conditions or missing rows.
+Sequin ensures ordered delivery and exactly-once processing, so you don't need to worry about race conditions or stale cache entries. This is especially important when maintaining caches that need to reflect the current state of your database.
 
 This guide shows you how to:
 
-- **Stream an existing table**: Copy all rows from a source table
-- **Keep tables in sync**: Maintain an up-to-date copy as the source changes
-- **Transform data**: Modify the data before writing to the destination
+- **Warm your cache**: Populate your cache with initial data
+- **Keep it fresh**: Maintain an up-to-date cache as source data changes
+- **Rebuild when needed**: Re-warm your cache if it gets flushed
 
 ## Prerequisites
 

@@ -32,7 +32,7 @@ import { toast } from "svelte-sonner";
 import * as Components from "../svelte/**/*.svelte";
 import topbar from "../vendor/topbar";
 
-let ko = null;
+let ko;
 
 posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",

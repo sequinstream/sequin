@@ -22,6 +22,7 @@
 
 import "phoenix_html";
 // Establish Phoenix Socket and LiveView configuration.
+import * as KoalaSDK from "@getkoala/browser";
 import Intercom from "@intercom/messenger-js-sdk";
 import { getHooks } from "live_svelte";
 import { Socket } from "phoenix";
@@ -30,6 +31,8 @@ import posthog from "posthog-js";
 import { toast } from "svelte-sonner";
 import * as Components from "../svelte/**/*.svelte";
 import topbar from "../vendor/topbar";
+
+let ko;
 
 posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
   api_host: "https://d2qm7p9dngzyqg.cloudfront.net",
@@ -42,6 +45,12 @@ posthog.init(document.querySelector("body").getAttribute("data-ph-token"), {
 Intercom({
   app_id: "btt358pc",
   custom_launcher_selector: "#launch-intercom",
+});
+
+KoalaSDK.load({
+  project: document.querySelector("body").getAttribute("data-ko-token"),
+}).then((koalaSDK) => {
+  ko = koalaSDK;
 });
 
 let csrfToken = document
@@ -90,6 +99,14 @@ window.addEventListener("phx:ph-identify", (event) => {
     name: accountName,
   });
 
+  ko.identify(userEmail, {
+    name: userName,
+    user_id: userId,
+    $account: {
+      account_id: accountId,
+    },
+  });
+
   Intercom({
     app_id: "btt358pc",
     user_id: userId,
@@ -105,6 +122,7 @@ window.addEventListener("phx:ph-identify", (event) => {
 
 window.addEventListener("phx:ph-reset", () => {
   posthog.reset();
+  ko.reset();
   if (window.Intercom) {
     window.Intercom("shutdown");
     window.Intercom("boot", { app_id: "YOUR_APP_ID" });

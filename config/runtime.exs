@@ -75,6 +75,10 @@ if config_env() == :prod and self_hosted do
   host = System.get_env("PHX_HOST")
   port = String.to_integer(System.get_env("PORT") || "7376")
 
+  config :sequin, Sequin.Koala,
+    public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002",
+    is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
+
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",

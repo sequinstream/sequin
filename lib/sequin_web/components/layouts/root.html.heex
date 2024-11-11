@@ -26,6 +26,13 @@
         Application.get_env(:sequin, Sequin.Posthog, [])[:frontend_api_key]
       end
     }
+    data-ko-token={
+      if Application.get_env(:sequin, Sequin.Koala, [])[:is_disabled] do
+        nil
+      else
+        Application.get_env(:sequin, Sequin.Koala, [])[:public_key]
+      end
+    }
   >
     <.svelte name="components/Toaster" />
     <%= if @current_user && @current_user.impersonating_user do %>

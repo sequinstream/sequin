@@ -94,7 +94,8 @@
     {
       "group": "How-to guides",
       "pages": [
-        "how-tos/audit-logging"
+        "how-tos/audit-logging",
+        "how-tos/replicating-tables"
       ]
     },
     {

@@ -11,6 +11,10 @@ Audit logs are an essential tool for tracking and recording changes in your data
 - **Build customer features**: Create activity feeds, change history views, and even undo/redo functionality for your users
 - **Data recovery**: Maintain a backup of deleted or modified data, enabling recovery from accidental deletions or unwanted changes
 
+With Sequin, you can turn Postgres' Write Ahead Log (WAL) into a stream. Your application can pull rows from that stream using a Consumer Group or receive rows via a Webhook Subscription. Then, your application can upsert rows into a destination table.
+
+Sequin ensures ordered delivery and exactly-once processing, so you don't need to worry about race conditions or missing rows.
+
 ### Comparison with other solutions
 
 Here's how Sequin's audit logging approach compares to alternatives:
@@ -317,9 +321,13 @@ func processEvents(ctx context.Context, msgs []sequin.Message) error {
 }
 ```
 
-{/* TODO: Link to example repo */}
+For `MaxBatchSize`, if you think it will difficult for you to [batch upsert rows](#upserting-into-your-audit-table) with your ORM or database adapter, set it to `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
 
 See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the implementation details of `upsert_events`.
+
+<Info>
+  See the [Go SDK](https://github.com/sequinstream/sequin-go/tree/main/examples/audit_logging) for a complete example of consuming events from a Consumer Group with Go.
+</Info>
 
 ### Repeat for other tables
 
@@ -327,11 +335,45 @@ If you're creating consumer groups for multiple tables, repeat the process for e
 
 ## Consume events with webhooks
 
-{/* {{TODO: Introduce batching for webhooks}} */}
+Instead of pulling events from a consumer group, you can have Sequin push events to a webhook endpoint. Each webhook payload will contain a batch of events. Events are processed exactly once per subscription.
 
-Instead of pulling events from a consumer group, you can have Sequin push events to a webhook endpoint. Each webhook payload will contain one event. Events are processed exactly once per subscription.
+### Handle webhooks in your application
+
+Your webhook endpoint will receive POST requests with [event payloads](/consume/webhooks).
+
+Here's an example of handling webhooks with Node.js and Express:
+
+```javascript
+app.post('/webhooks/audit-events', async (req, res) => {
+  try {
+    // The webhook payload contains an array of records in req.body.data
+    const events = req.body.data.map(item => ({
+      eventId: item.record.id,
+      action: item.record.action,
+      oldValues: item.record.changes,
+      newValues: item.record,
+      tableName: item.metadata.table_name,
+      tableSchema: item.metadata.table_schema
+    }));
+    
+    // Batch upsert all events into your audit table
+    await upsertEvents(events);
+
+    // Return 200 to acknowledge successful processing
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    // Return 500 to trigger a retry
+    res.sendStatus(500);
+  }
+});
+```
+
+If your endpoint returns a non-200 status code or fails to respond within the configured timeout, Sequin will retry the webhook indefintely with an exponential backoff.
 
 ### Create a webhook subscription
+
+With your webhook endpoint ready, you can create a subscription:
 
 <Steps>
   <Step title="Navigate to Webhook Subscriptions">
@@ -346,6 +388,10 @@ Instead of pulling events from a consumer group, you can have Sequin push events
 
   <Step title="Configure the webhook">
     Under "Webhook configuration", enter your endpoint URL. This is where Sequin will send the webhook payloads.
+
+    For "Batch size", if you think it will difficult for you to [batch upsert rows](#upserting-into-your-audit-table) with your ORM or database adapter, leave at the default value of `1`. Otherwise, we recommend you set it to a batch size of at least 100. This will improve overall throughput. (Depending on your hardware and use case, you'll see diminishing returns upserting batch sizes greater than 1000 into Postgres.)
+
+    Remember, you'll want to insert all rows you receive in a webhook payload in a single statement.
   </Step>
 
   <Step title="Configure message grouping">
@@ -356,43 +402,6 @@ Instead of pulling events from a consumer group, you can have Sequin push events
     Click "Create Webhook Subscription".
   </Step>
 </Steps>
-
-### Handle webhooks in your application
-
-{/* TODO: Add elsewhere typed examples of shapes when eg coming from a sequin_events table */}
-
-Your webhook endpoint will receive POST requests with [event payloads](/consume/webhooks).
-
-Here's an example of handling webhooks with Node.js and Express:
-
-```javascript
-app.post('/webhooks/audit-events', async (req, res) => {
-  try {
-    // The webhook payload contains a record and metadata
-    // The record is the event row itself
-    const event = req.body.record;
-    const { id: eventId, record: newValues, action, changes: oldValues } = event;
-    
-    // Upsert the event into your audit table
-    // We'll go into the details of upserting events below
-    await upsertEvent({
-      eventId,
-      action,
-      oldValues,
-      newValues
-    });
-
-    // Return 200 to acknowledge successful processing
-    res.sendStatus(200);
-  } catch (error) {
-    console.error('Error processing webhook:', error);
-    // Return 500 to trigger a retry
-    res.sendStatus(500);
-  }
-});
-```
-
-If your endpoint returns a non-200 status code or fails to respond within the configured timeout, Sequin will retry the webhook indefintely with an exponential backoff.
 
 ## Upserting into your audit table
 

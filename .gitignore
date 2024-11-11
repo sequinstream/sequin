@@ -57,3 +57,5 @@ priv/logs/consumer_messages.log
 
 sequin.log
 sequin.yaml
+.aider*
+.env

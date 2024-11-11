@@ -26,6 +26,7 @@
     "cmdk-sv": "^0.0.18",
     "date-fns": "^3.6.0",
     "live_svelte": "file:../deps/live_svelte",
+    "lodash": "^4.17.21",
     "lucide-svelte": "^0.428.0",
     "mode-watcher": "^0.4.1",
     "phoenix": "file:../deps/phoenix",

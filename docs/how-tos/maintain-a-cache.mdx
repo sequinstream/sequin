@@ -234,6 +234,222 @@ See "[Upserting into the audit table](#upserting-into-the-audit-table)" for the 
   See the [Go SDK](https://github.com/sequinstream/sequin-go/tree/main/examples/audit_logging) for a complete example of consuming events from a Consumer Group with Go.
 </Info>
 
+## Error handling and recovery
+
+When maintaining a cache, you need robust error handling to ensure data consistency:
+
+### Common failure scenarios
+
+1. **Cache connection failures**
+```javascript
+try {
+  await cache.set(key, value);
+} catch (error) {
+  if (error.code === 'ECONNREFUSED') {
+    // Implement circuit breaker pattern
+    await circuitBreaker.recordFailure();
+    // Fall back to database
+    return await fetchFromDatabase(key);
+  }
+}
+```
+
+2. **Cache eviction handling**
+```ruby
+def get_with_fallback(key)
+  value = cache.get(key)
+  if value.nil?
+    # Cache miss - reload from source
+    value = load_from_source(key)
+    cache.set(key, value, ttl: 1.hour)
+  end
+  value
+end
+```
+
+3. **Inconsistency detection**
+```python
+def verify_cache_consistency(key):
+    cache_value = cache.get(key)
+    db_value = db.get(key)
+    
+    if cache_value != db_value:
+        # Log inconsistency
+        logger.warn(f"Cache inconsistency detected for {key}")
+        # Update cache with correct value
+        cache.set(key, db_value)
+        # Track metric
+        metrics.increment('cache.inconsistency')
+```
+
+### Recovery strategies
+
+<Steps>
+  <Step title="Circuit breaker implementation">
+    Protect your system when cache becomes unavailable:
+    
+    ```javascript
+    class CacheCircuitBreaker {
+      constructor() {
+        this.failures = 0;
+        this.lastFailure = null;
+        this.threshold = 5;
+        this.resetTimeout = 60000; // 1 minute
+      }
+    
+      async execute(operation) {
+        if (this.isOpen()) {
+          throw new Error('Circuit breaker is open');
+        }
+        
+        try {
+          const result = await operation();
+          this.recordSuccess();
+          return result;
+        } catch (error) {
+          this.recordFailure();
+          throw error;
+        }
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Fallback mechanisms">
+    Implement graceful degradation:
+    
+    ```ruby
+    def get_cached_data(key)
+      begin
+        # Try cache first
+        cached = cache.get(key)
+        return cached if cached
+      rescue Redis::CannotConnectError => e
+        # Log cache failure
+        logger.error("Cache connection failed: #{e.message}")
+      end
+    
+      # Fallback to database
+      db_value = database.fetch(key)
+      
+      # Attempt to update cache in background
+      async do
+        cache.set(key, db_value)
+      end
+      
+      db_value
+    end
+    ```
+  </Step>
+</Steps>
+
+## Advanced caching patterns
+
+### Cache-aside pattern
+
+Implement the cache-aside pattern for better control:
+
+```javascript
+async function getCachedData(key) {
+  // Try cache first
+  let data = await cache.get(key);
+  
+  if (!data) {
+    // Cache miss - load from database
+    data = await database.fetch(key);
+    
+    // Write to cache with TTL
+    await cache.set(key, data, 'EX', 3600); // 1 hour TTL
+  }
+  
+  return data;
+}
+```
+
+### Write-through caching
+
+Maintain consistency with write-through caching:
+
+```python
+def update_data(key, value):
+    # Update database first
+    database.update(key, value)
+    
+    # Then update cache
+    cache.set(key, value)
+    
+    # Invalidate related cache entries
+    related_keys = find_related_keys(key)
+    cache.delete_many(related_keys)
+```
+
+### Cache warming strategies
+
+1. **Predictive warming**:
+```ruby
+def warm_cache_for_user(user_id)
+  # Warm frequently accessed data
+  common_queries = [
+    [:recent_orders, 10],
+    [:preferences],
+    [:notifications, 5]
+  ]
+  
+  common_queries.each do |query, limit|
+    data = database.fetch_user_data(user_id, query, limit)
+    cache.set("user:#{user_id}:#{query}", data)
+  end
+end
+```
+
+2. **Background refresh**:
+```javascript
+async function backgroundRefresh() {
+  const keys = await cache.keys('*');
+  
+  for (const key of keys) {
+    const ttl = await cache.ttl(key);
+    
+    // Refresh keys nearing expiration
+    if (ttl < 300) { // Less than 5 minutes
+      const newData = await fetchFreshData(key);
+      await cache.set(key, newData);
+    }
+  }
+}
+```
+
+### Monitoring and alerting
+
+Set up comprehensive monitoring:
+
+```yaml
+# Example Prometheus alerts
+groups:
+- name: CacheAlerts
+  rules:
+  - alert: HighCacheMissRate
+    expr: rate(cache_misses_total[5m]) / rate(cache_requests_total[5m]) > 0.2
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: High cache miss rate detected
+      
+  - alert: CacheMemoryNearLimit
+    expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: Cache memory usage approaching limit
+```
+
+Remember to:
+- Set appropriate thresholds for your use case
+- Configure notification channels
+- Document recovery procedures
+
 ### Rewind as needed
 
 Remember, when you're in development, you can rewind your Consumer Group to any point in time. As you're tweaking your pipeline and your destination table, you can rewind your Consumer Group in the Sequin web console.

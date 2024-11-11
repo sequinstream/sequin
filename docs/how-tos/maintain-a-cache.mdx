@@ -375,48 +375,135 @@ on conflict (product_id) do update set
 
 ## Deploying to production
 
-Once you've tested your replication pipeline locally, you can deploy it to production.
+When deploying your cache maintenance pipeline to production, consider these key aspects:
 
-You can use the Sequin CLI to export your local configuration and apply it to your production environment:
+### Cache infrastructure setup
 
 <Steps>
-  <Step title="Perform migrations">
-    Ensure your production destination database has the tables you want to replicate to.
+  <Step title="Scale your cache">
+    Ensure your cache infrastructure can handle production load:
     
-    We recommend deploying and migrating before proceeding.
+    - Configure appropriate memory allocation
+    - Set up cache clustering if needed
+    - Enable persistence for Redis/similar caches
   </Step>
 
-  <Step title="Set your Sequin token">
-    If you're using a Consumer Group, ensure your Sequin token is configured in your production environment.
+  <Step title="Configure monitoring">
+    Setup monitoring for:
+    
+    - Cache hit/miss rates
+    - Memory usage
+    - Eviction rates
+    - Response times
   </Step>
 
-  <Step title="Export your configuration">
-    After [setting up the Sequin CLI](/cli), export your local configuration:
+  <Step title="Set up Sequin">
+    Configure your Sequin pipeline:
 
     ```bash
     sequin config export --context=local
     ```
 
-    This creates a `sequin.yaml` file you can commit to your repository.
-
-    <Info>
-      Consider having different YAML files for different environments. For example, `sequin.staging.yaml` and `sequin.production.yaml`.
-
-      Database names often differ between environments (e.g. `my_db_dev` vs `my_db_prod`).
-    </Info>
+    Create environment-specific configurations:
+    
+    ```yaml
+    # sequin.production.yaml
+    cache:
+      redis:
+        url: ${REDIS_PRODUCTION_URL}
+        maxMemory: "2gb"
+        maxMemoryPolicy: "allkeys-lru"
+    ```
   </Step>
 
-  <Step title="Apply to production">
-    Apply your configuration to production:
+  <Step title="Deploy configurations">
+    Apply your production settings:
 
     ```bash
-    sequin config apply sequin.yaml --context=production
+    sequin config apply sequin.production.yaml --context=production
     ```
   </Step>
 </Steps>
 
-## Re-backfilling
+### Production best practices
 
-You can re-backfill your destination table at any time. For example, if you've fixed a bug in your upsert logic or changed the schema of your destination table, you might want to "play back" all source rows to re-run your upserts.
+1. **Graceful degradation**: Implement fallbacks if cache becomes unavailable
+2. **Circuit breakers**: Prevent cascade failures if cache is overloaded
+3. **Cache warming**: Schedule periodic cache warming to maintain performance
+4. **Monitoring alerts**: Set up alerts for cache health metrics
 
-You can re-backfill at any time in the Sequin web console. Go to the page for your Consumer Group or Webhook Subscription and click "Rewind".
+## Monitoring and maintenance
+
+Keep your cache healthy with proper monitoring and maintenance:
+
+### Key metrics to track
+
+- **Hit rate**: Aim for >80% cache hits
+- **Memory usage**: Monitor for approaching limits
+- **Eviction rate**: Watch for unexpected spikes
+- **Latency**: Track read/write times
+- **Stale entries**: Monitor TTL expiration patterns
+
+### Common maintenance tasks
+
+1. **Regular health checks**:
+   ```bash
+   redis-cli --stat  # For Redis monitoring
+   ```
+
+2. **Cache analysis**:
+   ```bash
+   redis-cli --bigkeys  # Find large keys
+   ```
+
+3. **Performance tuning**:
+   ```bash
+   redis-cli info | grep used_memory  # Memory usage
+   ```
+
+### Automated maintenance
+
+Set up automated tasks for:
+- Periodic cache warming
+- Memory usage optimization
+- Stale entry cleanup
+- Performance reporting
+
+## Re-warming caches
+
+You may need to re-warm your cache in these scenarios:
+
+1. **After infrastructure changes**: Cache server upgrades/migrations
+2. **Data model updates**: Schema or business logic changes
+3. **Cache eviction**: Unexpected cache flushes
+4. **Performance optimization**: Improving cache patterns
+
+To re-warm your cache:
+
+<Steps>
+  <Step title="Prepare for re-warming">
+    1. Identify affected cache keys
+    2. Estimate data volume
+    3. Plan for increased database load
+  </Step>
+
+  <Step title="Execute re-warming">
+    Use Sequin's rewind feature to replay data:
+    
+    1. Go to your Consumer Group/Webhook Subscription
+    2. Click "Rewind"
+    3. Choose the appropriate time range
+  </Step>
+
+  <Step title="Monitor progress">
+    Track re-warming progress:
+    
+    - Cache hit rates
+    - Memory usage
+    - System performance
+  </Step>
+</Steps>
+
+<Info>
+  Consider implementing a gradual re-warming strategy for large datasets to minimize system impact.
+</Info>

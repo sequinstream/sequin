@@ -49,7 +49,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   def stop_for_destination_consumer(supervisor, id) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, pipeline(id).via_tuple(id))
+    Enum.each([HttpPushPipeline, SqsPipeline], &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id)))
     :ok
   end
 

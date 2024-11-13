@@ -25,15 +25,29 @@ defmodule Sequin.Repo do
     )
   end
 
-  def lazy_preload(%_{} = entity, fields) do
+  def lazy_preload(%_{} = entity, field_names) do
     # For some reason, in test, when we manually set fields on a struct,
     # sometimes Ecto will still try to preload them.
-    unloaded_fields =
-      Enum.filter(fields, fn field ->
-        value = Map.fetch!(entity, field)
-        is_struct(value, Ecto.Association.NotLoaded)
-      end)
+    Enum.reduce(field_names, entity, fn
+      {field_name, child_field_names}, entity ->
+        entity
+        |> maybe_preload(field_name)
+        |> Map.update!(field_name, fn sub_entity ->
+          lazy_preload(sub_entity, child_field_names)
+        end)
 
-    preload(entity, unloaded_fields)
+      field_name, entity ->
+        maybe_preload(entity, field_name)
+    end)
+  end
+
+  defp maybe_preload(entity, field_name) do
+    value = Map.fetch!(entity, field_name)
+
+    if is_struct(value, Ecto.Association.NotLoaded) do
+      preload(entity, [field_name])
+    else
+      entity
+    end
   end
 end

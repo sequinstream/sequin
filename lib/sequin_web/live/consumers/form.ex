@@ -190,6 +190,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
         "destination" => %{
+          "type" => "http_push",
           "http_endpoint_id" => form["httpEndpointId"],
           "http_endpoint_path" => form["httpEndpointPath"]
         },
@@ -251,7 +252,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     if is_nil(socket.assigns.prev_params["consumer_kind"]) and next_params["consumer_kind"] do
       case next_params["consumer_kind"] do
         "http_pull" -> assign(socket, :consumer, %HttpPullConsumer{})
-        "http_push" -> assign(socket, :consumer, %DestinationConsumer{})
+        "http_push" -> assign(socket, :consumer, %DestinationConsumer{type: :http_push})
       end
     else
       socket
@@ -290,8 +291,8 @@ defmodule SequinWeb.ConsumersLive.Form do
     case consumer do
       %DestinationConsumer{type: :http_push} ->
         Map.merge(base, %{
-          "http_endpoint_id" => consumer.destination.http_endpoint_id,
-          "http_endpoint_path" => consumer.destination.http_endpoint_path
+          "http_endpoint_id" => consumer.destination && consumer.destination.http_endpoint_id,
+          "http_endpoint_path" => consumer.destination && consumer.destination.http_endpoint_path
         })
 
       %HttpPullConsumer{} ->

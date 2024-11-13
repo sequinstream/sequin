@@ -154,7 +154,7 @@ defmodule SequinWeb.ConsumersLive.Index do
       module={Form}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{}}
+      consumer={%DestinationConsumer{type: :http_push}}
     />
     """
   end

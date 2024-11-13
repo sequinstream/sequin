@@ -2,7 +2,7 @@ defmodule Sequin.Streams do
   @moduledoc false
   import Ecto.Query
 
-  alias Sequin.Consumers.HttpPushConsumer
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Error
   alias Sequin.Repo
   alias Sequin.Streams.ConsumerMessage
@@ -190,7 +190,7 @@ defmodule Sequin.Streams do
     :ok
   end
 
-  # HttpPushConsumer Messages
+  # DestinationConsumer Messages
 
   def all_consumer_messages do
     Repo.all(ConsumerMessage)
@@ -271,8 +271,8 @@ defmodule Sequin.Streams do
     Repo.delete_all(query)
   end
 
-  @spec ack_messages(Sequin.Consumers.HttpPushConsumer.t(), any()) :: :ok
-  def ack_messages(%HttpPushConsumer{} = consumer, ack_ids) do
+  @spec ack_messages(Sequin.Consumers.DestinationConsumer.t(), any()) :: :ok
+  def ack_messages(%DestinationConsumer{} = consumer, ack_ids) do
     Repo.transact(fn ->
       {_, _} =
         consumer.id
@@ -281,7 +281,7 @@ defmodule Sequin.Streams do
         |> ConsumerMessage.where_state(:pending_redelivery)
         |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
-      if HttpPushConsumer.should_delete_acked_messages?(consumer) do
+      if DestinationConsumer.should_delete_acked_messages?(consumer) do
         {_, _} =
           consumer.id
           |> ConsumerMessage.where_consumer_id()
@@ -303,8 +303,8 @@ defmodule Sequin.Streams do
     :ok
   end
 
-  @spec nack_messages(Sequin.Consumers.HttpPushConsumer.t(), any()) :: :ok
-  def nack_messages(%HttpPushConsumer{} = consumer, ack_ids) do
+  @spec nack_messages(Sequin.Consumers.DestinationConsumer.t(), any()) :: :ok
+  def nack_messages(%DestinationConsumer{} = consumer, ack_ids) do
     {_, _} =
       consumer.id
       |> ConsumerMessage.where_consumer_id()

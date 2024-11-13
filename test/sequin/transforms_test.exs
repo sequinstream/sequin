@@ -292,7 +292,7 @@ defmodule Sequin.TransformsTest do
     endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, name: "test-endpoint")
 
     consumer =
-      ConsumersFactory.insert_http_push_consumer!(
+      ConsumersFactory.insert_destination_consumer!(
         name: "test-consumer",
         account_id: account.id,
         status: :active,

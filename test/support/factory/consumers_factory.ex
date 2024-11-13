@@ -7,9 +7,9 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -28,25 +28,25 @@ defmodule Sequin.Factory.ConsumersFactory do
   def consumer(attrs \\ []) do
     case Enum.random([:http_pull, :http_push]) do
       :http_pull -> http_pull_consumer(attrs)
-      :http_push -> http_push_consumer(attrs)
+      :http_push -> destination_consumer(attrs)
     end
   end
 
   def consumer_attrs(attrs \\ []) do
     case Enum.random([:http_pull, :http_push]) do
       :http_pull -> http_pull_consumer_attrs(attrs)
-      :http_push -> http_push_consumer_attrs(attrs)
+      :http_push -> destination_consumer_attrs(attrs)
     end
   end
 
   def insert_consumer!(attrs \\ []) do
     case Enum.random([:http_pull, :http_push]) do
       :http_pull -> insert_http_pull_consumer!(attrs)
-      :http_push -> insert_http_push_consumer!(attrs)
+      :http_push -> insert_destination_consumer!(attrs)
     end
   end
 
-  def http_push_consumer(attrs \\ []) do
+  def destination_consumer(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {account_id, attrs} =
@@ -91,7 +91,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       end)
 
     merge_attributes(
-      %HttpPushConsumer{
+      %DestinationConsumer{
         id: Factory.uuid(),
         account_id: account_id,
         ack_wait_ms: 30_000,
@@ -113,9 +113,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  def http_push_consumer_attrs(attrs \\ []) do
+  def destination_consumer_attrs(attrs \\ []) do
     attrs
-    |> http_push_consumer()
+    |> destination_consumer()
     |> Sequin.Map.from_ecto()
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
@@ -128,7 +128,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     end)
   end
 
-  def insert_http_push_consumer!(attrs \\ []) do
+  def insert_destination_consumer!(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {account_id, attrs} =
@@ -137,14 +137,14 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs =
       attrs
       |> Map.put(:account_id, account_id)
-      |> http_push_consumer_attrs()
+      |> destination_consumer_attrs()
 
-    case Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs) do
+    case Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, attrs) do
       {:ok, consumer} ->
         consumer
 
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
-        insert_http_push_consumer!(attrs)
+        insert_destination_consumer!(attrs)
     end
   end
 

@@ -3,8 +3,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   use Broadway
 
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
@@ -13,7 +13,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   require Logger
 
   def start_link(opts) do
-    %HttpPushConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
+    %DestinationConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
     consumer = Repo.preload(consumer, [:http_endpoint])
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
@@ -152,7 +152,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     end
   end
 
-  defp push_message(%HttpEndpoint{} = http_endpoint, %HttpPushConsumer{} = consumer, message_data, req_opts) do
+  defp push_message(%HttpEndpoint{} = http_endpoint, %DestinationConsumer{} = consumer, message_data, req_opts) do
     headers = http_endpoint.headers
     encrypted_headers = http_endpoint.encrypted_headers || %{}
     headers = Map.merge(headers, encrypted_headers)

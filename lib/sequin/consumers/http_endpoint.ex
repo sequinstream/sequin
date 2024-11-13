@@ -41,7 +41,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
     belongs_to :account, Sequin.Accounts.Account
 
-    has_many :http_push_consumers, Sequin.Consumers.HttpPushConsumer
+    has_many :destination_consumers, Sequin.Consumers.DestinationConsumer
 
     timestamps()
   end

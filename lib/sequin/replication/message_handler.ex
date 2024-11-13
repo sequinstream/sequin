@@ -28,10 +28,10 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:wal_pipelines, http_pull_consumers: [:sequence], http_push_consumers: [:sequence]])
+    pr = Repo.preload(pr, [:wal_pipelines, http_pull_consumers: [:sequence], destination_consumers: [:sequence]])
 
     %Context{
-      consumers: pr.http_pull_consumers ++ pr.http_push_consumers,
+      consumers: pr.http_pull_consumers ++ pr.destination_consumers,
       wal_pipelines: pr.wal_pipelines
     }
   end

@@ -9,7 +9,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    http_endpoints = Consumers.list_http_endpoints_for_account(account_id, [:http_push_consumers])
+    http_endpoints = Consumers.list_http_endpoints_for_account(account_id, [:destination_consumers])
     http_endpoints = load_http_endpoint_health(http_endpoints)
 
     if connected?(socket) do
@@ -71,7 +71,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
       name: http_endpoint.name,
       baseUrl: HttpEndpoint.url(http_endpoint),
       insertedAt: http_endpoint.inserted_at,
-      httpPushConsumersCount: length(http_endpoint.http_push_consumers),
+      httpPushConsumersCount: length(http_endpoint.destination_consumers),
       health: Health.to_external(http_endpoint.health)
     }
   end

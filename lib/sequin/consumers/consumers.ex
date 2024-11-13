@@ -7,9 +7,9 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
@@ -39,7 +39,7 @@ defmodule Sequin.Consumers do
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
   @consumer_record_state_enum Postgres.quote_name(@stream_schema, "consumer_record_state")
 
-  @type consumer :: HttpPullConsumer.t() | HttpPushConsumer.t()
+  @type consumer :: HttpPullConsumer.t() | DestinationConsumer.t()
 
   def posthog_ets_table do
     :consumer_ack_events
@@ -51,7 +51,7 @@ defmodule Sequin.Consumers do
   # Consumers
 
   def kind(%HttpPullConsumer{}), do: :pull
-  def kind(%HttpPushConsumer{}), do: :push
+  def kind(%DestinationConsumer{}), do: :push
 
   def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
     %PostgresDatabase{} = postgres_database = consumer.postgres_database
@@ -87,7 +87,7 @@ defmodule Sequin.Consumers do
 
   def get_consumer(consumer_id) do
     with {:error, _} <- get_http_pull_consumer(consumer_id),
-         {:error, _} <- get_http_push_consumer(consumer_id) do
+         {:error, _} <- get_destination_consumer(consumer_id) do
       {:error, Error.not_found(entity: :consumer)}
     end
   end
@@ -111,8 +111,8 @@ defmodule Sequin.Consumers do
       pull_consumer
     else
       account_id
-      |> HttpPushConsumer.where_account_id()
-      |> HttpPushConsumer.where_id_or_name(consumer_id)
+      |> DestinationConsumer.where_account_id()
+      |> DestinationConsumer.where_id_or_name(consumer_id)
       |> preload(:sequence)
       |> Repo.one()
     end
@@ -133,7 +133,7 @@ defmodule Sequin.Consumers do
   end
 
   def all_consumers do
-    Repo.all(HttpPushConsumer) ++ Repo.all(HttpPullConsumer)
+    Repo.all(DestinationConsumer) ++ Repo.all(HttpPullConsumer)
   end
 
   def list_consumers_for_account(account_id, preload \\ []) do
@@ -143,18 +143,18 @@ defmodule Sequin.Consumers do
       |> preload(^preload)
       |> Repo.all()
 
-    push_consumers =
+    destination_consumers =
       account_id
-      |> HttpPushConsumer.where_account_id()
+      |> DestinationConsumer.where_account_id()
       |> preload(^preload)
       |> Repo.all()
 
-    Enum.sort_by(pull_consumers ++ push_consumers, & &1.inserted_at, {:desc, DateTime})
+    Enum.sort_by(pull_consumers ++ destination_consumers, & &1.inserted_at, {:desc, DateTime})
   end
 
-  def list_http_push_consumers_for_account(account_id, preload \\ []) do
+  def list_destination_consumers_for_account(account_id, preload \\ []) do
     account_id
-    |> HttpPushConsumer.where_account_id()
+    |> DestinationConsumer.where_account_id()
     |> preload(^preload)
     |> Repo.all()
   end
@@ -168,27 +168,27 @@ defmodule Sequin.Consumers do
 
   def list_consumers_for_replication_slot(replication_slot_id) do
     pull = HttpPullConsumer.where_replication_slot_id(replication_slot_id)
-    push = HttpPushConsumer.where_replication_slot_id(replication_slot_id)
+    push = DestinationConsumer.where_replication_slot_id(replication_slot_id)
 
     Repo.all(pull) ++ Repo.all(push)
   end
 
   def list_consumers_for_sequence(sequence_id) do
     pull = HttpPullConsumer.where_sequence_id(sequence_id)
-    push = HttpPushConsumer.where_sequence_id(sequence_id)
+    push = DestinationConsumer.where_sequence_id(sequence_id)
 
     Repo.all(pull) ++ Repo.all(push)
   end
 
   def list_consumers_for_http_endpoint(http_endpoint_id) do
     http_endpoint_id
-    |> HttpPushConsumer.where_http_endpoint_id()
+    |> DestinationConsumer.where_http_endpoint_id()
     |> Repo.all()
   end
 
   def list_consumers_where_table_producer do
     pull = Repo.all(preload(HttpPullConsumer.where_table_producer(), replication_slot: :postgres_database))
-    push = Repo.all(preload(HttpPushConsumer.where_table_producer(), replication_slot: :postgres_database))
+    push = Repo.all(preload(DestinationConsumer.where_table_producer(), replication_slot: :postgres_database))
 
     pull ++ push
   end
@@ -205,9 +205,9 @@ defmodule Sequin.Consumers do
     |> Repo.update()
   end
 
-  def update_consumer(%HttpPushConsumer{} = consumer, attrs) do
+  def update_consumer(%DestinationConsumer{} = consumer, attrs) do
     consumer
-    |> HttpPushConsumer.update_changeset(attrs)
+    |> DestinationConsumer.update_changeset(attrs)
     |> Repo.update()
   end
 
@@ -305,20 +305,20 @@ defmodule Sequin.Consumers do
     |> Repo.insert()
   end
 
-  # HttpPushConsumer
+  # DestinationConsumer
 
-  def get_http_push_consumer(consumer_id) do
-    case Repo.get(HttpPushConsumer, consumer_id) do
-      nil -> {:error, Error.not_found(entity: :http_push_consumer)}
+  def get_destination_consumer(consumer_id) do
+    case Repo.get(DestinationConsumer, consumer_id) do
+      nil -> {:error, Error.not_found(entity: :destination_consumer)}
       consumer -> {:ok, consumer}
     end
   end
 
-  def find_http_push_consumer(account_id, params \\ []) do
+  def find_destination_consumer(account_id, params \\ []) do
     params
-    |> Enum.reduce(HttpPushConsumer.where_account_id(account_id), fn
-      {:name, name}, query -> HttpPushConsumer.where_name(query, name)
-      {:sequence_id, sequence_id}, query -> HttpPushConsumer.where_sequence_id(query, sequence_id)
+    |> Enum.reduce(DestinationConsumer.where_account_id(account_id), fn
+      {:name, name}, query -> DestinationConsumer.where_name(query, name)
+      {:sequence_id, sequence_id}, query -> DestinationConsumer.where_sequence_id(query, sequence_id)
     end)
     |> Repo.one()
     |> case do
@@ -327,16 +327,16 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_active_push_consumers(preloads \\ []) do
+  def list_active_destination_consumers(preloads \\ []) do
     :active
-    |> HttpPushConsumer.where_status()
+    |> DestinationConsumer.where_status()
     |> preload(^preloads)
     |> Repo.all()
   end
 
-  def create_http_push_consumer_for_account_with_lifecycle(account_id, attrs) do
+  def create_destination_consumer_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
-      with {:ok, consumer} <- create_http_push_consumer(account_id, attrs),
+      with {:ok, consumer} <- create_destination_consumer(account_id, attrs),
            :ok <- create_consumer_partition(consumer) do
         :ok = notify_consumer_update(consumer)
         notify_consumer_create(consumer)
@@ -348,19 +348,19 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  def create_http_push_consumer_with_lifecycle(attrs) do
+  def create_destination_consumer_with_lifecycle(attrs) do
     account_id = Map.fetch!(attrs, :account_id)
-    create_http_push_consumer_for_account_with_lifecycle(account_id, attrs)
+    create_destination_consumer_for_account_with_lifecycle(account_id, attrs)
   end
 
-  def create_http_push_consumer(account_id, attrs) do
-    %HttpPushConsumer{account_id: account_id}
-    |> HttpPushConsumer.create_changeset(attrs)
+  def create_destination_consumer(account_id, attrs) do
+    %DestinationConsumer{account_id: account_id}
+    |> DestinationConsumer.create_changeset(attrs)
     |> Repo.insert()
   end
 
   @legacy_event_singleton_transform_cutoff_date ~D[2024-11-06]
-  def consumer_features(%HttpPushConsumer{} = consumer) do
+  def consumer_features(%DestinationConsumer{} = consumer) do
     consumer = Repo.lazy_preload(consumer, [:account])
 
     cond do
@@ -1374,7 +1374,7 @@ defmodule Sequin.Consumers do
   def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     http_endpoint
     |> Ecto.Changeset.change()
-    |> Ecto.Changeset.foreign_key_constraint(:http_push_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
+    |> Ecto.Changeset.foreign_key_constraint(:destination_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
     |> Repo.delete()
   end
 
@@ -1629,7 +1629,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp notify_consumer_update(%HttpPushConsumer{} = consumer) do
+  defp notify_consumer_update(%DestinationConsumer{} = consumer) do
     if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
 
     if env() == :test do
@@ -1642,11 +1642,11 @@ defmodule Sequin.Consumers do
               DatabasesRuntimeSupervisor.restart_table_producer(consumer)
             end
 
-            ConsumersSupervisor.restart_for_push_consumer(consumer)
+            ConsumersSupervisor.restart_for_destination_consumer(consumer)
             :ok
 
           :disabled ->
-            ConsumersSupervisor.stop_for_push_consumer(consumer)
+            ConsumersSupervisor.stop_for_destination_consumer(consumer)
             :ok
         end
       end
@@ -1664,14 +1664,14 @@ defmodule Sequin.Consumers do
     async_refresh_message_handler_ctx(consumer.replication_slot_id)
   end
 
-  defp notify_consumer_delete(%HttpPushConsumer{} = consumer) do
+  defp notify_consumer_delete(%DestinationConsumer{} = consumer) do
     maybe_disable_table_producer(consumer)
 
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
       with %Task{} <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
-        ConsumersSupervisor.stop_for_push_consumer(consumer)
+        ConsumersSupervisor.stop_for_destination_consumer(consumer)
       end
     end
   end
@@ -1696,8 +1696,8 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do
-    http_endpoint = Repo.preload(http_endpoint, :http_push_consumers)
-    Enum.each(http_endpoint.http_push_consumers, &ConsumersSupervisor.restart_for_push_consumer(&1))
+    http_endpoint = Repo.preload(http_endpoint, :destination_consumers)
+    Enum.each(http_endpoint.destination_consumers, &ConsumersSupervisor.restart_for_destination_consumer(&1))
   end
 
   defp env do

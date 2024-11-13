@@ -38,8 +38,8 @@ defmodule Sequin.ConsumersRuntime.Starter do
 
   defp start do
     Enum.each(
-      Consumers.list_active_push_consumers([:sequence, :account]),
-      &Supervisor.start_for_push_consumer(&1)
+      Consumers.list_active_destination_consumers([:sequence, :account]),
+      &Supervisor.start_for_destination_consumer(&1)
     )
   end
 

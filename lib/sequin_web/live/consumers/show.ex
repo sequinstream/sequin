@@ -155,7 +155,7 @@ defmodule SequinWeb.ConsumersLive.Show do
               on_finish={&handle_edit_finish/1}
               current_user={@current_user}
             />
-          <% {:show, %DestinationConsumer{}} -> %>
+          <% {:show, %DestinationConsumer{type: :http_push}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
               name="consumers/ShowHttpPush"

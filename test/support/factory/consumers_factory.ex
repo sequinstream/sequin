@@ -14,6 +14,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SqsDestination
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -158,6 +159,20 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %HttpPushDestination{
         http_endpoint_id: http_endpoint_id
+      },
+      attrs
+    )
+  end
+
+  defp destination(:sqs, _account_id, attrs) do
+    merge_attributes(
+      %SqsDestination{
+        type: :sqs,
+        queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/#{Factory.word()}",
+        region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
+        access_key_id: Factory.word(),
+        secret_access_key: Factory.word(),
+        is_fifo: Enum.random([true, false])
       },
       attrs
     )
@@ -519,6 +534,14 @@ defmodule Sequin.Factory.ConsumersFactory do
           character = CharacterFactory.insert_character!(%{}, repo: Sequin.Repo)
           Map.merge(attrs, %{record_pks: Character.record_pks(character), table_oid: Character.table_oid()})
 
+        :character_detailed ->
+          character_detailed = CharacterFactory.insert_character_detailed!(%{}, repo: Sequin.Repo)
+
+          Map.merge(attrs, %{
+            record_pks: CharacterDetailed.record_pks(character_detailed),
+            table_oid: CharacterDetailed.table_oid()
+          })
+
         nil ->
           attrs
       end
@@ -563,7 +586,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %SequenceFilter{
         actions: [:insert, :update, :delete],
         column_filters: [sequence_filter_column_filter()],
-        group_column_attnums: [Factory.integer()]
+        group_column_attnums: [Enum.random([1, 2, 3])]
       },
       attrs
     )

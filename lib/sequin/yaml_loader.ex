@@ -804,6 +804,7 @@ defmodule Sequin.YamlLoader do
          sequence_id: sequence.id,
          replication_slot_id: database.replication_slot.id,
          destination: %{
+           type: :http_push,
            http_endpoint_id: http_endpoint.id,
            http_endpoint_path: consumer_attrs["http_endpoint_path"]
          },

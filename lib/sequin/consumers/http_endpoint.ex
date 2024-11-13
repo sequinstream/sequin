@@ -39,9 +39,9 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :health, :map, virtual: true
     field :use_local_tunnel, :boolean, default: false
 
-    belongs_to :account, Sequin.Accounts.Account
+    field :destination_consumers, {:array, :map}, virtual: true
 
-    has_many :destination_consumers, Sequin.Consumers.DestinationConsumer
+    belongs_to :account, Sequin.Accounts.Account
 
     timestamps()
   end

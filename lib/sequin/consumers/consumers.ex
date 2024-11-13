@@ -1732,7 +1732,7 @@ defmodule Sequin.Consumers do
   end
 
   def group_column_values(%DestinationConsumer{} = consumer, record_data) do
-    table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     group_column_attnums = consumer.sequence_filter.group_column_attnums
     group_column_names = PostgresDatabaseTable.column_attnums_to_names(table, group_column_attnums)
 

@@ -32,8 +32,12 @@ defmodule Sequin.Repo do
       {field_name, child_field_names}, entity ->
         entity
         |> maybe_preload(field_name)
-        |> Map.update!(field_name, fn sub_entity ->
-          lazy_preload(sub_entity, child_field_names)
+        |> Map.update!(field_name, fn
+          nil ->
+            nil
+
+          sub_entity ->
+            lazy_preload(sub_entity, child_field_names)
         end)
 
       field_name, entity ->

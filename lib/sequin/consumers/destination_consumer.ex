@@ -13,6 +13,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Consumers.SqsDestination
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
@@ -62,7 +63,8 @@ defmodule Sequin.Consumers.DestinationConsumer do
 
     polymorphic_embeds_one(:destination,
       types: [
-        http_push: HttpPushDestination
+        http_push: HttpPushDestination,
+        sqs: SqsDestination
       ],
       on_replace: :update,
       type_field_name: :type

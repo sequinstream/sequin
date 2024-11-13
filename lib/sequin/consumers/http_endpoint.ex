@@ -6,6 +6,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
 
   alias __MODULE__
   alias Ecto.Changeset
+  alias Sequin.Consumers
 
   @derive {Jason.Encoder,
            only: [
@@ -161,5 +162,10 @@ defmodule Sequin.Consumers.HttpEndpoint do
         fragment: endpoint.fragment
       }
     end
+  end
+
+  def preload_destination_consumers(%__MODULE__{} = http_endpoint) do
+    consumers = Consumers.list_destination_consumers_for_http_endpoint(http_endpoint.id)
+    %{http_endpoint | destination_consumers: consumers}
   end
 end

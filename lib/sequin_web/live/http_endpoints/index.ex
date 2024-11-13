@@ -9,7 +9,12 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
-    http_endpoints = Consumers.list_http_endpoints_for_account(account_id, [:destination_consumers])
+
+    http_endpoints =
+      account_id
+      |> Consumers.list_http_endpoints_for_account()
+      |> Enum.map(&HttpEndpoint.preload_destination_consumers/1)
+
     http_endpoints = load_http_endpoint_health(http_endpoints)
 
     if connected?(socket) do

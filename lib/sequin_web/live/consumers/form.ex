@@ -74,7 +74,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     consumer =
       case consumer do
         %HttpPullConsumer{} -> Repo.preload(consumer, [:postgres_database])
-        %DestinationConsumer{} -> Repo.preload(consumer, [:http_endpoint, :postgres_database])
+        %DestinationConsumer{} -> Repo.preload(consumer, [:postgres_database])
         _ -> consumer
       end
 
@@ -185,35 +185,30 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp decode_params(form, socket) do
     message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
 
-    %{
-      "consumer_kind" => form["consumerKind"],
-      "ack_wait_ms" => form["ackWaitMs"],
-      "http_endpoint_id" => form["httpEndpointId"],
-      "http_endpoint_path" => form["httpEndpointPath"],
-      "max_ack_pending" => form["maxAckPending"],
-      "max_waiting" => form["maxWaiting"],
-      "message_kind" => message_kind,
-      "name" => form["name"],
-      "postgres_database_id" => form["postgresDatabaseId"],
-      "sequence_id" => form["sequenceId"],
-      "sequence_filter" => %{
-        "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
-        "actions" => form["sourceTableActions"],
-        "group_column_attnums" => form["groupColumnAttnums"]
-      },
-      # Only set for DestinationConsumer
-      "batch_size" => form["batchSize"]
-    }
-    |> maybe_delete_http_endpoint()
-    |> maybe_put_record_consumer_state(form, socket)
-  end
+    params =
+      %{
+        "consumer_kind" => form["consumerKind"],
+        "ack_wait_ms" => form["ackWaitMs"],
+        "destination" => %{
+          "http_endpoint_id" => form["httpEndpointId"],
+          "http_endpoint_path" => form["httpEndpointPath"]
+        },
+        "max_ack_pending" => form["maxAckPending"],
+        "max_waiting" => form["maxWaiting"],
+        "message_kind" => message_kind,
+        "name" => form["name"],
+        "postgres_database_id" => form["postgresDatabaseId"],
+        "sequence_id" => form["sequenceId"],
+        "sequence_filter" => %{
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+          "actions" => form["sourceTableActions"],
+          "group_column_attnums" => form["groupColumnAttnums"]
+        },
+        # Only set for DestinationConsumer
+        "batch_size" => form["batchSize"]
+      }
 
-  defp maybe_delete_http_endpoint(params) do
-    if params["http_endpoint_id"] do
-      Map.delete(params, "http_endpoint")
-    else
-      params
-    end
+    maybe_put_record_consumer_state(params, form, socket)
   end
 
   defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
@@ -265,7 +260,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   defp encode_consumer(nil), do: nil
 
-  defp encode_consumer(%{__struct__: consumer_type} = consumer) do
+  defp encode_consumer(%_{} = consumer) do
     postgres_database_id =
       if is_struct(consumer.postgres_database, PostgresDatabase), do: consumer.postgres_database.id
 
@@ -292,14 +287,14 @@ defmodule SequinWeb.ConsumersLive.Form do
       "batch_size" => Map.get(consumer, :batch_size)
     }
 
-    case consumer_type do
-      DestinationConsumer ->
+    case consumer do
+      %DestinationConsumer{type: :http_push} ->
         Map.merge(base, %{
-          "http_endpoint_id" => consumer.http_endpoint_id,
-          "http_endpoint_path" => consumer.http_endpoint_path
+          "http_endpoint_id" => consumer.destination.http_endpoint_id,
+          "http_endpoint_path" => consumer.destination.http_endpoint_path
         })
 
-      HttpPullConsumer ->
+      %HttpPullConsumer{} ->
         base
     end
   end

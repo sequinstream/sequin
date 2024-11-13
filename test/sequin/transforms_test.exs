@@ -298,7 +298,7 @@ defmodule Sequin.TransformsTest do
         status: :active,
         max_ack_pending: 1000,
         max_deliver: 5,
-        http_endpoint_id: endpoint.id,
+        destination: %{type: :http_push, http_endpoint_id: endpoint.id},
         sequence_id: sequence.id,
         record_consumer_state: %{
           producer: "table_and_wal",

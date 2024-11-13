@@ -4,10 +4,12 @@ defmodule Sequin.Consumers.DestinationConsumer do
 
   import Ecto.Changeset
   import Ecto.Query
+  import PolymorphicEmbed
 
   alias __MODULE__
   alias Sequin.Accounts.Account
-  alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers
+  alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
@@ -26,12 +28,11 @@ defmodule Sequin.Consumers.DestinationConsumer do
              :message_kind,
              :name,
              :updated_at,
-             :http_endpoint_id,
              :record_consumer_state,
              :status,
              :health
            ]}
-  typed_schema "http_push_consumers" do
+  typed_schema "destination_consumers" do
     field :name, :string
     field :backfill_completed_at, :utc_datetime_usec
     field :ack_wait_ms, :integer, default: 30_000
@@ -53,12 +54,19 @@ defmodule Sequin.Consumers.DestinationConsumer do
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
 
-    belongs_to :http_endpoint, HttpEndpoint
-    field :http_endpoint_path, :string
-
     field :health, :map, virtual: true
 
     field :batch_size, :integer, default: 1
+
+    field :type, Ecto.Enum, values: [:http_push], read_after_writes: true
+
+    polymorphic_embeds_one(:destination,
+      types: [
+        http_push: HttpPushDestination
+      ],
+      on_replace: :update,
+      type_field_name: :type
+    )
 
     timestamps()
   end
@@ -73,25 +81,17 @@ defmodule Sequin.Consumers.DestinationConsumer do
       :message_kind,
       :name,
       :backfill_completed_at,
-      :http_endpoint_id,
       :replication_slot_id,
       :status,
       :sequence_id,
       :batch_size
     ])
-    |> cast(attrs, [:http_endpoint_path], empty_values: [])
-    |> validate_required([:name, :status, :replication_slot_id, :http_endpoint_id, :batch_size])
+    |> cast_polymorphic_embed(:destination, required: true)
+    |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
-    |> validate_http_endpoint_path()
     |> validate_number(:batch_size, greater_than: 0)
-    |> cast_assoc(:http_endpoint,
-      with: fn _struct, attrs ->
-        HttpEndpoint.create_changeset(%HttpEndpoint{account_id: consumer.account_id}, attrs)
-      end
-    )
     |> cast_embed(:record_consumer_state)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
-    |> foreign_key_constraint(:http_endpoint_id)
     |> foreign_key_constraint(:sequence_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
@@ -107,14 +107,12 @@ defmodule Sequin.Consumers.DestinationConsumer do
       :max_deliver,
       :max_waiting,
       :backfill_completed_at,
-      :http_endpoint_id,
       :status,
       :message_kind,
       :batch_size
     ])
-    |> cast(attrs, [:http_endpoint_path], empty_values: [])
+    |> cast_polymorphic_embed(:destination)
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
-    |> validate_http_endpoint_path()
     |> cast_embed(:record_consumer_state)
     |> Sequin.Changeset.cast_embed(:source_tables)
   end
@@ -128,7 +126,13 @@ defmodule Sequin.Consumers.DestinationConsumer do
   end
 
   def where_http_endpoint_id(query \\ base_query(), http_endpoint_id) do
-    from([consumer: c] in query, where: c.http_endpoint_id == ^http_endpoint_id)
+    query = where_type(query, :http_push)
+
+    from([consumer: c] in query, where: fragment("?->>'http_endpoint_id' = ?", c.destination, ^http_endpoint_id))
+  end
+
+  def where_type(query \\ base_query(), type) do
+    from([consumer: c] in query, where: c.type == ^type)
   end
 
   def where_id(query \\ base_query(), id) do
@@ -182,25 +186,11 @@ defmodule Sequin.Consumers.DestinationConsumer do
     |> DateTime.compare(now) == :lt
   end
 
-  defp validate_http_endpoint_path(changeset) do
-    changeset
-    |> validate_format(
-      :http_endpoint_path,
-      ~r/^([\/\?\#]|$)/,
-      message: "must start with '/', '?', '#', or be blank"
-    )
-    |> then(fn changeset ->
-      if changeset.valid? do
-        validate_format(
-          changeset,
-          :http_endpoint_path,
-          ~r/^(\/[a-zA-Z0-9\-._~!$&'()*+,;=:@%\/]*)?$/,
-          message: "must be a valid URL path or empty"
-        )
-      else
-        changeset
-      end
-    end)
-    |> validate_length(:http_endpoint_path, max: 2000)
+  def preload_http_endpoint(%DestinationConsumer{type: :http_push} = consumer) do
+    http_endpoint = Consumers.get_http_endpoint!(consumer.destination.http_endpoint_id)
+    destination = %HttpPushDestination{consumer.destination | http_endpoint: http_endpoint}
+    %{consumer | destination: destination}
   end
+
+  def preload_http_endpoint(consumer), do: consumer
 end

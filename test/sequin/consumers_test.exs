@@ -2934,7 +2934,8 @@ defmodule Sequin.ConsumersTest do
         ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
-          sequence: sequence
+          sequence: sequence,
+          type: :http_push
         )
 
       assert Consumers.consumer_features(consumer) == [legacy_event_transform: true]
@@ -2955,7 +2956,8 @@ defmodule Sequin.ConsumersTest do
         ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
-          sequence: sequence
+          sequence: sequence,
+          type: :http_push
         )
 
       assert Consumers.consumer_features(consumer) == []
@@ -2977,7 +2979,8 @@ defmodule Sequin.ConsumersTest do
         ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
-          sequence: sequence
+          sequence: sequence,
+          type: :http_push
         )
 
       assert Consumers.consumer_features(consumer) == [{:legacy_event_singleton_transform, true}]

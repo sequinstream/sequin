@@ -10,6 +10,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -40,9 +41,9 @@ defmodule Sequin.Factory.ConsumersFactory do
   end
 
   def insert_consumer!(attrs \\ []) do
-    case Enum.random([:http_pull, :http_push]) do
+    case Enum.random([:http_pull, :destination_consumer]) do
       :http_pull -> insert_http_pull_consumer!(attrs)
-      :http_push -> insert_destination_consumer!(attrs)
+      :destination_consumer -> insert_destination_consumer!(attrs)
     end
   end
 
@@ -52,10 +53,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    {http_endpoint_id, attrs} =
-      Map.pop_lazy(attrs, :http_endpoint_id, fn ->
-        ConsumersFactory.insert_http_endpoint!(account_id: account_id).id
-      end)
+    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push])
+    {destination_attrs, attrs} = Map.pop(attrs, :destination, %{})
+    destination = destination(type, account_id, destination_attrs)
 
     {postgres_database_id, attrs} =
       Map.pop_lazy(attrs, :postgres_database_id, fn ->
@@ -96,7 +96,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         account_id: account_id,
         ack_wait_ms: 30_000,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
-        http_endpoint_id: http_endpoint_id,
+        destination: destination,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
@@ -117,6 +117,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> destination_consumer()
     |> Sequin.Map.from_ecto()
+    |> Map.update!(:destination, &Sequin.Map.from_ecto/1)
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
         source_table
@@ -146,6 +147,20 @@ defmodule Sequin.Factory.ConsumersFactory do
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
         insert_destination_consumer!(attrs)
     end
+  end
+
+  defp destination(:http_push, account_id, attrs) do
+    {http_endpoint_id, attrs} =
+      Map.pop_lazy(attrs, :http_endpoint_id, fn ->
+        ConsumersFactory.insert_http_endpoint!(account_id: account_id).id
+      end)
+
+    merge_attributes(
+      %HttpPushDestination{
+        http_endpoint_id: http_endpoint_id
+      },
+      attrs
+    )
   end
 
   def http_pull_consumer(attrs \\ []) do

@@ -79,8 +79,13 @@ defmodule SequinWeb.ConsumersLive.Show do
         %HttpPullConsumer{} = consumer ->
           {:ok, Repo.preload(consumer, [:postgres_database, :sequence])}
 
-        %DestinationConsumer{} = consumer ->
-          {:ok, Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])}
+        %DestinationConsumer{type: :http_push} = consumer ->
+          consumer =
+            consumer
+            |> Repo.preload([:postgres_database, :sequence])
+            |> DestinationConsumer.preload_http_endpoint()
+
+          {:ok, consumer}
       end
 
     case case_result do
@@ -479,7 +484,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     _ -> {:error, "Failed to get cursor position"}
   end
 
-  defp encode_consumer(%DestinationConsumer{} = consumer) do
+  defp encode_consumer(%DestinationConsumer{type: :http_push} = consumer) do
     %{
       id: consumer.id,
       name: consumer.name,
@@ -492,8 +497,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      http_endpoint: encode_http_endpoint(consumer.http_endpoint),
-      http_endpoint_path: consumer.http_endpoint_path,
+      http_endpoint: encode_http_endpoint(consumer.destination.http_endpoint),
+      http_endpoint_path: consumer.destination.http_endpoint_path,
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),

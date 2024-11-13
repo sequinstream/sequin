@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.ConsumersRuntime
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.ConsumersRuntime.SqsPipeline
 
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
@@ -31,7 +32,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
       |> Keyword.merge(opts)
       |> Keyword.put(:features, features)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {HttpPushPipeline, opts})
+    Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
   end
 
   def start_for_destination_consumer(supervisor, id, opts) do
@@ -48,13 +49,20 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   def stop_for_destination_consumer(supervisor, id) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, HttpPushPipeline.via_tuple(id))
+    Sequin.DynamicSupervisor.stop_child(supervisor, pipeline(id).via_tuple(id))
     :ok
   end
 
   def restart_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
     stop_for_destination_consumer(supervisor, consumer_or_id)
     start_for_destination_consumer(supervisor, consumer_or_id)
+  end
+
+  defp pipeline(%DestinationConsumer{} = consumer) do
+    case consumer.type do
+      :http_push -> HttpPushPipeline
+      :sqs -> SqsPipeline
+    end
   end
 
   defp children do

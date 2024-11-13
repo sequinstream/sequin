@@ -180,7 +180,7 @@ defmodule Sequin.Consumers do
     Repo.all(pull) ++ Repo.all(push)
   end
 
-  def list_consumers_for_http_endpoint(http_endpoint_id) do
+  def list_destination_consumers_for_http_endpoint(http_endpoint_id) do
     http_endpoint_id
     |> DestinationConsumer.where_http_endpoint_id()
     |> Repo.all()
@@ -1374,7 +1374,7 @@ defmodule Sequin.Consumers do
   def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     http_endpoint
     |> Ecto.Changeset.change()
-    |> Ecto.Changeset.foreign_key_constraint(:destination_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
+    # |> Ecto.Changeset.foreign_key_constraint(:destination_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
     |> Repo.delete()
   end
 
@@ -1696,8 +1696,8 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do
-    http_endpoint = Repo.preload(http_endpoint, :destination_consumers)
-    Enum.each(http_endpoint.destination_consumers, &ConsumersSupervisor.restart_for_destination_consumer(&1))
+    destination_consumers = list_destination_consumers_for_http_endpoint(http_endpoint.id)
+    Enum.each(destination_consumers, &ConsumersSupervisor.restart_for_destination_consumer(&1))
   end
 
   defp env do

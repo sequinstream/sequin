@@ -3,6 +3,7 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Accounts
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -137,7 +138,9 @@ defmodule Sequin.YamlLoader do
     http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
 
     destination_consumers =
-      Consumers.list_destination_consumers_for_account(account_id, [:http_endpoint, sequence: [:postgres_database]])
+      account_id
+      |> Consumers.list_destination_consumers_for_account(sequence: [:postgres_database])
+      |> Enum.map(&DestinationConsumer.preload_http_endpoint/1)
 
     [account | users] ++
       databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ destination_consumers
@@ -800,7 +803,10 @@ defmodule Sequin.YamlLoader do
          size: Map.get(consumer_attrs, "batch_size", 1),
          sequence_id: sequence.id,
          replication_slot_id: database.replication_slot.id,
-         http_endpoint_id: http_endpoint.id,
+         destination: %{
+           http_endpoint_id: http_endpoint.id,
+           http_endpoint_path: consumer_attrs["http_endpoint_path"]
+         },
          record_consumer_state: record_consumer_state,
          sequence_filter: %{
            actions: ["insert", "update", "delete"],

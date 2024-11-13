@@ -186,7 +186,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
     |> DateTime.compare(now) == :lt
   end
 
-  def preload_http_endpoint(%DestinationConsumer{type: :http_push} = consumer) do
+  def preload_http_endpoint(%DestinationConsumer{destination: %HttpPushDestination{http_endpoint: nil}} = consumer) do
     http_endpoint = Consumers.get_http_endpoint!(consumer.destination.http_endpoint_id)
     destination = %HttpPushDestination{consumer.destination | http_endpoint: http_endpoint}
     %{consumer | destination: destination}

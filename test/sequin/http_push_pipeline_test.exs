@@ -20,13 +20,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       http_endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id)
 
       consumer =
-        [
+        ConsumersFactory.insert_destination_consumer!(
           account_id: account.id,
           destination: %{type: :http_push, http_endpoint_id: http_endpoint.id},
           message_kind: :event
-        ]
-        |> ConsumersFactory.insert_destination_consumer!()
-        |> Repo.preload(:http_endpoint)
+        )
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
@@ -188,7 +186,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         ConsumersFactory.destination_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
-          destination: %{type: :http_push, http_endpoint_id: http_endpoint.id},
+          destination: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           sequence_id: sequence.id,
           message_kind: :event
@@ -196,7 +194,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       :ok = Consumers.create_consumer_partition(consumer)
 
-      {:ok, %{consumer: %{consumer | http_endpoint: http_endpoint, http_endpoint_id: http_endpoint.id}}}
+      {:ok, %{consumer: consumer}}
     end
 
     test "messages are sent from postgres to http endpoint", %{consumer: consumer} do
@@ -237,7 +235,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(consumer.destination.http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       assert json["record"] == record
@@ -332,7 +330,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         ConsumersFactory.destination_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
-          destination: %{type: :http_push, http_endpoint_id: http_endpoint.id},
+          destination: %{type: :http_push, http_endpoint_id: http_endpoint.id, http_endpoint: http_endpoint},
           replication_slot_id: replication.id,
           postgres_database: database,
           postgres_database_id: database.id,
@@ -342,7 +340,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       :ok = Consumers.create_consumer_partition(consumer)
 
-      {:ok, %{consumer: %{consumer | http_endpoint: http_endpoint, http_endpoint_id: http_endpoint.id}}}
+      {:ok, %{consumer: consumer}}
     end
 
     test "messages are sent from postgres to http endpoint", %{consumer: consumer} do
@@ -373,7 +371,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(consumer.destination.http_endpoint)
       %{"data" => [json]} = Jason.decode!(req.body)
 
       # Assert the record data matches
@@ -427,7 +425,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:http_request, req}, 5_000
 
       # Assert the request details
-      assert to_string(req.url) == HttpEndpoint.url(consumer.http_endpoint)
+      assert to_string(req.url) == HttpEndpoint.url(consumer.destination.http_endpoint)
       json = Jason.decode!(req.body)
 
       # Assert the transformed structure

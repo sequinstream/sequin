@@ -549,10 +549,10 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!(create_yaml)
 
       assert [consumer] = Repo.all(DestinationConsumer)
-      consumer = Repo.preload(consumer, :http_endpoint)
+      consumer = DestinationConsumer.preload_http_endpoint(consumer)
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.http_endpoint.name == "sequin-playground-http"
+      assert consumer.destination.http_endpoint.name == "sequin-playground-http"
 
       update_yaml = """
       #{account_db_and_sequence_yml()}
@@ -571,10 +571,10 @@ defmodule Sequin.YamlLoaderTest do
       assert :ok = YamlLoader.apply_from_yml!(update_yaml)
 
       assert [updated_consumer] = Repo.all(DestinationConsumer)
-      updated_consumer = Repo.preload(updated_consumer, :http_endpoint)
+      updated_consumer = DestinationConsumer.preload_http_endpoint(updated_consumer)
 
       assert updated_consumer.name == "sequin-playground-webhook"
-      assert updated_consumer.http_endpoint.name == "new-http-endpoint"
+      assert updated_consumer.destination.http_endpoint.name == "new-http-endpoint"
     end
   end
 

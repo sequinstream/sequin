@@ -7,7 +7,6 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
-  alias Sequin.Repo
   alias Sequin.Time
 
   @impl GenStage

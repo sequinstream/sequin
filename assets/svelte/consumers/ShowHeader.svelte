@@ -104,7 +104,9 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <LinkPushNavigate href={`/consumers/${kind}`}>
+        <LinkPushNavigate
+          href={kind === "pull" ? "/consumer-groups" : "/consumers"}
+        >
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>

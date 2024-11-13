@@ -3,10 +3,16 @@
   version="1.1"
   xmlns="http://www.w3.org/2000/svg"
   xmlns:xlink="http://www.w3.org/1999/xlink"
-  class="fill-gray-600 {$$props.class}"
+  class={$$props.class}
 >
+  <defs>
+    <linearGradient x1="0%" y1="100%" x2="100%" y2="0%" id="linearGradient-1">
+      <stop stop-color="#B0084D" offset="0%" />
+      <stop stop-color="#FF4F8B" offset="100%" />
+    </linearGradient>
+  </defs>
   <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-    <g fill="#4b5563">
+    <g fill="url(#linearGradient-1)">
       <rect x="0" y="0" width="80" height="80" />
     </g>
     <path

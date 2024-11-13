@@ -59,15 +59,15 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
-  def render(%{live_action: index_kind} = assigns) when index_kind in [:list_push, :list_pull] do
+  def render(%{live_action: index_kind} = assigns) when index_kind in [:list_destination_consumers, :list_pull] do
     consumers =
-      if index_kind == :list_push do
+      if index_kind == :list_destination_consumers do
         Enum.filter(assigns.consumers, &is_struct(&1, DestinationConsumer))
       else
         Enum.filter(assigns.consumers, &is_struct(&1, HttpPullConsumer))
       end
 
-    kind = if index_kind == :list_push, do: "push", else: "pull"
+    kind = if index_kind == :list_destination_consumers, do: "destination_consumer", else: "pull"
 
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
@@ -96,20 +96,20 @@ defmodule SequinWeb.ConsumersLive.Index do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("consumer_clicked", %{"id" => id}, socket) do
+  def handle_event("consumer_clicked", %{"id" => id, "type" => type}, socket) do
     case socket.assigns.live_action do
-      :list_push ->
-        {:noreply, push_navigate(socket, to: ~p"/consumers/push/#{id}")}
+      :list_destination_consumers ->
+        {:noreply, push_navigate(socket, to: ~p"/consumers/#{type}/#{id}")}
 
       :list_pull ->
-        {:noreply, push_navigate(socket, to: ~p"/consumers/pull/#{id}")}
+        {:noreply, push_navigate(socket, to: ~p"/consumer-groups/#{id}")}
     end
   end
 
-  defp apply_action(socket, :list_push, _params) do
+  defp apply_action(socket, :list_destination_consumers, _params) do
     socket
-    |> assign(:page_title, "Webhook Subscriptions")
-    |> assign(:live_action, :list_push)
+    |> assign(:page_title, "Destinations")
+    |> assign(:live_action, :list_destination_consumers)
   end
 
   defp apply_action(socket, :list_pull, _params) do
@@ -159,6 +159,18 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
+  defp render_consumer_form(%{form_kind: "sqs"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={Form}
+      id="new-consumer"
+      action={:new}
+      consumer={%DestinationConsumer{type: :sqs}}
+    />
+    """
+  end
+
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
@@ -188,5 +200,5 @@ defmodule SequinWeb.ConsumersLive.Index do
   end
 
   defp consumer_type(%Consumers.HttpPullConsumer{}), do: "pull"
-  defp consumer_type(%Consumers.DestinationConsumer{}), do: "push"
+  defp consumer_type(%Consumers.DestinationConsumer{type: type}), do: type
 end

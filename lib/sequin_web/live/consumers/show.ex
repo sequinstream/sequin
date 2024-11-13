@@ -207,11 +207,11 @@ defmodule SequinWeb.ConsumersLive.Show do
   @impl Phoenix.LiveView
   def handle_event("edit", _params, socket) do
     case Consumers.kind(socket.assigns.consumer) do
-      :push ->
-        {:noreply, push_patch(socket, to: ~p"/consumers/push/#{socket.assigns.consumer.id}/edit")}
-
       :pull ->
-        {:noreply, push_patch(socket, to: ~p"/consumers/pull/#{socket.assigns.consumer.id}/edit")}
+        {:noreply, push_patch(socket, to: ~p"/consumer-groups/#{socket.assigns.consumer.id}/edit")}
+
+      type ->
+        {:noreply, push_patch(socket, to: ~p"/consumers/#{type}/#{socket.assigns.consumer.id}/edit")}
     end
   end
 
@@ -221,8 +221,8 @@ defmodule SequinWeb.ConsumersLive.Show do
       {:ok, _deleted_consumer} ->
         push_to =
           case Consumers.kind(socket.assigns.consumer) do
-            :push -> ~p"/consumers/push"
-            :pull -> ~p"/consumers/pull"
+            :pull -> ~p"/consumer-groups"
+            _ -> ~p"/consumers"
           end
 
         {:noreply,

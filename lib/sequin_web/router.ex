@@ -87,16 +87,15 @@ defmodule SequinWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
-      live "/consumers", RedirectLive, :index
+      live "/consumers", ConsumersLive.Index, :list_destination_consumers
       live "/consumers/new", ConsumersLive.Index, :new
-      live "/consumers/push", ConsumersLive.Index, :list_push
-      live "/consumers/pull", ConsumersLive.Index, :list_pull
-      live "/consumers/push/:id", ConsumersLive.Show, :show
-      live "/consumers/pull/:id", ConsumersLive.Show, :show
-      live "/consumers/push/:id/messages", ConsumersLive.Show, :messages
-      live "/consumers/pull/:id/messages", ConsumersLive.Show, :messages
-      live "/consumers/push/:id/edit", ConsumersLive.Show, :edit
-      live "/consumers/pull/:id/edit", ConsumersLive.Show, :edit
+      live "/consumer-groups", ConsumersLive.Index, :list_pull
+      live "/consumers/:type/:id", ConsumersLive.Show, :show
+      live "/consumer-groups/:id", ConsumersLive.Show, :show
+      live "/consumers/:type/:id/messages", ConsumersLive.Show, :messages
+      live "/consumer-groups/:id/messages", ConsumersLive.Show, :messages
+      live "/consumers/:type/:id/edit", ConsumersLive.Show, :edit
+      live "/consumer-groups/:id/edit", ConsumersLive.Show, :edit
 
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.Form, :new

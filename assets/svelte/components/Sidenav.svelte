@@ -10,7 +10,7 @@
   import {
     Radio,
     Database,
-    Webhook,
+    SendHorizontal,
     FileText,
     LifeBuoy,
     LogOut,
@@ -23,9 +23,6 @@
     ListOrdered,
     ChevronsLeftRightEllipsis,
   } from "lucide-svelte";
-  import SQSIcon from "../../icons/sqs.svelte";
-
-  console.log(SQSIcon);
 
   export let live;
   export let currentPath: string;
@@ -45,7 +42,7 @@
       heading: "Stream",
       items: [
         { path: "/streams", text: "Streams", icon: ListOrdered },
-        { path: "/consumers/pull", text: "Consumer Groups", icon: Radio },
+        { path: "/consumer-groups", text: "Consumer Groups", icon: Radio },
       ],
     },
     {
@@ -62,14 +59,9 @@
       heading: "Destinations",
       items: [
         {
-          path: "/consumers/push",
-          text: "Webhook Subscriptions",
-          icon: Webhook,
-        },
-        {
-          path: "/consumers/sqs",
-          text: "AWS SQS",
-          icon: SQSIcon,
+          path: "/consumers",
+          text: "Destination Consumers",
+          icon: SendHorizontal,
         },
       ],
     },

@@ -47,4 +47,9 @@ defmodule Sequin.Databases.PostgresDatabaseTable do
       |> Enum.map(& &1.attnum)
     end
   end
+
+  def column_attnums_to_names(%__MODULE__{} = table, attnums) do
+    attnum_to_name = Map.new(table.columns, &{&1.attnum, &1.name})
+    Enum.map(attnums, &Map.get(attnum_to_name, &1))
+  end
 end

@@ -3,9 +3,9 @@ defmodule Sequin.YamlLoaderTest do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
@@ -431,7 +431,7 @@ defmodule Sequin.YamlLoaderTest do
                      position: "beginning"
                """)
 
-      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert [consumer] = Repo.all(DestinationConsumer)
       consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
@@ -480,7 +480,7 @@ defmodule Sequin.YamlLoaderTest do
                      position: "end"
                """)
 
-      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert [consumer] = Repo.all(DestinationConsumer)
       assert consumer.name == "sequin-playground-webhook"
 
       filters = consumer.sequence_filter.column_filters
@@ -527,7 +527,7 @@ defmodule Sequin.YamlLoaderTest do
       assert :ok = YamlLoader.apply_from_yml!(yaml)
       assert :ok = YamlLoader.apply_from_yml!(yaml)
 
-      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert [consumer] = Repo.all(DestinationConsumer)
       assert consumer.name == "sequin-playground-webhook"
     end
 
@@ -548,7 +548,7 @@ defmodule Sequin.YamlLoaderTest do
       assert :ok =
                YamlLoader.apply_from_yml!(create_yaml)
 
-      assert [consumer] = Repo.all(HttpPushConsumer)
+      assert [consumer] = Repo.all(DestinationConsumer)
       consumer = Repo.preload(consumer, :http_endpoint)
 
       assert consumer.name == "sequin-playground-webhook"
@@ -570,7 +570,7 @@ defmodule Sequin.YamlLoaderTest do
       # Update with different filters
       assert :ok = YamlLoader.apply_from_yml!(update_yaml)
 
-      assert [updated_consumer] = Repo.all(HttpPushConsumer)
+      assert [updated_consumer] = Repo.all(DestinationConsumer)
       updated_consumer = Repo.preload(updated_consumer, :http_endpoint)
 
       assert updated_consumer.name == "sequin-playground-webhook"

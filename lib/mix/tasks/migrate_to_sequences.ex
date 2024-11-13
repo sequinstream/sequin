@@ -5,8 +5,8 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
   @moduledoc false
   use Mix.Task
 
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
   alias Sequin.Databases.Sequence
@@ -33,7 +33,7 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
   def migrate_consumers do
     Repo.transaction(fn ->
       migrate_http_pull_consumers()
-      migrate_http_push_consumers()
+      migrate_destination_consumers()
     end)
   end
 
@@ -44,11 +44,11 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
     |> Enum.each(&migrate_consumer(&1, HttpPullConsumer))
   end
 
-  defp migrate_http_push_consumers do
-    HttpPushConsumer
+  defp migrate_destination_consumers do
+    DestinationConsumer
     |> Repo.all()
     |> Repo.preload(replication_slot: [:postgres_database])
-    |> Enum.each(&migrate_consumer(&1, HttpPushConsumer))
+    |> Enum.each(&migrate_consumer(&1, DestinationConsumer))
   end
 
   defp migrate_consumer(consumer, consumer_module) do

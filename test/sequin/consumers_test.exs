@@ -855,7 +855,7 @@ defmodule Sequin.ConsumersTest do
     @table_oid 12_345
     setup do
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           sequence: %Sequence{table_oid: @table_oid},
           sequence_filter: %SequenceFilter{
             actions: [:insert, :update, :delete],
@@ -903,7 +903,7 @@ defmodule Sequin.ConsumersTest do
 
     test "matches when no column filters are present" do
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           sequence: %Sequence{table_oid: @table_oid},
           sequence_filter: %SequenceFilter{
             actions: [:insert, :update, :delete],
@@ -1057,7 +1057,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1082,7 +1082,7 @@ defmodule Sequin.ConsumersTest do
       non_matching_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1104,7 +1104,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1127,7 +1127,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1151,7 +1151,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1201,7 +1201,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1270,7 +1270,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1313,7 +1313,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1356,7 +1356,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1399,7 +1399,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1442,7 +1442,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1485,7 +1485,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1528,7 +1528,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1571,7 +1571,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1614,7 +1614,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1657,7 +1657,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1700,7 +1700,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1743,7 +1743,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1786,7 +1786,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1829,7 +1829,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1872,7 +1872,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1915,7 +1915,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -1958,7 +1958,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2001,7 +2001,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2044,7 +2044,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2087,7 +2087,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2130,7 +2130,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2173,7 +2173,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2206,7 +2206,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2249,7 +2249,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2282,7 +2282,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2344,7 +2344,7 @@ defmodule Sequin.ConsumersTest do
       table_oid2 = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2387,7 +2387,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2437,7 +2437,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2478,7 +2478,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2521,7 +2521,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2564,7 +2564,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2607,7 +2607,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2650,7 +2650,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2700,7 +2700,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2764,7 +2764,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2808,7 +2808,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2852,7 +2852,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2886,7 +2886,7 @@ defmodule Sequin.ConsumersTest do
       table_oid = Sequin.Factory.unique_integer()
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: Factory.uuid(),
           source_tables: [
             ConsumersFactory.source_table(
@@ -2931,7 +2931,7 @@ defmodule Sequin.ConsumersTest do
         )
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
           sequence: sequence
@@ -2952,7 +2952,7 @@ defmodule Sequin.ConsumersTest do
         )
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
           sequence: sequence
@@ -2974,7 +2974,7 @@ defmodule Sequin.ConsumersTest do
         )
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           account: account,
           postgres_database: database,
           sequence: sequence

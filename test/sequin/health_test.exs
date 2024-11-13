@@ -19,7 +19,7 @@ defmodule Sequin.HealthTest do
 
   describe "update/4" do
     test "updates the health of an entity with an expected check" do
-      entity = ConsumersFactory.http_push_consumer(id: Factory.uuid())
+      entity = ConsumersFactory.destination_consumer(id: Factory.uuid())
 
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
       assert health.status == :initializing
@@ -39,7 +39,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "raises an error for unexpected checks" do
-      entity = ConsumersFactory.http_push_consumer(id: Factory.uuid())
+      entity = ConsumersFactory.destination_consumer(id: Factory.uuid())
 
       assert_raise FunctionClauseError, fn ->
         Health.update(entity, :unexpected_check, :healthy)
@@ -47,7 +47,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "sets status to the worst status of any incoming check" do
-      entity = ConsumersFactory.http_push_consumer(id: Factory.uuid())
+      entity = ConsumersFactory.destination_consumer(id: Factory.uuid())
 
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
       assert health.status == :initializing

@@ -3,8 +3,8 @@ defmodule SequinWeb.ConsumersLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases
   alias Sequin.Health
   alias SequinWeb.ConsumersLive.Form
@@ -62,7 +62,7 @@ defmodule SequinWeb.ConsumersLive.Index do
   def render(%{live_action: index_kind} = assigns) when index_kind in [:list_push, :list_pull] do
     consumers =
       if index_kind == :list_push do
-        Enum.filter(assigns.consumers, &is_struct(&1, HttpPushConsumer))
+        Enum.filter(assigns.consumers, &is_struct(&1, DestinationConsumer))
       else
         Enum.filter(assigns.consumers, &is_struct(&1, HttpPullConsumer))
       end
@@ -154,7 +154,7 @@ defmodule SequinWeb.ConsumersLive.Index do
       module={Form}
       id="new-consumer"
       action={:new}
-      consumer={%HttpPushConsumer{}}
+      consumer={%DestinationConsumer{}}
     />
     """
   end
@@ -188,5 +188,5 @@ defmodule SequinWeb.ConsumersLive.Index do
   end
 
   defp consumer_type(%Consumers.HttpPullConsumer{}), do: "pull"
-  defp consumer_type(%Consumers.HttpPushConsumer{}), do: "push"
+  defp consumer_type(%Consumers.DestinationConsumer{}), do: "push"
 end

@@ -119,7 +119,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
-         {:ok, _http_push_consumers} <- upsert_http_push_consumers(account.id, config, databases, http_endpoints),
+         {:ok, _destination_consumers} <- upsert_destination_consumers(account.id, config, databases, http_endpoints),
          {:ok, _http_pull_consumers} <- upsert_http_pull_consumers(account.id, config, databases) do
       {:ok, all_resources(account.id)}
     end
@@ -136,11 +136,11 @@ defmodule Sequin.YamlLoader do
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
     http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
 
-    http_push_consumers =
-      Consumers.list_http_push_consumers_for_account(account_id, [:http_endpoint, sequence: [:postgres_database]])
+    destination_consumers =
+      Consumers.list_destination_consumers_for_account(account_id, [:http_endpoint, sequence: [:postgres_database]])
 
     [account | users] ++
-      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ http_push_consumers
+      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ destination_consumers
   end
 
   #############
@@ -747,39 +747,40 @@ defmodule Sequin.YamlLoader do
   ## HTTP Push Consumers ##
   #########################
 
-  defp upsert_http_push_consumers(account_id, %{"webhook_subscriptions" => consumers}, databases, http_endpoints) do
+  defp upsert_destination_consumers(account_id, %{"webhook_subscriptions" => consumers}, databases, http_endpoints) do
     Logger.info("Upserting HTTP push consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
-      case upsert_http_push_consumer(account_id, consumer, databases, http_endpoints) do
+      case upsert_destination_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
 
-  defp upsert_http_push_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
+  defp upsert_destination_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
 
-  defp upsert_http_push_consumer(account_id, %{"name" => name} = consumer_attrs, databases, http_endpoints) do
+  defp upsert_destination_consumer(account_id, %{"name" => name} = consumer_attrs, databases, http_endpoints) do
     # Find existing consumer first
-    case Sequin.Consumers.find_http_push_consumer(account_id, name: name) do
+    case Sequin.Consumers.find_destination_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
-        with {:ok, params} <- parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints),
+        with {:ok, params} <- parse_destination_consumer_params(consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
 
       {:error, %NotFoundError{}} ->
-        with {:ok, params} <- parse_http_push_consumer_params(consumer_attrs, databases, http_endpoints),
-             {:ok, consumer} <- Sequin.Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params) do
+        with {:ok, params} <- parse_destination_consumer_params(consumer_attrs, databases, http_endpoints),
+             {:ok, consumer} <-
+               Sequin.Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, params) do
           Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
     end
   end
 
-  defp parse_http_push_consumer_params(
+  defp parse_destination_consumer_params(
          %{"name" => name, "sequence" => sequence_name, "http_endpoint" => http_endpoint_name} = consumer_attrs,
          databases,
          http_endpoints

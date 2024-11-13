@@ -8,9 +8,9 @@ defmodule Sequin.Health do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias __MODULE__
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health.Check
@@ -21,7 +21,7 @@ defmodule Sequin.Health do
   @type entity ::
           HttpEndpoint.t()
           | HttpPullConsumer.t()
-          | HttpPushConsumer.t()
+          | DestinationConsumer.t()
           | PostgresDatabase.t()
           | WalPipeline.t()
 
@@ -60,7 +60,7 @@ defmodule Sequin.Health do
   defguard is_entity(entity)
            when is_struct(entity, HttpEndpoint) or
                   is_struct(entity, HttpPullConsumer) or
-                  is_struct(entity, HttpPushConsumer) or
+                  is_struct(entity, DestinationConsumer) or
                   is_struct(entity, PostgresDatabase) or
                   is_struct(entity, WalPipeline)
 
@@ -158,8 +158,8 @@ defmodule Sequin.Health do
     end
   end
 
-  @http_push_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
-  defp expected_check(%HttpPushConsumer{}, check_id, status, error) when check_id in @http_push_consumer_checks do
+  @destination_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
+  defp expected_check(%DestinationConsumer{}, check_id, status, error) when check_id in @destination_consumer_checks do
     case check_id do
       :filters ->
         %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
@@ -218,9 +218,9 @@ defmodule Sequin.Health do
   #####################
   ## Initial Health ##
   #####################
-  defp initial_health(%HttpPushConsumer{} = entity) do
+  defp initial_health(%DestinationConsumer{} = entity) do
     checks =
-      @http_push_consumer_checks
+      @destination_consumer_checks
       |> Enum.map(&expected_check(entity, &1, :initializing))
       |> Enum.map(fn
         %Check{id: :receive} = check ->
@@ -374,7 +374,7 @@ defmodule Sequin.Health do
 
   defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
   defp entity_kind(%HttpPullConsumer{}), do: :http_pull_consumer
-  defp entity_kind(%HttpPushConsumer{}), do: :http_push_consumer
+  defp entity_kind(%DestinationConsumer{}), do: :push_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
   defp entity_kind(%WalPipeline{}), do: :wal_pipeline
 

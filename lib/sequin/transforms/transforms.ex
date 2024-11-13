@@ -3,9 +3,9 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
@@ -141,7 +141,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%HttpPushConsumer{} = consumer) do
+  def to_external(%DestinationConsumer{} = consumer) do
     consumer = Repo.preload(consumer, [:http_endpoint, sequence: [:postgres_database]])
     table = Sequin.Enum.find!(consumer.sequence.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
 

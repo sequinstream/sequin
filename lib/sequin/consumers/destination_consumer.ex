@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.HttpPushConsumer do
+defmodule Sequin.Consumers.DestinationConsumer do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -174,9 +174,9 @@ defmodule Sequin.Consumers.HttpPushConsumer do
   @backfill_completed_at_threshold :timer.minutes(5)
   def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
 
-  def should_delete_acked_messages?(%HttpPushConsumer{backfill_completed_at: nil}, _now), do: false
+  def should_delete_acked_messages?(%DestinationConsumer{backfill_completed_at: nil}, _now), do: false
 
-  def should_delete_acked_messages?(%HttpPushConsumer{backfill_completed_at: backfill_completed_at}, now) do
+  def should_delete_acked_messages?(%DestinationConsumer{backfill_completed_at: backfill_completed_at}, now) do
     backfill_completed_at
     |> DateTime.add(@backfill_completed_at_threshold, :millisecond)
     |> DateTime.compare(now) == :lt

@@ -128,11 +128,11 @@ defmodule Sequin.Databases do
 
   defp check_related_entities(db) do
     http_pull_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
-    http_push_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
+    destination_consumers = Consumers.list_consumers_for_replication_slot(db.replication_slot.id)
     wal_pipelines = Replication.list_wal_pipelines_for_replication_slot(db.replication_slot.id)
 
     cond do
-      http_pull_consumers != [] or http_push_consumers != [] ->
+      http_pull_consumers != [] or destination_consumers != [] ->
         {:error,
          Error.validation(
            summary: "Cannot delete database that's used by consumers. Please delete associated consumers first."

@@ -9,9 +9,9 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -73,9 +73,14 @@ defmodule SequinWeb.ConsumersLive.Show do
   defp load_consumer(id, socket) do
     case_result =
       case Consumers.get_consumer_for_account(current_account_id(socket), id) do
-        nil -> {:error, Error.not_found(entity: :consumer)}
-        %HttpPullConsumer{} = consumer -> {:ok, Repo.preload(consumer, [:postgres_database, :sequence])}
-        %HttpPushConsumer{} = consumer -> {:ok, Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])}
+        nil ->
+          {:error, Error.not_found(entity: :consumer)}
+
+        %HttpPullConsumer{} = consumer ->
+          {:ok, Repo.preload(consumer, [:postgres_database, :sequence])}
+
+        %DestinationConsumer{} = consumer ->
+          {:ok, Repo.preload(consumer, [:http_endpoint, :postgres_database, :sequence])}
       end
 
     case case_result do
@@ -145,7 +150,7 @@ defmodule SequinWeb.ConsumersLive.Show do
               on_finish={&handle_edit_finish/1}
               current_user={@current_user}
             />
-          <% {:show, %HttpPushConsumer{}} -> %>
+          <% {:show, %DestinationConsumer{}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
               name="consumers/ShowHttpPush"
@@ -474,7 +479,7 @@ defmodule SequinWeb.ConsumersLive.Show do
     _ -> {:error, "Failed to get cursor position"}
   end
 
-  defp encode_consumer(%HttpPushConsumer{} = consumer) do
+  defp encode_consumer(%DestinationConsumer{} = consumer) do
     %{
       id: consumer.id,
       name: consumer.name,

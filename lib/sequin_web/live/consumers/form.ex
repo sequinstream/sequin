@@ -3,9 +3,9 @@ defmodule SequinWeb.ConsumersLive.Form do
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushConsumer
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Databases
@@ -68,13 +68,13 @@ defmodule SequinWeb.ConsumersLive.Form do
     component =
       cond do
         is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
-        is_struct(consumer, HttpPushConsumer) -> "consumers/HttpPushForm"
+        is_struct(consumer, DestinationConsumer) -> "consumers/HttpPushForm"
       end
 
     consumer =
       case consumer do
         %HttpPullConsumer{} -> Repo.preload(consumer, [:postgres_database])
-        %HttpPushConsumer{} -> Repo.preload(consumer, [:http_endpoint, :postgres_database])
+        %DestinationConsumer{} -> Repo.preload(consumer, [:http_endpoint, :postgres_database])
         _ -> consumer
       end
 
@@ -201,7 +201,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         "actions" => form["sourceTableActions"],
         "group_column_attnums" => form["groupColumnAttnums"]
       },
-      # Only set for HttpPushConsumer
+      # Only set for DestinationConsumer
       "batch_size" => form["batchSize"]
     }
     |> maybe_delete_http_endpoint()
@@ -256,7 +256,7 @@ defmodule SequinWeb.ConsumersLive.Form do
     if is_nil(socket.assigns.prev_params["consumer_kind"]) and next_params["consumer_kind"] do
       case next_params["consumer_kind"] do
         "http_pull" -> assign(socket, :consumer, %HttpPullConsumer{})
-        "http_push" -> assign(socket, :consumer, %HttpPushConsumer{})
+        "http_push" -> assign(socket, :consumer, %DestinationConsumer{})
       end
     else
       socket
@@ -288,12 +288,12 @@ defmodule SequinWeb.ConsumersLive.Form do
       "sort_column_attnum" => source_table && source_table.sort_column_attnum,
       "sequence_id" => consumer.sequence_id,
       "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
-      # Only set for HttpPushConsumer
+      # Only set for DestinationConsumer
       "batch_size" => Map.get(consumer, :batch_size)
     }
 
     case consumer_type do
-      HttpPushConsumer ->
+      DestinationConsumer ->
         Map.merge(base, %{
           "http_endpoint_id" => consumer.http_endpoint_id,
           "http_endpoint_path" => consumer.http_endpoint_path
@@ -397,8 +397,8 @@ defmodule SequinWeb.ConsumersLive.Form do
         %HttpPullConsumer{} ->
           Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params)
 
-        %HttpPushConsumer{} ->
-          Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, params)
+        %DestinationConsumer{} ->
+          Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, params)
       end
 
     case case_result do
@@ -443,13 +443,13 @@ defmodule SequinWeb.ConsumersLive.Form do
     HttpPullConsumer.update_changeset(consumer, params)
   end
 
-  defp changeset(socket, %HttpPushConsumer{id: nil}, params) do
+  defp changeset(socket, %DestinationConsumer{id: nil}, params) do
     account_id = current_account_id(socket)
-    HttpPushConsumer.create_changeset(%HttpPushConsumer{account_id: account_id}, params)
+    DestinationConsumer.create_changeset(%DestinationConsumer{account_id: account_id}, params)
   end
 
-  defp changeset(_socket, %HttpPushConsumer{} = consumer, params) do
-    HttpPushConsumer.update_changeset(consumer, params)
+  defp changeset(_socket, %DestinationConsumer{} = consumer, params) do
+    DestinationConsumer.update_changeset(consumer, params)
   end
 
   # user is in wizard and hasn't selected a consumer_kind yet

@@ -21,7 +21,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       consumer =
         [account_id: account.id, http_endpoint_id: http_endpoint.id, message_kind: :event]
-        |> ConsumersFactory.insert_http_push_consumer!()
+        |> ConsumersFactory.insert_destination_consumer!()
         |> Repo.preload(:http_endpoint)
 
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
@@ -181,7 +181,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
           http_endpoint_id: http_endpoint.id,
@@ -325,7 +325,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.http_push_consumer(
+        ConsumersFactory.destination_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
           http_endpoint_id: http_endpoint.id,

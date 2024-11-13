@@ -163,7 +163,7 @@ defmodule Sequin.Dev do
               http_endpoint_id: http_endpoint.id
             }
 
-            Consumers.create_http_push_consumer_for_account_with_lifecycle(account_id, attrs)
+            Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, attrs)
         end
     end
   end

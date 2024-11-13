@@ -129,7 +129,7 @@ defmodule Sequin.AccountsTest do
       refute Enum.any?(Repo.all(Accounts.User))
       refute Enum.any?(Repo.all(Sequin.ApiTokens.ApiToken))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpEndpoint))
-      refute Enum.any?(Repo.all(Sequin.Consumers.HttpPushConsumer))
+      refute Enum.any?(Repo.all(Sequin.Consumers.DestinationConsumer))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpPullConsumer))
       refute Enum.any?(Repo.all(PostgresReplicationSlot))
       refute Enum.any?(Repo.all(Sequin.Databases.PostgresDatabase))

@@ -9,6 +9,7 @@
     CircleStop,
     Database,
     Webhook,
+    SendHorizontal,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
@@ -24,7 +25,7 @@
     id: string;
     name: string;
     insertedAt: string;
-    type: "pull" | "push";
+    type: "pull" | "http_push" | "sqs";
     status: "active" | "disabled";
     database_name: string;
     health: {
@@ -34,20 +35,20 @@
   export let live: any;
   export let hasDatabases: boolean;
   export let hasSequences: boolean;
-  export let consumerKind: "push" | "pull";
+  export let consumerKind: "destination_consumer" | "pull";
 
   const hasConsumers = consumers.length > 0;
 
-  function handleConsumerClick(id: string) {
-    live.pushEvent("consumer_clicked", { id });
+  function handleConsumerClick(id: string, type: string) {
+    live.pushEvent("consumer_clicked", { id, type });
   }
 </script>
 
 <div class="container mx-auto py-10">
   <DatabaseConnectionAlert
     show={!hasDatabases}
-    entityName={consumerKind === "push"
-      ? "Webhook Subscription"
+    entityName={consumerKind === "destination_consumer"
+      ? "Destination Consumers"
       : "Consumer Group"}
   />
 
@@ -60,8 +61,8 @@
         </AlertTitle>
         <AlertDescription class="text-carbon-600 col-start-2">
           Sequin must have at least one Stream before you can create {consumerKind ===
-          "push"
-            ? "a Webhook Subscription"
+          "destination_consumer"
+            ? "a Destination Consumer"
             : "a Consumer Group"}.
         </AlertDescription>
 
@@ -89,23 +90,25 @@
       {#if consumerKind === "pull"}
         <Radio class="h-6 w-6 mr-2" />
       {:else}
-        <Webhook class="h-6 w-6 mr-2" />
+        <SendHorizontal class="h-6 w-6 mr-2" />
       {/if}
       <h1 class="text-2xl font-bold">
-        {consumerKind === "push" ? "Webhook Subscriptions" : "Consumer Groups"}
+        {consumerKind === "destination_consumer"
+          ? "Destination Consumers"
+          : "Consumer Groups"}
       </h1>
     </div>
     {#if hasDatabases}
       {#if hasConsumers}
         <div class="relative inline-block text-left">
           <a
-            href={`/consumers/new?kind=${consumerKind}`}
+            href={`/consumers/new?kind=${consumerKind === "destination_consumer" ? "push" : "pull"}`}
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
             <Button variant="default">
-              Create {consumerKind === "push"
-                ? "Subscription"
+              Create {consumerKind === "destination_consumer"
+                ? "Destination Consumer"
                 : "Consumer Group"}
             </Button>
           </a>
@@ -118,13 +121,13 @@
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
         <h2 class="text-xl font-semibold mb-4">
-          {consumerKind === "push"
-            ? "No Webhook Subscriptions"
+          {consumerKind === "destination_consumer"
+            ? "No Destination Consumers"
             : "No Consumer Groups"}
         </h2>
         <p class="text-gray-600 mb-6">
-          {#if consumerKind === "push"}
-            Webhook Subscriptions filter, transform, and send messages from a
+          {#if consumerKind === "destination_consumer"}
+            Destination Consumers filter, transform, and send messages from a
             table in your database to your application or another service.
           {:else}
             Consumer Groups let you filter, transform, and pull messages from
@@ -139,15 +142,15 @@
               data-phx-link-state="push"
             >
               <Button variant="default">
-                Create {consumerKind === "push"
-                  ? "Subscription"
+                Create {consumerKind === "destination_consumer"
+                  ? "Destination Consumer"
                   : "Consumer Group"}
               </Button>
             </a>
           {:else}
             <Button disabled
-              >Create {consumerKind === "push"
-                ? "Subscription"
+              >Create {consumerKind === "destination_consumer"
+                ? "Destination Consumer"
                 : "Consumer Group"}</Button
             >
           {/if}
@@ -173,7 +176,7 @@
       <Table.Body>
         {#each consumers as consumer}
           <Table.Row
-            on:click={() => handleConsumerClick(consumer.id)}
+            on:click={() => handleConsumerClick(consumer.id, consumer.type)}
             class="cursor-pointer"
           >
             <Table.Cell>{consumer.name}</Table.Cell>

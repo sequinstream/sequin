@@ -5,15 +5,15 @@ defmodule Sequin.Consumers.SqsDestination do
 
   import Ecto.Changeset
 
+  alias Sequin.Aws.HttpClient
   alias Sequin.Encrypted
 
-  @derive {Jason.Encoder, only: [:queue_url, :region, :endpoint]}
+  @derive {Jason.Encoder, only: [:queue_url, :region]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:sqs], default: :sqs
     field :queue_url, :string
     field :region, :string
-    field :endpoint, :string
     field :access_key_id, Encrypted.Binary
     field :secret_access_key, Encrypted.Binary
     field :is_fifo, :boolean, default: false
@@ -21,7 +21,7 @@ defmodule Sequin.Consumers.SqsDestination do
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:queue_url, :region, :endpoint, :access_key_id, :secret_access_key, :is_fifo])
+    |> cast(params, [:queue_url, :region, :access_key_id, :secret_access_key, :is_fifo])
     |> validate_required([:queue_url, :region, :access_key_id, :secret_access_key])
     |> validate_queue_url()
     |> put_is_fifo()
@@ -45,4 +45,10 @@ defmodule Sequin.Consumers.SqsDestination do
 
   defp ends_with_fifo?(nil), do: false
   defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
+
+  def aws_client(%__MODULE__{} = destination) do
+    destination.access_key_id
+    |> AWS.Client.create(destination.secret_access_key, destination.region)
+    |> HttpClient.put_client()
+  end
 end

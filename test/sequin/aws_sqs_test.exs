@@ -28,14 +28,11 @@ defmodule Sequin.Aws.SQSTest do
         assert conn.method == "POST"
 
         Req.Test.json(conn, %{
-          "SendMessageBatchResponse" => %{
-            "SendMessageBatchResult" => %{
-              "SendMessageBatchResultEntry" => [
-                %{"Id" => "1", "MessageId" => "msg1", "MD5OfMessageBody" => "test"},
-                %{"Id" => "2", "MessageId" => "msg2", "MD5OfMessageBody" => "test"}
-              ]
-            }
-          }
+          "Successful" => [
+            %{"Id" => "1", "MessageId" => "msg1", "MD5OfMessageBody" => "test"},
+            %{"Id" => "2", "MessageId" => "msg2", "MD5OfMessageBody" => "test"}
+          ],
+          "Failed" => []
         })
       end)
 
@@ -47,21 +44,18 @@ defmodule Sequin.Aws.SQSTest do
 
       Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
         Req.Test.json(conn, %{
-          "SendMessageBatchResponse" => %{
-            "SendMessageBatchResult" => %{
-              "BatchResultErrorEntry" => [
-                %{
-                  "Id" => "1",
-                  "Code" => "InternalError",
-                  "Message" => "Internal Error occurred"
-                }
-              ]
+          "Failed" => [
+            %{
+              "Id" => "1",
+              "Code" => "InternalError",
+              "Message" => "Internal Error occurred"
             }
-          }
+          ],
+          "Successful" => []
         })
       end)
 
-      assert {:error, %{"SendMessageBatchResponse" => _}, _} = SQS.send_messages(client, @queue_url, messages)
+      assert {:error, %{"Failed" => [_failed_message]}, _} = SQS.send_messages(client, @queue_url, messages)
     end
   end
 
@@ -72,14 +66,10 @@ defmodule Sequin.Aws.SQSTest do
         assert String.contains?(conn.host, "sqs.us-east-1.amazonaws.com")
 
         Req.Test.json(conn, %{
-          "GetQueueAttributesResponse" => %{
-            "GetQueueAttributesResult" => %{
-              "Attribute" => [
-                %{"Name" => "ApproximateNumberOfMessages", "Value" => "10"},
-                %{"Name" => "ApproximateNumberOfMessagesNotVisible", "Value" => "5"},
-                %{"Name" => "QueueArn", "Value" => "arn:aws:sqs:us-east-1:123456789012:test-queue"}
-              ]
-            }
+          "Attributes" => %{
+            "ApproximateNumberOfMessages" => "10",
+            "ApproximateNumberOfMessagesNotVisible" => "5",
+            "QueueArn" => "arn:aws:sqs:us-east-1:123456789012:test-queue"
           }
         })
       end)

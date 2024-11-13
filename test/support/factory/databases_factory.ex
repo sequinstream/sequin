@@ -38,6 +38,8 @@ defmodule Sequin.Factory.DatabasesFactory do
     {tables_refreshed_at, attrs} =
       Map.pop_lazy(attrs, :tables_refreshed_at, fn -> unless tables == [], do: Factory.timestamp() end)
 
+    tables = maybe_cast_tables(tables)
+
     merge_attributes(
       %PostgresDatabase{
         id: Factory.uuid(),
@@ -56,6 +58,27 @@ defmodule Sequin.Factory.DatabasesFactory do
       },
       attrs
     )
+  end
+
+  defp maybe_cast_tables(tables) do
+    Enum.map(tables, fn
+      %PostgresDatabaseTable{} = table ->
+        table
+
+      table ->
+        columns =
+          Enum.map(table.columns, fn
+            %PostgresDatabaseTable.Column{} = column ->
+              column
+
+            column ->
+              column(column)
+          end)
+
+        table = table(table)
+
+        %{table | columns: columns}
+    end)
   end
 
   def postgres_database_attrs(attrs \\ []) do
@@ -79,6 +102,12 @@ defmodule Sequin.Factory.DatabasesFactory do
     %PostgresDatabase{account_id: account_id}
     |> PostgresDatabase.changeset(attrs)
     |> Repo.insert!()
+  end
+
+  def configured_postgres_database(attrs \\ []) do
+    attrs
+    |> configured_postgres_database_attrs()
+    |> postgres_database()
   end
 
   def configured_postgres_database_attrs(attrs \\ []) do
@@ -111,6 +140,8 @@ defmodule Sequin.Factory.DatabasesFactory do
   end
 
   def insert_configured_postgres_database!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
     attrs
     |> configured_postgres_database_attrs()
     |> insert_postgres_database!()

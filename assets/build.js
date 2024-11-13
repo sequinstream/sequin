@@ -21,6 +21,9 @@ let optsClient = {
   sourcemap: watch ? "inline" : false,
   watch,
   tsconfig: "./tsconfig.json",
+  loader: {
+    ".svg": "dataurl",
+  },
   plugins: [
     importGlobPlugin(),
     sveltePlugin({
@@ -59,6 +62,9 @@ let optsServer = {
   sourcemap: watch ? "inline" : false,
   watch,
   tsconfig: "./tsconfig.json",
+  loader: {
+    ".svg": "dataurl",
+  },
   plugins: [
     importGlobPlugin(),
     sveltePlugin({

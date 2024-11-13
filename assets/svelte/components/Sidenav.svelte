@@ -23,6 +23,9 @@
     ListOrdered,
     ChevronsLeftRightEllipsis,
   } from "lucide-svelte";
+  import SQSIcon from "../../icons/sqs.svelte";
+
+  console.log(SQSIcon);
 
   export let live;
   export let currentPath: string;
@@ -62,6 +65,11 @@
           path: "/consumers/push",
           text: "Webhook Subscriptions",
           icon: Webhook,
+        },
+        {
+          path: "/consumers/sqs",
+          text: "AWS SQS",
+          icon: SQSIcon,
         },
       ],
     },

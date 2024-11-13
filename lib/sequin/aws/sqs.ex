@@ -112,14 +112,22 @@ defmodule Sequin.Aws.SQS do
       {:ok, %{"Successful" => _successful}, %{body: _body}} ->
         :ok
 
-      {:error, {:unexpected_response, %{body: body, status_code: 400}}} ->
+      {:error, {:unexpected_response, %{body: body, status_code: status_code}}} ->
         message =
           case Jason.decode(body) do
-            {:ok, %{"message" => message}} -> message
-            _ -> inspect(body)
+            {:ok, %{"message" => message}} ->
+              message
+
+            _ ->
+              if is_binary(body) do
+                body
+              else
+                inspect(body)
+              end
           end
 
-        {:error, Error.service(service: :aws_sqs, message: "Failed to send messages", details: message)}
+        {:error,
+         Error.service(service: :aws_sqs, message: "Failed to send messages (status=#{status_code})", details: message)}
     end
   end
 

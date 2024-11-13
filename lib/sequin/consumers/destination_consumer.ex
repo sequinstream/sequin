@@ -7,6 +7,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
   import PolymorphicEmbed
 
   alias __MODULE__
+  alias Ecto.Changeset
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushDestination
@@ -43,6 +44,11 @@ defmodule Sequin.Consumers.DestinationConsumer do
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :record
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
     field :seq, :integer, read_after_writes: true
+    field :batch_size, :integer, default: 1
+
+    field :type, Ecto.Enum, values: [:http_push, :sqs], read_after_writes: true
+
+    field :health, :map, virtual: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
     embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
@@ -54,12 +60,6 @@ defmodule Sequin.Consumers.DestinationConsumer do
     belongs_to :account, Account
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
-
-    field :health, :map, virtual: true
-
-    field :batch_size, :integer, default: 1
-
-    field :type, Ecto.Enum, values: [:http_push], read_after_writes: true
 
     polymorphic_embeds_one(:destination,
       types: [
@@ -76,47 +76,54 @@ defmodule Sequin.Consumers.DestinationConsumer do
   def create_changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
-      :ack_wait_ms,
-      :max_ack_pending,
-      :max_deliver,
-      :max_waiting,
-      :message_kind,
       :name,
-      :backfill_completed_at,
       :replication_slot_id,
       :status,
       :sequence_id,
-      :batch_size
+      :message_kind
     ])
-    |> cast_polymorphic_embed(:destination, required: true)
-    |> validate_required([:name, :status, :replication_slot_id, :batch_size])
-    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
-    |> validate_number(:batch_size, greater_than: 0)
-    |> cast_embed(:record_consumer_state)
+    |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
     |> foreign_key_constraint(:sequence_id)
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
-    |> Sequin.Changeset.cast_embed(:source_tables)
     |> Sequin.Changeset.validate_name()
   end
 
   def update_changeset(consumer, attrs) do
+    changeset(consumer, attrs)
+  end
+
+  def changeset(consumer, attrs) do
     consumer
     |> cast(attrs, [
+      :batch_size,
       :ack_wait_ms,
+      :max_waiting,
       :max_ack_pending,
       :max_deliver,
-      :max_waiting,
       :backfill_completed_at,
-      :status,
-      :message_kind,
-      :batch_size
+      :status
     ])
-    |> cast_polymorphic_embed(:destination)
-    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> cast_polymorphic_embed(:destination, required: true)
     |> cast_embed(:record_consumer_state)
     |> Sequin.Changeset.cast_embed(:source_tables)
+    |> validate_required([:name, :status, :replication_slot_id, :batch_size])
+    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> validate_number(:batch_size, greater_than: 0)
+    |> validate_number(:batch_size, less_than_or_equal_to: 10_000)
+    |> validate_for_destination()
+  end
+
+  defp validate_for_destination(%Changeset{valid?: false} = changeset), do: changeset
+
+  defp validate_for_destination(%Changeset{} = changeset) do
+    type = changeset |> Changeset.get_field(:destination) |> Map.fetch!(:type)
+
+    case type do
+      :http_push -> changeset
+      :sqs -> validate_number(changeset, :batch_size, less_than_or_equal_to: 10)
+    end
   end
 
   def where_account_id(query \\ base_query(), account_id) do

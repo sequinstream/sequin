@@ -21,44 +21,40 @@ defmodule Sequin.Aws.SQS do
   def create_queue(client, queue_name, %QueuePolicy{} = queue_policy, opts) do
     is_fifo? = Keyword.get(opts, :fifo, false)
 
-    attrs =
+    attributes =
       if is_fifo? do
         %{
-          "QueueName" => queue_name,
-          "Attribute.1.Name" => "FifoQueue",
-          "Attribute.1.Value" => true,
-          "Attribute.2.Name" => "Policy",
-          "Attribute.2.Value" => Jason.encode!(queue_policy),
-          "Attribute.3.Name" => "ContentBasedDeduplication",
-          "Attribute.3.Value" => true
+          "FifoQueue" => "true",
+          "Policy" => Jason.encode!(queue_policy),
+          "ContentBasedDeduplication" => "true"
         }
       else
-        # Fifo: false breaks AWS
         %{
-          "QueueName" => queue_name,
-          "Attribute.1.Name" => "Policy",
-          "Attribute.1.Value" => Jason.encode!(queue_policy)
+          "Policy" => Jason.encode!(queue_policy)
         }
       end
 
-    res = AWS.SQS.create_queue(client, attrs)
+    request_body = %{
+      "QueueName" => queue_name,
+      "Attributes" => attributes
+    }
 
-    with {:ok, %{"CreateQueueResponse" => %{"CreateQueueResult" => %{"QueueUrl" => queue_url}}}, %{status_code: 200}} <-
-           res do
-      {:ok, queue_url}
+    case AWS.SQS.create_queue(client, request_body) do
+      {:ok, %{"QueueUrl" => queue_url}, %{status_code: 200}} ->
+        {:ok, queue_url}
+
+      err ->
+        {:error, err}
     end
   end
 
   @spec get_queue_url(Client.t(), String.t(), String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def get_queue_url(client, account_id, queue_name) do
-    res =
-      AWS.SQS.get_queue_url(client, %{
-        "QueueName" => queue_name,
-        "QueueOwnerAWSAccountId" => account_id
-      })
-
-    case res do
-      {:ok, %{"GetQueueUrlResponse" => %{"GetQueueUrlResult" => %{"QueueUrl" => queue_url}}}, _body} ->
+    case AWS.SQS.get_queue_url(client, %{
+           "QueueName" => queue_name,
+           "QueueOwnerAWSAccountId" => account_id
+         }) do
+      {:ok, %{"QueueUrl" => queue_url}, _body} ->
         {:ok, queue_url}
 
       err ->
@@ -78,60 +74,58 @@ defmodule Sequin.Aws.SQS do
   """
   @spec send_messages(Client.t(), String.t(), list(map())) :: :ok | {:error, any()}
   def send_messages(%Client{} = client, queue_url, messages) do
-    wrapped_messages =
+    entries =
       Enum.map(messages, fn msg ->
         attributes =
           msg
           |> Map.get(:attributes, [])
-          |> Enum.map(fn {k, v} ->
-            %{
-              "Name" => to_string(k),
-              "Value.StringValue" => to_string(v),
-              "Value.DataType" => "String"
-            }
+          |> Map.new(fn {k, v} ->
+            {to_string(k),
+             %{
+               "DataType" => "String",
+               "StringValue" => to_string(v)
+             }}
           end)
-
-        attributes = to_aws_object_array("MessageAttribute", attributes)
 
         %{
           "Id" => Map.fetch!(msg, :id),
           "MessageBody" => Jason.encode!(msg.message_body)
         }
-        |> Map.merge(attributes)
+        |> Sequin.Map.put_if_present("MessageAttributes", attributes)
         |> Sequin.Map.put_if_present("MessageGroupId", msg[:message_group_id])
         |> Sequin.Map.put_if_present("MessageDeduplicationId", msg[:message_deduplication_id])
       end)
 
-    wrapped_messages =
-      "SendMessageBatchRequestEntry"
-      |> to_aws_object_array(wrapped_messages)
-      |> Map.put("QueueUrl", queue_url)
+    request_body = %{
+      "QueueUrl" => queue_url,
+      "Entries" => entries
+    }
 
-    case AWS.SQS.send_message_batch(client, wrapped_messages) do
+    case AWS.SQS.send_message_batch(client, request_body) do
       {:ok,
        %{
-         "SendMessageBatchResponse" => %{
-           "SendMessageBatchResult" => %{"BatchResultErrorEntry" => _}
-         }
-       } = resp, %{body: body, status_code: 200}} ->
+         "Failed" => failed_entries
+       } = resp, %{body: body}}
+      when failed_entries != [] ->
         {:error, resp, %{body: body}}
 
-      {:ok,
-       %{
-         "SendMessageBatchResponse" => %{
-           "SendMessageBatchResult" => %{"SendMessageBatchResultEntry" => _}
-         }
-       }, %{body: _body, status_code: 200}} ->
+      {:ok, %{"Successful" => _successful}, %{body: _body}} ->
         :ok
 
-      err ->
-        err
+      {:error, {:unexpected_response, %{body: body, status_code: 400}}} ->
+        message =
+          case Jason.decode(body) do
+            {:ok, %{"message" => message}} -> message
+            _ -> inspect(body)
+          end
+
+        {:error, Error.service(service: :aws_sqs, message: "Failed to send messages", details: message)}
     end
   end
 
-  @spec fetch_messages(Client.t(), String.t(), Keyword.t()) ::
+  @spec receive_messages(Client.t(), String.t(), Keyword.t()) ::
           {:ok, list(message())} | {:error, Error.t()}
-  def fetch_messages(%Client{} = client, queue_url, opts) do
+  def receive_messages(%Client{} = client, queue_url, opts \\ []) do
     res =
       AWS.SQS.receive_message(
         client,
@@ -144,9 +138,12 @@ defmodule Sequin.Aws.SQS do
       )
 
     case res do
-      {:ok, %{"ReceiveMessageResponse" => %{"ReceiveMessageResult" => message_result}}, _} ->
-        messages = extract_messages(message_result)
-        {:ok, messages}
+      {:ok, %{"Messages" => messages}, _} ->
+        {:ok, extract_messages(messages)}
+
+      {:ok, response, _} when map_size(response) == 0 ->
+        # No messages available
+        {:ok, []}
 
       {:error,
        {:unexpected_response,
@@ -163,6 +160,22 @@ defmodule Sequin.Aws.SQS do
       err ->
         {:error, Error.service(service: :aws_sqs, message: "Failed to fetch messages", details: err)}
     end
+  end
+
+  defp extract_messages(messages) when is_list(messages) do
+    Enum.map(messages, fn msg ->
+      %{
+        "MessageId" => id,
+        "ReceiptHandle" => handle,
+        "Body" => body
+      } = msg
+
+      %{
+        id: id,
+        receipt_handle: handle,
+        message_body: Jason.decode!(body)
+      }
+    end)
   end
 
   @spec delete_queue(Client.t(), String.t(), String.t()) :: :ok | {:error, Error.t()}
@@ -183,85 +196,49 @@ defmodule Sequin.Aws.SQS do
     end
   end
 
-  defp extract_messages(:none), do: []
-
-  defp extract_messages(%{"Message" => messages}) do
-    # if there's only one message, then `messages` is an object, so wrap it
-    messages
-    |> List.wrap()
-    |> Enum.map(fn msg ->
-      %{
-        "MessageId" => id,
-        "ReceiptHandle" => handle,
-        "Body" => body
-      } = msg
-
-      %{
-        id: id,
-        receipt_handle: handle,
-        message_body: Jason.decode!(body)
-      }
-    end)
-  end
-
   def delete_messages(_client, _queue_url, []) do
     :ok
   end
 
   def delete_messages(%Client{} = client, queue_url, messages) do
-    req_body =
-      messages
-      |> Enum.with_index()
-      |> Enum.reduce(%{}, fn {message, idx}, acc ->
-        Map.merge(acc, %{
-          # AWS starts index at 1 not 0
-          "DeleteMessageBatchRequestEntry.#{idx + 1}.Id" => message.id,
-          "DeleteMessageBatchRequestEntry.#{idx + 1}.ReceiptHandle" => message.receipt_handle
-        })
-      end)
+    entries =
+      Enum.map(messages, fn message -> %{"Id" => message.id, "ReceiptHandle" => message.receipt_handle} end)
 
-    res = AWS.SQS.delete_message_batch(client, Map.put(req_body, "QueueUrl", queue_url))
+    request_body = %{
+      "QueueUrl" => queue_url,
+      "Entries" => entries
+    }
 
-    with {:ok,
-          %{
-            "DeleteMessageBatchResponse" => %{
-              "DeleteMessageBatchResult" => %{
-                "DeleteMessageBatchResultEntry" => results
-              }
-            }
-          }, _} <- res do
-      # AWS will not return a list if only one message was deleted!
+    case AWS.SQS.delete_message_batch(client, request_body) do
+      {:ok, %{"Failed" => failed, "Successful" => successful}, _} ->
+        if length(failed) > 0 do
+          Logger.error("Failed to delete some messages: #{inspect(failed)}")
+        end
 
-      results = List.wrap(results)
-      # Ghola.Statsd.increment("aws.sqs.messages_deleted", length(results))
+        # AWS will return a list for multiple items but an object for single items
+        successful = List.wrap(successful)
 
-      unless length(results) == length(messages) do
-        Logger.error("Did not delete messages for all handles: #{inspect(res)}")
-      end
+        unless length(successful) == length(messages) do
+          Logger.error("Did not delete messages for all handles")
+        end
 
-      :ok
+        :ok
+
+      err ->
+        Logger.error("Failed to delete messages: #{inspect(err)}")
+        {:error, err}
     end
   end
 
   def get_queue_arn(client, queue_url) do
-    res =
-      AWS.SQS.get_queue_attributes(
-        client,
-        %{
-          "QueueUrl" => queue_url,
-          "AttributeName.1" => "QueueArn"
-        }
-      )
-
-    case res do
-      {:ok,
-       %{
-         "GetQueueAttributesResponse" => %{
-           "GetQueueAttributesResult" => %{
-             "Attribute" => %{"Name" => "QueueArn", "Value" => queue_arn}
+    case AWS.SQS.get_queue_attributes(
+           client,
+           %{
+             "QueueUrl" => queue_url,
+             "AttributeNames" => ["QueueArn"]
            }
-         }
-       }, _response} ->
+         ) do
+      {:ok, %{"Attributes" => %{"QueueArn" => queue_arn}}, _response} ->
         {:ok, queue_arn}
 
       err ->
@@ -270,33 +247,27 @@ defmodule Sequin.Aws.SQS do
   end
 
   def queue_meta(%Client{} = client, queue_url) do
-    res =
-      AWS.SQS.get_queue_attributes(client, %{
-        "QueueUrl" => queue_url,
-        "AttributeName.1" => "ApproximateNumberOfMessages",
-        "AttributeName.2" => "ApproximateNumberOfMessagesNotVisible",
-        "AttributeName.3" => "QueueArn"
-      })
+    case AWS.SQS.get_queue_attributes(
+           client,
+           %{
+             "QueueUrl" => queue_url,
+             "AttributeNames" => [
+               "ApproximateNumberOfMessages",
+               "ApproximateNumberOfMessagesNotVisible",
+               "QueueArn"
+             ]
+           }
+         ) do
+      {:ok, %{"Attributes" => attributes}, %{status_code: 200}} ->
+        {:ok,
+         %{
+           messages: String.to_integer(attributes["ApproximateNumberOfMessages"]),
+           not_visible: String.to_integer(attributes["ApproximateNumberOfMessagesNotVisible"]),
+           arn: attributes["QueueArn"]
+         }}
 
-    with {:ok, body, %{status_code: 200}} <- res do
-      %{
-        "GetQueueAttributesResponse" => %{
-          "GetQueueAttributesResult" => %{
-            "Attribute" => [
-              %{"Name" => "ApproximateNumberOfMessages", "Value" => num_msgs},
-              %{"Name" => "ApproximateNumberOfMessagesNotVisible", "Value" => num_not_vis},
-              %{"Name" => "QueueArn", "Value" => arn}
-            ]
-          }
-        }
-      } = body
-
-      {:ok,
-       %{
-         messages: String.to_integer(num_msgs),
-         not_visible: String.to_integer(num_not_vis),
-         arn: arn
-       }}
+      err ->
+        err
     end
   end
 
@@ -306,28 +277,5 @@ defmodule Sequin.Aws.SQS do
       {:ok, _} -> {:ok, true}
       err -> err
     end
-  end
-
-  # Produces weird AWS object-based lists:
-  # SendMessageBatchRequestEntry.1.Id: test_msg_no_message_timer
-  # SendMessageBatchRequestEntry.1.MessageBody: test%20message%20body%201
-  # SendMessageBatchRequestEntry.2.Id: test_msg_delay_45_seconds
-  # SendMessageBatchRequestEntry.2.MessageBody: test%20message%20body%202
-  # SendMessageBatchRequestEntry.2.DelaySeconds: 45
-  # SendMessageBatchRequestEntry.3.Id: test_msg_delay_2_minutes
-  # SendMessageBatchRequestEntry.3.MessageBody: test%20message%20body%203
-  # SendMessageBatchRequestEntry.3.DelaySeconds: 120
-  defp to_aws_object_array(prefix, objects) do
-    objects
-    |> Enum.with_index()
-    |> Enum.reduce(%{}, fn {object, idx}, acc ->
-      # Index starts at 1 not 0
-      index = idx + 1
-
-      object =
-        Map.new(object, fn {k, v} -> {"#{prefix}.#{index}.#{k}", v} end)
-
-      Map.merge(acc, object)
-    end)
   end
 end

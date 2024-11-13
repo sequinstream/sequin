@@ -9,10 +9,11 @@ defmodule Sequin.Error do
     @moduledoc false
     @derive Jason.Encoder
     @enforce_keys [:message]
-    defexception [:message]
+    defexception [:message, :code]
 
     @type t :: %__MODULE__{
-            message: String.t()
+            message: String.t(),
+            code: atom()
           }
 
     def from_json(json), do: JSON.struct(json, __MODULE__)

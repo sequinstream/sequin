@@ -8,10 +8,10 @@ defmodule SequinWeb.RouteHelpers do
   def consumer_path(consumer, subpath \\ "")
 
   def consumer_path(%HttpPullConsumer{id: id}, subpath) do
-    ~p"/consumers/pull/#{id}" <> subpath
+    ~p"/consumer-groups/#{id}" <> subpath
   end
 
-  def consumer_path(%DestinationConsumer{id: id}, subpath) do
-    ~p"/consumers/push/#{id}" <> subpath
+  def consumer_path(%DestinationConsumer{id: id, type: type}, subpath) do
+    ~p"/consumers/#{type}/#{id}" <> subpath
   end
 end

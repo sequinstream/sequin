@@ -51,7 +51,7 @@ defmodule Sequin.Consumers do
   # Consumers
 
   def kind(%HttpPullConsumer{}), do: :pull
-  def kind(%DestinationConsumer{}), do: :push
+  def kind(%DestinationConsumer{type: type}), do: type
 
   def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
     %PostgresDatabase{} = postgres_database = consumer.postgres_database

@@ -146,8 +146,8 @@ defmodule SequinWeb.ConsumersLive.Form do
     socket =
       case {Consumers.kind(consumer), is_edit?(socket)} do
         {_, true} -> push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
-        {:push, false} -> push_navigate(socket, to: ~p"/consumers/push")
-        {:pull, false} -> push_navigate(socket, to: ~p"/consumers/pull")
+        {:pull, false} -> push_navigate(socket, to: ~p"/consumer-groups")
+        {_, false} -> push_navigate(socket, to: ~p"/consumers")
       end
 
     {:noreply, socket}

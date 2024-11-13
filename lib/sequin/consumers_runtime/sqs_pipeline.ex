@@ -19,7 +19,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload(sequence: [:postgres_database])
+      |> Repo.lazy_preload([:sequence, :postgres_database])
 
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     test_pid = Keyword.get(opts, :test_pid)
@@ -37,7 +37,8 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
       ],
       context: %{
         consumer: consumer,
-        sqs_client: SqsDestination.aws_client(consumer.destination)
+        sqs_client: SqsDestination.aws_client(consumer.destination),
+        test_pid: test_pid
       }
     )
   end
@@ -55,7 +56,13 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{consumer: consumer, sqs_client: sqs_client}) do
+  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+        consumer: consumer,
+        sqs_client: sqs_client,
+        test_pid: test_pid
+      }) do
+    setup_allowances(test_pid)
+
     Logger.metadata(
       account_id: consumer.account_id,
       consumer_id: consumer.id
@@ -126,5 +133,11 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
       message: "SQS batch send failed",
       details: %{error: error}
     )
+  end
+
+  defp setup_allowances(nil), do: :ok
+
+  defp setup_allowances(test_pid) do
+    Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
   end
 end

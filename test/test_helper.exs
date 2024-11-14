@@ -29,3 +29,6 @@ tables =
 :character_tables
 |> :ets.new([:set, :public, :named_table])
 |> :ets.insert({:tables, tables})
+
+# Mocks
+Mox.defmock(Sequin.RedisMock, for: Sequin.Redis)

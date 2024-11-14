@@ -312,6 +312,17 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def get_destination_consumer_for_account(account_id, consumer_id) do
+    account_id
+    |> DestinationConsumer.where_account_id()
+    |> DestinationConsumer.where_id(consumer_id)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :consumer)}
+      consumer -> {:ok, consumer}
+    end
+  end
+
   def find_destination_consumer(account_id, params \\ []) do
     params
     |> Enum.reduce(DestinationConsumer.where_account_id(account_id), fn

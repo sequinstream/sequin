@@ -1,8 +1,6 @@
 <script lang="ts">
   import {
     CheckCircle2,
-    ChevronsLeftRightEllipsis,
-    ExternalLink,
     ArrowUpRight,
     HelpCircle,
     XCircle,
@@ -12,28 +10,26 @@
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
-  import { concatenateUrl } from "../databases/utils";
   import ShowSequence from "./ShowSequence.svelte";
   import Cursor from "./Cursor.svelte";
+  import type {
+    Consumer,
+    HttpPushConsumer,
+    SqsConsumer,
+  } from "../types/consumer";
+  import DestinationCardHttpPush from "../components/DestinationCardHttpPush.svelte";
+  import DestinationCardSqs from "../components/DestinationCardSqs.svelte";
 
   export let live;
   export let parent;
-  export let consumer;
+  export let consumer: Consumer;
+
   export let metrics = {
     messages_processed_count: 0,
     messages_processed_throughput: 0,
     messages_failing_count: 0,
   };
   export let cursor_position = null;
-
-  function isWebhookSiteUrl(url: string): boolean {
-    return url.startsWith("https://webhook.site/");
-  }
-
-  function getWebhookSiteViewUrl(url: string): string {
-    const uuid = url.split("/").pop();
-    return `https://webhook.site/#!/view/${uuid}`;
-  }
 
   function onRewind(
     newCursorPosition: string | null,
@@ -47,16 +43,22 @@
     );
   }
 
-  $: fullEndpointUrl = concatenateUrl(
-    consumer.http_endpoint.url,
-    consumer.http_endpoint_path,
-  );
+  // Add type predicates
+  function isHttpPushConsumer(
+    consumer: Consumer,
+  ): consumer is HttpPushConsumer {
+    return consumer.destination.type === "http_push";
+  }
+
+  function isSqsConsumer(consumer: Consumer): consumer is SqsConsumer {
+    return consumer.destination.type === "sqs";
+  }
 </script>
 
 <div class="flex flex-col flex-1">
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
-    <div class="grid gap-6 md:grid-cols-3 mb-8">
+    <div class="grid gap-6 lg:grid-cols-3 mb-8">
       <HealthComponent
         health={consumer.health}
         paused={consumer.status === "disabled"}
@@ -113,7 +115,7 @@
           <div class="flex items-center space-x-4 mb-4">
             <h2 class="text-lg font-semibold">Configuration</h2>
           </div>
-          <div class="grid lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div class="grid lg:grid-cols-3 gap-4">
             <div>
               <span class="text-sm text-gray-500"> Request Timeout </span>
               <Tooltip.Root openDelay={200}>
@@ -191,40 +193,6 @@
                 {formatNumberWithCommas(consumer.max_ack_pending)}
               </p>
             </div>
-            <div>
-              <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
-              <Tooltip.Root openDelay={200}>
-                <Tooltip.Trigger>
-                  <HelpCircle
-                    class="inline-block h-2.5 w-2.5 text-gray-400 -mt-2 cursor-help"
-                  />
-                </Tooltip.Trigger>
-                <Tooltip.Content class="max-w-xs">
-                  <p class="text-xs text-gray-500">
-                    <b>HTTP Endpoint Path</b>
-                    <br />
-                    The path to use when pushing messages to the HTTP endpoint.
-                    <br />
-                    <br />
-                    This path is relative to the base URL of the HTTP endpoint.
-                    <br />
-                  </p>
-                </Tooltip.Content>
-              </Tooltip.Root>
-              <div class="mt-2">
-                {#if consumer.http_endpoint_path === ""}
-                  <span
-                    class="bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
-                    >No path configured</span
-                  >
-                {:else}
-                  <span
-                    class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
-                    >{consumer.http_endpoint_path}</span
-                  >
-                {/if}
-              </div>
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -237,44 +205,11 @@
         {onRewind}
       />
 
-      <Card>
-        <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
-            <div class="flex space-x-2">
-              <a
-                href="/http-endpoints/{consumer.http_endpoint.id}"
-                data-phx-link="redirect"
-                data-phx-link-state="push"
-              >
-                <Button variant="outline" size="sm">
-                  <ExternalLink class="h-4 w-4 mr-2" />
-                  View Endpoint
-                </Button>
-              </a>
-              {#if isWebhookSiteUrl(consumer.http_endpoint.url)}
-                <a
-                  href={getWebhookSiteViewUrl(consumer.http_endpoint.url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button variant="outline" size="sm">
-                    <ExternalLink class="h-4 w-4 mr-2" />
-                    View on Webhook.site
-                  </Button>
-                </a>
-              {/if}
-            </div>
-          </div>
-          <div class="flex items-center space-x-2 overflow-x-auto">
-            <ChevronsLeftRightEllipsis class="h-5 w-5 text-gray-400" />
-            <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-              >{fullEndpointUrl}</span
-            >
-          </div>
-        </CardContent>
-      </Card>
+      {#if isHttpPushConsumer(consumer)}
+        <DestinationCardHttpPush {consumer} />
+      {:else if isSqsConsumer(consumer)}
+        <DestinationCardSqs {consumer} />
+      {/if}
 
       <ShowSequence {consumer} />
     </div>

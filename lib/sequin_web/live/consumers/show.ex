@@ -132,11 +132,10 @@ defmodule SequinWeb.ConsumersLive.Show do
     <div id="consumer-show" class="flex flex-col">
       <!-- The header component -->
       <.svelte
-        name="consumers/ShowHeader"
+        name="consumers/ShowConsumerGroupHeader"
         props={
           %{
             consumer: encode_consumer(@consumer),
-            kind: @kind,
             parent: "consumer-show",
             live_action: @live_action,
             messages_failing: @metrics.messages_failing_count > 0

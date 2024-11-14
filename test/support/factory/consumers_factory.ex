@@ -12,6 +12,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SqsDestination
@@ -54,7 +55,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push])
+    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push, :redis, :sqs])
     {destination_attrs, attrs} = Map.pop(attrs, :destination, %{})
     destination = destination(type, account_id, destination_attrs)
 
@@ -173,6 +174,20 @@ defmodule Sequin.Factory.ConsumersFactory do
         access_key_id: Factory.word(),
         secret_access_key: Factory.word(),
         is_fifo: Enum.random([true, false])
+      },
+      attrs
+    )
+  end
+
+  defp destination(:redis, _account_id, attrs) do
+    merge_attributes(
+      %RedisDestination{
+        type: :redis,
+        host: "localhost",
+        port: 6379,
+        database: 0,
+        tls: false,
+        key_prefix: Enum.random([nil, Factory.word()])
       },
       attrs
     )

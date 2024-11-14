@@ -12,6 +12,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsDestination
@@ -46,7 +47,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
 
-    field :type, Ecto.Enum, values: [:http_push, :sqs], read_after_writes: true
+    field :type, Ecto.Enum, values: [:http_push, :sqs, :redis], read_after_writes: true
 
     field :health, :map, virtual: true
 
@@ -64,7 +65,8 @@ defmodule Sequin.Consumers.DestinationConsumer do
     polymorphic_embeds_one(:destination,
       types: [
         http_push: HttpPushDestination,
-        sqs: SqsDestination
+        sqs: SqsDestination,
+        redis: RedisDestination
       ],
       on_replace: :update,
       type_field_name: :type
@@ -123,6 +125,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
     case type do
       :http_push -> changeset
       :sqs -> validate_number(changeset, :batch_size, less_than_or_equal_to: 10)
+      :redis -> validate_number(changeset, :batch_size, less_than_or_equal_to: 1000)
     end
   end
 

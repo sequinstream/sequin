@@ -20,6 +20,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Posthog
+  alias Sequin.Redis
   alias Sequin.Repo
   alias SequinWeb.RouteHelpers
 
@@ -198,6 +199,12 @@ defmodule SequinWeb.Components.ConsumerForm do
             Logger.error("SQS connection test failed", error: error)
             {:reply, %{ok: false, error: error}, socket}
         end
+
+      :redis ->
+        case test_redis_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -213,6 +220,24 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       case Sequin.Aws.SQS.queue_meta(client, destination.queue_url) do
         {:ok, _} -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(destination_changeset)}
+    end
+  end
+
+  defp test_redis_connection(socket) do
+    destination_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:destination)
+      |> RedisDestination.changeset(%{})
+
+    if destination_changeset.valid? do
+      destination = Ecto.Changeset.apply_changes(destination_changeset)
+
+      case Redis.test_connection(destination) do
+        :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else

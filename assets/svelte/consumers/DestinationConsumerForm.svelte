@@ -345,7 +345,7 @@
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
         <div class="flex justify-end items-center gap-2">
-          {#if consumer.type === "sqs"}
+          {#if consumer.type === "sqs" || consumer.type === "redis"}
             <Button
               loading={testConnectionState.status === "loading"}
               type="button"

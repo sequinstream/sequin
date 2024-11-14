@@ -326,7 +326,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "port" => destination["port"],
       "stream_key" => destination["streamKey"],
       "database" => destination["database"],
-      "tls" => destination["tls"]
+      "tls" => destination["tls"],
+      "username" => destination["username"],
+      "password" => destination["password"]
     }
   end
 
@@ -443,7 +445,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "port" => destination.port,
       "streamKey" => destination.stream_key,
       "database" => destination.database,
-      "tls" => destination.tls
+      "tls" => destination.tls,
+      "username" => destination.username,
+      "password" => destination.password
     }
   end
 

@@ -28,20 +28,29 @@ defmodule Sequin.Consumers.RedisDestination do
     |> validate_length(:stream_key, max: 255)
   end
 
-  def redis_url(%RedisDestination{host: host, port: port, database: database} = destination) do
-    "#{protocol(destination)}#{host}:#{port}/#{database}"
+  def redis_url(destination, opts \\ []) do
+    obscure_password = Keyword.get(opts, :obscure_password, true)
+
+    auth = build_auth_string(destination, obscure_password)
+    "#{protocol(destination)}#{auth}#{destination.host}:#{destination.port}/#{destination.database}"
   end
 
-  def redis_url(%RedisDestination{host: host, port: port, password: password, database: database} = destination) do
-    "#{protocol(destination)}#{password}@#{host}:#{port}/#{database}"
+  defp build_auth_string(%RedisDestination{username: nil, password: nil}, _obscure), do: ""
+
+  defp build_auth_string(%RedisDestination{username: nil, password: password}, obscure) do
+    "#{format_password(password, obscure)}@"
   end
 
-  def redis_url(
-        %RedisDestination{host: host, port: port, username: username, password: password, database: database} =
-          destination
-      ) do
-    "#{protocol(destination)}#{username}:#{password}@#{host}:#{port}/#{database}"
+  defp build_auth_string(%RedisDestination{username: username, password: nil}, _obscure) do
+    "#{username}@"
   end
+
+  defp build_auth_string(%RedisDestination{username: username, password: password}, obscure) do
+    "#{username}:#{format_password(password, obscure)}@"
+  end
+
+  defp format_password(_, true), do: "******"
+  defp format_password(password, false), do: password
 
   defp protocol(%RedisDestination{tls: true}), do: "rediss://"
   defp protocol(%RedisDestination{tls: false}), do: "redis://"

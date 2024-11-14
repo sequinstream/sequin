@@ -121,12 +121,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
         props={
           %{
             consumer: encode_consumer(@consumer),
-            consumerTitle:
-              case @consumer.destination.type do
-                :http_push -> "Webhook Subscription"
-                :sqs -> "SQS Consumer"
-                :redis -> "Redis Consumer"
-              end,
+            consumerTitle: consumer_title(@consumer),
             parent: "consumer-show",
             live_action: @live_action,
             messages_failing: @metrics.messages_failing_count > 0
@@ -506,7 +501,8 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
       port: destination.port,
       streamKey: destination.stream_key,
       database: destination.database,
-      tls: destination.tls
+      tls: destination.tls,
+      url: RedisDestination.redis_url(destination)
     }
   end
 
@@ -824,4 +820,8 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
         "available"
     end
   end
+
+  defp consumer_title(%{destination: %{type: :http_push}}), do: "Webhook Subscription"
+  defp consumer_title(%{destination: %{type: :sqs}}), do: "SQS Consumer"
+  defp consumer_title(%{destination: %{type: :redis}}), do: "Redis Consumer"
 end

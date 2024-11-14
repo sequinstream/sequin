@@ -14,6 +14,7 @@
   import { formatRelativeTimestamp } from "../utils";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
+  import RedisIcon from "../../icons/redis.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -107,8 +108,10 @@
         <div class="flex items-center">
           {#if consumer.destination.type === "http_push"}
             <Webhook class="h-6 w-6 mr-2" />
-          {:else}
+          {:else if consumer.destination.type === "sqs"}
             <SQSIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.destination.type === "redis"}
+            <RedisIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumerTitle}: {consumer.name}

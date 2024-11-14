@@ -4,7 +4,6 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.DestinationConsumer
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Databases
   alias Sequin.Health
   alias SequinWeb.ConsumersLive.Form

@@ -7,6 +7,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SqsDestination
@@ -222,8 +223,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_params(form, socket) do
     message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
 
-    dbg(form)
-
     params =
       %{
         "consumer_kind" => form["consumerKind"],
@@ -292,6 +291,17 @@ defmodule SequinWeb.Components.ConsumerForm do
       "region" => aws_region_from_queue_url(destination["queue_url"]),
       "access_key_id" => destination["access_key_id"],
       "secret_access_key" => destination["secret_access_key"]
+    }
+  end
+
+  defp decode_destination(:redis, destination) do
+    %{
+      "type" => "redis",
+      "host" => destination["host"],
+      "port" => destination["port"],
+      "stream_key" => destination["streamKey"],
+      "database" => destination["database"],
+      "tls" => destination["tls"]
     }
   end
 
@@ -398,6 +408,17 @@ defmodule SequinWeb.Components.ConsumerForm do
       "access_key_id" => destination.access_key_id,
       "secret_access_key" => destination.secret_access_key,
       "is_fifo" => destination.is_fifo
+    }
+  end
+
+  defp encode_destination(%RedisDestination{} = destination) do
+    %{
+      "type" => "redis",
+      "host" => destination.host,
+      "port" => destination.port,
+      "streamKey" => destination.stream_key,
+      "database" => destination.database,
+      "tls" => destination.tls
     }
   end
 
@@ -597,7 +618,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     case consumer_type(consumer) do
       :http_push -> "Webhook Subscription"
       :pull -> "Consumer Group"
-      :sqs -> "SQS Sink"
+      :sqs -> "SQS Consumer"
+      :redis -> "Redis Consumer"
     end
   end
 end

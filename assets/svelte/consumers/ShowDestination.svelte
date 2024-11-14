@@ -16,9 +16,11 @@
     Consumer,
     HttpPushConsumer,
     SqsConsumer,
+    RedisConsumer,
   } from "../types/consumer";
   import DestinationCardHttpPush from "../components/DestinationCardHttpPush.svelte";
   import DestinationCardSqs from "../components/DestinationCardSqs.svelte";
+  import DestinationCardRedis from "../components/DestinationCardRedis.svelte";
 
   export let live;
   export let parent;
@@ -52,6 +54,10 @@
 
   function isSqsConsumer(consumer: Consumer): consumer is SqsConsumer {
     return consumer.destination.type === "sqs";
+  }
+
+  function isRedisConsumer(consumer: Consumer): consumer is RedisConsumer {
+    return consumer.destination.type === "redis";
   }
 </script>
 
@@ -209,6 +215,8 @@
         <DestinationCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}
         <DestinationCardSqs {consumer} />
+      {:else if isRedisConsumer(consumer)}
+        <DestinationCardRedis {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

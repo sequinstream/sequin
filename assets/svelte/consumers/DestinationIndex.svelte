@@ -34,6 +34,7 @@
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
+  import RedisIcon from "../../icons/redis.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -65,6 +66,11 @@
       id: "sqs",
       name: "Amazon SQS",
       icon: SQSIcon,
+    },
+    {
+      id: "redis",
+      name: "Redis",
+      icon: RedisIcon,
     },
   ];
 
@@ -163,11 +169,9 @@
             class="cursor-pointer"
           >
             <Table.Cell>
-              {#if consumer.type === "http_push"}
-                <Webhook class="h-6 w-6" />
-              {:else if consumer.type === "sqs"}
-                <SQSIcon class="h-6 w-6" />
-              {/if}
+              {#each destinations.filter((d) => d.id === consumer.type) as dest}
+                <svelte:component this={dest.icon} class="h-6 w-6" />
+              {/each}
             </Table.Cell>
             <Table.Cell>{consumer.name}</Table.Cell>
             <Table.Cell>

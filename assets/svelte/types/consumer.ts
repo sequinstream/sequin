@@ -54,5 +54,17 @@ export type SqsConsumer = BaseConsumer & {
   };
 };
 
+// Redis specific destination
+export type RedisConsumer = BaseConsumer & {
+  destination: {
+    type: "redis";
+    host: string;
+    port: number;
+    streamKey: string;
+    database: number;
+    tls: boolean;
+  };
+};
+
 // Union type for all consumer types
-export type Consumer = HttpPushConsumer | SqsConsumer;
+export type Consumer = HttpPushConsumer | SqsConsumer | RedisConsumer;

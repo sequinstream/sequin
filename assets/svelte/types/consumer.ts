@@ -1,6 +1,7 @@
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
+  type: "http_push" | "sqs";
   name: string;
   status: string;
   message_kind: string;

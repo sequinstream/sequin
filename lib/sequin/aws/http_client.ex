@@ -12,6 +12,7 @@ defmodule Sequin.Aws.HttpClient do
       |> Req.new()
       |> Req.merge(options)
       |> Req.merge(default_req_opts())
+      |> dbg()
       |> Req.request()
 
     case res do

@@ -49,14 +49,43 @@
     </div>
 
     <div class="space-y-2">
-      <Label for="streamKey">Stream key</Label>
+      <Label for="username">Username</Label>
+      <Input
+        id="username"
+        bind:value={form.destination.username}
+        placeholder="(optional)"
+      />
+      {#if errors.destination?.username}
+        <p class="text-destructive text-sm">{errors.destination.username}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2">
+      <Label for="password">Password</Label>
+      <Input
+        id="password"
+        type="password"
+        bind:value={form.destination.password}
+        placeholder="(optional)"
+      />
+      {#if errors.destination?.password}
+        <p class="text-destructive text-sm">{errors.destination.password}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2">
+      <Label for="streamKey">Stream Key</Label>
       <Input
         id="streamKey"
         bind:value={form.destination.streamKey}
         placeholder="my-stream"
       />
-      {#if errors.destination?.streamKey}
-        <p class="text-destructive text-sm">{errors.destination.streamKey}</p>
+      <p class="text-sm text-muted-foreground">
+        The key to use for the stream. Records are <code>XADD</code>ed to this
+        key.
+      </p>
+      {#if errors.destination?.stream_key}
+        <p class="text-destructive text-sm">{errors.destination.stream_key}</p>
       {/if}
     </div>
 

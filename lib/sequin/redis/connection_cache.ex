@@ -78,7 +78,7 @@ defmodule Sequin.Redis.ConnectionCache do
     end
 
     defp options_hash(destination) do
-      :erlang.phash2(RedisDestination.redis_url(destination))
+      :erlang.phash2(RedisDestination.redis_url(destination, obscure_password: false))
     end
   end
 
@@ -154,7 +154,7 @@ defmodule Sequin.Redis.ConnectionCache do
 
     defp default_start(%RedisDestination{} = destination) do
       destination
-      |> RedisDestination.redis_url()
+      |> RedisDestination.redis_url(obscure_password: false)
       |> Redix.start_link()
     end
   end

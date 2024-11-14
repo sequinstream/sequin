@@ -63,6 +63,7 @@ export type RedisConsumer = BaseConsumer & {
     streamKey: string;
     database: number;
     tls: boolean;
+    url: string;
   };
 };
 

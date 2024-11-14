@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Capture changes and stream data out of Postgres
+### Postgres CDC to streams and queues like Kafka, SQS, HTTP endpoints, and more
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
@@ -20,27 +20,45 @@
 
 ## What is Sequin?
 
-Sequin is a tool for capturing changes and streaming data out of your Postgres database.
+Sequin is a tool for change data capture (CDC) in Postgres. Sequin makes it easy to stream Postgres rows and changes to streaming platforms and queues (e.g. Kafka and SQS). You can backfill existing rows and stream new changes in real-time.
 
-Sequin is great for:
+Sequin even has a built-in stream interface (HTTP GET and webhooks), so you can get started without any other infrastructure.
 
-1. **Replicating data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
-2. **Building event driven workflows** such as triggering side effects when data in Postgres changes.
+CDC enables applications and services to track and respond to row-level changes in database tables as they occur. With CDC via Sequin, you can:
 
-Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store consumer state. Without Sequin, you'd need to cobble together tools like [Debezium](#sequin-vs-debezium--kafka) and [Kafka](#sequin-vs-kafka).
+1. **Replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
+2. **Build event driven workflows** such as triggering side effects when data in Postgres changes.
 
-Sequin is a standalone Docker container that you can deploy in front of your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
+Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store consumer state.
+
+Unlike Debezium, another CDC tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy in front of your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 
 Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
+## Destinations
+
+| Destination | Support | Description |
+|-------------|---------|-------------|
+| SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | |
+| Redis | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
+| Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
+| HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
+| Kafka | Coming soon | (Nov 2024) |
+| NATS JetStream | Coming soon | (Nov 2024) |
+| Azure EventHubs | Coming soon | (Nov 2024) |
+| Google Pub/Sub | Coming soon | (Nov 2024) |
+| Amazon SNS | Coming soon | (Nov 2024) |
+| AWS Kinesis | Coming soon | (Dec 2024) |
+| RabbitMQ | Coming soon | (Dec 2024) |
+| RedPanda | Coming soon | (Dec 2024) |
+
 ## Killer features
 
-- **Never miss a record or change:** Sequin ensures all database changes are delivered and processed exactly once by consumers.
-- **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
-- **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
-- **Start anywhere:** Consumers can start processing records from any point in a table.
+- **Never miss a record or change:** Sequin ensures all database changes are delivered to destinations.
+- **SQL-based routing:** Filter and route messages to destinations using SQL `where` conditions.
+- **Backfills:** Backfill existing rows from your tables to destinations.
+- **Start anywhere:** Destinations can start receiving records from any point in a table.
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
-- **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
 ## Use cases
@@ -51,49 +69,30 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 - **Audit logging:** Track and record all changes made to data in your database for compliance or feature development.
 - **Sync a table from one database to another:** Keep tables synchronized across different database instances in real-time.
 - **Materializing another table in your database:** Create and maintain derived tables based on changes to source tables.
-- **Maintaining an in-memory cache:** Keep application caches up-to-date by streaming database changes.
-- **Syncing a Redis cache:** Automatically update Redis when your Postgres data changes.
-- **Refreshing search indexes like Elastic:** Keep search indexes fresh by streaming updates from your database.
+- **Maintaining a cache:** Keep caches up-to-date by streaming database changes.
+- **Refreshing search indexes:** Keep search indexes fresh by streaming updates from your database.
 
 ## Getting started
 
-The quickest way to get started is to create an account on [Sequin Cloud](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
+See our [quickstart](https://sequinstream.com/docs/quickstart/setup).
 
-Our [cloud quickstart](https://sequinstream.com/docs/quickstart) and [database setup guides](https://sequinstream.com/docs/guides/rds) are helpful resources.
-
-### Self-hosting
-
-If you prefer to self-host, follow our [self-hosted quickstart](https://sequinstream.com/docs/quickstart/setup).
-
-You can run Sequin in its own Docker container or as a sidecar container in your existing deployment.
+Alternatively, you can try Sequin for free on [Sequin Cloud](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
 
 ## How Sequin works
 
-![Sequin architecture](./docs/images/core/consumer-workflow-diagram.png)
+Sequin connects to any Postgres database. To stream data, you'll create [Streams](https://sequinstream.com/docs/how-sequin-works#Streams) for each table you want to stream. Streams present a strictly ordered view of rows from one or more tables.
 
-Sequin keeps your data in your Postgres database. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
-
-Sequin connects to any Postgres database. To stream data, you'll create [Streams](https://sequinstream.com/docs/how-sequin-works#Streams) for each table you want to stream. Streams present a strictly ordered view of rows from one or more tables. Then, you can use this Stream to consume rows by:
-
-  1. Using [Consumer Groups](https://sequinstream.com/docs/how-sequin-works#consumer-groups)
-  2. Receiving [webhooks](https://sequinstream.com/docs/how-sequin-works#webhooks)
-  3. Using the [Sync API](https://sequinstream.com/docs/how-sequin-works#sync-api) ([coming soon](https://github.com/sequinstream/sequin/issues/345))
-
-As rows are inserted or updated, Sequin will redeliver them to consumers until acknowledged.
+Then, you'll connect your Streams to destinations, like SQS or HTTP endpoints. As rows are inserted or updated, Sequin will redeliver them until acknowledged.
 
 With [Change Capture Pipelines](https://sequinstream.com/docs/capture-changes/wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
 
-Sequin comes with a web console/UI for configuration:
+Sequin comes with a web console/UI for configuration.
 
-1. Connect any Postgres database to Sequin (Sequin uses logical replication).
-2. Add Streams and consumers to tables you want to stream.
-3. Consume messages using Sequin's APIs.
-
-You can configure Sequin as code using TOML config files ([coming soon](https://github.com/sequinstream/sequin/issues/315)).
+You can configure Sequin as code using YAML config files.
 
 ## Benchmarks
 
-Sequin efficiently captures changes using logical replication. This adds virtually no overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
+Sequin efficiently captures changes using logical replication. Except at very extreme scale, logical replication adds little overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
 
 Postgres Performance is highly dependent on machine resources. But to give you an idea, a `db.m5.xlarge` RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle inserts at 5,000 messages/second, with bursts up to 10k messages/second.
 
@@ -101,74 +100,59 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 <details open>
 
-<summary>Sequin vs Kafka</summary>
+<summary>Sequin vs Debezium</summary>
 
-### Sequin vs Kafka
+### Sequin vs Debezium
 
-Apache Kafka is a distributed event streaming platform. Kafka is designed for very high throughput and horizontal scalability.
+Debezium is also a CDC tool that captures changes from Postgres and streams them to messaging systems like Kafka. Debezium requires significant infrastructure (Kafka, Zookeeper, Connect) to operate.
 
-You can use Sequin to turn a Postgres table into something that behaves like a Kafka topic. You can create new consumers that process messages in order, starting at any offset in the table you specify. Because all your data lives at rest in Postgres, the data model is easy to understand and work with.
+Sequin provides the same CDC capabilities but with a much simpler setup:
 
-Sequin's consumer pattern is simpler than Kafka's. Kafka uses partitions and offsets for concurrency, whereas Sequin uses a message queue pattern similar to SQS. This means concurrency is flexible and you can scale workers up and down without making any configuration changes.
-
-While Kafka may be necessary for very high throughput use cases (logs or metrics, millions of messages per second), Postgres and Sequin are able to handle a lot of use cases with a lot less complexity (even modest Postgres instances can handle tens of thousands of messages per second).
-
-</details>
-
-<details>
-
-<summary>Sequin vs Debezium + Kafka</summary>
-
-## Sequin vs Debezium + Kafka
-
-Debezium is a change data capture (CDC) tool for databases like Postgres. It requires an external messaging system like Kafka to operate.
-
-Like Sequin, you can use Debezium + Kafka to replicate data or build event processing workflows.
-
-Debezium is a complex system that requires a lot of setup and configuration.
-
-Sequin is simpler to setup and operate, yet is quickly becoming as comprehensive as Debezium. Sequin comes with a much more comprehensive UI for configuration and monitoring. And Sequin doesn't require another messaging system like Kafka to learn and operate. With [Change Capture Pipelines](https://sequinstream.com/docs/capture-changes/wal-pipelines) you can capture the same changes that Debezium does.
+1. **No Kafka required**: Sequin doesn't require Kafka or Zookeeper.
+2. **Native destinations**: With Debezium, you route to destinations via Kafka Connect. With Sequin, you stream directly to your destination of choice. This means simpler setup, fewer transforms, and fewer moving parts.
+3. **Full-featured web console**: Sequin includes a web console for configuration and monitoring.
 
 </details>
 
 <details>
 
-<summary>Sequin vs PG Triggers</summary>
+<summary>Sequin vs Fivetran/Airbyte</summary>
 
-## Sequin vs PG Triggers
+### Sequin vs Fivetran/Airbyte
 
-[PG Triggers](https://www.postgresql.org/docs/current/sql-createtrigger.html) are database functions that execute in response to certain database events. Postgres triggers must be written in PL/pgSQL, a special procedural language for Postgres. And they are limited to simple operations like inserting, updating, and deleting rows.
+Fivetran and Airbyte are ETL tools designed primarily for data warehouse ingestion. They excel at moving data in batch intervals (minutes to hours) to analytical databases.
 
-Sequin sends changes over HTTP. Like Postgres triggers, Sequin guarantees exactly-once processing. But the HTTP interface means you can you can handle changes in your application code. Just like other advanced queuing systems, Sequin lets you fan out changes to multiple services or applications. And you can write business logic in the programming language of your choice (no PL/pgSQL!)
+Sequin is purpose-built for real-time operational use cases. Key differences:
 
-</details>
-
-<details>
-
-<summary>Sequin vs LISTEN / NOTIFY</summary>
-
-## Sequin vs LISTEN / NOTIFY
-
-[Postgres' LISTEN/NOTIFY](https://www.postgresql.org/docs/current/sql-notify.html) is a pub/sub system. When changes happen in your database, you can send notifications to a channel in Postgres. Other processes can listen for notifications on that channel and react to changes.
-
-LISTEN/NOTIFY offers _at-most-once_ delivery. If a consumer is not subscribed when a notification is sent, or a consumer fails to process a notification, the notification is lost. So LISTEN/NOTIFY is limited to simple use cases.
-
-Sequin sends changes over HTTP with exactly-once processing. This gives you a much more robust system to build on top of.
+1. **Real-time streaming**: Versus batch intervals.
+2. **Focus on operational destinations**: Queues, streams, webhooks, etc. vs data warehouses.
+3. **Flexible backfills**: Deployed a bug and need to replay the last 2 hours of data? Sequin makes it easy.
 
 </details>
 
 <details>
 
-<summary>Sequin vs Amazon SQS</summary>
+<summary>Sequin vs custom CDC solutions</summary>
 
-## Sequin vs Amazon SQS
+### Sequin vs custom CDC solutions
 
-Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
+Many teams build custom CDC solutions using triggers, LISTEN/NOTIFY, or logical replication. While these can work, they often:
 
-Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, Sequin isn't really a queue; it's better thought of as a stream. Because Sequin is streaming your Postgres tables, messages aren't deleted after they're processed. This means you get more advanced capability, like rewind and replay.
+- Lack exactly-once processing guarantees
+- Don't scale
+- Don't handle backfills well
+- Need ongoing maintenance
+- Become a burden when the engineer who built it leaves the team
+
+Sequin provides all this functionality out of the box:
+- Exactly-once processing
+- Seamless backfills
+- Automatic retries and error handling
+- Simple monitoring and observability
+- Zero maintenance of CDC infrastructure
 
 </details>
 
 ## Contribute
 
-Sequin is open-sourced with an MIT license. The project is just getting started, so the best way to contribute right now is to open an issue or join the [Discord Server](https://discord.gg/BV8wFXvNtY) and let us know what you want to build.
+Sequin is open source (MIT license). The project is just getting started, so the best way to contribute right now is to open an issue or join the [Discord Server](https://discord.gg/BV8wFXvNtY) and let us know what you want to build.

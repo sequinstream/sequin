@@ -6,8 +6,10 @@ defmodule SequinWeb.ConsumersLive.Form do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SqsDestination
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -182,6 +184,39 @@ defmodule SequinWeb.ConsumersLive.Form do
     {:noreply, assign_http_endpoints(socket)}
   end
 
+  def handle_event("test_connection", _params, socket) do
+    case socket.assigns.consumer.type do
+      :sqs ->
+        case test_sqs_connection(socket) do
+          :ok ->
+            {:reply, %{ok: true}, socket}
+
+          {:error, error} ->
+            Logger.error("SQS connection test failed", error: error)
+            {:reply, %{ok: false, error: error}, socket}
+        end
+    end
+  end
+
+  defp test_sqs_connection(socket) do
+    destination_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:destination)
+      |> SqsDestination.changeset(%{})
+
+    if destination_changeset.valid? do
+      destination = Ecto.Changeset.apply_changes(destination_changeset)
+      client = SqsDestination.aws_client(destination)
+
+      case Sequin.Aws.SQS.queue_meta(client, destination.queue_url) do
+        {:ok, _} -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(destination_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
 
@@ -189,11 +224,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "destination" => %{
-          "type" => "http_push",
-          "http_endpoint_id" => form["httpEndpointId"],
-          "http_endpoint_path" => form["httpEndpointPath"]
-        },
+        "destination" => decode_destination(consumer_type(socket), form["destination"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "message_kind" => message_kind,
@@ -240,6 +271,35 @@ defmodule SequinWeb.ConsumersLive.Form do
     params
   end
 
+  defp decode_destination(:pull, _form), do: nil
+
+  defp decode_destination(:http_push, destination) do
+    %{
+      "type" => "http_push",
+      "http_endpoint_id" => destination["http_endpoint_id"],
+      "http_endpoint_path" => destination["http_endpoint_path"]
+    }
+  end
+
+  defp decode_destination(:sqs, destination) do
+    %{
+      "type" => "sqs",
+      "queue_url" => destination["queue_url"],
+      "region" => aws_region_from_queue_url(destination["queue_url"]),
+      "access_key_id" => destination["access_key_id"],
+      "secret_access_key" => destination["secret_access_key"]
+    }
+  end
+
+  defp aws_region_from_queue_url(nil), do: nil
+
+  defp aws_region_from_queue_url(queue_url) do
+    case SqsDestination.region_from_url(queue_url) do
+      {:ok, region} -> region
+      _ -> nil
+    end
+  end
+
   defp table(databases, postgres_database_id, %Sequence{} = sequence) do
     if postgres_database_id do
       db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
@@ -284,15 +344,14 @@ defmodule SequinWeb.ConsumersLive.Form do
       "sort_column_attnum" => source_table && source_table.sort_column_attnum,
       "sequence_id" => consumer.sequence_id,
       "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
-      # Only set for DestinationConsumer
       "batch_size" => Map.get(consumer, :batch_size)
     }
 
     case consumer do
-      %DestinationConsumer{type: :http_push} ->
+      %DestinationConsumer{} ->
         Map.merge(base, %{
-          "http_endpoint_id" => consumer.destination && consumer.destination.http_endpoint_id,
-          "http_endpoint_path" => consumer.destination && consumer.destination.http_endpoint_path
+          "destination" => encode_destination(consumer.destination),
+          "type" => consumer.type
         })
 
       %HttpPullConsumer{} ->
@@ -316,6 +375,25 @@ defmodule SequinWeb.ConsumersLive.Form do
     %{
       "column_filters" => Enum.map(sequence_filter.column_filters, &ColumnFilter.to_external/1),
       "actions" => sequence_filter.actions
+    }
+  end
+
+  defp encode_destination(%HttpPushDestination{} = destination) do
+    %{
+      "type" => "http_push",
+      "http_endpoint_id" => destination.http_endpoint_id,
+      "http_endpoint_path" => destination.http_endpoint_path
+    }
+  end
+
+  defp encode_destination(%SqsDestination{} = destination) do
+    %{
+      "type" => "sqs",
+      "queue_url" => destination.queue_url,
+      "region" => destination.region,
+      "access_key_id" => destination.access_key_id,
+      "secret_access_key" => destination.secret_access_key,
+      "is_fifo" => destination.is_fifo
     }
   end
 
@@ -441,6 +519,7 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   defp changeset(socket, %DestinationConsumer{id: nil}, params) do
     account_id = current_account_id(socket)
+
     DestinationConsumer.create_changeset(%DestinationConsumer{account_id: account_id}, params)
   end
 
@@ -502,5 +581,12 @@ defmodule SequinWeb.ConsumersLive.Form do
 
   defp is_edit?(socket) do
     not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
+  end
+
+  defp consumer_type(socket) do
+    case socket.assigns.consumer do
+      %HttpPullConsumer{} -> :pull
+      %DestinationConsumer{type: type} -> type
+    end
   end
 end

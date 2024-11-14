@@ -19,9 +19,12 @@ defmodule Sequin.Consumers.SqsDestination do
     field :is_fifo, :boolean, default: false
   end
 
+  @sqs_url_regex ~r/^https:\/\/sqs\.(?<region>[a-z0-9-]+)\.amazonaws\.com\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/
+
   def changeset(struct, params) do
     struct
     |> cast(params, [:queue_url, :region, :access_key_id, :secret_access_key, :is_fifo])
+    |> maybe_put_region()
     |> validate_required([:queue_url, :region, :access_key_id, :secret_access_key])
     |> validate_queue_url()
     |> put_is_fifo()
@@ -29,10 +32,26 @@ defmodule Sequin.Consumers.SqsDestination do
 
   defp validate_queue_url(changeset) do
     changeset
-    |> validate_format(:queue_url, ~r/^https:\/\/sqs\.[a-z0-9-]+\.amazonaws\.com\/\d{12}\/[a-zA-Z0-9_-]+(?:\.fifo)?$/,
+    |> validate_format(:queue_url, @sqs_url_regex,
       message: "must be a valid AWS SQS URL (https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>)"
     )
     |> validate_length(:queue_url, max: 2000)
+  end
+
+  defp maybe_put_region(changeset) do
+    case {get_field(changeset, :region), get_field(changeset, :queue_url)} do
+      {nil, nil} ->
+        changeset
+
+      {nil, queue_url} ->
+        case region_from_url(queue_url) do
+          {:error, _} -> add_error(changeset, :region, "Could not infer region from queue_url")
+          region -> put_change(changeset, :region, region)
+        end
+
+      _ ->
+        changeset
+    end
   end
 
   defp put_is_fifo(changeset) do
@@ -50,5 +69,27 @@ defmodule Sequin.Consumers.SqsDestination do
     destination.access_key_id
     |> AWS.Client.create(destination.secret_access_key, destination.region)
     |> HttpClient.put_client()
+  end
+
+  @doc """
+  Extracts the AWS region from the given SQS queue URL.
+
+  ## Examples
+
+      iex> region_from_url("https://sqs.us-west-2.amazonaws.com/123456789012/MyQueue")
+      "us-west-2"
+
+      iex> region_from_url("https://sqs.eu-central-1.amazonaws.com/123456789012/MyQueue.fifo")
+      "eu-central-1"
+
+      iex> region_from_url("invalid_url")
+      {:error, "Invalid SQS queue URL format"}
+
+  """
+  def region_from_url(queue_url) do
+    case Regex.named_captures(@sqs_url_regex, queue_url) do
+      %{"region" => region} -> region
+      _ -> {:error, Sequin.Error.validation(summary: "Invalid SQS queue URL format")}
+    end
   end
 end

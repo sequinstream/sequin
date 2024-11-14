@@ -8,7 +8,6 @@
     CirclePlay,
     CircleStop,
     Database,
-    Webhook,
     SendHorizontal,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -20,12 +19,14 @@
   import HealthPill from "../health/HealthPill.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
+  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
+  import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
 
   export let consumers: Array<{
     id: string;
     name: string;
     insertedAt: string;
-    type: "pull" | "http_push" | "sqs";
+    type: "pull";
     status: "active" | "disabled";
     database_name: string;
     health: {
@@ -35,7 +36,6 @@
   export let live: any;
   export let hasDatabases: boolean;
   export let hasSequences: boolean;
-  export let consumerKind: "destination_consumer" | "pull";
 
   const hasConsumers = consumers.length > 0;
 
@@ -45,12 +45,7 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert
-    show={!hasDatabases}
-    entityName={consumerKind === "destination_consumer"
-      ? "Destination Consumers"
-      : "Consumer Group"}
-  />
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="Consumer Group" />
 
   {#if hasDatabases && !hasSequences}
     <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
@@ -60,18 +55,12 @@
           First, you need to create a Stream
         </AlertTitle>
         <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must have at least one Stream before you can create {consumerKind ===
-          "destination_consumer"
-            ? "a Destination Consumer"
-            : "a Consumer Group"}.
+          Sequin must have at least one Stream before you can create a Consumer
+          Group.
         </AlertDescription>
 
         <div class="flex mt-2 gap-4 col-start-2">
-          <a
-            href="/streams/new"
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
+          <LinkPushNavigate href="/streams/new">
             <Button
               variant="default"
               class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
@@ -79,7 +68,7 @@
               <ListOrdered class="inline-block h-4 w-4 mr-2" />
               Create Stream
             </Button>
-          </a>
+          </LinkPushNavigate>
         </div>
       </div>
     </Alert>
@@ -87,72 +76,33 @@
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
-      {#if consumerKind === "pull"}
-        <Radio class="h-6 w-6 mr-2" />
-      {:else}
-        <SendHorizontal class="h-6 w-6 mr-2" />
-      {/if}
-      <h1 class="text-2xl font-bold">
-        {consumerKind === "destination_consumer"
-          ? "Destination Consumers"
-          : "Consumer Groups"}
-      </h1>
+      <Radio class="h-6 w-6 mr-2" />
+      <h1 class="text-2xl font-bold">Consumer Groups</h1>
     </div>
-    {#if hasDatabases}
-      {#if hasConsumers}
-        <div class="relative inline-block text-left">
-          <a
-            href={`/consumers/new?kind=${consumerKind === "destination_consumer" ? "push" : "pull"}`}
-            data-phx-link="redirect"
-            data-phx-link-state="push"
-          >
-            <Button variant="default">
-              Create {consumerKind === "destination_consumer"
-                ? "Destination Consumer"
-                : "Consumer Group"}
-            </Button>
-          </a>
-        </div>
-      {/if}
+    {#if hasDatabases && hasConsumers}
+      <div class="relative inline-block text-left">
+        <LinkPatchNavigate href="/consumer-groups/new?kind=pull">
+          <Button variant="default">Create Consumer Group</Button>
+        </LinkPatchNavigate>
+      </div>
     {/if}
   </div>
 
   {#if !hasConsumers}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">
-          {consumerKind === "destination_consumer"
-            ? "No Destination Consumers"
-            : "No Consumer Groups"}
-        </h2>
+        <h2 class="text-xl font-semibold mb-4">No Consumer Groups</h2>
         <p class="text-gray-600 mb-6">
-          {#if consumerKind === "destination_consumer"}
-            Destination Consumers filter, transform, and send messages from a
-            table in your database to your application or another service.
-          {:else}
-            Consumer Groups let you filter, transform, and pull messages from
-            your tables into your application with exactly-once processing.
-          {/if}
+          Consumer Groups let you filter, transform, and pull messages from your
+          tables into your application with exactly-once processing.
         </p>
         <div class="relative inline-block text-left">
           {#if hasSequences}
-            <a
-              href={`/consumers/new?kind=${consumerKind}`}
-              data-phx-link="redirect"
-              data-phx-link-state="push"
-            >
-              <Button variant="default">
-                Create {consumerKind === "destination_consumer"
-                  ? "Destination Consumer"
-                  : "Consumer Group"}
-              </Button>
-            </a>
+            <LinkPatchNavigate href="/consumer-groups/new?kind=pull">
+              <Button variant="default">Create Consumer Group</Button>
+            </LinkPatchNavigate>
           {:else}
-            <Button disabled
-              >Create {consumerKind === "destination_consumer"
-                ? "Destination Consumer"
-                : "Consumer Group"}</Button
-            >
+            <Button disabled>Create Consumer Group</Button>
           {/if}
         </div>
       </div>

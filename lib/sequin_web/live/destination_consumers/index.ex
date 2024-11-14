@@ -61,23 +61,16 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
   def render(assigns) do
     consumers = Enum.filter(assigns.consumers, &is_struct(&1, DestinationConsumer))
 
-    # TODO: remove?
-    kind = "destination_consumer"
-
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
-    assigns =
-      assigns
-      |> assign(:encoded_consumers, encoded_consumers)
-      |> assign(:kind, kind)
+    assigns = assign(assigns, :encoded_consumers, encoded_consumers)
 
     ~H"""
     <div id="consumers-index">
       <.svelte
-        name="consumers/Index"
+        name="consumers/DestinationIndex"
         props={
           %{
-            consumerKind: @kind,
             consumers: @encoded_consumers,
             formErrors: @form_errors,
             hasDatabases: @has_databases?,
@@ -97,7 +90,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
 
   defp apply_action(socket, :list, _params) do
     socket
-    |> assign(:page_title, "Destinations")
+    |> assign(:page_title, "Destination Consumers")
     |> assign(:live_action, :list)
   end
 
@@ -108,17 +101,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
     |> assign(:form_kind, kind)
   end
 
-  defp apply_action(socket, :new, _params) do
-    apply_action(socket, :new, %{"kind" => "wizard"})
-  end
-
-  defp render_consumer_form(%{form_kind: "wizard"} = assigns) do
-    ~H"""
-    <.live_component current_user={@current_user} module={Form} id="new-consumer" action={:new} />
-    """
-  end
-
-  defp render_consumer_form(%{form_kind: "push"} = assigns) do
+  defp render_consumer_form(%{form_kind: "http_push"} = assigns) do
     ~H"""
     <.live_component
       current_user={@current_user}
@@ -162,14 +145,11 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       id: consumer.id,
       name: consumer.name,
       insertedAt: consumer.inserted_at,
-      type: consumer_type(consumer),
+      type: consumer.type,
       status: consumer.status,
       database_name: consumer.postgres_database.name,
       health: Health.to_external(consumer.health),
       href: RouteHelpers.consumer_path(consumer)
     }
   end
-
-  defp consumer_type(%Consumers.HttpPullConsumer{}), do: "pull"
-  defp consumer_type(%Consumers.DestinationConsumer{type: type}), do: type
 end

@@ -79,6 +79,9 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     |> unique_constraint([:account_id, :name], error_key: :name)
     |> check_constraint(:sequence_filter, name: "sequence_filter_check")
     |> Sequin.Changeset.validate_name()
+    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> validate_number(:max_ack_pending, greater_than: 0)
+    |> validate_number(:max_waiting, greater_than: 0)
   end
 
   def update_changeset(consumer, attrs) do
@@ -93,6 +96,9 @@ defmodule Sequin.Consumers.HttpPullConsumer do
     ])
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> cast_embed(:record_consumer_state)
+    |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
+    |> validate_number(:max_ack_pending, greater_than: 0)
+    |> validate_number(:max_waiting, greater_than: 0)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

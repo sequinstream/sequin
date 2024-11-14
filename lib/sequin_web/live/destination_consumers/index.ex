@@ -8,7 +8,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
   alias Sequin.Consumers.SqsDestination
   alias Sequin.Databases
   alias Sequin.Health
-  alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   @impl Phoenix.LiveView
@@ -107,7 +107,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
     ~H"""
     <.live_component
       current_user={@current_user}
-      module={Form}
+      module={ConsumerForm}
       id="new-consumer"
       action={:new}
       consumer={%DestinationConsumer{type: :http_push, destination: %HttpPushDestination{}}}
@@ -119,7 +119,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
     ~H"""
     <.live_component
       current_user={@current_user}
-      module={Form}
+      module={ConsumerForm}
       id="new-consumer"
       action={:new}
       consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}}}

@@ -1,4 +1,4 @@
-defmodule SequinWeb.ConsumersLive.Form do
+defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
@@ -41,6 +41,7 @@ defmodule SequinWeb.ConsumersLive.Form do
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
+      |> assign(:consumer_title, consumer_title(assigns.consumer))
 
     ~H"""
     <div id={@id}>
@@ -50,6 +51,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         props={
           %{
             consumer: @encoded_consumer,
+            consumerTitle: @consumer_title,
             errors: @encoded_errors,
             submitError: @submit_error,
             parent: @id,
@@ -220,11 +222,13 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp decode_params(form, socket) do
     message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
 
+    dbg(form)
+
     params =
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "destination" => decode_destination(consumer_type(socket), form["destination"]),
+        "destination" => decode_destination(consumer_type(socket.assigns.consumer), form["destination"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "message_kind" => message_kind,
@@ -276,8 +280,8 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp decode_destination(:http_push, destination) do
     %{
       "type" => "http_push",
-      "http_endpoint_id" => destination["http_endpoint_id"],
-      "http_endpoint_path" => destination["http_endpoint_path"]
+      "http_endpoint_id" => destination["httpEndpointId"],
+      "http_endpoint_path" => destination["httpEndpointPath"]
     }
   end
 
@@ -381,8 +385,8 @@ defmodule SequinWeb.ConsumersLive.Form do
   defp encode_destination(%HttpPushDestination{} = destination) do
     %{
       "type" => "http_push",
-      "http_endpoint_id" => destination.http_endpoint_id,
-      "http_endpoint_path" => destination.http_endpoint_path
+      "httpEndpointId" => destination.http_endpoint_id,
+      "httpEndpointPath" => destination.http_endpoint_path
     }
   end
 
@@ -459,6 +463,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         {:ok, socket}
 
       {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.info("Update consumer failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
         {:error, assign(socket, :changeset, changeset)}
     end
   end
@@ -477,13 +482,10 @@ defmodule SequinWeb.ConsumersLive.Form do
 
     case case_result do
       {:ok, consumer} ->
-        kind = Consumers.kind(consumer)
-        consumer_type = if kind == :pull, do: "HttpPullConsumer", else: "HttpPushConsumer"
-
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
           properties: %{
-            consumer_type: consumer_type,
+            consumer_type: consumer_type(consumer),
             stream_type: consumer.message_kind,
             consumer_id: consumer.id,
             consumer_name: consumer.name,
@@ -494,6 +496,7 @@ defmodule SequinWeb.ConsumersLive.Form do
         {:ok, push_navigate(socket, to: RouteHelpers.consumer_path(consumer))}
 
       {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.info("Create consumer failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
         {:error, assign(socket, :changeset, changeset)}
     end
   end
@@ -583,10 +586,18 @@ defmodule SequinWeb.ConsumersLive.Form do
     not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
   end
 
-  defp consumer_type(socket) do
-    case socket.assigns.consumer do
+  defp consumer_type(consumer) do
+    case consumer do
       %HttpPullConsumer{} -> :pull
       %DestinationConsumer{type: type} -> type
+    end
+  end
+
+  defp consumer_title(consumer) do
+    case consumer_type(consumer) do
+      :http_push -> "Webhook Subscription"
+      :pull -> "Consumer Group"
+      :sqs -> "SQS Sink"
     end
   end
 end

@@ -116,11 +116,15 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
     <div id="consumer-show" class="flex flex-col">
       <!-- The header component -->
       <.svelte
-        name="consumers/ShowHeader"
+        name="consumers/ShowDestinationHeader"
         props={
           %{
             consumer: encode_consumer(@consumer),
-            kind: @kind,
+            consumerTitle:
+              if(@consumer.destination.type == "http_push",
+                do: "Webhook Subscription",
+                else: "SQS Consumer"
+              ),
             parent: "consumer-show",
             live_action: @live_action,
             messages_failing: @metrics.messages_failing_count > 0
@@ -314,7 +318,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
         {:reply, %{ok: true},
          socket
          |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription paused"})}
+         |> put_flash(:toast, %{kind: :success, title: "Consumer paused"})}
 
       {:error, error} ->
         Logger.error("Failed to disable consumer: #{inspect(error)}", error: error)
@@ -328,7 +332,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
         {:reply, %{ok: true},
          socket
          |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription resumed"})}
+         |> put_flash(:toast, %{kind: :success, title: "Consumer resumed"})}
 
       {:error, error} ->
         Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)

@@ -4,6 +4,8 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.DestinationConsumer
+  alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.SqsDestination
   alias Sequin.Databases
   alias Sequin.Health
   alias SequinWeb.ConsumersLive.Form
@@ -108,7 +110,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={Form}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :http_push}}
+      consumer={%DestinationConsumer{type: :http_push, destination: %HttpPushDestination{}}}
     />
     """
   end
@@ -120,7 +122,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={Form}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :sqs}}
+      consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}}}
     />
     """
   end

@@ -26,6 +26,7 @@
   export let live;
   export let parent;
   export let consumer;
+  export let consumerTitle;
   export let databases;
   export let httpEndpoints;
   export let errors: any = {};
@@ -188,7 +189,6 @@
           error: reply.error,
           lastTestStatus: "error",
         };
-        console.log(reply);
         setTimeout(() => {
           testConnectionState.displayStatus = false;
           testConnectionState.status = "initial";
@@ -199,9 +199,7 @@
 </script>
 
 <FullPageModal
-  title={isEditMode
-    ? "Edit Webhook Subscription"
-    : "Create Webhook Subscription"}
+  title={isEditMode ? `Edit ${consumerTitle}` : `Create ${consumerTitle}`}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   showConfirmOnExit={isDirty}

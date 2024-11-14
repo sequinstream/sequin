@@ -87,11 +87,11 @@ defmodule SequinWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
-      live "/consumer-groups", ConsumersLive.Index, :list_pull
-      live "/consumer-groups/new", ConsumersLive.Index, :new
-      live "/consumer-groups/:id", ConsumersLive.Show, :show
-      live "/consumer-groups/:id/messages", ConsumersLive.Show, :messages
-      live "/consumer-groups/:id/edit", ConsumersLive.Show, :edit
+      live "/consumer-groups", ConsumerGroupsLive.Index, :list
+      live "/consumer-groups/new", ConsumerGroupsLive.Index, :new
+      live "/consumer-groups/:id", ConsumerGroupsLive.Show, :show
+      live "/consumer-groups/:id/messages", ConsumerGroupsLive.Show, :messages
+      live "/consumer-groups/:id/edit", ConsumerGroupsLive.Show, :edit
 
       live "/consumers", DestinationConsumersLive.Index, :list
       live "/consumers/new", DestinationConsumersLive.Index, :new

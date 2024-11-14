@@ -51,14 +51,16 @@
 
   $: pushEvent("form_updated", { form });
 
-  let selectedHttpEndpoint = form.httpEndpointId
-    ? httpEndpoints.find((endpoint) => endpoint.id === form.httpEndpointId)
+  let selectedHttpEndpoint = form.destination.httpEndpointId
+    ? httpEndpoints.find(
+        (endpoint) => endpoint.id === form.destination.httpEndpointId,
+      )
     : null;
 
   $: {
-    if (form.httpEndpointId) {
+    if (form.destination.httpEndpointId) {
       selectedHttpEndpoint = httpEndpoints.find(
-        (endpoint) => endpoint.id === form.httpEndpointId,
+        (endpoint) => endpoint.id === form.destination.httpEndpointId,
       );
     }
   }
@@ -72,7 +74,7 @@
       isGeneratingWebhookSite = false;
       if (result.http_endpoint_id) {
         pushEvent("refresh_http_endpoints", {}, () => {
-          form.httpEndpointId = result.http_endpoint_id;
+          form.destination.httpEndpointId = result.http_endpoint_id;
         });
       } else if (result.error) {
         toast.error("Failed to generate Webhook.site URL:", result.error);
@@ -97,8 +99,11 @@
   let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   $: fullUrl =
-    selectedHttpEndpoint?.baseUrl && form.httpEndpointPath
-      ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.httpEndpointPath)
+    selectedHttpEndpoint?.baseUrl && form.destination.httpEndpointPath
+      ? concatenateUrl(
+          selectedHttpEndpoint?.baseUrl,
+          form.destination.httpEndpointPath,
+        )
       : "";
 </script>
 
@@ -184,7 +189,7 @@
     <CardTitle>HTTP Endpoint</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
-    {#if !form.httpEndpointId}
+    {#if !form.destination.httpEndpointId}
       <p class="text-xs mb-2">
         Just kicking the tires?
         <button
@@ -207,11 +212,11 @@
     <div class="flex items-center space-x-2">
       <Select
         selected={{
-          value: form.httpEndpointId,
+          value: form.destination.httpEndpointId,
           label: selectedHttpEndpoint?.name || "Select an endpoint",
         }}
         onSelectedChange={(event) => {
-          form.httpEndpointId = event.value;
+          form.destination.httpEndpointId = event.value;
         }}
       >
         <SelectTrigger class="w-full">
@@ -276,7 +281,7 @@
       <p class="text-destructive text-sm">Please select an HTTP endpoint</p>
     {/if}
 
-    {#if form.httpEndpointId}
+    {#if form.destination.httpEndpointId && selectedHttpEndpoint}
       <div class="space-y-2">
         <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
         <div class="flex flex-row bg-white">
@@ -287,7 +292,7 @@
           </div>
           <Input
             id="http-endpoint-path"
-            bind:value={form.httpEndpointPath}
+            bind:value={form.destination.httpEndpointPath}
             placeholder="/webhook"
             class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
             style="border-left: none;"
@@ -306,7 +311,7 @@
       </div>
     {/if}
 
-    {#if form.httpEndpointId && fullUrl && fullUrl !== ""}
+    {#if form.destination.httpEndpointId && fullUrl && fullUrl !== ""}
       <div class="mt-4 space-y-2">
         <Label>Fully qualified URL</Label>
         <div class="flex items-center space-x-2 overflow-x-auto">

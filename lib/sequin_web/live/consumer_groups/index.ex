@@ -1,20 +1,19 @@
-defmodule SequinWeb.ConsumersLive.Index do
+defmodule SequinWeb.ConsumerGroupsLive.Index do
   @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Databases
   alias Sequin.Health
-  alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     user = current_user(socket)
     account = current_account(socket)
-    consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
+    consumers = Consumers.list_http_pull_consumers_for_account(account.id, :postgres_database)
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
     consumers = load_consumer_health(consumers)
@@ -59,22 +58,10 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
-  def render(%{live_action: index_kind} = assigns) when index_kind in [:list_destination_consumers, :list_pull] do
-    consumers =
-      if index_kind == :list_destination_consumers do
-        Enum.filter(assigns.consumers, &is_struct(&1, DestinationConsumer))
-      else
-        Enum.filter(assigns.consumers, &is_struct(&1, HttpPullConsumer))
-      end
+  def render(assigns) do
+    encoded_consumers = Enum.map(assigns.consumers, &encode_consumer/1)
 
-    kind = if index_kind == :list_destination_consumers, do: "destination_consumer", else: "pull"
-
-    encoded_consumers = Enum.map(consumers, &encode_consumer/1)
-
-    assigns =
-      assigns
-      |> assign(:encoded_consumers, encoded_consumers)
-      |> assign(:kind, kind)
+    assigns = assign(assigns, :encoded_consumers, encoded_consumers)
 
     ~H"""
     <div id="consumers-index">
@@ -82,7 +69,6 @@ defmodule SequinWeb.ConsumersLive.Index do
         name="consumers/ConsumerGroupIndex"
         props={
           %{
-            consumerKind: @kind,
             consumers: @encoded_consumers,
             formErrors: @form_errors,
             hasDatabases: @has_databases?,
@@ -96,77 +82,30 @@ defmodule SequinWeb.ConsumersLive.Index do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("consumer_clicked", %{"id" => id, "type" => type}, socket) do
-    case socket.assigns.live_action do
-      :list_destination_consumers ->
-        {:noreply, push_navigate(socket, to: ~p"/consumers/#{type}/#{id}")}
-
-      :list_pull ->
-        {:noreply, push_navigate(socket, to: ~p"/consumer-groups/#{id}")}
-    end
+  def handle_event("consumer_clicked", %{"id" => id}, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/consumer-groups/#{id}")}
   end
 
-  defp apply_action(socket, :list_destination_consumers, _params) do
+  defp apply_action(socket, :list, _params) do
     socket
-    |> assign(:page_title, "Destinations")
-    |> assign(:live_action, :list_destination_consumers)
-  end
-
-  defp apply_action(socket, :list_pull, _params) do
-    socket
-    |> assign(:page_title, "Consumer endpoints")
-    |> assign(:live_action, :list_pull)
-  end
-
-  defp apply_action(socket, :new, %{"kind" => kind}) do
-    socket
-    |> assign(:page_title, "New Consumer")
-    |> assign(:live_action, :new)
-    |> assign(:form_kind, kind)
+    |> assign(:page_title, "Consumer groups")
+    |> assign(:live_action, :list)
   end
 
   defp apply_action(socket, :new, _params) do
-    apply_action(socket, :new, %{"kind" => "wizard"})
+    socket
+    |> assign(:page_title, "New Consumer Group")
+    |> assign(:live_action, :new)
   end
 
-  defp render_consumer_form(%{form_kind: "wizard"} = assigns) do
-    ~H"""
-    <.live_component current_user={@current_user} module={Form} id="new-consumer" action={:new} />
-    """
-  end
-
-  defp render_consumer_form(%{form_kind: "pull"} = assigns) do
+  defp render_consumer_form(assigns) do
     ~H"""
     <.live_component
       current_user={@current_user}
-      module={Form}
+      module={ConsumerForm}
       id="new-consumer"
       action={:new}
       consumer={%HttpPullConsumer{}}
-    />
-    """
-  end
-
-  defp render_consumer_form(%{form_kind: "http_push"} = assigns) do
-    ~H"""
-    <.live_component
-      current_user={@current_user}
-      module={Form}
-      id="new-consumer"
-      action={:new}
-      consumer={%DestinationConsumer{type: :http_push}}
-    />
-    """
-  end
-
-  defp render_consumer_form(%{form_kind: "sqs"} = assigns) do
-    ~H"""
-    <.live_component
-      current_user={@current_user}
-      module={Form}
-      id="new-consumer"
-      action={:new}
-      consumer={%DestinationConsumer{type: :sqs}}
     />
     """
   end
@@ -191,14 +130,11 @@ defmodule SequinWeb.ConsumersLive.Index do
       id: consumer.id,
       name: consumer.name,
       insertedAt: consumer.inserted_at,
-      type: consumer_type(consumer),
+      type: "pull",
       status: consumer.status,
       database_name: consumer.postgres_database.name,
       health: Health.to_external(consumer.health),
       href: RouteHelpers.consumer_path(consumer)
     }
   end
-
-  defp consumer_type(%Consumers.HttpPullConsumer{}), do: "pull"
-  defp consumer_type(%Consumers.DestinationConsumer{type: type}), do: type
 end

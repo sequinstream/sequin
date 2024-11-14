@@ -46,22 +46,22 @@
       ],
     },
     {
-      heading: "Change Capture",
-      items: [
-        {
-          path: "/change-capture-pipelines",
-          text: "Change Capture Pipelines",
-          icon: Logs,
-        },
-      ],
-    },
-    {
       heading: "Destinations",
       items: [
         {
           path: "/consumers",
           text: "Destination Consumers",
           icon: SendHorizontal,
+        },
+      ],
+    },
+    {
+      heading: "Change Capture",
+      items: [
+        {
+          path: "/change-capture-pipelines",
+          text: "Change Capture Pipelines",
+          icon: Logs,
         },
       ],
     },

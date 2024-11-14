@@ -11,7 +11,6 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
@@ -21,7 +20,6 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
-  alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo

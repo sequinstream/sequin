@@ -4,7 +4,6 @@ defmodule Sequin.Application do
   @moduledoc false
   use Application
 
-  alias Sequin.Databases.ConnectionCache
   alias Sequin.MutexedSupervisor
 
   @impl true
@@ -56,7 +55,8 @@ defmodule Sequin.Application do
       {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
       {Oban, Application.fetch_env!(:sequin, Oban)},
       {Redix, Application.fetch_env!(:redix, :start_opts)},
-      ConnectionCache,
+      Sequin.Databases.ConnectionCache,
+      Sequin.Redis.ConnectionCache,
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
       # Start to serve requests, typically the last entry

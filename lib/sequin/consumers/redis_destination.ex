@@ -7,8 +7,7 @@ defmodule Sequin.Consumers.RedisDestination do
 
   alias __MODULE__
 
-  @derive {Jason.Encoder, only: [:host, :port, :key_prefix]}
-  @primary_key false
+  @derive {Jason.Encoder, only: [:host, :port, :stream_key]}
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:redis], default: :redis
     field :host, :string
@@ -16,17 +15,17 @@ defmodule Sequin.Consumers.RedisDestination do
     field :username, :string
     field :password, Sequin.Encrypted.Binary
     field :tls, :boolean, default: false
-    field :key_prefix, :string
+    field :stream_key, :string
     field :database, :integer, default: 0
   end
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:host, :port, :username, :password, :tls, :key_prefix, :database])
-    |> validate_required([:host, :port])
+    |> cast(params, [:host, :port, :username, :password, :tls, :stream_key, :database])
+    |> validate_required([:host, :port, :stream_key])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
     |> validate_number(:database, greater_than_or_equal_to: 0)
-    |> validate_length(:key_prefix, max: 255)
+    |> validate_length(:stream_key, max: 255)
   end
 
   def redis_url(%RedisDestination{host: host, port: port, database: database} = destination) do

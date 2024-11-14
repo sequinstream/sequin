@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.ConsumersRuntime
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.ConsumersRuntime.SqsPipeline
 
   def start_link(opts) do
@@ -62,6 +63,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     case consumer.type do
       :http_push -> HttpPushPipeline
       :sqs -> SqsPipeline
+      :redis -> RedisPipeline
     end
   end
 

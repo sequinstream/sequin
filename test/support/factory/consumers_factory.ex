@@ -187,7 +187,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         port: 6379,
         database: 0,
         tls: false,
-        key_prefix: Enum.random([nil, Factory.word()])
+        stream_key: Factory.word()
       },
       attrs
     )

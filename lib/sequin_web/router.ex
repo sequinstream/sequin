@@ -88,6 +88,7 @@ defmodule SequinWeb.Router do
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
       live "/consumer-groups", ConsumersLive.Index, :list_pull
+      live "/consumer-groups/new", ConsumersLive.Index, :new
       live "/consumer-groups/:id", ConsumersLive.Show, :show
       live "/consumer-groups/:id/messages", ConsumersLive.Show, :messages
       live "/consumer-groups/:id/edit", ConsumersLive.Show, :edit

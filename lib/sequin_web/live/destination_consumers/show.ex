@@ -23,7 +23,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
-  alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -137,7 +137,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
           <% {:edit, _consumer} -> %>
             <!-- Edit component -->
             <.live_component
-              module={Form}
+              module={ConsumerForm}
               id="edit-consumer"
               consumer={@consumer}
               on_finish={&handle_edit_finish/1}

@@ -79,7 +79,7 @@ defmodule SequinWeb.ConsumersLive.Index do
     ~H"""
     <div id="consumers-index">
       <.svelte
-        name="consumers/Index"
+        name="consumers/ConsumerGroupIndex"
         props={
           %{
             consumerKind: @kind,
@@ -147,7 +147,7 @@ defmodule SequinWeb.ConsumersLive.Index do
     """
   end
 
-  defp render_consumer_form(%{form_kind: "push"} = assigns) do
+  defp render_consumer_form(%{form_kind: "http_push"} = assigns) do
     ~H"""
     <.live_component
       current_user={@current_user}

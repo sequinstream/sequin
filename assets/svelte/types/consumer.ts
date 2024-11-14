@@ -2,7 +2,6 @@
 export type BaseConsumer = {
   id: string;
   name: string;
-  kind: "push";
   status: string;
   message_kind: string;
   ack_wait_ms: number;

@@ -122,7 +122,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}}}
+      consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}, batch_size: 10}}
     />
     """
   end

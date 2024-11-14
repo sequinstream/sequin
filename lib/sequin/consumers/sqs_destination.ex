@@ -14,8 +14,8 @@ defmodule Sequin.Consumers.SqsDestination do
     field :type, Ecto.Enum, values: [:sqs], default: :sqs
     field :queue_url, :string
     field :region, :string
-    field :access_key_id, Encrypted.Binary
-    field :secret_access_key, Encrypted.Binary
+    field :access_key_id, :string
+    field :secret_access_key, Encrypted.Field
     field :is_fifo, :boolean, default: false
   end
 

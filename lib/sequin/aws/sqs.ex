@@ -112,22 +112,8 @@ defmodule Sequin.Aws.SQS do
       {:ok, %{"Successful" => _successful}, %{body: _body}} ->
         :ok
 
-      {:error, {:unexpected_response, %{body: body, status_code: status_code}}} ->
-        message =
-          case Jason.decode(body) do
-            {:ok, %{"message" => message}} ->
-              message
-
-            _ ->
-              if is_binary(body) do
-                body
-              else
-                inspect(body)
-              end
-          end
-
-        {:error,
-         Error.service(service: :aws_sqs, message: "Failed to send messages (status=#{status_code})", details: message)}
+      {:error, {:unexpected_response, details}} ->
+        handle_unexpected_response(details)
     end
   end
 
@@ -254,6 +240,7 @@ defmodule Sequin.Aws.SQS do
     end
   end
 
+  @spec queue_meta(Client.t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def queue_meta(%Client{} = client, queue_url) do
     case AWS.SQS.get_queue_attributes(
            client,
@@ -274,8 +261,13 @@ defmodule Sequin.Aws.SQS do
            arn: attributes["QueueArn"]
          }}
 
-      err ->
-        err
+      {:error, {:unexpected_response, details}} ->
+        Logger.debug("[SQS] Failed to get queue attributes: #{inspect(details)}")
+        handle_unexpected_response(details)
+
+      {:error, error} ->
+        Logger.debug("[SQS] Failed to get queue attributes: #{inspect(error)}")
+        {:error, Error.service(service: :aws_sqs, message: "Failed to get queue attributes", details: error)}
     end
   end
 
@@ -285,5 +277,23 @@ defmodule Sequin.Aws.SQS do
       {:ok, _} -> {:ok, true}
       err -> err
     end
+  end
+
+  defp handle_unexpected_response(%{body: body, status_code: status_code}) do
+    message =
+      case Jason.decode(body) do
+        {:ok, %{"message" => message}} ->
+          message
+
+        _ ->
+          if is_binary(body) do
+            body
+          else
+            inspect(body)
+          end
+      end
+
+    {:error,
+     Error.service(service: :aws_sqs, message: "Error from AWS: #{message} (status=#{status_code})", details: message)}
   end
 end

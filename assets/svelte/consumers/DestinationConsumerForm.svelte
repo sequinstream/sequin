@@ -19,6 +19,9 @@
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
   import DestinationHttpPushForm from "./DestinationHttpPushForm.svelte";
+  import DestinationSqsForm from "./DestinationSqsForm.svelte";
+  import { CircleAlert } from "lucide-svelte";
+  import * as Alert from "$lib/components/ui/alert/index.js";
 
   export let live;
   export let parent;
@@ -29,6 +32,7 @@
   export let submitError;
 
   let initialForm = {
+    type: consumer.type,
     messageKind: consumer.message_kind || "record",
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
@@ -38,8 +42,7 @@
     ackWaitMs: consumer.ack_wait_ms || 30000,
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
-    httpEndpointId: consumer.http_endpoint_id,
-    httpEndpointPath: consumer.http_endpoint_path || "",
+    destination: consumer.destination,
     sortColumnAttnum: consumer.sort_column_attnum || null,
     recordConsumerState: consumer.record_consumer_state || {
       initialMinSortCol: null,
@@ -52,6 +55,18 @@
   let form = { ...initialForm };
   let isDirty = false;
   let isSubmitting = false;
+
+  type TestConnectionState = {
+    status: "initial" | "loading" | "success" | "error";
+    displayStatus?: boolean;
+    error?: string;
+    lastTestStatus?: "success" | "error" | "none";
+  };
+
+  let testConnectionState: TestConnectionState = {
+    status: "initial",
+    lastTestStatus: "none",
+  };
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
@@ -146,6 +161,41 @@
   }
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.sequenceId;
+
+  function onTestConnection() {
+    testConnectionState = {
+      status: "loading",
+      lastTestStatus: testConnectionState.lastTestStatus,
+    };
+
+    pushEvent("test_connection", {}, (reply) => {
+      if (reply.ok) {
+        testConnectionState = {
+          displayStatus: true,
+          status: "success",
+          lastTestStatus: "success",
+        };
+        setTimeout(() => {
+          testConnectionState = {
+            status: "initial",
+            lastTestStatus: "success",
+          };
+        }, 3000);
+      } else {
+        testConnectionState = {
+          displayStatus: true,
+          status: "error",
+          error: reply.error,
+          lastTestStatus: "error",
+        };
+        console.log(reply);
+        setTimeout(() => {
+          testConnectionState.displayStatus = false;
+          testConnectionState.status = "initial";
+        }, 3000);
+      }
+    });
+  }
 </script>
 
 <FullPageModal
@@ -250,17 +300,21 @@
       bind:groupColumnAttnums={form.groupColumnAttnums}
     />
 
-    <DestinationHttpPushForm
-      {errors}
-      {httpEndpoints}
-      bind:form
-      {live}
-      {parent}
-    />
+    {#if consumer.type === "http_push"}
+      <DestinationHttpPushForm
+        {errors}
+        {httpEndpoints}
+        bind:form
+        {live}
+        {parent}
+      />
+    {:else if consumer.type === "sqs"}
+      <DestinationSqsForm {errors} bind:form />
+    {/if}
 
     <Card>
       <CardHeader>
-        <CardTitle>Webhook Subscription name</CardTitle>
+        <CardTitle>Destination Consumer name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -289,16 +343,75 @@
         {:else if Object.keys(errors).length > 0}
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
-        <Button
-          loading={isSubmitting}
-          type="submit"
-          disabled={isCreateConsumerDisabled}
-        >
-          {isEditMode ? "Update" : "Create"} Webhook Subscription
-          <span slot="loading"
-            >{isEditMode ? "Updating..." : "Creating..."}</span
+        <div class="flex justify-end items-center gap-2">
+          {#if consumer.type === "sqs"}
+            <Button
+              loading={testConnectionState.status === "loading"}
+              type="button"
+              variant="outline"
+              class="self-end"
+              on:click={onTestConnection}
+            >
+              {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
+                <span
+                  class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
+                ></span>
+                Connection succeeded
+              {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
+                <span
+                  class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
+                ></span>
+                Connection failed
+              {:else}
+                <span
+                  class="flex items-center w-2 h-2 mr-2 rounded-full"
+                  class:bg-green-500={testConnectionState.lastTestStatus ===
+                    "success"}
+                  class:bg-red-500={testConnectionState.lastTestStatus ===
+                    "error"}
+                  class:bg-gray-300={testConnectionState.lastTestStatus ===
+                    "none"}
+                ></span>
+                Test Connection
+              {/if}
+            </Button>
+          {/if}
+          <Button
+            loading={isSubmitting}
+            type="submit"
+            disabled={isCreateConsumerDisabled}
           >
-        </Button>
+            {isEditMode ? "Update" : "Create"} Destination Consumer
+            <span slot="loading"
+              >{isEditMode ? "Updating..." : "Creating..."}</span
+            >
+          </Button>
+        </div>
+        {#if testConnectionState.lastTestStatus === "error"}
+          <Alert.Root variant="destructive">
+            <CircleAlert class="h-4 w-4" />
+            <Alert.Title>Connection test failed</Alert.Title>
+            <Alert.Description>
+              {#if typeof testConnectionState.error === "object"}
+                <ul
+                  class="mt-4"
+                  style="font-family: monospace; white-space: pre-wrap; list-style-type: disc; padding-left: 20px;"
+                >
+                  {#each Object.entries(testConnectionState.error) as [key, value]}
+                    <li>{key}: {value}</li>
+                  {/each}
+                </ul>
+              {:else}
+                <pre
+                  class="mt-4"
+                  style="white-space: pre-wrap; word-wrap: break-word;"><code
+                    >{testConnectionState.error}</code
+                  >
+              </pre>
+              {/if}
+            </Alert.Description>
+          </Alert.Root>
+        {/if}
       </CardContent>
     </Card>
   </form>

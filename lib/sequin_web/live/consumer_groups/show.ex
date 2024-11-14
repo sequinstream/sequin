@@ -1,4 +1,4 @@
-defmodule SequinWeb.ConsumersLive.Show do
+defmodule SequinWeb.ConsumerGroupsLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
@@ -9,8 +9,6 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.DestinationConsumer
-  alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
@@ -23,7 +21,7 @@ defmodule SequinWeb.ConsumersLive.Show do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
-  alias SequinWeb.ConsumersLive.Form
+  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -78,14 +76,6 @@ defmodule SequinWeb.ConsumersLive.Show do
 
         %HttpPullConsumer{} = consumer ->
           {:ok, Repo.preload(consumer, [:postgres_database, :sequence])}
-
-        %DestinationConsumer{type: :http_push} = consumer ->
-          consumer =
-            consumer
-            |> Repo.preload([:postgres_database, :sequence])
-            |> DestinationConsumer.preload_http_endpoint()
-
-          {:ok, consumer}
       end
 
     case case_result do
@@ -148,24 +138,11 @@ defmodule SequinWeb.ConsumersLive.Show do
           <% {:edit, _consumer} -> %>
             <!-- Edit component -->
             <.live_component
-              module={Form}
+              module={ConsumerForm}
               id="edit-consumer"
               consumer={@consumer}
               on_finish={&handle_edit_finish/1}
               current_user={@current_user}
-            />
-          <% {:show, %DestinationConsumer{type: :http_push}} -> %>
-            <!-- ShowHttpPush component -->
-            <.svelte
-              name="consumers/ShowHttpPush"
-              props={
-                %{
-                  consumer: encode_consumer(@consumer),
-                  parent: "consumer-show",
-                  metrics: @metrics,
-                  cursor_position: encode_cursor_position(@cursor_position, @consumer)
-                }
-              }
             />
           <% {:show, %HttpPullConsumer{}} -> %>
             <!-- ShowHttpPull component -->
@@ -205,29 +182,17 @@ defmodule SequinWeb.ConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("edit", _params, socket) do
-    case Consumers.kind(socket.assigns.consumer) do
-      :pull ->
-        {:noreply, push_patch(socket, to: ~p"/consumer-groups/#{socket.assigns.consumer.id}/edit")}
-
-      type ->
-        {:noreply, push_patch(socket, to: ~p"/consumers/#{type}/#{socket.assigns.consumer.id}/edit")}
-    end
+    {:noreply, push_patch(socket, to: ~p"/consumer-groups/#{socket.assigns.consumer.id}/edit")}
   end
 
   @impl Phoenix.LiveView
   def handle_event("delete", _params, socket) do
     case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
       {:ok, _deleted_consumer} ->
-        push_to =
-          case Consumers.kind(socket.assigns.consumer) do
-            :pull -> ~p"/consumer-groups"
-            _ -> ~p"/consumers"
-          end
-
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :success, title: "Consumer deleted."})
-         |> push_navigate(to: push_to)}
+         |> push_navigate(to: ~p"/consumer-groups")}
 
       {:error, _changeset} ->
         {:noreply, push_toast(socket, %{kind: :error, title: "Failed to delete consumer. Please try again."})}
@@ -335,34 +300,6 @@ defmodule SequinWeb.ConsumersLive.Show do
 
       {:error, _error} ->
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to rewind consumer"})}
-    end
-  end
-
-  def handle_event("disable", _params, socket) do
-    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :disabled}) do
-      {:ok, updated_consumer} ->
-        {:reply, %{ok: true},
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription paused"})}
-
-      {:error, error} ->
-        Logger.error("Failed to disable consumer: #{inspect(error)}", error: error)
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to disable consumer"})}
-    end
-  end
-
-  def handle_event("enable", _params, socket) do
-    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :active}) do
-      {:ok, updated_consumer} ->
-        {:reply, %{ok: true},
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Webhook Subscription resumed"})}
-
-      {:error, error} ->
-        Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to enable consumer"})}
     end
   end
 
@@ -483,30 +420,6 @@ defmodule SequinWeb.ConsumersLive.Show do
     _ -> {:error, "Failed to get cursor position"}
   end
 
-  defp encode_consumer(%DestinationConsumer{type: :http_push} = consumer) do
-    %{
-      id: consumer.id,
-      name: consumer.name,
-      kind: :push,
-      status: consumer.status,
-      message_kind: consumer.message_kind,
-      ack_wait_ms: consumer.ack_wait_ms,
-      max_ack_pending: consumer.max_ack_pending,
-      max_deliver: consumer.max_deliver,
-      max_waiting: consumer.max_waiting,
-      inserted_at: consumer.inserted_at,
-      updated_at: consumer.updated_at,
-      http_endpoint: encode_http_endpoint(consumer.destination.http_endpoint),
-      http_endpoint_path: consumer.destination.http_endpoint_path,
-      sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
-      postgres_database: encode_postgres_database(consumer.postgres_database),
-      health: Health.to_external(consumer.health),
-      href: RouteHelpers.consumer_path(consumer),
-      group_column_names: encode_group_column_names(consumer),
-      batch_size: consumer.batch_size
-    }
-  end
-
   defp encode_consumer(%HttpPullConsumer{} = consumer) do
     %{
       id: consumer.id,
@@ -525,13 +438,6 @@ defmodule SequinWeb.ConsumersLive.Show do
       health: Health.to_external(consumer.health),
       href: RouteHelpers.consumer_path(consumer),
       group_column_names: encode_group_column_names(consumer)
-    }
-  end
-
-  defp encode_http_endpoint(http_endpoint) do
-    %{
-      id: http_endpoint.id,
-      url: HttpEndpoint.url(http_endpoint)
     }
   end
 

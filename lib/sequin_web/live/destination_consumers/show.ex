@@ -13,6 +13,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushDestination
   alias Sequin.Consumers.RecordConsumerState
+  alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SqsDestination
@@ -121,10 +122,11 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
           %{
             consumer: encode_consumer(@consumer),
             consumerTitle:
-              if(@consumer.destination.type == "http_push",
-                do: "Webhook Subscription",
-                else: "SQS Consumer"
-              ),
+              case @consumer.destination.type do
+                :http_push -> "Webhook Subscription"
+                :sqs -> "SQS Consumer"
+                :redis -> "Redis Consumer"
+              end,
             parent: "consumer-show",
             live_action: @live_action,
             messages_failing: @metrics.messages_failing_count > 0
@@ -494,6 +496,17 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
       queue_url: destination.queue_url,
       region: destination.region,
       is_fifo: destination.is_fifo
+    }
+  end
+
+  defp encode_destination(%RedisDestination{} = destination) do
+    %{
+      type: :redis,
+      host: destination.host,
+      port: destination.port,
+      streamKey: destination.stream_key,
+      database: destination.database,
+      tls: destination.tls
     }
   end
 

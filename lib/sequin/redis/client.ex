@@ -57,6 +57,16 @@ defmodule Sequin.Redis.Client do
     end
   end
 
+  @impl Sequin.Redis
+  def client_info(%RedisDestination{} = destination) do
+    with {:ok, connection} <- ConnectionCache.connection(destination) do
+      case Redix.command(connection, ["INFO"]) do
+        {:ok, info} -> {:ok, info}
+        {:error, error} -> {:error, to_sequin_error(error)}
+      end
+    end
+  end
+
   defp to_sequin_error(error) do
     case error do
       %Redix.Error{} = error ->

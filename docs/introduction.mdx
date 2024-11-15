@@ -1,22 +1,22 @@
 ---
 title: What is Sequin?
-description: Start streaming Postgres in under five minutes
+description: Start streaming changes from Postgres in under five minutes
 icon: "book-open"
 iconType: "solid"
 ---
 
-Sequin is a tool for capturing changes and streaming data out of your Postgres database.
+Sequin is a change data capture (CDC) tool that makes it easy to stream changes from your Postgres database to streaming platforms, queues, and other destinations.
 
-To use Sequin, you'll create [Streams](/how-sequin-works#streams) for one or more tables in your database. Then, you'll consume rows from the Stream using Sequin's [Consume Groups](/how-sequin-works#consumer-groups), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api).
+To use Sequin, you'll configure [sinks](/how-sequin-works#sinks) for one or more tables in your database. Sequin will then stream changes to your chosen destinations like Kafka, SQS, Redis, or HTTP endpoints. You can backfill existing rows and stream new changes in real-time.
 
-Sequin guarantees exactly-once processing. That means you can use it to:
+Sequin works great for CDC use cases like:
 
 <CardGroup cols={3}>
   <Card title="Trigger Workflows" icon="bolt">
     Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
   </Card>
   <Card title="Stream Events" icon="arrow-right">
-    Stream changes from your database tables as events that other services can consume.
+    Make database changes available as events for other services to consume.
   </Card>
   <Card title="Keep Services in Sync" icon="arrows-rotate">
     Notify dependent services about data changes to keep systems in sync.
@@ -41,56 +41,38 @@ Sequin guarantees exactly-once processing. That means you can use it to:
   </Card>
 </CardGroup>
 
-Sequin is a Docker image you can run next to your Postgres database. Sequin itself is built on Postgres and uses Postgres to store consumer state.
+Sequin is a Docker image you can run next to your Postgres database. Sequin itself is built on Postgres and uses Postgres to store sink state.
+
+## Supported Sinks
+
+Sequin supports streaming to:
+
+- Kafka
+- Amazon SQS 
+- Redis Streams
+- Webhooks (HTTP POST)
+- Sequin Stream (HTTP Pull/GET)
+- More coming soon! (NATS, EventHubs, Pub/Sub, SNS, Kinesis, RabbitMQ, RedPanda)
 
 ## Killer features
 
-- **Never miss a row or change:** Sequin ensures all database changes are delivered and processed exactly once by consumers.
-- **SQL-based routing:** Filter and route messages to consumers using SQL `where` conditions.
-- **Replays:** Rewind consumers to any row on your table. Or republish select messages that match a SQL query.
-- **Start anywhere:** Consumers can start processing rows from any point in a table.
-- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
-- **No PL/pgSQL:** Define business logic in the language of your choice and in your application.
+- **Never miss a change:** Sequin ensures 100% delivery of database changes to sinks.
+- **SQL-based routing:** Filter and route messages to sinks using SQL `where` conditions.
+- **Backfills:** Easily backfill existing rows from your tables to sinks.
+- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12+.
 - **Transforms** (coming soon!): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
 ## Why Sequin?
 
-We all know Postgres is great for storing and querying data. But what about when you need to stream data?
+We all know Postgres is great for storing and querying data. But what about when you need to stream changes to other systems?
 
-**Postgres has limited support for streaming.** Postgres is not a log, so tracking changes is difficult. Logical replication slots are ephemeral, and don't support all the features developers need. And Postgres doesn't have the concept of consumer groups or delivery tracking.
+**Postgres has limited support for change streaming.** While Postgres supports logical replication, it's ephemeral and doesn't support features developers need like exactly-once processing, backfills, or delivery tracking.
 
-So, **Sequin adds streaming features to Postgres.** And importantly, Sequin keeps your data in Postgres. You can use your existing database in a new way without copying the data to a new system or mastering a new technology.
+Debezium is a popular CDC tool, but is complicated to setup and requires Kafka and Zookeeper to operate. Adding to the complexity, Debezium doesn't have native sinks, instead relying on Kafka Connect.
 
-With Sequin, you can:
+ETL tools like Fivetran and Airbyte have limited support for operational destinations. And they write changes in batches, not in real-time.
 
-1. Stream a Postgres table in real-time and with exactly-once processing over an [HTTP interface](/consume/consume-api/overview).
-2. Receive [webhooks](/consume/webhooks) whenever rows change, with retries and backoff.
-3. [Capture changes](/capture-changes/change-capture-pipelines) to Postgres tables as a series of events.
-
-## Watch
-
-Watch a recent demo of Sequin in action:
-
-<script src="https://fast.wistia.com/embed/medias/ya5uv992hi.jsonp" async></script>
-<script src="https://fast.wistia.com/assets/external/E-v1.js" async></script>
-<div className="wistia_responsive_padding" style={{ padding: "56.88% 0 0 0", position: "relative" }}>
-  <div className="wistia_responsive_wrapper" style={{ height: "100%", left: "0", position: "absolute", top: "0", width: "100%" }}>
-    <div className="wistia_embed wistia_async_ya5uv992hi seo=true videoFoam=true" style={{ height: "100%", position: "relative", width: "100%" }}>
-      <div className="wistia_swatch" style={{ height: "100%", left: "0", opacity: "0", overflow: "hidden", position: "absolute", top: "0", transition: "opacity 200ms", width: "100%" }}>
-        <img
-          src="https://fastwistiacom/embed/medias/ya5uv992hi/swatch" style={{ filter: "blur(5px)", height: "100%", objectFit: "contain", width: "100%" }}
-          alt=""
-          aria-hidden="true"
-          onLoad={(e) => {
-            if (e.currentTarget.parentElement) {
-              e.currentTarget.parentElement.style.opacity = "1";
-            }
-          }}
-        />
-      </div>
-    </div>
-  </div>
-</div>
+Sequin is a fast, simple alternative to Debezium. It's built on Postgres, streams changes in real-time, and doesn't require Kafka or Zookeeper to operate. Sequin also has native sinks for Kafka, SQS, Redis, and HTTP endpoints. So it's easy to get started.
 
 ## Getting started
 

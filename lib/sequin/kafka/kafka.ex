@@ -8,16 +8,21 @@ defmodule Sequin.Kafka do
   @callback publish(KafkaDestination.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
               :ok | {:error, Error.t()}
   @callback test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}
+  @callback get_metadata(KafkaDestination.t()) :: {:ok, any()} | {:error, Error.t()}
 
-  @spec publish(KafkaDestination.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
-          :ok | {:error, Error.t()}
-  def publish(%KafkaDestination{} = destination, messages) do
-    impl().send_messages(destination, messages)
+  @spec publish(KafkaDestination.t(), ConsumerRecordData.t() | ConsumerEventData.t()) :: :ok | {:error, Error.t()}
+  def publish(%KafkaDestination{} = destination, message) do
+    impl().publish(destination, message)
   end
 
   @spec test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}
   def test_connection(%KafkaDestination{} = destination) do
     impl().test_connection(destination)
+  end
+
+  @spec get_metadata(KafkaDestination.t()) :: {:ok, any()} | {:error, Error.t()}
+  def get_metadata(%KafkaDestination{} = destination) do
+    impl().get_metadata(destination)
   end
 
   defp impl do

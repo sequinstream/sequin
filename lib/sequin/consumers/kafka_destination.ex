@@ -121,4 +121,46 @@ defmodule Sequin.Consumers.KafkaDestination do
 
   defp protocol(%KafkaDestination{tls: true}), do: "kafka+ssl://"
   defp protocol(%KafkaDestination{tls: false}), do: "kafka://"
+
+  def hosts(%KafkaDestination{hosts: hosts}) do
+    hosts
+    |> String.split(",")
+    |> Enum.map(fn host ->
+      [host, port] = String.split(host, ":")
+      {String.trim(host), String.to_integer(port)}
+    end)
+  end
+
+  @doc """
+  Converts a KafkaDestination into configuration options for :brod.
+  """
+  def to_brod_config(%__MODULE__{} = destination) do
+    []
+    |> maybe_add_sasl(destination)
+    |> maybe_add_ssl(destination)
+    |> Keyword.put(:query_api_versions, true)
+  end
+
+  # Add SASL authentication if username/password are configured
+  defp maybe_add_sasl(config, %{username: username, password: password})
+       when not is_nil(username) or not is_nil(password) do
+    Keyword.put(config, :sasl, {:plain, username || "", password || ""})
+  end
+
+  defp maybe_add_sasl(config, _), do: config
+
+  # Add SSL configuration if TLS is enabled
+  defp maybe_add_ssl(config, %{tls: true} = destination) do
+    ssl_opts = [
+      certfile: destination.ssl_cert_file,
+      keyfile: destination.ssl_key_file,
+      cacertfile: destination.ssl_ca_cert_file
+    ]
+
+    config
+    |> Keyword.put(:ssl, true)
+    |> Keyword.put(:ssl_opts, ssl_opts)
+  end
+
+  defp maybe_add_ssl(config, _), do: config
 end

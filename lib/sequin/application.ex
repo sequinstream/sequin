@@ -57,6 +57,7 @@ defmodule Sequin.Application do
       {Redix, Application.fetch_env!(:redix, :start_opts)},
       Sequin.Databases.ConnectionCache,
       Sequin.Redis.ConnectionCache,
+      Sequin.Kafka.ConnectionCache,
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
       # Start to serve requests, typically the last entry

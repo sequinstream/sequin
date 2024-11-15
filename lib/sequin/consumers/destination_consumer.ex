@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.KafkaDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
@@ -47,7 +48,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
 
-    field :type, Ecto.Enum, values: [:http_push, :sqs, :redis], read_after_writes: true
+    field :type, Ecto.Enum, values: [:http_push, :sqs, :redis, :kafka], read_after_writes: true
 
     field :health, :map, virtual: true
 
@@ -66,7 +67,8 @@ defmodule Sequin.Consumers.DestinationConsumer do
       types: [
         http_push: HttpPushDestination,
         sqs: SqsDestination,
-        redis: RedisDestination
+        redis: RedisDestination,
+        kafka: KafkaDestination
       ],
       on_replace: :update,
       type_field_name: :type
@@ -126,6 +128,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
       :http_push -> changeset
       :sqs -> validate_number(changeset, :batch_size, less_than_or_equal_to: 10)
       :redis -> validate_number(changeset, :batch_size, less_than_or_equal_to: 1000)
+      :kafka -> changeset
     end
   end
 

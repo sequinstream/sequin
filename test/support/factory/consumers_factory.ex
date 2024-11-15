@@ -11,6 +11,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.KafkaDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
@@ -55,7 +56,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push, :redis, :sqs])
+    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push, :redis, :sqs, :kafka])
     {destination_attrs, attrs} = Map.pop(attrs, :destination, %{})
     destination = destination(type, account_id, destination_attrs)
 
@@ -188,6 +189,17 @@ defmodule Sequin.Factory.ConsumersFactory do
         database: 0,
         tls: false,
         stream_key: Factory.word()
+      },
+      attrs
+    )
+  end
+
+  defp destination(:kafka, _account_id, attrs) do
+    merge_attributes(
+      %KafkaDestination{
+        type: :kafka,
+        hosts: "localhost:9092",
+        topic: Factory.word()
       },
       attrs
     )

@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.ConsumersRuntime
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.ConsumersRuntime.KafkaPipeline
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.ConsumersRuntime.SqsPipeline
 
@@ -51,7 +52,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def stop_for_destination_consumer(supervisor, id) do
     Enum.each(
-      [HttpPushPipeline, SqsPipeline, RedisPipeline],
+      [HttpPushPipeline, SqsPipeline, RedisPipeline, KafkaPipeline],
       &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id))
     )
 
@@ -68,6 +69,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
       :http_push -> HttpPushPipeline
       :sqs -> SqsPipeline
       :redis -> RedisPipeline
+      :kafka -> KafkaPipeline
     end
   end
 

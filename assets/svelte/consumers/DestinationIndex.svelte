@@ -35,6 +35,7 @@
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
+  import KafkaIcon from "../../icons/kafka.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -71,6 +72,11 @@
       id: "redis",
       name: "Redis",
       icon: RedisIcon,
+    },
+    {
+      id: "kafka",
+      name: "Kafka",
+      icon: KafkaIcon,
     },
   ];
 

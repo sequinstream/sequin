@@ -128,7 +128,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
       :http_push -> changeset
       :sqs -> validate_number(changeset, :batch_size, less_than_or_equal_to: 10)
       :redis -> validate_number(changeset, :batch_size, less_than_or_equal_to: 1000)
-      :kafka -> changeset
+      :kafka -> validate_number(changeset, :batch_size, equal_to: 1)
     end
   end
 

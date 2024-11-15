@@ -51,7 +51,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{
+  def handle_message(_, %Broadway.Message{data: [consumer_record_or_event]} = message, %{
         consumer: %DestinationConsumer{destination: %KafkaDestination{} = destination} = consumer,
         test_pid: test_pid
       }) do
@@ -62,20 +62,18 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       consumer_id: consumer.id
     )
 
-    kafka_messages = Enum.map(messages, & &1.data)
+    kafka_message = consumer_record_or_event.data
 
-    case Kafka.publish(destination, kafka_messages) do
+    case Kafka.publish(destination, kafka_message) do
       :ok ->
         Health.update(consumer, :push, :healthy)
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            msg.replication_message_trace_id,
-            "Published message to Kafka successfully"
-          )
-        end)
+        Sequin.Logs.log_for_consumer_message(
+          :info,
+          consumer.account_id,
+          consumer_record_or_event.replication_message_trace_id,
+          "Published message to Kafka successfully"
+        )
 
         message
 
@@ -84,14 +82,12 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
         Health.update(consumer, :push, :error, error)
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            msg.replication_message_trace_id,
-            "Failed to publish message to Kafka: #{Exception.message(error)}"
-          )
-        end)
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer_record_or_event.replication_message_trace_id,
+          "Failed to publish message to Kafka: #{Exception.message(error)}"
+        )
 
         Broadway.Message.failed(message, error)
     end

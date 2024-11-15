@@ -21,6 +21,7 @@
   import DestinationHttpPushForm from "./DestinationHttpPushForm.svelte";
   import DestinationSqsForm from "./DestinationSqsForm.svelte";
   import DestinationRedisForm from "./DestinationRedisForm.svelte";
+  import DestinationKafkaForm from "./DestinationKafkaForm.svelte";
   import { CircleAlert } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
 
@@ -311,6 +312,8 @@
       <DestinationSqsForm {errors} bind:form />
     {:else if consumer.type === "redis"}
       <DestinationRedisForm {errors} bind:form />
+    {:else if consumer.type === "kafka"}
+      <DestinationKafkaForm {errors} bind:form />
     {/if}
 
     <Card>

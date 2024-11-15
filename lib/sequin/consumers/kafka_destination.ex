@@ -12,7 +12,7 @@ defmodule Sequin.Consumers.KafkaDestination do
     field :type, Ecto.Enum, values: [:kafka], default: :kafka
     field :hosts, :string
     field :username, :string
-    field :password, Sequin.Encrypted.Binary
+    field :password, Sequin.Encrypted.Field
     field :tls, :boolean, default: false
     field :topic, :string
 

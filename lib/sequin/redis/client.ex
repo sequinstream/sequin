@@ -90,6 +90,12 @@ defmodule Sequin.Redis.Client do
 
       %Redix.ConnectionError{} = error ->
         Error.service(service: :redis, message: "Redis connection error: #{Exception.message(error)}")
+
+      {%Redix.Protocol.ParseError{}, _} ->
+        Error.service(
+          service: :redis,
+          message: "Redis protocol error. Are you sure this is a Redis instance?"
+        )
     end
   end
 end

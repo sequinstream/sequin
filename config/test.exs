@@ -67,7 +67,8 @@ config :sequin,
   aws_sqs: [
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]
   ],
-  redis_module: Sequin.RedisMock
+  redis_module: Sequin.RedisMock,
+  kafka_module: Sequin.KafkaMock
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

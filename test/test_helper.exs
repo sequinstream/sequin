@@ -32,3 +32,4 @@ tables =
 
 # Mocks
 Mox.defmock(Sequin.RedisMock, for: Sequin.Redis)
+Mox.defmock(Sequin.KafkaMock, for: Sequin.Kafka)

@@ -26,6 +26,28 @@ defmodule Sequin.Consumers.RedisDestination do
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
     |> validate_number(:database, greater_than_or_equal_to: 0)
     |> validate_length(:stream_key, max: 255)
+    |> validate_redis_host()
+  end
+
+  defp validate_redis_host(changeset) do
+    if prod_env?() and not self_hosted?() do
+      case System.fetch_env("REDIS_URL") do
+        {:ok, redis_url} ->
+          %URI{host: system_host} = URI.parse(redis_url)
+          host = get_field(changeset, :host)
+
+          if host == system_host do
+            add_error(changeset, :host, "is invalid")
+          else
+            changeset
+          end
+
+        :error ->
+          changeset
+      end
+    else
+      changeset
+    end
   end
 
   def redis_url(destination, opts \\ []) do
@@ -54,4 +76,8 @@ defmodule Sequin.Consumers.RedisDestination do
 
   defp protocol(%RedisDestination{tls: true}), do: "rediss://"
   defp protocol(%RedisDestination{tls: false}), do: "redis://"
+
+  defp prod_env?, do: Application.get_env(:sequin, :env) == :prod
+
+  defp self_hosted?, do: Application.get_env(:sequin, :self_hosted)
 end

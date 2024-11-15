@@ -7,15 +7,22 @@
     CardTitle,
   } from "$lib/components/ui/card";
   import { Label } from "$lib/components/ui/label";
+  import { Switch } from "$lib/components/ui/switch";
   import {
     Accordion,
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
+  import { Eye, EyeOff } from "lucide-svelte";
 
   export let form;
   export let errors: any = {};
+  let showPassword = false;
+
+  function togglePasswordVisibility() {
+    showPassword = !showPassword;
+  }
 </script>
 
 <Card>
@@ -62,12 +69,25 @@
 
     <div class="space-y-2">
       <Label for="password">Password</Label>
-      <Input
-        id="password"
-        type="password"
-        bind:value={form.destination.password}
-        placeholder="(optional)"
-      />
+      <div class="relative">
+        <Input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          bind:value={form.destination.password}
+          placeholder="(optional)"
+        />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 flex items-center pr-3"
+          on:click={togglePasswordVisibility}
+        >
+          {#if showPassword}
+            <EyeOff class="h-4 w-4 text-gray-400" />
+          {:else}
+            <Eye class="h-4 w-4 text-gray-400" />
+          {/if}
+        </button>
+      </div>
       {#if errors.destination?.password}
         <p class="text-destructive text-sm">{errors.destination.password}</p>
       {/if}
@@ -99,6 +119,20 @@
       />
       {#if errors.destination?.database}
         <p class="text-destructive text-sm">{errors.destination.database}</p>
+      {/if}
+    </div>
+
+    <div class="flex items-center gap-2">
+      <Switch
+        id="tls"
+        checked={form.destination.tls}
+        onCheckedChange={(checked) => {
+          form.destination.tls = checked;
+        }}
+      />
+      <Label for="tls">TLS</Label>
+      {#if errors.destination?.tls}
+        <p class="text-destructive text-sm">{errors.destination.tls}</p>
       {/if}
     </div>
 
@@ -143,18 +177,6 @@
               </p>
               {#if errors.max_ack_pending}
                 <p class="text-destructive text-sm">{errors.max_ack_pending}</p>
-              {/if}
-            </div>
-
-            <div class="space-y-2">
-              <Label for="tls">TLS</Label>
-              <Input
-                id="tls"
-                type="checkbox"
-                bind:checked={form.destination.tls}
-              />
-              {#if errors.destination?.tls}
-                <p class="text-destructive text-sm">{errors.destination.tls}</p>
               {/if}
             </div>
           </div>

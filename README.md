@@ -22,28 +22,28 @@
 
 Sequin is a tool for change data capture (CDC) in Postgres. Sequin makes it easy to stream Postgres rows and changes to streaming platforms and queues (e.g. Kafka and SQS). You can backfill existing rows and stream new changes in real-time.
 
-Sequin even has a built-in stream interface (HTTP GET and webhooks), so you can get started without any other infrastructure.
+Sequin even supports native sinks (HTTP GET and webhooks), so you can get started without any other infrastructure.
 
 CDC enables applications and services to track and respond to row-level changes in database tables as they occur. With CDC via Sequin, you can:
 
 1. **Replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
 2. **Build event driven workflows** such as triggering side effects when data in Postgres changes.
 
-Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store consumer state.
+Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store sink state.
 
-Unlike Debezium, another CDC tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy in front of your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
+Unlike Debezium, another CDC tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 
 Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
-## Destinations
+## Sinks
 
-| Destination | Support | Description |
+| Sink | Support | Description |
 |-------------|---------|-------------|
+| Kafka | ✅ Real-time streaming<br />✅ Backfill existing rows | |
 | SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | |
 | Redis | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
-| Kafka | Coming soon | (Nov 2024) |
 | NATS JetStream | Coming soon | (Nov 2024) |
 | Azure EventHubs | Coming soon | (Nov 2024) |
 | Google Pub/Sub | Coming soon | (Nov 2024) |
@@ -54,14 +54,15 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 
 ## Killer features
 
-- **Never miss a record or change:** Sequin ensures all database changes are delivered to destinations.
-- **SQL-based routing:** Filter and route messages to destinations using SQL `where` conditions.
-- **Backfills:** Backfill existing rows from your tables to destinations.
-- **Start anywhere:** Destinations can start receiving records from any point in a table.
+- **Never miss a change:** Sequin ensures all database changes are delivered to sinks.
+- **SQL-based routing:** Filter and route messages to sinks using SQL `where` conditions.
+- **Backfills:** Backfill existing rows from your tables to sinks.
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-## Use cases
+## CDC use cases
+
+Sequin works great for CDC use cases like:
 
 - **Triggering a workflow when data changes in Postgres:** Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
 - **Making events available to downstream services:** Stream changes from your database tables as events that other services can consume.
@@ -80,15 +81,15 @@ Alternatively, you can try Sequin for free on [Sequin Cloud](https://console.seq
 
 ## How Sequin works
 
-Sequin connects to any Postgres database. To stream data, you'll create [Streams](https://sequinstream.com/docs/how-sequin-works#Streams) for each table you want to stream. Streams present a strictly ordered view of rows from one or more tables.
+Sequin connects to any Postgres database. Specify the tables you want to stream, as well as optional filters and transformations. Route changes to sinks like Kafka, SQS, Redis, or HTTP endpoints.
 
-Then, you'll connect your Streams to destinations, like SQS or HTTP endpoints. As rows are inserted or updated, Sequin will redeliver them until acknowledged.
+When you setup a sink, you can opt to backfill data from the source table to the sink.
 
-With [Change Capture Pipelines](https://sequinstream.com/docs/capture-changes/wal-pipelines), you can capture discrete changes to your tables, including `OLD` values for updates and hard-deletes. Sequin will write changes to an event log table in your database, so you can stream these changes with Sequin.
+After setup, Sequin will stream new changes to the sink as they occur in real-time. If there are any issues with delivery, Sequin will automatically retry delivery with exponential backoff.
 
 Sequin comes with a web console/UI for configuration.
 
-You can configure Sequin as code using YAML config files.
+You can also configure Sequin as code using YAML config files.
 
 ## Benchmarks
 

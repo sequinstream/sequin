@@ -12,6 +12,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.KafkaDestination
   alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
@@ -494,6 +495,20 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
     }
   end
 
+  defp encode_destination(%KafkaDestination{} = destination) do
+    %{
+      type: :kafka,
+      kafka_url: KafkaDestination.kafka_url(destination),
+      hosts: destination.hosts,
+      username: destination.username,
+      password: destination.password,
+      topic: destination.topic,
+      ssl_cert_file: destination.ssl_cert_file,
+      ssl_key_file: destination.ssl_key_file,
+      ssl_ca_cert_file: destination.ssl_ca_cert_file
+    }
+  end
+
   defp encode_destination(%RedisDestination{} = destination) do
     %{
       type: :redis,
@@ -824,4 +839,5 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   defp consumer_title(%{destination: %{type: :http_push}}), do: "Webhook Subscription"
   defp consumer_title(%{destination: %{type: :sqs}}), do: "SQS Consumer"
   defp consumer_title(%{destination: %{type: :redis}}), do: "Redis Consumer"
+  defp consumer_title(%{destination: %{type: :kafka}}), do: "Kafka Consumer"
 end

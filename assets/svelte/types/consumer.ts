@@ -67,5 +67,25 @@ export type RedisConsumer = BaseConsumer & {
   };
 };
 
+// Kafka specific destination
+export type KafkaConsumer = BaseConsumer & {
+  destination: {
+    type: "kafka";
+    url: string;
+    hosts: string;
+    username: string;
+    password: string;
+    tls: boolean;
+    topic: string;
+    ssl_cert_file: string;
+    ssl_key_file: string;
+    ssl_ca_cert_file: string;
+  };
+};
+
 // Union type for all consumer types
-export type Consumer = HttpPushConsumer | SqsConsumer | RedisConsumer;
+export type Consumer =
+  | HttpPushConsumer
+  | SqsConsumer
+  | RedisConsumer
+  | KafkaConsumer;

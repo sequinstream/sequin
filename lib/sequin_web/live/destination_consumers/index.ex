@@ -5,6 +5,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
   alias Sequin.Consumers
   alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.KafkaDestination
   alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SqsDestination
   alias Sequin.Databases
@@ -124,6 +125,18 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}, batch_size: 10}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "kafka"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%DestinationConsumer{type: :kafka, destination: %KafkaDestination{}}}
     />
     """
   end

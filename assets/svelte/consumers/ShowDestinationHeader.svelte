@@ -15,6 +15,7 @@
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
+  import KafkaIcon from "../../icons/kafka.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -112,6 +113,8 @@
             <SQSIcon class="h-6 w-6 mr-2" />
           {:else if consumer.destination.type === "redis"}
             <RedisIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.destination.type === "kafka"}
+            <KafkaIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumerTitle}: {consumer.name}

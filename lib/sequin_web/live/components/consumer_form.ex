@@ -7,6 +7,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushDestination
+  alias Sequin.Consumers.KafkaDestination
   alias Sequin.Consumers.RedisDestination
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -325,6 +326,19 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_destination(:kafka, destination) do
+    %{
+      "type" => "kafka",
+      "hosts" => destination["hosts"],
+      "username" => destination["username"],
+      "password" => destination["password"],
+      "topic" => destination["topic"],
+      "ssl_cert_file" => destination["ssl_cert_file"],
+      "ssl_key_file" => destination["ssl_key_file"],
+      "ssl_ca_cert_file" => destination["ssl_ca_cert_file"]
+    }
+  end
+
   defp decode_destination(:redis, destination) do
     %{
       "type" => "redis",
@@ -441,6 +455,20 @@ defmodule SequinWeb.Components.ConsumerForm do
       "access_key_id" => destination.access_key_id,
       "secret_access_key" => destination.secret_access_key,
       "is_fifo" => destination.is_fifo
+    }
+  end
+
+  defp encode_destination(%KafkaDestination{} = destination) do
+    %{
+      "type" => "kafka",
+      "url" => KafkaDestination.kafka_url(destination),
+      "hosts" => destination.hosts,
+      "username" => destination.username,
+      "password" => destination.password,
+      "topic" => destination.topic,
+      "ssl_cert_file" => destination.ssl_cert_file,
+      "ssl_key_file" => destination.ssl_key_file,
+      "ssl_ca_cert_file" => destination.ssl_ca_cert_file
     }
   end
 
@@ -655,6 +683,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :pull -> "Consumer Group"
       :sqs -> "SQS Consumer"
       :redis -> "Redis Consumer"
+      :kafka -> "Kafka Consumer"
     end
   end
 end

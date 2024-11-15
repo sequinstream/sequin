@@ -81,7 +81,8 @@ defmodule Sequin.MixProject do
       {:observer_cli, "~> 1.7"},
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:yaml_elixir, "~> 2.11"},
-      {:ymlr, "~> 5.0"}
+      {:ymlr, "~> 5.0"},
+      {:brod, "~> 4.3"}
     ]
   end
 

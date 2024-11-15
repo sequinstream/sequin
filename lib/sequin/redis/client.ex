@@ -72,10 +72,15 @@ defmodule Sequin.Redis.Client do
   def test_connection(%RedisDestination{} = destination) do
     with :ok <-
            NetworkUtils.test_tcp_reachability(destination.host, destination.port, destination.tls, :timer.seconds(10)),
-         {:ok, connection} <- ConnectionCache.connection(destination),
-         {:ok, "PONG"} <- Redix.command(connection, ["PING"]) do
-      :ok
+         {:ok, connection} <- ConnectionCache.connection(destination) do
+      case Redix.command(connection, ["PING"]) do
+        {:ok, "PONG"} -> :ok
+        {:error, error} -> {:error, to_sequin_error(error)}
+      end
     end
+  catch
+    :exit, {:redix_exited_during_call, error} ->
+      {:error, to_sequin_error(error)}
   end
 
   defp to_sequin_error(error) do

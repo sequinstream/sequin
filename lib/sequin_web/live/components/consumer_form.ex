@@ -212,7 +212,10 @@ defmodule SequinWeb.Components.ConsumerForm do
     destination_changeset =
       socket.assigns.changeset
       |> Ecto.Changeset.get_field(:destination)
-      |> SqsDestination.changeset(%{})
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %SqsDestination{} = destination -> SqsDestination.changeset(destination, %{})
+      end
 
     if destination_changeset.valid? do
       destination = Ecto.Changeset.apply_changes(destination_changeset)
@@ -231,7 +234,10 @@ defmodule SequinWeb.Components.ConsumerForm do
     destination_changeset =
       socket.assigns.changeset
       |> Ecto.Changeset.get_field(:destination)
-      |> RedisDestination.changeset(%{})
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %RedisDestination{} = destination -> RedisDestination.changeset(destination, %{})
+      end
 
     if destination_changeset.valid? do
       destination = Ecto.Changeset.apply_changes(destination_changeset)

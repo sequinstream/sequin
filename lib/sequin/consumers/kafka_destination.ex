@@ -33,7 +33,8 @@ defmodule Sequin.Consumers.KafkaDestination do
       :ssl_key_file,
       :ssl_ca_cert_file
     ])
-    |> validate_required([:hosts, :topic])
+    |> validate_required([:hosts, :topic, :tls])
+    |> validate_inclusion(:tls, [false], message: "Talk to the Sequin team to enable TLS for Kafka destinations")
     |> validate_length(:topic, max: 255)
     |> validate_hosts()
     |> validate_ssl_files()

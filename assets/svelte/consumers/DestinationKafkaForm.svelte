@@ -95,15 +95,22 @@
       {/if}
     </div>
 
-    <div class="flex items-center gap-2">
-      <Switch
-        id="tls"
-        checked={form.destination.tls}
-        onCheckedChange={(checked) => {
-          form.destination.tls = checked;
-        }}
-      />
-      <Label for="tls">TLS</Label>
+    <div class="space-y-2">
+      <div class="flex items-center gap-2 hidden">
+        <Switch
+          id="tls"
+          checked={form.destination.tls}
+          onCheckedChange={(checked) => {
+            form.destination.tls = checked;
+          }}
+          disabled
+        />
+        <Label for="tls">TLS</Label>
+      </div>
+      <div class="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
+        <span class="font-medium">Note:</span> Talk to the Sequin team to enable
+        TLS for Kafka destinations
+      </div>
       {#if errors.destination?.tls}
         <p class="text-destructive text-sm">{errors.destination.tls}</p>
       {/if}

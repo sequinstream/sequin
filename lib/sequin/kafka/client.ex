@@ -25,19 +25,31 @@ defmodule Sequin.Kafka.Client do
   @impl Sequin.Kafka
   def test_connection(%KafkaDestination{} = destination) do
     with :ok <- test_hosts_reachability(destination),
-         {:ok, _conn} <- ConnectionCache.connection(destination),
          {:ok, metadata} <- get_metadata(destination) do
       validate_topic_exists(metadata, destination.topic)
     else
       {:error, reason} ->
         {:error, to_sequin_error(reason)}
     end
+  rescue
+    error ->
+      {:error, Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(error)}")}
+  catch
+    :exit, reason ->
+      {:error, Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(reason)}")}
+
+    {:failed_to_connect, _} ->
+      {:error, Sequin.Error.validation(summary: "Failed to connect to kafka on `hosts`")}
+
+    error ->
+      {:error, Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(error)}")}
   end
 
   @impl Sequin.Kafka
   def get_metadata(%KafkaDestination{} = destination) do
-    :brod.get_metadata(
-      KafkaDestination.hosts(destination),
+    destination
+    |> KafkaDestination.hosts()
+    |> :brod.get_metadata(
       [destination.topic],
       KafkaDestination.to_brod_config(destination)
     )
@@ -47,6 +59,9 @@ defmodule Sequin.Kafka.Client do
     case error do
       :leader_not_available ->
         Sequin.Error.service(service: :kafka, message: "Leader not available")
+
+      error when is_exception(error) ->
+        Sequin.Error.service(service: :kafka, message: "Kafka error: #{Exception.message(error)}")
 
       error ->
         Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(error)}")
@@ -60,7 +75,11 @@ defmodule Sequin.Kafka.Client do
     end
   end
 
-  defp test_hosts_reachability(destination) do
+  defp test_hosts_reachability(%KafkaDestination{tls: true}) do
+    {:error, Sequin.Error.validation(summary: "Talk to the Sequin team to enable TLS for Kafka destinations")}
+  end
+
+  defp test_hosts_reachability(%KafkaDestination{} = destination) do
     results =
       destination
       |> KafkaDestination.hosts()

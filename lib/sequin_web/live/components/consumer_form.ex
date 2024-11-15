@@ -18,6 +18,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
+  alias Sequin.Kafka
   alias Sequin.Name
   alias Sequin.Postgres
   alias Sequin.Posthog
@@ -206,6 +207,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :kafka ->
+        case test_kafka_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -244,6 +251,27 @@ defmodule SequinWeb.Components.ConsumerForm do
       destination = Ecto.Changeset.apply_changes(destination_changeset)
 
       case Redis.test_connection(destination) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(destination_changeset)}
+    end
+  end
+
+  defp test_kafka_connection(socket) do
+    destination_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:destination)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %KafkaDestination{} = destination -> KafkaDestination.changeset(destination, %{})
+      end
+
+    if destination_changeset.valid? do
+      destination = Ecto.Changeset.apply_changes(destination_changeset)
+
+      case Kafka.test_connection(destination) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end

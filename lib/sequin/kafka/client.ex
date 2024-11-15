@@ -4,6 +4,7 @@ defmodule Sequin.Kafka.Client do
 
   alias Sequin.Consumers.KafkaDestination
   alias Sequin.Kafka.ConnectionCache
+  alias Sequin.NetworkUtils
 
   @impl Sequin.Kafka
   def publish(%KafkaDestination{} = destination, message) do
@@ -23,7 +24,8 @@ defmodule Sequin.Kafka.Client do
 
   @impl Sequin.Kafka
   def test_connection(%KafkaDestination{} = destination) do
-    with {:ok, _conn} <- ConnectionCache.connection(destination),
+    with :ok <- test_hosts_reachability(destination),
+         {:ok, _conn} <- ConnectionCache.connection(destination),
          {:ok, metadata} <- get_metadata(destination) do
       validate_topic_exists(metadata, destination.topic)
     else
@@ -55,6 +57,21 @@ defmodule Sequin.Kafka.Client do
     case Enum.find(topics, fn t -> t.name == topic_name end) do
       %{error_code: :no_error} -> :ok
       _ -> {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{topic_name}' does not exist")}
+    end
+  end
+
+  defp test_hosts_reachability(destination) do
+    results =
+      destination
+      |> KafkaDestination.hosts()
+      |> Enum.map(fn {hostname, port} ->
+        NetworkUtils.test_tcp_reachability(hostname, port, destination.tls, :timer.seconds(10))
+      end)
+
+    if Enum.all?(results, &(&1 == :ok)) do
+      :ok
+    else
+      {:error, Sequin.Error.validation(summary: "Unable to reach Kafka hosts")}
     end
   end
 end

@@ -20,8 +20,41 @@
   export let errors: any = {};
   let showPassword = false;
 
+  // Internal state for SASL credentials
+  let internalUsername = form.destination.username || "";
+  let internalPassword = form.destination.password || "";
+
+  // Local state for SASL mechanism
+  let saslOptions = [
+    { value: null, label: "None" },
+    { value: "plain", label: "Plain" },
+    { value: "scram_sha_256", label: "SCRAM-SHA-256" },
+    { value: "scram_sha_512", label: "SCRAM-SHA-512" },
+  ];
+
   function togglePasswordVisibility() {
     showPassword = !showPassword;
+  }
+
+  // Reactive statement to handle SASL credentials
+  $: if (form.destination.sasl_mechanism !== null) {
+    form.destination.username = internalUsername;
+    form.destination.password = internalPassword;
+  } else {
+    form.destination.username = null;
+    form.destination.password = null;
+  }
+
+  // Function to prepare and emit form data
+  function handleSubmit() {
+    const payload = {
+      ...form.destination,
+      // Only include username and password if SASL is enabled
+      ...(form.destination.sasl_mechanism !== "none" && {
+        username: internalUsername,
+        password: internalPassword,
+      }),
+    };
   }
 </script>
 
@@ -57,13 +90,37 @@
       {/if}
     </div>
 
+    <!-- SASL Mechanism Dropdown -->
+    <div class="space-y-2">
+      <Label for="sasl_mechanism">SASL Mechanism</Label>
+      <select
+        id="sasl_mechanism"
+        bind:value={form.destination.sasl_mechanism}
+        class="block w-full border border-gray-300 rounded-md p-2"
+      >
+        {#each saslOptions as option}
+          <option value={option.value}>{option.label}</option>
+        {/each}
+      </select>
+      {#if errors.destination?.sasl_mechanism}
+        <p class="text-destructive text-sm">
+          {errors.destination.sasl_mechanism}
+        </p>
+      {/if}
+    </div>
+
     <div class="space-y-2">
       <Label for="username">Username</Label>
-      <Input
-        id="username"
-        bind:value={form.destination.username}
-        placeholder="(optional)"
-      />
+      <div hidden={form.destination.sasl_mechanism === null}>
+        <Input
+          id="username"
+          bind:value={internalUsername}
+          placeholder="Username"
+        />
+      </div>
+      <div hidden={form.destination.sasl_mechanism !== null}>
+        <Input id="username" placeholder="Username requires SASL" disabled />
+      </div>
       {#if errors.destination?.username}
         <p class="text-destructive text-sm">{errors.destination.username}</p>
       {/if}
@@ -72,12 +129,22 @@
     <div class="space-y-2">
       <Label for="password">Password</Label>
       <div class="relative">
-        <Input
-          id="password"
-          type={showPassword ? "text" : "password"}
-          bind:value={form.destination.password}
-          placeholder="(optional)"
-        />
+        <div hidden={form.destination.sasl_mechanism === null}>
+          <Input
+            id="password"
+            type={showPassword ? "text" : "password"}
+            bind:value={internalPassword}
+            placeholder="Password"
+          />
+        </div>
+        <div hidden={form.destination.sasl_mechanism !== null}>
+          <Input
+            id="password"
+            type="password"
+            placeholder="Password requires SASL"
+            disabled
+          />
+        </div>
         <button
           type="button"
           class="absolute inset-y-0 right-0 flex items-center pr-3"
@@ -95,72 +162,22 @@
       {/if}
     </div>
 
+    <!-- TLS Switch -->
     <div class="space-y-2">
-      <div class="flex items-center gap-2 hidden">
+      <div class="flex items-center gap-2">
         <Switch
           id="tls"
           checked={form.destination.tls}
           onCheckedChange={(checked) => {
             form.destination.tls = checked;
           }}
-          disabled
         />
         <Label for="tls">TLS</Label>
-      </div>
-      <div class="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
-        <span class="font-medium">Note:</span> Talk to the Sequin team to enable
-        TLS for Kafka destinations
       </div>
       {#if errors.destination?.tls}
         <p class="text-destructive text-sm">{errors.destination.tls}</p>
       {/if}
     </div>
-
-    {#if form.destination.tls}
-      <div class="space-y-4">
-        <div class="space-y-2">
-          <Label for="ssl_cert_file">SSL Certificate File</Label>
-          <Input
-            id="ssl_cert_file"
-            bind:value={form.destination.ssl_cert_file}
-            placeholder="/path/to/cert.pem"
-          />
-          {#if errors.destination?.ssl_cert_file}
-            <p class="text-destructive text-sm">
-              {errors.destination.ssl_cert_file}
-            </p>
-          {/if}
-        </div>
-
-        <div class="space-y-2">
-          <Label for="ssl_key_file">SSL Key File</Label>
-          <Input
-            id="ssl_key_file"
-            bind:value={form.destination.ssl_key_file}
-            placeholder="/path/to/key.pem"
-          />
-          {#if errors.destination?.ssl_key_file}
-            <p class="text-destructive text-sm">
-              {errors.destination.ssl_key_file}
-            </p>
-          {/if}
-        </div>
-
-        <div class="space-y-2">
-          <Label for="ssl_ca_cert_file">SSL CA Certificate File</Label>
-          <Input
-            id="ssl_ca_cert_file"
-            bind:value={form.destination.ssl_ca_cert_file}
-            placeholder="/path/to/ca.pem"
-          />
-          {#if errors.destination?.ssl_ca_cert_file}
-            <p class="text-destructive text-sm">
-              {errors.destination.ssl_ca_cert_file}
-            </p>
-          {/if}
-        </div>
-      </div>
-    {/if}
 
     <div class="space-y-2">
       <Label for="batch-size">Batch size</Label>
@@ -198,8 +215,8 @@
               />
               <p class="text-sm text-muted-foreground">
                 Sets the maximum number of messages that can be in-flight to
-                Redis at any time. This helps control the flow of messages and
-                prevents overwhelming Redis.
+                Kafka at any time. This helps control the flow of messages and
+                prevents overwhelming Kafka.
               </p>
               {#if errors.max_ack_pending}
                 <p class="text-destructive text-sm">{errors.max_ack_pending}</p>

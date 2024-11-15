@@ -77,9 +77,7 @@ export type KafkaConsumer = BaseConsumer & {
     password: string;
     tls: boolean;
     topic: string;
-    ssl_cert_file: string;
-    ssl_key_file: string;
-    ssl_ca_cert_file: string;
+    sasl_mechanism: null | "plain" | "scram_sha_256" | "scram_sha_512";
   };
 };
 

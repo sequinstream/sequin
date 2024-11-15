@@ -15,10 +15,7 @@ defmodule Sequin.Consumers.KafkaDestination do
     field :password, Sequin.Encrypted.Field
     field :tls, :boolean, default: false
     field :topic, :string
-
-    field :ssl_cert_file, :string
-    field :ssl_key_file, :string
-    field :ssl_ca_cert_file, :string
+    field :sasl_mechanism, Ecto.Enum, values: [:plain, :scram_sha_256, :scram_sha_512]
   end
 
   def changeset(struct, params) do
@@ -29,15 +26,12 @@ defmodule Sequin.Consumers.KafkaDestination do
       :password,
       :tls,
       :topic,
-      :ssl_cert_file,
-      :ssl_key_file,
-      :ssl_ca_cert_file
+      :sasl_mechanism
     ])
     |> validate_required([:hosts, :topic, :tls])
-    |> validate_inclusion(:tls, [false], message: "Talk to the Sequin team to enable TLS for Kafka destinations")
     |> validate_length(:topic, max: 255)
     |> validate_hosts()
-    |> validate_ssl_files()
+    |> validate_sasl_credentials()
   end
 
   defp validate_hosts(changeset) do
@@ -70,29 +64,20 @@ defmodule Sequin.Consumers.KafkaDestination do
     end
   end
 
-  defp validate_ssl_files(changeset) do
-    if get_field(changeset, :tls) do
-      changeset
-      |> validate_required([:ssl_cert_file, :ssl_key_file, :ssl_ca_cert_file])
-      |> validate_ssl_file_exists(:ssl_cert_file)
-      |> validate_ssl_file_exists(:ssl_key_file)
-      |> validate_ssl_file_exists(:ssl_ca_cert_file)
-    else
-      changeset
-    end
-  end
+  defp validate_sasl_credentials(changeset) do
+    sasl_mechanism = get_field(changeset, :sasl_mechanism)
+    username = get_field(changeset, :username)
+    password = get_field(changeset, :password)
 
-  defp validate_ssl_file_exists(changeset, field) do
-    case get_field(changeset, field) do
-      nil ->
+    cond do
+      sasl_mechanism ->
+        validate_required(changeset, [:username, :password], message: "is required when SASL is enabled")
+
+      username || password ->
+        add_error(changeset, :sasl_mechanism, "must be set when SASL credentials are provided")
+
+      true ->
         changeset
-
-      path ->
-        if File.exists?(path) do
-          changeset
-        else
-          add_error(changeset, field, "file does not exist")
-        end
     end
   end
 
@@ -143,24 +128,15 @@ defmodule Sequin.Consumers.KafkaDestination do
   end
 
   # Add SASL authentication if username/password are configured
-  defp maybe_add_sasl(config, %{username: username, password: password})
-       when not is_nil(username) or not is_nil(password) do
-    Keyword.put(config, :sasl, {:plain, username || "", password || ""})
+  defp maybe_add_sasl(config, %{sasl_mechanism: mechanism} = destination) when not is_nil(mechanism) do
+    Keyword.put(config, :sasl, {mechanism, destination.username, destination.password})
   end
 
   defp maybe_add_sasl(config, _), do: config
 
   # Add SSL configuration if TLS is enabled
-  defp maybe_add_ssl(config, %{tls: true} = destination) do
-    ssl_opts = [
-      certfile: destination.ssl_cert_file,
-      keyfile: destination.ssl_key_file,
-      cacertfile: destination.ssl_ca_cert_file
-    ]
-
-    config
-    |> Keyword.put(:ssl, true)
-    |> Keyword.put(:ssl_opts, ssl_opts)
+  defp maybe_add_ssl(config, %{tls: true}) do
+    Keyword.put(config, :ssl, true)
   end
 
   defp maybe_add_ssl(config, _), do: config

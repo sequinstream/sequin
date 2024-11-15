@@ -53,6 +53,46 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
 
       assert KafkaDestination.kafka_url(destination) == "kafka://localhost:9092,remote:9093,other:9094"
     end
+
+    test "generates URL with SASL PLAIN authentication" do
+      destination = %KafkaDestination{
+        hosts: "localhost:9092",
+        username: "user1",
+        password: "secret",
+        topic: "test-topic",
+        sasl_mechanism: :plain,
+        tls: false
+      }
+
+      assert KafkaDestination.kafka_url(destination) == "kafka://user1:******@localhost:9092"
+      assert KafkaDestination.kafka_url(destination, obscure_password: false) == "kafka://user1:secret@localhost:9092"
+    end
+
+    test "generates URL with SASL SCRAM authentication" do
+      destination = %KafkaDestination{
+        hosts: "localhost:9092",
+        username: "user1",
+        password: "secret",
+        topic: "test-topic",
+        sasl_mechanism: :scram_sha_256,
+        tls: false
+      }
+
+      assert KafkaDestination.kafka_url(destination) == "kafka://user1:******@localhost:9092"
+    end
+
+    test "generates URL with TLS and SASL" do
+      destination = %KafkaDestination{
+        hosts: "localhost:9092",
+        username: "user1",
+        password: "secret",
+        topic: "test-topic",
+        sasl_mechanism: :plain,
+        tls: true
+      }
+
+      assert KafkaDestination.kafka_url(destination) == "kafka+ssl://user1:******@localhost:9092"
+    end
   end
 
   describe "changeset/2" do
@@ -61,6 +101,47 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
       refute changeset.valid?
       assert "can't be blank" in errors_on(changeset).hosts
       assert "can't be blank" in errors_on(changeset).topic
+    end
+
+    test "validates SASL credentials when mechanism is set" do
+      for mechanism <- [:plain, :scram_sha_256, :scram_sha_512] do
+        # Test missing credentials
+        changeset =
+          KafkaDestination.changeset(%KafkaDestination{}, %{
+            hosts: "localhost:9092",
+            topic: "test-topic",
+            tls: false,
+            sasl_mechanism: mechanism
+          })
+
+        refute changeset.valid?
+        assert "is required when SASL is enabled" in errors_on(changeset).username
+        assert "is required when SASL is enabled" in errors_on(changeset).password
+
+        # Test with valid credentials
+        changeset =
+          KafkaDestination.changeset(%KafkaDestination{}, %{
+            hosts: "localhost:9092",
+            topic: "test-topic",
+            tls: false,
+            sasl_mechanism: mechanism,
+            username: "user1",
+            password: "secret"
+          })
+
+        assert changeset.valid?
+      end
+    end
+
+    test "allows missing credentials when SASL is not configured" do
+      changeset =
+        KafkaDestination.changeset(%KafkaDestination{}, %{
+          hosts: "localhost:9092",
+          topic: "test-topic",
+          tls: false
+        })
+
+      assert changeset.valid?
     end
 
     test "validates hosts format" do

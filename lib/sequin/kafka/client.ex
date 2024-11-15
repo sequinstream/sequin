@@ -6,19 +6,15 @@ defmodule Sequin.Kafka.Client do
   alias Sequin.Kafka.ConnectionCache
   alias Sequin.NetworkUtils
 
+  require Logger
+
   @impl Sequin.Kafka
   def publish(%KafkaDestination{} = destination, message) do
-    with {:ok, connection} <- ConnectionCache.connection(destination) do
-      case :brod.produce_sync(
-             connection,
-             destination.topic,
-             0,
-             "",
-             Jason.encode!(message)
-           ) do
-        :ok -> :ok
-        {:error, reason} -> {:error, to_sequin_error(reason)}
-      end
+    with {:ok, connection} <- ConnectionCache.connection(destination),
+         :ok <- :brod.produce_sync(connection, destination.topic, 0, "", Jason.encode!(message)) do
+      :ok
+    else
+      {:error, reason} -> {:error, to_sequin_error(reason)}
     end
   end
 
@@ -38,7 +34,11 @@ defmodule Sequin.Kafka.Client do
     :exit, reason ->
       {:error, Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(reason)}")}
 
-    {:failed_to_connect, _} ->
+    {:failed_to_connect, [{{_host, _port}, {{:sasl_auth_error, message}, _}}]} ->
+      {:error, Sequin.Error.validation(summary: "SASL authentication error: #{message}")}
+
+    {:failed_to_connect, error} ->
+      Logger.warning("Failed to connect to kafka on `hosts`: #{inspect(error)}")
       {:error, Sequin.Error.validation(summary: "Failed to connect to kafka on `hosts`")}
 
     error ->
@@ -47,12 +47,11 @@ defmodule Sequin.Kafka.Client do
 
   @impl Sequin.Kafka
   def get_metadata(%KafkaDestination{} = destination) do
-    destination
-    |> KafkaDestination.hosts()
-    |> :brod.get_metadata(
-      [destination.topic],
-      KafkaDestination.to_brod_config(destination)
-    )
+    hosts = KafkaDestination.hosts(destination)
+    topics = [destination.topic]
+    config = KafkaDestination.to_brod_config(destination)
+
+    :brod.get_metadata(hosts, topics, config)
   end
 
   defp to_sequin_error(error) do
@@ -75,16 +74,13 @@ defmodule Sequin.Kafka.Client do
     end
   end
 
-  defp test_hosts_reachability(%KafkaDestination{tls: true}) do
-    {:error, Sequin.Error.validation(summary: "Talk to the Sequin team to enable TLS for Kafka destinations")}
-  end
-
+  # TODO: Add ipv6 support
   defp test_hosts_reachability(%KafkaDestination{} = destination) do
     results =
       destination
       |> KafkaDestination.hosts()
       |> Enum.map(fn {hostname, port} ->
-        NetworkUtils.test_tcp_reachability(hostname, port, destination.tls, :timer.seconds(10))
+        NetworkUtils.test_tcp_reachability(hostname, port, false, :timer.seconds(10))
       end)
 
     if Enum.all?(results, &(&1 == :ok)) do

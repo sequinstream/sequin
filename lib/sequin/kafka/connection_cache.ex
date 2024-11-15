@@ -9,7 +9,7 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   The cache takes ownership of the Kafka connections and is responsible for
   closing them when they are invalidated (or when the cache is stopped). Thus,
-  callers should not call `GenServer.stop/1` on these connections.
+  callers should not call `:brod.stop_client/1` on these connections.
 
   Cached connections are invalidated and recreated when their Kafka destination's
   connection options change.
@@ -104,7 +104,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     @spec new([opt]) :: t()
     def new(opts) do
       start_fn = Keyword.get(opts, :start_fn, &default_start/1)
-      stop_fn = Keyword.get(opts, :stop_fn, &GenServer.stop/1)
+      stop_fn = Keyword.get(opts, :stop_fn, &:brod.stop_client/1)
 
       %__MODULE__{
         start_fn: start_fn,

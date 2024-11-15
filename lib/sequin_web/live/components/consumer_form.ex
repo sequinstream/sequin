@@ -361,6 +361,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "username" => destination["username"],
       "password" => destination["password"],
       "topic" => destination["topic"],
+      "tls" => destination["tls"],
       "ssl_cert_file" => destination["ssl_cert_file"],
       "ssl_key_file" => destination["ssl_key_file"],
       "ssl_ca_cert_file" => destination["ssl_ca_cert_file"]
@@ -494,6 +495,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       "username" => destination.username,
       "password" => destination.password,
       "topic" => destination.topic,
+      "tls" => destination.tls,
       "ssl_cert_file" => destination.ssl_cert_file,
       "ssl_key_file" => destination.ssl_key_file,
       "ssl_ca_cert_file" => destination.ssl_ca_cert_file

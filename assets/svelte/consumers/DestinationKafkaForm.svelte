@@ -116,6 +116,8 @@
           id="username"
           bind:value={internalUsername}
           placeholder="Username"
+          data-1p-ignore
+          autocomplete="off"
         />
       </div>
       <div hidden={form.destination.sasl_mechanism !== null}>
@@ -135,6 +137,8 @@
             type={showPassword ? "text" : "password"}
             bind:value={internalPassword}
             placeholder="Password"
+            data-1p-ignore
+            autocomplete="off"
           />
         </div>
         <div hidden={form.destination.sasl_mechanism !== null}>

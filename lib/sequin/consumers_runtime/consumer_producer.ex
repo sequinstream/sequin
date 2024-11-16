@@ -9,9 +9,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.Consumers
   alias Sequin.Time
 
+  require Logger
+
   @impl GenStage
   def init(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
+    Logger.info("Initializing consumer producer", consumer_id: consumer.id)
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Sandbox.allow(Sequin.Repo, test_pid, self())

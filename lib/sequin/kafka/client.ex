@@ -80,7 +80,7 @@ defmodule Sequin.Kafka.Client do
       destination
       |> KafkaDestination.hosts()
       |> Enum.map(fn {hostname, port} ->
-        NetworkUtils.test_tcp_reachability(hostname, port, false, :timer.seconds(10))
+        NetworkUtils.test_tcp_reachability(hostname, port, false, :timer.seconds(5))
       end)
 
     if Enum.all?(results, &(&1 == :ok)) do

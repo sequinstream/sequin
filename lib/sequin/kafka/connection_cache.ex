@@ -78,7 +78,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     end
 
     defp options_hash(destination) do
-      :erlang.phash2(KafkaDestination.kafka_url(destination))
+      :erlang.phash2({KafkaDestination.hosts(destination), KafkaDestination.to_brod_config(destination)})
     end
   end
 

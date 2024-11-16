@@ -10,6 +10,8 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.ConsumersRuntime.SqsPipeline
 
+  require Logger
+
   def start_link(opts) do
     name = Keyword.get(opts, :name, __MODULE__)
     Supervisor.start_link(__MODULE__, opts, name: name)
@@ -23,6 +25,8 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   def start_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
 
   def start_for_destination_consumer(supervisor, %DestinationConsumer{} = consumer, opts) do
+    Logger.info("Starting consumer", consumer_id: consumer.id)
+
     default_opts = [consumer: consumer]
     consumer_features = Consumers.consumer_features(consumer)
 
@@ -51,6 +55,8 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   def stop_for_destination_consumer(supervisor, id) do
+    Logger.info("Stopping consumer", consumer_id: id)
+
     Enum.each(
       [HttpPushPipeline, SqsPipeline, RedisPipeline, KafkaPipeline],
       &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id))
@@ -60,6 +66,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   def restart_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
+    Logger.info("Restarting consumer", consumer_id: consumer_or_id)
     stop_for_destination_consumer(supervisor, consumer_or_id)
     start_for_destination_consumer(supervisor, consumer_or_id)
   end

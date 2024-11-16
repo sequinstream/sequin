@@ -48,7 +48,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :ipv6, :boolean, default: false
     field :use_local_tunnel, :boolean, default: false
 
-    embeds_many :tables, PostgresDatabaseTable
+    embeds_many :tables, PostgresDatabaseTable, on_replace: :delete
 
     field :health, :map, virtual: true
 

@@ -68,11 +68,11 @@
     {
       "group": "How-to guides",
       "pages": [
-        "how-to/stream-to-webhook-endpoints",
-        "how-to/stream-to-sqs",
-        "how-to/stream-to-kafka",
-        "how-to/stream-to-redis",
-        "how-to/stream-to-sequin-stream",
+        "how-to/stream-postgres-to-a-webhook-endpoint",
+        "how-to/stream-postgres-to-sqs",
+        "how-to/stream-postgres-to-kafka",
+        "how-to/stream-postgres-to-redis",
+        "how-to/stream-postgres-to-sequin-stream",
         "how-to/create-audit-logs",
         "how-to/replicate-tables",
         "how-to/maintain-caches",

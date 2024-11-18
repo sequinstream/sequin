@@ -283,7 +283,7 @@
 
     {#if form.destination.httpEndpointId && selectedHttpEndpoint}
       <div class="space-y-2">
-        <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
+        <Label for="http-endpoint-path">HTTP Endpoint Path</Label>
         <div class="flex flex-row bg-white">
           <div
             class="text-sm rounded-l px-4 h-10 flex items-center justify-center bg-muted border border-input whitespace-nowrap"

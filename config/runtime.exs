@@ -1,5 +1,7 @@
 import Config
 
+require Logger
+
 self_hosted = Application.compile_env(:sequin, :self_hosted)
 
 get_env = fn key ->
@@ -8,6 +10,17 @@ get_env = fn key ->
   else
     System.fetch_env!(key)
   end
+end
+
+server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
+server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
+
+if System.get_env("PORT") do
+  Logger.warning("PORT environment variable is deprecated. Please use SERVER_PORT instead.")
+end
+
+if System.get_env("PHX_HOST") do
+  Logger.warning("PHX_HOST environment variable is deprecated. Please use SERVER_HOST instead.")
 end
 
 # config/runtime.exs is executed for all environments, including
@@ -72,9 +85,6 @@ if config_env() == :prod and self_hosted do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  host = System.get_env("PHX_HOST")
-  port = String.to_integer(System.get_env("PORT") || "7376")
-
   config :sequin, Sequin.Posthog,
     api_url: "https://us.i.posthog.com",
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -83,15 +93,15 @@ if config_env() == :prod and self_hosted do
 
   config :sequin, Sequin.Repo,
     ssl: System.get_env("PG_SSL") in ~w(true 1),
-    pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "100")),
+    pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "10")),
     url: database_url,
     socket_options: ecto_socket_opts
 
   config :sequin, SequinWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: server_host, port: server_port, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
+      port: server_port
     ],
     secret_key_base: secret_key_base
 
@@ -104,7 +114,7 @@ if config_env() == :prod and self_hosted do
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
 
   config :sequin,
-    api_base_url: "http://#{host || "localhost"}:#{port}",
+    api_base_url: "http://#{server_host}:#{server_port}",
     config_file_path: System.get_env("CONFIG_FILE_PATH"),
     config_file_yaml: System.get_env("CONFIG_FILE_YAML")
 end
@@ -118,9 +128,6 @@ if config_env() == :prod and not self_hosted do
       environment variable SECRET_KEY_BASE is missing.
       You can generate one by calling: mix phx.gen.secret
       """
-
-  host = System.get_env("PHX_HOST") || "console.sequinstream.com"
-  port = String.to_integer(System.get_env("PORT") || "7376")
 
   config :sentry,
     dsn: System.fetch_env!("SENTRY_DSN"),
@@ -144,10 +151,10 @@ if config_env() == :prod and not self_hosted do
     ]
 
   config :sequin, SequinWeb.Endpoint,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: "console.sequinstream.com", port: 443, scheme: "https"],
     http: [
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
-      port: port
+      port: server_port
     ],
     secret_key_base: secret_key_base
 

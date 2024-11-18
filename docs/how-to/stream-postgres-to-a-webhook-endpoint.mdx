@@ -4,7 +4,7 @@ sidebarTitle: "Stream to a webhook endpoint"
 description: "Receive Postgres changes as webhooks in real-time"
 ---
 
-This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to your webhook endpoints.
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to a webhook endpoint using Sequin.
 
 With Postgres data streaming to your application, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
 
@@ -51,7 +51,7 @@ Here's how to generate a secure token with `openssl`:
 openssl rand -base64 32
 ```
 
-### (Optional) Create a Change Capture Pipeline
+### (Optional) Enable retention for changes
 
 You can send either [changes or rows](/reference/messages) to your webhook endpoint.
 

@@ -1,0 +1,105 @@
+---
+title: 'Configuration reference'
+sidebarTitle: 'Configuration reference'
+description: 'Reference for Sequin configuration options'
+---
+
+## Environment variables
+
+The standard [Docker Compose file](https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.yaml) includes sane defaults for [getting started quickly](/running-sequin).
+
+You can configure Sequin by setting environment variables.
+
+<Info>
+  To see the file that loads and uses these environment variables, see [config/runtime.exs](https://github.com/sequinstream/sequin/blob/main/config/runtime.exs).
+</Info>
+
+
+### General configuration
+
+- `SERVER_PORT`: Server port number (default: 7376)
+  - This is the port that Sequin will listen on for incoming connections. It's the port for both the web console as well as the API.
+- `SERVER_HOST`: Host name for the server
+  - If you're hosting Sequin at a custom domain, you should set this to that domain.
+
+### Configuration file
+
+You can provide a YAML configuration file to Sequin. This configuration file will upsert databases, sinks, and other resources on boot.
+
+- `CONFIG_FILE_PATH`: Path to configuration file
+- `CONFIG_FILE_YAML`: YAML configuration content (base64 encoded)
+  - If it's easier, you can provide the YAML directly as an environment variable. The YAML file must be base64 encoded.
+
+### Postgres configuration
+
+- `PG_URL`: Complete Postgres connection URL (alternative to individual PG_* variables below)
+  - (e.g. `postgres://sequin:password@localhost:5432/sequin`)
+- `PG_PORT`: Postgres port number (default: 5432)
+- `PG_HOSTNAME`: Postgres host address
+- `PG_DATABASE`: Database name
+- `PG_USERNAME`: Database user
+- `PG_PASSWORD`: Database password
+- `PG_IPV6`: Enable IPv6 support (default: false)
+- `PG_SSL`: Enable SSL for Postgres connection (default: false)
+- `PG_POOL_SIZE`: Database connection pool size (default: 10)
+
+#### `PG_POOL_SIZE`
+
+The `PG_POOL_SIZE` variable controls the maximum number of concurrent connections that Sequin will maintain to Postgres. For higher throughput on larger Postgres instances, you should increase this value.
+
+### Redis configuration
+
+- `REDIS_URL`: Redis connection URL
+  - (e.g. `redis://localhost:6379`)
+- `REDIS_IPV6`: Enable IPv6 support (default: false)
+
+### Security configuration
+
+- `SECRET_KEY_BASE`: Base secret key for encryption
+- `VAULT_KEY`: Vault encryption key
+
+See [secret generation](#secret-generation) for how to generate these values.
+
+### Feature configuration
+
+- `FEATURE_ACCOUNT_SELF_SIGNUP`: Enable account self-signup (default: enabled)
+  - If disabled, users must be invited to the Sequin instance by an admin. Turn this setting off if you'll be hosting Sequin at a public URL.
+- `FEATURE_PROVISION_DEFAULT_USER`: Enable default user provisioning (default: enabled)
+  - By default, Sequin provisions a default user on startup if one doesn't exist. This is a convenience feature to get started quickly. If you're hosting Sequin at a public URL, you should consider either changing the password for this user or disabling this feature.
+- `SEQUIN_TELEMETRY_DISABLED`: Disable telemetry data collection (default: false)
+  - Sequin collects telemetry data by default. While we're early, this **greatly** helps us improve the product. To opt-out, set this to `true`.
+
+### Email configuration
+
+Email configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/579) if you'd like to see this feature.
+
+### OAuth configuration
+
+To use GitHub OAuth as a sign-in/sign-up method, provide the following environment variables:
+
+- `GITHUB_CLIENT_ID`: GitHub OAuth client ID
+- `GITHUB_CLIENT_SECRET`: GitHub OAuth client secret
+
+### Monitoring/stats configuration
+
+Monitoring/stats configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/580) if you'd like to see this feature.
+
+## Clustering
+
+At the moment, Sequin does not support clustering. That means you should run Sequin as a **single-node** instance. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/581) if you'd like high availability.
+
+## Deploying to production
+
+### Secret generation
+
+{/* DOCSTODO: We think its 64 bytes for SECRET_KEY_BASE and base64 encoded for VAULT_KEY */}
+
+For production environments, generate secure values for `SECRET_KEY_BASE` and `VAULT_KEY`:
+
+```bash
+# Generate SECRET_KEY_BASE
+openssl rand -base64 32
+
+# Generate VAULT_KEY
+openssl rand -base64 32
+```

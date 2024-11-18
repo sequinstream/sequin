@@ -1,0 +1,174 @@
+---
+title: "Webhook sink"
+sidebarTitle: "Webhook sink"
+description: "Reference for the Webhook sink"
+---
+
+The webhook sink sends messages to a webhook endpoint. This can be a webhook endpoint for one of your own services or for a third-party service.
+
+## Configuration
+
+- **HTTP endpoint**
+
+    The HTTP endpoint to send messages to.
+
+- **HTTP endpoint path**
+
+    The path to append to the base URL for this sink's requests.
+
+- **Request timeout**
+
+    The maximum duration allowed for the HTTP request to complete. If the request doesn't finish within this time, it will be considered failed and may be retried.
+
+    You should set this to a conservative value, given how long you estimate your webhook handler will take to process messages.
+
+    If your programming platform allows it, we recommend wrapping the webhook request handler in your application with a hard timeout limit below the "Request timeout" specified here. That way, if your handler is taking too long, it will be killed before Sequin retries the message.
+
+- **Batch size**
+
+    The maximum number of messages to include in a single HTTP request.
+
+    You should try to process the full batch atomically.
+
+    For upserting to a database or store, set this to the number of rows you want to upsert in a single transaction.
+
+    For side effects like sending an email, you should probably set this to `1`. Otherwise, you risk your handler partially processing a batch then crashing. Then, when Sequin retries the batch, your handler will re-process the beginning of the batch.
+
+- **Max ack pending (advanced)**
+
+    The maximum number of messages allowed in-flight (delivered but not yet acknowledged) for this sink. Note this includes failed messages that Sequin is backing off and will retry.
+
+    "Max ack pending" creates back pressure to avoid overloading your webhook endpoint.
+
+    If you're unsure, leave this set to the default value.
+
+## Request format
+
+The webhook sink sends HTTP POST requests with JSON bodies. The body contains an array of messages wrapped in a `data` field.
+
+The format of messages depends on whether you've configured the sink for change messages or row messages:
+
+### Change Messages
+
+```typescript
+{
+  data: Array<{
+    record: Record<string, any>;  // The row data
+    changes: Record<string, any> | null;  // Previous values for changed fields
+    action: "insert" | "update" | "delete" | "read";
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      commit_timestamp: string;  // ISO timestamp
+      consumer: {
+        id: string;
+        name: string;
+      };
+    };
+  }>;
+}
+```
+
+Example:
+```json
+{
+  "data": [
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "changes": {
+        "status": "pending"
+      },
+      "action": "update",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-03-20T15:30:00Z",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
+        }
+      }
+    }
+  ]
+}
+```
+
+### Row Messages
+
+```typescript
+{
+  data: Array<{
+    record: Record<string, any>;  // The row data
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      consumer: {
+        id: string;
+        name: string;
+      };
+    };
+  }>;
+}
+```
+
+Example:
+```json
+{
+  "data": [
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
+        }
+      }
+    }
+  ]
+}
+```
+
+## Response format
+
+Your webhook endpoint must return a `200 OK` response after successfully processing a batch of messages. Sequin will consider any other response code a failure, and will [mark the message for re-delivery](#retry-behavior).
+
+Note all messages in a batch are either acknowledged together or fail together. There is no way to send Sequin a response that partially acknowledges a batch.
+
+## Authentication
+
+For production, we recommend you use **encrypted headers** to authenticate requests. Sequin will include these header(s) in its requests to the endpoint. You can then verify that the requests are coming from Sequin.
+
+You can add encrypted headers to the HTTP endpoint.
+
+A simple strategy is to generate a secure token and have Sequin include it as an `Authorization` bearer token in its requests. To generate a secure token with `openssl`, run:
+
+```bash
+openssl rand -base64 32
+```
+
+## Retry behavior
+
+Sequin considers a message delivered if it:
+
+- Receives a `200 OK` response from the webhook endpoint.
+- Receives that response within the "Request timeout" specified for the sink.
+
+If Sequin is unable to deliver a message, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Debugging
+
+You can view the status of your webhook sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from your endpoint.

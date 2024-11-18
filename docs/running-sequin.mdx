@@ -1,0 +1,99 @@
+---
+title: 'Getting Started with Sequin'
+sidebarTitle: 'Running Sequin'
+description: 'Get Sequin running in a few minutes'
+---
+
+You can start running Sequin quickly with Docker Compose.
+
+## Prerequisites
+
+You'll need Docker and Docker Compose installed.
+
+## Quick start
+
+1. Create a directory for Sequin and download the Docker Compose file:
+```bash
+mkdir sequin && cd sequin
+wget https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.yaml
+docker compose up -d
+```
+
+Alternatively, clone the repository:
+
+```bash
+git clone git@github.com:sequinstream/sequin.git
+cd sequin/docker
+docker compose up -d
+```
+
+<Check>
+  That's it! Sequin is now running locally with default configurations.
+</Check>
+
+## Using your own database
+
+### Using existing Postgres
+
+Sequin uses a Postgres database for configuration and to assist with its change data capture process.
+
+If you have an existing Postgres database you want Sequin to use for config, modify your `docker-compose.yaml`:
+
+1. Remove the `postgres` service section
+2. Update the Sequin service configuration:
+
+```yaml
+services:
+  sequin:
+    environment:
+      - PG_PORT=<port>
+      - PG_HOSTNAME=<hostname>
+      - PG_DATABASE=<database>
+      - PG_USERNAME=<username>
+      - PG_PASSWORD=<password>
+```
+
+### Using existing Redis
+
+Sequin uses Redis to assist with its change data capture process.
+
+If you have an existing Redis instance:
+
+1. Remove the `redis` service section
+2. Update the Sequin service configuration:
+
+```yaml
+services:
+  sequin:
+    environment:
+      - REDIS_URL=<url>
+```
+
+## Adding to an existing project
+
+To add Sequin to an existing project's Docker Compose file, add a `sequin` service:
+
+```yaml
+services:
+  ...
+  sequin:
+    image: sequin/sequin:latest
+    ports:
+      - "7376:7376"
+    environment:
+      - PG_PORT=<port>
+      - PG_HOSTNAME=postgres
+      - PG_DATABASE=sequin
+      - PG_USERNAME=postgres
+      - PG_PASSWORD=postgres
+      - REDIS_URL=<url>
+      - SECRET_KEY_BASE=wDPLYus0pvD6qJhKJICO4dauYPXfO/Yl782Zjtpew5qRBDp7CZvbWtQmY0eB13If
+      - VAULT_KEY=2Sig69bIpuSm2kv0VQfDekET2qy8qUZGI8v3/h3ASiY=
+    depends_on:
+      - postgres
+      - redis
+```
+
+## Preparing for production
+
+For more configuration options and steps for deploying to production, see the [Configuration Reference](/reference/configuration).

@@ -1,0 +1,209 @@
+---
+title: 'Messages'
+sidebarTitle: 'Messages'
+description: 'Reference for Sequin messages'
+---
+
+## Message shapes
+
+Sequin converts Postgres changes and rows into JSON messages that are delivered to your sinks.
+
+When you setup a sink, you can choose whether the sink should receive [change messages](#change-messages) or [row messages](#row-messages).
+
+### Change messages
+
+A change message has this shape:
+
+```js
+{
+  record: {
+    [key: string]: any;  // The row data
+  };
+  changes: null | {
+    [key: string]: any;  // Previous values for changed fields (updates only)
+  };
+  action: "insert" | "update" | "delete" | "read";
+  metadata: {
+    table_schema: string;
+    table_name: string;
+    commit_timestamp: string;  // ISO timestamp
+    sink: {
+      id: string;
+      name: string;
+    };
+  };
+}
+```
+
+A `read` operation occurs during [backfills](#backfills) when Sequin reads existing rows from your table. Unlike `insert`, `update`, or `delete` operations which happen in real-time, `read` operations represent historical data being loaded into your sink.
+
+<AccordionGroup>
+  <Accordion title="Insert Example" defaultOpen>
+    ```json
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "product": "Wireless Headphones",
+        "quantity": 1,
+        "price": 199.99,
+        "status": "pending",
+        "created_at": "2024-10-28T21:37:53",
+        "updated_at": "2024-10-28T21:37:53"
+      },
+      "changes": null,
+      "action": "insert",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-10-28T21:37:53Z",
+        "sink": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_kafka"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Update Example">
+    ```json
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "product": "Wireless Headphones",
+        "quantity": 1,
+        "price": 199.99,
+        "status": "shipped",
+        "created_at": "2024-10-28T21:37:53",
+        "updated_at": "2024-10-28T21:39:21"
+      },
+      "changes": {
+        "status": "pending",
+        "updated_at": "2024-10-28T21:37:53"
+      },
+      "action": "update",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-10-28T21:39:21Z",
+        "sink": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_kafka"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Delete Example">
+    ```json
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "product": "Wireless Headphones",
+        "quantity": 1,
+        "price": 199.99,
+        "status": "shipped",
+        "created_at": "2024-10-28T21:37:53",
+        "updated_at": "2024-10-28T21:39:21"
+      },
+      "changes": null,
+      "action": "delete",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-10-28T21:40:00Z",
+        "sink": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_kafka"
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Read Example (Backfill)">
+    ```json
+    {
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "product": "Wireless Headphones",
+        "quantity": 1,
+        "price": 199.99,
+        "status": "shipped",
+        "created_at": "2024-10-28T21:37:53",
+        "updated_at": "2024-10-28T21:39:21"
+      },
+      "changes": null,
+      "action": "read",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-10-28T21:39:21Z",
+        "sink": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_kafka"
+        }
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+For update operations, `record` contains the new values and `changes` contains the previous values of only the fields that changed. For all other operations, `changes` is null.
+
+### Row messages
+
+A row message has this shape:
+
+```js
+{
+  record: {
+    [key: string]: any;
+  };
+  metadata: {
+    table_schema: string;
+    table_name: string;
+    sink: {
+      id: string;
+      name: string;
+    };
+  };
+}
+```
+
+For example:
+
+```json
+{
+  "record": {
+    "id": 1,
+    "name": "Paul Atreides",
+    "title": "Duke of Arrakis",
+    "spice_allocation": 1000,
+    "is_kwisatz_haderach": true
+  },
+  "metadata": {
+    "table_schema": "public", 
+    "table_name": "house_atreides_members",
+    "sink": {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "dune_characters_kafka"
+    }
+  }
+}
+```
+
+<Info>
+  At the moment, row messages only support `insert` and `update` operations. Soon, we'll support `delete` operations by adding a `deleted` boolean column to the message.
+</Info>
+
+### Which message shape should you use?
+
+Change messages are the best fit for most use cases. They contain more information about discrete changes to a row and include `delete` operations.
+
+If you only need the latest version of a row, and either don't need deletes or soft-delete rows, consider using row messages. The nice part about row messages is that every message is the same shape, whether it's an insert, update, or backfill ("read") message.

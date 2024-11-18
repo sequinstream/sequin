@@ -72,21 +72,21 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
 
 <Steps>
   <Step title="Specify visibility timeout">
-    Under "Delivery configuration", choose a conservative value for "Visibility timeout". This is how long a message will be invisible to other workers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged.
+    Under "Delivery configuration", choose a conservative value for "Visibility timeout". This is how long a message will be invisible to other consumers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged.
 
-    The right value depends on how long you expect your worker to take to process a batch of messages.
+    The right value depends on how long you expect your consumer to take to process a batch of messages.
   </Step>
 
   <Step title="Specify max ack pending">
-    Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by a worker) at one time.
+    Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by your consumer group) at one time.
 
-    This setting helps prevent your worker from getting overloaded with messages. The right value depends on your worker's processing capacity.
+    This setting helps prevent your consumer group from getting overloaded with messages. The right value depends on your consumer group's processing capacity.
   </Step>
 
   <Step title="Specify max waiting">
-    Under "Max waiting" you can specify that maximum number of workers that can be waiting to receive messages at one time.
+    Under "Max waiting" you can specify that maximum number of consumers that can be waiting to receive messages at one time.
 
-    This setting helps manage resource utilization and prevent excessive polling. The right value depends on how many parallel workers you expect to have.
+    This setting helps manage resource utilization and prevent excessive polling. The right value depends on how many parallel consumers you expect to have in your consumer group.
   </Step>
 
   <Step title="Create the sink">

@@ -32,9 +32,9 @@ Sequin converts Postgres changes and rows into JSON and sends them to your HTTP 
 
 You'll need to create an HTTP endpoint on your server that Sequin can send data to. You can always start by creating a simple request handler, and then update it to process payloads after you get things working end-to-end.
 
-To see the shape of the webhook payloads that Sequin sends, see the [webhook sink reference](/reference/sinks/webhooks#payloads).
+To see the shape of the webhook payloads that Sequin sends, see the [webhook sink reference](/reference/sinks/webhooks#request-format).
 
-Your webhook endpoint must return a `200 OK` after successfully processing a batch of messages. Sequin will consider any other response code a failure, and will [mark the message for re-delivery](reference/sinks/webhooks#delivery-configuration).
+Your webhook endpoint must return a `200 OK` after successfully processing a batch of messages. Sequin will consider any other response code a failure, and will [mark the message for re-delivery](/reference/sinks/webhooks#retry-behavior).
 
 <Tip>
   If you're using Sequin Cloud and developing locally, you can use the Sequin CLI's [`tunnel` command](/reference/cli/overview#tunnel) to connect Sequin's servers to a local HTTP endpoint. So, no need to deploy your application just yet!
@@ -107,7 +107,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   <Step title="Specify message grouping">
     Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
 
-    While your webhook endpoint is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/ordering-and-grouping) until your webhook endpoint acknowledges the first message. This is almost always the desired behavior.
+    While your webhook endpoint is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/sinks/webhooks#grouping-and-ordering) until your webhook endpoint acknowledges the first message. This is almost always the desired behavior.
   </Step>
 
 </Steps>
@@ -116,7 +116,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
 
 <Steps>
   <Step title="Specify request timeout">
-    Under "Delivery configuration", choose a conservative value for "Request timeout". The right value depends on how long you want to give your webhook endpoint to process a batch of messages. When the request timeout is reached, Sequin [will mark the message for re-delivery](reference/sinks/webhooks#delivery-configuration).
+    Under "Delivery configuration", choose a conservative value for "Request timeout". The right value depends on how long you want to give your webhook endpoint to process a batch of messages. When the request timeout is reached, Sequin [will mark the message for re-delivery](/reference/sinks/webhooks#retry-behavior).
 
     <Tip>
       If your programming platform allows it, we recommend wrapping the webhook request handler in your application with a hard timeout limit below the "Request timeout" specified here. That way, if your handler is taking too long, it will be killed before Sequin retries the message.
@@ -134,7 +134,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   </Step>
 
   <Step title="Specify advanced delivery configuration">
-    See the [webhook sink reference](/reference/sinks/webhooks#delivery-configuration) for more information on advanced delivery configuration options.
+    See the [webhook sink reference](/reference/sinks/webhooks#configuration) for more information on advanced delivery configuration options.
   </Step>
 
   <Step title="Select the HTTP endpoint you created">

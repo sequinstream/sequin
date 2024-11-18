@@ -62,7 +62,8 @@
           ],
           "icon": "gauge-max"
         },
-        "compare"
+        "compare",
+        "running-sequin"
       ]
     },
     {
@@ -73,6 +74,7 @@
         "how-to/stream-postgres-to-kafka",
         "how-to/stream-postgres-to-redis",
         "how-to/stream-postgres-to-sequin-stream",
+        "how-to/event-driven-workflows",
         "how-to/create-audit-logs",
         "how-to/replicate-tables",
         "how-to/maintain-caches",
@@ -82,7 +84,7 @@
     {
       "group": "Reference",
       "pages": [
-        "reference/running-sequin",
+        "reference/configuration",
         "reference/messages",
         "reference/ordering-and-grouping",
         "reference/filters",

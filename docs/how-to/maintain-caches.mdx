@@ -18,32 +18,31 @@ This approach works well when you need to:
 
 ## Prerequisites
 
-This guide assumes you have:
+If you're self-hosting Sequin, you'll need:
 
-1. [Already have Sequin installed](/quickstart/webhooks)
-2. [Have a database connected](/quickstart/connect-postgres)
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/how-to/connect-postgres)
 3. A caching system (Redis, Memcached, etc.) ready to receive updates
-4. A queue or stream that can receive messages (SQS, Kafka, Redis, etc.) or an HTTP endpoint that can receive webhooks
+4. A sink destination (like SQS, Kafka, Redis, or HTTP)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/how-to/connect-postgres)
+3. A caching system (Redis, Memcached, etc.) ready to receive updates
+4. A sink destination (like SQS, Kafka, Redis, or HTTP)
+
+<Note>
+  If using SQS, be sure to use a FIFO queue.
+</Note>
 
 ## Architecture overview
 
 Your cache maintenance pipeline will have these components:
 
-1. **Source table(s)** in Postgres that contain the data you want to cache
-2. **Destination sink** (SQS, Kafka, Redis, or webhooks) that delivers changes to your processing system
-3. **Cache update processor** that receives changes and updates your cache
-
-## Setup your destination queue or stream
-
-It will be important for your system to process messages in order.
-
-For Kafka, webhooks, and Sequin Stream sinks, you don't need to do anything special. During setup (below), you'll configure Sequin to write messages in order.
-
-For SQS, be sure to use a FIFO queue.
-
-For Redis, messages will be written to your Redis Stream in order. But there's risk you may have race conditions as you process them. See 
-
-DOCSTODO
+1. **Source table(s)**: The table(s) in Postgres that contain the data you want to cache
+2. **Destination sink**: The message queue or webhook endpoint that delivers changes to your processing system (e.g. SQS, Kafka, or HTTP endpoint)
+3. **Cache update processor**: An application or service you write that receives changes and updates your cache
 
 ## Create a sink
 
@@ -57,7 +56,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
   </Step>
 
   <Step title="Select the message type">
-    Select "changes" as the message type.
+    Leave the default "Changes" message type selected.
   </Step>
 
   <Step title="Leave message grouping default">
@@ -72,10 +71,6 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
     Backfill messages are [change messages](/reference/messages#change-messages) where the `action` is `read`.
   </Step>
 
-  <Step title="Specify batch size">
-    If both your sink and cache support batch operations, consider setting a batch size > `1`. Cache update operations are usually idempotent, so it's safe to process batches. A batch size of 100 is a good place to start.
-  </Step>
-
   <Step title="Configure sink-specific settings">
     Configure sink-specific settings and click "Create Sink".
   </Step>
@@ -85,7 +80,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
 Here's an example of how you might process changes to update a cache:
 
-```python
+```python processor.py
 def process_change(change):
     # Extract key information
     cache_key = f"{change.metadata.table_name}:{change.record['id']}"
@@ -104,13 +99,15 @@ def process_change(change):
         cache.delete(cache_key)
 ```
 
-### Consideration for Redis Streams
+### Sink-specific considerations
+
+#### Redis Streams
 
 If you're using Redis Streams, you'll need to be mindful of race conditions as you process messages.
 
-While Sequin will write messages pertaining to the same row to your stream in order, there's a risk that two separate workers could pull 
+While Sequin will write messages pertaining to the same row to your stream in order, there's a risk that two separate workers will process messages simultaneously for the same row.
 
-DOCSTODO: What's the recommendation? How can we give them an easiy `{commit_lsn, commit_seq}` to use?
+You can use the Redis stream entry ID for a message to determine the order of messages for a given row. See the [Redis sink reference](/reference/sinks/redis#ordering-messages) for more details.
 
 ## Verify your pipeline is working
 

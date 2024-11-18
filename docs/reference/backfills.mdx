@@ -1,0 +1,40 @@
+---
+title: 'Backfills'
+sidebarTitle: 'Backfills'
+description: 'Backfill a table to a sink'
+---
+
+A **backfill** is a process that streams current rows from a table to a sink.
+
+You can use a backfill to:
+
+- **Seed a sink**: Stream the current state of a table to a sink.
+- **Replay**: Re-process rows that have already been sent to a sink.
+
+## Creating a backfill
+
+During sink creation, you can optionally specify a backfill. Sequin will run the backfill first, then continue to stream any changes to the sink.
+
+After a sink is created, you can manually trigger a backfill on the sink's Overview page at any time.
+
+## Backfill messages
+
+If you're sending [changes](/reference/messages#change-messages) to a sink, Sequin will send a `read` message for each row in the table.
+
+If you're sending [rows](/reference/messages#row-messages) to a sink, the messages shape is the same for inserts, updates, and backfill messages.
+
+## Backfill configuration
+
+When creating a backfill, you can indicate whether the backfill should:
+
+- **Stream the whole table**.
+
+    Sequin will backfill all rows currently in the table to the sink.
+
+- **Stream starting at a specific point in the table**.
+
+    When you add a source table to Sequin, you specify a sort column, like `updated_at`. You can specify a value for this column to start the backfill at (e.g. `updated_at >= '2024-01-01'`). Sequin will backfill all rows from the specified point to the end of the table.
+
+{/* TODO: Add details about monitoring backfills */}
+
+{/* TODO: Add an explanation doc for how backfills work */}

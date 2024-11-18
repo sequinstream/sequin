@@ -4,7 +4,7 @@ sidebarTitle: "Stream to Sequin Stream"
 description: "Pull Postgres changes directly from Sequin with exactly-once processing"
 ---
 
-This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to Sequin Stream, Sequin's native HTTP pull interface.
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Sequin Stream using Sequin.
 
 With Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
 
@@ -19,7 +19,7 @@ This guide assumes you:
 
 ## Basic setup
 
-### (Optional) Create a Change Capture Pipeline
+### (Optional) Enable retention for changes
 
 You can send either [changes or rows](/reference/messages) to Sequin Stream.
 

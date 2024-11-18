@@ -4,7 +4,7 @@ sidebarTitle: "Stream to Kafka"
 description: "Receive Postgres changes in Kafka topics in real-time"
 ---
 
-This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to Kafka.
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Kafka using Sequin.
 
 With Postgres data streaming to Kafka, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
 
@@ -22,7 +22,7 @@ This guide assumes you:
 
 ### Prepare your Kafka cluster
 
-TODO.
+DOCTODO.
 
 ## Create Kafka sink
 
@@ -54,7 +54,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Kafka Sink".
   </Step>
 
   <Step title="Specify message grouping">
-    TODO: Do we let them specify a message key?
+    DOCTODO: Do we let them specify a message key?
 
     Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to [Kafka in order](reference/kafka#message-grouping).
   </Step>

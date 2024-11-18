@@ -6,7 +6,7 @@ description: "Pull Postgres changes directly from Sequin with exactly-once proce
 
 This guide shows you how to set up Postgres change data capture (CDC) and stream changes to a [Sequin Stream](/reference/sinks/sequin-stream).
 
-With Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
+With a Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
 
 By the end of this how-to, you'll have database changes available to pull via HTTP.
 
@@ -30,7 +30,7 @@ You can send either [changes or rows](/reference/messages) to a Sequin Stream.
 
 If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to your consumer.
 
-You can use a [Change Capture Pipeline](/reference/change-capture-pipelines) to persist changes to a table in your database. Then, you can sink _that_ table to a Sequin Stream. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any time.
+You can use a [Change Capture Pipeline](/reference/change-capture-pipelines) to persist changes to a table in your database. Then, you can stream _that_ table to a Sequin Stream. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any time.
 
 ## Create Sequin Stream sink
 
@@ -72,21 +72,21 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
 
 <Steps>
   <Step title="Specify visibility timeout">
-    Under "Delivery configuration", choose a conservative value for "Visibility timeout". This is how long a message will be invisible to other consumers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged.
+    Under "Delivery configuration", choose a conservative value for "Visibility timeout". This is how long a message will be invisible to other workers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged.
 
-    The right value depends on how long you expect your consumer to take to process a batch of messages.
+    The right value depends on how long you expect your worker to take to process a batch of messages.
   </Step>
 
   <Step title="Specify max ack pending">
-    Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by a consumer) at one time.
+    Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by a worker) at one time.
 
-    This setting helps prevent a consumer from getting overloaded with messages. The right value depends on your consumer's processing capacity.
+    This setting helps prevent your worker from getting overloaded with messages. The right value depends on your worker's processing capacity.
   </Step>
 
   <Step title="Specify max waiting">
-    Under "Max waiting" you can specify that maximum number of consumers that can be waiting to receive messages at one time.
+    Under "Max waiting" you can specify that maximum number of workers that can be waiting to receive messages at one time.
 
-    This setting helps manage resource utilization and prevent excessive polling. The right value depends on how many parallel consumers you expect to have.
+    This setting helps manage resource utilization and prevent excessive polling. The right value depends on how many parallel workers you expect to have.
   </Step>
 
   <Step title="Create the sink">

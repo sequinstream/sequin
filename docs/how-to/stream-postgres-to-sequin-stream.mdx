@@ -1,0 +1,116 @@
+---
+title: "How to stream Postgres to Sequin Stream"
+sidebarTitle: "Stream to Sequin Stream"
+description: "Pull Postgres changes directly from Sequin with exactly-once processing"
+---
+
+This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to Sequin Stream, Sequin's native HTTP pull interface.
+
+With Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
+
+By the end of this how-to, you'll have database changes available to pull via HTTP.
+
+## Prerequisites
+
+This guide assumes you:
+
+1. [Already have Sequin installed](/quickstart/webhooks)
+2. [Have a database connected](/quickstart/connect-postgres)
+
+## Basic setup
+
+### (Optional) Create a Change Capture Pipeline
+
+You can send either [changes or rows](/reference/messages) to Sequin Stream.
+
+If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to your consumer.
+
+You can use a [Change Capture Pipeline](/reference/change-capture-pipelines) to persist changes to a table in your database. Then, you can stream _that_ table to your consumer. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any time. This can be handy: for example, if you realize there's a bug in your message handling implementation, you can deploy the fix and re-process changes from the last few minutes or days.
+
+## Create Sequin Stream sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+    If you're not sure which to choose, start with **Changes**.
+  </Step>
+
+  <Step title="Specify filters">
+    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
+
+    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  </Step>
+
+  <Step title="Specify backfill">
+    You can optionally indicate if you want to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. Backfills are useful if you want to process historical data.
+
+    You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
+  </Step>
+</Steps>
+
+### Configure delivery
+
+<Steps>
+  <Step title="Specify visibility timeout">
+    Under "Delivery configuration", choose a conservative value for "Visibility timeout". This is how long a message will be invisible to other consumers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged.
+
+    The right value depends on how long you expect your consumer to take to process a batch of messages.
+  </Step>
+
+  <Step title="Specify batch size">
+    The right value for "Batch size" depends on your requirements.
+
+    The simple rule is that you should try to match the batch size of messages to the unit of work your consumer will do.
+
+    For example, for event-driven use cases like triggering side effects one-by-one, you'll probably want to set this to `1`. Otherwise, you risk your worker partially processing a batch then crashing. Then, when the batch becomes visible again, another worker will re-process the beginning of the batch.
+
+    Conversely, for replication use cases, like batch upserting to a database, you'll want to set this to an optimal value for that batch upsert operation.
+  </Step>
+</Steps>
+
+## Verify & test
+
+To verify that your sink is working:
+
+1. Make some changes in your source table.
+2. Verify that the count of messages for your sink increases in the Sequin web console.
+3. Test receiving messages using curl. Find the receive curl request on your sink's details page:
+
+```bash
+curl -X GET "https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/receive?batch_size=10" \
+  -H "Authorization: Bearer {{YOUR_TOKEN}}"
+```
+
+You should see a response containing your messages:
+
+```json
+{
+  "data": [
+    {
+      "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
+      "data": {
+        "record": {
+          "id": 1,
+          "name": "Example Record",
+          "created_at": "2024-03-20T15:30:00Z"
+        }
+      }
+    }
+  ]
+}
+```
+
+## Next steps
+
+Assuming you've followed the steps above for your local environment, "[How to deploy to production](/how-to/deploy-to-production)" will show you how to deploy your implementation to production.
+
+For more details on consuming messages from Sequin Stream, including examples of implementing consumers in different languages, see the [Sequin Stream reference](/consume/consume-api/overview).

@@ -1,70 +1,41 @@
 ---
-title: "Change Capture Pipelines"
-sidebarTitle: "Change Capture Pipelines"
-description: "Capture changes with Change Capture Pipelines"
-icon: "timeline"
-iconType: "solid"
+title: "Change retention"
+sidebarTitle: "Change retention"
+description: "Retain change messages in a Postgres table"
 ---
 
-Sequin streams the latest version of rows out of Postgres tables. But sometimes you need to capture every discrete change to your tables, not just the latest state of each row.
+## About
 
-**Change Capture Pipelines** allow you to capture every insert, update, and delete event that happens in your database, storing them in an event log table. That event log table can live in the same database or a different one. Then, you can stream these events using Sequin's standard consumption methods:
+In Sequin, [change messages](/reference/messages#change-messages) are ephemeral. Once they're sent to a sink, they're deleted.
 
-<Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/wal-pipeline-arch.png" alt="Architecture diagram of Change Capture Pipelines, with the source table on the left and the event log table on the right" />
-</Frame>
+For some sinks and use cases, it can be desirable to retain change messages for some period of time. Then, you can take advantage of Sequin's [backfill](/reference/backfills) feature to replay the changes to the sink.
 
-## Overview
+For example, if your sink is a webhook endpoint, you might deploy a bug that erroneously processes messages. With change retention, you can play back change messages from the last few days to the sink to reprocess the affected messages.
 
-Change Capture Pipelines:
+With change retention, you store change messages in a Postgres table. You can then use Sequin's standard consumption methods to stream these messages to your sink.
 
-- Capture discrete change events (inserts, updates, and/or deletes)
-- Write changes to an event log table in your database
-- Store both new and old values for updates
-- Store old values for deleted rows
-- Allow SQL filtering on changes
-- Support configurable retention policies
+## Configuration
 
-## Creating Change Capture Pipelines
+You can configure change retention for tables in the Sequin web console, under the **Change Retention** tab.
 
-You can create Change Capture Pipelines in the Sequin console by navigating to the **Change Capture Pipelines** tab and clicking **Create Change Capture Pipeline**.
+### Source configuration
 
-Under **Source configuration**, select the table you want to capture changes from:
+Select the table you want to retain changes for. You can specify which operations to capture (i.e. inserts, updates, and/or deletes). And you can filter the changes to capture with one or more column [filters](/reference/filters).
 
-<Frame>
-  <img style={{maxWidth: "500px"}} src="/images/guides/change-capture-pipelines/source-configuration.png" alt="Source configuration widget, showing a list of tables to choose from" />
-</Frame>
+### Destination configuration
 
-You can specify which operations to capture (i.e. inserts, updates, and/or deletes). And you can filter the changes to capture with one or more column filters:
-
-<Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/filter-configuration.png" alt="Insert, delete, and update radio group, followed by a column filter widget" />
-</Frame>
-
-Sequin writes events to an [event table](#event-table) with a Sequin-specified schema. If you already have an event table ready to go, you can select it under **Destination configuration**. Otherwise, click **Create new event table** to create a new table:
-
-<Frame>
-  <img style={{maxWidth: "800px"}} src="/images/guides/change-capture-pipelines/destination-configuration.png" alt="Destination configuration widget, showing a list of tables to choose from, and a button to create a new event table" />
-</Frame>
-
-Clicking **Create new event table** will open a modal that will provide instructions for creating an event table in your database:
-
-<Frame>
-  <img style={{maxWidth: "500px"}} src="/images/guides/change-capture-pipelines/create-event-table-modal.png" alt="The create event table modal, showing some configuration options and a series of SQL DDL commands to create the table" />
-</Frame>
-
-After creating your event table, click **Done** to close the modal. Your new table should now appear in the destination list. Select it and click **Create** to finish creating your Change Capture Pipeline.
+Sequin writes events to an [event table](#event-table) with a Sequin-specified schema. If you already have an event table ready to go, you can select it. Otherwise, click "Create new event table" which will open a modal that will provide instructions for creating an event table in your database.
 
 ## Event table
 
 ### Schema
 
-Change Capture Pipelines write changes to an **event table** in your database. This event table has a schema specified by Sequin.
+Sequin retains changes in a **change table** in your database. This table has a schema specified by Sequin.
 
-Event tables look like this:
+Change tables look like this:
 
 ```sql
-create table sequin_events (
+create table sequin_changes (
   id serial primary key,
   seq bigint not null,
   source_database_id uuid not null,
@@ -132,7 +103,7 @@ create table sequin_events (
   The time this event was inserted into the event table.
 </ResponseField>
 
-### Creating an event table
+### Creating a change table
 
 The Sequin web console will provide you with the SQL commands you need to create an event table in your database.
 
@@ -242,23 +213,15 @@ A brief explanation of the options:
   When true, ensures pg_partman continues creating future partitions indefinitely. Recommended to set to true for time-based partitioning.
 </ResponseField>
 
-## Consuming Events
+## Message examples
 
-After capturing changes in your event table, you can stream these events using any of Sequin's standard consumption methods:
+{/* TODO: Add examples for the JSON message shapes */}
 
-- [Consumer Groups](/consume/consume-api/overview)
-- [Webhooks](/how-sequin-works#webhook-subscriptions)
-- Sync API (coming soon)
+Below are some examples of messages that Change Capture Pipelines capture:
 
-Create a Stream for your event table to begin streaming the changes to your applications.
+### Insert message
 
-## Event Examples
-
-Below are some examples of events that Change Capture Pipelines capture:
-
-### Insert Event
-
-`record` contains the `new` values for the row. `changes` is `null` for insert events:
+`record` contains the `new` values for the row. `changes` is `null` for insert messages:
 
 ```
 action                | insert
@@ -273,7 +236,7 @@ record                | {
 changes               |
 ```
 
-### Update Event
+### Update message
 
 `record` contains the `new` values for the row. `changes` contains the `old` values that changed:
 
@@ -295,9 +258,9 @@ changes               | {
 
 So, if you want the entire `new` row, just use `record`. If you want the entire `old` row, merge `changes` on top of `record`.
 
-### Delete Event
+### Delete message
 
-`record` contains the `old` values for the row. `changes` is `null` for delete events:
+`record` contains the `old` values for the row. `changes` is `null` for delete messages:
 
 ```
 action                | delete

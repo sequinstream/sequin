@@ -1,0 +1,88 @@
+---
+title: "SQS sink"
+sidebarTitle: "SQS sink"
+description: "Reference for the SQS sink"
+---
+
+The SQS sink sends messages to an Amazon SQS queue.
+
+## Configuration
+
+- **Queue URL**
+
+    The URL of your Amazon SQS queue. Must be in the format: `https://sqs.<region>.amazonaws.com/<account-id>/<queue-name>`.
+    
+    For FIFO queues, the queue name must end with `.fifo`.
+
+- **Access Key ID**
+
+    The AWS access key ID with permissions to send messages to the specified SQS queue.
+
+- **Secret Access Key**
+
+    The AWS secret access key corresponding to the access key ID.
+
+## IAM user permissions
+
+Sequin requires an IAM user with the following permissions:
+
+  ```json
+  {
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "sqs:SendMessage",
+          "sqs:SendMessageBatch",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+          "sqs:ListQueues",
+          "sqs:ListQueueTags",
+          "sqs:ChangeMessageVisibility"
+        ],
+        "Resource": "<your-queue-arn>"
+      }
+    ]
+  }
+  ```
+
+Replace `<your-queue-arn>` with your actual queue ARN (e.g., `arn:aws:sqs:us-east-1:123456789012:my-queue`).
+
+## Message format
+
+Sequin sends messages to SQS as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+
+## Retry behavior
+
+If Sequin is unable to deliver a message to SQS, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Max message size
+
+SQS allows for a [max message size of 256 KB](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/quotas-messages.html#:~:text=The%20minimum%20message%20size%20is,Extended%20Client%20Library%20for%20Python%20.).
+
+If SQS rejects a message, Sequin will cancel the message's delivery.
+
+<Info>
+  If you want to see logging/alerting for this situation, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).
+</Info>
+
+## Grouping and ordering
+
+When you configure an SQS sink, you can specify message grouping behavior. This will be used to set the `MessageGroupId` on the SQS message if you're using a FIFO queue.
+
+The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping.
+
+Sequin will order the delivery of messages with the same group according to their commit timestamp.
+
+### FIFO vs standard queues
+
+FIFO queues are generally recommended. They ensure that messages pertaining to the same row are processed in order. 
+
+## Debugging
+
+You can view the status of your SQS sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to SQS, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from SQS.

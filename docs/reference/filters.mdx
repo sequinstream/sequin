@@ -1,0 +1,62 @@
+---
+title: 'Filters'
+sidebarTitle: 'Filters'
+description: 'Filter a table before sending it to a sink'
+---
+
+When setting up a sink, you can optionally specify one or more **filters** to apply to the table:
+
+<Frame>
+  <img style={{maxWidth: '600px'}} src="/images/reference/filter-component.png" alt="Filter component" />
+</Frame>
+
+Only changes and rows that match the filters will be sent to the sink.
+
+## Operations to capture
+
+When using [change messages](/reference/messages#change-messages), you can specify which Postgres operations to capture:
+
+- `insert`
+- `update`
+- `delete`
+
+<Note>
+  If you backfill a table to a sink, Sequin will send `read` messages for each row in the table, regardless of which operations you specify.
+</Note>
+
+You do not specify Postgres operations for [row messages](/reference/messages#row-messages). Instead, Sequin will always capture the latest version of each row.
+
+## Column filters
+
+Column filters are SQL expressions (i.e. `where` clauses) that Sequin will use to filter the rows that are sent to the sink.
+
+- **Column**: The column to filter on.
+- **Operator**: The operator to use for the filter.
+- **Comparison value**: The comparison value to use for the filter.
+
+The available operators are:
+
+- `=`
+- `!=`
+- `>`
+- `>=`
+- `<`
+- `<=`
+- `in`
+- `not in`
+- `is null`
+- `is not null`
+
+### JSON filters
+
+Sequin also supports filtering on JSON columns. When you select a JSON column as the **Column** to filter on, you'll see an expanded set of input fields:
+
+<Frame>
+  <img style={{maxWidth: '600px'}} src="/images/reference/filter-component-jsonb.png" alt="Filter component for JSONB columns" />
+</Frame>
+
+- **Column**: The selected JSONB column to filter on.
+- **Field path**: The path to the JSONB field you want to filter on. Use dot notation for nested fields (e.g., "address.city").
+- **Field type**: The data type of the JSONB field you're filtering on. This helps ensure proper comparison and filtering.
+- **Operator**: The operator to use for the filter.
+- **Comparison value**: The comparison value to use for the filter.

@@ -1,0 +1,100 @@
+---
+title: "How to stream Postgres to Kafka"
+sidebarTitle: "Stream to Kafka"
+description: "Receive Postgres changes in Kafka topics in real-time"
+---
+
+This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to Kafka.
+
+With Postgres data streaming to Kafka, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
+
+By the end of this how-to, you'll have database changes flowing to a Kafka topic.
+
+## Prerequisites
+
+This guide assumes you:
+
+1. [Already have Sequin installed](/quickstart/webhooks)
+2. [Have a database connected](/quickstart/connect-postgres)
+3. Have a Kafka cluster ready to go
+
+## Basic setup
+
+### Prepare your Kafka cluster
+
+TODO.
+
+## Create Kafka sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select "Kafka Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+    If you're not sure which to choose, you can start with **Changes**.
+  </Step>
+
+  <Step title="Specify filters">
+    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
+
+    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  </Step>
+
+  <Step title="Specify backfill">
+    You can optionally indicate if you want to [backfill](reference/backfills) of all or a portion of the table's existing data into Kafka. Backfills are useful if you want to use Kafka to process historical data. For example, if you're materializing a cache, you might want to warm it with existing rows.
+
+    You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
+  </Step>
+
+  <Step title="Specify message grouping">
+    TODO: Do we let them specify a message key?
+
+    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to [Kafka in order](reference/kafka#message-grouping).
+  </Step>
+
+</Steps>
+
+### Configure Kafka
+
+Fill in your Kafka connection details:
+
+- **Hosts** (required): A comma-separated list of `host:port` pairs (e.g., `kafka1.example.com:9092,kafka2.example.com:9092`)
+- **Topic** (required): The Kafka topic to publish messages to (max 255 characters)
+- **Username**: Username for SASL PLAIN authentication (optional)
+- **Password**: Password for SASL PLAIN authentication (optional)
+- **TLS**: Enable TLS/SSL encryption for the connection
+
+Then, click "Create Kafka Sink".
+
+## Verify & debug
+
+To verify that your Kafka sink is working:
+
+1. Make some changes in your source table
+2. Verify that the count of messages for your sink increases in the Sequin web console
+3. Using your Kafka consumer tools, check your topic:
+   ```bash
+   kafka-console-consumer --bootstrap-server localhost:9092 --topic your-topic --from-beginning
+   ```
+   You should see the messages from Sequin appear in the topic.
+
+If messages don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink
+2. Click any failed message
+3. Check the delivery logs for error details, including any Kafka connection errors
+
+## Next steps
+
+Assuming you've followed the steps above for your local environment, "[How to deploy to production](/how-to/deploy-to-production)" will show you how to deploy your implementation to production.
+
+Create additional sinks to stream other tables to different Kafka topics.
+
+For advanced configuration and more about how Kafka sinks work, see the [Kafka sink reference](/reference/sinks/kafka).

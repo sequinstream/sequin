@@ -28,7 +28,83 @@ If you're using Sequin Cloud, you'll need:
 
 ### Prepare your Kafka cluster
 
-DOCTODO.
+You'll need a Kafka cluster and topic ready for Sequin to stream changes to. You can use either a local cluster for development or a cloud-hosted Kafka service in production.
+
+#### Local development with Docker
+
+For local development with Sequin, you can quickly spin up a Kafka cluster using Docker Compose:
+
+<Accordion title="docker-compose.yaml">
+```yaml
+version: '3'
+services:
+  zookeeper:
+    image: bitnami/zookeeper:latest
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    networks:
+      - kafka-net
+
+  kafka:
+    image: bitnami/kafka:latest
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=INTERNAL://:9093,EXTERNAL://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=INTERNAL://kafka:9093,EXTERNAL://localhost:9092
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - ALLOW_PLAINTEXT_LISTENER=yes
+    depends_on:
+      - zookeeper
+    networks:
+      - kafka-net
+
+networks:
+  kafka-net:
+    driver: bridge
+```
+</Accordion>
+
+Start the cluster:
+```bash
+docker-compose up -d
+```
+
+Create a topic for Sequin to publish to:
+```bash
+docker exec -it <kafka-container-id> kafka-topics.sh \
+  --create \
+  --topic my-topic \
+  --bootstrap-server kafka:9093 \
+  --partitions 1 \
+  --replication-factor 1
+```
+
+#### Production Kafka
+
+For production environments, Sequin works with major managed Kafka providers as well as self-hosted Kafka clusters. To prepare your Kafka cluster for Sequin, you'll need to:
+
+1. Create a dedicated topic for Sequin to publish to
+2. Create credentials (username/password) for Sequin to use
+3. Configure appropriate ACLs to allow Sequin to publish to your topic
+
+<Info>
+  Sequin currently supports SASL PLAIN, SCRAM-SHA-256, and SCRAM-SHA-512 authentication mechanisms with TLS encryption. Custom client certificates for verifying TLS connections are coming soon, [let us know if you need them](https://github.com/sequinstream/sequin/issues/592).
+</Info>
+
+Once your cluster is ready, make note of:
+- Bootstrap server addresses
+- Topic name
+- Authentication credentials
+- Whether TLS is required
+
+You'll need these details when configuring your Kafka sink in the next section.
 
 ## Create Kafka sink
 

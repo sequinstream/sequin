@@ -100,7 +100,7 @@
             "reference/sinks/sequin-stream"
           ]
         },
-        "reference/change-capture-pipelines",
+        "reference/change-retention",
         "reference/how-sequin-works",
         {
           "group": "Sequin Stream API",

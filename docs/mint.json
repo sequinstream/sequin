@@ -86,7 +86,7 @@
       "pages": [
         "reference/configuration",
         "reference/messages",
-        "reference/ordering-and-grouping",
+        "reference/ordering-and-groups",
         "reference/filters",
         "reference/backfills",
         {

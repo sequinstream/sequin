@@ -4,7 +4,7 @@ sidebarTitle: "Stream to SQS"
 description: "Receive Postgres changes in Amazon SQS in real-time"
 ---
 
-This guide shows you how to use Sequin to set up real-time streaming of database changes from Postgres to Amazon SQS.
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to SQS using Sequin.
 
 With Postgres data streaming to SQS, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
 
@@ -54,7 +54,7 @@ Replace `<your-queue-arn>` with your actual queue ARN.
 
 After creating the user, save the Access Key ID and Secret Access Key - you'll need these when configuring the SQS sink in Sequin.
 
-### (Optional) Create a Change Capture Pipeline
+### (Optional) Enable retention for changes
 
 You can send either [changes or rows](/reference/messages) to SQS.
 

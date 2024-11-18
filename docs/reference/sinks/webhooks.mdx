@@ -36,7 +36,7 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 
 - **Max ack pending (advanced)**
 
-    The maximum number of messages allowed in-flight (delivered but not yet acknowledged) for this sink. Note this includes failed messages that Sequin is backing off and will retry.
+    The maximum number of messages allowed in a pending state (delivered but not yet acknowledged) for this sink. Note this includes failed messages that Sequin is backing off and will retry.
 
     "Max ack pending" creates back pressure to avoid overloading your webhook endpoint.
 
@@ -164,6 +164,20 @@ Sequin considers a message delivered if it:
 - Receives that response within the "Request timeout" specified for the sink.
 
 If Sequin is unable to deliver a message, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Grouping and ordering
+
+When you configure a webhook sink, you can specify message grouping behavior.
+
+The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping.
+
+Sequin will only deliver messages that have no other messages with the same group already in-flight, i.e. currently being delivered to your webhook endpoint and awaiting a response. This gives you serial processing of messages with the same group, which can eliminate a lot of race conditions.
+
+What's more, Sequin will order the delivery of messages with the same group according to their commit timestamp. This means that for change messages, you can rely on receiving them in the order they occurred.
+
+### Batch behavior
+
+When you specify a "Batch size" greater than `1`, Sequin may include more than one message for the same group in a single request.
 
 ## Debugging
 

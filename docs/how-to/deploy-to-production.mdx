@@ -1,0 +1,51 @@
+---
+title: "How to deploy to production"
+sidebarTitle: "Deploy to production"
+description: "Deploy your Sequin implementation to production"
+---
+
+Once you've created your Sequin sinks locally, you can move your implementation to production.
+
+You can use the [Sequin CLI](/reference/cli/overview) to export your local configuration and apply it to your production environment.
+
+## Prerequisites
+
+- The [Sequin CLI](/reference/cli/overview) installed locally, setup with contexts for both your local and production environments
+
+## Steps
+
+<Steps>
+  <Step title="Export your configuration">
+    Export your local configuration:
+
+    ```bash
+    sequin config export --context=local
+    ```
+
+    Replace `local` with the name of your local or development context.
+
+    This creates a `sequin.yaml` file you can commit to your repository.
+
+    <Info>
+      Consider having different YAML files for different environments. For example, `sequin.staging.yaml` and `sequin.production.yaml`.
+
+      Database names often differ between environments (e.g. `my_db_dev` vs `my_db_prod`).
+    </Info>
+
+    <Warning>
+      `sequin config export` is still early and experimental. See the warnings given when you run the command.
+    </Warning>
+  </Step>
+
+  <Step title="Apply to production">
+    Apply your configuration to production:
+
+    ```bash
+    sequin config apply sequin.yaml --context=production
+    ```
+
+    Replace `production` with the name of your production context.
+
+    Sequin will show you the changes it will apply to your production environment. If they look good, confirm by entering `yes`.
+  </Step>
+</Steps>

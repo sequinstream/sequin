@@ -12,10 +12,15 @@ By the end of this how-to, you'll have a configured HTTP endpoint receiving data
 
 ## Prerequisites
 
-This guide assumes you:
+If you're self-hosting Sequin, you'll need:
 
-1. [Already have Sequin installed](/quickstart/webhooks)
-2. [Have a database connected](/quickstart/connect-postgres)
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/how-to/connect-postgres)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/how-to/connect-postgres)
 
 ## Basic setup
 
@@ -57,7 +62,7 @@ You can send either [changes or rows](/reference/messages) to your webhook endpo
 
 If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to your webhook endpoint.
 
-You can use a [Change Capture Pipeline](/reference/change-capture-pipelines) to persist changes to a table in your database. Then, you can stream _that_ table to your webhook endpoint. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any times. This can be handy: for example, if you realize there's a bug in your webhook handling implementation, you can deploy the fix and re-process changes from the last few minutes or days.
+You can use a [Change Capture Pipeline](/reference/change-capture-pipelines) to persist changes to a table in your database. Then, you can stream _that_ table to your webhook endpoint. This gives you the power to [run backfills](/reference/backfills)/replays of recent changes at any times.
 
 ### Create HTTP endpoint
 
@@ -68,7 +73,7 @@ When setting up a webhook sink, you can specify the request path as well as addi
 1. For the "URL" field, fill in the base URL for your HTTP endpoint.
 2. For the "Headers" field, include essential headers for your HTTP endpoint (e.g. `Content-Type: application/json`).
 
-Sensitive headers like `Authorization` should be added under "Encrypted Headers".
+Add sensitive headers like `Authorization` under "Encrypted Headers".
 
 ## Create webhook sink
 
@@ -84,7 +89,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   <Step title="Choose message type">
     Specify whether you want to receive [changes or rows](/reference/messages) from the table.
 
-    If you're not sure which to choose, select **Changes**. Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
+    If you're not sure which to choose, leave the default setting of "Changes". Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
   </Step>
 
   <Step title="Specify filters">
@@ -102,7 +107,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   <Step title="Specify message grouping">
     Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
 
-    If while your webhook endpoint is processing a message, a new change or version related to the same row is captured, [Sequin will hold the message back](reference/ordering-and-grouping) until your webhook endpoint acknowledges the first message. This is almost always the desired behavior.
+    While your webhook endpoint is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/ordering-and-grouping) until your webhook endpoint acknowledges the first message. This is almost always the desired behavior.
   </Step>
 
 </Steps>
@@ -113,17 +118,19 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Webhook Sink".
   <Step title="Specify request timeout">
     Under "Delivery configuration", choose a conservative value for "Request timeout". The right value depends on how long you want to give your webhook endpoint to process a batch of messages. When the request timeout is reached, Sequin [will mark the message for re-delivery](reference/sinks/webhooks#delivery-configuration).
 
-    If your programming platform allows it, we recommend wrapping the webhook request handler in your application with a hard timeout limit below the "Request timeout" specified here. That way, if your handler is taking too long, it will be killed before Sequin retries the message.
+    <Tip>
+      If your programming platform allows it, we recommend wrapping the webhook request handler in your application with a hard timeout limit below the "Request timeout" specified here. That way, if your handler is taking too long, it will be killed before Sequin retries the message.
+    </Tip>
   </Step>
 
   <Step title="Specify batch size">
     The right value for "Batch size" depends on your requirements.
 
-    The simple rule is that you should try to match the batch size of messages to the unit of work your webhook handler will do.
+    You should try to process the full batch atomically.
 
-    For example, for event-driven use cases like triggering side effects one-by-one, you'll probably want to set this to `1`. Otherwise, you risk your worker partially processing a batch then crashing. Then, when Sequin retries the batch, your handler will re-process the beginning of the batch.
+    For upserting to a database or store, set this to the number of rows you want to upsert in a single transaction.
 
-    Conversely, for replication use cases, like batch upserting to a database, you'll want to set this to an optimal value for that batch upsert operation.
+    For side effects like sending an email, you should probably set this to `1`. Otherwise, you risk your worker partially processing a batch then crashing. Then, when Sequin retries the batch, your handler will re-process the beginning of the batch.
   </Step>
 
   <Step title="Specify advanced delivery configuration">

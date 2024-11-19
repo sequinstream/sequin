@@ -1,0 +1,145 @@
+---
+title: "Connecting to an AWS RDS database"
+sidebarTitle: "AWS RDS"
+description: "How to connect Sequin to an AWS RDS database"
+icon: "aws"
+iconType: "solid"
+---
+
+This guide provides step-by-step instructions to connect your [AWS RDS](https://aws.amazon.com/rds/) database to Sequin.
+
+## Enable logical replication on RDS
+
+By default, logical replication is not enabled on RDS. You can double check if logical replication is enabled by connecting to your database and running the following command:
+
+```sql
+SHOW rds.logical_replication;
+```
+
+If the output is `off`, then logical replication is not enabled.
+
+To enable it, follow these steps:
+
+<Warning>Enabling replication requires a restart of your database.</Warning>
+
+<Steps titleSize="h3">
+  <Step title="Create an RDS parameter group">
+    In the AWS RDS console, create a new parameter group for your database ("RDS" > "Parameter groups" > "Create parameter group"):
+
+    <Frame>
+      <img src="/images/guides/rds/aws-rds-parameter-group.png" alt="Create parameter group" />
+    </Frame>
+
+    - "Parameter group family": Select your Postgres version.
+    - "Parameter group name": Enter a name for your parameter group.
+    - "Description": Optionally, enter a description for your parameter group.
+  </Step>
+  <Step title="Enable logical replication">
+    Edit the parameter group to enable logical replication by setting `rds.logical_replication` to `1`:
+
+    <Frame>
+      <img src="/images/guides/rds/turn-on-wal.png" alt="Edit parameter group" />
+    </Frame>
+
+  </Step>
+  <Step title="Apply the parameter group to your database">
+    Open your database options ("RDS" > "Databases" > "Modify") and set the "DB parameter group" to the parameter group you created in the previous step. Select to "Apply immediately".
+
+    <Frame>
+      <img src="/images/guides/rds/apply-parameter-group.png" alt="Modify DB instance" />
+    </Frame>
+  </Step>
+  <Step title="Restart your database">
+    Navigate to your database ("RDS" > "Databases") and click on your database instance. Then click on the "Actions" button and select "Reboot".
+
+    <Frame>
+      <img src="/images/guides/rds/reboot.png" alt="Reboot DB instance" />
+    </Frame>
+  </Step>
+</Steps>
+
+## Connect Sequin to your RDS database
+
+After enabling logical replication on RDS, you'll now connect to your database in Sequin.
+
+<Steps titleSize="h3">
+  <Step title="Enter connection details in Sequin">
+    In the Sequin Console, click on the "Connect Database" button and enter the credentials for your RDS database:
+
+    <Note>
+      You can find these connection details in your RDS console under the "Connectivity & security" section. For security reasons, we recommend using a read-only database user for the connection:
+
+      ```sql
+    CREATE ROLE [username] WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '[password]';
+    ```
+    </Note>
+
+    - Host: Your RDS host (e.g., `mydbinstance.abcdefghijkl.us-west-2.rds.amazonaws.com`)
+    - Port: 5432 (default Postgres port)
+    - Database: Your database name
+    - Username: Your database username
+    - Password: The password for your database user
+
+    Make sure to enable the **SSL** option for secure connection.
+
+  </Step>
+  <Step title="Create a publication">
+    Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
+
+        ```sql
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    ```
+
+    If you want to publish changes from all tables, you can use:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    ```
+  </Step>
+  <Step title="Create a replication slot">
+    Next, create a replication slot to capture changes from the publication:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+  </Step>
+
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+  </Step>
+</Steps>
+
+## Create a sink
+
+With your AWS RDS database connected to Sequin, you are ready to create a sink. Follow one of our guides below to get started:
+
+<CardGroup cols={2}>
+  <Card
+    title="Stream to Webhooks"
+    icon="webhook"
+    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+  >
+    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+  </Card>
+  <Card
+    title="Stream to Redis"
+    icon="layer-group"
+    href="/how-to/stream-postgres-to-redis"
+  >
+    Stream changes to Redis streams for real-time data processing and caching
+  </Card>
+  <Card
+    title="Stream to Kafka"
+    icon="code-branch"
+    href="/how-to/stream-postgres-to-kafka"
+  >
+    Publish database changes to Kafka topics for event streaming and processing
+  </Card>
+  <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+</CardGroup>

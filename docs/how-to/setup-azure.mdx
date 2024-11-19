@@ -18,20 +18,20 @@ By default, logical replication is not enabled on Azure Database for PostgreSQL.
   <Step title="Configure server parameters">
     In the Azure Portal, navigate to your Azure Database for PostgreSQL server and follow these steps:
 
-    1. Go to the **Server parameters** page
-    2. Set the following parameters:
-       - `wal_level`: Set to `logical`
+    - Go to the "Server parameters" page
+    - Set the following parameters:
+      - `wal_level`: Set to `logical`
        - `shared_preload_libraries`: Add `pglogical` to the list (if not already present)
        - `azure.extensions`: Add `pglogical` to the list (if not already present)
-       - `max_worker_processes`: Set to at least `16`
-    3. Click **Save** to apply the changes
+      - `max_worker_processes`: Set to at least `16`
+    - Click "Save" to apply the changes
   </Step>
   <Step title="Restart the server">
     After changing the server parameters, you need to restart your server for the changes to take effect. In the Azure Portal:
 
-    1. Go to the **Overview** page of your PostgreSQL server
-    2. Click the **Restart** button at the top of the page
-    3. Confirm the restart when prompted
+    - Go to the "Overview" page of your PostgreSQL server
+    - Click the "Restart" button at the top of the page
+    - Confirm the restart when prompted
   </Step>
   <Step title="Grant replication permissions">
     Connect to your database using a SQL client and run the following SQL command to grant replication permissions to your user:
@@ -59,31 +59,22 @@ After enabling logical replication on Azure Database for PostgreSQL, you'll now 
 
 <Steps titleSize="h3">
   <Step title="Enter connection details in Sequin">
-    In the Sequin Console, click on the **Connect Database** button and enter the credentials for your Azure Database for PostgreSQL:
+    In the Sequin Console, click on the "Connect Database" button and enter the credentials for your Azure Database for PostgreSQL:
 
     <Note>
-      You can find these connection details in your Azure Portal under the PostgreSQL server's **Connection strings** section.
+      You can find these connection details in your Azure Portal under the PostgreSQL server's "Connection strings" section.
     </Note>
 
-    - **Host**: Your Azure PostgreSQL server hostname
-    - **Port**: 5432 (default Postgres port)
-    - **Database**: Your database name
-    - **Username**: Your database username (with replication permissions)
-    - **Password**: The password for your database user
+    - Host: Your Azure PostgreSQL server hostname
+    - Port: 5432 (default Postgres port)
+    - Database: Your database name
+    - Username: Your database username (with replication permissions)
+    - Password: The password for your database user
 
-    Make sure to enable the **SSL** option for secure connection.
-  </Step>
-  <Step title="Create a replication slot">
-    Connect to your database using the SQL client of your choice and execute the following SQL query to create a replication slot:
-
-    ```sql
-    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
-    ```
-
-    This creates a replication slot named `sequin_slot`.
+    Make sure to enable the "SSL" option for secure connection.
   </Step>
   <Step title="Create a publication">
-    Next, create a publication to indicate which tables will publish changes to the replication slot. Run the following SQL command:
+    Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
 
     ```sql
     CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
@@ -95,23 +86,49 @@ After enabling logical replication on Azure Database for PostgreSQL, you'll now 
     CREATE PUBLICATION sequin_pub FOR ALL TABLES;
     ```
   </Step>
+  <Step title="Create a replication slot">
+    Next, create a replication slot to capture changes from the publication:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+  </Step>
   <Step title="Enter the replication slot details in Sequin">
-    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click "Create Database".
   </Step>
 </Steps>
 
-## Create a consumer
+## Create a sink
 
-With your Azure Database for PostgreSQL connected to Sequin via a replication slot and publication, Sequin is now detecting changes to your tables. Now create a consumer to process your data changes and send them to your application.
+With your Azure Database connected to Sequin, you are ready to create a sink. Follow one of our guides below to get started:
 
-Click the **Add a consumer** button and select your Azure Database for PostgreSQL as the source. Follow the instructions in our [quickstart guide](/quickstart) to complete the process.
-
-## Next steps
-
-With your Azure Database for PostgreSQL connected to Sequin, you can now:
-
-* Set up filters to capture specific changes.
-* Use Sequin's observability features to monitor and debug your data flows.
-* Explore Sequin's replay and backfill features for historical data processing.
-
-For more information on these features, learn [how Sequin works](/how-sequin-works).
+<CardGroup cols={2}>
+  <Card
+    title="Stream to Webhooks"
+    icon="webhook"
+    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+  >
+    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+  </Card>
+  <Card
+    title="Stream to Redis"
+    icon="layer-group"
+    href="/how-to/stream-postgres-to-redis"
+  >
+    Stream changes to Redis streams for real-time data processing and caching
+  </Card>
+  <Card
+    title="Stream to Kafka"
+    icon="code-branch"
+    href="/how-to/stream-postgres-to-kafka"
+  >
+    Publish database changes to Kafka topics for event streaming and processing
+  </Card>
+  <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+</CardGroup>

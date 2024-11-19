@@ -124,11 +124,11 @@
     {
       "group": "Database setup guides",
       "pages": [
-        "how-tos/setup-gcp",
-        "how-tos/setup-rds",
-        "how-tos/setup-azure",
-        "how-tos/setup-neon",
-        "how-tos/setup-supabase",
+        "how-to/setup-gcp",
+        "how-to/setup-rds",
+        "how-to/setup-azure",
+        "how-to/setup-neon",
+        "how-to/setup-supabase",
         "how-to/setup-timescale"
       ]
     },
@@ -179,6 +179,31 @@
     {
       "source": "cli",
       "destination": "reference/cli/overview",
+      "permanent": true
+    },
+    {
+      "source": "/guides/supabase",
+      "destination": "/how-to/setup-supabase",
+      "permanent": true
+    },
+    {
+      "source": "/guides/neon",
+      "destination": "/how-to/setup-neon",
+      "permanent": true
+    },
+    {
+      "source": "/guides/rds",
+      "destination": "/how-to/setup-rds",
+      "permanent": true
+    },
+    {
+      "source": "/guides/gcp",
+      "destination": "/how-to/setup-gcp",
+      "permanent": true
+    },
+    {
+      "source": "/guides/azure",
+      "destination": "/how-to/setup-azure",
       "permanent": true
     }
   ]

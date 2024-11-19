@@ -80,13 +80,15 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
   <Step title="Specify max ack pending">
     Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by your consumer group) at one time.
 
-    This setting helps prevent your consumer group from getting overloaded with messages. The right value depends on your consumer group's processing capacity.
+    This setting helps prevent issues where messages fail to be acknowledged, either due to errors in processing or bugs that cause too many workers to spin up. When the max ack pending limit is reached, Sequin stops delivering new messages and focuses on re-delivering unacknowledged messages.
+
+    The right value depends on your consumer group's processing capacity.
   </Step>
 
   <Step title="Specify max waiting">
     Under "Max waiting" you can specify that maximum number of consumers that can be waiting to receive messages at one time.
 
-    This setting helps manage resource utilization and prevent excessive polling. The right value depends on how many parallel consumers you expect to have in your consumer group.
+    This setting helps manage your consumer group's resource utilization and prevent excessive polling of the Sequin Stream API. The right value depends on how many parallel consumers you expect to have in your consumer group.
   </Step>
 
   <Step title="Create the sink">
@@ -137,9 +139,9 @@ To verify that your sink is working:
 
 ## Next steps
 
-- **Setup a consumer**
+- **Setup your consumer group to process messages**
 
-   Now that your Postgres data is flowing into Sequin Stream, you can setup a consumer to read and process the data. See the [Sequin Stream API reference](/reference/sequin-stream-api/overview) for more information on receiving messages, acknowledging messages, and more.
+   Now that your Postgres data is flowing into Sequin Stream, you can setup a consumer group to read and process the data. See the [Sequin Stream API reference](/reference/sequin-stream-api/overview) for more information on receiving messages, acknowledging messages, and more.
 
 - **Deploy your implementation**
 

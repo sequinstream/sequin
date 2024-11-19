@@ -28,7 +28,7 @@ You'll create a Sequin Stream sink for each database table you want to capture c
 
 The [Sequin Stream API](/reference/sequin-stream-api) allows you to pull rows from your Sequin Streams using **consumer groups**. Consumer groups for a Sequin Stream are like consumer groups in other streaming systems. They provide a way to safely process data in parallel with exactly-once processing guarantees.
 
-In the consumer group pattern, each message (i.e. change or row from your database) goes to only one consumer in the group. If a consumer fails, other consumers can pick up its messages, making sure nothing is missed.
+In the consumer group pattern, each message (i.e. change or row from your database) goes to only one consumer in the group. If a consumer fails, other consumers can pick up its messages, ensuring nothing is missed.
 
 When you set up a Sequin Stream sink, Sequin provisions an HTTP endpoint for your consumer group to pull messages from using the Sequin Stream API:
 

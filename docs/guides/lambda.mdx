@@ -8,7 +8,7 @@ iconType: "solid"
 
 [AWS Lambda](https://aws.amazon.com/lambda/) is a serverless compute service that lets you run code without provisioning or managing servers. It automatically scales your applications in response to incoming requests.
 
-Often, you want to trigger an AWS Lambda function when a database row changes. For example, you may want to trigger a function as a [side-effect](/use-cases/side-effects) of a database change, or [fan out work](/use-cases/fan-out) to multiple services.
+Often, you want to trigger an AWS Lambda function when a database row changes. For example, you may want to trigger a function as a side-effect of a database change, or fan out work to multiple services.
 
 <Frame>
   <img src="/images/guides/lambda/send-with-sequin.svg" alt="AWS Lambda Function" />
@@ -24,7 +24,7 @@ You'll need the following:
 
 - An AWS account
 - A Sequin account
-- A Postgres database (Sequin works with any Postgres database version 12+ - including [RDS](/guides/rds)) with a basic `users` table containing an `id` column and a `name` column.
+- A Postgres database (Sequin works with any Postgres database version 12+ - including [RDS](/how-to/setup-rds)) with a basic `users` table containing an `id` column and a `name` column.
 
 ## Create a Lambda function
 
@@ -188,7 +188,6 @@ You've successfully triggered an AWS Lambda function from a database change!
 
 Modify this example to suit your needs:
 
-- Create Lambda functions to perform [side-effects](/use-cases/side-effects), [fan out work](/use-cases/fan-out), and more.
 - If you need to run long-running jobs, consider using [AWS Step Functions](https://aws.amazon.com/step-functions/) in tandem with Lambda functions.
 - Tune your consumer configuration to suit your volume of work.
 - Implement additional security measures, such as [API Gateway request validation](https://docs.aws.amazon.com/apigateway/latest/developerguide/api-gateway-method-request-validation.html).

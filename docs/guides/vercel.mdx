@@ -8,7 +8,7 @@ iconType: "sharp-solid"
 
 [Vercel Functions](https://vercel.com/docs/functions) are on-demand, serverless functions that run on Vercel's global, edge network. They are executed in a variety of runtimes including Node.js, Edge, GO, Python and Ruby.
 
-Often, you want to trigger a Vercel Function when a database row changes. For example, you may want to trigger a function as a [side-effect](/use-cases/side-effects) of a database change, or [fan out work](/use-cases/fan-out) to multiple services.
+Often, you want to trigger a Vercel Function when a database row changes. For example, you may want to trigger a function as a side-effect of a database change, or fan out work to multiple services.
 
 <Frame>
   <img src="/images/guides/vercel/send-with-sequin.svg" alt="Vercel Function" />
@@ -34,7 +34,7 @@ Learn more in the [Vercel Functions Quickstart](https://vercel.com/docs/function
 </Info>
 
 - A Sequin account
-- A Postgres database (Sequin works with any Postgres database version 12+ - including [Neon](/guides/neon)) with a basic `users` table containing an `id` column and a `name` column.
+- A Postgres database (Sequin works with any Postgres database version 12+) with a basic `users` table containing an `id` column and a `name` column.
 
 ## Create a Vercel Edge Function
 
@@ -245,6 +245,5 @@ You've successfully deployed your Next.js app to Vercel and configured it to tri
 
 Modify this example to suit your needs:
 
-- Create Vercel Functions to perform [side-effects](/use-cases/side-effects), [fan out work](/use-cases/fan-out), and more.
 - If you need to run long-running jobs, consider using [Trigger.dev](/guides/trigger-dev) or [Inngest](/guides/inngest) in tandem with Vercel Functions.
 - Tune your consumer configuration to suit your volume of work.

@@ -72,7 +72,11 @@ The maximum size of a Redis string value is 512MB. However, it's recommended to 
 
 ## Message ordering
 
-Redis streams maintain message order within a single stream. Messages are assigned auto-incrementing IDs by Redis when they are added to the stream, ensuring strict ordering of messages.
+Redis streams maintain message order within a single stream. Messages are assigned auto-incrementing IDs of the form `<timestamp>-<sequence number>` by Redis when they are added to the stream, ensuring strict ordering of messages.
+
+Sequin `XADD`s messages to the Redis stream in the same order that they are received from your source table. Therefore, you can rely on the ordering of messages by their ID to ensure correct processing order.
+
+For example, if you are using a Redis stream as an audit log, you can process messages in order by their ID to reconstruct the state of the audited object at any point in time. Or if you are maintaining a materialized view of the stream, you can safely upsert to the view as long as the incoming ID is greater than the last processed ID.
 
 ## Security
 

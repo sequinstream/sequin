@@ -4,7 +4,7 @@ sidebarTitle: "Redis sink"
 description: "Reference for the Redis sink"
 ---
 
-The Redis sink sends messages to a Redis stream using the XADD command.
+The Redis sink sends messages to a Redis stream using the `XADD` command.
 
 ## Configuration
 
@@ -44,7 +44,7 @@ The Redis sink sends messages to a Redis stream using the XADD command.
 
 ## Message format
 
-Sequin sends messages to Redis streams using the XADD command. Each message contains the following fields:
+Sequin sends messages to Redis streams using the `XADD` command. Each message contains the following fields:
 
 For record messages:
 - `record`: The JSON-encoded record data
@@ -56,6 +56,8 @@ For change messages:
 - `action`: The type of change (e.g., "insert", "update", "delete")
 - `metadata`: JSON-encoded metadata about the event
 
+For the shape of the fields `metadata` and `changes` as well as information about `action`, see the reference for [messages](/reference/messages).
+
 ## Retry behavior
 
 If Sequin is unable to deliver a message to Redis, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
@@ -65,7 +67,7 @@ If Sequin is unable to deliver a message to Redis, it will retry the message ind
 The maximum size of a Redis string value is 512MB. However, it's recommended to keep messages significantly smaller for better performance.
 
 <Info>
-  If you want to see logging/alerting for message size rejections, please contact support.
+  If you want to see logging/alerting for this situation, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).
 </Info>
 
 ## Message ordering

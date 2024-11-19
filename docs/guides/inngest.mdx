@@ -1,20 +1,10 @@
 ---
 title: "Trigger Inngest events from database changes"
 sidebarTitle: "Inngest"
-description: "How to use Sequin to trigger Inngest events from database changes."
+description: "How to use a webhook sink to trigger Inngest events from database changes."
 icon: "hexagon-check"
 iconType: "solid"
 ---
-
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/_sxn2W6zFNY"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-  allowfullscreen
-></iframe>
 
 [Inngest](https://www.inngest.com/) is a serverless jobs queue. You write and test functions locally in your project, and then deploy them to Inngest where they reliably invoke the functions you write. Inngest handles the infrastructure, observability, and execution.
 
@@ -24,7 +14,7 @@ Often, you want to trigger Inngest events when a record in your database is crea
   <img src="/images/guides/inngest/send-with-sequin.svg" alt="Inngest Overview" />
 </Frame>
 
-In this guide, you'll learn how to use Sequin to trigger Inngest events from database changes.
+In this guide, you'll learn how to use a Sequin webhook sink to trigger Inngest events from database changes.
 
 ## Prerequisites
 
@@ -33,18 +23,18 @@ You are about to create a local Inngest function that sends a welcome email to a
 You'll need the following:
 
 - An JavaScript/TypeScript project with [Inngest](https://www.inngest.com/) installed
-<Info>
+<Tip>
 If you don't have one already, follow [Inngest's Next.js quickstart guide](https://www.inngest.com/docs/getting-started/nextjs-quick-start#before-you-start-choose-a-project) to setup your project. You can return to this guide when you're ready to write your first Inngest function.
-</Info>
-- A [Sequin](https://console.sequinstream.com/register) account
-- A Postgres database
+</Tip>
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register).
+- A [database](/connect-postgres) connected to Sequin
 
 ## Create an Inngest function
 
-Start by creating a new Inngest function that sends a welcome email to a user when a `webhook/user.inserted` event(we'll define this event below) is received.
+Start by creating a new Inngest function. The example below shows a function that sends a welcome email to a user when a `webhook/user.inserted` event is received.
 
 <Steps titleSize="h3">
-  <Step title="Create a `send-welcome-email` function">
+  <Step title="Create a new function">
   In your `functions.ts` file (typically located in `src/inngest/functions.ts`), create a new function:
 
   ```ts
@@ -66,7 +56,7 @@ Start by creating a new Inngest function that sends a welcome email to a user wh
   <Step title="Add the function to `Inngest.serve()`">
   The `Inngest.serve()` handler registers your function with Inngest so it can invoke the function.
 
-  In your route.ts file (typically located in `src/app/api/inngest/route.ts`) register the `sendWelcomeEmail` function:
+  In your route.ts file (typically located in `src/app/api/inngest/route.ts`) register the function you created above:
 
   ```ts
   import { serve } from "inngest/next";
@@ -88,8 +78,8 @@ Start by creating a new Inngest function that sends a welcome email to a user wh
         # in a new terminal, start the inngest development server
         npx inngest-cli@latest dev
         ```
-    2. Open the Inngest dashboard in your browser and navigate to the [**Functions**](http://localhost:8288/functions) tab.
-    3. You should see the `send-welcome-email` function. Click the **Invoke** button and enter the following event payload:
+    2. Open the Inngest dashboard in your browser and navigate to the ["Functions"](http://localhost:8288/functions) tab.
+    3. You should see the `send-welcome-email` function. Click the "Invoke" button and enter a sample event payload. For this example, use the following event payload:
         ```json
         {
             "data": {
@@ -98,7 +88,7 @@ Start by creating a new Inngest function that sends a welcome email to a user wh
             }
         }
         ```
-    4. Click the **Invoke Function** button and then navigate to the **Runs** tab. You should see the run you just triggered:
+    4. Click the "Invoke Function" button and then navigate to the "Runs" tab. You should see the run you just triggered:
 
     <Frame>
       <img src="/images/guides/inngest/invoke-function-dev.png" alt="Invoke Function" />
@@ -115,53 +105,58 @@ Start by creating a new Inngest function that sends a welcome email to a user wh
 
 ## Create an Inngest webhook
 
-Now, create a webhook to trigger the `sendWelcomeEmail` function:
+Now, create an Inngest trigger that invokes the function you created above:
 
 <Steps titleSize="h3">
     <Step title="Create a new webhook in the Inngest dashboard">
-        In the Inngest Cloud Dashboard, navigate to the [**Webhooks**](https://app.inngest.com/env/production/manage/webhooks)  tab and click the **Create Webhook** button.
+        In the Inngest Cloud Dashboard, navigate to the ["Webhooks"](https://app.inngest.com/env/production/manage/webhooks) tab and click the "Create Webhook" button.
 
         <Note>
         Copy the webhook URL. You'll provide this URL to Sequin when you create a consumer below.
         </Note>
     </Step>
     <Step title="Transform the Sequin payload into an Inngest event">
-    Sequin will send a payload to your webhook containing the database change:
+    Sequin will send a [payload](/reference/sinks/webhooks#request-format) to your webhook containing the database change:
 
     ```json
     {
-      "record": {
-        "id": 1,
-        "name": "John Doe",
-        "email": "john.doe@example.com"
-      },
-      "changes": null,
-      "action": "insert",
-      "metadata": {
-        "table_schema": "public",
-        "table_name": "users",
-        "commit_timestamp": "2024-02-20T14:30:00Z",
-        "consumer": {
-          "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
-          "name": "new_user_consumer"
+      "data:" [
+        {
+          "record": {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john.doe@example.com"
+          },
+          "changes": null,
+          "action": "insert",
+          "metadata": {
+            "table_schema": "public",
+            "table_name": "users",
+            "commit_timestamp": "2024-02-20T14:30:00Z",
+            "consumer": {
+              "id": "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
+              "name": "new_user_consumer"
+            }
+          }
         }
-      }
+      ]
     }
     ```
-    You need to transform this payload into an Inngest event that triggers the `sendWelcomeEmail` function. To do so, use a **Transform** to extract the the event name and data from the Sequin payload:
+
+    You need to transform this payload into an Inngest event that triggers your function. To do so, use a "Transform" to extract the the event name and data from the Sequin payload:
 
     ```ts
     function transform(evt, headers = {}, queryParams = {}) {
       return {
         // Rename this webhook to give the events a unique name,
         // or use a field from the incoming event as the event name.
-        name: `webhook/${evt.metadata.table_name}.${evt.action}`,
-        data: evt.record,
+        name: `webhook/${evt.metadata.table_name}.${evt.data[0].action}`,
+        data: evt.data[0].record,
       };
     };
     ```
 
-    This will create an Inngest event with the name `webhook/users.insert` and the data from the Sequin `record` field:
+    This will create an Inngest event with the name of the table and the action (i.e. `webhook/users.insert`) and the data from the `record` field in the payload:
 
     <Frame>
       <img src="/images/guides/inngest/create-webhook.png" alt="Transform Event" />
@@ -170,85 +165,88 @@ Now, create a webhook to trigger the `sendWelcomeEmail` function:
 </Steps>
 
 <Check>
-    You've successfully created a webhook endpoint that transforms Sequin payloads into Inngest events. In the next steps, you'll configure Sequin to send events to your webhook.
+    You've successfully created a webhook endpoint that transforms Sequin payloads into Inngest events. In the next steps, you'll configure a webhook sink to send events to your webhook.
 </Check>
 
-## Create a Sequin push consumer
+## Create a webhook sink
 
-You'll now configure Sequin to capture every new user in your database and send an event to the Inngest webhook you created above.
+Create a webhook sink that captures changes to your database and sends a HTTP POST request to the Inngest webhook URL:
 
 <Steps titleSize="h3">
-    <Step title="Connect Sequin to your database">
-        1. Login to your Sequin account and click the **Add New Database** button.
-        2. Enter the connection details for your Postgres database.
-        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
-        ```sql
-        create publication sequin_pub for all tables;
-        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
-        ```
-        4. Name your database and click the **Connect Database** button.
-
-        Sequin will connect to your database and ensure that it's configured properly.
-
-        <Note>
-        If you need step-by-step connection instructions to connect Sequin to your database, check out our [quickstart guide](/quickstart).
-        </Note>
+    <Step title="Create a new sink">
+        Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
-    <Step title="Create a Push Consumer">
-    With your database connected, create a push consumer that will send events to Inngest:
 
-    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
-    2. Select your users table (i.e `public.users`).
-    3. Select to process **changes** and click **Continue**.
-    4. Configure which kinds of changes you want to capture and apply filters (for instance, ignore internal emails). Since you just want to email all new users, you'll capture just the `insert` changes and apply no additional filters:
+    <Step title="Select source table">
+        Select the table you want to capture changes from (i.e `public.users`).
+    </Step>
 
-    <Frame>
-      <img src="/images/guides/inngest/filters.png" alt="Create Consumer Filters" />
-    </Frame>
+    <Step title="Choose message type">
+        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
 
-    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `new_user_consumer`) and in the **HTTP Endpoint** section enter the webhook URL you created in Inngest as the **Base URL**. You don't need any headers or a path:
+        <Tip>
+        If you're not sure which to choose, leave the default setting of "Changes". So far in this guide, you've been setting up Inngest to handle change payloads from Sequin.
+        </Tip>
+    </Step>
 
-    <Frame>
-      <img src="/images/guides/inngest/webhook_url.png" alt="Consumer Settings" />
-    </Frame>
+    <Step title="Specify change types">
+        If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
 
-    7. Click the **Create Consumer** button. Sequin will verify your database is set up properly and may give you another SQL command to run to ensure every new user is captured.
+        In this example, you want to send welcome emails to new users, so under "Records to process" select only `insert` changes. No need to add a filter.
+    </Step>
+
+    <Step title="Configure backfill">
+        You can optionally indicate if you want your webhook endpoint to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. For now, leave "Backfill" toggled off.
+    </Step>
+
+    <Step title="Configure message grouping">
+        Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+    </Step>
+
+    <Step title="Configure delivery settings">
+        Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1 since we're just sending welcome emails.
+    </Step>
+
+    <Step title="Configure HTTP endpoint">
+        Under "HTTP Endpoint", enter the webhook URL you created in Inngest as the base URL. No additional headers are needed.
+    </Step>
+
+    <Step title="Name and create sink">
+        Give your sink a name (i.e. `new_user_webhook_sink`) and click "Create Webhook Sink".
     </Step>
 </Steps>
 
 <Check>
-    Your Sequin consumer is now created and ready to send events to Inngest.
+    Your webhook sink is now created and ready to send events to Inngest.
 </Check>
 
 ## Test end-to-end
 
 <Steps titleSize="h3">
     <Step title="Create a new user in your database">
-    Insert a new user into your database:
+    Insert a new row into your database. For example, a new user:
 
     ```sql
     insert into users (name, email) values ('John Doe', 'john.doe@example.com');
     ```
     </Step>
+
     <Step title="Trace the change in the Sequin dashboard">
-    In the Sequin console, navigate to the [**Trace**](https://console.sequinstream.com/trace) tab and confirm that Sequin delivered the event to Inngest:
-    <Frame>
-      <img src="/images/guides/inngest/trace.png" alt="Trace Event" />
-    </Frame>
+    In the Sequin web console, navigate to the "messages" tab for your webhook sinks and confirm that Sequin delivered the event to Inngest.
     </Step>
 
     <Step title="Confirm the event in the Inngest dashboard">
-    In the Inngest Cloud dashboard, navigate to the [**Events**](https://app.inngest.com/env/production/events) tab, select the `webhook/users.insert` event, and open the **Logs** tab. You should see the event you just created:
+    In the Inngest Cloud dashboard, navigate to the ["Events"](https://app.inngest.com/env/production/events) tab, select your event (i.e., `webhook/users.insert`), and open the "Logs" tab. You should see the event you just created:
 
     <Frame>
       <img src="/images/guides/inngest/inngest-log.png" alt="Event log" />
     </Frame>
 
-    Now, click the **Send to Dev Server** button to forward the event to your local Inngest development server.
+    Now, click the "Send to Dev Server" button to forward the event to your local Inngest development server.
     </Step>
+
     <Step title="Forward the event to your local Inngest development server">
-    Finally, in your local Inngest development server, navigate to the **Runs** tab and confirm that the event was received and your `send-welcome-email` function was invoked:
+    Finally, in your local Inngest development server, navigate to the "Runs" tab and confirm that the event was received and your function was invoked:
 
     <Frame>
       <img src="/images/guides/inngest/confirm-function-run.png" alt="Event run" />
@@ -257,16 +255,13 @@ You'll now configure Sequin to capture every new user in your database and send 
 </Steps>
 
 <Check>
-    Every new user will now trigger an Inngest event that sends a welcome email!
+    You've successfully created a complete workflow that captures changes from your database, triggers an Inngest event, and invokes your function.
 </Check>
 
 ## Next steps
+From here you can tailor your Sequin webhook sink and Inngest functions to cover more use cases. Then deploy your Inngest functions to production. Here are some resources to help:
 
-You've implemented a complete workflow that captures every new user in your database, triggers an Inngest event, and sends a welcome email. This is a simple pattern you can expand on to fit your needs.
-
-From here you can tailor your Sequin consumers and Inngest functions to cover more use cases. Then deploy your Inngest functions to production. Here are some resources to help:
-
-- Tailor your [Sequin webhooks](/reference/sinks/webhooks) to your use case.
+- Tailor your [Sequin webhook sink](/reference/sinks/webhooks) to your use case.
 - [Deploy](https://www.inngest.com/docs/platform/deployment) your Inngest functions to production.
 - Make your Inngest functions more [robust](https://www.inngest.com/docs/guides/error-handling) with retries, timeouts, and other features.
 

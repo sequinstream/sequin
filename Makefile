@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -74,6 +74,7 @@ help:
 	@echo "  make buildpush - Run mix buildpush (build and push docker image)"
 	@echo "  make buildpush-dirty - Run mix buildpush with --dirty flag"
 	@echo "  make connectdb [id=<id>] [open=<open>] - Connect to the production database"
+	@echo "  make connect - Connect to the production database"
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
@@ -90,6 +91,10 @@ remiex:
 connectdb:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_db.sh $(id) $(open)
+
+connect:
+	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
+	cd "$$INFRA_DIR" && ./scripts/prod_ssh.sh
 
 %:
 	@:

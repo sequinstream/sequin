@@ -68,13 +68,18 @@
       ]
     },
     {
-      "group": "How-to guides",
+      "group": "Sink setup guides",
       "pages": [
         "how-to/stream-postgres-to-a-webhook-endpoint",
         "how-to/stream-postgres-to-sqs",
         "how-to/stream-postgres-to-kafka",
         "how-to/stream-postgres-to-redis",
-        "how-to/stream-postgres-to-sequin-stream",
+        "how-to/stream-postgres-to-sequin-stream"
+      ]
+    },
+    {
+      "group": "How-to guides",
+      "pages": [
         "how-to/setup-change-retention",
         "how-to/create-audit-logs",
         "how-to/replicate-tables",
@@ -85,24 +90,22 @@
     {
       "group": "Reference",
       "pages": [
-        "reference/how-sequin-works",
         "reference/configuration",
         "reference/messages",
         "reference/filters",
         "reference/backfills",
-        {
-          "group": "Sinks",
-          "pages": [
-            "reference/sinks/overview",
-            "reference/sinks/webhooks",
-            "reference/sinks/sqs",
-            "reference/sinks/kafka",
-            "reference/sinks/redis",
-            "reference/sinks/sequin-stream"
-          ]
-        },
-        "reference/change-retention",
-        "reference/how-sequin-works",
+        "reference/change-retention"
+      ]
+    },
+    {
+      "group": "Sink reference",
+      "pages": [
+        "reference/sinks/overview",
+        "reference/sinks/webhooks", 
+        "reference/sinks/sqs",
+        "reference/sinks/kafka",
+        "reference/sinks/redis",
+        "reference/sinks/sequin-stream",
         {
           "group": "Sequin Stream API",
           "pages": [
@@ -110,8 +113,7 @@
             "reference/sequin-stream-api/ack",
             "reference/sequin-stream-api/nack"
           ]
-        },
-        "reference/change-capture-pipelines"
+        }
       ]
     },
     {
@@ -127,13 +129,13 @@
         "how-tos/setup-rds",
         "how-tos/setup-azure",
         "how-tos/setup-neon",
-        "how-tos/setup-supabase"
+        "how-tos/setup-supabase",
+        "how-to/setup-timescale"
       ]
     },
     {
-      "group": "Tutorials",
+      "group": "Webhook destinations",
       "pages": [
-        "guides/timescale",
         "guides/cloudflare",
         "guides/inngest",
         "guides/lambda",

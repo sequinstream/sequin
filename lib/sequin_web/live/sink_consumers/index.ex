@@ -95,7 +95,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   defp apply_action(socket, :list, _params) do
     socket
-    |> assign(:page_title, "Destination Consumers")
+    |> assign(:page_title, "Sinks")
     |> assign(:live_action, :list)
   end
 

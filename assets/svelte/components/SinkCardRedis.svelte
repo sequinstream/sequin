@@ -8,7 +8,7 @@
 <Card>
   <CardContent class="p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold">Redis Destination</h2>
+      <h2 class="text-lg font-semibold">Redis Configuration</h2>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

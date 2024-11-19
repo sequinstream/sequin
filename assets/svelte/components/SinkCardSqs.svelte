@@ -10,7 +10,7 @@
 <Card>
   <CardContent class="p-6">
     <div class="flex justify-between items-center mb-4">
-      <h2 class="text-lg font-semibold">SQS Queue</h2>
+      <h2 class="text-lg font-semibold">SQS Configuration</h2>
       <div class="flex space-x-2">
         <a
           href={`https://${consumer.sink.region}.console.aws.amazon.com/sqs/v3/home?region=${consumer.sink.region}#/queues/${encodeURIComponent(consumer.sink.queue_url)}`}

@@ -6,11 +6,24 @@ icon: "microsoft"
 iconType: "solid"
 ---
 
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
+
 This guide provides step-by-step instructions to connect your [Azure Database for PostgreSQL](https://azure.microsoft.com/en-us/services/postgresql/) to Sequin.
+
+## Provision a Postgres user for Sequin
+<CreateSequinDbUser />
 
 ## Enable logical replication on Azure Database for PostgreSQL
 
-By default, logical replication is not enabled on Azure Database for PostgreSQL. To enable it, follow these steps:
+By default, logical replication is not enabled on Azure Database for PostgreSQL. You can double check if logical replication is enabled by connecting to your database and running the following command:
+
+```sql
+SHOW rds.logical_replication;
+```
+
+If the output is `off`, then logical replication is not enabled.
+
+To enable it, follow these steps:
 
 <Warning>Enabling replication requires a restart of your database server.</Warning>
 
@@ -32,19 +45,6 @@ By default, logical replication is not enabled on Azure Database for PostgreSQL.
     - Go to the "Overview" page of your PostgreSQL server
     - Click the "Restart" button at the top of the page
     - Confirm the restart when prompted
-  </Step>
-  <Step title="Grant replication permissions">
-    Connect to your database using a SQL client and run the following SQL command to grant replication permissions to your user:
-
-    ```sql
-    ALTER ROLE <username> WITH REPLICATION;
-    ```
-
-    Replace `<username>` with your admin username.
-
-    <Note>
-      It's recommended to create a separate user for replication instead of using the admin account. Ensure this user has the necessary privileges on the schema you're replicating.
-    </Note>
   </Step>
   <Step title="Configure network access">
     Ensure that your Azure Database for PostgreSQL server allows network traffic from your connecting resource. You may need to add firewall rules or configure virtual network settings in the Azure Portal.
@@ -68,8 +68,8 @@ After enabling logical replication on Azure Database for PostgreSQL, you'll now 
     - Host: Your Azure PostgreSQL server hostname
     - Port: 5432 (default Postgres port)
     - Database: Your database name
-    - Username: Your database username (with replication permissions)
-    - Password: The password for your database user
+    - Username: The sequin database user you created earlier
+    - Password: The password for your sequin database user
 
     Make sure to enable the "SSL" option for secure connection.
   </Step>

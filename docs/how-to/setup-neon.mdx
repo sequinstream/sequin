@@ -1,0 +1,114 @@
+---
+title: "Connecting to Neon"
+sidebarTitle: "Neon"
+description: "How to connect Sequin to your Neon database."
+icon: "elephant"
+iconType: "solid"
+---
+
+This guide provides step-by-step instructions to connect your [Neon](https://neon.tech/) database to Sequin.
+
+## Enable logical replication on Neon
+
+To enable logical replication on Neon, follow these steps:
+
+<Steps titleSize="h3">
+  <Step title="Navigate to your project's logical replication settings">
+    Open your project in the [Neon console](https://console.neon.tech/). Then, navigate to the **Beta** section: "Project settings" > "Logical Replication".
+  </Step>
+  <Step title="Enable logical replication">
+    Click on the **Enable** button to activate logical replication.
+
+    <Frame>
+      <img src="/images/guides/neon/neon-replication-beta.png" alt="Enable logical replication" />
+    </Frame>
+  </Step>
+</Steps>
+
+<Note>
+Learn more about enabling logical replication in Neon [here](https://neon.tech/docs/guides/logical-replication-neon#enabling-logical-replication-in-neon).
+</Note>
+
+## Connect Sequin to your Neon database
+
+After enabling logical replication on Neon, you'll now connect to your Neon database in Sequin.
+
+<Steps titleSize="h3">
+  <Step title="Enter connection details in Sequin">
+    In the Sequin Console, click on the "Connect Database" button and enter the following details for your Neon database:
+
+    <Note>
+      You can find these connection details in your Neon project dashboard under the "Connection details" section:
+      <Frame>
+        <img src="/images/guides/neon/neon-connection-details.png" alt="Neon connection details" />
+      </Frame>
+    </Note>
+
+    - Host: Your Neon host (e.g., `ep-cool-snow-123456.us-east-2.aws.neon.tech`)
+    - Port: 5432 (default Postgres port)
+    - Database: Your database name
+    - Username: Your Neon username
+    - Password: Your Neon password
+
+    Make sure to enable the "SSL" option for secure connection.
+
+  </Step>
+  <Step title="Create a publication">
+    Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
+
+        ```sql
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    ```
+
+    If you want to publish changes from all tables, you can use:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    ```
+  </Step>
+  <Step title="Create a replication slot">
+    Next, create a replication slot to capture changes from the publication:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+  </Step>
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+  </Step>
+</Steps>
+
+## Create a sink
+
+With your Neon database connected to Sequin, you are ready to create a sink. Follow one of our guides below to get started:
+
+<CardGroup cols={2}>
+  <Card
+    title="Stream to Webhooks"
+    icon="webhook"
+    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+  >
+    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+  </Card>
+  <Card
+    title="Stream to Redis"
+    icon="layer-group"
+    href="/how-to/stream-postgres-to-redis"
+  >
+    Stream changes to Redis streams for real-time data processing and caching
+  </Card>
+  <Card
+    title="Stream to Kafka"
+    icon="code-branch"
+    href="/how-to/stream-postgres-to-kafka"
+  >
+    Publish database changes to Kafka topics for event streaming and processing
+  </Card>
+  <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+</CardGroup>

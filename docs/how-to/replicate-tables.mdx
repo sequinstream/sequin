@@ -94,11 +94,6 @@ Once your sink is configured, changes from your source table will flow to your m
 
 3. **Idempotency**: Always use `ON CONFLICT` clauses to handle duplicate messages safely
 
-4. **Error handling**: Implement proper error handling and retries for your sink type:
-   - For SQS, failed messages return to the queue
-   - For webhooks, return non-200 status to trigger retries
-   - For Kafka, manage your own offset commits
-
 ### Example: Basic 1-to-1 replication
 
 First, create a destination table that matches your source schema:
@@ -118,54 +113,41 @@ create table replicated_products (
 
 ### Process changes
 
-Here's an example of processing changes in Python. This code demonstrates several key patterns for reliable table replication:
+Here's an example of how to process changes to your destination table:
 
-1. Batching changes by operation type (inserts/updates vs deletes) for better performance
-2. Proper type casting to handle JSON -> Postgres type conversions
-3. Using `unnest()` for efficient batch operations
-4. Implementing idempotent operations with `ON CONFLICT` clauses to handle duplicate messages safely
+```python process_change.py
+import json
+import uuid
 
-```python process_changes.py
-def process_changes(changes):
-    # Batch changes by operation type
-    upserts = []
-    deletes = []
+def process_change(change):
+    product_id = uuid.UUID(change.record['id'])
     
-    for change in changes:
-        if change.action in ['insert', 'update', 'read']:
-            # Cast types appropriately
-            record = {
-                'id': uuid.UUID(change.record['id']),  # string -> uuid
-                'name': change.record['name'],
-                'price': Decimal(str(change.record['price'])),  # number -> decimal
-                'created_at': datetime.fromisoformat(change.record['created_at'])  # string -> timestamp
-            }
-            upserts.append(record)
-        elif change.action == 'delete':
-            deletes.append(change.record['id'])
-
-    # Batch upsert changes using unnest() for efficiency
-    if upserts:
-        db.execute("""
-            insert into replicated_products (
-                product_id, name, price, created_at
-            ) 
-            select * from unnest(%(records)s)
+    if change.action in ['insert', 'update', 'read']:
+        # Map source table to appropriate column
+        record = {
+            'product_id': product_id,
+            'data': json.dumps(change.record)
+        }
+        
+        db.execute(f"""
+            insert into replicated_products (product_id, data)
+            values (%(product_id)s, %(data)s)
             on conflict (product_id) do update set
-                name = excluded.name,
-                price = excluded.price,
-                created_at = excluded.created_at
-        """, {'records': upserts})
-
-    # Batch delete changes using any() for efficiency
-    if deletes:
-        db.execute("""
+                data = excluded.data
+        """, record)
+        
+    elif change.action == 'delete':
+        db.execute(f"""
             delete from replicated_products 
-            where product_id = any(%(ids)s)
-        """, {'ids': deletes})
+            where product_id = %(product_id)s
+        """, {'product_id': product_id})
 ```
 
-With this approach, you can efficiently replicate changes from your source table to your destination table in ~40 lines of code.
+<Note>
+  For better performance, consider batching multiple changes into a single database operation. Batching increases throughput while still maintaining transactional guarantees.
+</Note>
+
+With this approach, you can efficiently replicate changes from your source table to your destination table in ~25 lines of code.
 
 ### Example: Fan-in replication
 
@@ -187,38 +169,31 @@ create table combined_records (
 Here's how to process changes with this schema:
 
 ```python
-def process_changes(changes):
-    upserts = []
-    deletes = []
+def process_change(change):
+    source_table = change.metadata.table_name
+    record_id = uuid.UUID(change.record['id'])
     
-    for change in changes:
-        # Include source table in the record
-        source_table = change.source_table
-        record_id = uuid.UUID(change.record['id'])
+    if change.action in ['insert', 'update', 'read']:
+        # Map source table to appropriate column
+        record = {
+            'source_table': source_table,
+            'record_id': record_id,
+            'data': json.dumps(change.record)
+        }
         
-        if change.action in ['insert', 'update', 'read']:
-            record = {
-                'source_table': source_table,
-                'record_id': record_id,
-                'data': json.dumps(change.record)
-            }
-            upserts.append(record)
-        elif change.action == 'delete':
-            deletes.append((source_table, record_id))
-
-    if upserts:
         db.execute("""
             insert into combined_records (source_table, record_id, data)
-            select * from unnest(%(records)s)
+            values (%(source_table)s, %(record_id)s, %(data)s)
             on conflict (source_table, record_id) do update set
                 data = excluded.data
-        """, {'records': upserts})
-
-    if deletes:
+        """, record)
+        
+    elif change.action == 'delete':
         db.execute("""
             delete from combined_records 
-            where (source_table, record_id) = any(%(keys)s)
-        """, {'keys': deletes})
+            where source_table = %(source_table)s 
+            and record_id = %(record_id)s
+        """, {'source_table': source_table, 'record_id': record_id})
 ```
 
 #### Option 2: Separate primary key columns
@@ -246,40 +221,29 @@ create table combined_records (
 Here's how to process changes with this schema:
 
 ```python
-def process_changes(changes):
-    upserts = []
-    deletes = []
+def process_change(change):
+    source_table = change.metadata.table_name
+    record_id = uuid.UUID(change.record['id'])
     
-    for change in changes:
-        source_table = change.source_table
-        record_id = uuid.UUID(change.record['id'])
+    if change.action in ['insert', 'update', 'read']:
+        # Map source table to appropriate column
+        record = {
+            f"{source_table}_id": record_id,
+            'data': json.dumps(change.record)
+        }
         
-        if change.action in ['insert', 'update', 'read']:
-            # Map source table to appropriate column
-            record = {
-                f"{source_table}_id": record_id,
-                'data': json.dumps(change.record)
-            }
-            upserts.append((source_table, record))
-        elif change.action == 'delete':
-            deletes.append((source_table, record_id))
-
-    if upserts:
-        for source_table, record in upserts:
-            # Use dynamic column name in conflict clause
-            db.execute(f"""
-                insert into combined_records ({source_table}_id, data)
-                values (%(id)s, %(data)s)
-                on conflict ({source_table}_id) do update set
-                    data = excluded.data
-            """, {'id': record[f"{source_table}_id"], 'data': record['data']})
-
-    if deletes:
-        for source_table, record_id in deletes:
-            db.execute(f"""
-                delete from combined_records 
-                where {source_table}_id = %(id)s
-            """, {'id': record_id})
+        db.execute(f"""
+            insert into combined_records ({source_table}_id, data)
+            values (%(id)s, %(data)s)
+            on conflict ({source_table}_id) do update set
+                data = excluded.data
+        """, record)
+        
+    elif change.action == 'delete':
+        db.execute(f"""
+            delete from combined_records 
+            where {source_table}_id = %(id)s
+        """, {'id': record_id})
 ```
 
 ## Verify your pipeline is working

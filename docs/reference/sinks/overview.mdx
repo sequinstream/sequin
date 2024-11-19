@@ -1,0 +1,41 @@
+---
+title: "Sinks overview"
+sidebarTitle: "Overview"
+description: "Overview of Sequin sinks"
+---
+
+A **sink** in Sequin is a destination for your Postgres data.
+
+## Common sink behaviors
+
+### Guaranteed delivery
+
+Sequin guarantees delivery of messages to sinks. If a message is not delivered successfully, Sequin will retry. Sequin will expontentially backoff the retry interval, up to a maximum of roughly 3 minutes.
+
+### Message grouping and ordering
+
+Sequin has the ability to group messages by one or more fields. By default, Sequin groups messages by the primary key value(s) of the source row.
+
+You can specify message grouping behavior when configuring a sink.
+
+How message grouping and ordering work depends on the type of sink you're using. See the reference page for your sink for details.
+
+### Backfill support
+
+Sequin supports backfilling to sinks. See the [backfills reference](/reference/backfills) for more details.
+
+## Monitoring and debugging
+
+You can view the status of sinks in the Sequin web console.
+
+All sinks have a "Messages" tab that shows the status of messages currently in flight to the sink, recently delivered messages, and messages that have failed delivery.
+
+You can click into any failed message to view the delivery logs and error details.
+
+## Individual sink references
+
+- [Webhook sink](/reference/sinks/webhooks)
+- [SQS sink](/reference/sinks/sqs)
+- [Kafka sink](/reference/sinks/kafka)
+- [Redis sink](/reference/sinks/redis)
+- [Sequin Stream sink](/reference/sinks/sequin-stream)

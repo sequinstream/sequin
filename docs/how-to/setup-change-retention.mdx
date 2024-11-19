@@ -1,0 +1,85 @@
+---
+title: 'Set up change retention'
+sidebarTitle: 'Set up change retention'
+description: 'Store and retain change messages in a database table'
+---
+
+This guide shows you how to set up [change retention](/reference/change-retention) in Sequin to store change messages (inserts, updates, and deletes) in your database.
+
+By the end of this guide, you'll have a table that stores change messages. Then, you can stream those changes to a Sequin [sink](/reference/sinks/overview) and have the ability to [backfill changes](/reference/backfill) at any time.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- Sequin [installed and configured](/running-sequin) in your environment
+- Permission to create tables in your database
+
+## Steps
+
+Open the Sequin web console and navigate to the **Change Retention** tab. Click "Create retention".
+
+### Configure source
+
+<Steps>
+
+  <Step title="Select the source table">
+    Select the table you want to capture changes from.
+    </Step>
+
+  <Step title="Configure filters">
+    Optionally, specify which operations to capture (e.g., `insert`, `update`, and/or `delete`). You can also add [column filters](/reference/filters) to capture only certain changes.
+  </Step>
+</Steps>
+
+### Configure destination
+
+If you've created a change event table previously, you can select it from the list.
+
+Otherwise, click **Create new change event table** to create a new table. This will open a modal that guides you through creating the table:
+
+<Steps>
+  <Step title="Choose a retention policy">
+    Choose a [retention policy](/reference/change-retention#retention-policy) for change messages.
+
+    If you're not sure what to choose, we recommend selecting "None" and setting up a retention policy later.
+  </Step>
+
+  <Step title="Run the DDL commands">
+    Copy the DDL commands from the modal and run them in your database.
+  </Step>
+
+  <Step title="Create the retention">
+    Give your change retention a name, and click **Create**.
+  </Step>
+</Steps>
+
+For more details on the options available, see the [reference](/reference/change-retention).
+
+## Verify
+
+Test that changes are being captured correctly:
+
+1. Connect to your database
+2. Make a test change to your source table:
+
+```sql
+-- Example: Insert a new row
+insert into your_table (column1, column2) 
+values ('test1', 'test2');
+```
+
+3. Verify the change was captured into the destination table:
+
+```sql
+select action, record_pk, record, changes
+from sequin_changes
+order by id desc
+limit 1;
+```
+
+## Next steps
+
+Now that you've set up change retention, you can stream changes to a [sink](/reference/sinks/overview). With retention enabled, you can backfill changes to your sink at any time.
+
+For more information about change retention, see the [reference](/reference/change-retention).

@@ -373,6 +373,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   defp test_db_conn(params, socket) do
     db =
       params["database"]
+      |> put_ipv6()
       |> Sequin.Map.atomize_keys()
       |> Map.put(:account_id, current_account_id(socket))
       |> then(&struct(PostgresDatabase, &1))
@@ -395,6 +396,7 @@ defmodule SequinWeb.DatabasesLive.Form do
     case Sequin.NetworkUtils.check_ipv6(db_params["hostname"]) do
       {:ok, true} -> Map.put(db_params, "ipv6", true)
       {:ok, false} -> Map.put(db_params, "ipv6", false)
+      {:error, _error} -> db_params
     end
   end
 

@@ -1,16 +1,36 @@
-## Moving Supabase webhooks to Sequin
+---
+title: "Migrate Supabase webhooks to Sequin webhook sinks"
+sidebarTitle: "Supabase webhooks"
+description: "How to migrate Supabase webhooks to Sequin webhook sinks."
+icon: "bolt"
+iconType: "solid"
+---
 
-Sequin has some helpful features that Supabase webhooks lack:
+This guide shows you how to migrate Supabase webhooks to Sequin webhook sinks.
+
+You may want to move your existing Supabase webhooks to Sequin because Sequin webhook sinks provide additional features, observability, and reliability:
 
 * Exactly-once processing guarantees ensuring every event is processed once and only once.
 * Automatic retries and backoff for failed events.
-* Filtering of events with no PL/pgSQL.
+* Filtering of events with no PL/pgSQL required.
 * Backfill support to sync historical data.
-* Helpful observability and debugging tools.
+* End-to-end observability and debugging tools for failed events.
+* Sinks to other streams and queues like SQS and Kafka.
 
 You can easily move your existing Supabase webhooks to Sequin by creating Sequin HTTP push consumers.
 
-### Example Supabase webhook to migrate
+## Prerequisites
+
+You are about to migrate a Supabase webhook to a Sequin webhook sink that sends HTTP POST requests to your endpoint when database rows change.
+
+You'll need the following:
+
+- A [Supabase](https://supabase.com) project
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register)
+- Your Supabase database [connected to Sequin](/how-to/setup-supabase)
+
+
+## Example Supabase webhook to migrate
 
 As an example, here's a webhook trigger in Supabase for a hypothetical `orders` table:
 
@@ -50,41 +70,51 @@ When the trigger fires, Supabase sends the data to the endpoint with the followi
 }
 ```
 
-### Sequin HTTP push consumer
+## Create a Sequin webhook sink
 
-To create this exact webhook in Sequin, you'll create an HTTP push consumer on the `orders` table with no filters. Here's how to do it:
+To replicate this exact webhook in Sequin, you'll create a webhook sink on the `orders` table with no filters. Here's how to do it:
 
 <Steps titleSize="h3" >
-  <Step title="Select your database and table">
-    In the Sequin Console, navigate to the Consumers page, click **Create Consumer**.
+  <Step title="Create a new sink">
+    Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
+  </Step>
 
+  <Step title="Select source table">
     Select your Supabase database and the `public.orders` table.
   </Step>
-  <Step title="Set filters and operations">
-    Don't configure any filters and set the consumer to capture just `INSERT` operations:
+
+  <Step title="Choose message type">
+    Specify whether you want to receive changes or rows from the table. In this case, you want to receive changes.
+  </Step>
+
+  <Step title="Specify change types">
+    In "Records to process", set the consumer to capture just `INSERT` operations:
+
     <Frame>
         <img src="../images/guides/supabase/sequin-consumer-filters.png" alt="Sequin consumer settings" />
     </Frame>
   </Step>
-  <Step title="Select Change stream to HTTP Push">
-    To mimic the behavior of the Supabase webhook, select **Change stream** as the stream type and then **HTTP Push** as the consumer type.
-  </Step>
-  <Step title="Add your webhook URL">
-    Finally, give your consumer a name, set a timeout, and add your webhook URL:
 
-    <Frame>
-        <img src="../images/guides/supabase/sequin-consumer-endpoint.png" alt="Sequin consumer settings" />
-    </Frame>
+  <Step title="Configure backfill">
+    Leave "Backfill" toggled off for now.
+  </Step>
+
+  <Step title="Configure message grouping">
+    Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+  </Step>
+
+  <Step title="Configure delivery settings">
+    Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1.
+  </Step>
+
+  <Step title="Configure HTTP endpoint">
+    Add your webhook URL and any required headers.
 
     <Note>Sequin gives you more control over webhook delivery and retries including a higher request timeout, automatic retries, and the ability to configure max ack pending (e.g. the consumer will stop sending new events to the endpoint if a certain number of events are not acknowledged). Additionally, you can authenticate the messages delivered to your endpoint with encrypted headers.</Note>
-
   </Step>
-  <Step title="Set the replica identity to `full`">
-    Once you create your Consumer, Sequin will verify your configuration. To ensure Sequin can capture the `old` values for `update` and `delete` operations, you'll be prompted to set the replica identity to `full` by running the following SQL command:
 
-    ```sql
-   alter table orders replica identity full;
-    ```
+  <Step title="Name and create sink">
+    Give your sink a name (e.g. `orders_webhook_sink`) and click "Create Webhook Sink".
   </Step>
 </Steps>
 
@@ -113,7 +143,7 @@ Now, when you create a new order in Supabase, Sequin will capture the change and
 ```
 
 <Note>
-  Sequin's data payload is slightly different than Supabase's webhook payload:
+  Sequin's [data payload](/reference/sinks/webhooks#request-format) is slightly different than Supabase's webhook payload:
   * Sequin's `metadata` field includes additional metadata about the consumer and the table.
   * Sequin captures the operation type (e.g. `insert`, `update`, `delete`) in the `action` field not the `type` field.
   * Sequin captures changes for `update` and `delete` operations in the `changes` field not the `old_record` field.

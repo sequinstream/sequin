@@ -100,7 +100,7 @@
       "group": "Sink reference",
       "pages": [
         "reference/sinks/overview",
-        "reference/sinks/webhooks", 
+        "reference/sinks/webhooks",
         "reference/sinks/sqs",
         "reference/sinks/kafka",
         "reference/sinks/redis",

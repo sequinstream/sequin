@@ -62,7 +62,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
   <Step title="Leave message grouping default">
     If your sink supports message grouping, leave the default option selected for "Message grouping".
     
-    This will ensure that messages are [grouped by primary key](/reference/ordering-and-grouping), helping eliminate race conditions as you write rows to your cache.
+    This will ensure that messages are grouped by primary key, helping eliminate race conditions as you write rows to your cache.
   </Step>
 
   <Step title="Specify backfill">
@@ -107,7 +107,7 @@ If you're using Redis Streams, you'll need to be mindful of race conditions as y
 
 While Sequin will write messages pertaining to the same row to your stream in order, there's a risk that two separate workers will process messages simultaneously for the same row.
 
-You can use the Redis stream entry ID for a message to determine the order of messages for a given row. See the [Redis sink reference](/reference/sinks/redis#ordering-messages) for more details.
+You can use the Redis stream entry ID for a message to determine the order of messages for a given row. See the [Redis sink reference](/reference/sinks/redis#grouping-and-ordering) for more details.
 
 ## Verify your pipeline is working
 

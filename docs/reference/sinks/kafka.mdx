@@ -46,7 +46,7 @@ Sequin sends messages to Kafka as JSON. You can find the shape of the messages i
 
 If Sequin is unable to deliver a message to Kafka, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
 
-## Message Size Limits
+## Message size limits
 
 The maximum message size in Kafka is configured at the broker level. The default maximum message size in Kafka is 1MB. If you need to handle larger messages, you'll need to adjust the `message.max.bytes` setting on your Kafka brokers.
 

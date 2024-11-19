@@ -63,7 +63,8 @@
           "icon": "gauge-max"
         },
         "compare",
-        "running-sequin"
+        "running-sequin",
+        "connect-postgres"
       ]
     },
     {
@@ -75,7 +76,6 @@
         "how-to/stream-postgres-to-redis",
         "how-to/stream-postgres-to-sequin-stream",
         "how-to/setup-change-retention",
-        "how-to/event-driven-workflows",
         "how-to/create-audit-logs",
         "how-to/replicate-tables",
         "how-to/maintain-caches",

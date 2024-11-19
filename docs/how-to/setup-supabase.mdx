@@ -1,0 +1,88 @@
+---
+title: "Connecting to Supabase"
+sidebarTitle: "Supabase"
+description: "How to connect Sequin to your Supabase project to replace webhooks and trigger edge functions."
+icon: "bolt"
+iconType: "solid"
+---
+
+This guide provides step-by-step instructions to connect your Supabase [Postgres database](https://supabase.com/docs/guides/database) to Sequin.
+
+## Connect Sequin to your Supabase database
+
+<Steps titleSize="h3">
+  <Step title="Get your database connection details">
+    Login to Supabase and navigate to the database settings page ("Project Settings" > "Database").
+  </Step>
+  <Step title="Copy your database connection details">
+    In the "Connection string" section, copy the connection string for your database (e.g. `postgresql://<username>:<password>@<host>:5432/<database>?sslmode=require`).
+  </Step>
+  <Step title="Enter the connection details in Sequin">
+    In Sequin web console, navigate to the "Databases" tab and click on the "Connect Database" button. Click the "Autofill with Connection String" button and paste the connection string you copied in the previous step.
+
+    Click "Autofill" to have Sequin prefill the connection details.
+
+    <Note>
+      Your database password is not included in the Supabase connection string, so you'll need to enter your password in the "Password" field.
+    </Note>
+  </Step>
+  <Step title="Create a publication">
+    In the Supabase SQL editor, execute the following SQL query to create a publication:
+
+        ```sql
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    ```
+
+    If you want to publish changes from all tables, you can use:
+
+    ```sql
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    ```
+  </Step>
+  <Step title="Create a replication slot">
+    Next, create a replication slot to capture changes from the publication:
+
+    ```sql
+    SELECT pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    ```
+  </Step>
+
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click **Create Database**.
+  </Step>
+</Steps>
+
+## Create sinks to replace database webhooks and triggers
+
+With your Supabase database connected to Sequin, you can create sinks to replace your database webhooks and triggers. Follow one of our guides below to get started:
+
+<CardGroup cols={2}>
+  <Card
+    title="Stream to Webhooks"
+    icon="webhook"
+    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+  >
+    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+  </Card>
+  <Card
+    title="Stream to Redis"
+    icon="layer-group"
+    href="/how-to/stream-postgres-to-redis"
+  >
+    Stream changes to Redis streams for real-time data processing and caching
+  </Card>
+  <Card
+    title="Stream to Kafka"
+    icon="code-branch"
+    href="/how-to/stream-postgres-to-kafka"
+  >
+    Publish database changes to Kafka topics for event streaming and processing
+  </Card>
+  <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+</CardGroup>

@@ -18,7 +18,11 @@ When you create a Sequin Stream sink, you can configure the following settings:
 - **Max ack pending**: The maximum number of messages that can be outstanding (i.e. in-flight but not yet acknowledged by your consumer group) at one time. This setting helps prevent your consumer group from getting overloaded with messages. Choose a value based on your consumer group's processing capacity.
 - **Max waiting**: The maximum number of consumers that can be waiting to receive messages at one time. Once reached, subsequent `/receive` calls will block until a slot becomes available. This setting helps manage resource utilization and prevent excessive polling. Choose a value based on how many parallel consumers you expect to have in your consumer group.
 
-You'll create a Sequin Stream sink for each database table you want to capture changes from. This means you'll also have one consumer group for each Sequin Stream sink and by extension, for each database table. We're working to support multiple tables per Sequin Stream sink, but this is not yet available.
+You'll create a Sequin Stream sink for each database table you want to capture changes from. This means you'll also have one consumer group for each Sequin Stream sink and, by extension, for each database table.
+
+<Note>
+  We're working to support multiple tables per Sequin Stream sink, but this is not yet available.
+</Note>
 
 ## Consumer group pattern
 

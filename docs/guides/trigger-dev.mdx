@@ -216,7 +216,7 @@ You'll now configure Sequin to send every row in your `posts` table to your Trig
         1. Login to your Sequin account and click the **Add New Database** button.
         2. Enter the connection details for your Postgres database.
         <Info>
-        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/cli).
+        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/reference/cli/overview).
         </Info>
         3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
 
@@ -237,7 +237,7 @@ You'll now configure Sequin to send every row in your `posts` table to your Trig
     Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
 
     1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
-    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/cli), then run:
+    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/reference/cli/overview), then run:
 
       ```bash
       sequin tunnel --ports=3001:local_endpoint

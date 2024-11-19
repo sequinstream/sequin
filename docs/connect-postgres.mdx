@@ -3,6 +3,8 @@ title: 'How to connect your Postgres database to Sequin'
 sidebarTitle: 'Connect Postgres'
 ---
 
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
+
 To start streaming changes from your Postgres database, connect Sequin to your database.
 
 This guide is for a **vanilla Postgres database**, such as one you run locally or host yourself on a cloud provider. If you're using a database provider, see the setup guide for your database provider:
@@ -21,37 +23,7 @@ You'll need permission to create publications and replication slots on your data
 
 ### Provision a Postgres user for Sequin
 
-When in development, it's probably fine to supply Sequin with an existing user.
-
-However, when in production, you should create a dedicated user for Sequin. The user needs the following permissions:
-
-1. `connect` permission on the database.
-2. `select` permission on all the tables you want to connect to Sequin.
-3. `replication` permission to read from replication slots.
-
-Here's how to create a dedicated user with the minimum required permissions:
-
-```sql
--- Create user with a secure password
-create user sequin_user with password 'REPLACE_WITH_SECURE_PASSWORD';
-
--- Grant connect permission
-grant connect on database your_database to sequin_user;
-
--- Grant select permission on tables you want to replicate
-grant select on table table1, table2, table3 to sequin_user;
--- OR grant select on all tables in a schema
-grant select on all tables in schema public to sequin_user;
-
--- Grant replication permission
-alter user sequin_user with replication;
-```
-
-To generate a secure password, if you have OpenSSL installed, you can use the following command:
-
-```bash
-openssl rand -base64 32
-```
+<CreateSequinDbUser />
 
 ## Enable logical replication
 
@@ -198,6 +170,6 @@ alter publication sequin_pub add all tables in schema my_schema;
 To verify which tables are included in your publication, you can run:
 
 ```sql
-select * from pg_publication_tables 
+select * from pg_publication_tables
 where pubname = 'sequin_pub';
 ```

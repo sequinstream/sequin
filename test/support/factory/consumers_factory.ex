@@ -8,7 +8,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RecordConsumerState
@@ -28,28 +27,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
   alias Sequin.Test.Support.Models.TestEventLog
-
-  # Consumer
-  def consumer(attrs \\ []) do
-    case Enum.random([:http_pull, :http_push]) do
-      :http_pull -> http_pull_consumer(attrs)
-      :http_push -> sink_consumer(attrs)
-    end
-  end
-
-  def consumer_attrs(attrs \\ []) do
-    case Enum.random([:http_pull, :http_push]) do
-      :http_pull -> http_pull_consumer_attrs(attrs)
-      :http_push -> sink_consumer_attrs(attrs)
-    end
-  end
-
-  def insert_consumer!(attrs \\ []) do
-    case Enum.random([:http_pull, :sink_consumer]) do
-      :http_pull -> insert_http_pull_consumer!(attrs)
-      :sink_consumer -> insert_sink_consumer!(attrs)
-    end
-  end
 
   def sink_consumer(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -210,102 +187,6 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   defp sink(:sequin_stream, _account_id, attrs) do
     merge_attributes(%SequinStreamSink{type: :sequin_stream}, attrs)
-  end
-
-  def http_pull_consumer(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    {postgres_database_id, attrs} =
-      Map.pop_lazy(attrs, :postgres_database_id, fn ->
-        DatabasesFactory.insert_postgres_database!(account_id: account_id).id
-      end)
-
-    {replication_slot_id, attrs} =
-      Map.pop_lazy(attrs, :replication_slot_id, fn ->
-        ReplicationFactory.insert_postgres_replication!(
-          account_id: account_id,
-          postgres_database_id: postgres_database_id
-        ).id
-      end)
-
-    {source_tables, attrs} =
-      Map.pop_lazy(attrs, :source_tables, fn -> [source_table()] end)
-
-    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
-
-    {record_consumer_state, attrs} =
-      Map.pop_lazy(attrs, :record_consumer_state, fn ->
-        if message_kind == :record, do: record_consumer_state_attrs()
-      end)
-
-    {sequence_id, attrs} =
-      Map.pop_lazy(attrs, :sequence_id, fn ->
-        DatabasesFactory.insert_sequence!(account_id: account_id, postgres_database_id: postgres_database_id).id
-      end)
-
-    {sequence_filter, attrs} =
-      Map.pop_lazy(attrs, :sequence_filter, fn ->
-        if sequence_id, do: sequence_filter_attrs()
-      end)
-
-    merge_attributes(
-      %HttpPullConsumer{
-        id: Factory.uuid(),
-        name: Factory.unique_word(),
-        message_kind: message_kind,
-        backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
-        ack_wait_ms: 30_000,
-        max_ack_pending: 10_000,
-        max_deliver: Enum.random(1..100),
-        max_waiting: 20,
-        account_id: account_id,
-        record_consumer_state: record_consumer_state,
-        replication_slot_id: replication_slot_id,
-        source_tables: source_tables,
-        status: :active,
-        sequence_id: sequence_id,
-        sequence_filter: sequence_filter
-      },
-      attrs
-    )
-  end
-
-  def http_pull_consumer_attrs(attrs \\ []) do
-    attrs
-    |> http_pull_consumer()
-    |> Sequin.Map.from_ecto()
-    |> Map.update!(:source_tables, fn source_tables ->
-      Enum.map(source_tables, fn source_table ->
-        source_table
-        |> Sequin.Map.from_ecto()
-        |> Map.update!(:column_filters, fn column_filters ->
-          Enum.map(column_filters, &Sequin.Map.from_ecto/1)
-        end)
-      end)
-    end)
-  end
-
-  def insert_http_pull_consumer!(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    {account_id, attrs} =
-      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
-
-    attrs =
-      attrs
-      |> Map.put(:account_id, account_id)
-      |> http_pull_consumer_attrs()
-
-    case Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs) do
-      {:ok, consumer} ->
-        consumer
-
-      {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
-        insert_http_pull_consumer!(attrs)
-    end
   end
 
   def record_consumer_state_attrs(attrs \\ []) do
@@ -489,7 +370,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs = Map.new(attrs)
 
     {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :event).id end)
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_sink_consumer!(message_kind: :event).id end)
 
     attrs
     |> Map.put(:consumer_id, consumer_id)
@@ -581,7 +462,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       end
 
     {consumer_id, attrs} =
-      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_consumer!(message_kind: :record).id end)
+      Map.pop_lazy(attrs, :consumer_id, fn -> ConsumersFactory.insert_sink_consumer!(message_kind: :record).id end)
 
     attrs
     |> Map.put(:consumer_id, consumer_id)

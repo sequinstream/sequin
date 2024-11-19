@@ -49,10 +49,7 @@
     },
     {
       heading: "Stream",
-      items: [
-        { path: "/streams", text: "Streams", icon: ListOrdered },
-        { path: "/consumer-groups", text: "Consumer Groups", icon: Radio },
-      ],
+      items: [{ path: "/streams", text: "Streams", icon: ListOrdered }],
     },
     {
       heading: "Change Capture",

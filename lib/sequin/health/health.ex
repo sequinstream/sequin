@@ -9,7 +9,6 @@ defmodule Sequin.Health do
 
   alias __MODULE__
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -20,7 +19,6 @@ defmodule Sequin.Health do
   @type status :: :healthy | :warning | :error | :initializing | :waiting
   @type entity ::
           HttpEndpoint.t()
-          | HttpPullConsumer.t()
           | SinkConsumer.t()
           | PostgresDatabase.t()
           | WalPipeline.t()
@@ -33,7 +31,6 @@ defmodule Sequin.Health do
 
     field :entity_kind,
           :http_endpoint
-          | :http_pull_consumer
           | :http_push_consumer
           | :postgres_database
           | :wal_pipeline
@@ -59,7 +56,6 @@ defmodule Sequin.Health do
 
   defguard is_entity(entity)
            when is_struct(entity, HttpEndpoint) or
-                  is_struct(entity, HttpPullConsumer) or
                   is_struct(entity, SinkConsumer) or
                   is_struct(entity, PostgresDatabase) or
                   is_struct(entity, WalPipeline)
@@ -196,23 +192,6 @@ defmodule Sequin.Health do
     end
   end
 
-  @http_pull_consumer_checks [:filters, :ingestion, :receive, :acknowledge]
-  defp expected_check(%HttpPullConsumer{}, check_id, status, error) when check_id in @http_pull_consumer_checks do
-    case check_id do
-      :filters ->
-        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :ingestion ->
-        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :receive ->
-        %Check{id: :receive, name: "Pull", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :acknowledge ->
-        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
-    end
-  end
-
   @wal_pipeline_checks [:filters, :ingestion, :destination_insert]
   defp expected_check(%WalPipeline{}, check_id, status, error) when check_id in @wal_pipeline_checks do
     case check_id do
@@ -272,31 +251,6 @@ defmodule Sequin.Health do
 
         %Check{id: :push} = check ->
           %{check | message: "Pushing messages to your endpoint via HTTP."}
-
-        %Check{} = check ->
-          check
-      end)
-
-    %Health{
-      name: "Consumer health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(%HttpPullConsumer{} = entity) do
-    checks =
-      @http_pull_consumer_checks
-      |> Enum.map(&expected_check(entity, &1, :initializing))
-      |> Enum.map(fn
-        %Check{id: :receive} = check ->
-          %{check | message: "Pull messages from the consumer via HTTP."}
-
-        %Check{id: :acknowledge} = check ->
-          %{check | message: "Acknowledge messages via HTTP."}
 
         %Check{} = check ->
           check
@@ -417,7 +371,6 @@ defmodule Sequin.Health do
   end
 
   defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
-  defp entity_kind(%HttpPullConsumer{}), do: :http_pull_consumer
   defp entity_kind(%SinkConsumer{}), do: :push_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
   defp entity_kind(%WalPipeline{}), do: :wal_pipeline

@@ -64,7 +64,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot (event)
       event_consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :event,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -87,7 +87,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot (record)
       record_consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -767,7 +767,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot (event)
       event_consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :event,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -778,7 +778,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot (record)
       record_consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
@@ -1111,7 +1111,7 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Create a consumer for this replication slot (record)
       consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           replication_slot_id: pg_replication.id,
           account_id: account_id,

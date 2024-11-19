@@ -37,7 +37,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "list_consumer_records_for_consumer/2 returns all consumer records for a consumer" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       consumer_record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
       consumer_record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
       consumer_record3 = ConsumersFactory.insert_consumer_record!()
@@ -50,7 +50,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "list_consumer_records_for_consumer/2 filters by deliverable state" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       now = DateTime.utc_now()
       past = DateTime.add(now, -60, :second)
       future = DateTime.add(now, 60, :second)
@@ -71,7 +71,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "list_consumer_records_for_consumer/2 respects limit parameter" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       Enum.each(1..5, fn _ -> ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id) end)
 
       records = Consumers.list_consumer_records_for_consumer(consumer.id, limit: 3)
@@ -79,7 +79,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "list_consumer_records_for_consumer/2 respects order_by parameter" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
 
@@ -93,7 +93,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "ack_messages/2 deletes non-pending_redelivery records and marks pending_redelivery as available" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
       record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
@@ -113,7 +113,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "nack_messages/2 marks consumer records as available and resets not_visible_until" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       future = DateTime.add(DateTime.utc_now(), 3600, :second)
 
       record1 =
@@ -140,7 +140,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
 
   describe "insert_consumer_records/1" do
     test "inserts a single new record" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record_attrs = ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id, state: :delivered)
 
       assert {:ok, 1} = Consumers.insert_consumer_records([record_attrs])
@@ -160,7 +160,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "inserts multiple new records" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       records = Enum.map(1..3, fn _ -> ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id) end)
 
       assert {:ok, 3} = Consumers.insert_consumer_records(records)
@@ -170,7 +170,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "upserts a record that already exists" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
 
       updated_attrs = %{
@@ -192,7 +192,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "upserts multiple records, some new and some existing" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id)
       new_record = ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id)
 
@@ -215,7 +215,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "state transitions" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       records = [
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available),
@@ -250,7 +250,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "inserts only one record when multiple records have the same unique constraint values" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       attrs =
         ConsumersFactory.consumer_record_attrs(
@@ -270,7 +270,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
 
   describe "delete_consumer_records/1" do
     test "deletes matching records" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["1"])
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["2"])
       record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["3"])
@@ -283,8 +283,8 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "doesn't delete records with non-matching consumer_id or table_oid" do
-      consumer1 = ConsumersFactory.insert_consumer!(message_kind: :record)
-      consumer2 = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer1 = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      consumer2 = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer1.id, table_oid: 1000, record_pks: ["1"])
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer2.id, table_oid: 1000, record_pks: ["2"])
 
@@ -296,7 +296,7 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
     end
 
     test "deletes records with multi-column primary keys respecting order" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       record1 =
         ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, table_oid: 1000, record_pks: ["1", "a"])

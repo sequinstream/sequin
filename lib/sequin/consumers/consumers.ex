@@ -8,7 +8,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
@@ -39,7 +38,7 @@ defmodule Sequin.Consumers do
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
   @consumer_record_state_enum Postgres.quote_name(@stream_schema, "consumer_record_state")
 
-  @type consumer :: HttpPullConsumer.t() | SinkConsumer.t()
+  @type consumer :: SinkConsumer.t()
 
   def posthog_ets_table do
     :consumer_ack_events
@@ -50,7 +49,6 @@ defmodule Sequin.Consumers do
 
   # Consumers
 
-  def kind(%HttpPullConsumer{}), do: :pull
   def kind(%SinkConsumer{type: type}), do: type
 
   def source_table(%{source_tables: [], sequence: %Sequence{} = sequence} = consumer) do
@@ -86,10 +84,7 @@ defmodule Sequin.Consumers do
   def source_table(_), do: nil
 
   def get_consumer(consumer_id) do
-    with {:error, _} <- get_http_pull_consumer(consumer_id),
-         {:error, _} <- get_sink_consumer(consumer_id) do
-      {:error, Error.not_found(entity: :consumer)}
-    end
+    get_sink_consumer(consumer_id)
   end
 
   def get_consumer!(consumer_id) do
@@ -100,22 +95,11 @@ defmodule Sequin.Consumers do
   end
 
   def get_consumer_for_account(account_id, consumer_id) do
-    pull_consumer =
-      account_id
-      |> HttpPullConsumer.where_account_id()
-      |> HttpPullConsumer.where_id_or_name(consumer_id)
-      |> preload(:sequence)
-      |> Repo.one()
-
-    if pull_consumer do
-      pull_consumer
-    else
-      account_id
-      |> SinkConsumer.where_account_id()
-      |> SinkConsumer.where_id_or_name(consumer_id)
-      |> preload(:sequence)
-      |> Repo.one()
-    end
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> SinkConsumer.where_id_or_name(consumer_id)
+    |> preload(:sequence)
+    |> Repo.one()
   end
 
   def reload(%ConsumerEvent{} = ce) do
@@ -133,23 +117,15 @@ defmodule Sequin.Consumers do
   end
 
   def all_consumers do
-    Repo.all(SinkConsumer) ++ Repo.all(HttpPullConsumer)
+    Repo.all(SinkConsumer)
   end
 
   def list_consumers_for_account(account_id, preload \\ []) do
-    pull_consumers =
-      account_id
-      |> HttpPullConsumer.where_account_id()
-      |> preload(^preload)
-      |> Repo.all()
-
-    sink_consumers =
-      account_id
-      |> SinkConsumer.where_account_id()
-      |> preload(^preload)
-      |> Repo.all()
-
-    Enum.sort_by(pull_consumers ++ sink_consumers, & &1.inserted_at, {:desc, DateTime})
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> preload(^preload)
+    |> Repo.all()
+    |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
   end
 
   def list_sink_consumers_for_account(account_id, preload \\ []) do
@@ -159,25 +135,16 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_http_pull_consumers_for_account(account_id, preload \\ []) do
-    account_id
-    |> HttpPullConsumer.where_account_id()
-    |> preload(^preload)
+  def list_consumers_for_replication_slot(replication_slot_id) do
+    replication_slot_id
+    |> SinkConsumer.where_replication_slot_id()
     |> Repo.all()
   end
 
-  def list_consumers_for_replication_slot(replication_slot_id) do
-    pull = HttpPullConsumer.where_replication_slot_id(replication_slot_id)
-    push = SinkConsumer.where_replication_slot_id(replication_slot_id)
-
-    Repo.all(pull) ++ Repo.all(push)
-  end
-
   def list_consumers_for_sequence(sequence_id) do
-    pull = HttpPullConsumer.where_sequence_id(sequence_id)
-    push = SinkConsumer.where_sequence_id(sequence_id)
-
-    Repo.all(pull) ++ Repo.all(push)
+    sequence_id
+    |> SinkConsumer.where_sequence_id()
+    |> Repo.all()
   end
 
   def list_sink_consumers_for_http_endpoint(http_endpoint_id) do
@@ -187,22 +154,13 @@ defmodule Sequin.Consumers do
   end
 
   def list_consumers_where_table_producer do
-    pull = Repo.all(preload(HttpPullConsumer.where_table_producer(), replication_slot: :postgres_database))
-    push = Repo.all(preload(SinkConsumer.where_table_producer(), replication_slot: :postgres_database))
-
-    pull ++ push
+    Repo.all(preload(SinkConsumer.where_table_producer(), replication_slot: :postgres_database))
   end
 
   def table_producer_finished(consumer_id) do
     consumer = get_consumer!(consumer_id)
     state = Map.from_struct(consumer.record_consumer_state)
     update_consumer(consumer, %{record_consumer_state: %{state | producer: :wal}})
-  end
-
-  def update_consumer(%HttpPullConsumer{} = consumer, attrs) do
-    consumer
-    |> HttpPullConsumer.update_changeset(attrs)
-    |> Repo.update()
   end
 
   def update_consumer(%SinkConsumer{} = consumer, attrs) do
@@ -243,64 +201,6 @@ defmodule Sequin.Consumers do
 
   def partition_name(%{message_kind: :record} = consumer) do
     "consumer_records_#{consumer.seq}"
-  end
-
-  # HttpPullConsumer
-
-  def get_http_pull_consumer(consumer_id) do
-    case Repo.get(HttpPullConsumer, consumer_id) do
-      nil -> {:error, Error.not_found(entity: :http_pull_consumer)}
-      consumer -> {:ok, consumer}
-    end
-  end
-
-  def find_http_pull_consumer(account_id, params \\ []) do
-    params
-    |> Enum.reduce(HttpPullConsumer.where_account_id(account_id), fn
-      {:name, name}, query -> HttpPullConsumer.where_name(query, name)
-      {:sequence_id, sequence_id}, query -> HttpPullConsumer.where_sequence_id(query, sequence_id)
-    end)
-    |> Repo.one()
-    |> case do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
-    end
-  end
-
-  def get_http_pull_consumer_for_account(account_id, id_or_name) do
-    res =
-      account_id
-      |> HttpPullConsumer.where_account_id()
-      |> HttpPullConsumer.where_id_or_name(id_or_name)
-      |> Repo.one()
-
-    case res do
-      nil -> {:error, Error.not_found(entity: :consumer)}
-      consumer -> {:ok, consumer}
-    end
-  end
-
-  def create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs) do
-    Repo.transact(fn ->
-      with {:ok, consumer} <- create_http_pull_consumer(account_id, attrs),
-           :ok <- create_consumer_partition(consumer) do
-        :ok = notify_consumer_update(consumer)
-        notify_consumer_create(consumer)
-
-        {:ok, consumer}
-      end
-    end)
-  end
-
-  def create_http_pull_consumer_with_lifecycle(attrs) do
-    account_id = Map.fetch!(attrs, :account_id)
-    create_http_pull_consumer_for_account_with_lifecycle(account_id, attrs)
-  end
-
-  def create_http_pull_consumer(account_id, attrs) do
-    %HttpPullConsumer{account_id: account_id}
-    |> HttpPullConsumer.create_changeset(attrs)
-    |> Repo.insert()
   end
 
   # SinkConsumer
@@ -1624,22 +1524,6 @@ defmodule Sequin.Consumers do
       to_string(field_value) not in Enum.map(filter_value, &to_string/1)
   end
 
-  defp notify_consumer_update(%HttpPullConsumer{} = consumer) do
-    if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
-
-    with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-      restart_table_producer? =
-        consumer.status == :active and consumer.message_kind == :record and
-          consumer.record_consumer_state.producer == :table_and_wal and env() != :test
-
-      if restart_table_producer? do
-        DatabasesRuntimeSupervisor.restart_table_producer(consumer)
-      end
-
-      :ok
-    end
-  end
-
   defp notify_consumer_update(%SinkConsumer{} = consumer) do
     if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
 
@@ -1668,11 +1552,6 @@ defmodule Sequin.Consumers do
     if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal and env() != :test do
       DatabasesRuntimeSupervisor.start_table_producer(consumer)
     end
-  end
-
-  defp notify_consumer_delete(%HttpPullConsumer{} = consumer) do
-    maybe_disable_table_producer(consumer)
-    async_refresh_message_handler_ctx(consumer.replication_slot_id)
   end
 
   defp notify_consumer_delete(%SinkConsumer{} = consumer) do

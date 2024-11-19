@@ -1,5 +1,4 @@
 alias Sequin.Consumers
-alias Sequin.Consumers.HttpPullConsumer
 alias Sequin.Consumers.SinkConsumer
 alias Sequin.Databases
 alias Sequin.Databases.PostgresDatabase

@@ -4,7 +4,6 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.User
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
@@ -100,23 +99,6 @@ defmodule Sequin.Transforms do
         }),
       headers: http_endpoint.headers,
       encrypted_headers: encrypted_headers(http_endpoint)
-    }
-  end
-
-  def to_external(%HttpPullConsumer{} = consumer) do
-    consumer = Repo.preload(consumer, [:sequence])
-    filters = consumer.sequence_filter.column_filters || []
-
-    %{
-      name: consumer.name,
-      sequence: consumer.sequence.name,
-      status: consumer.status,
-      max_ack_pending: consumer.max_ack_pending,
-      consumer_start: %{
-        position: "beginning | end | from with value"
-      },
-      group_column_attnums: consumer.sequence_filter.group_column_attnums || [],
-      filters: Enum.map(filters, &to_external/1)
     }
   end
 

@@ -182,29 +182,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("edit", _params, socket) do
-    case Consumers.kind(socket.assigns.consumer) do
-      :pull ->
-        {:noreply, push_patch(socket, to: ~p"/consumer-groups/#{socket.assigns.consumer.id}/edit")}
-
-      type ->
-        {:noreply, push_patch(socket, to: ~p"/sinks/#{type}/#{socket.assigns.consumer.id}/edit")}
-    end
+    type = Consumers.kind(socket.assigns.consumer)
+    {:noreply, push_patch(socket, to: ~p"/sinks/#{type}/#{socket.assigns.consumer.id}/edit")}
   end
 
   @impl Phoenix.LiveView
   def handle_event("delete", _params, socket) do
     case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
       {:ok, _deleted_consumer} ->
-        push_to =
-          case Consumers.kind(socket.assigns.consumer) do
-            :pull -> ~p"/consumer-groups"
-            _ -> ~p"/sinks"
-          end
-
         {:noreply,
          socket
          |> put_flash(:toast, %{kind: :success, title: "Consumer deleted."})
-         |> push_navigate(to: push_to)}
+         |> push_navigate(to: ~p"/sinks")}
 
       {:error, _changeset} ->
         {:noreply, push_toast(socket, %{kind: :error, title: "Failed to delete consumer. Please try again."})}

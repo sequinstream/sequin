@@ -32,17 +32,17 @@ The Kafka sink sends messages to a Kafka topic.
 
     Enable TLS encryption for connections to Kafka. Currently, Sequin only supports TLS with verify none. If you need a different TLS configuration, please [let us know](https://github.com/sequinstream/sequin/issues/592).
 
-## Advanced Configuration
+## Advanced configuration
 
 - **Max Ack Pending**
 
     Sets the maximum number of messages that can be in-flight at any time. This helps control message flow and prevents overwhelming the broker.
 
-## Message Format
+## Message format
 
 Sequin sends messages to Kafka as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
 
-## Retry Behavior
+## Retry behavior
 
 If Sequin is unable to deliver a message to Kafka, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
 
@@ -53,16 +53,14 @@ The maximum message size in Kafka is configured at the broker level. The default
 If Kafka rejects a message due to size limitations, Sequin will cancel the message's delivery.
 
 <Info>
-  If you want to see logging/alerting for message size rejections, please contact support.
+  If you want to see logging/alerting for this situation, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).
 </Info>
 
-## Message Ordering
+## Message ordering and partitioning
 
-Kafka maintains message order within partitions. Messages sent to the same partition are guaranteed to be delivered in the order they were sent.
+Kafka ensures message ordering within individual partitions. When messages are sent to the same partition, they are guaranteed to be delivered in the order they were produced. Partitioning plays a critical role in maintaining this order.
 
-### Partitioning Strategy
-
-Sequin uses the hash of the record's primary key(s) as the partition key. This ensures that messages related to the same record are sent to the same partition, maintaining ordering for updates to the same record.
+Sequin leverages Kafka's partitioning model by using the hash of a record's primary key(s) as the partition key. This strategy ensures that all messages related to the same record are routed to the same partition, preserving the order of updates for that record.
 
 ## Security
 

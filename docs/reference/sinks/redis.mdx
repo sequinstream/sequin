@@ -36,13 +36,13 @@ The Redis sink sends messages to a Redis stream using the XADD command.
 
     Enable TLS encryption for connections to Redis.
 
-## Advanced Configuration
+## Advanced configuration
 
 - **Max Ack Pending**
 
     Sets the maximum number of messages that can be in-flight at any time. This helps control message flow and prevents overwhelming Redis.
 
-## Message Format
+## Message format
 
 Sequin sends messages to Redis streams using the XADD command. Each message contains the following fields:
 
@@ -56,7 +56,7 @@ For change messages:
 - `action`: The type of change (e.g., "insert", "update", "delete")
 - `metadata`: JSON-encoded metadata about the event
 
-## Retry Behavior
+## Retry behavior
 
 If Sequin is unable to deliver a message to Redis, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
 
@@ -68,7 +68,7 @@ The maximum size of a Redis string value is 512MB. However, it's recommended to 
   If you want to see logging/alerting for message size rejections, please contact support.
 </Info>
 
-## Message Ordering
+## Message ordering
 
 Redis streams maintain message order within a single stream. Messages are assigned auto-incrementing IDs by Redis when they are added to the stream, ensuring strict ordering of messages.
 

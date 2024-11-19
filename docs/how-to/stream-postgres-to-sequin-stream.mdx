@@ -64,7 +64,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
   <Step title="Specify message grouping">
     Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are delivered in order.
 
-    While your consumer is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/ordering-and-grouping) until a consumer [acknowledges](reference/sequin-stream-api/ack) the first message. This is almost always the desired behavior.
+    While your consumer is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/sinks/sequin-stream#grouping-and-ordering) until a consumer [acknowledges](reference/sequin-stream-api/ack) the first message. This is almost always the desired behavior.
   </Step>
 </Steps>
 
@@ -141,7 +141,7 @@ To verify that your sink is working:
 
 - **Setup your consumer group to process messages**
 
-   Now that your Postgres data is flowing into Sequin Stream, you can setup a consumer group to read and process the data. See the [Sequin Stream API reference](/reference/sequin-stream-api/overview) for more information on receiving messages, acknowledging messages, and more.
+   Now that your Postgres data is flowing into Sequin Stream, you can setup a consumer group to read and process the data. See the [Sequin Stream API reference](/reference/sequin-stream-api/receive) for more information on receiving messages, acknowledging messages, and more.
 
 - **Deploy your implementation**
 

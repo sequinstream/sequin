@@ -57,8 +57,7 @@
             "quickstart/sqs",
             "quickstart/kafka",
             "quickstart/redis",
-            "quickstart/sequin-stream",
-            "quickstart/connect-postgres"
+            "quickstart/sequin-stream"
           ],
           "icon": "gauge-max"
         },

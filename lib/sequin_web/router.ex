@@ -158,6 +158,13 @@ defmodule SequinWeb.Router do
     get("/databases/:id_or_name/schemas", DatabaseController, :list_schemas)
     get("/databases/:id_or_name/schemas/:schema/tables", DatabaseController, :list_tables)
     post("/databases/test_connection", DatabaseController, :test_connection_params)
+
+    post("/sequin_streams/:id_or_name/receive", PullController, :receive)
+    get("/sequin_streams/:id_or_name/receive", PullController, :receive)
+    post("/sequin_streams/:id_or_name/ack", PullController, :ack)
+    post("/sequin_streams/:id_or_name/nack", PullController, :nack)
+
+    # For backwards compatibility
     post("/http_pull_consumers/:id_or_name/receive", PullController, :receive)
     get("/http_pull_consumers/:id_or_name/receive", PullController, :receive)
     post("/http_pull_consumers/:id_or_name/ack", PullController, :ack)

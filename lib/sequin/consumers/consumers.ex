@@ -327,6 +327,8 @@ defmodule Sequin.Consumers do
     params
     |> Enum.reduce(SinkConsumer.where_account_id(account_id), fn
       {:name, name}, query -> SinkConsumer.where_name(query, name)
+      {:id_or_name, id_or_name}, query -> SinkConsumer.where_id_or_name(query, id_or_name)
+      {:type, type}, query -> SinkConsumer.where_type(query, type)
       {:sequence_id, sequence_id}, query -> SinkConsumer.where_sequence_id(query, sequence_id)
     end)
     |> Repo.one()

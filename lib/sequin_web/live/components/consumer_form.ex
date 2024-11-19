@@ -10,6 +10,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases
@@ -379,6 +380,12 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp decode_sink(:sequin_stream, _sink) do
+    %{
+      "type" => "sequin_stream"
+    }
+  end
+
   defp aws_region_from_queue_url(nil), do: nil
 
   defp aws_region_from_queue_url(queue_url) do
@@ -508,6 +515,12 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink.tls,
       "username" => sink.username,
       "password" => sink.password
+    }
+  end
+
+  defp encode_sink(%SequinStreamSink{}) do
+    %{
+      "type" => "sequin_stream"
     }
   end
 
@@ -710,6 +723,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :pull -> "Consumer Group"
       :redis -> "Redis Sink"
       :sqs -> "SQS Sink"
+      :sequin_stream -> "Sequin Stream Sink"
     end
   end
 end

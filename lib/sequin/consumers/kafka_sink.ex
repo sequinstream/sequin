@@ -8,6 +8,7 @@ defmodule Sequin.Consumers.KafkaSink do
   alias __MODULE__
 
   @derive {Jason.Encoder, only: [:hosts, :topic]}
+  @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:kafka], default: :kafka
     field :hosts, :string
@@ -16,6 +17,7 @@ defmodule Sequin.Consumers.KafkaSink do
     field :tls, :boolean, default: false
     field :topic, :string
     field :sasl_mechanism, Ecto.Enum, values: [:plain, :scram_sha_256, :scram_sha_512]
+    field :connection_id, :string
   end
 
   def changeset(struct, params) do
@@ -32,6 +34,7 @@ defmodule Sequin.Consumers.KafkaSink do
     |> validate_length(:topic, max: 255)
     |> validate_hosts()
     |> validate_sasl_credentials()
+    |> put_new_connection_id()
   end
 
   defp validate_hosts(changeset) do
@@ -78,6 +81,13 @@ defmodule Sequin.Consumers.KafkaSink do
 
       true ->
         changeset
+    end
+  end
+
+  defp put_new_connection_id(changeset) do
+    case get_field(changeset, :connection_id) do
+      nil -> put_change(changeset, :connection_id, Ecto.UUID.generate())
+      _ -> changeset
     end
   end
 

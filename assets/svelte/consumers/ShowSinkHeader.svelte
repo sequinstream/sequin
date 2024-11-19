@@ -16,6 +16,7 @@
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
   import KafkaIcon from "../../icons/kafka.svelte";
+  import SequinStreamIcon from "../../icons/sequin_stream.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -115,6 +116,8 @@
             <RedisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kafka"}
             <KafkaIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "sequin_stream"}
+            <SequinStreamIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumerTitle}: {consumer.name}

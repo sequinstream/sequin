@@ -15,6 +15,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Factory
@@ -56,7 +57,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    type = attrs[:type] || get_in(attrs, [:sink, :type]) || Enum.random([:http_push, :redis, :sqs, :kafka])
+    type =
+      attrs[:type] || get_in(attrs, [:sink, :type]) || Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream])
+
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
 
@@ -203,6 +206,10 @@ defmodule Sequin.Factory.ConsumersFactory do
       },
       attrs
     )
+  end
+
+  defp sink(:sequin_stream, _account_id, attrs) do
+    merge_attributes(%SequinStreamSink{type: :sequin_stream}, attrs)
   end
 
   def http_pull_consumer(attrs \\ []) do

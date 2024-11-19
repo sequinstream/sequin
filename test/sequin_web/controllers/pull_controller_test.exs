@@ -19,14 +19,21 @@ defmodule SequinWeb.PullControllerTest do
     rep_slot = ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
 
     consumer =
-      ConsumersFactory.insert_http_pull_consumer!(
+      ConsumersFactory.insert_sink_consumer!(
         message_kind: :record,
         account_id: account.id,
         backfill_completed_at: @one_day_ago,
-        replication_slot_id: rep_slot.id
+        replication_slot_id: rep_slot.id,
+        sink: %{type: :sequin_stream}
       )
 
-    other_consumer = ConsumersFactory.insert_http_pull_consumer!(message_kind: :record, account_id: other_account.id)
+    other_consumer =
+      ConsumersFactory.insert_sink_consumer!(
+        message_kind: :record,
+        account_id: other_account.id,
+        sink: %{type: :sequin_stream}
+      )
+
     %{consumer: consumer, other_consumer: other_consumer}
   end
 

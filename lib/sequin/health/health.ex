@@ -158,6 +158,24 @@ defmodule Sequin.Health do
     end
   end
 
+  @stream_consumer_checks [:filters, :ingestion, :receive, :acknowledge]
+  defp expected_check(%SinkConsumer{type: :sequin_stream}, check_id, status, error)
+       when check_id in @stream_consumer_checks do
+    case check_id do
+      :filters ->
+        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :ingestion ->
+        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :receive ->
+        %Check{id: :receive, name: "Stream", status: status, error: error, created_at: DateTime.utc_now()}
+
+      :acknowledge ->
+        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
+    end
+  end
+
   @sink_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
   defp expected_check(%SinkConsumer{}, check_id, status, error) when check_id in @sink_consumer_checks do
     case check_id do
@@ -218,6 +236,32 @@ defmodule Sequin.Health do
   #####################
   ## Initial Health ##
   #####################
+
+  defp initial_health(%SinkConsumer{type: :sequin_stream} = entity) do
+    checks =
+      @stream_consumer_checks
+      |> Enum.map(&expected_check(entity, &1, :initializing))
+      |> Enum.map(fn
+        %Check{id: :receive} = check ->
+          %{check | message: "Stream messages from the consumer."}
+
+        %Check{id: :acknowledge} = check ->
+          %{check | message: "Acknowledge messages via stream."}
+
+        %Check{} = check ->
+          check
+      end)
+
+    %Health{
+      name: "Consumer health",
+      entity_id: entity.id,
+      entity_kind: entity_kind(entity),
+      status: :initializing,
+      checks: checks,
+      consecutive_errors: 0
+    }
+  end
+
   defp initial_health(%SinkConsumer{} = entity) do
     checks =
       @sink_consumer_checks

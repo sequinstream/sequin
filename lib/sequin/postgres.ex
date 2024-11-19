@@ -281,10 +281,12 @@ defmodule Sequin.Postgres do
         a.attnum,
         a.attname as column_name,
         pg_catalog.format_type(a.atttypid, -1) as column_type,
-        coalesce(i.indisprimary, false) as is_pk
+        coalesce(i.indisprimary, false) as is_pk,
+        t.typtype as pg_typtype
       from pg_class c
       join pg_namespace n on c.relnamespace = n.oid
       join pg_attribute a on c.oid = a.attrelid
+      join pg_type t on a.atttypid = t.oid
       left join pg_index i on c.oid = i.indrelid and a.attnum = any(i.indkey)
       where n.nspname in (#{schemas_list})
         and c.relkind in ('r', 'p')
@@ -376,12 +378,13 @@ defmodule Sequin.Postgres do
         schema: schema,
         name: table_name,
         columns:
-          Enum.map(columns, fn [_, _, _, attnum, column_name, column_type, is_pk] ->
+          Enum.map(columns, fn [_, _, _, attnum, column_name, column_type, is_pk, pg_typtype] ->
             %PostgresDatabaseTable.Column{
               attnum: attnum,
               name: column_name,
               type: column_type,
-              is_pk?: is_pk
+              is_pk?: is_pk,
+              pg_typtype: pg_typtype
             }
           end)
       }
@@ -480,36 +483,6 @@ defmodule Sequin.Postgres do
     case query(conn, "SELECT '#{quote_name(schema)}.#{quote_name(table)}'::regclass::oid") do
       {:ok, %{rows: [[oid]]}} -> oid
       _ -> nil
-    end
-  end
-
-  def list_columns(conn, schema, table) do
-    res =
-      query(
-        conn,
-        """
-        select distinct on (a.attnum)
-        a.attnum,
-        a.attname,
-        pg_catalog.format_type(a.atttypid, -1) as simple_type,
-        coalesce(i.indisprimary, false) as is_pk
-        from pg_attribute a
-        join pg_class c on a.attrelid = c.oid
-        join pg_namespace n on c.relnamespace = n.oid
-        left join pg_index i on c.oid = i.indrelid and a.attnum = any(i.indkey)
-        where n.nspname = $1
-        and c.relname = $2
-        and a.attnum > 0
-        and not a.attisdropped
-        order by a.attnum
-        """,
-        [schema, table]
-      )
-
-    case res do
-      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: "table", params: %{schema: schema, table: table})}
-      {:ok, %{rows: rows}} -> {:ok, rows}
-      {:error, _} = error -> error
     end
   end
 
@@ -736,6 +709,13 @@ defmodule Sequin.Postgres do
 
   # Catch-all for time formats
   defp has_encoder?(%PostgresDatabaseTable.Column{type: "time" <> _rest}) do
+    true
+  end
+
+  # For composite types, enums, and domains, we don't yet store the underlying "base" type
+  # For now, assume/hope that Postgrex has an encoder for the base type
+  # In the future, we should store the base type in the column to determine if Postgrex can encode it
+  defp has_encoder?(%PostgresDatabaseTable.Column{pg_typtype: typtype}) when typtype in ["c", "d", "e"] do
     true
   end
 

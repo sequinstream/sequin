@@ -18,6 +18,7 @@ defmodule Sequin.Databases.PostgresDatabaseTable do
       field :is_pk?, :boolean
       field :name, :string
       field :type, :string
+      field :pg_typtype, :string
     end
   end
 
@@ -30,8 +31,8 @@ defmodule Sequin.Databases.PostgresDatabaseTable do
 
   def columns_changeset(column, attrs) do
     column
-    |> cast(attrs, [:attnum, :name, :type, :is_pk?])
-    |> validate_required([:attnum, :name, :type, :is_pk?])
+    |> cast(attrs, [:attnum, :name, :type, :is_pk?, :pg_typtype])
+    |> validate_required([:attnum, :name, :type, :is_pk?, :pg_typtype])
   end
 
   def default_group_column_attnums(%__MODULE__{} = table) do

@@ -213,7 +213,8 @@ defmodule Sequin.Factory.DatabasesFactory do
         name: Factory.postgres_object(),
         type: Factory.one_of(["integer", "text", "boolean", "timestamp", "uuid"]),
         attnum: Factory.unique_integer(),
-        is_pk?: Factory.boolean()
+        is_pk?: Factory.boolean(),
+        pg_typtype: Factory.one_of(["b", "d", "c"])
       },
       attrs
     )

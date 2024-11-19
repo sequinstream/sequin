@@ -60,6 +60,9 @@ defmodule Sequin.DatabasesTest do
       id_column = Enum.find(characters_table.columns, &(&1.name == "id"))
       assert id_column.is_pk?
       assert id_column.type == "bigint"
+      assert id_column.pg_typtype == "b"
+
+      assert Enum.all?(characters_table.columns, &(&1.pg_typtype != nil))
     end
   end
 

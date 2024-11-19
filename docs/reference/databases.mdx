@@ -32,6 +32,12 @@ If your database is hosted by a cloud provider and requires a VPN to connect, Se
 
 When connecting Sequin to your database, it's recommended to create a dedicated database user with the following permissions:
 
+- `connect` permission on the database.
+- `select` permission on all the tables you want to connect to Sequin.
+- `replication` permission to read from replication slots.
+
+You can create a user with the following commands:
+
 ```sql
 -- Create user with a secure password
 create user sequin_user with password 'REPLACE_WITH_SECURE_PASSWORD';
@@ -156,3 +162,6 @@ select * from pg_replication_slots;
 ```sql
 select pg_drop_replication_slot('sequin_slot');
 ```
+## Monitoring
+
+Sequin will run health checks against your database connection automatically. You can view the status of the connection at any time in your database's "Overview" page.

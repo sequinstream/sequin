@@ -191,7 +191,7 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
 
 ### Nack messages
 
-Alternatively, if your consumer is unable to process the messages, it can [`nack`](/consume/consume-api/nack) them. This tells Sequin to make the messages available for processing again right away:
+Alternatively, if your consumer is unable to process the messages, it can [`nack`](/reference/sequin-stream-api/nack) them. This tells Sequin to make the messages available for processing again right away:
 
 ```bash
 curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/nack \
@@ -205,3 +205,11 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
 Nack'ing is a good option if for whatever reason you can't process the messages right away, but you anticipate they will be processable shortly. For example, if you're having difficulty connecting to a downstream database, you can `nack` in the hopes that another consumer will pick up the messages that has a working connection.
 
 Instead of nacking, your consumer can also do nothing. After the visibility timeout expires, the messages will be made available for processing again.
+
+## Grouping and ordering
+
+The default message grouping for a Sequin Stream is the source row's primary key value(s). This means if a message is outstanding for a given row, subsequent changes for that row will not be delivered until the first message is acknowledged.
+
+You can specify other columns to use for message grouping in a sink's settings.
+
+Changes in a group are delivered in the order that they occurred. So, you don't need to worry about receiving a new change for a row before an older change.

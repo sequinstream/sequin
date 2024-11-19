@@ -2,6 +2,7 @@ defmodule Sequin.Kafka.Client do
   @moduledoc false
   @behaviour Sequin.Kafka
 
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaDestination
   alias Sequin.Kafka.ConnectionCache
   alias Sequin.NetworkUtils
@@ -9,9 +10,16 @@ defmodule Sequin.Kafka.Client do
   require Logger
 
   @impl Sequin.Kafka
-  def publish(%KafkaDestination{} = destination, message) do
+  def publish(%KafkaDestination{} = destination, %ConsumerRecord{} = record) do
     with {:ok, connection} <- ConnectionCache.connection(destination),
-         :ok <- :brod.produce_sync(connection, destination.topic, 0, "", Jason.encode!(message)) do
+         :ok <-
+           :brod.produce_sync(
+             connection,
+             destination.topic,
+             :hash,
+             to_string(record.record_pks),
+             Jason.encode!(record.data)
+           ) do
       :ok
     else
       {:error, reason} -> {:error, to_sequin_error(reason)}

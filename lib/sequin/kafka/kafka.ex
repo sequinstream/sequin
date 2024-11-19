@@ -1,18 +1,16 @@
 defmodule Sequin.Kafka do
   @moduledoc false
-  alias Sequin.Consumers.ConsumerEventData
-  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaDestination
   alias Sequin.Error
 
-  @callback publish(KafkaDestination.t(), [ConsumerRecordData.t() | ConsumerEventData.t()]) ::
-              :ok | {:error, Error.t()}
+  @callback publish(KafkaDestination.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
   @callback test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}
   @callback get_metadata(KafkaDestination.t()) :: {:ok, any()} | {:error, Error.t()}
 
-  @spec publish(KafkaDestination.t(), ConsumerRecordData.t() | ConsumerEventData.t()) :: :ok | {:error, Error.t()}
-  def publish(%KafkaDestination{} = destination, message) do
-    impl().publish(destination, message)
+  @spec publish(KafkaDestination.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
+  def publish(%KafkaDestination{} = destination, %ConsumerRecord{} = record) do
+    impl().publish(destination, record)
   end
 
   @spec test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}

@@ -36,7 +36,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     belongs_to :postgres_database, PostgresDatabase
 
     has_many :http_pull_consumers, Sequin.Consumers.HttpPullConsumer, foreign_key: :replication_slot_id
-    has_many :destination_consumers, Sequin.Consumers.DestinationConsumer, foreign_key: :replication_slot_id
+    has_many :sink_consumers, Sequin.Consumers.SinkConsumer, foreign_key: :replication_slot_id
     has_many :wal_pipelines, Sequin.Replication.WalPipeline, foreign_key: :replication_slot_id
 
     field :info, :map, virtual: true

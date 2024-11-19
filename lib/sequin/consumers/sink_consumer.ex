@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.DestinationConsumer do
+defmodule Sequin.Consumers.SinkConsumer do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -10,13 +10,13 @@ defmodule Sequin.Consumers.DestinationConsumer do
   alias Ecto.Changeset
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
-  alias Sequin.Consumers.HttpPushDestination
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RecordConsumerState
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SourceTable
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
@@ -36,7 +36,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
              :status,
              :health
            ]}
-  typed_schema "destination_consumers" do
+  typed_schema "sink_consumers" do
     field :name, :string
     field :backfill_completed_at, :utc_datetime_usec
     field :ack_wait_ms, :integer, default: 30_000
@@ -63,12 +63,12 @@ defmodule Sequin.Consumers.DestinationConsumer do
     belongs_to :replication_slot, PostgresReplicationSlot
     has_one :postgres_database, through: [:replication_slot, :postgres_database]
 
-    polymorphic_embeds_one(:destination,
+    polymorphic_embeds_one(:sink,
       types: [
-        http_push: HttpPushDestination,
-        sqs: SqsDestination,
-        redis: RedisDestination,
-        kafka: KafkaDestination
+        http_push: HttpPushSink,
+        sqs: SqsSink,
+        redis: RedisSink,
+        kafka: KafkaSink
       ],
       on_replace: :update,
       type_field_name: :type
@@ -109,20 +109,20 @@ defmodule Sequin.Consumers.DestinationConsumer do
       :backfill_completed_at,
       :status
     ])
-    |> cast_polymorphic_embed(:destination, required: true)
+    |> cast_polymorphic_embed(:sink, required: true)
     |> cast_embed(:record_consumer_state)
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:batch_size, less_than_or_equal_to: 10_000)
-    |> validate_for_destination()
+    |> validate_for_sink()
   end
 
-  defp validate_for_destination(%Changeset{valid?: false} = changeset), do: changeset
+  defp validate_for_sink(%Changeset{valid?: false} = changeset), do: changeset
 
-  defp validate_for_destination(%Changeset{} = changeset) do
-    type = changeset |> Changeset.get_field(:destination) |> Map.fetch!(:type)
+  defp validate_for_sink(%Changeset{} = changeset) do
+    type = changeset |> Changeset.get_field(:sink) |> Map.fetch!(:type)
 
     case type do
       :http_push -> changeset
@@ -143,7 +143,7 @@ defmodule Sequin.Consumers.DestinationConsumer do
   def where_http_endpoint_id(query \\ base_query(), http_endpoint_id) do
     query = where_type(query, :http_push)
 
-    from([consumer: c] in query, where: fragment("?->>'http_endpoint_id' = ?", c.destination, ^http_endpoint_id))
+    from([consumer: c] in query, where: fragment("?->>'http_endpoint_id' = ?", c.sink, ^http_endpoint_id))
   end
 
   def where_type(query \\ base_query(), type) do
@@ -193,18 +193,18 @@ defmodule Sequin.Consumers.DestinationConsumer do
   @backfill_completed_at_threshold :timer.minutes(5)
   def should_delete_acked_messages?(consumer, now \\ DateTime.utc_now())
 
-  def should_delete_acked_messages?(%DestinationConsumer{backfill_completed_at: nil}, _now), do: false
+  def should_delete_acked_messages?(%SinkConsumer{backfill_completed_at: nil}, _now), do: false
 
-  def should_delete_acked_messages?(%DestinationConsumer{backfill_completed_at: backfill_completed_at}, now) do
+  def should_delete_acked_messages?(%SinkConsumer{backfill_completed_at: backfill_completed_at}, now) do
     backfill_completed_at
     |> DateTime.add(@backfill_completed_at_threshold, :millisecond)
     |> DateTime.compare(now) == :lt
   end
 
-  def preload_http_endpoint(%DestinationConsumer{destination: %HttpPushDestination{http_endpoint: nil}} = consumer) do
-    http_endpoint = Consumers.get_http_endpoint!(consumer.destination.http_endpoint_id)
-    destination = %HttpPushDestination{consumer.destination | http_endpoint: http_endpoint}
-    %{consumer | destination: destination}
+  def preload_http_endpoint(%SinkConsumer{sink: %HttpPushSink{http_endpoint: nil}} = consumer) do
+    http_endpoint = Consumers.get_http_endpoint!(consumer.sink.http_endpoint_id)
+    sink = %HttpPushSink{consumer.sink | http_endpoint: http_endpoint}
+    %{consumer | sink: sink}
   end
 
   def preload_http_endpoint(consumer), do: consumer

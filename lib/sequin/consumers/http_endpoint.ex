@@ -40,7 +40,7 @@ defmodule Sequin.Consumers.HttpEndpoint do
     field :health, :map, virtual: true
     field :use_local_tunnel, :boolean, default: false
 
-    field :destination_consumers, {:array, :map}, virtual: true
+    field :sink_consumers, {:array, :map}, virtual: true
 
     belongs_to :account, Sequin.Accounts.Account
 
@@ -164,8 +164,8 @@ defmodule Sequin.Consumers.HttpEndpoint do
     end
   end
 
-  def preload_destination_consumers(%__MODULE__{} = http_endpoint) do
-    consumers = Consumers.list_destination_consumers_for_http_endpoint(http_endpoint.id)
-    %{http_endpoint | destination_consumers: consumers}
+  def preload_sink_consumers(%__MODULE__{} = http_endpoint) do
+    consumers = Consumers.list_sink_consumers_for_http_endpoint(http_endpoint.id)
+    %{http_endpoint | sink_consumers: consumers}
   end
 end

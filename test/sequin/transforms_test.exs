@@ -292,13 +292,13 @@ defmodule Sequin.TransformsTest do
     endpoint = ConsumersFactory.insert_http_endpoint!(account_id: account.id, name: "test-endpoint")
 
     consumer =
-      ConsumersFactory.insert_destination_consumer!(
+      ConsumersFactory.insert_sink_consumer!(
         name: "test-consumer",
         account_id: account.id,
         status: :active,
         max_ack_pending: 1000,
         max_deliver: 5,
-        destination: %{type: :http_push, http_endpoint_id: endpoint.id},
+        sink: %{type: :http_push, http_endpoint_id: endpoint.id},
         sequence_id: sequence.id,
         record_consumer_state: %{
           producer: "table_and_wal",

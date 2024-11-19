@@ -1,4 +1,4 @@
-defmodule Sequin.Factory.DestinationFactory do
+defmodule Sequin.Factory.SinkFactory do
   @moduledoc false
 
   import Sequin.Factory.Support

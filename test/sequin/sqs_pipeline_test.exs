@@ -36,7 +36,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
         )
 
       consumer =
-        ConsumersFactory.insert_destination_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :sqs,
           message_kind: :record,
@@ -146,7 +146,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
       replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.destination_consumer(
+        ConsumersFactory.sink_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
           type: :sqs,

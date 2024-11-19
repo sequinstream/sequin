@@ -1,26 +1,26 @@
 defmodule Sequin.Kafka do
   @moduledoc false
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Error
 
-  @callback publish(KafkaDestination.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
-  @callback test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}
-  @callback get_metadata(KafkaDestination.t()) :: {:ok, any()} | {:error, Error.t()}
+  @callback publish(KafkaSink.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
+  @callback test_connection(KafkaSink.t()) :: :ok | {:error, Error.t()}
+  @callback get_metadata(KafkaSink.t()) :: {:ok, any()} | {:error, Error.t()}
 
-  @spec publish(KafkaDestination.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
-  def publish(%KafkaDestination{} = destination, %ConsumerRecord{} = record) do
-    impl().publish(destination, record)
+  @spec publish(KafkaSink.t(), ConsumerRecord.t()) :: :ok | {:error, Error.t()}
+  def publish(%KafkaSink{} = sink, %ConsumerRecord{} = record) do
+    impl().publish(sink, record)
   end
 
-  @spec test_connection(KafkaDestination.t()) :: :ok | {:error, Error.t()}
-  def test_connection(%KafkaDestination{} = destination) do
-    impl().test_connection(destination)
+  @spec test_connection(KafkaSink.t()) :: :ok | {:error, Error.t()}
+  def test_connection(%KafkaSink{} = sink) do
+    impl().test_connection(sink)
   end
 
-  @spec get_metadata(KafkaDestination.t()) :: {:ok, any()} | {:error, Error.t()}
-  def get_metadata(%KafkaDestination{} = destination) do
-    impl().get_metadata(destination)
+  @spec get_metadata(KafkaSink.t()) :: {:ok, any()} | {:error, Error.t()}
+  def get_metadata(%KafkaSink{} = sink) do
+    impl().get_metadata(sink)
   end
 
   defp impl do

@@ -4,20 +4,20 @@ defmodule Sequin.Redis.Client do
 
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Error
   alias Sequin.NetworkUtils
   alias Sequin.Redis.ConnectionCache
 
   @impl Sequin.Redis
-  def send_messages(%RedisDestination{} = destination, messages) do
-    with {:ok, connection} <- ConnectionCache.connection(destination) do
+  def send_messages(%RedisSink{} = sink, messages) do
+    with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands =
         Enum.map(messages, fn
           %ConsumerRecordData{} = message ->
             [
               "XADD",
-              destination.stream_key,
+              sink.stream_key,
               "*",
               "record",
               Jason.encode!(message.record),
@@ -28,7 +28,7 @@ defmodule Sequin.Redis.Client do
           %ConsumerEventData{} = message ->
             [
               "XADD",
-              destination.stream_key,
+              sink.stream_key,
               "*",
               "record",
               Jason.encode!(message.record),
@@ -49,9 +49,9 @@ defmodule Sequin.Redis.Client do
   end
 
   @impl Sequin.Redis
-  def message_count(%RedisDestination{} = destination) do
-    with {:ok, connection} <- ConnectionCache.connection(destination) do
-      case Redix.command(connection, ["XLEN", destination.stream_key]) do
+  def message_count(%RedisSink{} = sink) do
+    with {:ok, connection} <- ConnectionCache.connection(sink) do
+      case Redix.command(connection, ["XLEN", sink.stream_key]) do
         {:ok, count} -> {:ok, count}
         {:error, error} -> {:error, to_sequin_error(error)}
       end
@@ -59,8 +59,8 @@ defmodule Sequin.Redis.Client do
   end
 
   @impl Sequin.Redis
-  def client_info(%RedisDestination{} = destination) do
-    with {:ok, connection} <- ConnectionCache.connection(destination) do
+  def client_info(%RedisSink{} = sink) do
+    with {:ok, connection} <- ConnectionCache.connection(sink) do
       case Redix.command(connection, ["INFO"]) do
         {:ok, info} -> {:ok, info}
         {:error, error} -> {:error, to_sequin_error(error)}
@@ -69,10 +69,10 @@ defmodule Sequin.Redis.Client do
   end
 
   @impl Sequin.Redis
-  def test_connection(%RedisDestination{} = destination) do
+  def test_connection(%RedisSink{} = sink) do
     with :ok <-
-           NetworkUtils.test_tcp_reachability(destination.host, destination.port, destination.tls, :timer.seconds(10)),
-         {:ok, connection} <- ConnectionCache.connection(destination) do
+           NetworkUtils.test_tcp_reachability(sink.host, sink.port, sink.tls, :timer.seconds(10)),
+         {:ok, connection} <- ConnectionCache.connection(sink) do
       case Redix.command(connection, ["PING"]) do
         {:ok, "PONG"} -> :ok
         {:error, error} -> {:error, to_sequin_error(error)}

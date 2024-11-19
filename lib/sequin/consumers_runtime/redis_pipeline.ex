@@ -2,8 +2,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   @moduledoc false
   use Broadway
 
-  alias Sequin.Consumers.DestinationConsumer
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
   alias Sequin.Redis
   alias Sequin.Repo
@@ -11,7 +11,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   require Logger
 
   def start_link(opts) do
-    %DestinationConsumer{} =
+    %SinkConsumer{} =
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
@@ -52,7 +52,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
   def handle_message(_, %Broadway.Message{data: messages} = message, %{
-        consumer: %DestinationConsumer{destination: %RedisDestination{} = destination} = consumer,
+        consumer: %SinkConsumer{sink: %RedisSink{} = sink} = consumer,
         test_pid: test_pid
       }) do
     setup_allowances(test_pid)
@@ -64,10 +64,10 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
     redis_messages = Enum.map(messages, & &1.data)
 
-    case Redis.send_messages(destination, redis_messages) do
+    case Redis.send_messages(sink, redis_messages) do
       :ok ->
         Health.update(consumer, :push, :healthy)
-        # Metrics.incr_sqs_throughput(consumer.destination)
+        # Metrics.incr_sqs_throughput(consumer.sink)
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(

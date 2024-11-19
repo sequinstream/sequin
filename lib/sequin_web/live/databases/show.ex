@@ -19,7 +19,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
     case Databases.get_db_for_account(account_id, id) do
       {:ok, database} ->
-        database = Repo.preload(database, replication_slot: [:http_pull_consumers, :destination_consumers])
+        database = Repo.preload(database, replication_slot: [:http_pull_consumers, :sink_consumers])
 
         # Fetch initial health
         {:ok, health} = Health.get(database)
@@ -256,7 +256,7 @@ defmodule SequinWeb.DatabasesLive.Show do
       updated_at: database.updated_at,
       consumers:
         encode_consumers(database.replication_slot.http_pull_consumers, database) ++
-          encode_consumers(database.replication_slot.destination_consumers, database),
+          encode_consumers(database.replication_slot.sink_consumers, database),
       health: Health.to_external(database.health)
     }
   end

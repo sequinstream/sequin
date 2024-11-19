@@ -3,19 +3,19 @@ defmodule Sequin.Kafka.Client do
   @behaviour Sequin.Kafka
 
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Kafka.ConnectionCache
   alias Sequin.NetworkUtils
 
   require Logger
 
   @impl Sequin.Kafka
-  def publish(%KafkaDestination{} = destination, %ConsumerRecord{} = record) do
-    with {:ok, connection} <- ConnectionCache.connection(destination),
+  def publish(%KafkaSink{} = sink, %ConsumerRecord{} = record) do
+    with {:ok, connection} <- ConnectionCache.connection(sink),
          :ok <-
            :brod.produce_sync(
              connection,
-             destination.topic,
+             sink.topic,
              :hash,
              to_string(record.record_pks),
              Jason.encode!(record.data)
@@ -27,10 +27,10 @@ defmodule Sequin.Kafka.Client do
   end
 
   @impl Sequin.Kafka
-  def test_connection(%KafkaDestination{} = destination) do
-    with :ok <- test_hosts_reachability(destination),
-         {:ok, metadata} <- get_metadata(destination) do
-      validate_topic_exists(metadata, destination.topic)
+  def test_connection(%KafkaSink{} = sink) do
+    with :ok <- test_hosts_reachability(sink),
+         {:ok, metadata} <- get_metadata(sink) do
+      validate_topic_exists(metadata, sink.topic)
     else
       {:error, reason} ->
         {:error, to_sequin_error(reason)}
@@ -54,10 +54,10 @@ defmodule Sequin.Kafka.Client do
   end
 
   @impl Sequin.Kafka
-  def get_metadata(%KafkaDestination{} = destination) do
-    hosts = KafkaDestination.hosts(destination)
-    topics = [destination.topic]
-    config = KafkaDestination.to_brod_config(destination)
+  def get_metadata(%KafkaSink{} = sink) do
+    hosts = KafkaSink.hosts(sink)
+    topics = [sink.topic]
+    config = KafkaSink.to_brod_config(sink)
 
     :brod.get_metadata(hosts, topics, config)
   end
@@ -83,10 +83,10 @@ defmodule Sequin.Kafka.Client do
   end
 
   # TODO: Add ipv6 support
-  defp test_hosts_reachability(%KafkaDestination{} = destination) do
+  defp test_hosts_reachability(%KafkaSink{} = sink) do
     results =
-      destination
-      |> KafkaDestination.hosts()
+      sink
+      |> KafkaSink.hosts()
       |> Enum.map(fn {hostname, port} ->
         NetworkUtils.test_tcp_reachability(hostname, port, false, :timer.seconds(5))
       end)

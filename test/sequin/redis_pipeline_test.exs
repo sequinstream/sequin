@@ -4,7 +4,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.Databases.ConnectionCache
@@ -37,7 +37,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
         )
 
       consumer =
-        ConsumersFactory.insert_destination_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           account_id: account.id,
           type: :redis,
           message_kind: :record,
@@ -60,8 +60,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
         |> ConsumersFactory.insert_deliverable_consumer_record!()
         |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record))
 
-      Mox.expect(Sequin.RedisMock, :send_messages, fn destination, redis_messages ->
-        send(test_pid, {:redis_request, destination, redis_messages})
+      Mox.expect(Sequin.RedisMock, :send_messages, fn sink, redis_messages ->
+        send(test_pid, {:redis_request, sink, redis_messages})
         :ok
       end)
 
@@ -69,7 +69,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
 
       ref = send_test_events(consumer, [record])
       assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}]}], []}, 1_000
-      assert_receive {:redis_request, %RedisDestination{}, [%ConsumerRecordData{}]}, 1_000
+      assert_receive {:redis_request, %RedisSink{}, [%ConsumerRecordData{}]}, 1_000
     end
 
     test "batched messages are processed together", %{consumer: consumer} do
@@ -88,8 +88,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
         |> ConsumersFactory.insert_deliverable_consumer_record!()
         |> Map.put(:data, ConsumersFactory.consumer_record_data(record: record2))
 
-      Mox.expect(Sequin.RedisMock, :send_messages, fn destination, redis_messages ->
-        send(test_pid, {:redis_request, destination, redis_messages})
+      Mox.expect(Sequin.RedisMock, :send_messages, fn sink, redis_messages ->
+        send(test_pid, {:redis_request, sink, redis_messages})
         :ok
       end)
 
@@ -98,12 +98,12 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
       ref = send_test_events(consumer, [event1, event2])
 
       assert_receive {:ack, ^ref, [%{data: [%ConsumerRecord{}, %ConsumerRecord{}]}], []}, 1_000
-      assert_receive {:redis_request, _destination, _redis_messages}, 1_000
+      assert_receive {:redis_request, _sink, _redis_messages}, 1_000
     end
 
     @tag capture_log: true
     test "failed Redis requests result in failed events", %{consumer: consumer} do
-      Mox.expect(Sequin.RedisMock, :send_messages, fn _destination, _redis_messages ->
+      Mox.expect(Sequin.RedisMock, :send_messages, fn _sink, _redis_messages ->
         {:error, Sequin.Error.service(service: :redis, code: "batch_error", message: "Redis batch send failed")}
       end)
 
@@ -131,7 +131,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
       replication = ReplicationFactory.postgres_replication(account_id: account.id, postgres_database_id: database.id)
 
       consumer =
-        ConsumersFactory.destination_consumer(
+        ConsumersFactory.sink_consumer(
           id: UUID.uuid4(),
           account_id: account.id,
           type: :redis,
@@ -150,8 +150,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
     test "messages are sent from postgres to Redis", %{consumer: consumer} do
       test_pid = self()
 
-      Mox.expect(Sequin.RedisMock, :send_messages, fn destination, redis_messages ->
-        send(test_pid, {:redis_request, destination, redis_messages})
+      Mox.expect(Sequin.RedisMock, :send_messages, fn sink, redis_messages ->
+        send(test_pid, {:redis_request, sink, redis_messages})
         :ok
       end)
 
@@ -163,7 +163,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
 
       start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})
 
-      assert_receive {:redis_request, _destination, _redis_messages}, 5_000
+      assert_receive {:redis_request, _sink, _redis_messages}, 5_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
       refute Consumers.reload(consumer_record)

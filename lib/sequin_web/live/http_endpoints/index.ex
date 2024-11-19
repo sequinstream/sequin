@@ -13,7 +13,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
     http_endpoints =
       account_id
       |> Consumers.list_http_endpoints_for_account()
-      |> Enum.map(&HttpEndpoint.preload_destination_consumers/1)
+      |> Enum.map(&HttpEndpoint.preload_sink_consumers/1)
 
     http_endpoints = load_http_endpoint_health(http_endpoints)
 
@@ -76,7 +76,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
       name: http_endpoint.name,
       baseUrl: HttpEndpoint.url(http_endpoint),
       insertedAt: http_endpoint.inserted_at,
-      httpPushConsumersCount: length(http_endpoint.destination_consumers),
+      httpPushConsumersCount: length(http_endpoint.sink_consumers),
       health: Health.to_external(http_endpoint.health)
     }
   end

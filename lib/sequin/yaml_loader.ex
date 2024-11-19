@@ -3,7 +3,7 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Accounts
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
-  alias Sequin.Consumers.DestinationConsumer
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.WebhookSiteGenerator
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
@@ -120,7 +120,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
-         {:ok, _destination_consumers} <- upsert_destination_consumers(account.id, config, databases, http_endpoints),
+         {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints),
          {:ok, _http_pull_consumers} <- upsert_http_pull_consumers(account.id, config, databases) do
       {:ok, all_resources(account.id)}
     end
@@ -137,13 +137,13 @@ defmodule Sequin.YamlLoader do
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
     http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
 
-    destination_consumers =
+    sink_consumers =
       account_id
-      |> Consumers.list_destination_consumers_for_account(sequence: [:postgres_database])
-      |> Enum.map(&DestinationConsumer.preload_http_endpoint/1)
+      |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
+      |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
 
     [account | users] ++
-      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ destination_consumers
+      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ sink_consumers
   end
 
   #############
@@ -750,40 +750,40 @@ defmodule Sequin.YamlLoader do
   ## HTTP Push Consumers ##
   #########################
 
-  defp upsert_destination_consumers(account_id, %{"webhook_subscriptions" => consumers}, databases, http_endpoints) do
+  defp upsert_sink_consumers(account_id, %{"webhook_subscriptions" => consumers}, databases, http_endpoints) do
     Logger.info("Upserting HTTP push consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
-      case upsert_destination_consumer(account_id, consumer, databases, http_endpoints) do
+      case upsert_sink_consumer(account_id, consumer, databases, http_endpoints) do
         {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
         {:error, error} -> {:halt, {:error, error}}
       end
     end)
   end
 
-  defp upsert_destination_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
+  defp upsert_sink_consumers(_account_id, %{}, _databases, _http_endpoints), do: {:ok, []}
 
-  defp upsert_destination_consumer(account_id, %{"name" => name} = consumer_attrs, databases, http_endpoints) do
+  defp upsert_sink_consumer(account_id, %{"name" => name} = consumer_attrs, databases, http_endpoints) do
     # Find existing consumer first
-    case Sequin.Consumers.find_destination_consumer(account_id, name: name) do
+    case Sequin.Consumers.find_sink_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
-        with {:ok, params} <- parse_destination_consumer_params(consumer_attrs, databases, http_endpoints),
+        with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
 
       {:error, %NotFoundError{}} ->
-        with {:ok, params} <- parse_destination_consumer_params(consumer_attrs, databases, http_endpoints),
+        with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <-
-               Sequin.Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, params) do
+               Sequin.Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
           Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
     end
   end
 
-  defp parse_destination_consumer_params(
+  defp parse_sink_consumer_params(
          %{"name" => name, "sequence" => sequence_name, "http_endpoint" => http_endpoint_name} = consumer_attrs,
          databases,
          http_endpoints

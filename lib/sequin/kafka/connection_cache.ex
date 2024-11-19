@@ -5,13 +5,13 @@ defmodule Sequin.Kafka.ConnectionCache do
   By caching these connections, we can avoid paying a significant startup
   penalty when performing multiple operations on the same Kafka broker.
 
-  Each `Sequin.Consumers.KafkaDestination` gets its own connection in the cache.
+  Each `Sequin.Consumers.KafkaSink` gets its own connection in the cache.
 
   The cache takes ownership of the Kafka connections and is responsible for
   closing them when they are invalidated (or when the cache is stopped). Thus,
   callers should not call `:brod.stop_client/1` on these connections.
 
-  Cached connections are invalidated and recreated when their Kafka destination's
+  Cached connections are invalidated and recreated when their Kafka sink's
   connection options change.
 
   The cache will detect dead connections and create new ones as needed.
@@ -19,7 +19,7 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   use GenServer
 
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Error.NotFoundError
 
   require Logger
@@ -27,7 +27,7 @@ defmodule Sequin.Kafka.ConnectionCache do
   defmodule Cache do
     @moduledoc false
 
-    @type destination :: KafkaDestination.t()
+    @type sink :: KafkaSink.t()
     @type entry :: %{
             conn: atom(),
             options_hash: binary()
@@ -42,21 +42,21 @@ defmodule Sequin.Kafka.ConnectionCache do
       Enum.each(cache, fn {_id, entry} -> function.(entry.conn) end)
     end
 
-    @spec lookup(t(), destination()) :: {:ok, atom()} | {:error, :stale} | {:error, :not_found}
-    def lookup(cache, destination) do
-      new_hash = options_hash(destination)
-      entry = Map.get(cache, destination.id)
+    @spec lookup(t(), sink()) :: {:ok, atom()} | {:error, :stale} | {:error, :not_found}
+    def lookup(cache, sink) do
+      new_hash = options_hash(sink)
+      entry = Map.get(cache, sink.id)
 
       cond do
         is_nil(entry) ->
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached Kafka connection was dead upon lookup", destination_id: destination.id)
+          Logger.warning("Cached Kafka connection was dead upon lookup", sink_id: sink.id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached Kafka destination connection was stale", destination_id: destination.id)
+          Logger.info("Cached Kafka sink connection was stale", sink_id: sink.id)
           {:error, :stale}
 
         true ->
@@ -64,21 +64,21 @@ defmodule Sequin.Kafka.ConnectionCache do
       end
     end
 
-    @spec pop(t(), destination()) :: {atom() | nil, t()}
-    def pop(cache, destination) do
-      {entry, new_cache} = Map.pop(cache, destination.id, nil)
+    @spec pop(t(), sink()) :: {atom() | nil, t()}
+    def pop(cache, sink) do
+      {entry, new_cache} = Map.pop(cache, sink.id, nil)
 
       if entry, do: {entry.conn, new_cache}, else: {nil, new_cache}
     end
 
-    @spec store(t(), destination(), atom()) :: t()
-    def store(cache, destination, conn) do
-      entry = %{conn: conn, options_hash: options_hash(destination)}
-      Map.put(cache, destination.id, entry)
+    @spec store(t(), sink(), atom()) :: t()
+    def store(cache, sink, conn) do
+      entry = %{conn: conn, options_hash: options_hash(sink)}
+      Map.put(cache, sink.id, entry)
     end
 
-    defp options_hash(destination) do
-      :erlang.phash2({KafkaDestination.hosts(destination), KafkaDestination.to_brod_config(destination)})
+    defp options_hash(sink) do
+      :erlang.phash2({KafkaSink.hosts(sink), KafkaSink.to_brod_config(sink)})
     end
   end
 
@@ -86,12 +86,12 @@ defmodule Sequin.Kafka.ConnectionCache do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Consumers.KafkaDestination
+    alias Sequin.Consumers.KafkaSink
     alias Sequin.Error
 
-    @type destination :: KafkaDestination.t()
+    @type sink :: KafkaSink.t()
     @type opt :: {:start_fn, State.start_function()} | {:stop_fn, State.stop_function()}
-    @type start_function :: (destination() -> start_result())
+    @type start_function :: (sink() -> start_result())
     @type start_result :: {:ok, atom()} | {:error, Error.t()}
     @type stop_function :: (atom() -> :ok)
 
@@ -112,20 +112,20 @@ defmodule Sequin.Kafka.ConnectionCache do
       }
     end
 
-    @spec find_or_create_connection(t(), destination(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
-    def find_or_create_connection(%__MODULE__{} = state, destination, create_on_miss) do
-      case Cache.lookup(state.cache, destination) do
+    @spec find_or_create_connection(t(), sink(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
+    def find_or_create_connection(%__MODULE__{} = state, sink, create_on_miss) do
+      case Cache.lookup(state.cache, sink) do
         {:ok, conn} ->
           {:ok, conn, state}
 
         {:error, :stale} ->
           state
-          |> invalidate_connection(destination)
-          |> find_or_create_connection(destination, create_on_miss)
+          |> invalidate_connection(sink)
+          |> find_or_create_connection(sink, create_on_miss)
 
         {:error, :not_found} when create_on_miss ->
-          with {:ok, conn} <- state.start_fn.(destination) do
-            new_cache = Cache.store(state.cache, destination, conn)
+          with {:ok, conn} <- state.start_fn.(sink) do
+            new_cache = Cache.store(state.cache, sink, conn)
             new_state = %{state | cache: new_cache}
             {:ok, conn, new_state}
           end
@@ -142,22 +142,22 @@ defmodule Sequin.Kafka.ConnectionCache do
       %{state | cache: Cache.new()}
     end
 
-    @spec invalidate_connection(t(), destination()) :: t()
-    def invalidate_connection(%__MODULE__{} = state, destination) do
-      {conn, new_cache} = Cache.pop(state.cache, destination)
+    @spec invalidate_connection(t(), sink()) :: t()
+    def invalidate_connection(%__MODULE__{} = state, sink) do
+      {conn, new_cache} = Cache.pop(state.cache, sink)
 
       if conn, do: state.stop_fn.(conn)
 
       %{state | cache: new_cache}
     end
 
-    defp default_start(%KafkaDestination{} = destination) do
-      client_id = :"brod_client_#{destination.id}"
-      endpoints = KafkaDestination.hosts(destination)
-      client_config = KafkaDestination.to_brod_config(destination)
+    defp default_start(%KafkaSink{} = sink) do
+      client_id = :"brod_client_#{sink.id}"
+      endpoints = KafkaSink.hosts(sink)
+      client_config = KafkaSink.to_brod_config(sink)
 
       with :ok <- :brod.start_client(endpoints, client_id, client_config),
-           :ok <- :brod.start_producer(client_id, destination.topic, []) do
+           :ok <- :brod.start_producer(client_id, sink.topic, []) do
         {:ok, client_id}
       else
         {:error, {:already_started, client_pid}} -> {:ok, client_pid}
@@ -166,7 +166,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     end
   end
 
-  @type destination :: KafkaDestination.t()
+  @type sink :: KafkaSink.t()
   @type opt :: State.opt()
   @type start_result :: State.start_result()
 
@@ -176,26 +176,26 @@ defmodule Sequin.Kafka.ConnectionCache do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
-  @spec connection(destination()) :: start_result()
-  @spec connection(GenServer.server(), destination()) :: start_result()
-  def connection(server \\ __MODULE__, %KafkaDestination{} = destination) do
-    GenServer.call(server, {:connection, destination, true})
+  @spec connection(sink()) :: start_result()
+  @spec connection(GenServer.server(), sink()) :: start_result()
+  def connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+    GenServer.call(server, {:connection, sink, true})
   end
 
-  @spec existing_connection(GenServer.server(), destination()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %KafkaDestination{} = destination) do
-    GenServer.call(server, {:connection, destination, false})
+  @spec existing_connection(GenServer.server(), sink()) :: start_result() | {:error, NotFoundError.t()}
+  def existing_connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+    GenServer.call(server, {:connection, sink, false})
   end
 
-  @spec invalidate_connection(GenServer.server(), destination()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %KafkaDestination{} = destination) do
-    GenServer.cast(server, {:invalidate_connection, destination})
+  @spec invalidate_connection(GenServer.server(), sink()) :: :ok
+  def invalidate_connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+    GenServer.cast(server, {:invalidate_connection, sink})
   end
 
   # This function is intended for test purposes only
-  @spec cache_connection(GenServer.server(), destination(), pid()) :: :ok
-  def cache_connection(server \\ __MODULE__, %KafkaDestination{} = destination, conn) do
-    GenServer.call(server, {:cache_connection, destination, conn})
+  @spec cache_connection(GenServer.server(), sink(), pid()) :: :ok
+  def cache_connection(server \\ __MODULE__, %KafkaSink{} = sink, conn) do
+    GenServer.call(server, {:cache_connection, sink, conn})
   end
 
   @impl GenServer
@@ -206,8 +206,8 @@ defmodule Sequin.Kafka.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_call({:connection, %KafkaDestination{} = destination, create_on_miss}, _from, %State{} = state) do
-    case State.find_or_create_connection(state, destination, create_on_miss) do
+  def handle_call({:connection, %KafkaSink{} = sink, create_on_miss}, _from, %State{} = state) do
+    case State.find_or_create_connection(state, sink, create_on_miss) do
       {:ok, conn, new_state} ->
         {:reply, {:ok, conn}, new_state}
 
@@ -221,15 +221,15 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   # This function is intended for test purposes only
   @impl GenServer
-  def handle_call({:cache_connection, %KafkaDestination{} = destination, conn}, _from, %State{} = state) do
-    new_cache = Cache.store(state.cache, destination, conn)
+  def handle_call({:cache_connection, %KafkaSink{} = sink, conn}, _from, %State{} = state) do
+    new_cache = Cache.store(state.cache, sink, conn)
     new_state = %{state | cache: new_cache}
     {:reply, :ok, new_state}
   end
 
   @impl GenServer
-  def handle_cast({:invalidate_connection, %KafkaDestination{} = destination}, %State{} = state) do
-    new_state = State.invalidate_connection(state, destination)
+  def handle_cast({:invalidate_connection, %KafkaSink{} = sink}, %State{} = state) do
+    new_state = State.invalidate_connection(state, sink)
     {:noreply, new_state}
   end
 

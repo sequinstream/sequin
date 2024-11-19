@@ -3,7 +3,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   use Supervisor
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.DestinationConsumer
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.ConsumersRuntime.KafkaPipeline
@@ -22,9 +22,9 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
+  def start_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
 
-  def start_for_destination_consumer(supervisor, %DestinationConsumer{} = consumer, opts) do
+  def start_for_sink_consumer(supervisor, %SinkConsumer{} = consumer, opts) do
     Logger.info("Starting consumer", consumer_id: consumer.id)
 
     default_opts = [consumer: consumer]
@@ -41,20 +41,20 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
   end
 
-  def start_for_destination_consumer(supervisor, id, opts) do
+  def start_for_sink_consumer(supervisor, id, opts) do
     case Consumers.get_consumer(id) do
-      {:ok, consumer} -> start_for_destination_consumer(supervisor, consumer, opts)
+      {:ok, consumer} -> start_for_sink_consumer(supervisor, consumer, opts)
       error -> error
     end
   end
 
-  def stop_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
+  def stop_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
 
-  def stop_for_destination_consumer(supervisor, %DestinationConsumer{id: id}) do
-    stop_for_destination_consumer(supervisor, id)
+  def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id}) do
+    stop_for_sink_consumer(supervisor, id)
   end
 
-  def stop_for_destination_consumer(supervisor, id) do
+  def stop_for_sink_consumer(supervisor, id) do
     Logger.info("Stopping consumer", consumer_id: id)
 
     Enum.each(
@@ -65,13 +65,13 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     :ok
   end
 
-  def restart_for_destination_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
+  def restart_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
     Logger.info("Restarting consumer", consumer_id: consumer_or_id)
-    stop_for_destination_consumer(supervisor, consumer_or_id)
-    start_for_destination_consumer(supervisor, consumer_or_id)
+    stop_for_sink_consumer(supervisor, consumer_or_id)
+    start_for_sink_consumer(supervisor, consumer_or_id)
   end
 
-  defp pipeline(%DestinationConsumer{} = consumer) do
+  defp pipeline(%SinkConsumer{} = consumer) do
     case consumer.type do
       :http_push -> HttpPushPipeline
       :sqs -> SqsPipeline

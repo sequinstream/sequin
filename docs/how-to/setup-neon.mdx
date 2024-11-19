@@ -6,11 +6,16 @@ icon: "elephant"
 iconType: "solid"
 ---
 
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
+
 This guide provides step-by-step instructions to connect your [Neon](https://neon.tech/) database to Sequin.
+
+## Provision a Postgres user for Sequin
+<CreateSequinDbUser />
 
 ## Enable logical replication on Neon
 
-To enable logical replication on Neon, follow these steps:
+By default, logical replication is not enabled on Neon. To turn it on, follow these steps:
 
 <Steps titleSize="h3">
   <Step title="Navigate to your project's logical replication settings">
@@ -47,8 +52,8 @@ After enabling logical replication on Neon, you'll now connect to your Neon data
     - Host: Your Neon host (e.g., `ep-cool-snow-123456.us-east-2.aws.neon.tech`)
     - Port: 5432 (default Postgres port)
     - Database: Your database name
-    - Username: Your Neon username
-    - Password: Your Neon password
+    - Username: The sequin database user you created earlier
+    - Password: The password for your sequin database user
 
     Make sure to enable the "SSL" option for secure connection.
 

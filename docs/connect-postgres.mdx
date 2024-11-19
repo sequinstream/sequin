@@ -5,10 +5,199 @@ sidebarTitle: 'Connect Postgres'
 
 To start streaming changes from your Postgres database, connect Sequin to your database.
 
-See the setup guide for your database provider:
+This guide is for a **vanilla Postgres database**, such as one you run locally or host yourself on a cloud provider. If you're using a database provider, see the setup guide for your database provider:
 
 - [AWS RDS](/how-to/setup-rds)
 - [GCP Cloud SQL](/how-to/setup-gcp)
 - [Azure Database for PostgreSQL](/how-to/setup-azure)
 - [Neon](/how-to/setup-neon)
 - [Supabase](/how-to/setup-supabase)
+
+## Prerequisites
+
+If you're running Sequin locally, be sure to [install and configure Sequin](/running-sequin) first.
+
+You'll need permission to create publications and replication slots on your database. You may also need administration privileges on your database if logical replication is not configured (more below).
+
+### Provision a Postgres user for Sequin
+
+When in development, it's probably fine to supply Sequin with an existing user.
+
+However, when in production, you should create a dedicated user for Sequin. The user needs the following permissions:
+
+1. `connect` permission on the database.
+2. `select` permission on all the tables you want to connect to Sequin.
+3. `replication` permission to read from replication slots.
+
+Here's how to create a dedicated user with the minimum required permissions:
+
+```sql
+-- Create user with a secure password
+create user sequin_user with password 'REPLACE_WITH_SECURE_PASSWORD';
+
+-- Grant connect permission
+grant connect on database your_database to sequin_user;
+
+-- Grant select permission on tables you want to replicate
+grant select on table table1, table2, table3 to sequin_user;
+-- OR grant select on all tables in a schema
+grant select on all tables in schema public to sequin_user;
+
+-- Grant replication permission
+alter user sequin_user with replication;
+```
+
+To generate a secure password, if you have OpenSSL installed, you can use the following command:
+
+```bash
+openssl rand -base64 32
+```
+
+## Enable logical replication
+
+Sequin uses logical replication to capture changes from your Postgres database.
+
+To find out if logical replication is enabled on your database, connect to your database and run the following SQL command:
+
+```sql
+show wal_level;
+```
+
+The `wal_level` must be set to `logical`.
+
+If it's not, you'll need to enable it. Note that this requires a restart of your database.
+
+Follow these steps to enable logical replication:
+
+<Steps>
+  <Step title="Locate your postgresql.conf file">
+    The location varies by platform:
+
+    - Linux: Usually in `/etc/postgresql/<version>/main/postgresql.conf`
+    - macOS (Homebrew): `/usr/local/var/postgresql@<version>/postgresql.conf`
+    - Windows: `C:\Program Files\PostgreSQL\<version>\data\postgresql.conf`
+
+    You can also find it by running:
+
+    ```sql
+    show config_file;
+    ```
+  </Step>
+
+  <Step title="Edit postgresql.conf">
+    Open postgresql.conf in your text editor and set:
+
+    ```
+    wal_level = logical
+    ```
+
+    If you can't find the `wal_level` setting, add it at the end of the file.
+  </Step>
+
+  <Step title="Restart PostgreSQL">
+    Restart PostgreSQL to apply the changes:
+
+    **Linux**:
+    ```bash
+    sudo systemctl restart postgresql
+    ```
+
+    **macOS**:
+    ```bash
+    brew services restart postgresql@<version>
+    ```
+
+    **Windows**:
+    ```bash
+    net stop postgresql
+    net start postgresql
+    ```
+  </Step>
+</Steps>
+
+After restarting, run the `show wal_level;` command again to verify the change took effect.
+
+## Connect Sequin to your database
+
+In the Sequin Console, navigate to the "Databases" tab and click "Connect Database".
+
+### Database connection details
+
+Fill in the connection details for your database:
+
+- **Host**: The host address of your database.
+- **Port**: The port number of your database.
+- **Database**: The name of your database.
+- **Username**: The username Sequin will use to connect to your database.
+- **Password**: The password Sequin will use to connect to your database.
+
+### (Sequin Cloud) Connect to local database
+
+If you're using Sequin Cloud, you can connect Sequin to a database running on your local machine.
+
+Click "Use localhost" and follow the instructions. The "Host" and "Port" fields will be disabled.
+
+You'll need the [Sequin CLI](/reference/cli/overview) installed to use this method.
+
+### Replication configuration
+
+<Steps>
+  <Step title="Slot name and publication name">
+    Fill in the "Slot name" and "Publication name" that you'd like Sequin to use.
+  </Step>
+
+  <Step title="Create slot and publication">
+    Follow the instructions to create the slot and publication on your database.
+
+    The simplest publication is one that includes all tables:
+
+    ```sql
+    create publication sequin_pub for all tables;
+    ```
+
+    However, you can also create a publication that includes specific tables or schemas. You'll just need to [modify the publication](#adding-tables-to-your-publication) as needed in the future.
+
+     <Warning>
+      Be sure to create the publication _before_ you create the slot.
+    </Warning>
+  </Step>
+</Steps>
+
+### Test and connect
+
+<Steps>
+  <Step title="Test connection">
+    Click "Test connection" to verify that Sequin can connect to your database.
+  </Step>
+
+  <Step title="Connect">
+    Once the test goes green, click "Connect" to finish the connection process.
+  </Step>
+</Steps>
+
+## Monitoring
+
+Sequin will run health checks against your database connection automatically. You can view the status of the connection at any time in your database's "Overview" page.
+
+## Adding tables to your publication
+
+If you created a publication that contained a subset of your tables, you can add more tables to the publication later.
+
+To add tables to an existing publication, use the `alter publication` command:
+
+```sql
+alter publication sequin_pub add table table1, table2;
+```
+
+You can also add all tables in a specific schema:
+
+```sql
+alter publication sequin_pub add all tables in schema my_schema;
+```
+
+To verify which tables are included in your publication, you can run:
+
+```sql
+select * from pg_publication_tables 
+where pubname = 'sequin_pub';
+```

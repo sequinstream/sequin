@@ -5,12 +5,22 @@ icon: "key"
 iconType: "solid"
 ---
 
-You can [retrieve your API token](/management-api/introduction ) in the [Sequin Console](https://console.sequinstream.com).
+You can [retrieve and manage your API tokens](/management-api/introduction ) in your account settings page in the [Sequin Console](https://console.sequinstream.com).
+
+## API requests
 
 You'll include your token in the header of your HTTP requests. For example, with a client such as `curl`, you can include your token by using the `--header` option:
 
 ```bash
 curl --request GET \
-  --url api.sequinstream.com/api/http_pull_consumers/consumer_name/receive \
+  --url api.sequinstream.com/api/http_pull_consumers/{{sequin_stream_name}}/receive \
   --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+
+## CLI
+
+You can set your API token as a context variable in the [Sequin CLI](/reference/cli/overview) by running:
+
+```bash
+sequin context add {{CONTEXT_NAME}} --api-token={{YOUR_API_TOKEN}}
 ```

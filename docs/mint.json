@@ -81,10 +81,11 @@
         "how-to/maintain-caches",
         "how-to/deploy-to-production"
       ]
-    }, 
+    },
     {
       "group": "Reference",
       "pages": [
+        "reference/how-sequin-works",
         "reference/configuration",
         "reference/messages",
         "reference/filters",
@@ -105,13 +106,12 @@
         {
           "group": "Sequin Stream API",
           "pages": [
-            "reference/sequin-stream-api/overview",
             "reference/sequin-stream-api/receive",
             "reference/sequin-stream-api/ack",
             "reference/sequin-stream-api/nack"
-          ],
-          "icon": "wifi"
-        }
+          ]
+        },
+        "reference/change-capture-pipelines"
       ]
     },
     {

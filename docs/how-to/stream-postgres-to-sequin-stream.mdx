@@ -4,24 +4,29 @@ sidebarTitle: "Stream to Sequin Stream"
 description: "Pull Postgres changes directly from Sequin with exactly-once processing"
 ---
 
-This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Sequin Stream using Sequin.
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to a [Sequin Stream](/reference/sinks/sequin-stream).
 
-With Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
+With a Sequin Stream, you can pull database changes directly from Sequin without setting up additional infrastructure like Kafka or SQS. Sequin Stream provides exactly-once processing guarantees and supports multiple consumers working together as a consumer group.
 
 By the end of this how-to, you'll have database changes available to pull via HTTP.
 
 ## Prerequisites
 
-This guide assumes you:
+If you're self-hosting Sequin, you'll need:
 
-1. [Already have Sequin installed](/quickstart/webhooks)
-2. [Have a database connected](/quickstart/connect-postgres)
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/how-to/connect-postgres)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/how-to/connect-postgres)
 
 ## Basic setup
 
 ### (Optional) Enable retention for changes
 
-You can send either [changes or rows](/reference/messages) to Sequin Stream.
+You can send either [changes or rows](/reference/messages) to a Sequin Stream.
 
 If you're sending changes, note that changes are ephemeral. Sequin stores `insert`, `update`, and `delete` changes in a buffer table until they're delivered to your consumer.
 
@@ -41,7 +46,7 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
   <Step title="Choose message type">
     Specify whether you want to receive [changes or rows](/reference/messages) from the table.
 
-    If you're not sure which to choose, start with **Changes**.
+    If you're not sure which to choose, you can start with the default, "Changes".
   </Step>
 
   <Step title="Specify filters">
@@ -55,6 +60,12 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
 
     You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
   </Step>
+
+  <Step title="Specify message grouping">
+    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are delivered in order.
+
+    While your consumer is processing a message, if a new change or version related to the same row is captured, [Sequin will hold the message back](reference/ordering-and-grouping) until a consumer [acknowledges](reference/sequin-stream-api/ack) the first message. This is almost always the desired behavior.
+  </Step>
 </Steps>
 
 ### Configure delivery
@@ -66,14 +77,22 @@ Navigate to the "Sinks" tab, click "Create Sink", and select "Sequin Stream Sink
     The right value depends on how long you expect your consumer to take to process a batch of messages.
   </Step>
 
-  <Step title="Specify batch size">
-    The right value for "Batch size" depends on your requirements.
+  <Step title="Specify max ack pending">
+    Under "Max ack pending", specify the maximum number of messages that can be outstanding (e.g. in-flight but not yet acknowledged by your consumer group) at one time.
 
-    The simple rule is that you should try to match the batch size of messages to the unit of work your consumer will do.
+    This setting helps prevent issues where messages fail to be acknowledged, either due to errors in processing or bugs that cause too many workers to spin up. When the max ack pending limit is reached, Sequin stops delivering new messages and focuses on re-delivering unacknowledged messages.
 
-    For example, for event-driven use cases like triggering side effects one-by-one, you'll probably want to set this to `1`. Otherwise, you risk your worker partially processing a batch then crashing. Then, when the batch becomes visible again, another worker will re-process the beginning of the batch.
+    The right value depends on your consumer group's processing capacity.
+  </Step>
 
-    Conversely, for replication use cases, like batch upserting to a database, you'll want to set this to an optimal value for that batch upsert operation.
+  <Step title="Specify max waiting">
+    Under "Max waiting" you can specify that maximum number of consumers that can be waiting to receive messages at one time.
+
+    This setting helps manage your consumer group's resource utilization and prevent excessive polling of the Sequin Stream API. The right value depends on how many parallel consumers you expect to have in your consumer group.
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create Sequin Stream Sink".
   </Step>
 </Steps>
 
@@ -83,34 +102,51 @@ To verify that your sink is working:
 
 1. Make some changes in your source table.
 2. Verify that the count of messages for your sink increases in the Sequin web console.
-3. Test receiving messages using curl. Find the receive curl request on your sink's details page:
+3. Test [receiving messages](/reference/sequin-stream-api/receive) using curl. Find the receive curl request on your sink's details page:
 
-```bash
-curl -X GET "https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/receive?batch_size=10" \
-  -H "Authorization: Bearer {{YOUR_TOKEN}}"
-```
+    ```bash
+    curl -X GET "https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/receive?batch_size=10" \
+      -H "Authorization: Bearer {{YOUR_TOKEN}}"
+    ```
 
-You should see a response containing your messages:
+    You should see a response containing your messages:
 
-```json
-{
-  "data": [
+    ```json
     {
-      "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
-      "data": {
-        "record": {
-          "id": 1,
-          "name": "Example Record",
-          "created_at": "2024-03-20T15:30:00Z"
+      "data": [
+        {
+          "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
+          "data": {
+            "record": {
+              "id": 1,
+              "name": "Example Record",
+              "created_at": "2024-03-20T15:30:00Z"
+            }
+          }
         }
-      }
+      ]
     }
-  ]
-}
-```
+    ```
+4. Acknowledge the messages you received:
+
+    ```bash
+    curl -X POST "https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/ack" \
+      -H "Authorization: Bearer {{YOUR_TOKEN}}" \
+      -d '{"ack_ids": ["0e6ae50d-4226-4498-8429-fc012737125b"]}'
+    ```
+
+    You should see the message state changes to `acknowledged` in the Sequin web console.
 
 ## Next steps
 
-Assuming you've followed the steps above for your local environment, "[How to deploy to production](/how-to/deploy-to-production)" will show you how to deploy your implementation to production.
+- **Setup your consumer group to process messages**
 
-For more details on consuming messages from Sequin Stream, including examples of implementing consumers in different languages, see the [Sequin Stream reference](/consume/consume-api/overview).
+   Now that your Postgres data is flowing into Sequin Stream, you can setup a consumer group to read and process the data. See the [Sequin Stream API reference](/reference/sequin-stream-api/overview) for more information on receiving messages, acknowledging messages, and more.
+
+- **Deploy your implementation**
+
+   When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+   For more about how Sequin Stream sinks work, see the [Sequin Stream sink reference](/reference/sinks/sequin-stream).

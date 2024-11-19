@@ -1,0 +1,99 @@
+---
+title: 'Receive next messages'
+sidebarTitle: "Receive"
+description: "Use the `/receive` endpoint to get one or more messages from a Sequin Stream"
+api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
+---
+
+<Note>You can use either `POST` or `GET` to receive messages from a Sequin Stream.</Note>
+
+## Request parameters
+
+<ParamField path="name_or_id" type="string" required>
+  The ID or name of the Sequin Stream.
+</ParamField>
+<ParamField body="batch_size" type="integer" placeholder={1}>
+  Number of messages to try to fetch from the stream. Defaults to `1`.
+
+  The count of returned messages may be less than the requested batch size if there are fewer messages available for the consumer.
+</ParamField>
+<ParamField body="wait_for" type="integer | string" placeholder={0}>
+  Amount of time to wait for messages to become available in the stream, in milliseconds. Defaults to `0`.
+
+  When `wait_for` is greater than `0`, the request will block until any messages are available or `wait_for` milliseconds have passed.
+
+  Therefore, you can use `wait_for` to implement long polling.
+
+  Instead of passing in an integer, you can also pass in a duration string, like `"60s"`, `"5000ms"`, or `"5m"`.
+</ParamField>
+
+## Response fields
+
+The response is an object with a `data` property that contains a list of messages. Within each message is an `ack_id` and a `data` property that contains the message data.
+
+<ResponseField name="data" type="list" required>
+  <Expandable title="properties">
+    <ResponseField name="ack_id" type="string" required>
+      You'll use the `ack_id` in follow-up requests to either [ack](/reference/sequin-stream-api/ack) or [nack](/reference/sequin-stream-api/nack) this specific message.
+    </ResponseField>
+    <ResponseField name="record" type="object" required>
+      A [message](/reference/messages) containing the message data with a key for each column in the associated table.
+    </ResponseField>
+    <ResponseField name="changes" type="object">
+      Only present if the message is a change message. Contains the previous values for changed fields.
+    </ResponseField>
+    <ResponseField name="action" type="string">
+      Only present if the message is a change message.The action that occurred on the message.
+    </ResponseField>
+    <ResponseField name="metadata" type="object" required>
+      Metadata about the Sequin Stream sink that produced the message.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+```shell Using POST
+curl --request POST \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/receive \
+  --header 'Authorization: Bearer YOUR_API_TOKEN' \
+  --header 'Content-Type: application/json' \
+  -d '{ "batch_size": 10 }'
+```
+
+```shell Using GET
+curl --request GET \
+  --url https://api.sequinstream.com/api/http_pull_consumers/orders-pull-consumer/receive?batch_size=10 \
+  --header 'Authorization: Bearer YOUR_API_TOKEN'
+```
+</ RequestExample>
+
+<ResponseExample>
+```json Response
+{
+  "data": [
+    {
+      "ack_id": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "changes": {
+        "status": "pending"
+      },
+      "action": "update",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-03-20T15:30:00Z",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
+        }
+      }
+    }
+  ]
+}
+```
+</ResponseExample>
+

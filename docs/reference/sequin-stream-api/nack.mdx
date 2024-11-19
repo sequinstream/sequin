@@ -1,18 +1,18 @@
 ---
 title: 'Nack messages'
-description: "Nack messages for a Consume endpoint"
+description: "Nack messages in a Sequin Stream"
 api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/nack'
 ---
 
 ## Request parameters
 
 <ParamField path="consumer_name_or_id" type="string" required>
-  The ID or name of the consumer.
+  The ID or name of the Sequin Stream.
 </ParamField>
 <ParamField body="ack_ids" type="string[]" required>
   An array of `ack_id` values to nack.
 
-  Each message returned by the [`/receive` endpoint](/consume/consume-api/receive) contains an `ack_id` that you can use to `nack`` the message.
+  Each message returned by the [`/receive` endpoint](/reference/sequin-stream-api/receive) contains an `ack_id` that you can use to `nack` the message.
 </ParamField>
 
 <RequestExample>

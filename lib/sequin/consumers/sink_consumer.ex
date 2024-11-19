@@ -7,7 +7,6 @@ defmodule Sequin.Consumers.SinkConsumer do
   import PolymorphicEmbed
 
   alias __MODULE__
-  alias Ecto.Changeset
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpPushSink
@@ -117,22 +116,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
-    |> validate_number(:batch_size, less_than_or_equal_to: 10_000)
-    |> validate_for_sink()
-  end
-
-  defp validate_for_sink(%Changeset{valid?: false} = changeset), do: changeset
-
-  defp validate_for_sink(%Changeset{} = changeset) do
-    type = changeset |> Changeset.get_field(:sink) |> Map.fetch!(:type)
-
-    case type do
-      :http_push -> changeset
-      :sqs -> validate_number(changeset, :batch_size, less_than_or_equal_to: 10)
-      :redis -> validate_number(changeset, :batch_size, less_than_or_equal_to: 1000)
-      :kafka -> validate_number(changeset, :batch_size, equal_to: 1)
-      :sequin_stream -> changeset
-    end
+    |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
   end
 
   def where_account_id(query \\ base_query(), account_id) do

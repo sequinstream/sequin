@@ -110,7 +110,7 @@ curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUME
 
 ### Nack messages
 
-Alternatively, if you're consumer is unable to process the messages, it can [`nack`](/consume/consume-api/nack) them. This tells Sequin to make the messages available for processing again:
+Alternatively, if your consumer is unable to process the messages, it can [`nack`](/consume/consume-api/nack) them. This tells Sequin to make the messages available for processing again right away:
 
 ```bash
 curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/nack \

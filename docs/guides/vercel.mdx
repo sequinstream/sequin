@@ -1,7 +1,7 @@
 ---
 title: "Trigger Vercel Functions from database changes"
 sidebarTitle: "Vercel Functions"
-description: "How to use Sequin to trigger Vercel Functions from database changes."
+description: "How to use a Sequin webhook sink to trigger Vercel Functions from database changes."
 icon: "triangle"
 iconType: "sharp-solid"
 ---
@@ -14,86 +14,88 @@ Often, you want to trigger a Vercel Function when a database row changes. For ex
   <img src="/images/guides/vercel/send-with-sequin.svg" alt="Vercel Function" />
 </Frame>
 
-In this guide, you will learn how to setup Sequin to trigger a Vercel Function when a database row changes.
+In this guide, you will learn how to setup a Sequin webhook sink to trigger a Vercel Function when a database row changes.
 
 ## Prerequisites
 
-You are about to create a simple Vercel Function that logs a message to the console. Sequin will trigger this function by sending a HTTP POST request to the function's URL with the payload of the database row that changed.
+You are about to create a simple Vercel Function that logs a message to the console. You'll trigger this function by setting up a webhook sink in Sequin that sends a HTTP POST request to the function's URL with the payload of the database row that changed.
 
 You'll need the following:
 
-- A Next.js project
-<Info>
-You can create a new Next.js project with the following terminal command:
+- A [Vercel account](https://vercel.com/signup)
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register)
+- A [database](/connect-postgres) connected to Sequin
+
+## Create a Vercel Function
+
+Start by creating a new Vercel Function that takes in a Sequin webhook sink [payload](/reference/sinks/webhooks#request-format) and logs the payload to the console.
+
+<Steps titleSize="h3">
+<Step title="Create a new Next.js project">
+Create a new Next.js project if you don't have one:
 
 ```bash
 npx create-next-app@latest --typescript
 ```
+</Step>
 
-Learn more in the [Vercel Functions Quickstart](https://vercel.com/docs/functions/quickstart).
-</Info>
+<Step title="Add function code">
+Create a new API route at `app/api/hello/route.ts` with the following code:
 
-- A Sequin account
-- A Postgres database (Sequin works with any Postgres database version 12+) with a basic `users` table containing an `id` column and a `name` column.
+```typescript
+export const dynamic = 'force-dynamic';
 
-## Create a Vercel Edge Function
+export async function POST(request: Request) {
+  const authHeader = request.headers.get('authorization');
+  if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
 
-Start by creating a new Vercel Function that takes in a Sequin change event as a payload and logs the payload to the console.
+  try {
+    const payload = await request.json();
+    const { record } = payload;
 
-<Steps titleSize="h3">
-<Step title="Create a new Vercel Function">
-    Add a new API route to your project. For example, create a new file called `api/hello.ts` and add the following code:
-
-    <Info>
-    If you're using Next.js, you all add the route in your `app` directory: `app/api/hello/route.ts`.
-    </Info>
-
-    ```ts
-    export const dynamic = 'force-dynamic';
-
-    export async function POST(request: Request) {
-      const authHeader = request.headers.get('authorization');
-      if (!authHeader || authHeader !== `Bearer ${process.env.SEQUIN_WEBHOOK_SECRET}`) {
-        return new Response('Unauthorized', { status: 401 });
-      }
-
-      try {
-        const payload = await request.json();
-        const { record } = payload;
-
-        if (record && record.name) {
-          console.log(`Hello ${record.name}`);
-        } else {
-          console.log('No name found in the payload.');
-        }
-
-        return new Response('Success', { status: 200 });
-      } catch (error) {
-        console.error('Error processing request:', error);
-        return new Response('Internal Server Error', { status: 500 });
-      }
+    if (record && record.name) {
+      console.log(`Hello ${record.name}`);
+    } else {
+      console.log('No name found in the payload.');
     }
-    ```
 
-    This function first checks the authorization header to make sure the request is coming from Sequin. Then it processes the payload (which contains the database row that changed) and logs the name from the payload to the console.
+    return new Response('Success', { status: 200 });
+  } catch (error) {
+    console.error('Error processing request:', error);
+    return new Response('Internal Server Error', { status: 500 });
+  }
+}
+```
+
+This function first checks the authorization header to make sure the request is coming from Sequin. Then it processes the [payload](/reference/sinks/webhooks#request-format) and logs the name from the payload to the console.
 </Step>
+
 <Step title="Add the SEQUIN_WEBHOOK_SECRET environment variable">
-    Add the `SEQUIN_WEBHOOK_SECRET` environment variable to a `.env.local` file in your project root. You can create any secret value here, but make sure to keep it secure.
+Create a `.env.local` file in your project root and add:
 
-    ```bash
-    SEQUIN_WEBHOOK_SECRET=your-secret-value
-    ```
+```bash
+SEQUIN_WEBHOOK_SECRET=your-secret-value
+```
 
-    You will need to set this secret value in the Sequin dashboard when you create the push consumer.
+[Create a secret](/reference/sinks/webhooks#authentication) and set it as the `SEQUIN_WEBHOOK_SECRET` environment variable. You will need to use this secret value in the Sequin dashboard when you create the webhook sink.
 </Step>
-<Step title="Start your local development server">
-    Start your local development server with the following command:
 
-    ```bash
-    npm run dev
-    ```
+<Step title="Deploy to Vercel">
+1. Install the Vercel CLI if you haven't already:
+```bash
+npm install -g vercel
+```
 
-    This will typically start the development server on `http://localhost:3000`.
+2. Deploy your app:
+```bash
+vercel
+```
+
+3. In the Vercel dashboard, add the `SEQUIN_WEBHOOK_SECRET` environment variable with the same value you used locally.
+
+Copy your deployment URL. You will need this URL when creating the webhook sink.
 </Step>
 </Steps>
 
@@ -101,64 +103,80 @@ Start by creating a new Vercel Function that takes in a Sequin change event as a
 You've successfully created a Vercel Function that logs a message to the console when Sequin sends a HTTP POST request to the function's URL.
 </Check>
 
-## Create a Sequin Push Consumer
+## Use the CLI to tunnel to your local endpoint
 
-Create a new Sequin push consumer that detects changes to the `users` table and sends a HTTP POST request to the Vercel Function's URL.
+Create a Sequin HTTP endpoint that points to your local Vercel Function:
 
 <Steps titleSize="h3">
-    <Step title="Connect Sequin to your database">
-        1. Login to your Sequin account and click the **Add New Database** button.
-        2. Enter the connection details for your Postgres database.
-        <Info>
-        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/reference/cli/overview).
-        </Info>
-        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+    <Step title="Open HTTP Endpoint tab">
+        In the Sequin web console, open the "HTTP Endpoint" tab and click the "Create HTTP Endpoint" button.
+    </Step>
 
-        ```sql
-        create publication sequin_pub for all tables;
-        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    <Step title="Configure endpoint">
+        Enter a name for your endpoint (i.e. `local_endpoint`) and flip the "Use localhost" switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/reference/cli/overview), then run:
+
+        ```bash
+        sequin tunnel --ports=3000:local-endpoint
         ```
-
-        4. Name your database and click the **Connect Database** button.
-
-        Sequin will connect to your database and ensure that it's configured properly.
-
-        <Note>
-        If you need step-by-step connection instructions to connect Sequin to your database, check out our [quickstart guide](/quickstart).
-        </Note>
     </Step>
-    <Step title="Tunnel to your local endpoint">
-    Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
 
-    1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
-    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/reference/cli/overview), then run:
-
-      ```bash
-      sequin tunnel --ports=3000:local-endpoint
-      ```
-
-    3. Now, click **Add encryption header** and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET` using the secret value you created above.
-    4. Click **Create HTTP Endpoint**.
+    <Step title="Add authentication">
+        Back in the Sequin web console, click "Add encryption header" and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET` using the secret value you created above.
     </Step>
-    <Step title="Create a Push Consumer">
-    Create a push consumer that will capture users from your database and deliver them to your local endpoint:
 
-    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
-    2. Select your `users` table (i.e `public.users`).
-    3. For this guide, you want to capture all changes to the `users` table. To do this, select **Changes** and click **Continue**.
-    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `users_push_consumer`) and in the **HTTP Endpoint** section select the `local-endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/hello`):
+    <Step title="Create endpoint">
+        Click "Create HTTP Endpoint".
+    </Step>
+</Steps>
 
-    <Frame>
-      <img src="/images/guides/vercel/consumer-config.png" alt="Create Consumer" />
-    </Frame>
+## Create a webhook sink
 
-    7. Click the **Create Consumer** button.
+Create a webhook sink that captures changes to your database and sends a HTTP POST request to the local Sequin HTTP endpoint you created above:
+
+<Steps titleSize="h3">
+    <Step title="Create a new sink">
+        Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
+    </Step>
+
+    <Step title="Select source table">
+        Select the table you want to capture changes from (i.e `public.users`).
+    </Step>
+
+    <Step title="Choose message type">
+        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+        <Tip>
+        If you're not sure which to choose, leave the default setting of "Changes". Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
+        </Tip>
+    </Step>
+
+    <Step title="Specify change types">
+        If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes. Select all three for now. No need to add a filter.
+    </Step>
+
+    <Step title="Configure backfill">
+        You can optionally indicate if you want your webhook endpoint to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. For now, leave "Backfill" toggled off.
+    </Step>
+
+    <Step title="Configure message grouping">
+        Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+    </Step>
+
+    <Step title="Configure delivery settings">
+        Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1 since we're just logging messages.
+    </Step>
+
+    <Step title="Configure HTTP endpoint">
+        Under "HTTP Endpoint", enter the Sequin HTTP endpoint you created above. Then click to "Add Encrypted Header" with the key `Authorization` and the value `Bearer SEQUIN_WEBHOOK_SECRET`, using the secret value you set in your Lambda function's environment variables.
+    </Step>
+
+    <Step title="Name and create sink">
+        Give your sink a name (i.e. `users_webhook_sink`) and click "Create Webhook Sink".
     </Step>
 </Steps>
 
 <Check>
-    Your Sequin consumer is now created and ready to send events to your function
+    Your Sequin consumer is now created and ready to send events to your function.
 </Check>
 
 ## Test end-to-end
@@ -167,7 +185,7 @@ Create a new Sequin push consumer that detects changes to the `users` table and 
     1. The Next.js app is running: `npm run dev`
     3. The Sequin tunnel is running: `sequin tunnel --ports=3000:local_endpoint`
     </Step>
-    <Step title="Create a new post in your database">
+    <Step title="Add a row to your database">
 
     ```sql
     insert into
@@ -179,7 +197,7 @@ Create a new Sequin push consumer that detects changes to the `users` table and 
     ```
     </Step>
     <Step title="Trace the change in the Sequin dashboard">
-    In the Sequin console, open the **Messages** tab on your consumer and confirm that a message was delivered:
+    In the Sequin console, open the "Messages" tab on your webhook sink and confirm that a message was delivered:
     <Frame>
       <img src="/images/guides/vercel/message-delivered.png" alt="Message Delivered" />
     </Frame>
@@ -217,18 +235,18 @@ You've successfully triggerd a Vercel Function from a database change!
     </Step>
 
     <Step title="Set production environment variables">
-    1. In the Vercel dashboard, navigate to your project and click on the **Settings** tab.
-    2. Under the **Environment Variables** section, click the **Add** button.
+    1. In the Vercel dashboard, navigate to your project and click on the "Settings" tab.
+    2. Under the "Environment Variables" section, click the "Add" button.
     3. Add a new environment variable with the following details:
-        - **Environment**: Select **Production** (and optionally **Preview** and **Development** if you want to use the same secret in those environments)
-        - **Key**: `SEQUIN_WEBHOOK_SECRET`
-        - **Value**: your-secret-value (use the same value you set in your `.env.local` file)
+        - "Environment": Select "Production" (and optionally "Preview" and "Development" if you want to use the same secret in those environments)
+        - "Key": `SEQUIN_WEBHOOK_SECRET`
+        - "Value": your-secret-value (use the same value you set in your `.env.local` file)
 
-    4. Click **Save** to add the environment variable.
+    4. Click "Save" to add the environment variable.
     </Step>
 
     <Step title="Create a production consumer">
-    In the Sequin console, create a new Push consumer that points to your Vercel Function's HTTP endpoint.
+    In the Sequin console, create a new webhook sink that points to your Vercel Function's HTTP endpoint.
     </Step>
 
     <Step title="Verify your deployment">
@@ -246,4 +264,4 @@ You've successfully deployed your Next.js app to Vercel and configured it to tri
 Modify this example to suit your needs:
 
 - If you need to run long-running jobs, consider using [Trigger.dev](/guides/trigger-dev) or [Inngest](/guides/inngest) in tandem with Vercel Functions.
-- Tune your consumer configuration to suit your volume of work.
+- Tune your [webhook sink configuration](/reference/sinks/webhooks) to suit your volume of work.

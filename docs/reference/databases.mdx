@@ -1,0 +1,158 @@
+---
+title: 'Databases'
+sidebarTitle: 'Databases'
+description: 'Reference for connecting databases to Sequin'
+---
+
+ ## Supported databases
+
+Sequin works with any PostgreSQL database version 12 or higher that supports the [Logical Replication](https://www.postgresql.org/docs/current/logical-replication.html).
+
+You can find guides for connecting to local and hosted databases in the [connect postgres](/connect-postgres) guide.
+
+## Database connection credentials
+
+Sequin requires the following credentials to connect to your database:
+
+- **Host**: The hostname of your database
+- **Port**: The port number of your database
+- **Database**: The name of your database
+- **Username**: The username of a database user with the [necessary permissions](/reference/databases#database-user-permissions)
+- **Password**: The password for the database user
+
+You can also enable or disable SSL mode for your database connection.
+
+### Tunneling to your database
+
+Use the [Sequin CLI](/reference/cli/overview) to create a secure tunnel between Sequin Cloud and a local database.
+
+If your database is hosted by a cloud provider and requires a VPN to connect, Sequin can create a secure tunnel through a bastion host. Please [contact support](mailto:support@sequinstream.com) to enable this.
+
+## Database user permissions
+
+When connecting Sequin to your database, it's recommended to create a dedicated database user with the following permissions:
+
+```sql
+-- Create user with a secure password
+create user sequin_user with password 'REPLACE_WITH_SECURE_PASSWORD';
+-- Grant connect permission
+grant connect on database your_database to sequin_user;
+-- Grant select permission on tables you want to replicate
+grant select on table table1, table2, table3 to sequin_user;
+-- OR grant select on all tables in a schema
+grant select on all tables in schema public to sequin_user;
+-- Grant replication permission
+alter user sequin_user with replication;
+```
+
+Please create a strong password for your database user. You can generate a secure password using the following command:
+
+```bash
+openssl rand -base64 24
+```
+
+## Enabling logical replication
+
+Sequin requires logical replication to be enabled on your database. You can check if it's enabled:
+
+```sql
+show wal_level;
+```
+
+If the output isn't `logical`, you'll need to enable it. The process for enabling logical replication varies by provider. You can find more information in the following guides:
+
+- [Self-hosted PostgreSQL](/connect-postgres): Modify `postgresql.conf` to set `wal_level = logical`
+- [AWS RDS](/how-to/setup-rds): Create a parameter group with `rds.logical_replication = 1`
+- [Google Cloud SQL](/how-to/setup-gcp): Enable through the console or API
+- [Azure](/how-to/setup-azure): Configure through server parameters
+- [Neon](/how-to/setup-neon): Enable through project settings
+- [Supabase](/how-to/setup-supabase): Enabled by default
+
+<Warning>
+Enabling logical replication often requires a database restart.
+</Warning>
+
+## Publications
+
+[Publications](https://www.postgresql.org/docs/current/sql-createpublication.html) identify which tables to track for changes.
+
+By default, Sequin looks for a publication named `sequin_publication`.
+
+### Creating a Publication
+
+The simplest publication includes all tables:
+
+```sql
+create publication sequin_publication for all tables;
+```
+
+To specify a subset of tables, use the following command:
+
+```sql
+create publication sequin_publication for table table1, table2, table3;
+```
+
+Or all tables in a schema:
+
+```sql
+create publication sequin_publication for all tables in schema public;
+```
+
+### Modifying Publications
+
+To add or remove tables from a publication, use the `ALTER PUBLICATION` statement:
+
+```sql
+-- Drop all tables
+alter publication sequin_publication drop all tables;
+-- Add tables
+alter publication sequin_publication add table table1, table2, table3;
+-- Drop tables
+alter publication sequin_publication drop table table1, table2, table3;
+-- Add all tables in a schema
+alter publication sequin_publication add all tables in schema my_schema;
+-- Drop all tables in a schema
+alter publication sequin_publication drop all tables in schema my_schema;
+```
+
+### Deleting a Publication
+
+You can delete a publication using the `DROP PUBLICATION` statement:
+
+```sql
+drop publication sequin_publication;
+```
+
+## Replication slots
+
+[Replication slots](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) ensure that PostgreSQL retains WAL (Write-Ahead Log) data needed by Sequin.
+
+By default, Sequin looks for a slot named `sequin_slot`.
+
+### Creating a Replication Slot
+
+```sql
+create replication slot sequin_slot;
+```
+
+### Deleting a Replication Slot
+
+```sql
+drop replication slot sequin_slot;
+```
+
+### Best practices
+
+**Monitor slot lag**: Excessive lag in a replication slot can cause WAL buildup and disk space issues. Monitor lag with:
+
+```sql
+select * from pg_replication_slots;
+```
+
+**Use meaningful names**: Name slots clearly to identify their purpose, e.g., `sequin_prod_slot`, `sequin_audit_slot`
+
+**Clean up unused slots**: Delete slots that are no longer in use to prevent WAL retention:
+
+```sql
+select pg_drop_replication_slot('sequin_slot');
+```

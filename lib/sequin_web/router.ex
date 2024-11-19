@@ -93,11 +93,11 @@ defmodule SequinWeb.Router do
       live "/consumer-groups/:id/messages", ConsumerGroupsLive.Show, :messages
       live "/consumer-groups/:id/edit", ConsumerGroupsLive.Show, :edit
 
-      live "/consumers", DestinationConsumersLive.Index, :list
-      live "/consumers/new", DestinationConsumersLive.Index, :new
-      live "/consumers/:type/:id", DestinationConsumersLive.Show, :show
-      live "/consumers/:type/:id/messages", DestinationConsumersLive.Show, :messages
-      live "/consumers/:type/:id/edit", DestinationConsumersLive.Show, :edit
+      live "/consumers", SinkConsumersLive.Index, :list
+      live "/consumers/new", SinkConsumersLive.Index, :new
+      live "/consumers/:type/:id", SinkConsumersLive.Show, :show
+      live "/consumers/:type/:id/messages", SinkConsumersLive.Show, :messages
+      live "/consumers/:type/:id/edit", SinkConsumersLive.Show, :edit
 
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.Form, :new

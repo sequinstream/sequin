@@ -5,13 +5,13 @@ defmodule Sequin.Redis.ConnectionCache do
   By caching these connections, we can avoid paying a significant startup
   penalty when performing multiple operations on the same Redis instance.
 
-  Each `Sequin.Consumers.RedisDestination` gets its own connection in the cache.
+  Each `Sequin.Consumers.RedisSink` gets its own connection in the cache.
 
   The cache takes ownership of the Redis connections and is responsible for
   closing them when they are invalidated (or when the cache is stopped). Thus,
   callers should not call `GenServer.stop/1` on these connections.
 
-  Cached connections are invalidated and recreated when their Redis destination's
+  Cached connections are invalidated and recreated when their Redis sink's
   connection options change.
 
   The cache will detect dead connections and create new ones as needed.
@@ -19,7 +19,7 @@ defmodule Sequin.Redis.ConnectionCache do
 
   use GenServer
 
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Error.NotFoundError
 
   require Logger
@@ -27,7 +27,7 @@ defmodule Sequin.Redis.ConnectionCache do
   defmodule Cache do
     @moduledoc false
 
-    @type destination :: RedisDestination.t()
+    @type sink :: RedisSink.t()
     @type entry :: %{
             conn: pid() | atom(),
             options_hash: binary()
@@ -42,21 +42,21 @@ defmodule Sequin.Redis.ConnectionCache do
       Enum.each(cache, fn {_id, entry} -> function.(entry.conn) end)
     end
 
-    @spec lookup(t(), destination()) :: {:ok, pid()} | {:error, :stale} | {:error, :not_found}
-    def lookup(cache, destination) do
-      new_hash = options_hash(destination)
-      entry = Map.get(cache, destination.id)
+    @spec lookup(t(), sink()) :: {:ok, pid()} | {:error, :stale} | {:error, :not_found}
+    def lookup(cache, sink) do
+      new_hash = options_hash(sink)
+      entry = Map.get(cache, sink.id)
 
       cond do
         is_nil(entry) ->
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached Redis connection was dead upon lookup", destination_id: destination.id)
+          Logger.warning("Cached Redis connection was dead upon lookup", sink_id: sink.id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached Redis destination connection was stale", destination_id: destination.id)
+          Logger.info("Cached Redis sink connection was stale", sink_id: sink.id)
           {:error, :stale}
 
         true ->
@@ -64,21 +64,21 @@ defmodule Sequin.Redis.ConnectionCache do
       end
     end
 
-    @spec pop(t(), destination()) :: {pid() | nil, t()}
-    def pop(cache, destination) do
-      {entry, new_cache} = Map.pop(cache, destination.id, nil)
+    @spec pop(t(), sink()) :: {pid() | nil, t()}
+    def pop(cache, sink) do
+      {entry, new_cache} = Map.pop(cache, sink.id, nil)
 
       if entry, do: {entry.conn, new_cache}, else: {nil, new_cache}
     end
 
-    @spec store(t(), destination(), pid()) :: t()
-    def store(cache, destination, conn) do
-      entry = %{conn: conn, options_hash: options_hash(destination)}
-      Map.put(cache, destination.id, entry)
+    @spec store(t(), sink(), pid()) :: t()
+    def store(cache, sink, conn) do
+      entry = %{conn: conn, options_hash: options_hash(sink)}
+      Map.put(cache, sink.id, entry)
     end
 
-    defp options_hash(destination) do
-      :erlang.phash2(RedisDestination.redis_url(destination, obscure_password: false))
+    defp options_hash(sink) do
+      :erlang.phash2(RedisSink.redis_url(sink, obscure_password: false))
     end
   end
 
@@ -86,11 +86,11 @@ defmodule Sequin.Redis.ConnectionCache do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Consumers.RedisDestination
+    alias Sequin.Consumers.RedisSink
 
-    @type destination :: RedisDestination.t()
+    @type sink :: RedisSink.t()
     @type opt :: {:start_fn, State.start_function()} | {:stop_fn, State.stop_function()}
-    @type start_function :: (destination() -> start_result())
+    @type start_function :: (sink() -> start_result())
     @type start_result ::
             {:ok, pid()}
             | {:error, Postgrex.Error.t()}
@@ -113,20 +113,20 @@ defmodule Sequin.Redis.ConnectionCache do
       }
     end
 
-    @spec find_or_create_connection(t(), destination(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
-    def find_or_create_connection(%__MODULE__{} = state, destination, create_on_miss) do
-      case Cache.lookup(state.cache, destination) do
+    @spec find_or_create_connection(t(), sink(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
+    def find_or_create_connection(%__MODULE__{} = state, sink, create_on_miss) do
+      case Cache.lookup(state.cache, sink) do
         {:ok, conn} ->
           {:ok, conn, state}
 
         {:error, :stale} ->
           state
-          |> invalidate_connection(destination)
-          |> find_or_create_connection(destination, create_on_miss)
+          |> invalidate_connection(sink)
+          |> find_or_create_connection(sink, create_on_miss)
 
         {:error, :not_found} when create_on_miss ->
-          with {:ok, conn} <- state.start_fn.(destination) do
-            new_cache = Cache.store(state.cache, destination, conn)
+          with {:ok, conn} <- state.start_fn.(sink) do
+            new_cache = Cache.store(state.cache, sink, conn)
             new_state = %{state | cache: new_cache}
             {:ok, conn, new_state}
           end
@@ -143,23 +143,23 @@ defmodule Sequin.Redis.ConnectionCache do
       %{state | cache: Cache.new()}
     end
 
-    @spec invalidate_connection(t(), destination()) :: t()
-    def invalidate_connection(%__MODULE__{} = state, destination) do
-      {conn, new_cache} = Cache.pop(state.cache, destination)
+    @spec invalidate_connection(t(), sink()) :: t()
+    def invalidate_connection(%__MODULE__{} = state, sink) do
+      {conn, new_cache} = Cache.pop(state.cache, sink)
 
       if conn, do: state.stop_fn.(conn)
 
       %{state | cache: new_cache}
     end
 
-    defp default_start(%RedisDestination{} = destination) do
-      destination
-      |> RedisDestination.redis_url(obscure_password: false)
+    defp default_start(%RedisSink{} = sink) do
+      sink
+      |> RedisSink.redis_url(obscure_password: false)
       |> Redix.start_link()
     end
   end
 
-  @type destination :: RedisDestination.t()
+  @type sink :: RedisSink.t()
   @type opt :: State.opt()
   @type start_result :: State.start_result()
 
@@ -169,26 +169,26 @@ defmodule Sequin.Redis.ConnectionCache do
     GenServer.start_link(__MODULE__, opts, name: name)
   end
 
-  @spec connection(destination()) :: start_result()
-  @spec connection(GenServer.server(), destination()) :: start_result()
-  def connection(server \\ __MODULE__, %RedisDestination{} = destination) do
-    GenServer.call(server, {:connection, destination, true})
+  @spec connection(sink()) :: start_result()
+  @spec connection(GenServer.server(), sink()) :: start_result()
+  def connection(server \\ __MODULE__, %RedisSink{} = sink) do
+    GenServer.call(server, {:connection, sink, true})
   end
 
-  @spec existing_connection(GenServer.server(), destination()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %RedisDestination{} = destination) do
-    GenServer.call(server, {:connection, destination, false})
+  @spec existing_connection(GenServer.server(), sink()) :: start_result() | {:error, NotFoundError.t()}
+  def existing_connection(server \\ __MODULE__, %RedisSink{} = sink) do
+    GenServer.call(server, {:connection, sink, false})
   end
 
-  @spec invalidate_connection(GenServer.server(), destination()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %RedisDestination{} = destination) do
-    GenServer.cast(server, {:invalidate_connection, destination})
+  @spec invalidate_connection(GenServer.server(), sink()) :: :ok
+  def invalidate_connection(server \\ __MODULE__, %RedisSink{} = sink) do
+    GenServer.cast(server, {:invalidate_connection, sink})
   end
 
   # This function is intended for test purposes only
-  @spec cache_connection(GenServer.server(), destination(), pid()) :: :ok
-  def cache_connection(server \\ __MODULE__, %RedisDestination{} = destination, conn) do
-    GenServer.call(server, {:cache_connection, destination, conn})
+  @spec cache_connection(GenServer.server(), sink(), pid()) :: :ok
+  def cache_connection(server \\ __MODULE__, %RedisSink{} = sink, conn) do
+    GenServer.call(server, {:cache_connection, sink, conn})
   end
 
   @impl GenServer
@@ -199,8 +199,8 @@ defmodule Sequin.Redis.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_call({:connection, %RedisDestination{} = destination, create_on_miss}, _from, %State{} = state) do
-    case State.find_or_create_connection(state, destination, create_on_miss) do
+  def handle_call({:connection, %RedisSink{} = sink, create_on_miss}, _from, %State{} = state) do
+    case State.find_or_create_connection(state, sink, create_on_miss) do
       {:ok, conn, new_state} ->
         {:reply, {:ok, conn}, new_state}
 
@@ -214,15 +214,15 @@ defmodule Sequin.Redis.ConnectionCache do
 
   # This function is intended for test purposes only
   @impl GenServer
-  def handle_call({:cache_connection, %RedisDestination{} = destination, conn}, _from, %State{} = state) do
-    new_cache = Cache.store(state.cache, destination, conn)
+  def handle_call({:cache_connection, %RedisSink{} = sink, conn}, _from, %State{} = state) do
+    new_cache = Cache.store(state.cache, sink, conn)
     new_state = %{state | cache: new_cache}
     {:reply, :ok, new_state}
   end
 
   @impl GenServer
-  def handle_cast({:invalidate_connection, %RedisDestination{} = destination}, %State{} = state) do
-    new_state = State.invalidate_connection(state, destination)
+  def handle_cast({:invalidate_connection, %RedisSink{} = sink}, %State{} = state) do
+    new_state = State.invalidate_connection(state, sink)
     {:noreply, new_state}
   end
 

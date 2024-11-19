@@ -3,7 +3,7 @@ defmodule Sequin.Aws.SQSTest do
 
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS
-  alias Sequin.Factory.DestinationFactory
+  alias Sequin.Factory.SinkFactory
 
   @queue_url "https://sqs.us-east-1.amazonaws.com/123456789012/test-queue"
 
@@ -19,8 +19,8 @@ defmodule Sequin.Aws.SQSTest do
   describe "send_messages/3" do
     test "successfully sends batch of messages", %{client: client} do
       messages = [
-        DestinationFactory.sqs_message(),
-        DestinationFactory.sqs_message()
+        SinkFactory.sqs_message(),
+        SinkFactory.sqs_message()
       ]
 
       Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
@@ -40,7 +40,7 @@ defmodule Sequin.Aws.SQSTest do
     end
 
     test "returns error when batch send fails", %{client: client} do
-      messages = [DestinationFactory.sqs_message()]
+      messages = [SinkFactory.sqs_message()]
 
       Req.Test.stub(Sequin.Aws.HttpClient, fn conn ->
         Req.Test.json(conn, %{

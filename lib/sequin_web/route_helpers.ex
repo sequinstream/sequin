@@ -2,8 +2,8 @@ defmodule SequinWeb.RouteHelpers do
   @moduledoc false
   use SequinWeb, :verified_routes
 
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.SinkConsumer
 
   def consumer_path(consumer, subpath \\ "")
 
@@ -11,7 +11,7 @@ defmodule SequinWeb.RouteHelpers do
     ~p"/consumer-groups/#{id}" <> subpath
   end
 
-  def consumer_path(%DestinationConsumer{id: id, type: type}, subpath) do
+  def consumer_path(%SinkConsumer{id: id, type: type}, subpath) do
     ~p"/consumers/#{type}/#{id}" <> subpath
   end
 end

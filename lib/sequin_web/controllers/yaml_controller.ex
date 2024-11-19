@@ -3,9 +3,9 @@ defmodule SequinWeb.YamlController do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.WalPipeline
@@ -112,7 +112,7 @@ defmodule SequinWeb.YamlController do
   defp get_resource_type(%Account{}), do: "account"
   defp get_resource_type(%HttpEndpoint{}), do: "http_endpoint"
   defp get_resource_type(%HttpPullConsumer{}), do: "consumer_group"
-  defp get_resource_type(%DestinationConsumer{}), do: "webhook_subscription"
+  defp get_resource_type(%SinkConsumer{}), do: "webhook_subscription"
   defp get_resource_type(%PostgresDatabase{}), do: "database"
   defp get_resource_type(%Sequence{}), do: "stream"
   defp get_resource_type(%User{}), do: "user"
@@ -121,7 +121,7 @@ defmodule SequinWeb.YamlController do
   defp same_resource?(%Account{name: name}, %Account{name: name}), do: true
   defp same_resource?(%HttpEndpoint{name: name}, %HttpEndpoint{name: name}), do: true
   defp same_resource?(%HttpPullConsumer{name: name}, %HttpPullConsumer{name: name}), do: true
-  defp same_resource?(%DestinationConsumer{name: name}, %DestinationConsumer{name: name}), do: true
+  defp same_resource?(%SinkConsumer{name: name}, %SinkConsumer{name: name}), do: true
   defp same_resource?(%PostgresDatabase{name: name}, %PostgresDatabase{name: name}), do: true
   defp same_resource?(%Sequence{name: name}, %Sequence{name: name}), do: true
   defp same_resource?(%User{email: email}, %User{email: email}), do: true

@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.RedisDestination do
+defmodule Sequin.Consumers.RedisSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -50,32 +50,32 @@ defmodule Sequin.Consumers.RedisDestination do
     end
   end
 
-  def redis_url(destination, opts \\ []) do
+  def redis_url(sink, opts \\ []) do
     obscure_password = Keyword.get(opts, :obscure_password, true)
 
-    auth = build_auth_string(destination, obscure_password)
-    "#{protocol(destination)}#{auth}#{destination.host}:#{destination.port}/#{destination.database}"
+    auth = build_auth_string(sink, obscure_password)
+    "#{protocol(sink)}#{auth}#{sink.host}:#{sink.port}/#{sink.database}"
   end
 
-  defp build_auth_string(%RedisDestination{username: nil, password: nil}, _obscure), do: ""
+  defp build_auth_string(%RedisSink{username: nil, password: nil}, _obscure), do: ""
 
-  defp build_auth_string(%RedisDestination{username: nil, password: password}, obscure) do
+  defp build_auth_string(%RedisSink{username: nil, password: password}, obscure) do
     "#{format_password(password, obscure)}@"
   end
 
-  defp build_auth_string(%RedisDestination{username: username, password: nil}, _obscure) do
+  defp build_auth_string(%RedisSink{username: username, password: nil}, _obscure) do
     "#{username}@"
   end
 
-  defp build_auth_string(%RedisDestination{username: username, password: password}, obscure) do
+  defp build_auth_string(%RedisSink{username: username, password: password}, obscure) do
     "#{username}:#{format_password(password, obscure)}@"
   end
 
   defp format_password(_, true), do: "******"
   defp format_password(password, false), do: password
 
-  defp protocol(%RedisDestination{tls: true}), do: "rediss://"
-  defp protocol(%RedisDestination{tls: false}), do: "redis://"
+  defp protocol(%RedisSink{tls: true}), do: "rediss://"
+  defp protocol(%RedisSink{tls: false}), do: "redis://"
 
   defp prod_env?, do: Application.get_env(:sequin, :env) == :prod
 

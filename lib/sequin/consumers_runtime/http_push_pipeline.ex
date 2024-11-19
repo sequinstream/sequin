@@ -3,8 +3,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   use Broadway
 
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Metrics
@@ -12,8 +12,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   require Logger
 
   def start_link(opts) do
-    %DestinationConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
-    consumer = DestinationConsumer.preload_http_endpoint(consumer)
+    %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
+    consumer = SinkConsumer.preload_http_endpoint(consumer)
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
     req_opts = Keyword.get(opts, :req_opts, [])
     test_pid = Keyword.get(opts, :test_pid)
@@ -34,7 +34,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       ],
       context: %{
         consumer: consumer,
-        http_endpoint: consumer.destination.http_endpoint,
+        http_endpoint: consumer.sink.http_endpoint,
         req_opts: req_opts,
         features: [
           legacy_event_transform: legacy_event_transform,
@@ -151,7 +151,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     end
   end
 
-  defp push_message(%HttpEndpoint{} = http_endpoint, %DestinationConsumer{} = consumer, message_data, req_opts) do
+  defp push_message(%HttpEndpoint{} = http_endpoint, %SinkConsumer{} = consumer, message_data, req_opts) do
     headers = http_endpoint.headers
     encrypted_headers = http_endpoint.encrypted_headers || %{}
     headers = Map.merge(headers, encrypted_headers)
@@ -159,7 +159,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     req =
       [
         base_url: HttpEndpoint.url(http_endpoint),
-        url: consumer.destination.http_endpoint_path || "",
+        url: consumer.sink.http_endpoint_path || "",
         headers: headers,
         json: message_data,
         receive_timeout: consumer.ack_wait_ms

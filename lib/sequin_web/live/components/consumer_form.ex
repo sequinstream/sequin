@@ -3,15 +3,15 @@ defmodule SequinWeb.Components.ConsumerForm do
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushDestination
-  alias Sequin.Consumers.KafkaDestination
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
@@ -76,13 +76,13 @@ defmodule SequinWeb.Components.ConsumerForm do
     component =
       cond do
         is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
-        is_struct(consumer, DestinationConsumer) -> "consumers/DestinationConsumerForm"
+        is_struct(consumer, SinkConsumer) -> "consumers/DestinationConsumerForm"
       end
 
     consumer =
       case consumer do
         %HttpPullConsumer{} -> Repo.preload(consumer, [:postgres_database])
-        %DestinationConsumer{} -> Repo.preload(consumer, [:postgres_database])
+        %SinkConsumer{} -> Repo.preload(consumer, [:postgres_database])
         _ -> consumer
       end
 
@@ -217,66 +217,66 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp test_sqs_connection(socket) do
-    destination_changeset =
+    sink_changeset =
       socket.assigns.changeset
-      |> Ecto.Changeset.get_field(:destination)
+      |> Ecto.Changeset.get_field(:sink)
       |> case do
         %Ecto.Changeset{} = changeset -> changeset
-        %SqsDestination{} = destination -> SqsDestination.changeset(destination, %{})
+        %SqsSink{} = sink -> SqsSink.changeset(sink, %{})
       end
 
-    if destination_changeset.valid? do
-      destination = Ecto.Changeset.apply_changes(destination_changeset)
-      client = SqsDestination.aws_client(destination)
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+      client = SqsSink.aws_client(sink)
 
-      case Sequin.Aws.SQS.queue_meta(client, destination.queue_url) do
+      case Sequin.Aws.SQS.queue_meta(client, sink.queue_url) do
         {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
-      {:error, encode_errors(destination_changeset)}
+      {:error, encode_errors(sink_changeset)}
     end
   end
 
   defp test_redis_connection(socket) do
-    destination_changeset =
+    sink_changeset =
       socket.assigns.changeset
-      |> Ecto.Changeset.get_field(:destination)
+      |> Ecto.Changeset.get_field(:sink)
       |> case do
         %Ecto.Changeset{} = changeset -> changeset
-        %RedisDestination{} = destination -> RedisDestination.changeset(destination, %{})
+        %RedisSink{} = sink -> RedisSink.changeset(sink, %{})
       end
 
-    if destination_changeset.valid? do
-      destination = Ecto.Changeset.apply_changes(destination_changeset)
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
 
-      case Redis.test_connection(destination) do
+      case Redis.test_connection(sink) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
-      {:error, encode_errors(destination_changeset)}
+      {:error, encode_errors(sink_changeset)}
     end
   end
 
   defp test_kafka_connection(socket) do
-    destination_changeset =
+    sink_changeset =
       socket.assigns.changeset
-      |> Ecto.Changeset.get_field(:destination)
+      |> Ecto.Changeset.get_field(:sink)
       |> case do
         %Ecto.Changeset{} = changeset -> changeset
-        %KafkaDestination{} = destination -> KafkaDestination.changeset(destination, %{})
+        %KafkaSink{} = sink -> KafkaSink.changeset(sink, %{})
       end
 
-    if destination_changeset.valid? do
-      destination = Ecto.Changeset.apply_changes(destination_changeset)
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
 
-      case Kafka.test_connection(destination) do
+      case Kafka.test_connection(sink) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
-      {:error, encode_errors(destination_changeset)}
+      {:error, encode_errors(sink_changeset)}
     end
   end
 
@@ -287,7 +287,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "destination" => decode_destination(consumer_type(socket.assigns.consumer), form["destination"]),
+        "sink" => decode_sink(consumer_type(socket.assigns.consumer), form["destination"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "message_kind" => message_kind,
@@ -299,7 +299,7 @@ defmodule SequinWeb.Components.ConsumerForm do
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },
-        # Only set for DestinationConsumer
+        # Only set for SinkConsumer
         "batch_size" => form["batchSize"]
       }
 
@@ -334,55 +334,55 @@ defmodule SequinWeb.Components.ConsumerForm do
     params
   end
 
-  defp decode_destination(:pull, _form), do: nil
+  defp decode_sink(:pull, _form), do: nil
 
-  defp decode_destination(:http_push, destination) do
+  defp decode_sink(:http_push, sink) do
     %{
       "type" => "http_push",
-      "http_endpoint_id" => destination["httpEndpointId"],
-      "http_endpoint_path" => destination["httpEndpointPath"]
+      "http_endpoint_id" => sink["httpEndpointId"],
+      "http_endpoint_path" => sink["httpEndpointPath"]
     }
   end
 
-  defp decode_destination(:sqs, destination) do
+  defp decode_sink(:sqs, sink) do
     %{
       "type" => "sqs",
-      "queue_url" => destination["queue_url"],
-      "region" => aws_region_from_queue_url(destination["queue_url"]),
-      "access_key_id" => destination["access_key_id"],
-      "secret_access_key" => destination["secret_access_key"]
+      "queue_url" => sink["queue_url"],
+      "region" => aws_region_from_queue_url(sink["queue_url"]),
+      "access_key_id" => sink["access_key_id"],
+      "secret_access_key" => sink["secret_access_key"]
     }
   end
 
-  defp decode_destination(:kafka, destination) do
+  defp decode_sink(:kafka, sink) do
     %{
       "type" => "kafka",
-      "hosts" => destination["hosts"],
-      "username" => destination["username"],
-      "password" => destination["password"],
-      "topic" => destination["topic"],
-      "tls" => destination["tls"],
-      "sasl_mechanism" => destination["sasl_mechanism"]
+      "hosts" => sink["hosts"],
+      "username" => sink["username"],
+      "password" => sink["password"],
+      "topic" => sink["topic"],
+      "tls" => sink["tls"],
+      "sasl_mechanism" => sink["sasl_mechanism"]
     }
   end
 
-  defp decode_destination(:redis, destination) do
+  defp decode_sink(:redis, sink) do
     %{
       "type" => "redis",
-      "host" => destination["host"],
-      "port" => destination["port"],
-      "stream_key" => destination["streamKey"],
-      "database" => destination["database"],
-      "tls" => destination["tls"],
-      "username" => destination["username"],
-      "password" => destination["password"]
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "stream_key" => sink["streamKey"],
+      "database" => sink["database"],
+      "tls" => sink["tls"],
+      "username" => sink["username"],
+      "password" => sink["password"]
     }
   end
 
   defp aws_region_from_queue_url(nil), do: nil
 
   defp aws_region_from_queue_url(queue_url) do
-    case SqsDestination.region_from_url(queue_url) do
+    case SqsSink.region_from_url(queue_url) do
       {:ok, region} -> region
       _ -> nil
     end
@@ -400,7 +400,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     if is_nil(socket.assigns.prev_params["consumer_kind"]) and next_params["consumer_kind"] do
       case next_params["consumer_kind"] do
         "http_pull" -> assign(socket, :consumer, %HttpPullConsumer{})
-        "http_push" -> assign(socket, :consumer, %DestinationConsumer{type: :http_push})
+        "http_push" -> assign(socket, :consumer, %SinkConsumer{type: :http_push})
       end
     else
       socket
@@ -436,9 +436,9 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
 
     case consumer do
-      %DestinationConsumer{} ->
+      %SinkConsumer{} ->
         Map.merge(base, %{
-          "destination" => encode_destination(consumer.destination),
+          "destination" => encode_sink(consumer.sink),
           "type" => consumer.type
         })
 
@@ -466,48 +466,48 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_destination(%HttpPushDestination{} = destination) do
+  defp encode_sink(%HttpPushSink{} = sink) do
     %{
       "type" => "http_push",
-      "httpEndpointId" => destination.http_endpoint_id,
-      "httpEndpointPath" => destination.http_endpoint_path
+      "httpEndpointId" => sink.http_endpoint_id,
+      "httpEndpointPath" => sink.http_endpoint_path
     }
   end
 
-  defp encode_destination(%SqsDestination{} = destination) do
+  defp encode_sink(%SqsSink{} = sink) do
     %{
       "type" => "sqs",
-      "queue_url" => destination.queue_url,
-      "region" => destination.region,
-      "access_key_id" => destination.access_key_id,
-      "secret_access_key" => destination.secret_access_key,
-      "is_fifo" => destination.is_fifo
+      "queue_url" => sink.queue_url,
+      "region" => sink.region,
+      "access_key_id" => sink.access_key_id,
+      "secret_access_key" => sink.secret_access_key,
+      "is_fifo" => sink.is_fifo
     }
   end
 
-  defp encode_destination(%KafkaDestination{} = destination) do
+  defp encode_sink(%KafkaSink{} = sink) do
     %{
       "type" => "kafka",
-      "url" => KafkaDestination.kafka_url(destination),
-      "hosts" => destination.hosts,
-      "username" => destination.username,
-      "password" => destination.password,
-      "topic" => destination.topic,
-      "tls" => destination.tls,
-      "sasl_mechanism" => destination.sasl_mechanism
+      "url" => KafkaSink.kafka_url(sink),
+      "hosts" => sink.hosts,
+      "username" => sink.username,
+      "password" => sink.password,
+      "topic" => sink.topic,
+      "tls" => sink.tls,
+      "sasl_mechanism" => sink.sasl_mechanism
     }
   end
 
-  defp encode_destination(%RedisDestination{} = destination) do
+  defp encode_sink(%RedisSink{} = sink) do
     %{
       "type" => "redis",
-      "host" => destination.host,
-      "port" => destination.port,
-      "streamKey" => destination.stream_key,
-      "database" => destination.database,
-      "tls" => destination.tls,
-      "username" => destination.username,
-      "password" => destination.password
+      "host" => sink.host,
+      "port" => sink.port,
+      "streamKey" => sink.stream_key,
+      "database" => sink.database,
+      "tls" => sink.tls,
+      "username" => sink.username,
+      "password" => sink.password
     }
   end
 
@@ -586,8 +586,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         %HttpPullConsumer{} ->
           Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params)
 
-        %DestinationConsumer{} ->
-          Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, params)
+        %SinkConsumer{} ->
+          Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params)
       end
 
     case case_result do
@@ -630,14 +630,14 @@ defmodule SequinWeb.Components.ConsumerForm do
     HttpPullConsumer.update_changeset(consumer, params)
   end
 
-  defp changeset(socket, %DestinationConsumer{id: nil}, params) do
+  defp changeset(socket, %SinkConsumer{id: nil}, params) do
     account_id = current_account_id(socket)
 
-    DestinationConsumer.create_changeset(%DestinationConsumer{account_id: account_id}, params)
+    SinkConsumer.create_changeset(%SinkConsumer{account_id: account_id}, params)
   end
 
-  defp changeset(_socket, %DestinationConsumer{} = consumer, params) do
-    DestinationConsumer.update_changeset(consumer, params)
+  defp changeset(_socket, %SinkConsumer{} = consumer, params) do
+    SinkConsumer.update_changeset(consumer, params)
   end
 
   # user is in wizard and hasn't selected a consumer_kind yet
@@ -699,7 +699,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp consumer_type(consumer) do
     case consumer do
       %HttpPullConsumer{} -> :pull
-      %DestinationConsumer{type: type} -> type
+      %SinkConsumer{type: type} -> type
     end
   end
 

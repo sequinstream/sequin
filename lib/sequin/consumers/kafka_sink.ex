@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.KafkaDestination do
+defmodule Sequin.Consumers.KafkaSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -81,34 +81,34 @@ defmodule Sequin.Consumers.KafkaDestination do
     end
   end
 
-  def kafka_url(destination, opts \\ []) do
+  def kafka_url(sink, opts \\ []) do
     obscure_password = Keyword.get(opts, :obscure_password, true)
 
-    auth = build_auth_string(destination, obscure_password)
-    "#{protocol(destination)}#{auth}#{destination.hosts}"
+    auth = build_auth_string(sink, obscure_password)
+    "#{protocol(sink)}#{auth}#{sink.hosts}"
   end
 
-  defp build_auth_string(%KafkaDestination{username: nil, password: nil}, _obscure), do: ""
+  defp build_auth_string(%KafkaSink{username: nil, password: nil}, _obscure), do: ""
 
-  defp build_auth_string(%KafkaDestination{username: nil, password: password}, obscure) do
+  defp build_auth_string(%KafkaSink{username: nil, password: password}, obscure) do
     "#{format_password(password, obscure)}@"
   end
 
-  defp build_auth_string(%KafkaDestination{username: username, password: nil}, _obscure) do
+  defp build_auth_string(%KafkaSink{username: username, password: nil}, _obscure) do
     "#{username}@"
   end
 
-  defp build_auth_string(%KafkaDestination{username: username, password: password}, obscure) do
+  defp build_auth_string(%KafkaSink{username: username, password: password}, obscure) do
     "#{username}:#{format_password(password, obscure)}@"
   end
 
   defp format_password(_, true), do: "******"
   defp format_password(password, false), do: password
 
-  defp protocol(%KafkaDestination{tls: true}), do: "kafka+ssl://"
-  defp protocol(%KafkaDestination{tls: false}), do: "kafka://"
+  defp protocol(%KafkaSink{tls: true}), do: "kafka+ssl://"
+  defp protocol(%KafkaSink{tls: false}), do: "kafka://"
 
-  def hosts(%KafkaDestination{hosts: hosts}) do
+  def hosts(%KafkaSink{hosts: hosts}) do
     hosts
     |> String.split(",")
     |> Enum.map(fn host ->
@@ -118,18 +118,18 @@ defmodule Sequin.Consumers.KafkaDestination do
   end
 
   @doc """
-  Converts a KafkaDestination into configuration options for :brod.
+  Converts a KafkaSink into configuration options for :brod.
   """
-  def to_brod_config(%__MODULE__{} = destination) do
+  def to_brod_config(%__MODULE__{} = sink) do
     []
-    |> maybe_add_sasl(destination)
-    |> maybe_add_ssl(destination)
+    |> maybe_add_sasl(sink)
+    |> maybe_add_ssl(sink)
     |> Keyword.put(:query_api_versions, true)
   end
 
   # Add SASL authentication if username/password are configured
-  defp maybe_add_sasl(config, %{sasl_mechanism: mechanism} = destination) when not is_nil(mechanism) do
-    Keyword.put(config, :sasl, {mechanism, destination.username, destination.password})
+  defp maybe_add_sasl(config, %{sasl_mechanism: mechanism} = sink) when not is_nil(mechanism) do
+    Keyword.put(config, :sasl, {mechanism, sink.username, sink.password})
   end
 
   defp maybe_add_sasl(config, _), do: config

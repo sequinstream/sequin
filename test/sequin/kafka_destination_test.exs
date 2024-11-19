@@ -1,61 +1,61 @@
-defmodule Sequin.Consumers.KafkaDestinationTest do
+defmodule Sequin.Consumers.KafkaSinkTest do
   use ExUnit.Case, async: true
 
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.KafkaSink
 
   describe "kafka_url/2" do
     test "generates basic kafka URL without authentication" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         topic: "test-topic"
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka://localhost:9092"
     end
 
     test "generates URL with username only" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         username: "user1",
         topic: "test-topic"
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://user1@localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka://user1@localhost:9092"
     end
 
     test "generates URL with username and password" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         username: "user1",
         password: "secret",
         topic: "test-topic"
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://user1:******@localhost:9092"
-      assert KafkaDestination.kafka_url(destination, obscure_password: false) == "kafka://user1:secret@localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka://user1:******@localhost:9092"
+      assert KafkaSink.kafka_url(sink, obscure_password: false) == "kafka://user1:secret@localhost:9092"
     end
 
     test "generates URL with TLS enabled" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         tls: true,
         topic: "test-topic"
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka+ssl://localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka+ssl://localhost:9092"
     end
 
     test "handles multiple hosts" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092,remote:9093,other:9094",
         topic: "test-topic"
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://localhost:9092,remote:9093,other:9094"
+      assert KafkaSink.kafka_url(sink) == "kafka://localhost:9092,remote:9093,other:9094"
     end
 
     test "generates URL with SASL PLAIN authentication" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         username: "user1",
         password: "secret",
@@ -64,12 +64,12 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
         tls: false
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://user1:******@localhost:9092"
-      assert KafkaDestination.kafka_url(destination, obscure_password: false) == "kafka://user1:secret@localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka://user1:******@localhost:9092"
+      assert KafkaSink.kafka_url(sink, obscure_password: false) == "kafka://user1:secret@localhost:9092"
     end
 
     test "generates URL with SASL SCRAM authentication" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         username: "user1",
         password: "secret",
@@ -78,11 +78,11 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
         tls: false
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka://user1:******@localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka://user1:******@localhost:9092"
     end
 
     test "generates URL with TLS and SASL" do
-      destination = %KafkaDestination{
+      sink = %KafkaSink{
         hosts: "localhost:9092",
         username: "user1",
         password: "secret",
@@ -91,13 +91,13 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
         tls: true
       }
 
-      assert KafkaDestination.kafka_url(destination) == "kafka+ssl://user1:******@localhost:9092"
+      assert KafkaSink.kafka_url(sink) == "kafka+ssl://user1:******@localhost:9092"
     end
   end
 
   describe "changeset/2" do
     test "validates required fields" do
-      changeset = KafkaDestination.changeset(%KafkaDestination{}, %{})
+      changeset = KafkaSink.changeset(%KafkaSink{}, %{})
       refute changeset.valid?
       assert "can't be blank" in errors_on(changeset).hosts
       assert "can't be blank" in errors_on(changeset).topic
@@ -107,7 +107,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
       for mechanism <- [:plain, :scram_sha_256, :scram_sha_512] do
         # Test missing credentials
         changeset =
-          KafkaDestination.changeset(%KafkaDestination{}, %{
+          KafkaSink.changeset(%KafkaSink{}, %{
             hosts: "localhost:9092",
             topic: "test-topic",
             tls: false,
@@ -120,7 +120,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
 
         # Test with valid credentials
         changeset =
-          KafkaDestination.changeset(%KafkaDestination{}, %{
+          KafkaSink.changeset(%KafkaSink{}, %{
             hosts: "localhost:9092",
             topic: "test-topic",
             tls: false,
@@ -135,7 +135,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
 
     test "allows missing credentials when SASL is not configured" do
       changeset =
-        KafkaDestination.changeset(%KafkaDestination{}, %{
+        KafkaSink.changeset(%KafkaSink{}, %{
           hosts: "localhost:9092",
           topic: "test-topic",
           tls: false
@@ -168,7 +168,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
 
       for hosts <- invalid_hosts do
         changeset =
-          KafkaDestination.changeset(%KafkaDestination{}, %{
+          KafkaSink.changeset(%KafkaSink{}, %{
             hosts: hosts,
             topic: "test-topic"
           })
@@ -180,7 +180,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
 
       for hosts <- valid_hosts do
         changeset =
-          KafkaDestination.changeset(%KafkaDestination{}, %{
+          KafkaSink.changeset(%KafkaSink{}, %{
             hosts: hosts,
             topic: "test-topic"
           })
@@ -195,7 +195,7 @@ defmodule Sequin.Consumers.KafkaDestinationTest do
         topic: String.duplicate("a", 256)
       }
 
-      changeset = KafkaDestination.changeset(%KafkaDestination{}, params)
+      changeset = KafkaSink.changeset(%KafkaSink{}, params)
       refute changeset.valid?
       assert "should be at most 255 character(s)" in errors_on(changeset).topic
     end

@@ -1,13 +1,13 @@
-defmodule SequinWeb.DestinationConsumersLive.Index do
+defmodule SequinWeb.SinkConsumersLive.Index do
   @moduledoc false
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.DestinationConsumer
-  alias Sequin.Consumers.HttpPushDestination
-  alias Sequin.Consumers.KafkaDestination
-  alias Sequin.Consumers.RedisDestination
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases
   alias Sequin.Health
   alias SequinWeb.Components.ConsumerForm
@@ -63,7 +63,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
   end
 
   def render(assigns) do
-    consumers = Enum.filter(assigns.consumers, &is_struct(&1, DestinationConsumer))
+    consumers = Enum.filter(assigns.consumers, &is_struct(&1, SinkConsumer))
 
     encoded_consumers = Enum.map(consumers, &encode_consumer/1)
 
@@ -112,7 +112,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :http_push, destination: %HttpPushDestination{}}}
+      consumer={%SinkConsumer{type: :http_push, sink: %HttpPushSink{}}}
     />
     """
   end
@@ -124,7 +124,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :sqs, destination: %SqsDestination{}, batch_size: 10}}
+      consumer={%SinkConsumer{type: :sqs, sink: %SqsSink{}, batch_size: 10}}
     />
     """
   end
@@ -136,7 +136,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :kafka, destination: %KafkaDestination{tls: false}}}
+      consumer={%SinkConsumer{type: :kafka, sink: %KafkaSink{tls: false}}}
     />
     """
   end
@@ -148,7 +148,7 @@ defmodule SequinWeb.DestinationConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%DestinationConsumer{type: :redis, batch_size: 100, destination: %RedisDestination{}}}
+      consumer={%SinkConsumer{type: :redis, batch_size: 100, sink: %RedisSink{}}}
     />
     """
   end

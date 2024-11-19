@@ -7,16 +7,16 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPullConsumer
-  alias Sequin.Consumers.HttpPushDestination
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RecordConsumerState
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
@@ -32,33 +32,33 @@ defmodule Sequin.Factory.ConsumersFactory do
   def consumer(attrs \\ []) do
     case Enum.random([:http_pull, :http_push]) do
       :http_pull -> http_pull_consumer(attrs)
-      :http_push -> destination_consumer(attrs)
+      :http_push -> sink_consumer(attrs)
     end
   end
 
   def consumer_attrs(attrs \\ []) do
     case Enum.random([:http_pull, :http_push]) do
       :http_pull -> http_pull_consumer_attrs(attrs)
-      :http_push -> destination_consumer_attrs(attrs)
+      :http_push -> sink_consumer_attrs(attrs)
     end
   end
 
   def insert_consumer!(attrs \\ []) do
-    case Enum.random([:http_pull, :destination_consumer]) do
+    case Enum.random([:http_pull, :sink_consumer]) do
       :http_pull -> insert_http_pull_consumer!(attrs)
-      :destination_consumer -> insert_destination_consumer!(attrs)
+      :sink_consumer -> insert_sink_consumer!(attrs)
     end
   end
 
-  def destination_consumer(attrs \\ []) do
+  def sink_consumer(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {account_id, attrs} =
       Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
 
-    type = attrs[:type] || get_in(attrs, [:destination, :type]) || Enum.random([:http_push, :redis, :sqs, :kafka])
-    {destination_attrs, attrs} = Map.pop(attrs, :destination, %{})
-    destination = destination(type, account_id, destination_attrs)
+    type = attrs[:type] || get_in(attrs, [:sink, :type]) || Enum.random([:http_push, :redis, :sqs, :kafka])
+    {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
+    sink = sink(type, account_id, sink_attrs)
 
     {postgres_database_id, attrs} =
       Map.pop_lazy(attrs, :postgres_database_id, fn ->
@@ -94,12 +94,12 @@ defmodule Sequin.Factory.ConsumersFactory do
       end)
 
     merge_attributes(
-      %DestinationConsumer{
+      %SinkConsumer{
         id: Factory.uuid(),
         account_id: account_id,
         ack_wait_ms: 30_000,
         backfill_completed_at: Enum.random([nil, Factory.timestamp()]),
-        destination: destination,
+        sink: sink,
         max_ack_pending: 10_000,
         max_deliver: Enum.random(1..100),
         max_waiting: 20,
@@ -116,11 +116,11 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  def destination_consumer_attrs(attrs \\ []) do
+  def sink_consumer_attrs(attrs \\ []) do
     attrs
-    |> destination_consumer()
+    |> sink_consumer()
     |> Sequin.Map.from_ecto()
-    |> Map.update!(:destination, &Sequin.Map.from_ecto/1)
+    |> Map.update!(:sink, &Sequin.Map.from_ecto/1)
     |> Map.update!(:source_tables, fn source_tables ->
       Enum.map(source_tables, fn source_table ->
         source_table
@@ -132,7 +132,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     end)
   end
 
-  def insert_destination_consumer!(attrs \\ []) do
+  def insert_sink_consumer!(attrs \\ []) do
     attrs = Map.new(attrs)
 
     {account_id, attrs} =
@@ -141,34 +141,34 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs =
       attrs
       |> Map.put(:account_id, account_id)
-      |> destination_consumer_attrs()
+      |> sink_consumer_attrs()
 
-    case Consumers.create_destination_consumer_for_account_with_lifecycle(account_id, attrs) do
+    case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
       {:ok, consumer} ->
         consumer
 
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
-        insert_destination_consumer!(attrs)
+        insert_sink_consumer!(attrs)
     end
   end
 
-  defp destination(:http_push, account_id, attrs) do
+  defp sink(:http_push, account_id, attrs) do
     {http_endpoint_id, attrs} =
       Map.pop_lazy(attrs, :http_endpoint_id, fn ->
         ConsumersFactory.insert_http_endpoint!(account_id: account_id).id
       end)
 
     merge_attributes(
-      %HttpPushDestination{
+      %HttpPushSink{
         http_endpoint_id: http_endpoint_id
       },
       attrs
     )
   end
 
-  defp destination(:sqs, _account_id, attrs) do
+  defp sink(:sqs, _account_id, attrs) do
     merge_attributes(
-      %SqsDestination{
+      %SqsSink{
         type: :sqs,
         queue_url: "https://sqs.us-east-1.amazonaws.com/123456789012/#{Factory.word()}",
         region: Enum.random(["us-east-1", "us-west-1", "us-west-2"]),
@@ -180,9 +180,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  defp destination(:redis, _account_id, attrs) do
+  defp sink(:redis, _account_id, attrs) do
     merge_attributes(
-      %RedisDestination{
+      %RedisSink{
         type: :redis,
         host: "localhost",
         port: 6379,
@@ -194,9 +194,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     )
   end
 
-  defp destination(:kafka, _account_id, attrs) do
+  defp sink(:kafka, _account_id, attrs) do
     merge_attributes(
-      %KafkaDestination{
+      %KafkaSink{
         type: :kafka,
         hosts: "localhost:9092",
         topic: Factory.word()

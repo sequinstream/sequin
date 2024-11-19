@@ -6,8 +6,8 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.DestinationConsumer
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Repo
@@ -15,7 +15,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   require Logger
 
   def start_link(opts) do
-    %DestinationConsumer{} =
+    %SinkConsumer{} =
       consumer =
       opts
       |> Keyword.fetch!(:consumer)
@@ -37,7 +37,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
       ],
       context: %{
         consumer: consumer,
-        sqs_client: SqsDestination.aws_client(consumer.destination),
+        sqs_client: SqsSink.aws_client(consumer.sink),
         test_pid: test_pid
       }
     )
@@ -70,10 +70,10 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
 
     sqs_messages = Enum.map(messages, &build_sqs_message(consumer, &1.data))
 
-    case SQS.send_messages(sqs_client, consumer.destination.queue_url, sqs_messages) do
+    case SQS.send_messages(sqs_client, consumer.sink.queue_url, sqs_messages) do
       :ok ->
         Health.update(consumer, :push, :healthy)
-        # Metrics.incr_sqs_throughput(consumer.destination)
+        # Metrics.incr_sqs_throughput(consumer.sink)
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -105,14 +105,14 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
     end
   end
 
-  @spec build_sqs_message(DestinationConsumer.t(), ConsumerRecordData.t() | ConsumerEventData.t()) :: map()
+  @spec build_sqs_message(SinkConsumer.t(), ConsumerRecordData.t() | ConsumerEventData.t()) :: map()
   defp build_sqs_message(consumer, record_or_event_data) do
     message = %{
       message_body: record_or_event_data,
       id: UUID.uuid4()
     }
 
-    if consumer.destination.is_fifo do
+    if consumer.sink.is_fifo do
       group_id =
         consumer
         |> Consumers.group_column_values(record_or_event_data)

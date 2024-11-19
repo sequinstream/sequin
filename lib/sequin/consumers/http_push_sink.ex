@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.HttpPushDestination do
+defmodule Sequin.Consumers.HttpPushSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema

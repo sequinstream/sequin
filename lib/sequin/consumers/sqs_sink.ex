@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.SqsDestination do
+defmodule Sequin.Consumers.SqsSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -65,9 +65,9 @@ defmodule Sequin.Consumers.SqsDestination do
   defp ends_with_fifo?(nil), do: false
   defp ends_with_fifo?(url), do: String.ends_with?(url, ".fifo")
 
-  def aws_client(%__MODULE__{} = destination) do
-    destination.access_key_id
-    |> AWS.Client.create(destination.secret_access_key, destination.region)
+  def aws_client(%__MODULE__{} = sink) do
+    sink.access_key_id
+    |> AWS.Client.create(sink.secret_access_key, sink.region)
     |> HttpClient.put_client()
   end
 

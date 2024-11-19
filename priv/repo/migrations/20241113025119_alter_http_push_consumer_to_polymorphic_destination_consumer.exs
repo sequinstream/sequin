@@ -1,4 +1,4 @@
-defmodule Sequin.Repo.Migrations.AlterHttpPushConsumerToPolymorphicDestinationConsumer do
+defmodule Sequin.Repo.Migrations.AlterHttpPushConsumerToPolymorphicSinkConsumer do
   use Ecto.Migration
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])

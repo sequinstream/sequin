@@ -1,4 +1,4 @@
-defmodule SequinWeb.DestinationConsumersLive.Show do
+defmodule SequinWeb.SinkConsumersLive.Show do
   @moduledoc false
   use SequinWeb, :live_view
 
@@ -9,15 +9,15 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.DestinationConsumer
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPushDestination
-  alias Sequin.Consumers.KafkaDestination
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RecordConsumerState
-  alias Sequin.Consumers.RedisDestination
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
-  alias Sequin.Consumers.SqsDestination
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -73,11 +73,11 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
   end
 
   defp load_consumer(id, socket) do
-    with {:ok, consumer} <- Consumers.get_destination_consumer_for_account(current_account_id(socket), id) do
+    with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
         |> Repo.preload([:postgres_database, :sequence])
-        |> DestinationConsumer.preload_http_endpoint()
+        |> SinkConsumer.preload_http_endpoint()
 
       {:ok, health} = Health.get(consumer)
       {:ok, %{consumer | health: health}}
@@ -141,7 +141,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
               on_finish={&handle_edit_finish/1}
               current_user={@current_user}
             />
-          <% {:show, %DestinationConsumer{}} -> %>
+          <% {:show, %SinkConsumer{}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
               name="consumers/ShowDestination"
@@ -455,7 +455,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
     _ -> {:error, "Failed to get cursor position"}
   end
 
-  defp encode_consumer(%DestinationConsumer{type: _} = consumer) do
+  defp encode_consumer(%SinkConsumer{type: _} = consumer) do
     %{
       id: consumer.id,
       name: consumer.name,
@@ -468,7 +468,7 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      destination: encode_destination(consumer.destination),
+      destination: encode_sink(consumer.sink),
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
@@ -478,45 +478,45 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
     }
   end
 
-  defp encode_destination(%HttpPushDestination{} = destination) do
+  defp encode_sink(%HttpPushSink{} = sink) do
     %{
       type: :http_push,
-      http_endpoint: encode_http_endpoint(destination.http_endpoint),
-      http_endpoint_path: destination.http_endpoint_path
+      http_endpoint: encode_http_endpoint(sink.http_endpoint),
+      http_endpoint_path: sink.http_endpoint_path
     }
   end
 
-  defp encode_destination(%SqsDestination{} = destination) do
+  defp encode_sink(%SqsSink{} = sink) do
     %{
       type: :sqs,
-      queue_url: destination.queue_url,
-      region: destination.region,
-      is_fifo: destination.is_fifo
+      queue_url: sink.queue_url,
+      region: sink.region,
+      is_fifo: sink.is_fifo
     }
   end
 
-  defp encode_destination(%KafkaDestination{} = destination) do
+  defp encode_sink(%KafkaSink{} = sink) do
     %{
       type: :kafka,
-      kafka_url: KafkaDestination.kafka_url(destination),
-      hosts: destination.hosts,
-      username: destination.username,
-      password: destination.password,
-      topic: destination.topic,
-      tls: destination.tls,
-      sasl_mechanism: destination.sasl_mechanism
+      kafka_url: KafkaSink.kafka_url(sink),
+      hosts: sink.hosts,
+      username: sink.username,
+      password: sink.password,
+      topic: sink.topic,
+      tls: sink.tls,
+      sasl_mechanism: sink.sasl_mechanism
     }
   end
 
-  defp encode_destination(%RedisDestination{} = destination) do
+  defp encode_sink(%RedisSink{} = sink) do
     %{
       type: :redis,
-      host: destination.host,
-      port: destination.port,
-      streamKey: destination.stream_key,
-      database: destination.database,
-      tls: destination.tls,
-      url: RedisDestination.redis_url(destination)
+      host: sink.host,
+      port: sink.port,
+      streamKey: sink.stream_key,
+      database: sink.database,
+      tls: sink.tls,
+      url: RedisSink.redis_url(sink)
     }
   end
 
@@ -835,8 +835,8 @@ defmodule SequinWeb.DestinationConsumersLive.Show do
     end
   end
 
-  defp consumer_title(%{destination: %{type: :http_push}}), do: "Webhook Subscription"
-  defp consumer_title(%{destination: %{type: :sqs}}), do: "SQS Consumer"
-  defp consumer_title(%{destination: %{type: :redis}}), do: "Redis Consumer"
-  defp consumer_title(%{destination: %{type: :kafka}}), do: "Kafka Consumer"
+  defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Subscription"
+  defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Consumer"
+  defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Consumer"
+  defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Consumer"
 end

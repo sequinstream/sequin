@@ -6,16 +6,6 @@ icon: "triangle-person-digging"
 iconType: "solid"
 ---
 
-<iframe
-  width="560"
-  height="315"
-  src="https://www.youtube.com/embed/dF_jzeSWv04"
-  title="YouTube video player"
-  frameborder="0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-  allowfullscreen
-></iframe>
-
 [Trigger.dev](https://trigger.dev) makes it easy to write and run long-running tasks. You write and test tasks locally in your project, and then deploy them to Trigger.dev where they reliably invoke the tasks. Trigger.dev handles the infrastructure, observability, and execution.
 
 Often, you want to trigger a task when a record in your database is created, updated, or deleted. For instance, you might want to use a Trigger.dev task to generate an embedding for each new post in your database:
@@ -35,15 +25,15 @@ As long as you create an HTTP endpoint that Sequin can deliver webhooks to, you 
 You'll need the following to follow this guide:
 
 - A Next.js project with [Trigger.dev](https://trigger.dev) installed
-<Info>
-If you don't have one already, follow [Trigger.dev's Next.js setup guide](https://trigger.dev/docs/guides/frameworks/nextjs) to setup your project. You can return to this guide when you're ready to write your first Trigger.dev task.
-</Info>
-- A [Sequin](https://console.sequinstream.com/register) account
-- A Postgres database (Sequin works with any Postgres database version 12 and up) with a `posts` table.
+    <Info>
+    If you don't have one already, follow [Trigger.dev's Next.js setup guide](https://trigger.dev/docs/guides/frameworks/nextjs) to setup your project. You can return to this guide when you're ready to write your first Trigger.dev task.
+    </Info>
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register)
+- A [database](/connect-postgres) connected to Sequin
 
 ## Create a Trigger.dev task
 
-Start by creating a new Trigger.dev task that takes in a Sequin change event as a payload, creates an embedding, and then inserts the embedding into the database:
+Start by creating a new Trigger.dev task that takes in a Sequin webhook sink [payload](/reference/sinks/webhooks#request-format), creates an embedding, and then inserts the embedding into the database:
 
 <Steps titleSize="h3">
   <Step title="Create a `create-embedding-for-post` task">
@@ -130,7 +120,7 @@ Start by creating a new Trigger.dev task that takes in a Sequin change event as 
   ```
   </CodeGroup>
 
-  This task takes in a Sequin record event, creates an embedding, and then uppserts the embedding into a `post_embeddings` table.
+  This task takes in a Sequin record, creates an embedding, and then uppserts the embedding into a `post_embeddings` table.
   </Step>
   <Step title="Add the task to your Trigger.dev project">
   Register the `create-embedding-for-post` task to your Trigger.dev cloud project by running the following command:
@@ -153,7 +143,7 @@ Start by creating a new Trigger.dev task that takes in a Sequin change event as 
 
 ## Setup API route
 
-You'll now create an API endpoint that will receive posts from Sequin and then trigger the `create-embedding-for-post` task.
+You'll now create an API endpoint that will receive webhook sink payloads from Sequin and then trigger the `create-embedding-for-post` task.
 
 <Info>
 This guide covers how to setup an API endpoint using the Next.js App Router. You can find examples for Next.js Server Actions and Pages Router in the [Trigger.dev documentation](https://trigger.dev/docs/guides/frameworks/nextjs).
@@ -207,69 +197,60 @@ This guide covers how to setup an API endpoint using the Next.js App Router. You
   You've successfully created an API endpoint that can receive record payloads from Sequin and trigger a Trigger.dev task. In the next step, you'll setup Sequin to trigger the endpoint.
 </Check>
 
-## Create Sequin consumer
+## Create a webhook sink
 
-You'll now configure Sequin to send every row in your `posts` table to your Trigger.dev task.
+Create a webhook sink that captures changes to your database and sends a HTTP POST request to your local API endpoint:
 
 <Steps titleSize="h3">
-    <Step title="Connect Sequin to your database">
-        1. Login to your Sequin account and click the **Add New Database** button.
-        2. Enter the connection details for your Postgres database.
-        <Info>
-        If you need to connect to a local dev database, flip the **use localhost** switch and follow the instructions to create a tunnel using the [Sequin CLI](/reference/cli/overview).
-        </Info>
-        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
+    <Step title="Create a new sink">
+        Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
+    </Step>
 
-        ```sql
-        create publication sequin_pub for all tables;
-        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
+    <Step title="Select source table">
+        Select the table you want to capture changes from (i.e `public.posts`).
+    </Step>
+
+    <Step title="Choose message type">
+        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+        <Tip>
+        In this example, you should choose "Rows" since you want to ensure every post gets an embedding and that embeddings are updated as posts change.
+        </Tip>
+    </Step>
+
+    <Step title="Configure backfill">
+        You can optionally indicate if you want your webhook endpoint to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. Since you want to process all posts, select to backfill all data.
+    </Step>
+
+    <Step title="Configure message grouping">
+        Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+    </Step>
+
+    <Step title="Configure delivery settings">
+        Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1 since we're just processing one post at a time.
+    </Step>
+
+    <Step title="Configure HTTP endpoint">
+        First, create a tunnel to your local endpoint:
+        1. In the Sequin console, open the "HTTP Endpoint" tab and click the "Create HTTP Endpoint" button
+        2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the "Use localhost" switch
+        3. Follow the instructions to [install the Sequin CLI](/reference/cli/overview), then run:
+        ```bash
+        sequin tunnel --ports=3001:local_endpoint
         ```
+        4. Click "Add encryption header" and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`
+        5. Click "Create HTTP Endpoint"
 
-        4. Name your database and click the **Connect Database** button.
-
-        Sequin will connect to your database and ensure that it's configured properly.
-
-        <Note>
-        If you need step-by-step connection instructions to connect Sequin to your database, check out our [quickstart guide](/quickstart).
-        </Note>
+        Then, under "HTTP Endpoint", select your `local_endpoint` and add the path to your API route (i.e. `/api/create-embedding-for-post`).
     </Step>
-    <Step title="Tunnel to your local endpoint">
-    Now, create a tunnel to your local endpoint so Sequin can deliver change payloads to your local API:
 
-    1. In the Sequin console, open the **HTTP Endpoint** tab and click the **Create HTTP Endpoint** button.
-    2. Enter a name for your endpoint (i.e. `local_endpoint`) and flip the **Use localhost** switch. Follow the instructions in the Sequin console to [install the Sequin CLI](/reference/cli/overview), then run:
-
-      ```bash
-      sequin tunnel --ports=3001:local_endpoint
-      ```
-
-    3. Now, click **Add encryption header** and set the key to `Authorization` and the value to `Bearer SEQUIN_WEBHOOK_SECRET`.
-    4. Click **Create HTTP Endpoint**.
-    </Step>
-    <Step title="Create a Push Consumer">
-    Create a push consumer that will capture posts from your database and deliver them to your local endpoint:
-
-    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
-    2. Select your `posts` table (i.e `public.posts`).
-    3. You want to ensure that every post receives an embedding - and that embeddings are updated as posts are updated. To do this, select to process **Rows** and click **Continue**.
-    <Note>
-    You can also use **changes** for this particular use case, but **rows** comes with some nice replay and backfill features.
-    </Note>
-    4. You'll now set the sort and filter for the consumer. For this guide, we'll sort by `updated_at` and start at the beginning of the table. We won't apply any filters:
-      <Frame>
-        <img src="/images/guides/trigger-dev/sort-and-filter.png" alt="Consumer Sort and Filter" />
-      </Frame>
-    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `posts_push_consumer`) and in the **HTTP Endpoint** section select the `local_endpoint` you created above. Add the exact API route you created in the previous step (i.e. `/api/create-embedding-for-post`):
-      <Frame>
-        <img src="/images/guides/trigger-dev/consumer-config.png" alt="Consumer Endpoint" />
-      </Frame>
-    7. Click the **Create Consumer** button.
+    <Step title="Name and create sink">
+        Give your sink a name (i.e. `posts_webhook_sink`) and click "Create Webhook Sink".
     </Step>
 </Steps>
 
 <Check>
-    Your Sequin consumer is now created and ready to send events to your API endpoint.
+    Your webhook sink is now created and ready to send events to your API endpoint.
 </Check>
 
 ## Test end-to-end

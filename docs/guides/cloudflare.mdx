@@ -1,7 +1,7 @@
 ---
 title: "Trigger Cloudflare Workers from database changes"
 sidebarTitle: "Cloudflare Workers"
-description: "How to use Sequin to trigger Cloudflare Workers from database changes."
+description: "How to use a webhook sink to trigger Cloudflare Workers from database changes."
 icon: "cloudflare"
 iconType: "solid"
 ---
@@ -18,13 +18,13 @@ In this guide, you will learn how to setup Sequin to trigger a Cloudflare Worker
 
 ## Prerequisites
 
-You are about to create a simple Cloudflare Worker that logs a message to the console. Sequin will trigger this worker by sending a HTTP POST request to the worker's URL with the payload of the database row that changed.
+You are about to create a simple Cloudflare Worker that logs a message to the console. You'll trigger this worker by setting up a Webhook sink in Sequin that sends a HTTP POST request to the worker's URL with the payload of the database row that changed.
 
 You'll need the following:
 
 - A [Cloudflare account](https://dash.cloudflare.com/sign-up?utm_source=sequin.com)
-- A Sequin account
-- A Postgres database (Sequin works with any Postgres database version 12+) with a basic `users` table containing an `id` column and a `name` column.
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register).
+- A [database](/connect-postgres) connected to Sequin
 
 ## Create a Cloudflare Worker
 
@@ -71,7 +71,7 @@ Start by creating a new Cloudflare Worker that takes in a Sequin change event as
       };
       ```
 
-      This worker first checks the authorization header to make sure the request is coming from Sequin. Then it processes the payload (which contains the database row that changed) and logs the name from the payload to the console.
+      This worker first checks the authorization header to make sure the request is coming from Sequin. Then it processes the [payload](/reference/sinks/webhooks#request-format) and logs a message to the console. In this example code, the row that changed contains a `name` field, so the worker logs the name to the console.
 
       Click the **Deploy** button to deploy your worker.
   </Step>
@@ -79,10 +79,10 @@ Start by creating a new Cloudflare Worker that takes in a Sequin change event as
       1. In your worker's settings, go to the "Settings" tab.
       2. Scroll down to the "Variables and Secrets" section.
       3. Click "+ Add".
-      4. Set the variable name as `SEQUIN_WEBHOOK_SECRET` and the value to a secure secret of your choice.
+      4. Set the variable name as `SEQUIN_WEBHOOK_SECRET` and the value to a [secure secret](/reference/sinks/webhooks#authentication) of your choice.
       5. Click "Deploy".
 
-      You will need to use this secret value in the Sequin dashboard when you create the push consumer.
+      Keep this secret handy. You will need to use this secret value in the Sequin dashboard when you create the push consumer.
   </Step>
   <Step title="Get the worker's URL">
       Under the "Settings" tab, find the "Domains & Routes" section.
@@ -95,46 +95,63 @@ Start by creating a new Cloudflare Worker that takes in a Sequin change event as
 You've successfully created a Cloudflare Worker that logs a message to the console when Sequin sends a HTTP POST request to the worker's URL.
 </Check>
 
-## Create a Sequin Push Consumer
+## Create a webhook sink
 
-Create a new Sequin push consumer that detects changes to the `users` table and sends a HTTP POST request to the Cloudflare Worker's URL.
+Create a webhook sink that captures changes to your database and sends a HTTP POST request to the Cloudflare Worker's URL:
 
 <Steps titleSize="h3">
-    <Step title="Connect Sequin to your database">
-        1. Login to your Sequin account and click the **Add New Database** button.
-        2. Enter the connection details for your Postgres database.
-        3. Follow the instructions to create a publication and a replication slot by running two SQL commands in your database:
 
-        ```sql
-        create publication sequin_pub for all tables;
-        select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
-        ```
 
-        4. Name your database and click the **Connect Database** button.
-
-        Sequin will connect to your database and ensure that it's configured properly.
+    <Step title="Create a new sink">
+        Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
     </Step>
-    <Step title="Create a Push Consumer">
-    Create a push consumer that will capture users from your database and deliver them to your Cloudflare Worker:
 
-    1. Navigate to the **Consumers** tab and click the **Create Consumer** button.
-    2. Select your `users` table (i.e `public.users`).
-    3. For this guide, you want to capture all changes to the `users` table. To do this, select **Changes** and click **Continue**.
-    4. Select to capture `inserts`, `updates`, and `deletes`. No need to add a filter for now. Click **Continue**.
-    5. On the next screen, select **Push** to have Sequin send the events to your webhook URL. Click **Continue**.
-    6. Now, give your consumer a name (i.e. `users_push_consumer`) and in the **HTTP Endpoint** section, click **New HTTP Endpoint**.
-    7. Enter your Cloudflare Worker's URL. Then click to **Add Encrypted Header** and add an encryption header with the key `Authorization` and the value `Bearer SEQUIN_WEBHOOK_SECRET`, using the secret value you set in your worker's environment variables. Click **Create Endpoint**.
-    8. Back in the tab where you were creating your consumer, click the refresh button by the **Endpoints** section and select the endpoint you just created. Click **Create Consumer**.
+    <Step title="Select source table">
+        Select the table you want to capture changes from (i.e `public.users`).
+    </Step>
+
+    <Step title="Choose message type">
+        Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+        <Tip>
+        If you're not sure which to choose, leave the default setting of "Changes". Changes are a better fit for event-driven use cases, like triggering workflows, which is usually what you want to do with webhooks.
+        </Tip>
+    </Step>
+
+    <Step title="Specify change types">
+        If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes. Select all three for now. No need to add a filter.
+    </Step>
+
+    <Step title="Configure backfill">
+        You can optionally indicate if you want your webhook endpoint to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. For now, leave "Backfill" toggled off.
+    </Step>
+
+    <Step title="Configure message grouping">
+        Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+    </Step>
+
+    <Step title="Configure delivery settings">
+        Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1 since we're just logging messages.
+    </Step>
+
+    <Step title="Configure HTTP endpoint">
+        Under "HTTP Endpoint", enter the Cloudflare Worker's URL you copied earlier. Then click to "Add Encrypted Header" with the key `Authorization` and the value `Bearer SEQUIN_WEBHOOK_SECRET`, using the secret value you set in your worker's environment variables.
+    </Step>
+
+    <Step title="Name and create sink">
+        Give your sink a name (i.e. `users_webhook_sink`) and click "Create Webhook Sink".
     </Step>
 </Steps>
 
 <Check>
-    Your Sequin consumer is now created and ready to send events to your Cloudflare Worker.
+    Your webhook sink is now created and ready to send events to your Cloudflare Worker.
 </Check>
 
 ## Test end-to-end
 <Steps titleSize="h3">
-    <Step title="Create a new user in your database">
+    <Step title="Create a row in your database">
+
+    For example, insert a row into the `users` table:
 
     ```sql
     insert into
@@ -146,13 +163,13 @@ Create a new Sequin push consumer that detects changes to the `users` table and 
     ```
     </Step>
     <Step title="Trace the change in the Sequin dashboard">
-    In the Sequin console, open the **Messages** tab on your consumer and confirm that a message was delivered.
+    In the Sequin console, open the **Messages** tab on your webhook sink and confirm that a message was delivered.
     </Step>
 
     <Step title="Confirm the event was received by your Cloudflare Worker">
     1. Go to your Cloudflare dashboard and navigate to your worker.
     2. Click on the "Logs" tab.
-    3. You should see a log entry: `Hello John Doe`:
+    3. You should see a log entry. For example:`Hello John Doe`:
 
     <Frame>
       <img src="/images/guides/cloudflare/logs.png" alt="Confirm message" />
@@ -169,5 +186,5 @@ You've successfully triggered a Cloudflare Worker from a database change!
 Modify this example to suit your needs:
 
 - If you need to run long-running jobs, consider using [Cloudflare Durable Objects](https://developers.cloudflare.com/workers/learning/using-durable-objects/) in tandem with Workers.
-- Tune your consumer configuration to suit your volume of work.
+- Tune your webhook sink configuration to suit your volume of work.
 - Implement additional security measures, such as [Cloudflare Access](https://www.cloudflare.com/products/zero-trust/access/) for enhanced authentication and authorization.

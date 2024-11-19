@@ -140,6 +140,8 @@
         "guides/lambda",
         "guides/tinybird",
         "guides/trigger-dev",
+        "guides/supabase-function",
+        "guides/supabase-webhooks",
         "guides/vercel"
       ]
     },

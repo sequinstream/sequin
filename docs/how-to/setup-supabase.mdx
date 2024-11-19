@@ -58,12 +58,21 @@ With your Supabase database connected to Sequin, you can create sinks to replace
 
 <CardGroup cols={2}>
   <Card
-    title="Stream to Webhooks"
-    icon="webhook"
-    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+    title="Migrate Supabase Webhooks"
+    icon="bolt"
+    href="/guides/supabase-webhooks"
   >
-    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+    Move your existing Supabase webhooks to Sequin for better reliability and observability
   </Card>
+
+  <Card
+    title="Trigger Supabase Edge Functions"
+    icon="bolt"
+    href="/guides/supabase-function"
+  >
+    Trigger Supabase edge functions from database changes with retries and filtering
+  </Card>
+
   <Card
     title="Stream to Redis"
     icon="layer-group"
@@ -71,13 +80,7 @@ With your Supabase database connected to Sequin, you can create sinks to replace
   >
     Stream changes to Redis streams for real-time data processing and caching
   </Card>
-  <Card
-    title="Stream to Kafka"
-    icon="code-branch"
-    href="/how-to/stream-postgres-to-kafka"
-  >
-    Publish database changes to Kafka topics for event streaming and processing
-  </Card>
+
   <Card
     title="Stream to SQS"
     icon="aws"

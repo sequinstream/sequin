@@ -1,0 +1,90 @@
+---
+title: "Redis sink"
+sidebarTitle: "Redis sink"
+description: "Reference for the Redis sink"
+---
+
+The Redis sink sends messages to a Redis stream using the XADD command.
+
+## Configuration
+
+- **Host**
+
+    The hostname of your Redis server (e.g., `localhost`).
+
+- **Port**
+
+    The port number for your Redis server (default: `6379`).
+
+- **Stream Key**
+
+    The key name for the Redis stream where messages will be sent. Maximum length is 255 characters.
+
+- **Database**
+
+    The Redis database number to use (default: `0`).
+
+- **Username** (optional)
+
+    Username for Redis authentication.
+
+- **Password** (optional)
+
+    Password for Redis authentication.
+
+- **TLS**
+
+    Enable TLS encryption for connections to Redis.
+
+## Advanced Configuration
+
+- **Max Ack Pending**
+
+    Sets the maximum number of messages that can be in-flight at any time. This helps control message flow and prevents overwhelming Redis.
+
+## Message Format
+
+Sequin sends messages to Redis streams using the XADD command. Each message contains the following fields:
+
+For record messages:
+- `record`: The JSON-encoded record data
+- `metadata`: JSON-encoded metadata about the record
+
+For change messages:
+- `record`: The JSON-encoded record data
+- `changes`: JSON-encoded changes to the record
+- `action`: The type of change (e.g., "insert", "update", "delete")
+- `metadata`: JSON-encoded metadata about the event
+
+## Retry Behavior
+
+If Sequin is unable to deliver a message to Redis, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Message Size Limits
+
+The maximum size of a Redis string value is 512MB. However, it's recommended to keep messages significantly smaller for better performance.
+
+<Info>
+  If you want to see logging/alerting for message size rejections, please contact support.
+</Info>
+
+## Message Ordering
+
+Redis streams maintain message order within a single stream. Messages are assigned auto-incrementing IDs by Redis when they are added to the stream, ensuring strict ordering of messages.
+
+## Security
+
+Sequin supports the following security features for Redis connections:
+
+- TLS encryption
+- Username/password authentication
+
+Make sure your Redis server is properly configured to accept the security settings you enable in Sequin.
+
+## Debugging
+
+You can view the status of your Redis sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to Redis, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from Redis.

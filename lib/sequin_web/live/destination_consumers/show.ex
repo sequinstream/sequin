@@ -118,7 +118,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     <div id="consumer-show" class="flex flex-col">
       <!-- The header component -->
       <.svelte
-        name="consumers/ShowDestinationHeader"
+        name="consumers/ShowSinkHeader"
         props={
           %{
             consumer: encode_consumer(@consumer),
@@ -144,7 +144,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           <% {:show, %SinkConsumer{}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
-              name="consumers/ShowDestination"
+              name="consumers/ShowSink"
               props={
                 %{
                   consumer: encode_consumer(@consumer),
@@ -182,7 +182,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:noreply, push_patch(socket, to: ~p"/consumer-groups/#{socket.assigns.consumer.id}/edit")}
 
       type ->
-        {:noreply, push_patch(socket, to: ~p"/consumers/#{type}/#{socket.assigns.consumer.id}/edit")}
+        {:noreply, push_patch(socket, to: ~p"/sinks/#{type}/#{socket.assigns.consumer.id}/edit")}
     end
   end
 
@@ -193,7 +193,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         push_to =
           case Consumers.kind(socket.assigns.consumer) do
             :pull -> ~p"/consumer-groups"
-            _ -> ~p"/consumers"
+            _ -> ~p"/sinks"
           end
 
         {:noreply,
@@ -468,7 +468,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      destination: encode_sink(consumer.sink),
+      sink: encode_sink(consumer.sink),
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
@@ -835,8 +835,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Subscription"
-  defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Consumer"
-  defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Consumer"
-  defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Consumer"
+  defp consumer_title(%{sink: %{type: :http_push}}), do: "Webhook Sink"
+  defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
+  defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Sink"
+  defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
 end

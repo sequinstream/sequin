@@ -12,6 +12,6 @@ defmodule SequinWeb.RouteHelpers do
   end
 
   def consumer_path(%SinkConsumer{id: id, type: type}, subpath) do
-    ~p"/consumers/#{type}/#{id}" <> subpath
+    ~p"/sinks/#{type}/#{id}" <> subpath
   end
 end

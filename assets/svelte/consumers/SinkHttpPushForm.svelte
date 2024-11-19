@@ -51,16 +51,14 @@
 
   $: pushEvent("form_updated", { form });
 
-  let selectedHttpEndpoint = form.destination.httpEndpointId
-    ? httpEndpoints.find(
-        (endpoint) => endpoint.id === form.destination.httpEndpointId,
-      )
+  let selectedHttpEndpoint = form.sink.httpEndpointId
+    ? httpEndpoints.find((endpoint) => endpoint.id === form.sink.httpEndpointId)
     : null;
 
   $: {
-    if (form.destination.httpEndpointId) {
+    if (form.sink.httpEndpointId) {
       selectedHttpEndpoint = httpEndpoints.find(
-        (endpoint) => endpoint.id === form.destination.httpEndpointId,
+        (endpoint) => endpoint.id === form.sink.httpEndpointId,
       );
     }
   }
@@ -74,7 +72,7 @@
       isGeneratingWebhookSite = false;
       if (result.http_endpoint_id) {
         pushEvent("refresh_http_endpoints", {}, () => {
-          form.destination.httpEndpointId = result.http_endpoint_id;
+          form.sink.httpEndpointId = result.http_endpoint_id;
         });
       } else if (result.error) {
         toast.error("Failed to generate Webhook.site URL:", result.error);
@@ -99,17 +97,17 @@
   let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
 
   $: fullUrl =
-    selectedHttpEndpoint?.baseUrl && form.destination.httpEndpointPath
+    selectedHttpEndpoint?.baseUrl && form.sink.httpEndpointPath
       ? concatenateUrl(
           selectedHttpEndpoint?.baseUrl,
-          form.destination.httpEndpointPath,
+          form.sink.httpEndpointPath,
         )
       : "";
 </script>
 
 <Card>
   <CardHeader>
-    <CardTitle>Webhook Subscription configuration</CardTitle>
+    <CardTitle>Webhook Sink configuration</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
     <div class="space-y-2">
@@ -189,7 +187,7 @@
     <CardTitle>HTTP Endpoint</CardTitle>
   </CardHeader>
   <CardContent class="space-y-4">
-    {#if !form.destination.httpEndpointId}
+    {#if !form.sink.httpEndpointId}
       <p class="text-xs mb-2">
         Just kicking the tires?
         <button
@@ -212,11 +210,11 @@
     <div class="flex items-center space-x-2">
       <Select
         selected={{
-          value: form.destination.httpEndpointId,
+          value: form.sink.httpEndpointId,
           label: selectedHttpEndpoint?.name || "Select an endpoint",
         }}
         onSelectedChange={(event) => {
-          form.destination.httpEndpointId = event.value;
+          form.sink.httpEndpointId = event.value;
         }}
       >
         <SelectTrigger class="w-full">
@@ -277,11 +275,11 @@
       </div>
     </div>
 
-    {#if errors.http_endpoint_id}
+    {#if errors.sink?.http_endpoint_id}
       <p class="text-destructive text-sm">Please select an HTTP endpoint</p>
     {/if}
 
-    {#if form.destination.httpEndpointId && selectedHttpEndpoint}
+    {#if form.sink.httpEndpointId && selectedHttpEndpoint}
       <div class="space-y-2">
         <Label for="http-endpoint-path">Consumer Endpoint Path</Label>
         <div class="flex flex-row bg-white">
@@ -292,7 +290,7 @@
           </div>
           <Input
             id="http-endpoint-path"
-            bind:value={form.destination.httpEndpointPath}
+            bind:value={form.sink.httpEndpointPath}
             placeholder="/webhook"
             class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
             style="border-left: none;"
@@ -301,8 +299,8 @@
         <p class="text-sm text-muted-foreground">
           The path to append to the base URL for this consumer's requests.
         </p>
-        {#if errors.http_endpoint_path}
-          {#each errors.http_endpoint_path as error}
+        {#if errors.sink?.http_endpoint_path}
+          {#each errors.sink.http_endpoint_path as error}
             <p class="text-destructive text-sm">
               {error}
             </p>
@@ -311,7 +309,7 @@
       </div>
     {/if}
 
-    {#if form.destination.httpEndpointId && fullUrl && fullUrl !== ""}
+    {#if form.sink.httpEndpointId && fullUrl && fullUrl !== ""}
       <div class="mt-4 space-y-2">
         <Label>Fully qualified URL</Label>
         <div class="flex items-center space-x-2 overflow-x-auto">

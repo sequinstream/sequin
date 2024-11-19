@@ -72,7 +72,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     ~H"""
     <div id="consumers-index">
       <.svelte
-        name="consumers/DestinationIndex"
+        name="consumers/SinkIndex"
         props={
           %{
             consumers: @encoded_consumers,
@@ -89,7 +89,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   @impl Phoenix.LiveView
   def handle_event("consumer_clicked", %{"id" => id, "type" => type}, socket) do
-    {:noreply, push_navigate(socket, to: ~p"/consumers/#{type}/#{id}")}
+    {:noreply, push_navigate(socket, to: ~p"/sinks/#{type}/#{id}")}
   end
 
   defp apply_action(socket, :list, _params) do

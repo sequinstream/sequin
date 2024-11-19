@@ -19,10 +19,10 @@
     RedisConsumer,
     KafkaConsumer,
   } from "../types/consumer";
-  import DestinationCardHttpPush from "../components/DestinationCardHttpPush.svelte";
-  import DestinationCardSqs from "../components/DestinationCardSqs.svelte";
-  import DestinationCardRedis from "../components/DestinationCardRedis.svelte";
-  import DestinationCardKafka from "../components/DestinationCardKafka.svelte";
+  import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
+  import SinkCardSqs from "../components/SinkCardSqs.svelte";
+  import SinkCardRedis from "../components/SinkCardRedis.svelte";
+  import SinkCardKafka from "../components/SinkCardKafka.svelte";
 
   export let live;
   export let parent;
@@ -51,19 +51,19 @@
   function isHttpPushConsumer(
     consumer: Consumer,
   ): consumer is HttpPushConsumer {
-    return consumer.destination.type === "http_push";
+    return consumer.sink.type === "http_push";
   }
 
   function isSqsConsumer(consumer: Consumer): consumer is SqsConsumer {
-    return consumer.destination.type === "sqs";
+    return consumer.sink.type === "sqs";
   }
 
   function isRedisConsumer(consumer: Consumer): consumer is RedisConsumer {
-    return consumer.destination.type === "redis";
+    return consumer.sink.type === "redis";
   }
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
-    return consumer.destination.type === "kafka";
+    return consumer.sink.type === "kafka";
   }
 </script>
 
@@ -218,13 +218,13 @@
       />
 
       {#if isHttpPushConsumer(consumer)}
-        <DestinationCardHttpPush {consumer} />
+        <SinkCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}
-        <DestinationCardSqs {consumer} />
+        <SinkCardSqs {consumer} />
       {:else if isRedisConsumer(consumer)}
-        <DestinationCardRedis {consumer} />
+        <SinkCardRedis {consumer} />
       {:else if isKafkaConsumer(consumer)}
-        <DestinationCardKafka {consumer} />
+        <SinkCardKafka {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

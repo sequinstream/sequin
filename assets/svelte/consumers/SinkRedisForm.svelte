@@ -32,13 +32,9 @@
   <CardContent class="space-y-4">
     <div class="space-y-2">
       <Label for="host">Host</Label>
-      <Input
-        id="host"
-        bind:value={form.destination.host}
-        placeholder="localhost"
-      />
-      {#if errors.destination?.host}
-        <p class="text-destructive text-sm">{errors.destination.host}</p>
+      <Input id="host" bind:value={form.sink.host} placeholder="localhost" />
+      {#if errors.sink?.host}
+        <p class="text-destructive text-sm">{errors.sink.host}</p>
       {/if}
     </div>
 
@@ -47,11 +43,11 @@
       <Input
         id="port"
         type="number"
-        bind:value={form.destination.port}
+        bind:value={form.sink.port}
         placeholder="6379"
       />
-      {#if errors.destination?.port}
-        <p class="text-destructive text-sm">{errors.destination.port}</p>
+      {#if errors.sink?.port}
+        <p class="text-destructive text-sm">{errors.sink.port}</p>
       {/if}
     </div>
 
@@ -59,11 +55,11 @@
       <Label for="username">Username</Label>
       <Input
         id="username"
-        bind:value={form.destination.username}
+        bind:value={form.sink.username}
         placeholder="(optional)"
       />
-      {#if errors.destination?.username}
-        <p class="text-destructive text-sm">{errors.destination.username}</p>
+      {#if errors.sink?.username}
+        <p class="text-destructive text-sm">{errors.sink.username}</p>
       {/if}
     </div>
 
@@ -73,7 +69,7 @@
         <Input
           id="password"
           type={showPassword ? "text" : "password"}
-          bind:value={form.destination.password}
+          bind:value={form.sink.password}
           placeholder="(optional)"
         />
         <button
@@ -88,8 +84,8 @@
           {/if}
         </button>
       </div>
-      {#if errors.destination?.password}
-        <p class="text-destructive text-sm">{errors.destination.password}</p>
+      {#if errors.sink?.password}
+        <p class="text-destructive text-sm">{errors.sink.password}</p>
       {/if}
     </div>
 
@@ -97,15 +93,15 @@
       <Label for="streamKey">Stream Key</Label>
       <Input
         id="streamKey"
-        bind:value={form.destination.streamKey}
+        bind:value={form.sink.streamKey}
         placeholder="my-stream"
       />
       <p class="text-sm text-muted-foreground">
         The key to use for the stream. Records are <code>XADD</code>ed to this
         key.
       </p>
-      {#if errors.destination?.stream_key}
-        <p class="text-destructive text-sm">{errors.destination.stream_key}</p>
+      {#if errors.sink?.stream_key}
+        <p class="text-destructive text-sm">{errors.sink.stream_key}</p>
       {/if}
     </div>
 
@@ -114,25 +110,25 @@
       <Input
         id="database"
         type="number"
-        bind:value={form.destination.database}
+        bind:value={form.sink.database}
         placeholder="0"
       />
-      {#if errors.destination?.database}
-        <p class="text-destructive text-sm">{errors.destination.database}</p>
+      {#if errors.sink?.database}
+        <p class="text-destructive text-sm">{errors.sink.database}</p>
       {/if}
     </div>
 
     <div class="flex items-center gap-2">
       <Switch
         id="tls"
-        checked={form.destination.tls}
+        checked={form.sink.tls}
         onCheckedChange={(checked) => {
-          form.destination.tls = checked;
+          form.sink.tls = checked;
         }}
       />
       <Label for="tls">TLS</Label>
-      {#if errors.destination?.tls}
-        <p class="text-destructive text-sm">{errors.destination.tls}</p>
+      {#if errors.sink?.tls}
+        <p class="text-destructive text-sm">{errors.sink.tls}</p>
       {/if}
     </div>
 

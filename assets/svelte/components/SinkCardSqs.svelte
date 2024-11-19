@@ -13,7 +13,7 @@
       <h2 class="text-lg font-semibold">SQS Queue</h2>
       <div class="flex space-x-2">
         <a
-          href={`https://${consumer.destination.region}.console.aws.amazon.com/sqs/v3/home?region=${consumer.destination.region}#/queues/${encodeURIComponent(consumer.destination.queue_url)}`}
+          href={`https://${consumer.sink.region}.console.aws.amazon.com/sqs/v3/home?region=${consumer.sink.region}#/queues/${encodeURIComponent(consumer.sink.queue_url)}`}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -30,14 +30,14 @@
         <div>
           <span class="text-sm text-gray-500">Region</span>
           <div class="mt-2">
-            <span>{consumer.destination.region}</span>
+            <span>{consumer.sink.region}</span>
           </div>
         </div>
 
         <div>
           <span class="text-sm text-gray-500">Queue Type</span>
           <div class="mt-2">
-            <span>{consumer.destination.is_fifo ? "FIFO" : "Standard"}</span>
+            <span>{consumer.sink.is_fifo ? "FIFO" : "Standard"}</span>
           </div>
         </div>
       </div>
@@ -46,7 +46,7 @@
         <div class="mt-2">
           <span
             class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.destination.queue_url}</span
+            >{consumer.sink.queue_url}</span
           >
         </div>
       </div>

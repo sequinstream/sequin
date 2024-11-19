@@ -1,34 +1,40 @@
 ---
-title: "Stream Timescale data with Sequin"
-sidebarTitle: "Timescale"
-description: "Use Sequin to stream data from your Timescale database."
+title: "Connecting to a TimescaleDB database"
+sidebarTitle: "TimescaleDB"
+description: "How to connect Sequin to a TimescaleDB database"
 icon: "clock"
 iconType: "solid"
 ---
 
-[TimescaleDB](https://www.timescale.com/) is an open-source database built on Postgres that's optimized for time-series data. You can use Sequin to stream data from TimescaleDB. You can setup HTTP endpoints that let consumers subscribe to changes in your TimescaleDB tables. Or you can receive webhooks when rows are inserted.
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
 
-The two together are a formidable, Postgres-based alternative to Kafka.
-
-In this guide, you'll learn how to set up Sequin with TimescaleDB to stream your time-series data.
+This guide provides step-by-step instructions to connect your [TimescaleDB](https://www.timescale.com/) database to Sequin. TimescaleDB is an open-source database built on Postgres that's optimized for time-series data.
 
 ## Setting up TimescaleDB
 
-First, set up a local TimescaleDB instance:
-
-<Steps>
-<Step title="Start TimescaleDB container">
-Run the following command to start a TimescaleDB container:
+If you don't have a TimescaleDB instance yet, you can set one up using Docker:
 
 ```bash
 docker run -d --name timescaledb -p 5432:5432 \
 -e POSTGRES_PASSWORD=postgres \
 timescale/timescaledb-ha:pg16
 ```
-</Step>
 
-<Step title="Configure WAL level">
-Sequin requires logical replication to be enabled. To do this, you need to set `wal_level` to `logical`:
+## Enable logical replication
+
+To determine if logical replication is already enabled for your TimescaleDB instance, you can run the following SQL command:
+
+```sql
+show wal_level;
+```
+
+This command should return `logical`. If it doesn't, you'll need to enable it by setting `wal_level` to `logical`.
+
+<Warning>Enabling replication requires a restart of your database.</Warning>
+
+<Steps titleSize="h3">
+  <Step title="Configure WAL level">
+    Connect to your TimescaleDB container and edit the PostgreSQL configuration:
 
 ```bash
 # Connect to the container
@@ -43,115 +49,84 @@ exit
 # Restart the container for changes to take effect
 docker restart timescaledb
 ```
-</Step>
+  </Step>
 </Steps>
 
-## Connecting Sequin to TimescaleDB
+<Tip>
+  You can also find the location of your `postgresql.conf` file by running the SQL command `show config_file;`.
+</Tip>
 
-Now that TimescaleDB is set up, connect it to Sequin:
+## Provision a Postgres user for Sequin
+<CreateSequinDbUser />
 
-<Steps>
-<Step title="Connect Sequin to your database">
-1. In the Sequin console, click **Databases** > **Connect Database**.
-2. Enter the connection details for your TimescaleDB instance:
-   - Host: `localhost` (or your Docker machine IP)
-   - Port: `5432`
-   - Database: `postgres`
-   - Username: `postgres`
-   - Password: `postgres`
-</Step>
+## Connect Sequin to your TimescaleDB database
 
-<Step title="Create publication and replication slot">
-Run the following SQL commands in your TimescaleDB instance:
+After enabling logical replication, you'll now connect to your database in Sequin:
+
+<Steps titleSize="h3">
+  <Step title="Enter connection details in Sequin">
+    In the Sequin Console, click on the "Connect Database" button and enter the credentials for your TimescaleDB database:
+
+    - Host: Your TimescaleDB host (e.g., `localhost` or your Docker machine IP)
+    - Port: 5432 (default Postgres port)
+    - Database: Your database name
+    - Username: The sequin database user you created earlier
+    - Password: The password for your sequin database user
+  </Step>
+
+  <Step title="Create a publication">
+    Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
 
 ```sql
 create publication sequin_pub for all tables;
-select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
 ```
 
-These commands create a publication for all tables and a replication slot for Sequin to use.
-</Step>
+  </Step>
 
-<Step title="Complete the connection">
-Name your database connection in Sequin and click the **Connect Database** button.
-</Step>
-</Steps>
-
-## Creating a Stream for a TimescaleDB Hypertable
-
-TimescaleDB uses hypertables to optimize time-series data storage. Hypertables work like any other table in Sequin. Let's create a Stream for a hypertable:
-
-<Steps>
-<Step title="Create a hypertable">
-First, create a hypertable in TimescaleDB:
+  <Step title="Create a replication slot">
+    Next, create a replication slot to capture changes from the publication:
 
 ```sql
--- Create a regular table
-create table sensor_data (
-  time timestamptz not null,
-  sensor_id integer not null,
-  temperature double precision null,
-  humidity double precision null
-);
-
--- Convert it to a hypertable
-select create_hypertable('sensor_data', 'time');
+select pg_create_logical_replication_slot('sequin_slot', 'pgoutput');
 ```
-</Step>
+  </Step>
 
-<Step title="Create a Stream in Sequin">
-1. In the Sequin console, go to the **Streams** tab and click **Create Stream**.
-2. Select the `sensor_data` hypertable.
-3. Choose `time` as the sort column.
-4. Click **Create Stream**.
-</Step>
+  <Step title="Enter the replication slot details in Sequin">
+    Back in the Sequin Console, enter the name of the replication slot (e.g. `sequin_slot`) and publication (e.g. `sequin_pub`) you just created. Then, name your database and click "Create Database".
+  </Step>
 </Steps>
 
-## Consuming TimescaleDB Data with Sequin
+## Create a sink
 
-Now that you have a Stream set up, you can consume data using Sequin's [Consumer Group API](/consume/consume-api/overview), [webhooks](/how-sequin-works#webhooks), or [Sync API](/how-sequin-works#sync-api) (coming soon).
+With your TimescaleDB database connected to Sequin, you are ready to create a sink. Follow one of our guides below to get started:
 
-Here's an example of how to consume data using the Consumer Group API:
-
-```bash
-curl -X GET 'https://api.sequinstream.com/api/http_pull_consumers/sensor_data_consumer/receive?batch_size=10' \
--H 'Authorization: Bearer YOUR_API_TOKEN'
-```
-
-This will return up a batch of up to 10 messages from your `sensor_data` hypertable. The response will look something like this:
-
-```json
-{
-  "data": [
-    {
-      "ack_id": "MTYyeJ7abUjl1pO",
-      "data": {
-        "record": {
-          "time": "2023-06-01T12:00:00Z",
-          "sensor_id": 1,
-          "temperature": 25.5,
-          "humidity": 60.2
-        }
-      }
-    },
-    // More messages...
-  ]
-}
-```
-
-After processing these messages, you can acknowledge them using the `/ack` endpoint:
-
-```bash
-curl -X POST 'https://api.sequinstream.com/api/http_pull_consumers/sensor_data_consumer/ack' \
--H 'Authorization: Bearer YOUR_API_TOKEN' \
--H 'Content-Type: application/json' \
--d '{
-  "ack_ids": ["MTYyeJ7abUjl1pO"]
-}'
-```
-
-With Sequin's Consumer Group API or Webhook Subscriptions, you can process your TimescaleDB data in real-time, with exactly-once processing guarantees.
-
-## Next steps
-
-Explore Sequin further by checking out our [documentation](/how-sequin-works). Join our [Discord community](https://discord.gg/BV8wFXvNtY) for support.
+<CardGroup cols={2}>
+  <Card
+    title="Stream to Webhooks"
+    icon="webhook"
+    href="/how-to/stream-postgres-to-a-webhook-endpoint"
+  >
+    Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
+  </Card>
+  <Card
+    title="Stream to Redis"
+    icon="layer-group"
+    href="/how-to/stream-postgres-to-redis"
+  >
+    Stream changes to Redis streams for real-time data processing and caching
+  </Card>
+  <Card
+    title="Stream to Kafka"
+    icon="code-branch"
+    href="/how-to/stream-postgres-to-kafka"
+  >
+    Publish database changes to Kafka topics for event streaming and processing
+  </Card>
+  <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+</CardGroup>

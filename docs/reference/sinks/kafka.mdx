@@ -1,0 +1,82 @@
+---
+title: "Kafka sink"
+sidebarTitle: "Kafka sink"
+description: "Reference for the Kafka sink"
+---
+
+The Kafka sink sends messages to a Kafka topic.
+
+## Configuration
+
+- **Hosts**
+
+    A comma-separated list of host:port pairs for your Kafka brokers (e.g., `localhost:9092,localhost:9093`).
+
+- **Topic**
+
+    The name of the Kafka topic where messages will be sent. Maximum length is 255 characters.
+
+- **Username** (optional)
+
+    Username for SASL authentication.
+
+- **Password** (optional)
+
+    Password for SASL authentication.
+
+- **SASL Mechanism** (optional)
+
+    The SASL mechanism to use for authentication. Can be `PLAIN`, `SCRAM-SHA-256`, or `SCRAM-SHA-512`. This is required if you specify a username and password.
+
+- **TLS**
+
+    Enable TLS encryption for connections to Kafka. Currently, Sequin only supports TLS with verify none. If you need a different TLS configuration, please [let us know](https://github.com/sequinstream/sequin/issues/592).
+
+## Advanced Configuration
+
+- **Max Ack Pending**
+
+    Sets the maximum number of messages that can be in-flight at any time. This helps control message flow and prevents overwhelming the broker.
+
+## Message Format
+
+Sequin sends messages to Kafka as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+
+## Retry Behavior
+
+If Sequin is unable to deliver a message to Kafka, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Message Size Limits
+
+The maximum message size in Kafka is configured at the broker level. The default maximum message size in Kafka is 1MB. If you need to handle larger messages, you'll need to adjust the `message.max.bytes` setting on your Kafka brokers.
+
+If Kafka rejects a message due to size limitations, Sequin will cancel the message's delivery.
+
+<Info>
+  If you want to see logging/alerting for message size rejections, please contact support.
+</Info>
+
+## Message Ordering
+
+Kafka maintains message order within partitions. Messages sent to the same partition are guaranteed to be delivered in the order they were sent.
+
+### Partitioning Strategy
+
+Sequin uses the hash of the record's primary key(s) as the partition key. This ensures that messages related to the same record are sent to the same partition, maintaining ordering for updates to the same record.
+
+## Security
+
+Sequin supports the following security features for Kafka connections:
+
+- TLS encryption
+- SASL authentication, with support for PLAIN, SCRAM-SHA-256, and SCRAM-SHA-512
+
+Make sure your Kafka brokers are properly configured to accept the security settings you enable in Sequin.
+
+## Debugging
+
+You can view the status of your Kafka sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to Kafka, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from Kafka.

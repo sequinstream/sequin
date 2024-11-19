@@ -76,7 +76,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     component =
       cond do
         is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
-        is_struct(consumer, SinkConsumer) -> "consumers/DestinationConsumerForm"
+        is_struct(consumer, SinkConsumer) -> "consumers/SinkConsumerForm"
       end
 
     consumer =
@@ -155,7 +155,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       case {Consumers.kind(consumer), is_edit?(socket)} do
         {_, true} -> push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
         {:pull, false} -> push_navigate(socket, to: ~p"/consumer-groups")
-        {_, false} -> push_navigate(socket, to: ~p"/consumers")
+        {_, false} -> push_navigate(socket, to: ~p"/sinks")
       end
 
     {:noreply, socket}
@@ -287,7 +287,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "sink" => decode_sink(consumer_type(socket.assigns.consumer), form["destination"]),
+        "sink" => decode_sink(consumer_type(socket.assigns.consumer), form["sink"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "message_kind" => message_kind,
@@ -438,7 +438,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     case consumer do
       %SinkConsumer{} ->
         Map.merge(base, %{
-          "destination" => encode_sink(consumer.sink),
+          "sink" => encode_sink(consumer.sink),
           "type" => consumer.type
         })
 
@@ -705,11 +705,11 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp consumer_title(consumer) do
     case consumer_type(consumer) do
-      :http_push -> "Webhook Subscription"
+      :http_push -> "Webhook Sink"
+      :kafka -> "Kafka Sink"
       :pull -> "Consumer Group"
-      :sqs -> "SQS Consumer"
-      :redis -> "Redis Consumer"
-      :kafka -> "Kafka Consumer"
+      :redis -> "Redis Sink"
+      :sqs -> "SQS Sink"
     end
   end
 end

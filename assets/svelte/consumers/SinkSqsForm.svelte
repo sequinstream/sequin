@@ -18,8 +18,8 @@
   export let errors: any = {};
 
   // Update is_fifo based on queue URL
-  $: if (form.destination?.queue_url) {
-    form.destination.is_fifo = form.destination.queue_url.endsWith(".fifo");
+  $: if (form.sink?.queue_url) {
+    form.sink.is_fifo = form.sink.queue_url.endsWith(".fifo");
   }
 </script>
 
@@ -32,11 +32,13 @@
       <Label for="queue-url">Queue URL</Label>
       <Input
         id="queue-url"
-        bind:value={form.destination.queue_url}
+        bind:value={form.sink.queue_url}
         placeholder="https://sqs.region.amazonaws.com/123456789012/queue-name"
       />
-      {#if errors.destination?.queue_url}
-        <p class="text-destructive text-sm">{errors.destination.queue_url}</p>
+      {#if errors.sink?.queue_url}
+        <p class="text-destructive text-sm">{errors.sink.queue_url}</p>
+      {:else if errors.sink?.region}
+        <p class="text-destructive text-sm">{errors.sink.region}</p>
       {/if}
     </div>
 
@@ -45,13 +47,13 @@
       <Input
         id="access-key"
         data-1p-ignore
-        bind:value={form.destination.access_key_id}
+        bind:value={form.sink.access_key_id}
         placeholder="Enter your AWS access key ID"
         autocomplete="off"
       />
-      {#if errors.destination?.access_key_id}
+      {#if errors.sink?.access_key_id}
         <p class="text-destructive text-sm">
-          {errors.destination.access_key_id}
+          {errors.sink.access_key_id}
         </p>
       {/if}
     </div>
@@ -62,13 +64,13 @@
         id="secret-key"
         data-1p-ignore
         type="password"
-        bind:value={form.destination.secret_access_key}
+        bind:value={form.sink.secret_access_key}
         placeholder="Enter your AWS secret access key"
         autocomplete="off"
       />
-      {#if errors.destination?.secret_access_key}
+      {#if errors.sink?.secret_access_key}
         <p class="text-destructive text-sm">
-          {errors.destination.secret_access_key}
+          {errors.sink.secret_access_key}
         </p>
       {/if}
     </div>

@@ -101,19 +101,19 @@
   <div class="container mx-auto px-4 py-4">
     <div class="flex items-center justify-between">
       <div class="flex items-center space-x-4">
-        <LinkPushNavigate href="/consumers">
+        <LinkPushNavigate href="/sinks">
           <Button variant="ghost" size="sm">
             <ArrowLeft class="h-4 w-4" />
           </Button>
         </LinkPushNavigate>
         <div class="flex items-center">
-          {#if consumer.destination.type === "http_push"}
+          {#if consumer.sink.type === "http_push"}
             <Webhook class="h-6 w-6 mr-2" />
-          {:else if consumer.destination.type === "sqs"}
+          {:else if consumer.sink.type === "sqs"}
             <SQSIcon class="h-6 w-6 mr-2" />
-          {:else if consumer.destination.type === "redis"}
+          {:else if consumer.sink.type === "redis"}
             <RedisIcon class="h-6 w-6 mr-2" />
-          {:else if consumer.destination.type === "kafka"}
+          {:else if consumer.sink.type === "kafka"}
             <KafkaIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">

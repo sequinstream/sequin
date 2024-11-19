@@ -8,7 +8,7 @@
     CirclePlay,
     CircleStop,
     Database,
-    SendHorizontal,
+    Plug,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {

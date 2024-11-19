@@ -220,7 +220,7 @@
             Once created, you'll be able to view and manage outgoing messages
             for each consumer.
           </p>
-          <LinkPushNavigate href="/consumers" class="inline-block">
+          <LinkPushNavigate href="/sinks" class="inline-block">
             <Button variant="default" class="mb-4">
               Create Consumer
               <ArrowUpRight class="h-4 w-4 ml-2" />
@@ -537,7 +537,7 @@
                       class="bg-gray-100 p-4 rounded-lg flex justify-between items-center"
                     >
                       <h4 class="font-medium">{selectedConsumer}</h4>
-                      <LinkPushNavigate href={`/consumers/${selectedConsumer}`}>
+                      <LinkPushNavigate href={`/sinks/${selectedConsumer}`}>
                         <Button variant="outline" size="sm">
                           View Consumer
                           <ArrowUpRight class="h-4 w-4 ml-2" />

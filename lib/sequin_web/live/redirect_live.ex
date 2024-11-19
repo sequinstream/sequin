@@ -16,6 +16,7 @@ defmodule SequinWeb.RedirectLive do
   defp redirect_path(path) do
     case path do
       "/consumers" -> "/"
+      "/sinks" -> "/"
     end
   end
 end

@@ -10,7 +10,6 @@
   import {
     Radio,
     Database,
-    SendHorizontal,
     FileText,
     LifeBuoy,
     LogOut,
@@ -19,6 +18,7 @@
     Check,
     PlusCircle,
     Cog,
+    Plug,
     Logs,
     ListOrdered,
     ChevronsLeftRightEllipsis,
@@ -39,20 +39,19 @@
 
   const navItems = [
     {
+      items: [
+        {
+          path: "/sinks",
+          text: "Sinks",
+          icon: Plug,
+        },
+      ],
+    },
+    {
       heading: "Stream",
       items: [
         { path: "/streams", text: "Streams", icon: ListOrdered },
         { path: "/consumer-groups", text: "Consumer Groups", icon: Radio },
-      ],
-    },
-    {
-      heading: "Destinations",
-      items: [
-        {
-          path: "/consumers",
-          text: "Destination Consumers",
-          icon: SendHorizontal,
-        },
       ],
     },
     {
@@ -157,7 +156,7 @@
   <div class="flex grow flex-col justify-between">
     <div class="text-basis mx-4 mt-5 flex h-full flex-col">
       {#each navItems as group}
-        {#if !$isNavCollapsed}
+        {#if !$isNavCollapsed && group.heading}
           <h3 class="text-xs font-semibold text-muted mb-2 mt-4">
             {group.heading}
           </h3>

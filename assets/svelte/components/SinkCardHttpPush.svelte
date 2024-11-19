@@ -17,8 +17,8 @@
   }
 
   $: fullEndpointUrl = concatenateUrl(
-    consumer.destination.http_endpoint.url,
-    consumer.destination.http_endpoint_path,
+    consumer.sink.http_endpoint.url,
+    consumer.sink.http_endpoint_path,
   );
 </script>
 
@@ -28,7 +28,7 @@
       <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
       <div class="flex space-x-2">
         <a
-          href={`/http-endpoints/${consumer.destination.http_endpoint.id}`}
+          href={`/http-endpoints/${consumer.sink.http_endpoint.id}`}
           data-phx-link="redirect"
           data-phx-link-state="push"
         >
@@ -37,9 +37,9 @@
             View Endpoint
           </Button>
         </a>
-        {#if isWebhookSiteUrl(consumer.destination.http_endpoint.url)}
+        {#if isWebhookSiteUrl(consumer.sink.http_endpoint.url)}
           <a
-            href={getWebhookSiteViewUrl(consumer.destination.http_endpoint.url)}
+            href={getWebhookSiteViewUrl(consumer.sink.http_endpoint.url)}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -55,7 +55,7 @@
     <div class="space-y-4 grid xl:grid-cols-2">
       <div>
         <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
-        {#if consumer.destination.http_endpoint_path === ""}
+        {#if consumer.sink.http_endpoint_path === ""}
           <div class="mt-2">
             <span
               class="bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
@@ -66,7 +66,7 @@
           <div class="mt-2">
             <span
               class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
-              >{consumer.destination.http_endpoint_path}</span
+              >{consumer.sink.http_endpoint_path}</span
             >
           </div>
         {/if}

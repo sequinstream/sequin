@@ -18,10 +18,10 @@
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
-  import DestinationHttpPushForm from "./DestinationHttpPushForm.svelte";
-  import DestinationSqsForm from "./DestinationSqsForm.svelte";
-  import DestinationRedisForm from "./DestinationRedisForm.svelte";
-  import DestinationKafkaForm from "./DestinationKafkaForm.svelte";
+  import SinkHttpPushForm from "./SinkHttpPushForm.svelte";
+  import SinkSqsForm from "./SinkSqsForm.svelte";
+  import SinkRedisForm from "./SinkRedisForm.svelte";
+  import SinkKafkaForm from "./SinkKafkaForm.svelte";
   import { CircleAlert } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
 
@@ -45,7 +45,7 @@
     ackWaitMs: consumer.ack_wait_ms || 30000,
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
-    destination: consumer.destination,
+    sink: consumer.sink,
     sortColumnAttnum: consumer.sort_column_attnum || null,
     recordConsumerState: consumer.record_consumer_state || {
       initialMinSortCol: null,
@@ -301,24 +301,18 @@
     />
 
     {#if consumer.type === "http_push"}
-      <DestinationHttpPushForm
-        {errors}
-        {httpEndpoints}
-        bind:form
-        {live}
-        {parent}
-      />
+      <SinkHttpPushForm {errors} {httpEndpoints} bind:form {live} {parent} />
     {:else if consumer.type === "sqs"}
-      <DestinationSqsForm {errors} bind:form />
+      <SinkSqsForm {errors} bind:form />
     {:else if consumer.type === "redis"}
-      <DestinationRedisForm {errors} bind:form />
+      <SinkRedisForm {errors} bind:form />
     {:else if consumer.type === "kafka"}
-      <DestinationKafkaForm {errors} bind:form />
+      <SinkKafkaForm {errors} bind:form />
     {/if}
 
     <Card>
       <CardHeader>
-        <CardTitle>Destination Consumer name</CardTitle>
+        <CardTitle>Sink name</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="space-y-2">
@@ -385,7 +379,7 @@
             type="submit"
             disabled={isCreateConsumerDisabled}
           >
-            {isEditMode ? "Update" : "Create"} Destination Consumer
+            {isEditMode ? "Update" : "Create"} Sink
             <span slot="loading"
               >{isEditMode ? "Updating..." : "Creating..."}</span
             >

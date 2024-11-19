@@ -8,7 +8,6 @@
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
   } from "$lib/components/ui/dialog";
   import { Label } from "$lib/components/ui/label";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
@@ -19,7 +18,7 @@
     CirclePlay,
     CircleStop,
     Database,
-    SendHorizontal,
+    Plug,
     Webhook,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -57,10 +56,10 @@
 
   const hasConsumers = consumers.length > 0;
 
-  const destinations = [
+  const sinks = [
     {
       id: "http_push",
-      name: "HTTP Endpoint",
+      name: "Webhook",
       icon: Webhook,
     },
     {
@@ -86,10 +85,7 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert
-    show={!hasDatabases}
-    entityName="Destination Consumers"
-  />
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="Sinks" />
 
   {#if hasDatabases && !hasSequences}
     <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
@@ -99,8 +95,7 @@
           First, you need to create a Stream
         </AlertTitle>
         <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must have at least one Stream before you can create a
-          Destination Consumer.
+          Sequin must have at least one Stream before you can create a Sink.
         </AlertDescription>
 
         <div class="flex mt-2 gap-4 col-start-2">
@@ -120,13 +115,13 @@
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
-      <SendHorizontal class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">Destination Consumers</h1>
+      <Plug class="h-6 w-6 mr-2" />
+      <h1 class="text-2xl font-bold">Sinks</h1>
     </div>
     {#if hasDatabases && hasConsumers}
       <div class="relative inline-block text-left">
         <Button variant="default" on:click={() => (dialogOpen = true)}
-          >Create Destination Consumer</Button
+          >Create Sink</Button
         >
       </div>
     {/if}
@@ -135,18 +130,18 @@
   {#if !hasConsumers}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">No Destination Consumers</h2>
+        <h2 class="text-xl font-semibold mb-4">No Sinks</h2>
         <p class="text-gray-600 mb-6">
-          Destination Consumers filter, transform, and send messages from a
-          table in your database to your application or another service.
+          Sinks filter, transform, and send messages from a table in your
+          database to your application or another service.
         </p>
         <div class="relative inline-block text-left">
           {#if hasSequences}
             <Button variant="default" on:click={() => (dialogOpen = true)}
-              >Create Destination Consumer</Button
+              >Create Sink</Button
             >
           {:else}
-            <Button disabled>Create Destination Consumer</Button>
+            <Button disabled>Create Sink</Button>
           {/if}
         </div>
       </div>
@@ -175,7 +170,7 @@
             class="cursor-pointer"
           >
             <Table.Cell>
-              {#each destinations.filter((d) => d.id === consumer.type) as dest}
+              {#each sinks.filter((d) => d.id === consumer.type) as dest}
                 <svelte:component this={dest.icon} class="h-6 w-6" />
               {/each}
             </Table.Cell>
@@ -208,7 +203,7 @@
 <Dialog bind:open={dialogOpen}>
   <DialogContent class="sm:max-w-[425px]">
     <DialogHeader>
-      <DialogTitle>Choose Destination</DialogTitle>
+      <DialogTitle>Choose Sink Type</DialogTitle>
       <DialogDescription>
         Where do you want to stream Postgres to?
       </DialogDescription>
@@ -217,7 +212,7 @@
       bind:value={selectedDestination}
       class="grid grid-cols-2 gap-4 py-4"
     >
-      {#each destinations as dest}
+      {#each sinks as dest}
         <Label
           for={dest.id}
           class="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary text-center leading-tight cursor-pointer"
@@ -232,7 +227,7 @@
       {#if selectedDestination}
         <LinkPatchNavigate
           class="w-full"
-          href={`/consumers/new?kind=${selectedDestination}`}
+          href={`/sinks/new?kind=${selectedDestination}`}
         >
           <Button type="submit" class="w-full">
             Continue

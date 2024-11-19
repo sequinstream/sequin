@@ -62,9 +62,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       consumer_id: consumer.id
     )
 
-    kafka_message = consumer_record_or_event.data
-
-    case Kafka.publish(destination, kafka_message) do
+    case Kafka.publish(destination, consumer_record_or_event) do
       :ok ->
         Health.update(consumer, :push, :healthy)
 

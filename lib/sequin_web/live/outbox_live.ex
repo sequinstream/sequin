@@ -5,7 +5,6 @@ defmodule SequinWeb.OutboxLive do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.SinkConsumer
   alias SequinWeb.RouteHelpers
 
@@ -179,14 +178,6 @@ defmodule SequinWeb.OutboxLive do
 
   defp encode_consumers(consumers) do
     Enum.map(consumers, fn
-      %HttpPullConsumer{} = consumer ->
-        %{
-          id: consumer.id,
-          name: consumer.name,
-          type: "http_pull",
-          href: RouteHelpers.consumer_path(consumer)
-        }
-
       %SinkConsumer{} = consumer ->
         %{
           id: consumer.id,

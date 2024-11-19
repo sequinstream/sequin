@@ -120,8 +120,7 @@ defmodule Sequin.YamlLoader do
          {:ok, _wal_pipelines} <- upsert_wal_pipelines(account.id, config, databases),
          {:ok, _http_endpoints} <- upsert_http_endpoints(account.id, config),
          http_endpoints = Consumers.list_http_endpoints_for_account(account.id),
-         {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints),
-         {:ok, _http_pull_consumers} <- upsert_http_pull_consumers(account.id, config, databases) do
+         {:ok, _sink_consumers} <- upsert_sink_consumers(account.id, config, databases, http_endpoints) do
       {:ok, all_resources(account.id)}
     end
   end
@@ -135,15 +134,13 @@ defmodule Sequin.YamlLoader do
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
     sequences = Databases.list_sequences_for_account(account_id, [:postgres_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
-    http_pull_consumers = Consumers.list_http_pull_consumers_for_account(account_id, [:sequence])
 
     sink_consumers =
       account_id
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
       |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
 
-    [account | users] ++
-      databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ http_pull_consumers ++ sink_consumers
+    [account | users] ++ databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ sink_consumers
   end
 
   #############
@@ -944,86 +941,6 @@ defmodule Sequin.YamlLoader do
       "jsonb" -> :string
       "json" -> :string
       type -> raise "Unsupported column type: #{type}"
-    end
-  end
-
-  ########################
-  ## HTTP Pull Consumers ##
-  ########################
-
-  defp upsert_http_pull_consumers(account_id, %{"consumer_groups" => consumers}, databases) do
-    Logger.info("Creating HTTP pull consumers: #{inspect(consumers, pretty: true)}")
-
-    Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
-      case upsert_http_pull_consumer(account_id, consumer, databases) do
-        {:ok, consumer} -> {:cont, {:ok, [consumer | acc]}}
-        {:error, error} -> {:halt, {:error, error}}
-      end
-    end)
-  end
-
-  defp upsert_http_pull_consumers(_account_id, %{}, _databases), do: {:ok, []}
-
-  defp upsert_http_pull_consumer(account_id, %{"name" => name} = consumer_attrs, databases) do
-    case Sequin.Consumers.find_http_pull_consumer(account_id, name: name) do
-      {:ok, existing_consumer} ->
-        with {:ok, params} <- parse_http_pull_consumer_params(consumer_attrs, databases),
-             {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
-          Logger.info("Updated HTTP pull consumer: #{inspect(consumer, pretty: true)}")
-          {:ok, consumer}
-        else
-          {:error, error} when is_exception(error) ->
-            {:error,
-             Error.bad_request(message: "Error updating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            {:error,
-             Error.bad_request(
-               message: "Error updating HTTP pull consumer '#{name}': #{inspect(changeset, pretty: true)}"
-             )}
-        end
-
-      {:error, %NotFoundError{}} ->
-        with {:ok, params} <- parse_http_pull_consumer_params(consumer_attrs, databases),
-             {:ok, consumer} <- Sequin.Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params) do
-          Logger.info("Created HTTP pull consumer: #{inspect(consumer, pretty: true)}")
-          {:ok, consumer}
-        else
-          {:error, error} when is_exception(error) ->
-            {:error,
-             Error.bad_request(message: "Error creating HTTP pull consumer '#{name}': #{Exception.message(error)}")}
-
-          {:error, %Ecto.Changeset{} = changeset} ->
-            {:error,
-             Error.bad_request(
-               message: "Error creating HTTP pull consumer '#{name}': #{inspect(changeset, pretty: true)}"
-             )}
-        end
-    end
-  end
-
-  defp parse_http_pull_consumer_params(%{"name" => name, "sequence" => sequence_name} = consumer_attrs, databases) do
-    with {:ok, sequence} <- sequence_by_name(databases, sequence_name) do
-      database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end)
-      table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
-      table = %{table | sort_column_attnum: sequence.sort_column_attnum}
-
-      record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
-
-      {:ok,
-       %{
-         name: name,
-         status: parse_status(consumer_attrs["status"]),
-         sequence_id: sequence.id,
-         max_ack_pending: Map.get(consumer_attrs, "max_ack_pending", 100),
-         replication_slot_id: database.replication_slot.id,
-         record_consumer_state: record_consumer_state,
-         sequence_filter: %{
-           actions: ["insert", "update", "delete"],
-           group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
-           column_filters: column_filters(consumer_attrs["filters"], table)
-         }
-       }}
     end
   end
 

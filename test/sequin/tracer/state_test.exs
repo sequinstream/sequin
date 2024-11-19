@@ -33,7 +33,7 @@ defmodule Sequin.Tracer.StateTest do
     test "adds a filtered event to an existing trace message for a specific consumer" do
       state = State.new("account123")
       database = DatabasesFactory.postgres_database()
-      consumer = ConsumersFactory.consumer(id: "consumer1")
+      consumer = ConsumersFactory.sink_consumer(id: "consumer1")
       message = ReplicationFactory.postgres_message()
 
       state = State.message_replicated(state, database, message)

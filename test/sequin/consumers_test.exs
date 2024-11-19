@@ -33,7 +33,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "receive_for_consumer/2 with event message kind" do
     setup do
-      consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 1_000, message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 1_000, message_kind: :event)
       %{consumer: consumer}
     end
 
@@ -93,7 +93,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "does not deliver outstanding events for another consumer", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
       ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id, not_visible_until: nil)
 
       assert {:ok, []} = Consumers.receive_for_consumer(consumer)
@@ -231,7 +231,7 @@ defmodule Sequin.ConsumersTest do
       ]
 
       consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           max_ack_pending: 1_000,
           account_id: database.account_id,
@@ -306,7 +306,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "does not deliver outstanding records for another consumer", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       insert_consumer_record!(other_consumer, state: :available)
 
       assert {:ok, []} = Consumers.receive_for_consumer(consumer)
@@ -482,12 +482,13 @@ defmodule Sequin.ConsumersTest do
         )
 
       consumer =
-        ConsumersFactory.insert_http_pull_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           account_id: account.id,
           replication_slot_id: slot.id,
           sequence_id: sequence.id,
-          sequence_filter: sequence_filter
+          sequence_filter: sequence_filter,
+          type: :sequin_stream
         )
 
       consumer = Repo.preload(consumer, :postgres_database)
@@ -520,12 +521,12 @@ defmodule Sequin.ConsumersTest do
 
   describe "ack_messages/2" do
     setup do
-      consumer = ConsumersFactory.insert_consumer!()
+      consumer = ConsumersFactory.insert_sink_consumer!()
       {:ok, consumer: consumer}
     end
 
     test "acknowledges records" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       records =
         for _ <- 1..3 do
@@ -543,7 +544,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "acknowledges events" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       events =
         for _ <- 1..3 do
@@ -561,7 +562,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "silently ignores non-existent ack_ids" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       valid_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
       non_existent_ack_id = UUID.uuid4()
 
@@ -574,8 +575,8 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "acknowledges only records/events for the given consumer" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
-      other_consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 100, message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 100, message_kind: :record)
 
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, state: :delivered)
@@ -587,7 +588,7 @@ defmodule Sequin.ConsumersTest do
     end
 
     test "acknowledged messages are stored in redis" do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
       record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
@@ -602,7 +603,7 @@ defmodule Sequin.ConsumersTest do
 
   describe "receive_for_consumer with concurrent workers" do
     setup do
-      consumer = ConsumersFactory.insert_consumer!(max_ack_pending: 100, message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 100, message_kind: :event)
 
       for _ <- 1..10 do
         ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
@@ -665,7 +666,7 @@ defmodule Sequin.ConsumersTest do
       ]
 
       consumer =
-        ConsumersFactory.insert_consumer!(
+        ConsumersFactory.insert_sink_consumer!(
           message_kind: :record,
           account_id: database.account_id,
           replication_slot_id: slot.id,

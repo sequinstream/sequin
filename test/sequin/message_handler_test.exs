@@ -11,7 +11,7 @@ defmodule Sequin.MessageHandlerTest do
     test "handles message_kind: event correctly" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :event, source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
@@ -32,7 +32,7 @@ defmodule Sequin.MessageHandlerTest do
     test "handles message_kind: record correctly" do
       message = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
       source_table = ConsumersFactory.source_table(oid: 456, column_filters: [])
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
@@ -53,9 +53,12 @@ defmodule Sequin.MessageHandlerTest do
       source_table1 = ConsumersFactory.source_table(oid: 123, column_filters: [])
       source_table2 = ConsumersFactory.source_table(oid: 456, column_filters: [])
 
-      consumer1 = ConsumersFactory.insert_consumer!(message_kind: :event, source_tables: [source_table1])
-      consumer2 = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table2])
-      consumer3 = ConsumersFactory.insert_consumer!(message_kind: :event, source_tables: [source_table1, source_table2])
+      consumer1 = ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table1])
+      consumer2 = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table2])
+
+      consumer3 =
+        ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table1, source_table2])
+
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table1, source_table2])
 
       context = %MessageHandler.Context{
@@ -87,8 +90,8 @@ defmodule Sequin.MessageHandlerTest do
       message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       message2 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer1 = ConsumersFactory.insert_consumer!(source_tables: [source_table])
-      consumer2 = ConsumersFactory.insert_consumer!(source_tables: [source_table])
+      consumer1 = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
+      consumer2 = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       context = %MessageHandler.Context{
@@ -120,7 +123,7 @@ defmodule Sequin.MessageHandlerTest do
     test "inserts message for consumer with matching source table and no filters" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_consumer!(source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
@@ -134,7 +137,7 @@ defmodule Sequin.MessageHandlerTest do
     test "does not insert message for consumer with non-matching source table" do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
-      consumer = ConsumersFactory.insert_consumer!(source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
@@ -154,7 +157,7 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      consumer = ConsumersFactory.insert_consumer!(source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
 
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
@@ -180,7 +183,7 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      consumer = ConsumersFactory.insert_consumer!(source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
 
       # Ensure the message has a non-matching field for the filter
       message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
@@ -303,7 +306,7 @@ defmodule Sequin.MessageHandlerTest do
     test "sets group_id based on PKs when group_column_attnums is nil" do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [1, 2])
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: nil)
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
@@ -326,7 +329,7 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: [2])
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])

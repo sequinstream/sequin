@@ -174,7 +174,7 @@ defmodule Sequin.DatabasesTest do
 
     test "delete_sequence/1 returns error when sequence is used by consumers", %{account: account, database: database} do
       sequence = DatabasesFactory.insert_sequence!(account_id: account.id, postgres_database_id: database.id)
-      ConsumersFactory.insert_consumer!(account_id: account.id, sequence_id: sequence.id)
+      ConsumersFactory.insert_sink_consumer!(account_id: account.id, sequence_id: sequence.id)
       assert {:error, _} = Databases.delete_sequence(sequence)
     end
 

@@ -4,7 +4,6 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.HttpPullConsumer
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RedisSink
@@ -74,18 +73,8 @@ defmodule SequinWeb.Components.ConsumerForm do
   def update(assigns, socket) do
     consumer = assigns[:consumer]
 
-    component =
-      cond do
-        is_struct(consumer, HttpPullConsumer) -> "consumers/HttpPullForm"
-        is_struct(consumer, SinkConsumer) -> "consumers/SinkConsumerForm"
-      end
-
-    consumer =
-      case consumer do
-        %HttpPullConsumer{} -> Repo.preload(consumer, [:postgres_database])
-        %SinkConsumer{} -> Repo.preload(consumer, [:postgres_database])
-        _ -> consumer
-      end
+    component = "consumers/SinkConsumerForm"
+    consumer = Repo.preload(consumer, [:postgres_database])
 
     socket =
       socket
@@ -116,7 +105,6 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     socket =
       socket
-      |> handle_params_changes(params)
       |> merge_changeset(params)
       |> assign(prev_params: params)
 
@@ -153,10 +141,10 @@ defmodule SequinWeb.Components.ConsumerForm do
     consumer = socket.assigns.consumer
 
     socket =
-      case {Consumers.kind(consumer), is_edit?(socket)} do
-        {_, true} -> push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
-        {:pull, false} -> push_navigate(socket, to: ~p"/consumer-groups")
-        {_, false} -> push_navigate(socket, to: ~p"/sinks")
+      if is_edit?(socket) do
+        push_navigate(socket, to: RouteHelpers.consumer_path(consumer))
+      else
+        push_navigate(socket, to: ~p"/sinks")
       end
 
     {:noreply, socket}
@@ -288,7 +276,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       %{
         "consumer_kind" => form["consumerKind"],
         "ack_wait_ms" => form["ackWaitMs"],
-        "sink" => decode_sink(consumer_type(socket.assigns.consumer), form["sink"]),
+        "sink" => decode_sink(socket.assigns.consumer.type, form["sink"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
         "message_kind" => message_kind,
@@ -403,17 +391,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp handle_params_changes(socket, next_params) do
-    if is_nil(socket.assigns.prev_params["consumer_kind"]) and next_params["consumer_kind"] do
-      case next_params["consumer_kind"] do
-        "http_pull" -> assign(socket, :consumer, %HttpPullConsumer{})
-        "http_push" -> assign(socket, :consumer, %SinkConsumer{type: :http_push})
-      end
-    else
-      socket
-    end
-  end
-
   defp encode_consumer(nil), do: nil
 
   defp encode_consumer(%_{} = consumer) do
@@ -422,36 +399,27 @@ defmodule SequinWeb.Components.ConsumerForm do
 
     source_table = Consumers.source_table(consumer)
 
-    base = %{
+    %{
       "id" => consumer.id,
       "name" => consumer.name || Name.generate(999),
       "ack_wait_ms" => consumer.ack_wait_ms,
+      "batch_size" => Map.get(consumer, :batch_size),
       "group_column_attnums" => source_table && source_table.group_column_attnums,
       "max_ack_pending" => consumer.max_ack_pending,
       "max_deliver" => consumer.max_deliver,
       "max_waiting" => consumer.max_waiting,
       "message_kind" => consumer.message_kind,
-      "status" => consumer.status,
       "postgres_database_id" => postgres_database_id,
-      "table_oid" => source_table && source_table.oid,
+      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
+      "sequence_id" => consumer.sequence_id,
+      "sink" => encode_sink(consumer.sink),
+      "sort_column_attnum" => source_table && source_table.sort_column_attnum,
       "source_table_actions" => (source_table && source_table.actions) || [:insert, :update, :delete],
       "source_table_filters" => source_table && Enum.map(source_table.column_filters, &ColumnFilter.to_external/1),
-      "sort_column_attnum" => source_table && source_table.sort_column_attnum,
-      "sequence_id" => consumer.sequence_id,
-      "sequence_filter" => consumer.sequence_filter && encode_sequence_filter(consumer.sequence_filter),
-      "batch_size" => Map.get(consumer, :batch_size)
+      "status" => consumer.status,
+      "table_oid" => source_table && source_table.oid,
+      "type" => consumer.type
     }
-
-    case consumer do
-      %SinkConsumer{} ->
-        Map.merge(base, %{
-          "sink" => encode_sink(consumer.sink),
-          "type" => consumer.type
-        })
-
-      %HttpPullConsumer{} ->
-        base
-    end
   end
 
   defp encode_sequence(%Sequence{} = sequence) do
@@ -594,21 +562,12 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
 
-    case_result =
-      case socket.assigns.consumer do
-        %HttpPullConsumer{} ->
-          Consumers.create_http_pull_consumer_for_account_with_lifecycle(account_id, params)
-
-        %SinkConsumer{} ->
-          Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params)
-      end
-
-    case case_result do
+    case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
       {:ok, consumer} ->
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
           properties: %{
-            consumer_type: consumer_type(consumer),
+            consumer_type: consumer.type,
             stream_type: consumer.message_kind,
             consumer_id: consumer.id,
             consumer_name: consumer.name,
@@ -632,15 +591,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp merge_changeset(socket, params) do
     consumer = socket.assigns.consumer
     assign(socket, :changeset, changeset(socket, consumer, params))
-  end
-
-  defp changeset(socket, %HttpPullConsumer{id: nil}, params) do
-    account_id = current_account_id(socket)
-    HttpPullConsumer.create_changeset(%HttpPullConsumer{account_id: account_id}, params)
-  end
-
-  defp changeset(_socket, %HttpPullConsumer{} = consumer, params) do
-    HttpPullConsumer.update_changeset(consumer, params)
   end
 
   defp changeset(socket, %SinkConsumer{id: nil}, params) do
@@ -709,15 +659,8 @@ defmodule SequinWeb.Components.ConsumerForm do
     not is_nil(socket.assigns.consumer) and not is_nil(socket.assigns.consumer.id)
   end
 
-  defp consumer_type(consumer) do
-    case consumer do
-      %HttpPullConsumer{} -> :pull
-      %SinkConsumer{type: type} -> type
-    end
-  end
-
   defp consumer_title(consumer) do
-    case consumer_type(consumer) do
+    case consumer.type do
       :http_push -> "Webhook Sink"
       :kafka -> "Kafka Sink"
       :pull -> "Consumer Group"

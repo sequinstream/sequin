@@ -8,7 +8,7 @@ defmodule Sequin.ConsumerEventTest do
 
   describe "ConsumerEvent" do
     setup do
-      consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
       %{consumer: consumer}
     end
 
@@ -41,7 +41,7 @@ defmodule Sequin.ConsumerEventTest do
     end
 
     test "list_consumer_events_for_consumer/2 returns events only for the specified consumer", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
       for _ <- 1..3, do: ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
       ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id)
@@ -100,7 +100,7 @@ defmodule Sequin.ConsumerEventTest do
     end
 
     test "ack_messages/2 ignores events with different consumer_id", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
       event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
 
       event2 =
@@ -128,7 +128,7 @@ defmodule Sequin.ConsumerEventTest do
     end
 
     test "nack_messages/2 does not nack events belonging to another consumer", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_consumer!(message_kind: :event)
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
       event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
 
       event2 =

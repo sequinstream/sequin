@@ -69,7 +69,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
     }
 
     consumer =
-      ConsumersFactory.insert_consumer!(
+      ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
         record_consumer_state:
@@ -80,7 +80,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       )
 
     filtered_consumer =
-      ConsumersFactory.insert_consumer!(
+      ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
         record_consumer_state:

@@ -10,7 +10,7 @@ defmodule Sequin.HealthTest do
 
   describe "initializes a new health" do
     test "initializes a new health" do
-      entity = ConsumersFactory.consumer(id: Factory.uuid())
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
       assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :initializing
       assert is_list(health.checks) and length(health.checks) > 0
@@ -66,7 +66,7 @@ defmodule Sequin.HealthTest do
 
   describe "get/1" do
     test "finds the health of an entity" do
-      entity = ConsumersFactory.consumer(id: Factory.uuid())
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
 
       assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
       assert health.status == :initializing
@@ -78,7 +78,7 @@ defmodule Sequin.HealthTest do
 
   describe "to_external/1" do
     test "converts the health to an external format" do
-      entity = ConsumersFactory.consumer(id: Factory.uuid())
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
 
       assert {:ok, %Health{} = health} = Health.get(entity)
       assert external = Health.to_external(health)

@@ -117,7 +117,7 @@ defmodule Sequin.AccountsTest do
       replication_slot =
         ReplicationFactory.insert_postgres_replication!(postgres_database_id: db.id, account_id: account.id)
 
-      ConsumersFactory.insert_http_pull_consumer!(
+      ConsumersFactory.insert_sink_consumer!(
         account_id: account.id,
         postgres_database_id: db.id,
         replication_slot_id: replication_slot.id
@@ -130,7 +130,6 @@ defmodule Sequin.AccountsTest do
       refute Enum.any?(Repo.all(Sequin.ApiTokens.ApiToken))
       refute Enum.any?(Repo.all(Sequin.Consumers.HttpEndpoint))
       refute Enum.any?(Repo.all(Sequin.Consumers.SinkConsumer))
-      refute Enum.any?(Repo.all(Sequin.Consumers.HttpPullConsumer))
       refute Enum.any?(Repo.all(PostgresReplicationSlot))
       refute Enum.any?(Repo.all(Sequin.Databases.PostgresDatabase))
     end

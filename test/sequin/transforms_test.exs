@@ -222,60 +222,6 @@ defmodule Sequin.TransformsTest do
     end
   end
 
-  test "returns a map of the http pull consumer" do
-    sequence = DatabasesFactory.insert_sequence!()
-
-    consumer =
-      ConsumersFactory.http_pull_consumer(
-        name: "test-consumer",
-        status: :active,
-        max_ack_pending: 1000,
-        sequence_id: sequence.id,
-        record_consumer_state: %{
-          producer: "table_and_wal",
-          initial_min_cursor: %{1 => "2024-01-01"}
-        },
-        sequence_filter: %{
-          group_column_attnums: [1, 2, 3],
-          column_filters: [
-            ConsumersFactory.sequence_filter_column_filter(
-              column_attnum: 1,
-              operator: :==,
-              value: %{__type__: :string, value: "test"}
-            )
-          ]
-        }
-      )
-
-    json = Transforms.to_external(consumer)
-
-    assert %{
-             name: name,
-             sequence: sequence_name,
-             status: status,
-             max_ack_pending: max_ack_pending,
-             consumer_start: %{
-               position: "beginning | end | from with value"
-             },
-             group_column_attnums: group_column_attnums,
-             filters: filters
-           } = json
-
-    assert name == "test-consumer"
-    assert sequence_name == sequence.name
-    assert status == :active
-    assert max_ack_pending == 1000
-    assert group_column_attnums == [1, 2, 3]
-    assert length(filters) == 1
-    [filter] = filters
-
-    assert %{
-             column_name: _,
-             operator: :==,
-             comparison_value: "test"
-           } = filter
-  end
-
   test "returns a map of the http push consumer" do
     account = AccountsFactory.insert_account!()
     database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)

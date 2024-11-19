@@ -28,7 +28,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: consumer.batch_size
+          max_demand: 1
         ]
       ],
       context: %{

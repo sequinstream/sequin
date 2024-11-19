@@ -111,7 +111,7 @@
   </CardHeader>
   <CardContent class="space-y-4">
     <div class="space-y-2">
-      <Label for="request-timeout">Request timeout</Label>
+      <Label for="request-timeout">Visibility timeout</Label>
       <div class="flex items-center space-x-2">
         <Input
           id="request-timeout"

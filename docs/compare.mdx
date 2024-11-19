@@ -5,46 +5,60 @@ icon: "list-check"
 iconType: "solid"
 ---
 
-Sequin brings new capabilities to Postgres. You can use Sequin as a more advanced replacement for native Postgres tools like triggers or LISTEN/NOTIFY. And you can use Sequin to leverage your Postgres database in new ways, replacing other systems like Kafka.
+Sequin is a change data capture (CDC) tool that makes it easy to stream changes from your Postgres database to streaming platforms, queues, and other destinations.
 
-## Postgres triggers
+## Sequin vs Debezium
 
-Postgres triggers are database functions that execute in response to certain database events. Postgres triggers must be written in PL/pgSQL, a special procedural language for Postgres. And they are limited to simple operations like inserting, updating, and deleting rows.
+Debezium is an open-source platform for change data capture (CDC), built on Apache Kafka. While both Sequin and Debezium excel at capturing changes from Postgres, they differ in significant ways:
 
-Sequin sends changes over HTTP. Like Postgres triggers, Sequin guarantees exactly-once processing. But the HTTP interface means you can you can handle changes in your application code. Just like other advanced queuing systems, Sequin lets you fan out changes to multiple services or applications. And you can write business logic in the programming language of your choice (no PL/pgSQL!)
+1. **Infrastructure requirements**: Debezium requires Kafka and Zookeeper to operate. Sequin is a standalone Docker container that works directly with your Postgres database.
+
+2. **Destination support**: Debezium sends changes to Kafka, requiring Kafka Connect to route to other destinations. Sequin streams directly to popular destinations like Kafka, SQS, Redis Streams, and HTTP endpoints. This means less setup, transforms, and maintenance.
+
+3. **Web console**: Sequin has a full-featured web console for setup, monitoring, and observability.
+
+4. **Operational simplicity**: With Sequin, you don't need to be a Kafka expert, learn Zookeeper, or manage complex configuration. Just point Sequin at your database and desired destination.
+
+5. **Cloud option**: Sequin offers a fully managed cloud option with Sequin Cloud.
+
+## Sequin vs Fivetran/Airbyte
+
+Fivetran and Airbyte are ETL tools primarily designed for data warehouse ingestion. While they can capture changes from databases, they differ from Sequin in key ways:
+
+1. **Real-time vs batch**: Fivetran and Airbyte typically operate in batch intervals (minutes to hours). Sequin streams changes in real-time as they occur.
+
+2. **Use case focus**: These tools excel at analytical use cases and data warehouse loading. Sequin is purpose-built for operational use cases like triggering workflows, maintaining caches, and keeping services in sync.
+
+3. **Destination types**: Fivetran and Airbyte primarily support data warehouse destinations. Sequin focuses on operational destinations like queues, streams, and webhooks.
+
+## Sequin vs Postgres Triggers
+
+Postgres triggers are database functions that execute in response to database events. While useful for simple operations, they have limitations:
+
+1. **Language constraints**: Triggers must be written in PL/pgSQL. With Sequin, you can handle changes in your application code using any programming language.
+
+2. **Processing guarantees**: Triggers execute synchronously with the transaction. Sequin provides exactly-once processing with automatic retries and failure handling _outside_ the transaction.
+
+3. **Scalability**: Complex trigger logic can impact database performance. Sequin offloads processing to external services while maintaining exactly-once processing guarantees.
 
 ## LISTEN/NOTIFY
 
-Postgres' LISTEN/NOTIFY is a pub/sub system. When changes happen in your database, you can send notifications to a channel in Postgres. Other processes can listen for notifications on that channel and react to changes.
+Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has important limitations:
 
-LISTEN/NOTIFY offers _at-most-once_ delivery. If a consumer is not subscribed when a notification is sent, or a consumer fails to process a notification, the notification is lost. So LISTEN/NOTIFY is limited to simple use cases.
+1. **Delivery guarantees**: LISTEN/NOTIFY offers at-most-once delivery. If a consumer is offline or fails to process a notification, it's lost forever. Sequin guarantees exactly-once processing.
 
-Sequin sends changes over HTTP with exactly-once processing. This gives you a much more robust system to build on top of.
+2. **Persistence**: Notifications are ephemeral and cannot be replayed. Sequin can backfill historical data.
 
-## Kafka
+3. **Scale**: LISTEN/NOTIFY is best suited for simple, low-volume use cases. Sequin is built to handle high-throughput scenarios with multiple consumers.
 
-Apache Kafka is a distributed event streaming platform. Kafka is designed for very high throughput and horizontal scalability.
+## Why Choose Sequin?
 
-You can use Sequin to turn a Postgres table into something that behaves like a Kafka topic. You can create new consumers that process messages in order, starting at any offset in the table you specify. Because all your data lives at rest in Postgres, the data model is easy to understand and work with.
+Sequin brings together the best aspects of these tools while eliminating complexity:
 
-Sequin's consumer pattern is simpler than Kafka's. Kafka uses partitions and offsets for concurrency, whereas Sequin uses a message queue pattern similar to SQS. This means concurrency is flexible and you can scale workers up and down without making any configuration changes.
+- **Simple setup**: Deploy a single Docker container - no Kafka or Zookeeper required
+- **Flexible destinations**: Stream directly to Kafka, SQS, Redis, or HTTP endpoints
+- **Exactly-once processing**: Never miss a change or process it twice
+- **Real-time operation**: Stream changes as they happen, not in batches
+- **Developer experience**: Modern web console and simple configuration
 
-While Kafka may be necessary for very high throughput use cases (logs or metrics, millions of messages per second), Postgres and Sequin are able to handle a lot of use cases with a lot less complexity (even modest Postgres instances can handle tens of thousands of messages per second).
-
-## Debezium
-
-Debezium is an open-source platform for change data capture (CDC), often used with Apache Kafka, a distributed event streaming platform.
-
-Sequin provides the CDC capabilities of Debezium with a durable message stream like Kafka, except with fewer moving parts and none of the operational overhead. You don't need to be a Kafka expert, learn Zookeeper, endlessly configure Debezium, or figure out the Java runtime.
-
-## Amazon SQS
-
-Amazon Simple Queue Service (SQS) is a message queuing service. It offers exactly-once processing over an HTTP interface.
-
-Sequin's HTTP pull interface is a lot like SQS's HTTP pull interface. Except, Sequin isn't really a queue; it's better thought of as a stream. Because Sequin is streaming your Postgres tables, messages aren't deleted after they're processed. This means you get more advanced capability, like rewind and replay.
-
-## PGMQ
-
-PGMQ is a Postgres extension that provides a durable message queue with a SQL interface that mimics SQS methods. It offers exactly-once processing like SQS, but runs entirely in Postgres.
-
-Unlike PGMQ, Sequin is a stream not a queue. PGMQ owns a table you publish messages to, and when you process the messages they are deleted. By contrast, Sequin turns your existing tables into a stream. They're useful for different use cases.
+For most operational CDC use cases, Sequin provides the ideal balance of functionality and simplicity.

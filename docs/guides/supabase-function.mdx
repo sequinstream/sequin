@@ -1,87 +1,206 @@
-## Triggering a Supabase edge function with Sequin
+---
+title: "Trigger Supabase edge functions from database changes"
+sidebarTitle: "Supabase edge function"
+description: "How to use a webhook sink to trigger Supabase edge functions from database changes."
+icon: "bolt"
+iconType: "solid"
+---
 
-Sequin can trigger Supabase edge functions by calling the function's endpoint URL. This is an alternative to triggering Supabase edge functions with Supabase webhooks. Sequin improves on the Supabase workflow by offering more features, like retries for failed events.
+[Supabase Edge Functions](https://supabase.com/docs/guides/functions) are serverless functions that run on Supabase's global edge network.
+
+Often, you want to trigger a Supabase Edge Function when a database row changes. For example, you may want to trigger a function as a side-effect of a database change, or fan out work to multiple services.
+
+In this guide, you will learn how to setup a Sequin webhook sink to trigger a Supabase Edge Function when a database row changes. This is an alternative to triggering Supabase Edge Functions with Supabase webhooks - and offers additional features like retries and filtering built in.
+## Prerequisites
+
+You are about to create a simple Supabase Edge Function that logs a message to the console. You'll trigger this function by setting up a webhook sink in Sequin that sends a HTTP POST request to the function's URL with the payload of the database row that changed.
+
+You'll need the following:
+
+- A [Supabase account](https://supabase.com)
+- Sequin [installed locally](/quickstart/webhooks) or a [Sequin Cloud account](https://console.sequinstream.com/register)
+- A [Supabase database](/how-to/setup-supabase) connected to Sequin
+
+## Create a Supabase Edge Function
 
 <Steps titleSize="h3">
-  <Step title="Update the edge function to process Sequin's payload">
-    Update the edge function to process Sequin's event payload. Note that while Sequin's `record` payload is the same, the keys `changes`, `actions`, and `metadata` are different:
+  <Step title="Create a new edge function">
+    Using the [Supabase CLI](https://supabase.com/docs/guides/cli), create a new edge function:
 
-    <CodeGroup>
-        ```json Supabase insert
-        {
-        "type": "INSERT",
-        "table": "orders",
-        "record": {
-            "id": 4,
-            "user_id": 4,
-            "order_date": "2024-09-03T18:32:48.108729+00:00",
-            "total_amount": 154.97
-        },
-        "schema": "public",
-        "old_record": null
-        }
-        ```
+    ```bash
+    supabase functions new webhook-handler
+    ```
 
-        ```json Sequin insert
-        {
-        "record": {
-            "id": 5,
-            "order_date": "2024-09-03T19:41:17Z",
-            "total_amount": "154.97",
-            "user_id": 5
-        },
-        "metadata": {
-            "consumer": {
-            "id": "107adb3d-76b4-40ba-8e9d-587f9871ab5c",
-            "name": "new_order"
-            },
-            "table_name": "orders",
-            "table_schema": "public",
-            "commit_timestamp": "2024-09-03T19:41:17.650384Z"
-        },
-        "action": "insert",
-        "changes": null
-        }
-        ```
-    </CodeGroup>
+    This will create a new TypeScript function in the `supabase/functions/webhook-handler` directory.
   </Step>
+
+  <Step title="Add code to process webhook requests">
+    Replace the contents of `supabase/functions/webhook-handler/index.ts` with:
+
+    ```typescript
+    import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+
+    serve(async (req) => {
+      try {
+        const { data } = await req.json()
+
+        // Process each change in the batch
+        for (const change of data) {
+          // Log the database change
+          console.log('Database change:', {
+            action: change.action,
+            table: change.metadata.table_name,
+            schema: change.metadata.table_schema,
+            record: change.record,
+            changes: change.changes,
+            timestamp: change.metadata.commit_timestamp,
+            consumer: change.metadata.consumer
+          })
+
+          // Add your business logic here
+          // For example, you could:
+          // - Send notifications
+          // - Update other services
+          // - Transform data
+        }
+
+        return new Response(
+          JSON.stringify({ message: 'Webhook processed successfully' }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+
+      } catch (error) {
+        console.error('Error processing webhook:', error)
+        return new Response(
+          JSON.stringify({ error: 'Error processing webhook' }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        )
+      }
+    })
+    ```
+
+    This function will:
+    1. Parse the incoming webhook payload from Sequin
+    2. Log the database change details
+    3. Allow you to add custom business logic if you'd like
+    4. Return a success/error response
+  </Step>
+
+  <Step title="Test the function locally">
+    Start the function locally using the Supabase CLI:
+
+    ```bash
+    supabase start
+    supabase functions serve webhook-handler
+    ```
+
+    The function will be available at `http://localhost:54321/functions/v1/webhook-handler`
+  </Step>
+
   <Step title="Deploy the edge function and retrieve the URL">
     Using the Supabase CLI, deploy your edge function:
 
     ```bash
-    supabase functions deploy {your-function-name}
+    supabase functions deploy webhook-handler
     ```
 
-    Once deployed, you can retrieve the URL of the edge function by logging into the Supabase Dashboard and navigating to the Edge Functions page:
+    Once deployed, you can retrieve the URL of the edge function by logging into the Supabase Dashboard and navigating to the Edge Functions page. The URL will be in the format:
 
-    <Frame>
-        <img src="../images/guides/supabase/supabase-function-url.png" alt="Supabase function URL" />
-    </Frame>
+    ```
+    https://<project-ref>.functions.supabase.co/webhook-handler
+    ```
 
-  </Step>
-  <Step title="Create a Sequin push consumer">
-    With your edge function URL in hand, you 'll create a Sequin push consumer:
-    * Set the endpoint to the edge function URL.
-    * Add an authentication to your POST request with the key `Authorization` and the value `Bearer YOUR_SUPABASE_ANON_KEY`.
+    You can also get the URL by running:
 
-    <Frame>
-        <img src="../images/guides/supabase/sequin-supabase-edge-function.png" alt="Sequin consumer settings" />
-    </Frame>
-
-    <Note>
-      The `Authorization` header is required to authenticate the request with the edge function. You can find your `SUPABASE_ANON_KEY` in the **Settings > API** page in the Supabase Dashboard. If you don't want to authenticate your request (i.e. make the edge function public), you can deploy the edge function with the `--no-verify-jwt` flag.
-    </Note>
-
+    ```bash
+    supabase functions list
+    ```
 
   </Step>
 </Steps>
 
-<Check>Now, when you make a change in your Supabase database that meets the consumer's filter criteria, Sequin will capture the change and send it to the edge function.</Check>
+## Create a Sequin webhook sink
+
+<Steps titleSize="h3">
+  <Step title="Create a new sink">
+    Navigate to the "Sinks" tab, click the "Create Sink" button, and select "Webhook Sink".
+  </Step>
+
+  <Step title="Select source table">
+    Select your Supabase database and the table you want to capture changes from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive changes or rows from the table. In this case, you want to receive changes.
+  </Step>
+
+  <Step title="Specify change types">
+    In "Records to process", set which operations (`INSERT`, `UPDATE`, and/or `DELETE`) you want to capture.
+  </Step>
+
+  <Step title="Configure backfill">
+    Leave "Backfill" toggled off for now.
+  </Step>
+
+  <Step title="Configure message grouping">
+    Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
+  </Step>
+
+  <Step title="Configure delivery settings">
+    Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1.
+  </Step>
+
+  <Step title="Configure HTTP endpoint">
+    Add your Supabase edge function URL and add an `Authorization` header with the value `Bearer YOUR_SUPABASE_ANON_KEY`.
+
+    <Note>
+      The `Authorization` header is required to authenticate the request with the edge function. You can find your `SUPABASE_ANON_KEY` in the "Settings" > "API" page in the Supabase Dashboard. If you don't want to authenticate your request (i.e. make the edge function public), you can deploy the edge function with the `--no-verify-jwt` flag.
+    </Note>
+  </Step>
+
+  <Step title="Name and create sink">
+    Give your sink a name and click "Create Webhook Sink".
+  </Step>
+</Steps>
+
+## Test end-to-end
+<Steps titleSize="h3">
+    <Step title="Add a row to your table">
+    Insert a row into your table. For example:
+
+    ```sql
+    insert into
+    users (name)
+    values
+      (
+        'John Doe'
+      );
+    ```
+    </Step>
+    <Step title="Trace the change in the Sequin dashboard">
+    In the Sequin console, open the "Messages" tab on your webhook sink and confirm that a message was delivered.
+    </Step>
+
+    <Step title="Confirm the event was received by your edge function">
+    In the Supabase Dashboard, navigate to "Edge Functions" and click on your function. You should see the event logged in the function logs.
+    </Step>
+</Steps>
+
+<Check>
+You've successfully triggered a Supabase Edge Function from a database change!
+</Check>
+
 
 ## Next steps
 
-Sequin is a great complement to Supabase. This guide showed you how to connect Supabase to Sequin and start moving your webhooks and edge function triggers to Sequin. From here, you may want to:
+From here, you may want to:
 
-* Refine your webhooks / triggers by using more specific filters. Perhaps you can move logic out of your edge function and into your consumer filters.
+* Refine your webhook sink by using more specific filters. Perhaps you can move logic out of your edge function and into your consumer filters.
 * Use Sequin's replay and backfill features to run historical data through your edge function.
 * Use Sequin's observability features to monitor and debug your webhooks and triggers.

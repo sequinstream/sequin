@@ -6,6 +6,8 @@ icon: "aws"
 iconType: "solid"
 ---
 
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
+
 This guide provides step-by-step instructions to connect your [AWS RDS](https://aws.amazon.com/rds/) database to Sequin.
 
 ## Enable logical replication on RDS
@@ -58,6 +60,9 @@ To enable it, follow these steps:
   </Step>
 </Steps>
 
+## Provision a Postgres user for Sequin
+<CreateSequinDbUser />
+
 ## Connect Sequin to your RDS database
 
 After enabling logical replication on RDS, you'll now connect to your database in Sequin.
@@ -66,19 +71,11 @@ After enabling logical replication on RDS, you'll now connect to your database i
   <Step title="Enter connection details in Sequin">
     In the Sequin Console, click on the "Connect Database" button and enter the credentials for your RDS database:
 
-    <Note>
-      You can find these connection details in your RDS console under the "Connectivity & security" section. For security reasons, we recommend using a read-only database user for the connection:
-
-      ```sql
-    CREATE ROLE [username] WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '[password]';
-    ```
-    </Note>
-
     - Host: Your RDS host (e.g., `mydbinstance.abcdefghijkl.us-west-2.rds.amazonaws.com`)
     - Port: 5432 (default Postgres port)
     - Database: Your database name
-    - Username: Your database username
-    - Password: The password for your database user
+    - Username: The sequin database user you created earlier
+    - Password: The password for your sequin database user
 
     Make sure to enable the **SSL** option for secure connection.
 

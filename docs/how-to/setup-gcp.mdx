@@ -6,24 +6,28 @@ icon: "google"
 iconType: "solid"
 ---
 
+import CreateSequinDbUser from '/snippets/create-sequin-db-user.mdx';
+
 This guide provides step-by-step instructions to connect your [GCP Cloud SQL](https://cloud.google.com/sql) database to Sequin.
+
+## Provision a Postgres user for Sequin
+<CreateSequinDbUser />
 
 ## Enable logical replication on GCP Cloud SQL
 
-By default, logical replication is not enabled on GCP Cloud SQL. To enable it, follow these steps:
+By default, logical replication is not enabled on GCP Cloud SQL. You can double check if logical replication is enabled by connecting to your database and running the following command:
+
+```sql
+SHOW rds.logical_replication;
+```
+
+If the output is `off`, then logical replication is not enabled.
+
+To enable it, follow these steps:
 
 <Warning>Enabling replication requires a restart of your database instance.</Warning>
 
 <Steps titleSize="h3">
-  <Step title="Grant replication permissions">
-    Connect to your database and run the following SQL command to grant replication permissions to your user:
-
-    ```sql
-    ALTER USER [username] WITH REPLICATION;
-    ```
-
-    Replace `[username]` with the database user you want to use for replication.
-  </Step>
   <Step title="Enable pglogical flag">
     In the Google Cloud Console, navigate to your Cloud SQL instance and follow these steps:
 
@@ -56,8 +60,8 @@ After enabling logical replication on GCP Cloud SQL, you'll now connect to your 
     - Host: Your Cloud SQL instance IP address
     - Port: 5432 (default Postgres port)
     - Database: Your database name
-    - Username: Your database username (with replication permissions)
-    - Password: The password for your database user
+    - Username: The sequin database user you created earlier
+    - Password: The password for your sequin database user
 
     Make sure to enable the "SSL" option for secure connection.
   </Step>

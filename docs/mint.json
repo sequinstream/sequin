@@ -125,9 +125,9 @@
     {
       "group": "Database setup",
       "pages": [
-        "how-to/setup-gcp",
         "how-to/setup-rds",
         "how-to/setup-azure",
+        "how-to/setup-gcp",
         "how-to/setup-neon",
         "how-to/setup-supabase",
         "how-to/setup-timescale"

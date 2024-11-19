@@ -35,6 +35,7 @@
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
   import KafkaIcon from "../../icons/kafka.svelte";
+  import SequinStreamIcon from "../../icons/sequin_stream.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -76,6 +77,11 @@
       id: "kafka",
       name: "Kafka",
       icon: KafkaIcon,
+    },
+    {
+      id: "sequin_stream",
+      name: "Sequin Stream",
+      icon: SequinStreamIcon,
     },
   ];
 

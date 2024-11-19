@@ -24,6 +24,10 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def start_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
 
+  def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}, _opts) do
+    :ok
+  end
+
   def start_for_sink_consumer(supervisor, %SinkConsumer{} = consumer, opts) do
     Logger.info("Starting consumer", consumer_id: consumer.id)
 
@@ -49,6 +53,10 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   def stop_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
+
+  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}) do
+    :ok
+  end
 
   def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id}) do
     stop_for_sink_consumer(supervisor, id)

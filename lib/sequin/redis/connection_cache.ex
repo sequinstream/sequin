@@ -45,18 +45,18 @@ defmodule Sequin.Redis.ConnectionCache do
     @spec lookup(t(), sink()) :: {:ok, pid()} | {:error, :stale} | {:error, :not_found}
     def lookup(cache, sink) do
       new_hash = options_hash(sink)
-      entry = Map.get(cache, sink.id)
+      entry = Map.get(cache, sink.connection_id)
 
       cond do
         is_nil(entry) ->
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached Redis connection was dead upon lookup", sink_id: sink.id)
+          Logger.warning("Cached Redis connection was dead upon lookup", sink_id: sink.connection_id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached Redis sink connection was stale", sink_id: sink.id)
+          Logger.info("Cached Redis sink connection was stale", sink_id: sink.connection_id)
           {:error, :stale}
 
         true ->
@@ -66,7 +66,7 @@ defmodule Sequin.Redis.ConnectionCache do
 
     @spec pop(t(), sink()) :: {pid() | nil, t()}
     def pop(cache, sink) do
-      {entry, new_cache} = Map.pop(cache, sink.id, nil)
+      {entry, new_cache} = Map.pop(cache, sink.connection_id, nil)
 
       if entry, do: {entry.conn, new_cache}, else: {nil, new_cache}
     end
@@ -74,7 +74,7 @@ defmodule Sequin.Redis.ConnectionCache do
     @spec store(t(), sink(), pid()) :: t()
     def store(cache, sink, conn) do
       entry = %{conn: conn, options_hash: options_hash(sink)}
-      Map.put(cache, sink.id, entry)
+      Map.put(cache, sink.connection_id, entry)
     end
 
     defp options_hash(sink) do

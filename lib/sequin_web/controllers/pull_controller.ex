@@ -14,7 +14,7 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     # TODO: Cache this
-    with {:ok, consumer} <- Consumers.get_http_pull_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, batch_size} <- parse_batch_size(params),
          :ok <- maybe_wait(params, consumer),
          {:ok, messages} <- Consumers.receive_for_consumer(consumer, batch_size: batch_size) do
@@ -27,7 +27,7 @@ defmodule SequinWeb.PullController do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Consumers.get_http_pull_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, message_ids} <- parse_ack_ids(params),
          {:ok, _count} <- Consumers.ack_messages(consumer, message_ids) do
       json(conn, %{success: true})
@@ -38,7 +38,7 @@ defmodule SequinWeb.PullController do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
 
-    with {:ok, consumer} <- Consumers.get_http_pull_consumer_for_account(account_id, id_or_name),
+    with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, message_ids} <- parse_ack_ids(params),
          {:ok, _count} <- Consumers.nack_messages(consumer, message_ids) do
       json(conn, %{success: true})

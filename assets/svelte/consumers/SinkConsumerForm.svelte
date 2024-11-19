@@ -22,6 +22,7 @@
   import SinkSqsForm from "./SinkSqsForm.svelte";
   import SinkRedisForm from "./SinkRedisForm.svelte";
   import SinkKafkaForm from "./SinkKafkaForm.svelte";
+  import SinkSequinStreamForm from "./SinkSequinStreamForm.svelte";
   import { CircleAlert } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
 
@@ -308,6 +309,8 @@
       <SinkRedisForm {errors} bind:form />
     {:else if consumer.type === "kafka"}
       <SinkKafkaForm {errors} bind:form />
+    {:else if consumer.type === "sequin_stream"}
+      <SinkSequinStreamForm {errors} bind:form />
     {/if}
 
     <Card>

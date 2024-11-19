@@ -8,6 +8,7 @@ defmodule Sequin.Consumers.RedisSink do
   alias __MODULE__
 
   @derive {Jason.Encoder, only: [:host, :port, :stream_key]}
+  @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:redis], default: :redis
     field :host, :string
@@ -17,6 +18,7 @@ defmodule Sequin.Consumers.RedisSink do
     field :tls, :boolean, default: false
     field :stream_key, :string
     field :database, :integer, default: 0
+    field :connection_id, :string
   end
 
   def changeset(struct, params) do
@@ -27,6 +29,7 @@ defmodule Sequin.Consumers.RedisSink do
     |> validate_number(:database, greater_than_or_equal_to: 0)
     |> validate_length(:stream_key, max: 255)
     |> validate_redis_host()
+    |> put_new_connection_id()
   end
 
   defp validate_redis_host(changeset) do
@@ -47,6 +50,13 @@ defmodule Sequin.Consumers.RedisSink do
       end
     else
       changeset
+    end
+  end
+
+  defp put_new_connection_id(changeset) do
+    case get_field(changeset, :connection_id) do
+      nil -> put_change(changeset, :connection_id, Ecto.UUID.generate())
+      _ -> changeset
     end
   end
 

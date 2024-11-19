@@ -16,6 +16,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.PostgresDatabase
@@ -50,7 +51,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         socket =
           socket
           |> assign(:consumer, consumer)
-          |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
+          |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign_metrics()
           |> assign(:paused, false)
@@ -150,7 +151,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
                   metrics: @metrics,
-                  cursor_position: encode_cursor_position(@cursor_position, @consumer)
+                  cursor_position: encode_cursor_position(@cursor_position, @consumer),
+                  apiBaseUrl: @api_base_url,
+                  apiTokens: encode_api_tokens(@api_tokens)
                 }
               }
             />
@@ -165,7 +168,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   totalCount: @total_count,
                   pageSize: @page_size,
                   paused: @paused,
-                  showAcked: @show_acked
+                  showAcked: @show_acked,
+                  apiBaseUrl: @api_base_url,
+                  apiTokens: encode_api_tokens(@api_tokens)
                 }
               }
             />
@@ -520,6 +525,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SequinStreamSink{}) do
+    %{type: :sequin_stream}
+  end
+
   defp encode_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     %{
       id: http_endpoint.id,
@@ -839,4 +848,5 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :sqs}}), do: "SQS Sink"
   defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Sink"
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
+  defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
 end

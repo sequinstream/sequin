@@ -45,18 +45,18 @@ defmodule Sequin.Kafka.ConnectionCache do
     @spec lookup(t(), sink()) :: {:ok, atom()} | {:error, :stale} | {:error, :not_found}
     def lookup(cache, sink) do
       new_hash = options_hash(sink)
-      entry = Map.get(cache, sink.id)
+      entry = Map.get(cache, sink.connection_id)
 
       cond do
         is_nil(entry) ->
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached Kafka connection was dead upon lookup", sink_id: sink.id)
+          Logger.warning("Cached Kafka connection was dead upon lookup", sink_id: sink.connection_id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached Kafka sink connection was stale", sink_id: sink.id)
+          Logger.info("Cached Kafka sink connection was stale", sink_id: sink.connection_id)
           {:error, :stale}
 
         true ->
@@ -66,7 +66,7 @@ defmodule Sequin.Kafka.ConnectionCache do
 
     @spec pop(t(), sink()) :: {atom() | nil, t()}
     def pop(cache, sink) do
-      {entry, new_cache} = Map.pop(cache, sink.id, nil)
+      {entry, new_cache} = Map.pop(cache, sink.connection_id, nil)
 
       if entry, do: {entry.conn, new_cache}, else: {nil, new_cache}
     end
@@ -74,7 +74,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     @spec store(t(), sink(), atom()) :: t()
     def store(cache, sink, conn) do
       entry = %{conn: conn, options_hash: options_hash(sink)}
-      Map.put(cache, sink.id, entry)
+      Map.put(cache, sink.connection_id, entry)
     end
 
     defp options_hash(sink) do
@@ -152,7 +152,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     end
 
     defp default_start(%KafkaSink{} = sink) do
-      client_id = :"brod_client_#{sink.id}"
+      client_id = :"brod_client_#{sink.connection_id}"
       endpoints = KafkaSink.hosts(sink)
       client_config = KafkaSink.to_brod_config(sink)
 

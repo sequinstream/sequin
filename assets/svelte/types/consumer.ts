@@ -32,9 +32,9 @@ export type BaseConsumer = {
   batch_size: number;
 };
 
-// HTTP Push specific destination
+// HTTP Push specific sink
 export type HttpPushConsumer = BaseConsumer & {
-  destination: {
+  sink: {
     type: "http_push";
     http_endpoint: {
       id: string;
@@ -44,9 +44,9 @@ export type HttpPushConsumer = BaseConsumer & {
   };
 };
 
-// SQS specific destination
+// SQS specific sink
 export type SqsConsumer = BaseConsumer & {
-  destination: {
+  sink: {
     type: "sqs";
     queue_url: string;
     region: string;
@@ -54,9 +54,9 @@ export type SqsConsumer = BaseConsumer & {
   };
 };
 
-// Redis specific destination
+// Redis specific sink
 export type RedisConsumer = BaseConsumer & {
-  destination: {
+  sink: {
     type: "redis";
     host: string;
     port: number;
@@ -67,9 +67,9 @@ export type RedisConsumer = BaseConsumer & {
   };
 };
 
-// Kafka specific destination
+// Kafka specific sink
 export type KafkaConsumer = BaseConsumer & {
-  destination: {
+  sink: {
     type: "kafka";
     url: string;
     hosts: string;
@@ -81,9 +81,17 @@ export type KafkaConsumer = BaseConsumer & {
   };
 };
 
+// Sequin Stream specific sink
+export type SequinStreamConsumer = BaseConsumer & {
+  sink: {
+    type: "sequin_stream";
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
   | RedisConsumer
-  | KafkaConsumer;
+  | KafkaConsumer
+  | SequinStreamConsumer;

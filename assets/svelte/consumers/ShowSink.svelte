@@ -18,12 +18,13 @@
     SqsConsumer,
     RedisConsumer,
     KafkaConsumer,
+    SequinStreamConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SinkCardSqs from "../components/SinkCardSqs.svelte";
   import SinkCardRedis from "../components/SinkCardRedis.svelte";
   import SinkCardKafka from "../components/SinkCardKafka.svelte";
-
+  import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   export let live;
   export let parent;
   export let consumer: Consumer;
@@ -34,6 +35,8 @@
     messages_failing_count: 0,
   };
   export let cursor_position = null;
+  export let apiBaseUrl: string;
+  export let apiTokens: any[];
 
   function onRewind(
     newCursorPosition: string | null,
@@ -64,6 +67,12 @@
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
     return consumer.sink.type === "kafka";
+  }
+
+  function isSequinStreamConsumer(
+    consumer: Consumer,
+  ): consumer is SequinStreamConsumer {
+    return consumer.sink.type === "sequin_stream";
   }
 </script>
 
@@ -225,6 +234,8 @@
         <SinkCardRedis {consumer} />
       {:else if isKafkaConsumer(consumer)}
         <SinkCardKafka {consumer} />
+      {:else if isSequinStreamConsumer(consumer)}
+        <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
       {/if}
 
       <ShowSequence {consumer} />

@@ -19,7 +19,7 @@ This approach works well when you need to:
 
 If you're self-hosting Sequin, you'll need:
 
-1. [Sequin installed](/quickstart/self-host)
+1. [Sequin installed](/running-sequin)
 2. [A database connected](/connect-postgres) 
 3. A destination database ready to receive updates
 4. A sink destination (like SQS, Kafka, Redis, or HTTP)
@@ -61,7 +61,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
   <Step title="Leave message grouping default">
     If your sink supports message grouping, leave the default option selected for "Message grouping".
     
-    This will ensure that messages are [grouped by primary key](/reference/ordering-and-grouping), helping eliminate race conditions as you write rows to your destination.
+    This will ensure that messages are [grouped by primary key](/reference/sinks/overview#grouping-and-ordering), helping eliminate race conditions as you write rows to your destination.
   </Step>
 
   <Step title="Specify backfill">

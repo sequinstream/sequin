@@ -7,7 +7,7 @@ iconType: "solid"
 
 Sequin is a change data capture (CDC) tool that makes it easy to stream changes from your Postgres database to streaming platforms, queues, and other destinations.
 
-To use Sequin, you'll configure [sinks](/how-sequin-works#sinks) for one or more tables in your database. Sequin will then stream changes to your chosen destinations like Kafka, SQS, Redis, or HTTP endpoints. You can backfill existing rows and stream new changes in real-time.
+To use Sequin, you'll configure [sinks](/reference/sinks/overview) for one or more tables in your database. Sequin will then stream changes to your chosen destinations like Kafka, SQS, Redis, or HTTP endpoints. You can backfill existing rows and stream new changes in real-time.
 
 Sequin works great for CDC use cases like:
 
@@ -78,12 +78,28 @@ Sequin is a fast, simple alternative to Debezium. It's built on Postgres, stream
 
 Sequin is available as a Docker image or cloud service. See the following docs to get up and running:
 
-<Card title="Quickstart" icon="docker" href="/quickstart/setup" horizontal>
-  Install and setup Sequin in about 5 minutes.
+<Card title="Run Sequin" icon="docker" href="/running-sequin" horizontal>
+  If you're not using Sequin Cloud, install and setup Sequin in about 5 minutes.
 </Card>
 
-<Card title="Cloud Quickstart" icon="cloud" href="/quickstart" horizontal>
-  Get started in about 3 minutes with no installation.
+<Card title="Webhooks Quickstart" icon="webhook" href="/quickstart/webhooks" horizontal>
+  Stream changes to a webhook endpoint in about 3 minutes.
+</Card>
+
+<Card title="SQS Quickstart" icon="aws" href="/quickstart/sqs" horizontal>
+  Stream changes to an Amazon SQS queue in about 3 minutes.
+</Card>
+
+<Card title="Kafka Quickstart" icon="server" href="/quickstart/kafka" horizontal>
+  Stream changes to a Kafka topic in about 3 minutes.
+</Card>
+
+<Card title="Redis Quickstart" icon="database" href="/quickstart/redis" horizontal>
+  Stream changes to a Redis stream in about 3 minutes.
+</Card>
+
+<Card title="Sequin Stream Quickstart" icon="stream" href="/quickstart/sequin-stream" horizontal>
+  Stream changes to a Sequin Stream in about 3 minutes.
 </Card>
 
 

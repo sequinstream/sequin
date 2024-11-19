@@ -31,13 +31,22 @@ api: 'POST /api/http_pull_consumers/{consumer_name_or_id}/receive'
 
 The response is an object with a `data` property that contains a list of messages. Within each message is an `ack_id` and a `data` property that contains the message data.
 
-<ResponseField name="data" type="list">
+<ResponseField name="data" type="list" required>
   <Expandable title="properties">
-    <ResponseField name="record" type="Record">
-    A [message](/reference/messages) containing the message data with a key for each column in the associated table.
+    <ResponseField name="ack_id" type="string" required>
+      You'll use the `ack_id` in follow-up requests to either [ack](/reference/sequin-stream-api/ack) or [nack](/reference/sequin-stream-api/nack) this specific message.
     </ResponseField>
-    <ResponseField name="ack_id" type="string">
-    You'll use the `ack_id` in follow-up requests to either [ack](/reference/sequin-stream-api/ack) or [nack](/reference/sequin-stream-api/nack) this specific message.
+    <ResponseField name="record" type="object" required>
+      A [message](/reference/messages) containing the message data with a key for each column in the associated table.
+    </ResponseField>
+    <ResponseField name="changes" type="object">
+      Only present if the message is a change message. Contains the previous values for changed fields.
+    </ResponseField>
+    <ResponseField name="action" type="string">
+      Only present if the message is a change message.The action that occurred on the message.
+    </ResponseField>
+    <ResponseField name="metadata" type="object" required>
+      Metadata about the Sequin Stream sink that produced the message.
     </ResponseField>
   </Expandable>
 </ResponseField>
@@ -63,15 +72,23 @@ curl --request GET \
 {
   "data": [
     {
-      "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
-      "data": {
-        "record": {
-          "id": 1,
-          "name": "Lady Jessica",
-          "title": "Bene Gesserit",
-          "spice_allocation": 750,
-          "inserted_at": "2024-10-31T17:02:38.058807",
-          "updated_at": "2024-10-31T17:02:38.058807"
+      "ack_id": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "changes": {
+        "status": "pending"
+      },
+      "action": "update",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-03-20T15:30:00Z",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
         }
       }
     }

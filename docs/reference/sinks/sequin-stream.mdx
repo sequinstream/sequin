@@ -14,9 +14,17 @@ Sequin Stream provides exactly-once processing guarantees and supports multiple 
 
 When you create a Sequin Stream sink, you can configure the following settings:
 
-- **Visibility timeout**: How long a message will be invisible to other consumers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged. Choose a conservative value based on how long you expect your consumer to take to process a batch of messages.
-- **Max ack pending**: The maximum number of messages that can be outstanding (i.e. in-flight but not yet acknowledged by your consumer group) at one time. This setting helps prevent your consumer group from getting overloaded with messages. Choose a value based on your consumer group's processing capacity.
-- **Max waiting**: The maximum number of consumers that can be waiting to receive messages at one time. Once reached, subsequent `/receive` calls will block until a slot becomes available. This setting helps manage resource utilization and prevent excessive polling. Choose a value based on how many parallel consumers you expect to have in your consumer group.
+- **Visibility timeout**
+
+    How long a message will be invisible to other consumers after being received. When the timeout is reached, Sequin will make the message available again if it hasn't been acknowledged. Choose a conservative value based on how long you expect your consumer to take to process a batch of messages.
+
+- **Max ack pending**
+
+    The maximum number of messages that can be outstanding (i.e. in-flight but not yet acknowledged by your consumer group) at one time. This setting helps prevent issues where messages fail to be acknowledged, either due to errors in processing or bugs that cause too many workers to spin up. When the max ack pending limit is reached, Sequin stops delivering new messages and focuses on re-delivering unacknowledged messages.
+
+- **Max waiting**
+
+    The maximum number of consumers that can be waiting to receive messages at one time. Once reached, subsequent `/receive` calls will be rejected with a 429 error. This setting helps manage your consumer group's resource utilization and prevent excessive polling of the Sequin Stream API. The right value depends on how many parallel consumers you expect to have in your consumer group.
 
 You'll create a Sequin Stream sink for each database table you want to capture changes from. This means you'll also have one consumer group for each Sequin Stream sink and, by extension, for each database table.
 
@@ -72,23 +80,96 @@ curl -X GET https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER
 
 This will return a batch of messages. Each message will contain an `ack_id` and either a row or changes object:
 
+#### Change Messages
+
+```typescript
+{
+  data: Array<{
+    ack_id: string;
+    record: Record<string, any>;  // The row data
+    changes: Record<string, any> | null;  // Previous values for changed fields
+    action: "insert" | "update" | "delete" | "read";
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      commit_timestamp: string;  // ISO timestamp
+      consumer: {
+        id: string;
+        name: string;
+      };
+    };
+  }>;
+}
+```
+
+Example:
 ```json
 {
   "data": [
     {
-      "ack_id": "0e6ae50d-4226-4498-8429-fc012737125b",
-      "data": {
-        "record": {
-          "id": 1,
-          "name": "Paul Atreides",
-          "title": "Kwisatz Haderach",
-          "spice_allocation": 1000,
-          "inserted_at": "2024-10-31T17:02:38.058807",
-          "updated_at": "2024-10-31T17:02:38.058807"
+      "ack_id": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "changes": {
+        "status": "pending"
+      },
+      "action": "update",
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "commit_timestamp": "2024-03-20T15:30:00Z",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
         }
       }
-    },
-    // more messages...
+    }
+  ]
+}
+```
+
+#### Row Messages
+
+```typescript
+{
+  data: Array<{
+    ack_id: string;
+    record: Record<string, any>;  // The row data
+    metadata: {
+      table_schema: string;
+      table_name: string;
+      consumer: {
+        id: string;
+        name: string;
+      };
+    };
+  }>;
+}
+```
+
+Example:
+```json
+{
+  "data": [
+    {
+      "ack_id": "MTYyeJ7abUjl1pO",
+      "record": {
+        "id": 1234,
+        "customer_id": 789,
+        "status": "shipped"
+      },
+      "metadata": {
+        "table_schema": "public",
+        "table_name": "orders",
+        "consumer": {
+          "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "name": "orders_webhook"
+        }
+      }
+    }
   ]
 }
 ```

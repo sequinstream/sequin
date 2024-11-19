@@ -97,7 +97,7 @@ While your consumer is processing this batch of messages, the messages will not 
 
 ### Acknowledge messages
 
-Once your consumer has finished processing the messages, [acknowledge](/reference/sequin-stream-api/ack) or `ack` them. This tells Sequin you're done processing them, and ensures that other consumers won't see them again:
+Once your consumer has finished processing the messages, [acknowledge](/reference/sequin-stream-api/ack) or `ack` them. This tells Sequin you're done processing them, and ensures that the consumer group won't see them again:
 
 ```bash
 curl -X POST https://api.sequinstream.com/api/http_pull_consumers/{{YOUR_CONSUMER_NAME}}/ack \

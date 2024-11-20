@@ -275,8 +275,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_params(form, socket) do
-    message_kind = if is_edit?(socket), do: form["messageKind"], else: "record"
-
     params =
       %{
         "consumer_kind" => form["consumerKind"],
@@ -284,7 +282,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "sink" => decode_sink(socket.assigns.consumer.type, form["sink"]),
         "max_ack_pending" => form["maxAckPending"],
         "max_waiting" => form["maxWaiting"],
-        "message_kind" => message_kind,
+        "message_kind" => form["messageKind"],
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
         "table_oid" => form["tableOid"],

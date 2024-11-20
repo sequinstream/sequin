@@ -211,22 +211,24 @@
         </Card>
       {/if}
 
-      <Backfill
-        {cursor_position}
-        onRun={(newCursorPosition, callback) => {
-          live.pushEventTo(
-            "#" + parent,
-            "run-backfill",
-            { new_cursor_position: newCursorPosition },
-            (reply) => callback(reply),
-          );
-        }}
-        onCancel={(callback) => {
-          live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
-            callback(reply),
-          );
-        }}
-      />
+      {#if consumer.message_kind === "record"}
+        <Backfill
+          {cursor_position}
+          onRun={(newCursorPosition, callback) => {
+            live.pushEventTo(
+              "#" + parent,
+              "run-backfill",
+              { new_cursor_position: newCursorPosition },
+              (reply) => callback(reply),
+            );
+          }}
+          onCancel={(callback) => {
+            live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
+              callback(reply),
+            );
+          }}
+        />
+      {/if}
 
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />

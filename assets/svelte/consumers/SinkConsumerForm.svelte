@@ -671,7 +671,7 @@
     {/if}
 
     <GroupColumnsForm
-      {errors}
+      errors={errors.consumer}
       {isEditMode}
       {selectedTable}
       bind:groupColumnAttnums={form.groupColumnAttnums}

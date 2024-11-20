@@ -418,11 +418,11 @@ defmodule Sequin.YamlLoader do
   end
 
   ##############################
-  ## Change Capture Pipelines ##
+  ## Change Retention         ##
   ##############################
 
   defp upsert_wal_pipelines(account_id, %{"change_capture_pipelines" => wal_pipelines}, databases) do
-    Logger.info("Creating change capture pipelines: #{inspect(wal_pipelines, pretty: true)}")
+    Logger.info("Setting up change retention: #{inspect(wal_pipelines, pretty: true)}")
 
     Enum.reduce_while(wal_pipelines, {:ok, []}, fn wal_pipeline, {:ok, acc} ->
       case upsert_wal_pipeline(account_id, wal_pipeline, databases) do
@@ -433,7 +433,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp upsert_wal_pipelines(_account_id, %{}, _databases) do
-    Logger.info("No change capture pipelines found in config")
+    Logger.info("Change retention not setup in config")
     {:ok, []}
   end
 
@@ -448,7 +448,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp upsert_wal_pipeline(_account_id, %{}, _databases) do
-    {:error, Error.bad_request(message: "`name` is required for each change capture pipeline")}
+    {:error, Error.bad_request(message: "`name` is required to setup change retention")}
   end
 
   defp create_wal_pipeline(account_id, attrs, databases) do
@@ -462,14 +462,12 @@ defmodule Sequin.YamlLoader do
 
       {:error, error} when is_exception(error) ->
         {:error,
-         Error.bad_request(
-           message: "Error creating change capture pipeline '#{attrs["name"]}': #{Exception.message(error)}"
-         )}
+         Error.bad_request(message: "Error setting up change retention '#{attrs["name"]}': #{Exception.message(error)}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
          Error.bad_request(
-           message: "Error creating change capture pipeline '#{attrs["name"]}': #{inspect(changeset, pretty: true)}"
+           message: "Error setting up change retention '#{attrs["name"]}': #{inspect(changeset, pretty: true)}"
          )}
     end
   end
@@ -479,19 +477,17 @@ defmodule Sequin.YamlLoader do
 
     case Replication.update_wal_pipeline_with_lifecycle(wal_pipeline, params) do
       {:ok, wal_pipeline} ->
-        Logger.info("Updated change capture pipeline: #{inspect(wal_pipeline, pretty: true)}")
+        Logger.info("Updated change retention: #{inspect(wal_pipeline, pretty: true)}")
         {:ok, wal_pipeline}
 
       {:error, error} when is_exception(error) ->
         {:error,
-         Error.bad_request(
-           message: "Error updating change capture pipeline '#{wal_pipeline.name}': #{Exception.message(error)}"
-         )}
+         Error.bad_request(message: "Error updating change retention '#{wal_pipeline.name}': #{Exception.message(error)}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:error,
          Error.bad_request(
-           message: "Error updating change capture pipeline '#{wal_pipeline.name}': #{inspect(changeset, pretty: true)}"
+           message: "Error updating change retention '#{wal_pipeline.name}': #{inspect(changeset, pretty: true)}"
          )}
     end
   end

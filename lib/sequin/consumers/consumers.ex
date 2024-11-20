@@ -738,7 +738,7 @@ defmodule Sequin.Consumers do
       table = Enum.find(tables, &(&1.oid == table_oid))
 
       if table do
-        case fetch_records_data(postgres_db, table, oid_records) do
+        case fetch_records_data(postgres_db, table, oid_records, consumer) do
           {:ok, fetched_records} -> {:cont, {:ok, acc ++ fetched_records}}
           {:error, _} = error -> {:halt, error}
         end
@@ -756,7 +756,7 @@ defmodule Sequin.Consumers do
     end)
   end
 
-  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabaseTable{} = table, records) do
+  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabaseTable{} = table, records, consumer) do
     record_count = length(records)
     # Get the primary key columns and their types
     pk_columns =
@@ -816,7 +816,10 @@ defmodule Sequin.Consumers do
       updated_records =
         Enum.map(records, fn record ->
           metadata = %ConsumerRecordData.Metadata{
-            consumer: %{id: record.consumer_id},
+            consumer: %{
+              id: consumer.id,
+              name: consumer.name
+            },
             table_name: table.name,
             table_schema: table.schema
           }
@@ -1132,7 +1135,7 @@ defmodule Sequin.Consumers do
 
     with {:ok, %ConsumerRecord{} = consumer_record} <- get_consumer_record(consumer.id, params),
          {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: record}}]} when not is_nil(record) <-
-           fetch_records_data(consumer.postgres_database, table, [consumer_record]) do
+           fetch_records_data(consumer.postgres_database, table, [consumer_record], consumer) do
       {:ok, record[consumer.sequence.sort_column_name]}
     else
       {:error, %NotFoundError{entity: :consumer_record}} ->

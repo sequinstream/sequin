@@ -104,8 +104,8 @@
       <CardContent>
         <p class="mb-4 text-secondary-foreground text-sm" class:hidden={isEdit}>
           With Change Retention, you can capture every insert, update, or delete
-          that happens to one or more tables into another table in your database
-          so you can backfill and replay changes to a sink.
+          from one or more tables into another table in your database. Then, you
+          can backfill and replay changes to a sink.
         </p>
 
         <div class="space-y-4">

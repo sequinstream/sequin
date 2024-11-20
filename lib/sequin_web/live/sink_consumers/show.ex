@@ -807,6 +807,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_cursor_position(nil, _consumer), do: nil
   defp encode_cursor_position(:error, _consumer), do: :error
+  defp encode_cursor_position(_, %{message_kind: :event}), do: nil
 
   defp encode_cursor_position(cursor_position, consumer) when is_map(cursor_position) do
     %{record_consumer_state: %RecordConsumerState{producer: producer}} = consumer

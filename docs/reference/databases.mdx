@@ -82,7 +82,9 @@ Enabling logical replication often requires a database restart.
 
 [Publications](https://www.postgresql.org/docs/current/sql-createpublication.html) identify which tables to track for changes.
 
-By default, Sequin looks for a publication named `sequin_publication`.
+<Warning>
+As a best practice, create the [publication](#publications) before creating the replication slot. Creating the slot first can create a race condition that can lead to data loss.
+</Warning>
 
 ### Creating a publication
 
@@ -133,8 +135,6 @@ drop publication sequin_publication;
 
 [Replication slots](https://www.postgresql.org/docs/9.4/catalog-pg-replication-slots.html) ensure that PostgreSQL retains WAL (Write-Ahead Log) data needed by Sequin.
 
-By default, Sequin looks for a slot named `sequin_slot`.
-
 ### Creating a Replication Slot
 
 ```sql
@@ -149,14 +149,16 @@ drop replication slot sequin_slot;
 
 ### Best practices
 
+<Warning>
+As a best practice, create the [publication](#publications) before creating the replication slot. Creating the slot first can create a race condition that can lead to data loss.
+</Warning>
+
 **Monitor slot lag**
     Excessive lag in a replication slot can cause WAL buildup and disk space issues. Monitor lag with:
 
     ```sql
     select * from pg_replication_slots;
     ```
-
-**Use meaningful names**: Name slots clearly to identify their purpose, e.g., `sequin_prod_slot`, `sequin_audit_slot`
 
 **Clean up unused slots**: Delete slots that are no longer in use to prevent WAL retention:
 

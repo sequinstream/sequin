@@ -88,9 +88,7 @@
 </script>
 
 <FullPageModal
-  title={isEdit
-    ? "Edit Change Capture Pipeline"
-    : "Create Change Capture Pipeline"}
+  title={isEdit ? "Edit Change Retention" : "Setup Change Retention"}
   bind:open={dialogOpen}
   bind:showConfirmDialog
   on:close={handleClose}
@@ -105,9 +103,9 @@
       </CardHeader>
       <CardContent>
         <p class="mb-4 text-secondary-foreground text-sm" class:hidden={isEdit}>
-          With a Change Capture Pipeline, you can capture every insert, update,
-          or delete that happens to one or more tables into another table in
-          your database. Then, you can stream these events with Sequin.
+          With Change Retention, you can capture every insert, update, or delete
+          that happens to one or more tables into another table in your database
+          so you can backfill and replay changes to a sink.
         </p>
 
         <div class="space-y-4">
@@ -234,7 +232,7 @@
       <CardContent>
         <div class="space-y-4 my-4">
           <div class="space-y-2">
-            <Label for="name">Change Capture Pipeline name</Label>
+            <Label for="name">Change Retention name</Label>
             <Input id="name" bind:value={form.name} />
             {#if errors.name}
               <p class="text-red-500 text-sm">{errors.name}</p>
@@ -248,7 +246,7 @@
               type="submit"
               disabled={!form.tableOid || !form.destinationTableOid}
             >
-              {walPipeline.id ? "Update" : "Create"} Change Capture Pipeline
+              {walPipeline.id ? "Update" : "Setup"} Change Retention
             </Button>
           </div>
         </div>

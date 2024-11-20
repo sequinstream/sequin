@@ -27,15 +27,12 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert
-    show={!hasDatabases}
-    entityName="Change Capture Pipeline"
-  />
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="Change Retention" />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Logs class="h-6 w-6 mr-2" />
-      <h1 class="text-2xl font-bold">Change Capture Pipelines</h1>
+      <h1 class="text-2xl font-bold">Change Retention</h1>
     </div>
     {#if walPipelines.length > 0 && hasDatabases}
       <a
@@ -43,7 +40,7 @@
         data-phx-link="redirect"
         data-phx-link-state="push"
       >
-        <Button>Create Change Capture Pipeline</Button>
+        <Button>Setup Change Retention</Button>
       </a>
     {/if}
   </div>
@@ -51,17 +48,15 @@
   {#if walPipelines.length === 0}
     <div class="w-full rounded-lg border-2 border-dashed border-gray-300">
       <div class="text-center py-12 w-1/2 mx-auto my-auto">
-        <h2 class="text-xl font-semibold mb-4">
-          No Change Capture Pipelines found
-        </h2>
+        <h2 class="text-xl font-semibold mb-4">No Change Retention setup</h2>
         <p class="text-gray-600 mb-6">
-          With a
+          With
           <a
             href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
             target="_blank"
-            class="text-blue-500 hover:underline">Change Capture Pipeline</a
+            class="text-blue-500 hover:underline">Change Retention</a
           >, Sequin captures all of a table's insert, update, and delete events
-          and stores them in an event log table.
+          and stores them in a change table.
         </p>
         {#if hasDatabases}
           <a
@@ -69,13 +64,13 @@
             data-phx-link="redirect"
             data-phx-link-state="push"
           >
-            <Button>Create Change Capture Pipeline</Button>
+            <Button>Setup Change Retention</Button>
           </a>
         {:else}
-          <Button disabled>Create Change Capture Pipeline</Button>
+          <Button disabled>Setup Change Retention</Button>
           <p class="text-gray-600 mt-4">
-            You need to connect a database to Sequin before you can create a
-            Change Capture Pipeline.
+            You need to connect a database to Sequin before you can setup Change
+            Retention.
           </p>
         {/if}
       </div>

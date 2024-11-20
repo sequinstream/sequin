@@ -300,8 +300,7 @@
                 No filters applied
               </h4>
               <p class="text-sm text-gray-500 mb-4">
-                This Change Capture Pipeline will process all data from the
-                source table.
+                Change Retention will process all data from the source table.
               </p>
             </div>
           {/if}
@@ -315,7 +314,7 @@
   <Dialog.Content>
     <Dialog.Header>
       <Dialog.Title
-        >Are you sure you want to delete this Change Capture Pipeline?</Dialog.Title
+        >Are you sure you want to delete this Change Retention?</Dialog.Title
       >
       <Dialog.Description>This action cannot be undone.</Dialog.Description>
     </Dialog.Header>

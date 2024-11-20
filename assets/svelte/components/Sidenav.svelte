@@ -52,7 +52,7 @@
       items: [
         {
           path: "/change-capture-pipelines",
-          text: "Change Capture Pipelines",
+          text: "Change Retention",
           icon: Logs,
         },
       ],

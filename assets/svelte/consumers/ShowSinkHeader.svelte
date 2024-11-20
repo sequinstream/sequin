@@ -242,10 +242,10 @@
     <Dialog.Header>
       <Dialog.Title class="leading-6">Pause {consumerTitle}?</Dialog.Title>
       <Dialog.Description class="mb-6">
-        The consumer will stop receiving new messages until resumed.
+        The sink will stop receiving new messages until resumed.
       </Dialog.Description>
     </Dialog.Header>
-    <Dialog.Footer>
+    <Dialog.Footer class="mt-4">
       <Button
         variant="outline"
         on:click={() => (showPauseConfirmDialog = false)}>Cancel</Button

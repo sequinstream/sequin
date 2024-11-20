@@ -3,6 +3,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -16,6 +17,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
@@ -28,8 +30,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias SequinWeb.RouteHelpers
 
   require Logger
-
-  defguardp is_create?(socket) when is_nil(socket.assigns.consumer) or is_nil(socket.assigns.consumer.id)
 
   @impl Phoenix.LiveComponent
   def render(assigns) do
@@ -292,40 +292,21 @@ defmodule SequinWeb.Components.ConsumerForm do
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },
-        "batch_size" => form["batchSize"]
+        "batch_size" => form["batchSize"],
+        "initial_backfill" => decode_initial_backfill(form["initialBackfill"])
       }
 
-    maybe_put_record_consumer_state(params, form, socket)
+    maybe_put_replication_slot_id(params, socket)
   end
 
-  defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
+  defp decode_initial_backfill(nil), do: nil
+  defp decode_initial_backfill(%{"enabled" => false}), do: nil
+
+  defp decode_initial_backfill(%{"enabled" => true} = backfill) do
     %{
-      "postgres_database_id" => postgres_database_id,
-      "table_oid" => table_oid,
-      "sort_column_attnum" => sort_column_attnum
-    } = params
-
-    if not is_nil(postgres_database_id) and not is_nil(table_oid) do
-      table = table(socket.assigns.databases, postgres_database_id, table_oid, sort_column_attnum)
-
-      initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
-      producer = get_in(form, ["recordConsumerState", "producer"])
-
-      initial_min_cursor =
-        cond do
-          producer == "wal" -> nil
-          initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
-          true -> sort_column_attnum && KeysetCursor.min_cursor(table)
-        end
-
-      Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
-    else
-      params
-    end
-  end
-
-  defp maybe_put_record_consumer_state(params, _form, _socket) do
-    params
+      "start_position" => backfill["startPosition"],
+      "initial_min_sort_col" => backfill["initialMinSortCol"]
+    }
   end
 
   defp decode_sink(:pull, _form), do: nil
@@ -385,14 +366,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     case SqsSink.region_from_url(queue_url) do
       {:ok, region} -> region
       _ -> nil
-    end
-  end
-
-  defp table(databases, postgres_database_id, table_oid, sort_column_attnum) do
-    if postgres_database_id do
-      db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
-      table = Sequin.Enum.find!(db.tables, &(&1.oid == table_oid))
-      %{table | sort_column_attnum: sort_column_attnum}
     end
   end
 
@@ -565,17 +538,29 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
+    initial_backfill = params["initial_backfill"]
 
     result =
       Repo.transact(fn ->
-        with {:ok, sequence} <- find_or_create_sequence(account_id, params) do
-          params = Map.put(params, "sequence_id", sequence.id)
-          Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params)
+        with {:ok, sequence} <- find_or_create_sequence(account_id, params),
+             params = Map.put(params, "sequence_id", sequence.id),
+             {:ok, consumer} <- Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
+          case maybe_create_backfill(socket, consumer, params, initial_backfill) do
+            :ok -> {:ok, consumer}
+            {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
+            {:error, changeset} -> {:error, changeset}
+          end
         end
       end)
 
     case result do
       {:ok, consumer} ->
+        case consumer.active_backfill do
+          nil -> :ok
+          %Backfill{state: :active} -> DatabasesRuntime.Supervisor.start_table_producer(consumer)
+          %Backfill{state: _} -> :ok
+        end
+
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
           properties: %{
@@ -588,6 +573,10 @@ defmodule SequinWeb.Components.ConsumerForm do
         })
 
         {:ok, push_navigate(socket, to: RouteHelpers.consumer_path(consumer))}
+
+      {:error, %Ecto.Changeset{data: %Backfill{}} = changeset} ->
+        Logger.info("Create backfill failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
+        {:error, assign(socket, :backfill_changeset, changeset)}
 
       {:error, %Ecto.Changeset{data: %Sequence{}} = changeset} ->
         Logger.info("Create sequence failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
@@ -604,6 +593,37 @@ defmodule SequinWeb.Components.ConsumerForm do
 
         {:error, socket |> assign(:changeset, changeset) |> assign(:submit_error, error_message)}
     end
+  end
+
+  defp maybe_create_backfill(_socket, _consumer, _params, nil), do: {:ok, nil}
+
+  defp maybe_create_backfill(socket, consumer, params, backfill_params) do
+    table =
+      table(
+        socket.assigns.databases,
+        params["postgres_database_id"],
+        params["table_oid"],
+        params["sort_column_attnum"]
+      )
+
+    initial_min_cursor =
+      case backfill_params["start_position"] do
+        "beginning" ->
+          KeysetCursor.min_cursor(table)
+
+        "specific" ->
+          sort_col = backfill_params["initial_min_sort_col"]
+          if sort_col, do: KeysetCursor.min_cursor(table, sort_col)
+      end
+
+    backfill_attrs = %{
+      "account_id" => consumer.account_id,
+      "sink_consumer_id" => consumer.id,
+      "initial_min_cursor" => initial_min_cursor,
+      "state" => :active
+    }
+
+    Consumers.create_backfill(backfill_attrs)
   end
 
   defp find_or_create_sequence(
@@ -715,6 +735,14 @@ defmodule SequinWeb.Components.ConsumerForm do
       :redis -> "Redis Sink"
       :sqs -> "SQS Sink"
       :sequin_stream -> "Sequin Stream Sink"
+    end
+  end
+
+  defp table(databases, postgres_database_id, table_oid, sort_column_attnum) do
+    if postgres_database_id do
+      db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
+      table = Sequin.Enum.find!(db.tables, &(&1.oid == table_oid))
+      %{table | sort_column_attnum: sort_column_attnum}
     end
   end
 end

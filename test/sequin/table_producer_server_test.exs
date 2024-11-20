@@ -72,27 +72,37 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
-        record_consumer_state:
-          ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: initial_min_cursor, producer: :table_and_wal),
+        record_consumer_state: %{},
         account_id: database.account_id,
         sequence_id: sequence.id,
         sequence_filter: Map.from_struct(sequence_filter)
       )
 
+    ConsumersFactory.insert_active_backfill!(
+      account_id: database.account_id,
+      sink_consumer_id: consumer.id,
+      initial_min_cursor: initial_min_cursor
+    )
+
     filtered_consumer =
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
-        record_consumer_state:
-          ConsumersFactory.record_consumer_state_attrs(initial_min_cursor: initial_min_cursor, producer: :table_and_wal),
+        record_consumer_state: %{},
         account_id: database.account_id,
         sequence_id: sequence.id,
         sequence_filter: Map.from_struct(filtered_sequence_filter)
       )
 
+    ConsumersFactory.insert_active_backfill!(
+      account_id: database.account_id,
+      sink_consumer_id: filtered_consumer.id,
+      initial_min_cursor: initial_min_cursor
+    )
+
     {:ok,
-     consumer: consumer,
-     filtered_consumer: filtered_consumer,
+     consumer: Repo.preload(consumer, :active_backfill),
+     filtered_consumer: Repo.preload(filtered_consumer, :active_backfill),
      table: table,
      table_oid: table_oid,
      database: database,
@@ -114,14 +124,15 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         Character.column_attnum("id") => Enum.at(characters, 3).id
       }
 
-      record_state = consumer.record_consumer_state
-      consumer = %{consumer | record_consumer_state: %{record_state | initial_min_cursor: initial_min_cursor}}
+      consumer.active_backfill
+      |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
+      |> Repo.update!()
 
       pid =
         start_supervised!(
           {TableProducerServer,
            [
-             consumer: consumer,
+             consumer: Repo.reload(consumer),
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -153,9 +164,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       # Cursor should be nil after completion
       assert cursor == :error
 
-      # Verify that the consumer's producer state has been updated
-      consumer = Repo.reload(consumer)
-      assert consumer.record_consumer_state.producer == :wal
+      # Verify that the consumer's backfill has been updated
+      consumer = Repo.preload(consumer, :active_backfill, force: true)
+      refute consumer.active_backfill
     end
 
     test "sets group_id based on PKs when group_column_attnums is nil", %{
@@ -287,9 +298,9 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       # Cursor should be nil after completion
       assert cursor == :error
 
-      # Verify that the consumer's producer state has been updated
-      filtered_consumer = Repo.reload(filtered_consumer)
-      assert filtered_consumer.record_consumer_state.producer == :wal
+      # Verify that the consumer's backfill has been updated
+      filtered_consumer = Repo.preload(filtered_consumer, :active_backfill, force: true)
+      refute filtered_consumer.active_backfill
     end
   end
 end

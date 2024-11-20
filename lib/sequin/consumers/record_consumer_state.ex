@@ -13,8 +13,6 @@ defmodule Sequin.Consumers.RecordConsumerState do
   end
 
   def changeset(config, attrs) do
-    config
-    |> cast(attrs, [:producer, :initial_min_cursor])
-    |> validate_required([:producer])
+    cast(config, attrs, [:producer, :initial_min_cursor])
   end
 end

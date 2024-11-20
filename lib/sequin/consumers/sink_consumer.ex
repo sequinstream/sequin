@@ -112,7 +112,6 @@ defmodule Sequin.Consumers.SinkConsumer do
       :status
     ])
     |> cast_polymorphic_embed(:sink, required: true)
-    |> cast_embed(:record_consumer_state)
     |> Sequin.Changeset.cast_embed(:source_tables)
     |> validate_required([:name, :status, :replication_slot_id, :batch_size])
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)

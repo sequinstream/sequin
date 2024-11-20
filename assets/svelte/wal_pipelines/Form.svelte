@@ -161,7 +161,6 @@
 
           {#if selectedSourceTable}
             <FilterForm
-              showTitle={false}
               messageKind="event"
               selectedTable={selectedSourceTable}
               bind:form

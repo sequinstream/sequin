@@ -20,14 +20,18 @@
   import { cn } from "$lib/utils";
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
-  import SinkHttpPushForm from "./SinkHttpPushForm.svelte";
-  import SinkSqsForm from "./SinkSqsForm.svelte";
-  import SinkRedisForm from "./SinkRedisForm.svelte";
-  import SinkKafkaForm from "./SinkKafkaForm.svelte";
-  import SinkSequinStreamForm from "./SinkSequinStreamForm.svelte";
-  import { CircleAlert, ExternalLinkIcon } from "lucide-svelte";
+  import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
+  import SinkSqsForm from "$lib/consumers/SinkSqsForm.svelte";
+  import SinkRedisForm from "$lib/consumers/SinkRedisForm.svelte";
+  import SinkKafkaForm from "$lib/consumers/SinkKafkaForm.svelte";
+  import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
+  import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
+  import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
+  import Datetime from "../components/Datetime.svelte";
+  import { Switch } from "$lib/components/ui/switch";
+  import * as Popover from "$lib/components/ui/popover";
 
   type Column = {
     attnum: number;
@@ -82,7 +86,8 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
     sink: consumer.sink,
-    recordConsumerState: consumer.record_consumer_state || {
+    recordConsumerState: {
+      producer: "wal",
       initialMinSortCol: null,
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
@@ -223,6 +228,29 @@
       }
     });
   }
+
+  let startPosition = "beginning";
+  let minSortColError: string = "";
+  let enableBackfill = false;
+
+  $: {
+    if (!enableBackfill) {
+      form.recordConsumerState = {
+        producer: "wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "beginning") {
+      form.recordConsumerState = {
+        producer: "table_and_wal",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "specific") {
+      form.recordConsumerState = {
+        producer: "table_and_wal",
+        initialMinSortCol: null,
+      };
+    }
+  }
 </script>
 
 <FullPageModal
@@ -354,28 +382,124 @@
 
     <Card>
       <CardHeader>
-        <CardTitle>
-          {#if form.messageKind === "record"}
-            Records to process
-          {:else}
-            Changes to process
-          {/if}
-        </CardTitle>
+        <CardTitle>Filters</CardTitle>
       </CardHeader>
       <CardContent>
         <FilterForm
           messageKind={form.messageKind}
           {selectedTable}
-          sortColumnName={selectedTable?.sort_column?.name}
-          sortColumnType={selectedTable?.sort_column?.type}
           bind:form
           {errors}
-          {isEditMode}
           onFilterChange={handleFilterChange}
           showTitle={false}
         />
       </CardContent>
     </Card>
+
+    {#if form.messageKind === "record" && !isEditMode}
+      <Card>
+        <CardHeader class="flex flex-row items-center justify-between">
+          <div class="flex items-center gap-2">
+            <CardTitle>Initial Backfill</CardTitle>
+            <Popover.Root>
+              <Popover.Trigger asChild let:builder>
+                <Button
+                  builders={[builder]}
+                  variant="link"
+                  class="text-muted-foreground hover:text-foreground"
+                >
+                  <Info class="h-4 w-4" />
+                </Button>
+              </Popover.Trigger>
+              <Popover.Content class="w-80">
+                <div class="grid gap-4">
+                  <div class="space-y-2">
+                    <h4 class="font-medium leading-none">Initial Backfill</h4>
+                    <p class="text-sm text-muted-foreground">
+                      Sequin will initially backfill data from the selected
+                      table to the sink destination.
+                      <a
+                        href="https://sequinstream.com/docs/reference/backfills"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-primary underline"
+                      >
+                        Learn more
+                      </a> about how backfills work and when to use them.
+                    </p>
+                  </div>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
+          </div>
+          <Switch
+            bind:checked={enableBackfill}
+            disabled={isEditMode || !selectedTable}
+          />
+        </CardHeader>
+        <CardContent>
+          <div class="space-y-2">
+            <div class="text-sm text-muted-foreground">
+              {#if !enableBackfill}
+                No initial backfill. You can run backfills at any time in the
+                future.
+              {/if}
+            </div>
+
+            {#if enableBackfill}
+              <RadioGroup
+                bind:value={startPosition}
+                disabled={isEditMode || !selectedTable}
+              >
+                <div class="flex items-center space-x-2">
+                  <RadioGroupItem value="beginning" id="beginning" />
+                  <Label for="beginning">From the beginning</Label>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <RadioGroupItem value="specific" id="specific" />
+                  <Label for="specific">From a specific point</Label>
+                </div>
+              </RadioGroup>
+
+              {#if startPosition === "specific"}
+                <div
+                  class="grid grid-cols-[auto_1fr] gap-4 content-center mt-4"
+                >
+                  <div class="flex items-center space-x-2 text-sm font-mono">
+                    <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
+                      >{selectedTable?.sort_column?.name}</span
+                    >
+                    <span class="bg-secondary-2xSubtle px-2 py-1 rounded"
+                      >&gt;=</span
+                    >
+                  </div>
+
+                  {#if selectedTable?.sort_column?.type.startsWith("timestamp")}
+                    <Datetime
+                      bind:value={form.recordConsumerState.initialMinSortCol}
+                      bind:error={minSortColError}
+                    />
+                    {#if minSortColError}
+                      <p class="text-sm text-red-500 mt-2">{minSortColError}</p>
+                    {/if}
+                  {:else if ["integer", "bigint", "smallint", "serial"].includes(selectedTable?.sort_column?.type)}
+                    <Input
+                      type="number"
+                      bind:value={form.recordConsumerState.initialMinSortCol}
+                    />
+                  {:else}
+                    <Input
+                      type="text"
+                      bind:value={form.recordConsumerState.initialMinSortCol}
+                    />
+                  {/if}
+                </div>
+              {/if}
+            {/if}
+          </div>
+        </CardContent>
+      </Card>
+    {/if}
 
     <GroupColumnsForm
       {errors}

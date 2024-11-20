@@ -311,7 +311,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       table = table(socket.assigns.databases, postgres_database_id, table_oid, sort_column_attnum)
 
       initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
-      producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
+      producer = get_in(form, ["recordConsumerState", "producer"])
 
       initial_min_cursor =
         cond do

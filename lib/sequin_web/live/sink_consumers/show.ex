@@ -7,12 +7,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
-  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -22,6 +22,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Health
   alias Sequin.Metrics
@@ -77,7 +78,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence])
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill])
         |> SinkConsumer.preload_http_endpoint()
 
       {:ok, health} = Health.get(consumer)
@@ -231,21 +232,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         KeysetCursor.min_cursor(table)
       end
 
-    new_record_consumer_state =
-      Map.from_struct(%{
-        consumer.record_consumer_state
-        | initial_min_cursor: initial_min_cursor,
-          producer: "table_and_wal"
-      })
+    backfill_attrs = %{
+      account_id: current_account_id(socket),
+      sink_consumer_id: consumer.id,
+      initial_min_cursor: initial_min_cursor,
+      state: :active
+    }
 
-    case Consumers.update_consumer_with_lifecycle(consumer, %{
-           record_consumer_state: new_record_consumer_state
-         }) do
-      {:ok, updated_consumer} ->
-        {:reply, %{ok: true},
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Backfill started successfully"})}
+    case Consumers.create_backfill_with_lifecycle(backfill_attrs) do
+      {:ok, _backfill} ->
+        DatabasesRuntime.Supervisor.start_table_producer(socket.assigns.consumer)
+        {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill started successfully"})}
 
       {:error, _error} ->
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to start backfill"})}
@@ -254,25 +251,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("cancel-backfill", _params, socket) do
-    consumer = socket.assigns.consumer
+    case socket.assigns.consumer.active_backfill do
+      nil ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "No active backfill to cancel"})}
 
-    new_record_consumer_state =
-      Map.from_struct(%{
-        consumer.record_consumer_state
-        | producer: "wal"
-      })
+      backfill ->
+        case Consumers.update_backfill_with_lifecycle(backfill, %{state: :cancelled}) do
+          {:ok, _updated_backfill} ->
+            DatabasesRuntime.Supervisor.stop_table_producer(socket.assigns.consumer)
+            {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
 
-    case Consumers.update_consumer_with_lifecycle(consumer, %{
-           record_consumer_state: new_record_consumer_state
-         }) do
-      {:ok, updated_consumer} ->
-        {:reply, %{ok: true},
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Backfill cancelled successfully"})}
-
-      {:error, _error} ->
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
+          {:error, _error} ->
+            {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
+        end
     end
   end
 
@@ -810,19 +801,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_cursor_position(_, %{message_kind: :event}), do: nil
 
   defp encode_cursor_position(cursor_position, consumer) when is_map(cursor_position) do
-    %{record_consumer_state: %RecordConsumerState{producer: producer}} = consumer
     sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
 
-    case producer do
-      :table_and_wal ->
+    case consumer.active_backfill do
+      %Backfill{state: :active} ->
         %{
           is_backfilling: true,
           cursor_type: column.type
         }
 
-      :wal ->
+      _ ->
         %{
           is_backfilling: false,
           cursor_type: column.type

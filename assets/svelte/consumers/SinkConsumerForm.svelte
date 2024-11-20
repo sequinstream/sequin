@@ -88,8 +88,9 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
     sink: consumer.sink,
-    recordConsumerState: {
-      producer: "wal",
+    initialBackfill: {
+      enabled: false,
+      startPosition: "beginning",
       initialMinSortCol: null,
     },
     groupColumnAttnums: consumer.group_column_attnums || [],
@@ -243,19 +244,22 @@
 
   $: {
     if (!enableBackfill) {
-      form.recordConsumerState = {
-        producer: "wal",
+      form.initialBackfill = {
+        enabled: false,
+        startPosition: "beginning",
         initialMinSortCol: null,
       };
     } else if (startPosition === "beginning") {
-      form.recordConsumerState = {
-        producer: "table_and_wal",
+      form.initialBackfill = {
+        enabled: true,
+        startPosition: "beginning",
         initialMinSortCol: null,
       };
     } else if (startPosition === "specific") {
-      form.recordConsumerState = {
-        producer: "table_and_wal",
-        initialMinSortCol: null,
+      form.initialBackfill = {
+        enabled: true,
+        startPosition: "specific",
+        initialMinSortCol: form.recordConsumerState?.initialMinSortCol,
       };
     }
   }
@@ -641,7 +645,7 @@
 
                   {#if selectedTable?.sort_column?.type.startsWith("timestamp")}
                     <Datetime
-                      bind:value={form.recordConsumerState.initialMinSortCol}
+                      bind:value={form.initialBackfill.initialMinSortCol}
                       bind:error={minSortColError}
                     />
                     {#if minSortColError}
@@ -650,12 +654,12 @@
                   {:else if ["integer", "bigint", "smallint", "serial"].includes(selectedTable?.sort_column?.type)}
                     <Input
                       type="number"
-                      bind:value={form.recordConsumerState.initialMinSortCol}
+                      bind:value={form.initialBackfill.initialMinSortCol}
                     />
                   {:else}
                     <Input
                       type="text"
-                      bind:value={form.recordConsumerState.initialMinSortCol}
+                      bind:value={form.initialBackfill.initialMinSortCol}
                     />
                   {/if}
                 </div>

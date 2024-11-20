@@ -18,6 +18,7 @@ defmodule Sequin.Repo.Migrations.CreateBackfillsTable do
       add :sink_consumer_id,
           references(:sink_consumers,
             with: [account_id: :account_id],
+            on_delete: :delete_all,
             prefix: @config_schema
           ),
           null: false

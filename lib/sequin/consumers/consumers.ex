@@ -160,8 +160,14 @@ defmodule Sequin.Consumers do
 
   def table_producer_finished(consumer_id) do
     consumer = get_consumer!(consumer_id)
-    state = Map.from_struct(consumer.record_consumer_state)
-    update_consumer(consumer, %{record_consumer_state: %{state | producer: :wal}})
+
+    case Repo.preload(consumer, :active_backfill) do
+      %{active_backfill: %Backfill{} = backfill} ->
+        update_backfill_with_lifecycle(backfill, %{state: :completed})
+
+      _ ->
+        :ok
+    end
   end
 
   def update_consumer(%SinkConsumer{} = consumer, attrs) do
@@ -1641,21 +1647,17 @@ defmodule Sequin.Consumers do
   end
 
   def create_backfill_with_lifecycle(attrs) do
-    Repo.transact(fn ->
-      with {:ok, backfill} <- create_backfill(attrs),
-           :ok <- notify_backfill_create(backfill) do
-        {:ok, backfill}
-      end
-    end)
+    with {:ok, backfill} <- create_backfill(attrs),
+         :ok <- notify_backfill_create(backfill) do
+      {:ok, backfill}
+    end
   end
 
   def update_backfill_with_lifecycle(backfill, attrs) do
-    Repo.transact(fn ->
-      with {:ok, backfill} <- update_backfill(backfill, attrs),
-           :ok <- notify_backfill_update(backfill) do
-        {:ok, backfill}
-      end
-    end)
+    with {:ok, backfill} <- update_backfill(backfill, attrs),
+         :ok <- notify_backfill_update(backfill) do
+      {:ok, backfill}
+    end
   end
 
   def create_backfill(attrs) do
@@ -1680,6 +1682,7 @@ defmodule Sequin.Consumers do
   defp notify_backfill_create(%Backfill{state: :active} = backfill) do
     unless env() == :test do
       consumer = get_consumer!(backfill.sink_consumer_id)
+      dbg(consumer)
       DatabasesRuntimeSupervisor.start_table_producer(consumer)
     end
 

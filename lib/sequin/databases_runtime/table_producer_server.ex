@@ -111,13 +111,21 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   def handle_event(:internal, :init, :initializing, state) do
     consumer = state.consumer
-    cursor_min = TableProducer.cursor(consumer.id, :min)
-    cursor_min = cursor_min || initial_min_cursor(consumer)
-    state = %{state | cursor_min: cursor_min}
 
-    actions = [reload_consumer_timeout()]
+    case consumer.active_backfill do
+      nil ->
+        Logger.info("[TableProducerServer] No active backfill found, shutting down")
+        {:stop, :normal}
 
-    {:next_state, :query_max_cursor, state, actions}
+      backfill ->
+        cursor_min = TableProducer.cursor(consumer.id, :min)
+        cursor_min = cursor_min || backfill.initial_min_cursor
+        state = %{state | cursor_min: cursor_min}
+
+        actions = [reload_consumer_timeout()]
+
+        {:next_state, :query_max_cursor, state, actions}
+    end
   end
 
   def handle_event(:enter, _old_state, :query_max_cursor, state) do
@@ -246,19 +254,21 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   def handle_event({:timeout, :reload_consumer}, _evt, _state_name, state) do
-    case Repo.reload(state.consumer) do
+    case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableProducerServer] Consumer #{state.consumer.id} not found, shutting down")
         {:stop, :normal}
 
-      %{record_consumer_state: %RecordConsumerState{producer: :wal}} ->
-        Logger.info("[TableProducerServer] Consumer is wal-only, shutting down")
-        {:stop, :normal}
-
       consumer ->
-        actions = [reload_consumer_timeout()]
+        case consumer.active_backfill do
+          nil ->
+            Logger.info("[TableProducerServer] No active backfill found, shutting down")
+            {:stop, :normal}
 
-        {:keep_state, %{state | consumer: preload_consumer(consumer)}, actions}
+          _backfill ->
+            actions = [reload_consumer_timeout()]
+            {:keep_state, %{state | consumer: consumer}, actions}
+        end
     end
   end
 
@@ -325,8 +335,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   defp initial_min_cursor(consumer) do
-    %{record_consumer_state: %RecordConsumerState{initial_min_cursor: initial_min_cursor}} = consumer
-    initial_min_cursor
+    consumer.active_backfill.initial_min_cursor
   end
 
   defp record_pks(%PostgresDatabaseTable{} = table, record_attnums_to_values) do
@@ -355,6 +364,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   defp preload_consumer(consumer) do
-    Repo.preload(consumer, [:sequence, replication_slot: :postgres_database])
+    Repo.preload(consumer, [:sequence, :active_backfill, replication_slot: :postgres_database], force: true)
   end
 end

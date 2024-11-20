@@ -107,7 +107,9 @@
             <ArrowLeft class="h-4 w-4" />
           </Button>
         </LinkPushNavigate>
-        <div class="flex items-center">
+        <div class="grid grid-cols-[auto_1fr]">
+          <span></span>
+          <span class="text-xs text-gray-500">{consumerTitle}</span>
           {#if consumer.sink.type === "http_push"}
             <Webhook class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sqs"}
@@ -120,7 +122,7 @@
             <SequinStreamIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
-            {consumerTitle}: {consumer.name}
+            {consumer.name}
           </h1>
         </div>
       </div>

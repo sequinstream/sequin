@@ -22,17 +22,19 @@ defmodule SequinWeb.PullJSON do
     }
   end
 
-  defp render_data(%ConsumerEventData{action: action, record: record, changes: changes}) do
+  defp render_data(%ConsumerEventData{action: action, record: record, changes: changes, metadata: metadata}) do
     %{
       action: action,
       record: record,
-      changes: changes
+      changes: changes,
+      metadata: metadata
     }
   end
 
-  defp render_data(%ConsumerRecordData{record: record}) do
+  defp render_data(%ConsumerRecordData{record: record, metadata: metadata}) do
     %{
-      record: record
+      record: record,
+      metadata: metadata
     }
   end
 end

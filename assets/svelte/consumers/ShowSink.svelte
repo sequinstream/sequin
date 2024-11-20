@@ -11,7 +11,7 @@
   import { formatNumberWithCommas } from "../utils";
   import HealthComponent from "../health/HealthComponent.svelte";
   import ShowSequence from "./ShowSequence.svelte";
-  import Cursor from "./Cursor.svelte";
+  import Backfill from "./Backfill.svelte";
   import type {
     Consumer,
     HttpPushConsumer,
@@ -34,21 +34,12 @@
     messages_processed_throughput: 0,
     messages_failing_count: 0,
   };
-  export let cursor_position = null;
+  export let cursor_position: {
+    is_backfilling: boolean;
+    cursor_type: string;
+  } | null;
   export let apiBaseUrl: string;
   export let apiTokens: any[];
-
-  function onRewind(
-    newCursorPosition: string | null,
-    callback: (result: { ok: boolean }) => void,
-  ) {
-    live.pushEventTo(
-      "#" + parent,
-      "rewind",
-      { new_cursor_position: newCursorPosition },
-      (reply) => callback(reply),
-    );
-  }
 
   // Add type predicates
   function isHttpPushConsumer(
@@ -220,12 +211,21 @@
         </Card>
       {/if}
 
-      <Cursor
+      <Backfill
         {cursor_position}
-        messages_processed_count={metrics.messages_processed_count
-          ? metrics.messages_processed_count.toLocaleString()
-          : 0}
-        {onRewind}
+        onRun={(newCursorPosition, callback) => {
+          live.pushEventTo(
+            "#" + parent,
+            "run-backfill",
+            { new_cursor_position: newCursorPosition },
+            (reply) => callback(reply),
+          );
+        }}
+        onCancel={(callback) => {
+          live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
+            callback(reply),
+          );
+        }}
       />
 
       {#if isHttpPushConsumer(consumer)}

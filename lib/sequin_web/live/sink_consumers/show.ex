@@ -200,19 +200,80 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  @impl Phoenix.LiveView
   def handle_event("pause_updates", _params, socket) do
     {:noreply, assign(socket, paused: true)}
   end
 
+  @impl Phoenix.LiveView
   def handle_event("resume_updates", _params, socket) do
     {:noreply, assign(socket, paused: false)}
   end
 
+  @impl Phoenix.LiveView
   def handle_event("change_page", %{"page" => page}, socket) do
     {:noreply,
      socket
      |> assign(page: page)
      |> load_consumer_messages()}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("run-backfill", %{"new_cursor_position" => new_cursor_position}, socket) do
+    consumer = socket.assigns.consumer
+    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
+    table = %PostgresDatabaseTable{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
+
+    initial_min_cursor =
+      if new_cursor_position do
+        KeysetCursor.min_cursor(table, new_cursor_position)
+      else
+        KeysetCursor.min_cursor(table)
+      end
+
+    new_record_consumer_state =
+      Map.from_struct(%{
+        consumer.record_consumer_state
+        | initial_min_cursor: initial_min_cursor,
+          producer: "table_and_wal"
+      })
+
+    case Consumers.update_consumer_with_lifecycle(consumer, %{
+           record_consumer_state: new_record_consumer_state
+         }) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Backfill started successfully"})}
+
+      {:error, _error} ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to start backfill"})}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("cancel-backfill", _params, socket) do
+    consumer = socket.assigns.consumer
+
+    new_record_consumer_state =
+      Map.from_struct(%{
+        consumer.record_consumer_state
+        | producer: "wal"
+      })
+
+    case Consumers.update_consumer_with_lifecycle(consumer, %{
+           record_consumer_state: new_record_consumer_state
+         }) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Backfill cancelled successfully"})}
+
+      {:error, _error} ->
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to cancel backfill"})}
+    end
   end
 
   def handle_event("fetch_message_data", %{"message_id" => message_id}, socket) do
@@ -268,39 +329,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       {:error, reason} ->
         {:reply, %{error: reason}, socket}
-    end
-  end
-
-  def handle_event("rewind", %{"new_cursor_position" => new_cursor_position}, socket) do
-    consumer = socket.assigns.consumer
-    table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
-    table = %PostgresDatabaseTable{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
-
-    initial_min_cursor =
-      if new_cursor_position do
-        KeysetCursor.min_cursor(table, new_cursor_position)
-      else
-        KeysetCursor.min_cursor(table)
-      end
-
-    new_record_consumer_state =
-      Map.from_struct(%{
-        consumer.record_consumer_state
-        | initial_min_cursor: initial_min_cursor,
-          producer: "table_and_wal"
-      })
-
-    case Consumers.update_consumer_with_lifecycle(consumer, %{
-           record_consumer_state: new_record_consumer_state
-         }) do
-      {:ok, updated_consumer} ->
-        {:reply, %{ok: true},
-         socket
-         |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Consumer rewound successfully"})}
-
-      {:error, _error} ->
-        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to rewind consumer"})}
     end
   end
 
@@ -424,6 +452,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   # Ignore messages from old tasks
   @impl Phoenix.LiveView
   def handle_info({_ref, _}, socket), do: {:noreply, socket}
+
   @impl Phoenix.LiveView
   def handle_info({:DOWN, _, :process, _, _}, socket), do: {:noreply, socket}
 
@@ -443,8 +472,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     assign(socket, :metrics, metrics)
   end
 
-  defp get_cursors(consumer) do
-    Sequin.Consumers.cursors(consumer)
+  defp get_cursors(_consumer) do
+    # Sequin.Consumers.cursors(consumer)
+    {:ok, %{}}
   rescue
     _ -> {:error, "Failed to get cursor position"}
   end
@@ -779,39 +809,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp encode_cursor_position(:error, _consumer), do: :error
 
   defp encode_cursor_position(cursor_position, consumer) when is_map(cursor_position) do
-    %{
-      min_active_cursor: min_active_cursor,
-      max_active_cursor: max_active_cursor,
-      next_active_cursor: next_active_cursor,
-      min_possible_cursor: min_possible_cursor,
-      max_possible_cursor: max_possible_cursor,
-      processing_count: processing_count,
-      to_process_count: to_process_count
-    } = cursor_position
-
-    %{record_consumer_state: %RecordConsumerState{producer: producer, initial_min_cursor: initial_min_cursor}} = consumer
+    %{record_consumer_state: %RecordConsumerState{producer: producer}} = consumer
     sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
 
-    initial_min_cursor_value = initial_min_cursor[sort_column_attnum]
-    initial_min_cursor_type = column.type
+    case producer do
+      :table_and_wal ->
+        %{
+          is_backfilling: true,
+          cursor_type: column.type
+        }
 
-    %{
-      min_active_cursor: min_active_cursor,
-      max_active_cursor: max_active_cursor,
-      next_active_cursor: next_active_cursor,
-      min_possible_cursor: min_possible_cursor,
-      max_possible_cursor: max_possible_cursor,
-      processing_count: processing_count,
-      to_process_count: to_process_count,
-      producer: producer,
-      sort_column_name: column.name,
-      initial_min_cursor: %{
-        value: initial_min_cursor_value,
-        type: initial_min_cursor_type
-      }
-    }
+      :wal ->
+        %{
+          is_backfilling: false,
+          cursor_type: column.type
+        }
+    end
   end
 
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "acknowledged"

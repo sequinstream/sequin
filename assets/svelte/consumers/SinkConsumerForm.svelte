@@ -3,6 +3,8 @@
   import { Input } from "$lib/components/ui/input";
   import {
     Select,
+    SelectContent,
+    SelectItem,
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
@@ -23,16 +25,48 @@
   import SinkRedisForm from "./SinkRedisForm.svelte";
   import SinkKafkaForm from "./SinkKafkaForm.svelte";
   import SinkSequinStreamForm from "./SinkSequinStreamForm.svelte";
-  import { CircleAlert } from "lucide-svelte";
+  import { CircleAlert, ExternalLinkIcon } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
+  import TableSelector from "../components/TableSelector.svelte";
+
+  type Column = {
+    attnum: number;
+    isPk?: boolean;
+    name: string;
+    type: string;
+    filterType: string;
+  };
+
+  type Table = {
+    oid: number;
+    schema: string;
+    name: string;
+    default_group_columns: number[];
+    is_event_table: boolean;
+    sort_column?: {
+      name: string;
+      type: string;
+      attnum: number;
+    };
+    columns: Column[];
+  };
+
+  type Database = {
+    id: string;
+    name: string;
+    tables: Table[];
+  };
 
   export let live;
   export let parent;
   export let consumer;
   export let consumerTitle;
-  export let databases;
   export let httpEndpoints;
-  export let errors: any = {};
+  export let databases: Database[];
+  export let errors: {
+    consumer: Record<string, string>;
+    sequence: Record<string, string>;
+  };
   export let submitError;
 
   let initialForm = {
@@ -40,6 +74,7 @@
     messageKind: consumer.message_kind || "record",
     postgresDatabaseId: consumer.postgres_database_id,
     tableOid: consumer.table_oid,
+    sortColumnAttnum: null,
     sourceTableFilters: consumer.source_table_filters || [],
     sourceTableActions: consumer.source_table_actions || [],
     name: consumer.name || "",
@@ -47,11 +82,9 @@
     maxAckPending: consumer.max_ack_pending || 10000,
     maxWaiting: consumer.max_waiting || 20,
     sink: consumer.sink,
-    sortColumnAttnum: consumer.sort_column_attnum || null,
     recordConsumerState: consumer.record_consumer_state || {
       initialMinSortCol: null,
     },
-    sequenceId: consumer.sequence_id || null,
     groupColumnAttnums: consumer.group_column_attnums || [],
     batchSize: consumer.batch_size || 1,
   };
@@ -59,6 +92,7 @@
   let form = { ...initialForm };
   let isDirty = false;
   let isSubmitting = false;
+  let sortColumnName = null;
 
   type TestConnectionState = {
     status: "initial" | "loading" | "success" | "error";
@@ -81,10 +115,7 @@
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
-  $: pushEvent("form_updated", { form });
-
   let selectedDatabase: any;
-  let selectedSequence: any;
   let selectedTable: any;
 
   $: {
@@ -94,26 +125,20 @@
       );
     }
 
-    if (
-      selectedDatabase &&
-      !form.sequenceId &&
-      selectedDatabase.sequences.length > 0
-    ) {
-      form.sequenceId = selectedDatabase.sequences[0].id;
-    }
-
-    if (form.sequenceId && selectedDatabase) {
-      selectedSequence = selectedDatabase.sequences.find(
-        (sequence) => sequence.id === form.sequenceId,
+    if (form.tableOid && selectedDatabase) {
+      selectedTable = selectedDatabase.tables.find(
+        (table) => table.oid === form.tableOid,
       );
     }
 
-    selectedTable =
-      selectedSequence && selectedDatabase
-        ? selectedDatabase.tables.find(
-            (table) => table.oid === selectedSequence.table_oid,
-          )
-        : null;
+    if (selectedTable) {
+      form.sortColumnAttnum =
+        selectedTable.sort_column?.attnum || form.sortColumnAttnum;
+
+      sortColumnName = selectedTable.columns.find(
+        (column) => column.attnum === form.sortColumnAttnum,
+      )?.name;
+    }
   }
 
   const isEditMode = !!consumer.id;
@@ -129,25 +154,26 @@
     });
   }
 
-  function handleSequenceSelect(event: {
-    databaseId: string;
-    sequenceId: string;
-  }) {
-    form.postgresDatabaseId = event.databaseId;
-    form.sequenceId = event.sequenceId;
+  function handleTableSelect(event: { databaseId: string; tableOid: number }) {
+    if (form.tableOid !== event.tableOid) {
+      form.sortColumnAttnum = null;
+    }
 
-    // Set the form name based on the selected sequence
-    if (form.sequenceId) {
+    form.postgresDatabaseId = event.databaseId;
+    form.tableOid = event.tableOid;
+
+    // Set the form name based on the selected table
+    if (form.tableOid) {
       const selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId,
       );
       if (selectedDatabase) {
-        const selectedSequence = selectedDatabase.sequences.find(
-          (sequence) => sequence.id === form.sequenceId,
+        const selectedTable = selectedDatabase.tables.find(
+          (table) => table.oid === form.tableOid,
         );
-        if (selectedSequence) {
-          const tableName = selectedSequence.table_name;
-          const newName = `${tableName}_push_consumer`;
+        if (selectedTable) {
+          const tableName = selectedTable.name;
+          const newName = `${tableName}_sink`;
           form.name = newName;
         }
       }
@@ -156,15 +182,13 @@
 
   function handleFilterChange(newFilters) {
     form.sourceTableFilters = newFilters;
-    // Trigger a form update to refresh error messages
-    pushEvent("form_updated", { form });
   }
 
   function handleClose() {
     pushEvent("form_closed");
   }
 
-  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.sequenceId;
+  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
   function onTestConnection() {
     testConnectionState = {
@@ -252,17 +276,76 @@
               </SelectTrigger>
             </Select>
           {:else}
-            <SequenceSelector
-              {pushEvent}
+            <TableSelector
               {databases}
+              onSelect={handleTableSelect}
+              {pushEvent}
               selectedDatabaseId={form.postgresDatabaseId}
-              selectedSequenceId={form.sequenceId}
-              onSelect={handleSequenceSelect}
+              selectedTableOid={form.tableOid}
+              showSortColumn={true}
             />
+
+            {#if errors.consumer.postgres_database_id}
+              <p class="text-destructive text-sm">
+                {errors.consumer.postgres_database_id}
+              </p>
+            {/if}
+
+            {#if errors.consumer.table_oid}
+              <p class="text-destructive text-sm">
+                {errors.consumer.table_oid}
+              </p>
+            {/if}
+
+            {#if selectedTable && selectedTable.sort_column === null}
+              <div class="space-y-2">
+                <Label for="sort_column_attnum">Sort and start</Label>
+                <p class="text-sm text-muted-foreground mt-1 mb-2">
+                  Select the sort column for the table. Your system should
+                  update the sort column whenever a row is updated. A good
+                  example of a sort column is <code>updated_at</code>.
+                  <a
+                    href="https://sequinstream.com/docs/how-sequin-works#creating-a-table-stream"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center text-link hover:underline"
+                  >
+                    Learn more
+                    <ExternalLinkIcon class="w-3 h-3 ml-1" />
+                  </a>
+                </p>
+                <Select
+                  selected={{
+                    value: form.sortColumnAttnum,
+                    label: sortColumnName || "Select a sort column",
+                  }}
+                  onSelectedChange={(event) => {
+                    form.sortColumnAttnum = event.value;
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a sort column" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {#each selectedTable.columns as column}
+                      <SelectItem value={column.attnum}
+                        >{column.name}</SelectItem
+                      >
+                    {/each}
+                  </SelectContent>
+                </Select>
+                {#if errors.sequence.sort_column_attnum}
+                  <p class="text-destructive text-sm">
+                    {errors.sequence.sort_column_attnum}
+                  </p>
+                {/if}
+              </div>
+            {/if}
           {/if}
-          {#if errors.postgres_database_id || errors.table_oid}
+          {#if errors.consumer.postgres_database_id || errors.consumer.table_oid}
             <p class="text-destructive text-sm">
-              {errors.postgres_database_id || errors.table_oid}
+              {errors.consumer.postgres_database_id ||
+                errors.consumer.table_oid}
             </p>
           {/if}
         </div>
@@ -283,8 +366,8 @@
         <FilterForm
           messageKind={form.messageKind}
           {selectedTable}
-          sortColumnName={selectedSequence?.sort_column_name}
-          sortColumnType={selectedSequence?.sort_column_type}
+          sortColumnName={selectedTable?.sort_column?.name}
+          sortColumnType={selectedTable?.sort_column?.type}
           bind:form
           {errors}
           {isEditMode}
@@ -302,15 +385,21 @@
     />
 
     {#if consumer.type === "http_push"}
-      <SinkHttpPushForm {errors} {httpEndpoints} bind:form {live} {parent} />
+      <SinkHttpPushForm
+        errors={errors.consumer}
+        {httpEndpoints}
+        bind:form
+        {live}
+        {parent}
+      />
     {:else if consumer.type === "sqs"}
-      <SinkSqsForm {errors} bind:form />
+      <SinkSqsForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis"}
-      <SinkRedisForm {errors} bind:form />
+      <SinkRedisForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "kafka"}
-      <SinkKafkaForm {errors} bind:form />
+      <SinkKafkaForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}
-      <SinkSequinStreamForm {errors} bind:form />
+      <SinkSequinStreamForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>
@@ -335,13 +424,13 @@
               or dots..
             </p>
           </div>
-          {#if errors.name}
-            <p class="text-destructive text-sm">{errors.name}</p>
+          {#if errors.consumer.name}
+            <p class="text-destructive text-sm">{errors.consumer.name}</p>
           {/if}
         </div>
         {#if submitError}
           <p class="text-destructive text-sm">{submitError}</p>
-        {:else if Object.keys(errors).length > 0}
+        {:else if Object.keys(errors.consumer).length > 0 || Object.keys(errors.sequence).length > 0}
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
         <div class="flex justify-end items-center gap-2">

@@ -1155,8 +1155,11 @@ defmodule Sequin.Consumers do
   end
 
   defp get_possible_cursor(consumer, aggregate_function, entity_name) do
-    table_name = Postgres.quote_name(consumer.sequence.table_name)
-    sort_column_name = Postgres.quote_name(consumer.sequence.sort_column_name)
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    column = Sequin.Enum.find!(table.columns, &(&1.attnum == consumer.sequence.sort_column_attnum))
+
+    table_name = Postgres.quote_name(table.name)
+    sort_column_name = Postgres.quote_name(column.name)
 
     sql = "SELECT #{aggregate_function}(#{sort_column_name}) FROM #{table_name}"
 
@@ -1173,10 +1176,15 @@ defmodule Sequin.Consumers do
   end
 
   defp fast_count_to_process_count(consumer, max_active_cursor) do
+    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    column = Sequin.Enum.find!(table.columns, &(&1.attnum == consumer.sequence.sort_column_attnum))
+    table_name = Postgres.quote_name(table.name)
+    sort_column_name = Postgres.quote_name(column.name)
+
     sql = """
     EXPLAIN SELECT COUNT(*)
-    FROM #{consumer.sequence.table_name}
-    WHERE #{consumer.sequence.sort_column_name} >= $1
+    FROM #{table_name}
+    WHERE #{sort_column_name} >= $1
     """
 
     case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do
@@ -1189,8 +1197,8 @@ defmodule Sequin.Consumers do
             # If the count is small or couldn't be extracted, run the actual query
             sql = """
             SELECT COUNT(*)
-            FROM #{consumer.sequence.table_name}
-            WHERE #{consumer.sequence.sort_column_name} >= $1
+            FROM #{table_name}
+            WHERE #{sort_column_name} >= $1
             """
 
             case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do

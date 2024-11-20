@@ -93,32 +93,6 @@
 <div class="container mx-auto py-10">
   <DatabaseConnectionAlert show={!hasDatabases} entityName="Sinks" />
 
-  {#if hasDatabases && !hasSequences}
-    <Alert class="bg-carbon-50 border-carbon-200 text-carbon-900 w-full mb-8">
-      <div class="grid grid-cols-[auto_1fr] gap-2 items-center">
-        <AlertCircle class="h-5 w-5 text-carbon-600" />
-        <AlertTitle class="text-lg font-semibold text-carbon-900">
-          First, you need to create a Stream
-        </AlertTitle>
-        <AlertDescription class="text-carbon-600 col-start-2">
-          Sequin must have at least one Stream before you can create a Sink.
-        </AlertDescription>
-
-        <div class="flex mt-2 gap-4 col-start-2">
-          <LinkPushNavigate href="/streams/new">
-            <Button
-              variant="default"
-              class="bg-blue-600 text-white border-blue-700 hover:bg-blue-700 hover:text-white transition-colors duration-200 shadow-lg hover:shadow-xl"
-            >
-              <ListOrdered class="inline-block h-4 w-4 mr-2" />
-              Create Stream
-            </Button>
-          </LinkPushNavigate>
-        </div>
-      </div>
-    </Alert>
-  {/if}
-
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <Plug class="h-6 w-6 mr-2" />
@@ -142,13 +116,11 @@
           database to your application or another service.
         </p>
         <div class="relative inline-block text-left">
-          {#if hasSequences}
-            <Button variant="default" on:click={() => (dialogOpen = true)}
-              >Create Sink</Button
-            >
-          {:else}
-            <Button disabled>Create Sink</Button>
-          {/if}
+          <Button
+            variant="default"
+            disabled={!hasDatabases}
+            on:click={() => (dialogOpen = true)}>Create Sink</Button
+          >
         </div>
       </div>
     </div>

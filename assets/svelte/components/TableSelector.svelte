@@ -40,6 +40,9 @@
     schema: string;
     name: string;
     isEventTable?: boolean;
+    sort_column?: {
+      name: string;
+    };
   };
 
   export let databases: Array<{
@@ -60,6 +63,7 @@
   export let selectedTableOid: number | null;
   export let onlyEventTables: boolean = false;
   export let excludeEventTables: boolean = false;
+  export let showSortColumn: boolean = false;
 
   let selectedDatabase;
   let autoRefreshedDatabaseTables = [];
@@ -364,6 +368,9 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
                     Tables
                   {/if}
                 </TableHead>
+                {#if showSortColumn}
+                  <TableHead>Sort Column</TableHead>
+                {/if}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -394,6 +401,13 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
                       {/if}
                       <span>{table.schema}.{table.name}</span>
                     </TableCell>
+                    {#if showSortColumn}
+                      <TableCell>
+                        {#if table.sort_column}
+                          {table.sort_column.name}
+                        {/if}
+                      </TableCell>
+                    {/if}
                   </TableRow>
                 {/each}
                 {#if onlyEventTables}

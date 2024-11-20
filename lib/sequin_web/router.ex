@@ -109,11 +109,6 @@ defmodule SequinWeb.Router do
       live "/change-capture-pipelines/:id", WalPipelinesLive.Show, :show
       live "/change-capture-pipelines/:id/edit", WalPipelinesLive.Form, :edit
 
-      live "/streams", SequencesLive.Index, :index
-      live "/streams/new", SequencesLive.Index, :new
-      # live "/streams/:id", SequencesLive.Show, :show
-      # live "/streams/:id/edit", SequencesLive.Form, :edit
-
       live "/logout", UserLogoutLive, :index
 
       get "/easter-egg", EasterEggController, :home
@@ -135,11 +130,6 @@ defmodule SequinWeb.Router do
 
   scope "/api", SequinWeb do
     pipe_through(:api)
-
-    resources("/streams/:stream_id_or_name/consumers", ConsumerController,
-      except: [:new, :edit],
-      param: "id_or_name"
-    )
 
     resources("/databases", DatabaseController, except: [:new, :edit], param: "id_or_name")
     resources("/api_keys", ApiKeyController, only: [:index, :create, :delete])

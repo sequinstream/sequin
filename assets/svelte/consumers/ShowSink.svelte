@@ -161,7 +161,7 @@
                 </p>
               </div>
 
-              <div>
+              <div hidden={!isHttpPushConsumer(consumer)}>
                 <span class="text-sm text-gray-500">Batch Size</span>
                 <Tooltip.Root openDelay={200}>
                   <Tooltip.Trigger>

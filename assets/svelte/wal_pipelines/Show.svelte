@@ -31,6 +31,7 @@
   export let live;
   export let metrics;
   export let showReplicaWarning;
+  export let parent;
 
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
@@ -62,22 +63,13 @@
 
   function handleRefreshReplicaWarning() {
     refreshReplicaWarningLoading = true;
-    live.pushEventTo(
-      "#change-capture-pipeline-show",
-      "refresh_replica_warning",
-      {},
-      () => {
-        refreshReplicaWarningLoading = false;
-      },
-    );
+    live.pushEventTo(`#${parent}`, "refresh_replica_warning", {}, () => {
+      refreshReplicaWarningLoading = false;
+    });
   }
 
   function handleDismissReplicaWarning() {
-    live.pushEventTo(
-      "#change-capture-pipeline-show",
-      "dismiss_replica_warning",
-      {},
-    );
+    live.pushEventTo(`#${parent}`, "dismiss_replica_warning", {});
   }
 </script>
 

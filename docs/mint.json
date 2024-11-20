@@ -90,6 +90,7 @@
       "group": "Reference",
       "pages": [
         "reference/configuration",
+        "reference/databases",
         "reference/messages",
         "reference/filters",
         "reference/backfills",

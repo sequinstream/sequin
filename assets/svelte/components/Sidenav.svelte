@@ -48,19 +48,14 @@
       ],
     },
     {
-      heading: "Change Capture",
+      heading: "Resources",
       items: [
+        { path: "/databases", text: "Databases", icon: Database },
         {
           path: "/change-capture-pipelines",
           text: "Change Retention",
           icon: Logs,
         },
-      ],
-    },
-    {
-      heading: "Resources",
-      items: [
-        { path: "/databases", text: "Databases", icon: Database },
         {
           path: "/http-endpoints",
           text: "HTTP Endpoints",

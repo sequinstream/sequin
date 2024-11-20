@@ -48,10 +48,6 @@
       ],
     },
     {
-      heading: "Stream",
-      items: [{ path: "/streams", text: "Streams", icon: ListOrdered }],
-    },
-    {
       heading: "Change Capture",
       items: [
         {

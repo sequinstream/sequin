@@ -61,6 +61,10 @@ defmodule Sequin.Databases.Sequence do
     from(s in query, where: s.table_name == ^table_name)
   end
 
+  def where_table_oid(query \\ base_query(), table_oid) do
+    from(s in query, where: s.table_oid == ^table_oid)
+  end
+
   def where_account(query \\ base_query(), account_id) do
     from(s in query,
       join: db in assoc(s, :postgres_database),

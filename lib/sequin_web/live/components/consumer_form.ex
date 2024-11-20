@@ -18,6 +18,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
+  alias Sequin.Error.NotFoundError
   alias Sequin.Kafka
   alias Sequin.Name
   alias Sequin.Postgres
@@ -34,9 +35,12 @@ defmodule SequinWeb.Components.ConsumerForm do
   def render(assigns) do
     encoded_errors =
       if assigns.show_errors? do
-        encode_errors(assigns.changeset)
+        %{
+          consumer: encode_errors(assigns.changeset),
+          sequence: encode_errors(assigns.sequence_changeset)
+        }
       else
-        %{}
+        %{consumer: %{}, sequence: %{}}
       end
 
     assigns =
@@ -84,6 +88,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         show_errors?: false,
         submit_error: nil,
         changeset: nil,
+        sequence_changeset: nil,
         component: component,
         prev_params: %{}
       )
@@ -282,13 +287,13 @@ defmodule SequinWeb.Components.ConsumerForm do
         "message_kind" => message_kind,
         "name" => form["name"],
         "postgres_database_id" => form["postgresDatabaseId"],
-        "sequence_id" => form["sequenceId"],
+        "table_oid" => form["tableOid"],
+        "sort_column_attnum" => form["sortColumnAttnum"],
         "sequence_filter" => %{
           "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },
-        # Only set for SinkConsumer
         "batch_size" => form["batchSize"]
       }
 
@@ -296,12 +301,14 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp maybe_put_record_consumer_state(%{"message_kind" => "record"} = params, form, socket) when is_create?(socket) do
-    %{"postgres_database_id" => postgres_database_id, "sequence_id" => sequence_id} = params
+    %{
+      "postgres_database_id" => postgres_database_id,
+      "table_oid" => table_oid,
+      "sort_column_attnum" => sort_column_attnum
+    } = params
 
-    if not is_nil(postgres_database_id) and not is_nil(sequence_id) do
-      db = Sequin.Enum.find!(socket.assigns.databases, &(&1.id == postgres_database_id))
-      sequence = Sequin.Enum.find!(db.sequences, &(&1.id == sequence_id))
-      table = table(socket.assigns.databases, postgres_database_id, sequence)
+    if not is_nil(postgres_database_id) and not is_nil(table_oid) do
+      table = table(socket.assigns.databases, postgres_database_id, table_oid, sort_column_attnum)
 
       initial_min_sort_col = get_in(form, ["recordConsumerState", "initialMinSortCol"])
       producer = get_in(form, ["recordConsumerState", "producer"]) || "table_and_wal"
@@ -310,7 +317,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         cond do
           producer == "wal" -> nil
           initial_min_sort_col -> KeysetCursor.min_cursor(table, initial_min_sort_col)
-          true -> sequence.sort_column_attnum && KeysetCursor.min_cursor(table)
+          true -> sort_column_attnum && KeysetCursor.min_cursor(table)
         end
 
       Map.put(params, "record_consumer_state", %{"producer" => producer, "initial_min_cursor" => initial_min_cursor})
@@ -383,11 +390,11 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp table(databases, postgres_database_id, %Sequence{} = sequence) do
+  defp table(databases, postgres_database_id, table_oid, sort_column_attnum) do
     if postgres_database_id do
       db = Sequin.Enum.find!(databases, &(&1.id == postgres_database_id))
-      table = Sequin.Enum.find!(db.tables, &(&1.oid == sequence.table_oid))
-      %{table | sort_column_attnum: sequence.sort_column_attnum}
+      table = Sequin.Enum.find!(db.tables, &(&1.oid == table_oid))
+      %{table | sort_column_attnum: sort_column_attnum}
     end
   end
 
@@ -419,18 +426,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       "status" => consumer.status,
       "table_oid" => source_table && source_table.oid,
       "type" => consumer.type
-    }
-  end
-
-  defp encode_sequence(%Sequence{} = sequence) do
-    %{
-      "id" => sequence.id,
-      "table_oid" => sequence.table_oid,
-      "table_name" => sequence.table_name,
-      "table_schema" => sequence.table_schema,
-      "sort_column_name" => sequence.sort_column_name,
-      "sort_column_attnum" => sequence.sort_column_attnum,
-      "sort_column_type" => sequence.sort_column_type
     }
   end
 
@@ -492,25 +487,28 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
+  defp encode_errors(nil), do: %{}
+
   defp encode_errors(%Ecto.Changeset{} = changeset) do
     Error.errors_on(changeset)
   end
 
   defp encode_database(database) do
-    sequences_with_sort_column_type =
-      Enum.map(database.sequences, fn %Sequence{} = sequence ->
-        table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
-        column = Sequin.Enum.find!(table.columns, &(&1.attnum == sequence.sort_column_attnum))
-        %{sequence | sort_column_type: column.type}
-      end)
-
     %{
       "id" => database.id,
       "name" => database.name,
-      "sequences" => Enum.map(sequences_with_sort_column_type, &encode_sequence/1),
       "tables" =>
-        Enum.map(database.tables, fn %PostgresDatabaseTable{} = table ->
+        database.tables
+        |> Enum.map(fn %PostgresDatabaseTable{} = table ->
+          sequence = Enum.find(database.sequences, &(&1.table_oid == table.oid))
           default_group_columns = PostgresDatabaseTable.default_group_column_attnums(table)
+
+          sort_column =
+            cond do
+              not is_nil(sequence) -> Sequin.Enum.find!(table.columns, &(&1.attnum == sequence.sort_column_attnum))
+              Postgres.is_event_table?(table) -> Sequin.Enum.find!(table.columns, &(&1.name == "seq"))
+              true -> nil
+            end
 
           %{
             "oid" => table.oid,
@@ -518,6 +516,13 @@ defmodule SequinWeb.Components.ConsumerForm do
             "name" => table.name,
             "default_group_columns" => default_group_columns,
             "is_event_table" => Postgres.is_event_table?(table),
+            "sort_column" =>
+              sort_column &&
+                %{
+                  "name" => sort_column.name,
+                  "type" => sort_column.type,
+                  "attnum" => sort_column.attnum
+                },
             "columns" =>
               Enum.map(table.columns, fn %PostgresDatabaseTable.Column{} = column ->
                 %{
@@ -530,6 +535,7 @@ defmodule SequinWeb.Components.ConsumerForm do
               end)
           }
         end)
+        |> Enum.sort_by(&{is_nil(&1["sort_column"]), &1["name"]}, :asc)
     }
   end
 
@@ -562,7 +568,15 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp create_consumer(socket, params) do
     account_id = current_account_id(socket)
 
-    case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
+    result =
+      Repo.transact(fn ->
+        with {:ok, sequence} <- find_or_create_sequence(account_id, params) do
+          params = Map.put(params, "sequence_id", sequence.id)
+          Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params)
+        end
+      end)
+
+    case result do
       {:ok, consumer} ->
         Posthog.capture("Consumer Created", %{
           distinct_id: socket.assigns.current_user.id,
@@ -577,9 +591,45 @@ defmodule SequinWeb.Components.ConsumerForm do
 
         {:ok, push_navigate(socket, to: RouteHelpers.consumer_path(consumer))}
 
-      {:error, %Ecto.Changeset{} = changeset} ->
+      {:error, %Ecto.Changeset{data: %Sequence{}} = changeset} ->
+        Logger.info("Create sequence failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
+        {:error, assign(socket, :sequence_changeset, changeset)}
+
+      {:error, %Ecto.Changeset{data: %SinkConsumer{}} = changeset} ->
         Logger.info("Create consumer failed validation: #{inspect(Error.errors_on(changeset), pretty: true)}")
-        {:error, assign(socket, :changeset, changeset)}
+
+        error_message =
+          case changeset.errors do
+            [{:name, {"has already been taken", _opts}} | _] -> "Name has already been taken"
+            _ -> "Failed to create consumer"
+          end
+
+        {:error, socket |> assign(:changeset, changeset) |> assign(:submit_error, error_message)}
+    end
+  end
+
+  defp find_or_create_sequence(
+         account_id,
+         %{"table_oid" => table_oid, "postgres_database_id" => postgres_database_id} = params
+       ) do
+    sort_column_attnum = params["sort_column_attnum"]
+
+    case Databases.find_sequence_for_account(account_id, table_oid: table_oid) do
+      {:ok, sequence} ->
+        {:ok, sequence}
+
+      {:error, %NotFoundError{}} ->
+        Logger.info("Creating sequence for table #{table_oid}")
+
+        case Databases.create_sequence(account_id, %{
+               name: Ecto.UUID.generate(),
+               table_oid: table_oid,
+               sort_column_attnum: sort_column_attnum,
+               postgres_database_id: postgres_database_id
+             }) do
+          {:ok, sequence} -> {:ok, sequence}
+          {:error, changeset} -> {:error, changeset}
+        end
     end
   end
 

@@ -69,7 +69,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:ok,
          socket
          |> put_flash(:error, "Consumer not found")
-         |> push_navigate(to: ~p"/streams")}
+         |> push_navigate(to: ~p"/sinks")}
     end
   end
 
@@ -533,8 +533,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
 
     %{
-      table_name: sequence.table_name,
-      table_schema: sequence.table_schema,
+      table_name: table.name,
+      table_schema: table.schema,
       column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
     }
   end

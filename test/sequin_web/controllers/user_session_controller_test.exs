@@ -18,7 +18,7 @@ defmodule SequinWeb.UserSessionControllerTest do
       assert redirected_to(conn) == ~p"/"
 
       # Now do a logged in request
-      conn = get(conn, ~p"/streams")
+      conn = get(conn, ~p"/sinks")
       html_response(conn, 200)
     end
 

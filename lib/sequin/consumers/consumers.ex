@@ -4,6 +4,7 @@ defmodule Sequin.Consumers do
 
   alias Sequin.Accounts
   alias Sequin.Consumers.AcknowledgedMessages
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
@@ -1544,10 +1545,6 @@ defmodule Sequin.Consumers do
       with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
         case consumer.status do
           :active ->
-            if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal do
-              DatabasesRuntimeSupervisor.restart_table_producer(consumer)
-            end
-
             ConsumersSupervisor.restart_for_sink_consumer(consumer)
             :ok
 
@@ -1559,10 +1556,9 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp notify_consumer_create(consumer) do
-    if consumer.message_kind == :record and consumer.record_consumer_state.producer == :table_and_wal and env() != :test do
-      DatabasesRuntimeSupervisor.start_table_producer(consumer)
-    end
+  defp notify_consumer_create(_consumer) do
+    # Remove the table producer start logic since backfills control that now
+    :ok
   end
 
   defp notify_consumer_delete(%SinkConsumer{} = consumer) do
@@ -1643,4 +1639,72 @@ defmodule Sequin.Consumers do
       Map.get(record_data.record, group_column_name)
     end)
   end
+
+  def create_backfill_with_lifecycle(attrs) do
+    Repo.transact(fn ->
+      with {:ok, backfill} <- create_backfill(attrs),
+           :ok <- notify_backfill_create(backfill) do
+        {:ok, backfill}
+      end
+    end)
+  end
+
+  def update_backfill_with_lifecycle(backfill, attrs) do
+    Repo.transact(fn ->
+      with {:ok, backfill} <- update_backfill(backfill, attrs),
+           :ok <- notify_backfill_update(backfill) do
+        {:ok, backfill}
+      end
+    end)
+  end
+
+  def create_backfill(attrs) do
+    %Backfill{}
+    |> Backfill.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_backfill(backfill, attrs) do
+    backfill
+    |> Backfill.update_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def active_backfill_for_consumer(sink_consumer_id) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> Backfill.where_state(:active)
+    |> Repo.one()
+  end
+
+  defp notify_backfill_create(%Backfill{state: :active} = backfill) do
+    unless env() == :test do
+      consumer = get_consumer!(backfill.sink_consumer_id)
+      DatabasesRuntimeSupervisor.start_table_producer(consumer)
+    end
+
+    :ok
+  end
+
+  defp notify_backfill_create(_backfill), do: :ok
+
+  defp notify_backfill_update(%Backfill{state: :active} = backfill) do
+    unless env() == :test do
+      consumer = get_consumer!(backfill.sink_consumer_id)
+      DatabasesRuntimeSupervisor.restart_table_producer(consumer)
+    end
+
+    :ok
+  end
+
+  defp notify_backfill_update(%Backfill{state: state} = backfill) when state in [:completed, :cancelled] do
+    unless env() == :test do
+      consumer = get_consumer!(backfill.sink_consumer_id)
+      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
+    end
+
+    :ok
+  end
+
+  defp notify_backfill_update(_backfill), do: :ok
 end

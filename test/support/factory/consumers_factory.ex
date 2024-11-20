@@ -3,6 +3,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   import Sequin.Factory.Support
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
@@ -537,5 +538,87 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> sequence_filter_column_filter()
     |> Sequin.Map.from_ecto()
+  end
+
+  def backfill(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    {sink_consumer_id, attrs} =
+      Map.pop_lazy(attrs, :sink_consumer_id, fn ->
+        insert_sink_consumer!(account_id: account_id).id
+      end)
+
+    {initial_min_cursor, attrs} =
+      Map.pop_lazy(attrs, :initial_min_cursor, fn ->
+        %{Factory.unique_integer() => Factory.timestamp()}
+      end)
+
+    merge_attributes(
+      %Backfill{
+        id: Factory.uuid(),
+        account_id: account_id,
+        sink_consumer_id: sink_consumer_id,
+        initial_min_cursor: initial_min_cursor,
+        state: Enum.random([:active, :completed, :cancelled]),
+        rows_initial_count: Enum.random(1..1000),
+        rows_processed_count: 0,
+        rows_ingested_count: 0,
+        completed_at: nil,
+        canceled_at: nil
+      },
+      attrs
+    )
+  end
+
+  def backfill_attrs(attrs \\ []) do
+    attrs
+    |> backfill()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_backfill!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {account_id, attrs} =
+      Map.pop_lazy(attrs, :account_id, fn -> AccountsFactory.insert_account!().id end)
+
+    attrs =
+      attrs
+      |> Map.put(:account_id, account_id)
+      |> backfill_attrs()
+
+    case Consumers.create_backfill_with_lifecycle(attrs) do
+      {:ok, backfill} ->
+        backfill
+
+      {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
+        insert_backfill!(attrs)
+    end
+  end
+
+  def insert_active_backfill!(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.put(:state, :active)
+    |> insert_backfill!()
+  end
+
+  def insert_completed_backfill!(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.put(:state, :completed)
+    |> Map.put(:completed_at, DateTime.utc_now())
+    |> insert_backfill!()
+  end
+
+  def insert_cancelled_backfill!(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.put(:state, :cancelled)
+    |> Map.put(:canceled_at, DateTime.utc_now())
+    |> insert_backfill!()
   end
 end

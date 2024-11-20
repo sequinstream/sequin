@@ -54,6 +54,7 @@ defmodule Sequin.Consumers.SinkConsumer do
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
     embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
+    has_one :active_backfill, Sequin.Consumers.Backfill, where: [state: :active]
 
     # Sequences
     belongs_to :sequence, Sequence

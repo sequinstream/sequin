@@ -55,6 +55,8 @@ assets/node_modules
 
 priv/logs/consumer_messages.log
 
+docker-local/
+
 sequin.log
 sequin.yaml
 .aider*

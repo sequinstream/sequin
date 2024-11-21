@@ -156,7 +156,7 @@
 
     <Card class="mb-6">
       <CardContent class="p-6">
-        <h2 class="text-lg font-semibold mb-4">Consumers</h2>
+        <h2 class="text-lg font-semibold mb-4">Sinks</h2>
         {#if database.consumers && database.consumers.length > 0}
           <div class="flex flex-wrap gap-4">
             {#each database.consumers as consumer}
@@ -169,7 +169,7 @@
                     </div>
                     <Button variant="outline" size="sm" href={consumer.href}>
                       <ExternalLink class="h-4 w-4 mr-2" />
-                      View Consumer
+                      View Sink
                     </Button>
                   </div>
                   <div
@@ -237,7 +237,7 @@
           >
             <Radio class="h-12 w-12 mb-4 text-gray-400" />
             <p class="text-sm font-medium text-gray-900 mb-3">
-              No consumers attached to database
+              No sinks attached to database
             </p>
           </div>
         {/if}

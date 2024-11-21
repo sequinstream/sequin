@@ -90,7 +90,7 @@
             >
             <Table.Cell>
               {#if endpoint.httpPushConsumersCount === 0}
-                <span class="text-gray-400">No consumers</span>
+                <span class="text-gray-400">No webhook sinks</span>
               {:else}
                 {endpoint.httpPushConsumersCount}
               {/if}

@@ -63,6 +63,7 @@ defmodule Sequin.Consumers.Backfill do
     backfill
     |> cast(attrs, [
       :state,
+      :rows_initial_count,
       :rows_processed_count,
       :rows_ingested_count
     ])

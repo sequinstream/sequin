@@ -5,7 +5,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -100,13 +99,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   @impl GenStateMachine
   def handle_event(:enter, _old_state, :initializing, _state) do
     :keep_state_and_data
-  end
-
-  def handle_event(:internal, :init, :initializing, %State{
-        consumer: %{record_consumer_state: %RecordConsumerState{producer: :wal}}
-      }) do
-    Logger.info("[TableProducerServer] Producer should only be :wal, shutting down")
-    {:stop, :normal}
   end
 
   def handle_event(:internal, :init, :initializing, state) do

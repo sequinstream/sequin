@@ -154,8 +154,8 @@ defmodule Sequin.Consumers do
     |> Repo.all()
   end
 
-  def list_consumers_where_table_producer do
-    Repo.all(preload(SinkConsumer.where_table_producer(), replication_slot: :postgres_database))
+  def list_sink_consumers_with_active_backfill do
+    Repo.all(SinkConsumer.where_active_backfill())
   end
 
   def table_producer_finished(consumer_id) do

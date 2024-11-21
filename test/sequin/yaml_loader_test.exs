@@ -4,7 +4,6 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
@@ -437,11 +436,6 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "sequin-playground-webhook"
       assert consumer.sequence.name == "characters"
 
-      assert %RecordConsumerState{
-               initial_min_cursor: %{1 => 0, 9 => "0001-01-01T00:00:00"},
-               producer: :table_and_wal
-             } = consumer.record_consumer_state
-
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
                column_filters: [],
@@ -596,11 +590,6 @@ defmodule Sequin.YamlLoaderTest do
 
       # assert consumer.name == "sequin-playground-consumer"
       # assert consumer.sequence.name == "characters"
-
-      # assert %RecordConsumerState{
-      #          initial_min_cursor: %{1 => 0, 9 => "0001-01-01T00:00:00"},
-      #          producer: :table_and_wal
-      #        } = consumer.record_consumer_state
 
       # assert consumer.sequence_filter == %SequenceFilter{
       #          actions: [:insert, :update, :delete],

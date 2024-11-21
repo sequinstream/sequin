@@ -11,7 +11,6 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
-  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -69,11 +68,6 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
 
-    {record_consumer_state, attrs} =
-      Map.pop_lazy(attrs, :record_consumer_state, fn ->
-        if message_kind == :record, do: record_consumer_state_attrs()
-      end)
-
     merge_attributes(
       %SinkConsumer{
         id: Factory.uuid(),
@@ -86,7 +80,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         max_waiting: 20,
         message_kind: message_kind,
         name: Factory.unique_word(),
-        record_consumer_state: record_consumer_state,
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
         status: :active,
@@ -188,17 +181,6 @@ defmodule Sequin.Factory.ConsumersFactory do
 
   defp sink(:sequin_stream, _account_id, attrs) do
     merge_attributes(%SequinStreamSink{type: :sequin_stream}, attrs)
-  end
-
-  def record_consumer_state_attrs(attrs \\ []) do
-    attrs = Map.new(attrs)
-
-    %RecordConsumerState{
-      producer: Enum.random([:table_and_wal, :wal]),
-      initial_min_cursor: %{Factory.unique_integer() => Factory.timestamp()}
-    }
-    |> merge_attributes(attrs)
-    |> Sequin.Map.from_ecto()
   end
 
   def source_table(attrs \\ []) do

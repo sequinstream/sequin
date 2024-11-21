@@ -73,7 +73,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
-        record_consumer_state: %{},
         account_id: database.account_id,
         sequence_id: sequence.id,
         sequence_filter: Map.from_struct(sequence_filter)
@@ -89,7 +88,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :record,
-        record_consumer_state: %{},
         account_id: database.account_id,
         sequence_id: sequence.id,
         sequence_filter: Map.from_struct(filtered_sequence_filter)
@@ -105,7 +103,6 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       ConsumersFactory.insert_sink_consumer!(
         replication_slot_id: replication.id,
         message_kind: :event,
-        record_consumer_state: %{},
         account_id: database.account_id,
         sequence_id: sequence.id,
         sequence_filter: Map.from_struct(sequence_filter)

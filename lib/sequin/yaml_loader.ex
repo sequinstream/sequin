@@ -8,7 +8,6 @@ defmodule Sequin.YamlLoader do
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
-  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Replication
@@ -787,8 +786,6 @@ defmodule Sequin.YamlLoader do
          table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid)),
          table = %{table | sort_column_attnum: sequence.sort_column_attnum},
          {:ok, http_endpoint} <- http_endpoint_by_name(http_endpoints, http_endpoint_name) do
-      record_consumer_state = build_record_consumer_state(consumer_attrs["consumer_start"], table, sequence)
-
       {:ok,
        %{
          name: name,
@@ -801,7 +798,6 @@ defmodule Sequin.YamlLoader do
            http_endpoint_id: http_endpoint.id,
            http_endpoint_path: consumer_attrs["http_endpoint_path"]
          },
-         record_consumer_state: record_consumer_state,
          sequence_filter: %{
            actions: ["insert", "update", "delete"],
            group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
@@ -829,37 +825,6 @@ defmodule Sequin.YamlLoader do
       nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: http_endpoint_name})}
       endpoint -> {:ok, endpoint}
     end
-  end
-
-  defp build_record_consumer_state(nil, table, sequence) do
-    # Default to beginning if not specified
-    build_record_consumer_state(%{"position" => "beginning"}, table, sequence)
-  end
-
-  defp build_record_consumer_state(%{"position" => position} = start_config, table, sequence) do
-    producer = "table_and_wal"
-
-    initial_min_cursor =
-      case position do
-        "beginning" ->
-          sequence.sort_column_attnum && KeysetCursor.min_cursor(table)
-
-        "end" ->
-          nil
-
-        "from" ->
-          value = start_config["value"]
-          unless value, do: raise("Missing 'value' for consumer_start position 'from'")
-          KeysetCursor.min_cursor(table, value)
-
-        invalid ->
-          raise "Invalid consumer_start position '#{invalid}'. Must be 'beginning', 'end', or 'from'"
-      end
-
-    %{
-      "producer" => producer,
-      "initial_min_cursor" => initial_min_cursor
-    }
   end
 
   defp group_column_attnums(nil, %PostgresDatabaseTable{} = table) do

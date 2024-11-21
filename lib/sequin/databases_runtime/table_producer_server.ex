@@ -118,9 +118,20 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         {:stop, :normal}
 
       backfill ->
-        cursor_min = TableProducer.cursor(consumer.id, :min)
+        cursor_min = TableProducer.cursor(backfill.id, :min)
         cursor_min = cursor_min || backfill.initial_min_cursor
         state = %{state | cursor_min: cursor_min}
+
+        # Add initial count if not set
+        if is_nil(backfill.rows_initial_count) do
+          case TableProducer.fast_count_estimate(database(state), table(state), cursor_min) do
+            {:ok, count} ->
+              Consumers.update_backfill(backfill, %{rows_initial_count: count})
+
+            {:error, error} ->
+              Logger.error("[TableProducerServer] Failed to get initial count: #{inspect(error)}")
+          end
+        end
 
         actions = [reload_consumer_timeout()]
 
@@ -155,14 +166,14 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     Process.demonitor(ref, [:flush])
     Logger.info("[TableProducerServer] Max cursor query returned nil. Table pagination complete.")
     Consumers.table_producer_finished(state.consumer.id)
-    TableProducer.delete_cursor(state.consumer.id)
+    TableProducer.delete_cursor(state.consumer.active_backfill.id)
 
     {:stop, :normal}
   end
 
   def handle_event(:info, {ref, {:ok, result}}, :query_max_cursor, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    :ok = TableProducer.update_cursor(state.consumer.id, :max, result)
+    :ok = TableProducer.update_cursor(state.consumer.active_backfill.id, :max, result)
     state = %{state | cursor_max: result, task_ref: nil, successive_failure_count: 0}
 
     {:next_state, :query_fetch_records, state}
@@ -210,8 +221,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     else
       # Call handle_records inline
       {:ok, _count} = handle_records(state.consumer, table(state), result)
-      :ok = TableProducer.update_cursor(state.consumer.id, :min, state.cursor_max)
-      state = %State{state | cursor_min: state.cursor_max, cursor_max: nil}
+      :ok = TableProducer.update_cursor(state.consumer.active_backfill.id, :min, state.cursor_max)
+      state = %State{state | cursor_min: state.cursor_max, cursor_max: nil, consumer: preload_consumer(state.consumer)}
       {:next_state, :query_max_cursor, state}
     end
   end
@@ -302,11 +313,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     Logger.info("[TableProducerServer] Handling #{length(records)} record(s)")
 
     records_by_column_attnum = records_by_column_attnum(table, records)
+    total_processed = length(records)
+
+    matching_records = Enum.filter(records_by_column_attnum, &Consumers.matches_record?(consumer, table.oid, &1))
 
     consumer_records =
-      records_by_column_attnum
-      |> Enum.filter(&Consumers.matches_record?(consumer, table.oid, &1))
-      |> Enum.map(fn record_attnums_to_values ->
+      Enum.map(matching_records, fn record_attnums_to_values ->
         Sequin.Map.from_ecto(%ConsumerRecord{
           consumer_id: consumer.id,
           table_oid: table.oid,
@@ -316,8 +328,13 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         })
       end)
 
-    # TODO: Add to tracer, ie:
-    # Sequin.Tracer.Server.records_replicated(consumer, consumer_records)
+    # Update backfill counts
+    if backfill = consumer.active_backfill do
+      Consumers.update_backfill(backfill, %{
+        rows_processed_count: backfill.rows_processed_count + total_processed,
+        rows_ingested_count: backfill.rows_ingested_count + length(matching_records)
+      })
+    end
 
     res = Consumers.insert_consumer_records(consumer_records)
 

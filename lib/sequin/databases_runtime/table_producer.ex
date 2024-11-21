@@ -8,8 +8,8 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   require Logger
 
   # Cursor
-  def fetch_cursors(consumer_id) do
-    case Redix.command(:redix, ["HGETALL", cursor_key(consumer_id)]) do
+  def fetch_cursors(backfill_id) do
+    case Redix.command(:redix, ["HGETALL", cursor_key(backfill_id)]) do
       {:ok, []} ->
         :error
 
@@ -23,15 +23,15 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
-  def cursor(consumer_id, type) when type in [:min, :max] do
-    case Redix.command(:redix, ["HGET", cursor_key(consumer_id), type]) do
+  def cursor(backfill_id, type) when type in [:min, :max] do
+    case Redix.command(:redix, ["HGET", cursor_key(backfill_id), type]) do
       {:ok, nil} -> nil
       {:ok, cursor} -> decode_cursor(cursor)
     end
   end
 
-  def update_cursor(consumer_id, type, cursor) when type in [:min, :max] do
-    with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(consumer_id), type, Jason.encode!(cursor)]) do
+  def update_cursor(backfill_id, type, cursor) when type in [:min, :max] do
+    with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(backfill_id), type, Jason.encode!(cursor)]) do
       :ok
     end
   end
@@ -42,11 +42,11 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     |> Map.new(fn {k, v} -> {String.to_integer(k), v} end)
   end
 
-  def delete_cursor(consumer_id) do
-    case fetch_cursors(consumer_id) do
+  def delete_cursor(backfill_id) do
+    case fetch_cursors(backfill_id) do
       {:ok, cursors} ->
-        Logger.info("[TableProducer] Deleting cursors for consumer #{consumer_id}", cursors)
-        {:ok, _} = Redix.command(:redix, ["DEL", cursor_key(consumer_id)])
+        Logger.info("[TableProducer] Deleting cursors for backfill #{backfill_id}", cursors)
+        {:ok, _} = Redix.command(:redix, ["DEL", cursor_key(backfill_id)])
         :ok
 
       :error ->
@@ -71,8 +71,8 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
     end
   end
 
-  defp cursor_key(consumer_id) do
-    "sequin:#{env()}:table_producer:cursor:#{consumer_id}"
+  defp cursor_key(backfill_id) do
+    "sequin:#{env()}:table_producer:cursor:#{backfill_id}"
   end
 
   # Queries
@@ -211,5 +211,41 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  # Add this new function
+  def fast_count_estimate(%PostgresDatabase{} = db, %Table{} = table, min_cursor, opts \\ []) do
+    include_min = Keyword.get(opts, :include_min, false)
+    min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
+    cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
+
+    sql = """
+    SELECT reltuples::bigint AS estimate
+    FROM pg_class
+    WHERE oid = '#{Postgres.quote_name(table.schema, table.name)}'::regclass
+    """
+
+    # If we have a where clause, we need to adjust the estimate
+    sql =
+      if min_cursor do
+        """
+        WITH total AS (#{sql}),
+        filtered AS (
+          SELECT count(*) as actual_count
+          FROM #{Postgres.quote_name(table.schema, table.name)}
+          WHERE #{min_where_clause}
+        )
+        SELECT actual_count FROM filtered
+        """
+      else
+        sql
+      end
+
+    sql = Postgres.parameterize_sql(sql)
+    params = if min_cursor, do: cursor_values, else: []
+
+    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, params) do
+      {:ok, count}
+    end
   end
 end

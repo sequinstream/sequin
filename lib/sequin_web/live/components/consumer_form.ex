@@ -546,7 +546,7 @@ defmodule SequinWeb.Components.ConsumerForm do
              params = Map.put(params, "sequence_id", sequence.id),
              {:ok, consumer} <- Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
           case maybe_create_backfill(socket, consumer, params, initial_backfill) do
-            :ok -> {:ok, consumer}
+            :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
             {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
             {:error, changeset} -> {:error, changeset}
           end
@@ -595,7 +595,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
-  defp maybe_create_backfill(_socket, _consumer, _params, nil), do: {:ok, nil}
+  defp maybe_create_backfill(_socket, _consumer, _params, nil), do: :ok
 
   defp maybe_create_backfill(socket, consumer, params, backfill_params) do
     table =

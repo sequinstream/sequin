@@ -149,8 +149,6 @@
       // Force message kind to "record" for event tables
       if (selectedTable.is_event_table) {
         form.messageKind = "record";
-      } else {
-        form.messageKind = "event";
       }
     }
   }
@@ -171,6 +169,7 @@
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
     if (form.tableOid !== event.tableOid) {
       form.sortColumnAttnum = null;
+      form.messageKind = "event";
     }
 
     form.postgresDatabaseId = event.databaseId;

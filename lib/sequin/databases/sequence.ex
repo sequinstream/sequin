@@ -5,6 +5,7 @@ defmodule Sequin.Databases.Sequence do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
 
   @derive {Jason.Encoder,
@@ -20,6 +21,7 @@ defmodule Sequin.Databases.Sequence do
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
+    has_many :sink_consumers, SinkConsumer
 
     timestamps()
   end

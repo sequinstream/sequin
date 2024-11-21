@@ -134,7 +134,7 @@ defmodule Sequin.Databases do
       sink_consumers != [] ->
         {:error,
          Error.validation(
-           summary: "Cannot delete database that's used by consumers. Please delete associated consumers first."
+           summary: "Cannot delete database that's used by sink consumers. Please delete associated sink consumers first."
          )}
 
       wal_pipelines != [] ->

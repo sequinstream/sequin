@@ -11,7 +11,7 @@
     insertedAt: string;
     hostname: string;
     port: number;
-    streams: number;
+    sinkConsumers: number;
     pipelines: number;
     health: {
       status: "healthy" | "warning" | "error" | "initializing";
@@ -64,7 +64,7 @@
           <Table.Head>
             <div class="flex items-center">
               <ListOrdered class="h-4 w-4 mr-2" />
-              <span>Streams</span>
+              <span>Sink Consumers</span>
             </div>
           </Table.Head>
           <Table.Head>
@@ -96,10 +96,10 @@
               {formatRelativeTimestamp(database.insertedAt)}
             </Table.Cell>
             <Table.Cell>
-              {#if database.streams === 0}
-                <span class="text-gray-400">No streams</span>
+              {#if database.sinkConsumers === 0}
+                <span class="text-gray-400">No sink consumers</span>
               {:else}
-                {database.streams}
+                {database.sinkConsumers}
               {/if}
             </Table.Cell>
             <Table.Cell>

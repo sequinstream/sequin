@@ -9,7 +9,7 @@ defmodule SequinWeb.DatabasesLive.Index do
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
 
-    databases = Databases.list_dbs_for_account(account_id, [:sequences, :wal_pipelines])
+    databases = Databases.list_dbs_for_account(account_id, [:sink_consumers, :wal_pipelines])
 
     databases = load_database_health(databases)
 
@@ -61,7 +61,7 @@ defmodule SequinWeb.DatabasesLive.Index do
       insertedAt: database.inserted_at,
       hostname: database.hostname,
       port: database.port,
-      streams: length(database.sequences),
+      sinkConsumers: length(database.sink_consumers),
       pipelines: length(database.wal_pipelines),
       health: Health.to_external(database.health)
     }

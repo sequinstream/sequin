@@ -56,6 +56,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     has_one(:replication_slot, PostgresReplicationSlot, foreign_key: :postgres_database_id)
     has_many(:wal_pipelines, through: [:replication_slot, :wal_pipelines])
     has_many(:sequences, Sequence)
+    has_many(:sink_consumers, through: [:sequences, :sink_consumers])
 
     timestamps()
   end

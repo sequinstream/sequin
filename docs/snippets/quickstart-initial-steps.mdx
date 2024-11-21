@@ -1,0 +1,127 @@
+<Step title="Run Sequin" icon="server">
+  The easiest way to get started with Sequin is with our [Docker Compose file](https://github.com/sequinstream/sequin/blob/main/docker/docker-compose.yaml). This file starts a Postgres database, Redis instance, and Sequin server.
+
+  <Steps>
+    <Step title="Create directory and start services">
+      Create a directory for Sequin, download the Docker Compose file, and start the services:
+
+      ```bash
+      mkdir sequin && cd sequin
+      wget https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.yaml
+      docker compose up -d
+      ```
+
+      <Accordion title="Alternative: Clone the repository">
+        ```bash
+        git clone git@github.com:sequinstream/sequin.git
+        cd sequin/docker
+        docker compose up -d
+        ```
+      </Accordion>
+    </Step>
+
+    <Step title="Verify services are running">
+      Check that Sequin is running using `docker ps`:
+
+      ```bash
+      docker ps
+      ```
+
+      You should see output like the following:
+
+      ```
+      CONTAINER ID   IMAGE                                 STATUS          PORTS                                       NAMES
+      abc123def456   sequinstream/sequin:latest           Up 10 seconds    0.0.0.0:7376->7376/tcp                     sequin
+      def456ghi789   redis:7.0                            Up 10 seconds    0.0.0.0:6379->6379/tcp                     sequin-redis
+      ghi789jkl012   postgres:15                          Up 10 seconds    0.0.0.0:5432->5432/tcp                     sequin-postgres
+      ```
+
+      <Check>
+        All three containers should be up and running (status: `Up`).
+      </Check>
+    </Step>
+  </Steps>
+</Step>
+<Step title="Login" icon="key">
+  The Docker Compose file automatically configures Sequin with an admin user and a playground database.
+
+  Let's log in to the Sequin web console:
+
+  <Steps>
+    <Step title="Open the web console">
+      After starting the Docker Compose services, open the Sequin web console at [http://localhost:7376](http://localhost:7376):
+
+      <Frame>
+        <img src="/images/quickstart/login-page.png" alt="Sequin login page, allowing login with default credentials" />
+      </Frame>
+    </Step>
+
+    <Step title="Login with default credentials">
+      Use the following default credentials to login:
+      
+      - Email:
+      ```
+      admin@sequinstream.com
+      ```
+
+      - Password:
+      ```
+      sequinpassword!
+      ```
+    </Step>
+
+  </Steps>
+</Step>
+<Step title="View the playground database" icon="database">
+  To get you started quickly, Sequin's Docker Compose file creates a logical database called `sequin_playground` with a sample dataset in the `public.products` table.
+
+  Let's take a look:
+
+  <Steps>
+    <Step title="Navigate to Databases">
+      In the Sequin web console, click **Databases** in the sidebar.
+    </Step>
+
+    <Step title="Select playground database">
+      Click on the pre-configured `sequin-playground` database:
+
+      <Frame>
+        <img src="/images/quickstart/playground-database.png" alt="Playground database" />
+      </Frame>
+
+      <Check>
+        The database "Health" should be green.
+      </Check>
+    </Step>
+
+      <Step title="View contents of the products table">
+        Let's get a sense of what's in the `products` table. Run the following command: 
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "select id, name, price from products;"
+        ```
+
+          <Info>
+          This command connects to the running Postgres container and runs a `psql` command.
+        </Info>
+
+        You should see a list of the rows in the `products` table:
+
+        ```
+          id |         name          | price 
+        ----+-----------------------+-------
+          1 | Avocados (3 pack)     |  5.99
+          2 | Flank Steak (1 lb)    |  8.99
+          3 | Salmon Fillet (12 oz) | 14.99
+          4 | Baby Spinach (16 oz)  |  4.99
+          5 | Sourdough Bread       |  6.99
+          6 | Blueberries (6 oz)    |  3.99
+        (6 rows)
+        ```
+
+        We'll make modifications to this table in a bit.
+      </Step>
+  </Steps>
+</Step>

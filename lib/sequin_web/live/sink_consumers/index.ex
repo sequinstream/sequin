@@ -101,7 +101,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   defp apply_action(socket, :new, %{"kind" => kind}) do
     socket
-    |> assign(:page_title, "New Consumer")
+    |> assign(:page_title, "New Sink")
     |> assign(:live_action, :new)
     |> assign(:form_kind, kind)
   end

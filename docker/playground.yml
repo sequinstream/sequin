@@ -16,9 +16,9 @@ databases:
     slot_name: "sequin_slot"
     publication_name: "sequin_pub"
 
-sequences:
-  - name: "regions"
+streams:
+  - name: "products"
     database: "sequin-playground"
     table_schema: "public"
-    table_name: "regions"
+    table_name: "products"
     sort_column_name: "updated_at"

@@ -3,3 +3,148 @@ title: 'Get started with webhooks'
 sidebarTitle: 'Webhooks'
 description: 'Stream Postgres changes to a webhook endpoint'
 ---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a webhook endpoint. You'll:
+
+- Set up a local development environment with Sequin
+- Connect to a sample playground database 
+- Create a webhook that receives database changes
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to keep other systems in sync with your database changes.
+
+<Steps titleSize="h2">
+ <QuickstartInitialSteps />
+ <Step title="Create a Webhook Sink" icon="plug">
+  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to an HTTP endpoint:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "Webhook" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note "Source" configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a backfill">
+      In the "Initial backfill" card, click the toggle to enable an initial backfill. You can leave the default start position, which will backfill all existing rows in the `products` table:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure "HTTP Endpoint"'>
+      In the "HTTP Endpoint" card, click the dropdown "New HTTP Endpoint" and select "Create webhook.site endpoint".
+
+      This will provision a test endpoint on Webhook.site for you to use:
+
+       <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/webhooks/http-endpoint-card.png" alt="Clicking to create a new Webhook.site endpoint" />
+      </Frame>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, the webhook endpoint will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your webhook.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="See changes flow to the webhook endpoint" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to the webhook endpoint.
+
+    Let's confirm messages are flowing, both on Sequin and on Webhook.site:
+
+    <Steps>
+    <Step title="Messages tab">
+      Click the "Messages" tab. You'll see a list of the recently delivered messages:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/webhooks/messages-tab.png" alt="List of recently delivered messages" />
+      </Frame>
+
+      <Check>
+        Sequin indicates it backfilled the `products` table to our webhook endpoint.
+      </Check>
+    </Step>
+      <Step title="View on Webhook.site">
+        Navigate back to the "Overview" tab. On the "HTTP Endpoint" card, click "View on Webhook.site".
+
+        This opens a new tab with the webhook endpoint's request log. You should see the most recently received message displayed:
+
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/webhooks/webhook-site-messages.png" alt="Webhook.site request log" />
+        </Frame>
+
+        This message is a [`read` event](/reference/messages#change-messages) for a row in the `products` table. A `read` event indicates the event came from a Sequin backfill.
+
+        <Check>
+          Messages are flowing from Sequin to the webhook endpoint.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to the webhook endpoint.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        Back on Webhook.site, you should see a new message appear in the request log:
+
+        
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/webhooks/webhook-site-inserted-message.png" alt="Recently inserted message on Webhook.site" />
+        </Frame>
+
+        Feel free to try other changes:
+        - Update a product's price
+        - Change a product's name
+        - Delete a product
+
+        Each change will appear in Webhook.site within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres CDC pipeline
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to your webhook endpoint
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a webhook sink" icon="webhook" href="/how-to/stream-postgres-to-a-webhook-endpoint">
+    Setup a webhook sink to send changes to an HTTP endpoint.
+  </Card>
+</CardGroup>

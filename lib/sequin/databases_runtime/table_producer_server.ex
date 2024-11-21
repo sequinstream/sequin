@@ -383,7 +383,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       metadata: %{
         table_name: table.name,
         table_schema: table.schema,
-        consumer: consumer,
+        consumer: %{
+          id: consumer.id,
+          name: consumer.name,
+          inserted_at: consumer.inserted_at,
+          updated_at: consumer.updated_at
+        },
         commit_timestamp: DateTime.utc_now()
       }
     }

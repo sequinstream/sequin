@@ -14,11 +14,21 @@ Sequin guarantees delivery of messages to sinks. If a message is not delivered s
 
 ### Message grouping and ordering
 
-Sequin has the ability to group messages by one or more fields. By default, Sequin groups messages by the primary key value(s) of the source row.
+Sequin has the ability to group messages by one or more fields. Changes for rows in the same group are guaranteed to arrive in the order they occurred (i.e. the order they were committed in Postgres) to your sink.
 
-You can specify message grouping behavior when configuring a sink.
+By default, Sequin groups messages by the primary key value(s) of the source row. This means that if a row is updated multiple times, each update event will arrive in order to your sink.
 
-How message grouping and ordering work depends on the type of sink you're using. See the reference page for your sink for details.
+You can specify message grouping behavior when configuring a sink. You can group rows by a single field or multiple fields.
+
+So, for example, instead of grouping by primary key, you could instead group `orders` by `account_id`. This means that all changes for a given `account_id` will be sent to your sink in the order they were committed in Postgres.
+
+All this applies to how Sequin _delivers_ messages to your sink. Whether your sink supports ordered/FIFO processing depends on the sink. See the reference page for your sink for details.
+
+<Note>
+  The only sink that doesn't support ordering out of the box is Redis streams.
+
+  SQS supports ordering, but only when configured as a FIFO queue.
+</Note>
 
 ### Backfill support
 

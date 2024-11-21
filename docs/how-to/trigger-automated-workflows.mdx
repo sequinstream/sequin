@@ -1,0 +1,192 @@
+---
+title: "How to build automated workflows from database changes"
+sidebarTitle: "Build automated workflows"
+description: "Trigger code when Postgres rows change"
+---
+
+This guide shows you how to break monolithic processes into automated, event-driven workflows using Sequin. You'll learn how to capture database changes and trigger downstream processes reliably.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/running-sequin)
+2. [A database connected](/connect-postgres)
+3. A sink destination (like SQS, Kafka, Redis, or HTTP)
+4. A service or function to process changes (e.g., an application or AWS Lambda)
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. A sink destination (like SQS, Kafka, Redis, or HTTP)
+4. A service or function to process changes
+
+<Note>
+  If using SQS, use a FIFO queue to maintain message ordering.
+</Note>
+
+## Architecture overview
+
+Your event-driven workflow will have these components:
+
+1. **Source table(s)**: The tables in Postgres that trigger your workflows
+2. **Destination sink**: The message queue or webhook endpoint that delivers changes (e.g. SQS, Kafka, or HTTP endpoint)
+3. **Workflow processor**: Your service that receives changes and triggers appropriate actions
+
+## Create a sink
+
+First, create a sink to receive database changes. In the Sequin console, navigate to the "Sinks" tab and click "Create Sink":
+
+<Steps>
+  <Step title="Select the source table">
+    Under "Source", select the table that should trigger your workflows.
+
+    For "Message type", leave the default "Changes" selected.
+  </Step>
+
+  <Step title="Specify records to process">
+    Under "Records to process", specify which actions should trigger your workflows (i.e. `insert`, `update`, `delete`).
+
+    You can add filters (`where` clauses) to narrow down the rows that trigger your workflows. For example, you might only want to trigger workflows for changes to rows where `status = 'paid'`.
+  </Step>
+
+  <Step title='Leave the default for "Message grouping"'>
+    The default setting for "Message grouping" groups changes by their primary key(s). That means that changes pertaining to the same row are sent to the destination sink in order. This is usually what you want in workflows, so you don't process changes out-of-order.
+
+    <Note>
+      This ordering applies to how Sequin _writes_ changes to your sink. All sinks except [Redis streams](/reference/sinks/redis) support ordered _processing_ as well.
+    </Note>
+  </Step>
+
+  <Step title="Configure sink-specific settings">
+    Configure any sink-specific settings, such as the connection and authentication details for your sink.
+    
+    Then, click "Create Sink".
+  </Step>
+</Steps>
+
+<Info>
+  For more information on creating a sink, see the how-to guide corresponding to your sink destination:
+  
+  * [SQS](/how-to/stream-postgres-to-sqs)
+  * [Kafka](/how-to/stream-postgres-to-kafka)
+  * [Redis](/how-to/stream-postgres-to-redis)
+  * [webhooks](/how-to/stream-postgres-to-a-webhook-endpoint)
+  * [Sequin Stream](/how-to/stream-postgres-to-sequin-stream)
+</Info>
+
+## Verify messages are flowing
+
+You can verify that changes are being captured by Sequin and flowing to your sink by checking the "Messages" tab on the sink's overview page:
+
+1. First, change a row in your source table.
+2. Then, check the "Messages" tab on the sink's overview page. You should see a list of recently delivered messages:
+
+<Frame>
+  <img style={{ maxWidth: '600px' }} src="/images/how-to/messages-tab.png" alt="List of recently delivered messages" />
+</Frame>
+
+## Process changes and trigger workflows
+
+Now that messages are flowing to your sink, you can build your workflow processor. Refer to the [messages reference](/reference/messages) for the shape of the messages that flow to your sink.
+
+Here's a basic example of processing changes in Python:
+
+```python processor.py
+from dataclasses import dataclass
+from typing import Dict, Any
+
+@dataclass
+class WorkflowContext:
+    table: str
+    action: str
+    record: Dict[str, Any]
+    old_values: Dict[str, Any]
+
+def process_change(change):
+    # Create workflow context
+    context = WorkflowContext(
+        table=change.metadata.table_name,
+        action=change.action,
+        record=change.record,
+        old_values=change.changes if hasattr(change, 'changes') else {}
+    )
+    
+    # Route to appropriate workflow
+    if context.table == 'orders':
+        handle_order_workflows(context)
+    elif context.table == 'users':
+        handle_user_workflows(context)
+
+def handle_order_workflows(ctx: WorkflowContext):
+    if ctx.action == 'update':
+        old_status = ctx.old_values.get('status')
+        new_status = ctx.record['status']
+        
+        if old_status != new_status:
+            if new_status == 'paid':
+                trigger_fulfillment(ctx.record)
+            elif new_status == 'shipped':
+                send_tracking_notification(ctx.record)
+
+def handle_user_workflows(ctx: WorkflowContext):
+    if ctx.action == 'insert':
+        trigger_welcome_email(ctx.record)
+    elif ctx.action == 'update':
+        if 'email' in ctx.old_values:
+            trigger_email_change_verification(ctx.record)
+```
+
+## Design considerations
+
+### Ordering
+
+As mentioned earlier, Sequin will send changes for the same record in order to your sink. So, unless your sink is a Redis stream, you can safely assume this order in your processor.
+
+However, changes across different records may appear out-of-order with respect to each other. i.e. a change for Row A may arrive before a change for Row B, even if the change for Row B was made more recently.
+
+You can adjust the **message grouping** setting for your sink to change this behavior. See the [sink reference](/reference/sinks/overview) for more details.
+
+### Multi-step workflows
+
+If your workflow processor performs multiple actions, you should ensure those actions are idempotent. That's because if one of the actions fails, you'll want to retry processing the same message again.
+
+For example, it's probably safe if your workflow is upserting tables into multiple systems. If one of the upserts fails, you can retry the same message again safely, as replaying the successful upserts will have no effect.
+
+However, if your workflow is triggering multiple side effects like sending emails, it's not idempotent. If one of those actions fails, replaying the same message could result in sending the same email multiple times.
+
+Here are ideas for breaking apart multi-step workflows per sink destination:
+
+<AccordionGroup>
+  <Accordion title="SQS and Redis streams">
+    You can create multiple sinks from Sequin to different queues/streams. That way, you can create multiple workflow processors that handle the same changes independently.
+
+    Alternatively, you can use a single sink, and then have a workflow processor that simply fans the message out to multiple queues/streams. Then, have multiple workflow processors from there. (So, do the fan-out on your end as opposed to on Sequin.)
+  </Accordion>
+  <Accordion title="Webhooks">
+    You can create multiple sinks from Sequin to different webhook endpoints. That way, you can create multiple workflow processors that handle the same changes independently.
+  </Accordion>
+  <Accordion title="Sequin Stream">
+    You can create multiple sinks from Sequin to different Sequin Streams. That way, you can create multiple workflow processors that handle the same changes independently.
+  </Accordion>
+  <Accordion title="Kafka">
+    You can create multiple workflow processors and use separate consumer groups for each processor.
+  </Accordion>
+</AccordionGroup>
+
+## Maintenance
+
+### Replaying workflows
+
+You may need to replay workflows in these scenarios:
+
+1. Bug fixes in workflow logic
+2. Recovery from downstream system failures
+3. Backfilling historical data
+
+Use Sequin's [backfill](/reference/backfills) feature to replay changes from your source tables.
+
+## Next steps
+
+See "[Deploy to production](/how-to/deploy-to-production)" for guidance on deploying your workflows to production.

@@ -17,43 +17,56 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
 <Steps titleSize="h2">
  <Step title="Boot Kafka (optional)" icon="database">
-  If you don't already have Kafka running, start Kafka with Docker Compose. You can use the following commands to get started:
+  If you don't already have Kafka running, start Kafka with Docker Compose:
+
+  1. Download our <a href="https://github.com/sequinstream/sequin/raw/main/docs/static/docker-compose.yaml" download="docker-compose.yaml">Docker compose file for Kafka</a> (right click, save link as...).
+  2. Move it to a new directory, navigate to that directory, and start the services:
 
   ```bash
   mkdir kafka-quickstart && cd kafka-quickstart
-  curl -o docker-compose.yaml https://raw.githubusercontent.com/sequinstream/sequin/main/docs/static/kafka-docker-compose.yaml
+  # On macOS:
+  mv ~/Downloads/docker-compose.yaml .
   docker compose up
   ```
 
-  <Accordion title="Kafka docker-compose.yaml">
-    ```yaml
-    name: playground-kafka
-    version: '3'
+  <AccordionGroup>
+    <Accordion title="Alternative: Download with curl">
+      ```bash
+      mkdir kafka-quickstart && cd kafka-quickstart
+      curl -o docker-compose.yaml https://raw.githubusercontent.com/sequinstream/sequin/main/docs/static/kafka-docker-compose.yaml
+      docker compose up
+      ```
+    </Accordion>
 
-    services:
-      zookeeper:
-        image: confluentinc/cp-zookeeper:latest
-        environment:
-          ZOOKEEPER_CLIENT_PORT: 2181
-          ZOOKEEPER_TICK_TIME: 2000
-        ports:
-          - "2181:2181"
-      
-      kafka:
-        image: confluentinc/cp-kafka:latest
-        depends_on:
-          - zookeeper
-        ports:
-          - "9092:9092"
-        environment:
-          KAFKA_BROKER_ID: 1
-          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092
-          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-    ``` 
-  </Accordion>
+    <Accordion title="Alternative: Copy/paste raw Kafka docker-compose.yaml">
+      ```yaml
+      name: playground-kafka
+      version: '3'
 
+      services:
+        zookeeper:
+          image: confluentinc/cp-zookeeper:latest
+          environment:
+            ZOOKEEPER_CLIENT_PORT: 2181
+            ZOOKEEPER_TICK_TIME: 2000
+          ports:
+            - "2181:2181"
+
+        kafka:
+          image: confluentinc/cp-kafka:latest
+          depends_on:
+            - zookeeper
+          ports:
+            - "9092:9092"
+          environment:
+            KAFKA_BROKER_ID: 1
+            KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092
+            KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+            KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      ```
+    </Accordion>
+  </AccordionGroup>
   <Note>
     If you're using another Kafka instance, ensure you have the connection details ready.
   </Note>

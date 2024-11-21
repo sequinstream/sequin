@@ -1,5 +1,4 @@
 name: playground-kafka
-version: '3'
 
 services:
   zookeeper:

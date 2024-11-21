@@ -49,6 +49,15 @@ inplace_sed() {
     fi
 }
 
+# Function to create and upload docker archive
+create_docker_archive() {
+    local assets_dir=$1
+    echo "Creating docker archive..."
+    cp -r docker sequin-docker-compose
+    zip -r "$assets_dir/sequin-docker-compose.zip" sequin-docker-compose/
+    rm -rf sequin-docker-compose
+}
+
 # Function to create a GitHub release with assets
 create_github_release() {
     local tag=$1
@@ -62,7 +71,10 @@ create_github_release() {
         --notes "Release notes for $tag" \
         --generate-notes
 
-    # Upload assets to the release
+    # Create docker archive
+    create_docker_archive "$assets_dir"
+
+    # Upload all assets to the release
     for asset in "$assets_dir"/*.zip; do
         gh release upload "$tag" "$asset" --repo "$repo"
     done

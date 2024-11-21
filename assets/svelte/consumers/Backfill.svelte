@@ -10,6 +10,8 @@
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import { Label } from "$lib/components/ui/label";
   import Datetime from "../components/Datetime.svelte";
+  import * as Popover from "$lib/components/ui/popover";
+  import { Info } from "lucide-svelte";
 
   export let cursor_position: {
     is_backfilling: boolean;
@@ -107,7 +109,36 @@
 <Card>
   <CardContent class="p-6">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold">Backfill</h2>
+      <h2 class="text-lg font-semibold flex items-center gap-2">
+        Backfill
+        <Popover.Root>
+          <Popover.Trigger asChild let:builder>
+            <Button
+              builders={[builder]}
+              variant="link"
+              class="text-muted-foreground hover:text-foreground p-0"
+            >
+              <Info class="h-4 w-4" />
+            </Button>
+          </Popover.Trigger>
+          <Popover.Content class="w-80">
+            <div class="grid gap-4">
+              <div class="space-y-2">
+                <p class="text-sm text-muted-foreground font-normal">
+                  Run a <a
+                    href="https://sequinstream.com/docs/reference/backfills"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-primary underline"
+                  >
+                    backfill
+                  </a> to ingest records from the table.
+                </p>
+              </div>
+            </div>
+          </Popover.Content>
+        </Popover.Root>
+      </h2>
       {#if cursor_position?.is_backfilling}
         <Button
           variant="destructive"
@@ -131,11 +162,6 @@
 
     {#if cursor_position?.is_backfilling && cursor_position.backfill}
       <div class="space-y-4">
-        <Progress
-          value={progress}
-          class={progress === null ? "animate-pulse" : ""}
-        />
-
         <div class="grid grid-cols-3 gap-4 text-sm">
           <div>
             <div class="text-gray-500">Total Rows</div>
@@ -163,6 +189,16 @@
               )}
             </div>
           </div>
+        </div>
+
+        <div class="max-w-md mx-auto space-y-2">
+          <p class="text-sm text-gray-500 italic text-center">
+            Backfill in progress
+          </p>
+          <Progress
+            value={progress}
+            class={`h-2 ${progress === null ? "animate-pulse" : ""}`}
+          />
         </div>
       </div>
     {:else}

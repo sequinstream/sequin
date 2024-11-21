@@ -50,7 +50,6 @@
   }>;
   export let live: any;
   export let hasDatabases: boolean;
-  export let hasSequences: boolean;
 
   let selectedDestination: string;
   let dialogOpen = false;

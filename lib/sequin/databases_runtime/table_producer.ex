@@ -227,24 +227,19 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
 
     # If we have a where clause, we need to adjust the estimate
     sql =
-      if min_cursor do
-        """
-        WITH total AS (#{sql}),
-        filtered AS (
-          SELECT count(*) as actual_count
-          FROM #{Postgres.quote_name(table.schema, table.name)}
-          WHERE #{min_where_clause}
-        )
-        SELECT actual_count FROM filtered
-        """
-      else
-        sql
-      end
+      """
+      WITH total AS (#{sql}),
+      filtered AS (
+        SELECT count(*) as actual_count
+        FROM #{Postgres.quote_name(table.schema, table.name)}
+        WHERE #{min_where_clause}
+      )
+      SELECT actual_count FROM filtered
+      """
 
     sql = Postgres.parameterize_sql(sql)
-    params = if min_cursor, do: cursor_values, else: []
 
-    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, params) do
+    with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values) do
       {:ok, count}
     end
   end

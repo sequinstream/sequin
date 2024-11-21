@@ -317,6 +317,33 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
     matching_records = Enum.filter(records_by_column_attnum, &Consumers.matches_record?(consumer, table.oid, &1))
 
+    # Handle different message kinds
+    case_result =
+      case consumer.message_kind do
+        :record -> handle_record_messages(consumer, table, matching_records)
+        :event -> handle_event_messages(consumer, table, matching_records)
+      end
+
+    case case_result do
+      {:ok, count} ->
+        if backfill = consumer.active_backfill do
+          Consumers.update_backfill(backfill, %{
+            rows_processed_count: backfill.rows_processed_count + total_processed,
+            rows_ingested_count: backfill.rows_ingested_count + length(matching_records)
+          })
+        end
+
+        Health.update(consumer, :ingestion, :healthy)
+        {:ok, count}
+
+      error ->
+        error
+    end
+
+    # Update backfill counts
+  end
+
+  defp handle_record_messages(consumer, table, matching_records) do
     consumer_records =
       Enum.map(matching_records, fn record_attnums_to_values ->
         Sequin.Map.from_ecto(%ConsumerRecord{
@@ -328,19 +355,42 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         })
       end)
 
-    # Update backfill counts
-    if backfill = consumer.active_backfill do
-      Consumers.update_backfill(backfill, %{
-        rows_processed_count: backfill.rows_processed_count + total_processed,
-        rows_ingested_count: backfill.rows_ingested_count + length(matching_records)
-      })
-    end
+    Consumers.insert_consumer_records(consumer_records)
+  end
 
-    res = Consumers.insert_consumer_records(consumer_records)
+  defp handle_event_messages(consumer, table, matching_records) do
+    consumer_events =
+      Enum.map(matching_records, fn record_attnums_to_values ->
+        %{
+          consumer_id: consumer.id,
+          # You may need to get this from somewhere
+          commit_lsn: 0,
+          record_pks: record_pks(table, record_attnums_to_values),
+          table_oid: table.oid,
+          deliver_count: 0,
+          replication_message_trace_id: UUID.uuid4(),
+          data: build_event_data(table, consumer, record_attnums_to_values)
+        }
+      end)
 
-    Health.update(consumer, :ingestion, :healthy)
+    Consumers.insert_consumer_events(consumer_events)
+  end
 
-    res
+  defp build_event_data(table, consumer, record_attnums_to_values) do
+    %{
+      action: :read,
+      record: build_event_payload(table, record_attnums_to_values),
+      metadata: %{
+        table_name: table.name,
+        table_schema: table.schema,
+        consumer: consumer,
+        commit_timestamp: DateTime.utc_now()
+      }
+    }
+  end
+
+  defp build_event_payload(table, record_attnums_to_values) do
+    Map.new(table.columns, fn column -> {column.name, Map.get(record_attnums_to_values, column.attnum)} end)
   end
 
   defp records_by_column_attnum(%PostgresDatabaseTable{} = table, records) do

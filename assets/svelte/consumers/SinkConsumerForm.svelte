@@ -259,7 +259,7 @@
       form.initialBackfill = {
         enabled: true,
         startPosition: "specific",
-        initialMinSortCol: form.recordConsumerState?.initialMinSortCol,
+        initialMinSortCol: form.initialBackfill.initialMinSortCol,
       };
     }
   }
@@ -568,7 +568,7 @@
       </CardContent>
     </Card>
 
-    {#if form.messageKind === "record" && !isEditMode}
+    {#if !isEditMode}
       <Card>
         <CardHeader class="flex flex-row items-center justify-between">
           <CardTitle class="flex items-center gap-2"

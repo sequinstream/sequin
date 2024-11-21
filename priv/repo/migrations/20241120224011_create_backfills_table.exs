@@ -28,8 +28,8 @@ defmodule Sequin.Repo.Migrations.CreateBackfillsTable do
       add :rows_initial_count, :integer
       add :rows_processed_count, :integer, default: 0, null: false
       add :rows_ingested_count, :integer, default: 0, null: false
-      add :completed_at, :utc_datetime_usec
-      add :canceled_at, :utc_datetime_usec
+      add :completed_at, :naive_datetime
+      add :canceled_at, :naive_datetime
 
       timestamps()
     end
@@ -48,9 +48,9 @@ defmodule Sequin.Repo.Migrations.CreateBackfillsTable do
     RETURNS TRIGGER AS $$
     BEGIN
       IF NEW.state = 'completed' AND OLD.state != 'completed' THEN
-        NEW.completed_at = NOW();
+        NEW.completed_at = NOW() AT TIME ZONE 'UTC';
       ELSIF NEW.state = 'cancelled' AND OLD.state != 'cancelled' THEN
-        NEW.canceled_at = NOW();
+        NEW.canceled_at = NOW() AT TIME ZONE 'UTC';
       END IF;
       RETURN NEW;
     END;

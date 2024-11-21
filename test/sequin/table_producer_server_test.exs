@@ -2,6 +2,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
@@ -100,9 +101,26 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       initial_min_cursor: initial_min_cursor
     )
 
+    event_consumer =
+      ConsumersFactory.insert_sink_consumer!(
+        replication_slot_id: replication.id,
+        message_kind: :event,
+        record_consumer_state: %{},
+        account_id: database.account_id,
+        sequence_id: sequence.id,
+        sequence_filter: Map.from_struct(sequence_filter)
+      )
+
+    ConsumersFactory.insert_active_backfill!(
+      account_id: database.account_id,
+      sink_consumer_id: event_consumer.id,
+      initial_min_cursor: initial_min_cursor
+    )
+
     {:ok,
      consumer: Repo.preload(consumer, :active_backfill),
      filtered_consumer: Repo.preload(filtered_consumer, :active_backfill),
+     event_consumer: Repo.preload(event_consumer, :active_backfill),
      table: table,
      table_oid: table_oid,
      database: database,
@@ -301,6 +319,53 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       # Verify that the consumer's backfill has been updated
       filtered_consumer = Repo.preload(filtered_consumer, :active_backfill, force: true)
       refute filtered_consumer.active_backfill
+    end
+
+    test "processes events for event consumers", %{
+      event_consumer: event_consumer,
+      table_oid: table_oid,
+      characters: characters
+    } do
+      page_size = 3
+
+      pid =
+        start_supervised!(
+          {TableProducerServer,
+           [
+             consumer: event_consumer,
+             page_size: page_size,
+             table_oid: table_oid,
+             test_pid: self()
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+
+      consumer_events =
+        event_consumer.id
+        |> ConsumerEvent.where_consumer_id()
+        |> Repo.all()
+        |> Enum.sort_by(& &1.id)
+
+      # Verify all characters were processed
+      assert length(consumer_events) == length(characters)
+
+      # Verify each record has the correct event fields
+      for consumer_event <- consumer_events do
+        assert consumer_event.table_oid == table_oid
+        assert consumer_event.data.action == :read
+        assert consumer_event.data.metadata.commit_timestamp
+        assert is_map(consumer_event.data)
+      end
+
+      cursor = TableProducer.fetch_cursors(event_consumer.id)
+      assert cursor == :error
+
+      # Verify that the consumer's backfill has been updated
+      event_consumer = Repo.preload(event_consumer, :active_backfill, force: true)
+      refute event_consumer.active_backfill
     end
   end
 end

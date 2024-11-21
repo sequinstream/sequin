@@ -48,10 +48,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           send(self(), :update_backfill)
         end
 
+        last_completed_backfill =
+          Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
+
         # Initialize message-related assigns
         socket =
           socket
           |> assign(:consumer, consumer)
+          |> assign(:last_completed_backfill, last_completed_backfill)
           |> assign(:api_tokens, ApiTokens.list_tokens_for_account(current_account.id))
           |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
           |> assign_metrics()
@@ -152,7 +156,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
                   metrics: @metrics,
-                  cursor_position: encode_backfill(@consumer),
+                  cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens)
                 }
@@ -244,7 +248,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         DatabasesRuntime.Supervisor.start_table_producer(socket.assigns.consumer)
         {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill started successfully"})}
 
-      {:error, _error} ->
+      {:error, error} ->
+        Logger.error("Failed to start backfill: #{inspect(error)}", error: error)
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to start backfill"})}
     end
   end
@@ -368,7 +373,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     case load_consumer(socket.assigns.consumer.id, socket) do
       {:ok, consumer} ->
-        {:noreply, assign(socket, consumer: consumer)}
+        last_completed_backfill =
+          Consumers.find_backfill(consumer.id, state: :completed, limit: 1, order_by: [desc: :completed_at])
+
+        {:noreply,
+         socket
+         |> assign(:consumer, consumer)
+         |> assign(:last_completed_backfill, last_completed_backfill)}
 
       {:error, _} ->
         {:noreply, socket}
@@ -750,9 +761,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp encode_backfill(%{message_kind: :event}), do: nil
-
-  defp encode_backfill(consumer) do
+  defp encode_backfill(consumer, last_completed_backfill) do
     sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
@@ -771,13 +780,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
             completed_at: backfill.completed_at,
             canceled_at: backfill.canceled_at,
             inserted_at: backfill.inserted_at
-          }
+          },
+          last_completed_at: last_completed_backfill && last_completed_backfill.completed_at
         }
 
       _ ->
         %{
           is_backfilling: false,
-          cursor_type: column.type
+          cursor_type: column.type,
+          last_completed_at: last_completed_backfill && last_completed_backfill.completed_at
         }
     end
   end

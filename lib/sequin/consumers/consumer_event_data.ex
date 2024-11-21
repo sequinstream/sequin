@@ -17,7 +17,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
   embedded_schema do
     field :record, :map
     field :changes, :map
-    field :action, Ecto.Enum, values: [:insert, :update, :delete]
+    field :action, Ecto.Enum, values: [:insert, :update, :delete, :read]
 
     embeds_one :metadata, Metadata, primary_key: false do
       @derive Jason.Encoder

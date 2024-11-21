@@ -1562,8 +1562,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp notify_consumer_create(_consumer) do
-    # Remove the table producer start logic since backfills control that now
+  defp notify_consumer_create(%SinkConsumer{}) do
     :ok
   end
 
@@ -1670,6 +1669,21 @@ defmodule Sequin.Consumers do
     backfill
     |> Backfill.update_changeset(attrs)
     |> Repo.update()
+  end
+
+  def find_backfill(sink_consumer_id, params \\ []) do
+    sink_consumer_id
+    |> Backfill.where_sink_consumer_id()
+    |> backfill_query(params)
+    |> Repo.one()
+  end
+
+  defp backfill_query(query, params) do
+    Enum.reduce(params, query, fn
+      {:state, state}, query -> Backfill.where_state(query, state)
+      {:limit, limit}, query -> limit(query, ^limit)
+      {:order_by, order_by}, query -> order_by(query, ^order_by)
+    end)
   end
 
   def active_backfill_for_consumer(sink_consumer_id) do

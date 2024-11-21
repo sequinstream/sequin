@@ -37,6 +37,14 @@
   export let cursor_position: {
     is_backfilling: boolean;
     cursor_type: string;
+    backfill: {
+      id: number;
+      state: string;
+      rows_initial_count: number;
+      rows_processed_count: number;
+      rows_ingested_count: number;
+    } | null;
+    last_completed_at: number;
   } | null;
   export let apiBaseUrl: string;
   export let apiTokens: any[];
@@ -211,24 +219,22 @@
         </Card>
       {/if}
 
-      {#if consumer.message_kind === "record"}
-        <Backfill
-          {cursor_position}
-          onRun={(newCursorPosition, callback) => {
-            live.pushEventTo(
-              "#" + parent,
-              "run-backfill",
-              { new_cursor_position: newCursorPosition },
-              (reply) => callback(reply),
-            );
-          }}
-          onCancel={(callback) => {
-            live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
-              callback(reply),
-            );
-          }}
-        />
-      {/if}
+      <Backfill
+        {cursor_position}
+        onRun={(newCursorPosition, callback) => {
+          live.pushEventTo(
+            "#" + parent,
+            "run-backfill",
+            { new_cursor_position: newCursorPosition },
+            (reply) => callback(reply),
+          );
+        }}
+        onCancel={(callback) => {
+          live.pushEventTo("#" + parent, "cancel-backfill", {}, (reply) =>
+            callback(reply),
+          );
+        }}
+      />
 
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />

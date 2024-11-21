@@ -164,6 +164,7 @@
               bind:form
               {errors}
               onFilterChange={(filters) => (form.sourceTableFilters = filters)}
+              {isEdit}
             />
           {/if}
         </div>

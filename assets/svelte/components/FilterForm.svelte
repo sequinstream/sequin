@@ -16,6 +16,7 @@
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import * as Tooltip from "$lib/components/ui/tooltip";
 
+  export let isEdit: boolean = false;
   export let messageKind: string;
   export let selectedTable: any;
   export let form: any;
@@ -63,6 +64,7 @@
   ];
 
   function addFilter() {
+    if (isEdit) return;
     const newFilter: Filter = {
       columnAttnum: null,
       isJsonb: null,
@@ -76,6 +78,7 @@
   }
 
   function removeFilter(index: number) {
+    if (isEdit) return;
     form.sourceTableFilters = form.sourceTableFilters.filter(
       (_, i) => i !== index,
     );
@@ -83,6 +86,7 @@
   }
 
   function updateFilter(index: number, key: keyof Filter, value: any) {
+    if (isEdit) return;
     form.sourceTableFilters = form.sourceTableFilters.map((filter, i) => {
       if (i === index) {
         const updatedFilter = { ...filter, [key]: value };
@@ -212,7 +216,7 @@
               }}
               onSelectedChange={(e) =>
                 updateFilter(index, "columnAttnum", e.value)}
-              disabled={!form.postgresDatabaseId && !form.tableOid}
+              disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
             >
               <SelectTrigger class="border-carbon-100 bg-surface-base">
                 <SelectValue placeholder="Column" />
@@ -250,7 +254,8 @@
                 value={filter.jsonbPath}
                 on:input={(e) =>
                   updateFilter(index, "jsonbPath", e.currentTarget.value)}
-                disabled={!form.postgresDatabaseId && !form.tableOid}
+                disabled={(!form.postgresDatabaseId && !form.tableOid) ||
+                  isEdit}
                 class="bg-surface-base border-carbon-100"
               />
             </div>
@@ -279,7 +284,8 @@
                 }}
                 onSelectedChange={(e) =>
                   updateFilter(index, "valueType", e.value)}
-                disabled={!form.postgresDatabaseId && !form.tableOid}
+                disabled={(!form.postgresDatabaseId && !form.tableOid) ||
+                  isEdit}
               >
                 <SelectTrigger class="border-carbon-100 bg-surface-base">
                   <SelectValue placeholder="Field type" />
@@ -312,7 +318,7 @@
                 label: filter.operator || "Operator",
               }}
               onSelectedChange={(e) => updateFilter(index, "operator", e.value)}
-              disabled={!form.postgresDatabaseId && !form.tableOid}
+              disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
             >
               <SelectTrigger class="border-carbon-100 bg-surface-base">
                 <SelectValue placeholder="Operator" />
@@ -345,9 +351,7 @@
               value={filter.value}
               on:input={(e) =>
                 updateFilter(index, "value", e.currentTarget.value)}
-              disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-                ["IS NULL", "IS NOT NULL"].includes(filter.operator) ||
-                filter.columnAttnum === null}
+              disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
               class="bg-surface-base border-carbon-100"
             />
           </div>
@@ -358,7 +362,7 @@
             class="text-carbon-400 hover:text-carbon-600 justify-self-end p-2 transition-colors hover:scale-110 self-start mt-6 {filter.isJsonb
               ? 'row-start-2 col-start-4'
               : ''}"
-            disabled={!form.postgresDatabaseId && !form.tableOid}
+            disabled={(!form.postgresDatabaseId && !form.tableOid) || isEdit}
           >
             <icon class="hero-x-mark w-4 h-4" />
           </button>
@@ -377,7 +381,8 @@
         size="sm"
         on:click={addFilter}
         disabled={(!form.postgresDatabaseId && !form.tableOid) ||
-          !selectedTable}
+          !selectedTable ||
+          isEdit}
         class="bg-surface-base border-carbon-200 text-carbon-700 hover:bg-carbon-100 transition-colors"
       >
         <PlusCircle class="w-4 h-4 mr-2" />

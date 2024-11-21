@@ -876,8 +876,7 @@ defmodule Sequin.Accounts do
   def only_default_user_and_first_login? do
     default_user_email = default_user_email()
 
-    with 1 <- Repo.aggregate(Account, :count),
-         1 <- Repo.aggregate(User, :count),
+    with 1 <- Repo.aggregate(User, :count),
          [%User{email: ^default_user_email, last_login_at: nil} = user] <- list_users() do
       User.valid_password?(user, default_user_password())
     else

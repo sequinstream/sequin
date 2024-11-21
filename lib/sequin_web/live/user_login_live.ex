@@ -14,7 +14,7 @@ defmodule SequinWeb.UserLoginLive do
         </.alert>
 
         <.alert :if={@display_default_user_login?} class="mb-4">
-          <.alert_title>Default Login Credentials</.alert_title>
+          <.alert_title>Default login credentials</.alert_title>
           <.alert_description>
             Use these credentials for your first login:
             <div class="mt-2">

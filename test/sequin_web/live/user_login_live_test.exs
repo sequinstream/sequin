@@ -24,7 +24,7 @@ defmodule SequinWeb.UserLoginLiveTest do
 
       {:ok, _lv, html} = live(conn, ~p"/login")
 
-      assert html =~ "Default Login Credentials"
+      assert html =~ "Default login credentials"
       assert html =~ Sequin.Accounts.default_user_email()
       assert html =~ Sequin.Accounts.default_user_password()
     end
@@ -41,7 +41,7 @@ defmodule SequinWeb.UserLoginLiveTest do
 
       {:ok, _lv, html} = live(conn, ~p"/login")
 
-      refute html =~ "Default Login Credentials"
+      refute html =~ "Default login credentials"
     end
 
     test "does not show default credentials when other users exist", %{conn: conn} do
@@ -56,7 +56,7 @@ defmodule SequinWeb.UserLoginLiveTest do
 
       {:ok, _lv, html} = live(conn, ~p"/login")
 
-      refute html =~ "Default Login Credentials"
+      refute html =~ "Default login credentials"
     end
 
     test "redirects if already logged in", %{conn: conn} do

@@ -246,10 +246,6 @@ defmodule Sequin.TransformsTest do
         max_deliver: 5,
         sink: %{type: :http_push, http_endpoint_id: endpoint.id},
         sequence_id: sequence.id,
-        record_consumer_state: %{
-          producer: "table_and_wal",
-          initial_min_cursor: %{1 => "2024-01-01"}
-        },
         sequence_filter: %{
           group_column_attnums: [1, 2, 3],
           actions: [:insert, :update],

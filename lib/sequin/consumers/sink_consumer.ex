@@ -9,9 +9,9 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
-  alias Sequin.Consumers.RecordConsumerState
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -32,7 +32,6 @@ defmodule Sequin.Consumers.SinkConsumer do
              :message_kind,
              :name,
              :updated_at,
-             :record_consumer_state,
              :status,
              :health
            ]}
@@ -53,8 +52,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :health, :map, virtual: true
 
     embeds_many :source_tables, SourceTable, on_replace: :delete
-    embeds_one :record_consumer_state, RecordConsumerState, on_replace: :delete
-    has_one :active_backfill, Sequin.Consumers.Backfill, where: [state: :active]
+    has_one :active_backfill, Backfill, where: [state: :active]
 
     # Sequences
     belongs_to :sequence, Sequence
@@ -145,6 +143,13 @@ defmodule Sequin.Consumers.SinkConsumer do
     from([consumer: c] in query, where: c.sequence_id == ^sequence_id)
   end
 
+  def where_active_backfill(query \\ base_query()) do
+    from([consumer: c] in query,
+      inner_join: b in Backfill,
+      on: b.sink_consumer_id == c.id and b.state == :active
+    )
+  end
+
   def where_name(query \\ base_query(), name) do
     from([consumer: c] in query, where: c.name == ^name)
   end
@@ -163,14 +168,6 @@ defmodule Sequin.Consumers.SinkConsumer do
 
   def where_status(query \\ base_query(), status) do
     from([consumer: c] in query, where: c.status == ^status)
-  end
-
-  def where_table_producer(query \\ base_query()) do
-    from([consumer: c] in query,
-      where:
-        fragment("?->>'producer' = ?", c.record_consumer_state, "table_and_wal") and
-          c.message_kind == :record
-    )
   end
 
   defp base_query(query \\ __MODULE__) do

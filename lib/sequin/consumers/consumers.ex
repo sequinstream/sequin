@@ -1695,8 +1695,9 @@ defmodule Sequin.Consumers do
 
   defp notify_backfill_create(%Backfill{state: :active} = backfill) do
     unless env() == :test do
-      consumer = get_consumer!(backfill.sink_consumer_id)
-      DatabasesRuntimeSupervisor.start_table_producer(consumer)
+      backfill.sink_consumer_id
+      |> get_consumer!()
+      |> DatabasesRuntimeSupervisor.start_table_producer()
     end
 
     :ok
@@ -1706,8 +1707,9 @@ defmodule Sequin.Consumers do
 
   defp notify_backfill_update(%Backfill{state: :active} = backfill) do
     unless env() == :test do
-      consumer = get_consumer!(backfill.sink_consumer_id)
-      DatabasesRuntimeSupervisor.restart_table_producer(consumer)
+      backfill.sink_consumer_id
+      |> get_consumer!()
+      |> DatabasesRuntimeSupervisor.restart_table_producer()
     end
 
     :ok
@@ -1715,8 +1717,9 @@ defmodule Sequin.Consumers do
 
   defp notify_backfill_update(%Backfill{state: state} = backfill) when state in [:completed, :cancelled] do
     unless env() == :test do
-      consumer = get_consumer!(backfill.sink_consumer_id)
-      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
+      backfill.sink_consumer_id
+      |> get_consumer!()
+      |> DatabasesRuntimeSupervisor.stop_table_producer()
     end
 
     :ok

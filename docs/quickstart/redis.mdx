@@ -8,19 +8,26 @@ import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
 
 In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Redis stream. You'll:
 
-- Set up a local development environment with Sequin
+- Boot Sequin
 - Connect to a sample playground database 
 - Configure a Redis stream to receive database changes
 - See your changes flow in real-time
 
 By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to keep other systems in sync with your database changes.
 
-## Prerequisites
-
-- A Redis instance (version 5.0 or later for stream support)
-- Connection credentials for your Redis instance
-
 <Steps titleSize="h2">
+ <Step title="Boot Redis" icon="database">
+  If you don't already have Redis running, start Redis with Docker:
+
+  ```bash
+  docker run --name redis -p 6379:6379 -d redis:latest
+  ```
+
+  <Note>
+    If you're using another Redis instance, be sure you're using Redis 5.0+ (required for streams).
+  </Note>
+ </Step>
+
  <QuickstartInitialSteps />
  <Step title="Create a Redis Sink" icon="database">
   With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Redis stream:
@@ -53,14 +60,11 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     <Step title='Configure "Redis Configuration"'>
       In the "Redis Configuration" card, enter your Redis connection details.
 
-      For the "Host" field, if connecting to Redis locally, use `host.docker.internal` instead of `localhost`. This is because you're running Sequin in Docker.
-
-      Complete the rest of the fields:
-
+      - Host: If running locally with Docker, use `host.docker.internal`
       - Port: The port Redis is listening on (default: 6379)
-      - Username: (Optional) Your Redis username
-      - Password: (Optional) Your Redis password
-      - Stream Key: The key to use for the Redis stream (e.g., `products-stream`)
+      - Username: Required if Redis authentication is enabled
+      - Password: Required if Redis authentication is enabled
+      - Stream Key: The Redis stream to write to (e.g., `products-stream`)
       - Database: The Redis database number (default: 0)
       - TLS: Toggle on if your Redis instance requires TLS
 

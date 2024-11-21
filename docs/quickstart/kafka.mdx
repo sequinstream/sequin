@@ -3,3 +3,232 @@ title: 'Get started with Kafka'
 sidebarTitle: 'Kafka'
 description: 'Stream Postgres changes to a Kafka topic'
 ---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a Kafka topic. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database 
+- Configure a Kafka topic to receive database changes
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to keep other systems in sync with your database changes.
+
+<Steps titleSize="h2">
+ <Step title="Boot Kafka (optional)" icon="database">
+  If you don't already have Kafka running, start Kafka with Docker Compose. You can use the following commands to get started:
+
+  ```bash
+  mkdir kafka-quickstart && cd kafka-quickstart
+  wget https://raw.githubusercontent.com/sequinstream/sequin/main/docs/static/kafka-docker-compose.yaml
+  docker compose up
+  ```
+
+  <Accordion title="Kafka docker-compose.yaml">
+    ```yaml
+    name: playground-kafka
+    version: '3'
+
+    services:
+      zookeeper:
+        image: confluentinc/cp-zookeeper:latest
+        environment:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+        ports:
+          - "2181:2181"
+      
+      kafka:
+        image: confluentinc/cp-kafka:latest
+        depends_on:
+          - zookeeper
+        ports:
+          - "9092:9092"
+        environment:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ``` 
+  </Accordion>
+
+  <Note>
+    If you're using another Kafka instance, ensure you have the connection details ready.
+  </Note>
+ </Step>
+
+ <QuickstartInitialSteps />
+ <Step title="Create a Kafka Sink" icon="database">
+  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your Kafka topic:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "Kafka" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note "Source" configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a backfill">
+      In the "Initial backfill" card, click the toggle to enable an initial backfill. You can leave the default start position, which will backfill all existing rows in the `products` table:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure "Kafka Configuration"'>
+      In the "Kafka Configuration" card, enter your Kafka connection details:
+
+      - Hosts: If running locally with the provided docker-compose, use `host.docker.internal:9092`
+      - Topic: The Kafka topic to stream to (e.g., `products`)
+      - SASL Mechanism: Select if your Kafka cluster requires authentication
+      - Username/Password: Required if SASL is enabled
+      - TLS: Toggle on if your Kafka cluster requires TLS
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/kafka/kafka-config-card.png" alt="Kafka configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Test the connection">
+      At the bottom of the form, click the "Test Connection" button. If you provided proper credentials, it should succeed.
+
+      <Check>
+        Sequin can connect to your Kafka cluster.
+      </Check>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, the Kafka topic will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your Kafka sink.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="See changes flow to your Kafka topic" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your Kafka topic.
+
+    Let's confirm messages are flowing:
+
+    <Steps>
+    <Step title="Messages tab">
+      Click the "Messages" tab. You'll see a list of the recently delivered messages:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/kafka/messages-tab.png" alt="List of recently delivered messages" />
+      </Frame>
+
+      <Check>
+        Sequin indicates it backfilled the `products` table to your Kafka topic.
+      </Check>
+    </Step>
+      <Step title="View in Kafka CLI">
+        In your terminal, run the following command to read from the topic:
+
+        ```bash
+        docker exec playground-kafka-kafka-1 \
+          kafka-console-consumer --bootstrap-server localhost:9092 \
+          --topic products \
+          --from-beginning \
+          --max-messages 10
+        ```
+
+        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+
+        <Check>
+          Messages are flowing from Sequin to your Kafka topic.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to your topic.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        In another terminal, consume messages from your Kafka topic:
+
+        ```bash
+        docker exec playground-kafka-kafka-1 \
+          kafka-console-consumer --bootstrap-server localhost:9092 \
+          --topic products \
+          --from-beginning
+        ```
+
+        You should see a message corresponding to the inserted row.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will appear in your Kafka topic within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres CDC pipeline
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to your Kafka topic
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  <Card title="Guide: Setting up a Kafka sink" icon="database" href="/how-to/stream-postgres-to-kafka">
+    Setup a Kafka sink to send changes to your topic.
+  </Card>
+</CardGroup>

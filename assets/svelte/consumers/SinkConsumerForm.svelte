@@ -582,18 +582,15 @@
               <Popover.Content class="w-80">
                 <div class="grid gap-4">
                   <div class="space-y-2">
-                    <h4 class="font-medium leading-none">Initial Backfill</h4>
-                    <p class="text-sm text-muted-foreground">
-                      Sequin will initially backfill data from the selected
-                      table to the sink destination.
-                      <a
+                    <p class="text-sm text-muted-foreground font-normal">
+                      Sequin will run an initial <a
                         href="https://sequinstream.com/docs/reference/backfills"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="text-primary underline"
                       >
-                        Learn more
-                      </a> about how backfills work and when to use them.
+                        backfill
+                      </a> of data from the selected table to the sink destination.
                     </p>
                   </div>
                 </div>

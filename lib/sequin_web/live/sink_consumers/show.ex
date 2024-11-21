@@ -224,7 +224,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("run-backfill", %{"new_cursor_position" => new_cursor_position}, socket) do
+  def handle_event("run-backfill", %{"new_cursor_position" => new_cursor_position}, socket)
+      when is_nil(new_cursor_position) or is_binary(new_cursor_position) or is_integer(new_cursor_position) do
     consumer = socket.assigns.consumer
     table = find_table_by_oid(consumer.sequence.table_oid, consumer.postgres_database.tables)
     table = %PostgresDatabaseTable{table | sort_column_attnum: consumer.sequence.sort_column_attnum}
@@ -252,6 +253,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         Logger.error("Failed to start backfill: #{inspect(error)}", error: error)
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to start backfill"})}
     end
+  end
+
+  # Add a catch-all clause for invalid parameters
+  def handle_event("run-backfill", _params, socket) do
+    {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Invalid backfill parameters provided"})}
   end
 
   @impl Phoenix.LiveView

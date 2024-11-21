@@ -24,7 +24,12 @@
         rows_ingested_count: number;
         state: string;
       };
-      last_completed_at: number | null;
+      last_completed_backfill?: {
+        rows_processed_count: number;
+        rows_ingested_count: number;
+        completed_at: string;
+        inserted_at: string;
+      };
     } | null;
     onCancel: (callback: (reply: any) => void) => void;
   }
@@ -110,6 +115,20 @@
           cursor_position.backfill.rows_initial_count) *
         100
     : 0;
+
+  function getElapsedTime(start: string, end: string): string {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const diffMs = endDate.getTime() - startDate.getTime();
+
+    const minutes = Math.floor(diffMs / 60000);
+    const seconds = Math.floor((diffMs % 60000) / 1000);
+
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
+  }
 </script>
 
 <Card>
@@ -117,33 +136,44 @@
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold flex items-center gap-2">
         Backfill
-        <Popover.Root>
-          <Popover.Trigger asChild let:builder>
-            <Button
-              builders={[builder]}
-              variant="link"
-              class="text-muted-foreground hover:text-foreground p-0"
-            >
-              <Info class="h-4 w-4" />
-            </Button>
-          </Popover.Trigger>
-          <Popover.Content class="w-80">
-            <div class="grid gap-4">
-              <div class="space-y-2">
-                <p class="text-sm text-muted-foreground font-normal">
-                  Run a <a
-                    href="https://sequinstream.com/docs/reference/backfills"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-primary underline"
-                  >
-                    backfill
-                  </a> to ingest records from the table.
-                </p>
+        {#if cursor_position?.last_completed_backfill}
+          <span
+            class="flex items-center gap-2 text-sm font-normal text-gray-600"
+          >
+            <CheckCircle2 class="h-4 w-4 text-green-500" />
+            last completed {formatRelativeTimestamp(
+              cursor_position.last_completed_backfill.completed_at,
+            )}
+          </span>
+        {:else}
+          <Popover.Root>
+            <Popover.Trigger asChild let:builder>
+              <Button
+                builders={[builder]}
+                variant="link"
+                class="text-muted-foreground hover:text-foreground p-0"
+              >
+                <Info class="h-4 w-4" />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Content class="w-80">
+              <div class="grid gap-4">
+                <div class="space-y-2">
+                  <p class="text-sm text-muted-foreground font-normal">
+                    Run a <a
+                      href="https://sequinstream.com/docs/reference/backfills"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="text-primary underline"
+                    >
+                      backfill
+                    </a> to ingest records from the table.
+                  </p>
+                </div>
               </div>
-            </div>
-          </Popover.Content>
-        </Popover.Root>
+            </Popover.Content>
+          </Popover.Root>
+        {/if}
       </h2>
       {#if cursor_position?.is_backfilling}
         <Button
@@ -209,23 +239,21 @@
           </p>
         </div>
       </div>
+    {:else if cursor_position?.last_completed_backfill}
+      <p class="text-sm text-gray-500">
+        Processed {formatNumberWithCommas(
+          cursor_position.last_completed_backfill.rows_processed_count,
+        )} and ingested {formatNumberWithCommas(
+          cursor_position.last_completed_backfill.rows_ingested_count,
+        )} records in {getElapsedTime(
+          cursor_position.last_completed_backfill.inserted_at,
+          cursor_position.last_completed_backfill.completed_at,
+        )}
+      </p>
     {:else}
-      <div class="space-y-4">
-        {#if cursor_position?.last_completed_at}
-          <div class="flex items-center space-x-2 text-sm text-gray-600">
-            <CheckCircle2 class="h-4 w-4 text-green-500" />
-            <span
-              >Last completed {formatRelativeTimestamp(
-                new Date(cursor_position.last_completed_at).toISOString(),
-              )}</span
-            >
-          </div>
-        {:else}
-          <p class="text-sm text-gray-500">
-            Run a backfill to process all existing records in the table.
-          </p>
-        {/if}
-      </div>
+      <p class="text-sm text-gray-500">
+        Run a backfill to process all existing records in the table.
+      </p>
     {/if}
   </CardContent>
 </Card>

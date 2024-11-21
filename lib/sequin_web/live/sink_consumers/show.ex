@@ -788,14 +788,28 @@ defmodule SequinWeb.SinkConsumersLive.Show do
             canceled_at: backfill.canceled_at,
             inserted_at: backfill.inserted_at
           },
-          last_completed_at: last_completed_backfill && last_completed_backfill.completed_at
+          last_completed_backfill:
+            last_completed_backfill &&
+              %{
+                rows_processed_count: last_completed_backfill.rows_processed_count,
+                rows_ingested_count: last_completed_backfill.rows_ingested_count,
+                completed_at: last_completed_backfill.completed_at,
+                inserted_at: last_completed_backfill.inserted_at
+              }
         }
 
       _ ->
         %{
           is_backfilling: false,
           cursor_type: column.type,
-          last_completed_at: last_completed_backfill && last_completed_backfill.completed_at
+          last_completed_backfill:
+            last_completed_backfill &&
+              %{
+                rows_processed_count: last_completed_backfill.rows_processed_count,
+                rows_ingested_count: last_completed_backfill.rows_ingested_count,
+                completed_at: last_completed_backfill.completed_at,
+                inserted_at: last_completed_backfill.inserted_at
+              }
         }
     end
   end

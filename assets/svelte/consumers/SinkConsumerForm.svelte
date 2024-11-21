@@ -567,14 +567,14 @@
     {#if form.messageKind === "record" && !isEditMode}
       <Card>
         <CardHeader class="flex flex-row items-center justify-between">
-          <div class="flex items-center gap-2">
-            <CardTitle>Initial Backfill</CardTitle>
+          <CardTitle class="flex items-center gap-2"
+            >Initial backfill
             <Popover.Root>
               <Popover.Trigger asChild let:builder>
                 <Button
                   builders={[builder]}
                   variant="link"
-                  class="text-muted-foreground hover:text-foreground"
+                  class="text-muted-foreground hover:text-foreground p-0"
                 >
                   <Info class="h-4 w-4" />
                 </Button>
@@ -599,7 +599,7 @@
                 </div>
               </Popover.Content>
             </Popover.Root>
-          </div>
+          </CardTitle>
           <Switch
             bind:checked={enableBackfill}
             disabled={isEditMode || !selectedTable}

@@ -13,18 +13,23 @@
   import * as Popover from "$lib/components/ui/popover";
   import { Info } from "lucide-svelte";
 
-  export let cursor_position: {
-    is_backfilling: boolean;
-    cursor_type: string;
-    backfill?: {
-      rows_initial_count: number;
-      rows_processed_count: number;
-      rows_ingested_count: number;
-      state: string;
-    };
-    last_completed_at: number | null;
-  } | null;
+  // Simplified props interface
+  interface BackfillProps {
+    cursor_position: {
+      is_backfilling: boolean;
+      cursor_type: string;
+      backfill?: {
+        rows_initial_count: number;
+        rows_processed_count: number;
+        rows_ingested_count: number;
+        state: string;
+      };
+      last_completed_at: number | null;
+    } | null;
+    onCancel: (callback: (reply: any) => void) => void;
+  }
 
+  export let cursor_position: BackfillProps["cursor_position"];
   export let onRun: (
     newCursorPosition: any,
     callback: (reply: any) => void,
@@ -97,6 +102,7 @@
 
   $: startPosition, (validationError = "");
 
+  // Computed progress value
   $: progress = cursor_position?.backfill
     ? cursor_position.backfill.rows_initial_count === null
       ? null
@@ -162,43 +168,45 @@
 
     {#if cursor_position?.is_backfilling && cursor_position.backfill}
       <div class="space-y-4">
-        <div class="grid grid-cols-3 gap-4 text-sm">
-          <div>
-            <div class="text-gray-500">Total Rows</div>
-            <div class="font-medium">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="flex flex-col items-center">
+            <span class="text-lg font-medium">
               {cursor_position.backfill.rows_initial_count === null
                 ? "Calculating..."
                 : formatNumberWithCommas(
                     cursor_position.backfill.rows_initial_count,
                   )}
-            </div>
+            </span>
+            <span class="text-sm text-gray-500">Total Rows</span>
           </div>
-          <div>
-            <div class="text-gray-500">Processed</div>
-            <div class="font-medium">
+          <div class="flex flex-col items-center">
+            <span class="text-lg font-medium">
               {formatNumberWithCommas(
                 cursor_position.backfill.rows_processed_count,
               )}
-            </div>
+            </span>
+            <span class="text-sm text-gray-500">Processed</span>
           </div>
-          <div>
-            <div class="text-gray-500">Ingested</div>
-            <div class="font-medium">
+          <div class="flex flex-col items-center">
+            <span class="text-lg font-medium">
               {formatNumberWithCommas(
                 cursor_position.backfill.rows_ingested_count,
               )}
-            </div>
+            </span>
+            <span class="text-sm text-gray-500">Ingested</span>
           </div>
         </div>
 
-        <div class="max-w-md mx-auto space-y-2">
-          <p class="text-sm text-gray-500 italic text-center">
-            Backfill in progress
-          </p>
+        <div class="space-y-2 max-w-md mx-auto">
           <Progress
             value={progress}
             class={`h-2 ${progress === null ? "animate-pulse" : ""}`}
           />
+          <p class="text-sm text-gray-500 text-center">
+            {progress
+              ? `${progress.toFixed(1)}% Complete`
+              : "Calculating progress..."}
+          </p>
         </div>
       </div>
     {:else}

@@ -564,6 +564,7 @@
           {errors}
           onFilterChange={handleFilterChange}
           showTitle={false}
+          isEdit={isEditMode}
         />
       </CardContent>
     </Card>

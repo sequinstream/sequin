@@ -22,7 +22,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Health
   alias Sequin.Metrics
@@ -246,7 +245,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     case Consumers.create_backfill_with_lifecycle(backfill_attrs) do
       {:ok, _backfill} ->
-        DatabasesRuntime.Supervisor.start_table_producer(socket.assigns.consumer)
         {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill started successfully"})}
 
       {:error, error} ->
@@ -269,7 +267,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       backfill ->
         case Consumers.update_backfill_with_lifecycle(backfill, %{state: :cancelled}) do
           {:ok, _updated_backfill} ->
-            DatabasesRuntime.Supervisor.stop_table_producer(socket.assigns.consumer)
             {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
 
           {:error, _error} ->
@@ -375,7 +372,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_info(:update_backfill, socket) do
-    Process.send_after(self(), :update_backfill, 1000)
+    # Update backfill every 200ms if there is an active backfill, otherwise every second
+    case socket.assigns.consumer.active_backfill do
+      nil -> Process.send_after(self(), :update_backfill, 1000)
+      %Backfill{} -> Process.send_after(self(), :update_backfill, 200)
+    end
 
     case load_consumer(socket.assigns.consumer.id, socket) do
       {:ok, consumer} ->

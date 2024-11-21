@@ -309,30 +309,19 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
     matching_records = Enum.filter(records_by_column_attnum, &Consumers.matches_record?(consumer, table.oid, &1))
 
-    # Handle different message kinds
-    case_result =
+    {:ok, count} =
       case consumer.message_kind do
         :record -> handle_record_messages(consumer, table, matching_records)
         :event -> handle_event_messages(consumer, table, matching_records)
       end
 
-    case case_result do
-      {:ok, count} ->
-        if backfill = consumer.active_backfill do
-          Consumers.update_backfill(backfill, %{
-            rows_processed_count: backfill.rows_processed_count + total_processed,
-            rows_ingested_count: backfill.rows_ingested_count + length(matching_records)
-          })
-        end
+    Consumers.update_backfill(consumer.active_backfill, %{
+      rows_processed_count: consumer.active_backfill.rows_processed_count + total_processed,
+      rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
+    })
 
-        Health.update(consumer, :ingestion, :healthy)
-        {:ok, count}
-
-      error ->
-        error
-    end
-
-    # Update backfill counts
+    Health.update(consumer, :ingestion, :healthy)
+    {:ok, count}
   end
 
   defp handle_record_messages(consumer, table, matching_records) do

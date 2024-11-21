@@ -149,9 +149,32 @@ Replace `<your-queue-arn>` with your queue's ARN (e.g., `arn:aws:sqs:us-east-1:1
         In the "Poll for messages" widget in the SQS Console, you should see the new message appear.
 
         Feel free to try other changes:
-        - Update a product's price
-        - Change a product's name
-        - Delete a product
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
 
         Each change will appear in your SQS queue within a few seconds.
       </Step>

@@ -1682,7 +1682,6 @@ defmodule Sequin.Consumers do
   defp notify_backfill_create(%Backfill{state: :active} = backfill) do
     unless env() == :test do
       consumer = get_consumer!(backfill.sink_consumer_id)
-      dbg(consumer)
       DatabasesRuntimeSupervisor.start_table_producer(consumer)
     end
 

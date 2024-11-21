@@ -45,7 +45,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           send(self(), :update_health)
           send(self(), :update_metrics)
           send(self(), :update_messages)
-          send(self(), :update_cursor_position)
+          send(self(), :update_backfill)
         end
 
         # Initialize message-related assigns
@@ -78,7 +78,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill])
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill], force: true)
         |> SinkConsumer.preload_http_endpoint()
 
       {:ok, health} = Health.get(consumer)
@@ -152,7 +152,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   consumer: encode_consumer(@consumer),
                   parent: "consumer-show",
                   metrics: @metrics,
-                  cursor_position: encode_cursor_position(@cursor_position, @consumer),
+                  cursor_position: encode_backfill(@consumer),
                   apiBaseUrl: @api_base_url,
                   apiTokens: encode_api_tokens(@api_tokens)
                 }
@@ -363,6 +363,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(updated_consumer))}
   end
 
+  def handle_info(:update_backfill, socket) do
+    Process.send_after(self(), :update_backfill, 1000)
+
+    case load_consumer(socket.assigns.consumer.id, socket) do
+      {:ok, consumer} ->
+        {:noreply, assign(socket, consumer: consumer)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
@@ -396,57 +408,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:noreply, socket}
   end
 
-  @impl Phoenix.LiveView
-  def handle_info(:update_cursor_position, socket) do
-    task =
-      Task.Supervisor.async_nolink(
-        Sequin.TaskSupervisor,
-        fn -> get_cursors(socket.assigns.consumer) end,
-        timeout: :timer.seconds(30)
-      )
-
-    {:noreply, assign(socket, :cursor_task_ref, task.ref)}
-  end
-
-  @impl Phoenix.LiveView
-  def handle_info({ref, {:ok, cursor_position}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
-    {:ok, consumer} = load_consumer(socket.assigns.consumer.id, socket)
-
-    Process.demonitor(ref, [:flush])
-    Process.send_after(self(), :update_cursor_position, 1000)
-
-    {:noreply, assign(socket, consumer: consumer, cursor_position: cursor_position, cursor_task_ref: nil)}
-  end
-
-  @impl Phoenix.LiveView
-  def handle_info({ref, {:error, error}}, %{assigns: %{cursor_task_ref: ref}} = socket) do
-    Process.demonitor(ref, [:flush])
-    Process.send_after(self(), :update_cursor_position, 1000)
-
-    if is_exception(error) do
-      Logger.error("Failed to get cursor position: #{Exception.message(error)}")
-    else
-      Logger.error("Failed to get cursor position: #{inspect(error)}")
-    end
-
-    {:noreply, assign(socket, cursor_task_ref: nil, cursor_position: :error)}
-  end
-
-  @impl Phoenix.LiveView
-  def handle_info({:DOWN, ref, :process, _, reason}, %{assigns: %{cursor_task_ref: ref}} = socket) do
-    Logger.error("Cursor task #{ref} exited: #{inspect(reason)}")
-    Process.send_after(self(), :update_cursor_position, 1000)
-
-    {:noreply, assign(socket, cursor_task_ref: nil)}
-  end
-
-  # Ignore messages from old tasks
-  @impl Phoenix.LiveView
-  def handle_info({_ref, _}, socket), do: {:noreply, socket}
-
-  @impl Phoenix.LiveView
-  def handle_info({:DOWN, _, :process, _, _}, socket), do: {:noreply, socket}
-
   defp assign_metrics(socket) do
     consumer = socket.assigns.consumer
 
@@ -461,13 +422,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
 
     assign(socket, :metrics, metrics)
-  end
-
-  defp get_cursors(_consumer) do
-    # Sequin.Consumers.cursors(consumer)
-    {:ok, %{}}
-  rescue
-    _ -> {:error, "Failed to get cursor position"}
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do
@@ -796,20 +750,28 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp encode_cursor_position(nil, _consumer), do: nil
-  defp encode_cursor_position(:error, _consumer), do: :error
-  defp encode_cursor_position(_, %{message_kind: :event}), do: nil
+  defp encode_backfill(%{message_kind: :event}), do: nil
 
-  defp encode_cursor_position(cursor_position, consumer) when is_map(cursor_position) do
+  defp encode_backfill(consumer) do
     sort_column_attnum = consumer.sequence.sort_column_attnum
     table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
     column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
 
     case consumer.active_backfill do
-      %Backfill{state: :active} ->
+      %Backfill{state: :active} = backfill ->
         %{
           is_backfilling: true,
-          cursor_type: column.type
+          cursor_type: column.type,
+          backfill: %{
+            id: backfill.id,
+            state: backfill.state,
+            rows_initial_count: backfill.rows_initial_count,
+            rows_processed_count: backfill.rows_processed_count,
+            rows_ingested_count: backfill.rows_ingested_count,
+            completed_at: backfill.completed_at,
+            canceled_at: backfill.canceled_at,
+            inserted_at: backfill.inserted_at
+          }
         }
 
       _ ->

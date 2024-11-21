@@ -2,8 +2,9 @@
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Button } from "$lib/components/ui/button";
   import { Progress } from "$lib/components/ui/progress";
-  import { formatNumberWithCommas } from "../utils";
+  import { formatNumberWithCommas, formatRelativeTimestamp } from "../utils";
   import { Loader2 } from "lucide-svelte";
+  import { CheckCircle2 } from "lucide-svelte";
 
   export let cursor_position: {
     is_backfilling: boolean;
@@ -14,6 +15,7 @@
       rows_ingested_count: number;
       state: string;
     };
+    last_completed_at: number | null;
   } | null;
 
   export let onRun: (
@@ -29,6 +31,7 @@
     isRunning = false;
   } else {
     isCancelling = false;
+    isRunning = false;
   }
 
   function handleRun() {
@@ -122,9 +125,22 @@
         </div>
       </div>
     {:else}
-      <p class="text-sm text-gray-500">
-        Run a backfill to process all existing records in the table.
-      </p>
+      <div class="space-y-4">
+        {#if cursor_position?.last_completed_at}
+          <div class="flex items-center space-x-2 text-sm text-gray-600">
+            <CheckCircle2 class="h-4 w-4 text-green-500" />
+            <span
+              >Last completed {formatRelativeTimestamp(
+                new Date(cursor_position.last_completed_at).toISOString(),
+              )}</span
+            >
+          </div>
+        {:else}
+          <p class="text-sm text-gray-500">
+            Run a backfill to process all existing records in the table.
+          </p>
+        {/if}
+      </div>
     {/if}
   </CardContent>
 </Card>

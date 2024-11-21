@@ -8,9 +8,14 @@ import Config
 
 self_hosted = System.get_env("SELF_HOSTED", "0") in ~w(1 true)
 
-config :logger,
-  level: :info,
-  default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
+if self_hosted do
+  config :logger,
+    level: :info
+else
+  config :logger,
+    level: :info,
+    default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
+end
 
 config :sequin, self_hosted: self_hosted, portal_hostname: "portal.sequin.local"
 

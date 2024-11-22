@@ -23,7 +23,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
     socket = assign_databases(socket)
 
     case fetch_or_build_wal_pipeline(socket, wal_pipeline_id) do
-      {:ok, wal_pipeline} ->
+      {:ok, %WalPipeline{} = wal_pipeline} ->
         {:ok,
          socket
          |> assign(wal_pipeline: wal_pipeline)
@@ -32,7 +32,7 @@ defmodule SequinWeb.WalPipelinesLive.Form do
          |> assign(submit_error: nil)
          |> assign_changeset(%{})}
 
-      {:error, _reason} ->
+      {:ok, nil} ->
         {:ok, push_navigate(socket, to: ~p"/change-capture-pipelines")}
     end
   end

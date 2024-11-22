@@ -321,7 +321,7 @@ defmodule Sequin.Postgres do
     - {:ok, [%{name: String.t(), columns: [String.t()]}]} on success
     - {:error, Error.t()} on failure
   """
-  @spec fetch_unique_indexes(Postgrex.Connection.t() | PostgresDatabase.t(), String.t(), String.t()) ::
+  @spec fetch_unique_indexes(DBConnection.conn() | PostgresDatabase.t(), String.t(), String.t()) ::
           {:ok, [%{name: String.t(), columns: [String.t()]}]} | {:error, Error.t()}
   def fetch_unique_indexes(conn, schema, table) do
     query = """
@@ -590,7 +590,7 @@ defmodule Sequin.Postgres do
   @doc """
   Creates a logical replication slot if it doesn't already exist.
   """
-  @spec create_replication_slot(Postgrex.Connection.t(), String.t()) :: :ok | {:error, Errorr.t()}
+  @spec create_replication_slot(DBConnection.conn(), String.t()) :: :ok | {:error, Error.t()}
   def create_replication_slot(conn, slot_name) do
     check_query = "select 1 from pg_replication_slots where slot_name = $1"
 
@@ -738,7 +738,7 @@ defmodule Sequin.Postgres do
     - publication_name: The name of the publication to check
     - table_oid: The OID of the table to check
   """
-  @spec verify_table_in_publication(Postgrex.Connection.t() | PostgresDatabase.t(), String.t(), integer()) ::
+  @spec verify_table_in_publication(DBConnection.conn() | PostgresDatabase.t(), String.t(), integer()) ::
           :ok | {:error, Error.ServiceError.t() | Error.NotFoundError.t()}
   def verify_table_in_publication(conn, publication_name, table_oid) do
     query = """

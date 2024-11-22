@@ -5,6 +5,7 @@ defmodule Sequin.Databases do
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError

@@ -8,7 +8,7 @@ defmodule Sequin.Replication.WalPipeline do
   alias Sequin.Consumers.SourceTable
 
   @derive {Jason.Encoder, only: [:id, :name, :status, :seq, :destination_oid, :destination_database_id, :source_tables]}
-  schema "wal_pipelines" do
+  typed_schema "wal_pipelines" do
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
     field :name, :string
     field :seq, :integer

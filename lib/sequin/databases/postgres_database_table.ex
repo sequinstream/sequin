@@ -1,13 +1,13 @@
 defmodule Sequin.Databases.PostgresDatabaseTable do
   @moduledoc false
-  use Ecto.Schema
+  use Sequin.ConfigSchema
 
   import Ecto.Changeset
 
   alias Sequin.Postgres
 
   @primary_key false
-  embedded_schema do
+  typed_embedded_schema do
     field :oid, :integer, primary_key: true
     field :schema, :string
     field :name, :string

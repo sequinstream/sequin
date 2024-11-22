@@ -1067,7 +1067,7 @@ defmodule Sequin.Consumers do
   @doc """
   Resets the not_visible_until field to the current time for a given consumer and record/event ID.
   """
-  @spec reset_message_visibility(consumer(), String.t()) :: {:ok, integer()} | {:error, term()}
+  @spec reset_message_visibility(consumer(), String.t()) :: {:ok, %ConsumerEvent{} | %ConsumerRecord{}} | {:error, term()}
   def reset_message_visibility(consumer, id) do
     now = DateTime.utc_now()
 

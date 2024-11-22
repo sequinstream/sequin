@@ -1,14 +1,18 @@
 defmodule Sequin.YamlLoaderTest do
-  use Sequin.DataCase, async: true
+  use Sequin.DataCase, async: false
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.StringValue
+  alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
   alias Sequin.Error.BadRequestError
@@ -20,7 +24,6 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.YamlLoader
 
   @moduletag :unboxed
-  @moduletag :skip
 
   @publication "characters_publication"
 
@@ -52,13 +55,10 @@ defmodule Sequin.YamlLoaderTest do
         database: "sequin_test"
         slot_name: "#{replication_slot()}"
         publication_name: "#{@publication}"
-
-    streams:
-      - name: "characters"
-        database: "test-db"
-        table_schema: "public"
-        table_name: "Characters"
-        sort_column_name: "updated_at"
+        tables:
+          - table_name: "Characters"
+            table_schema: "public"
+            sort_column_name: "updated_at"
     """
   end
 
@@ -81,19 +81,16 @@ defmodule Sequin.YamlLoaderTest do
                     database: "sequin_test"
                     slot_name: "#{replication_slot()}"
                     publication_name: "#{@publication}"
-
-                streams:
-                  - name: "characters"
-                    database: "test-db"
-                    table_schema: "public"
-                    table_name: "Characters"
-                    sort_column_name: "updated_at"
+                    tables:
+                      - table_name: "Characters"
+                        table_schema: "public"
+                        sort_column_name: "updated_at"
 
                 http_endpoints:
                   - name: "test-endpoint"
                     url: "https://api.example.com/webhook"
 
-                change_capture_pipelines:
+                change_retentions:
                   - name: "test-pipeline"
                     source_database: "test-db"
                     source_table_schema: "public"
@@ -120,12 +117,6 @@ defmodule Sequin.YamlLoaderTest do
       database = Repo.preload(database, [:replication_slot])
       assert database.name == "test-db"
 
-      sequence = Enum.find(planned_resources, &is_struct(&1, Sequence))
-      assert sequence.table_schema == "public"
-      assert sequence.table_name == "Characters"
-      assert sequence.sort_column_name == "updated_at"
-      assert sequence.postgres_database_id == database.id
-
       http_endpoint = Enum.find(planned_resources, &is_struct(&1, HttpEndpoint))
       assert http_endpoint.name == "test-endpoint"
       assert http_endpoint.scheme == :https
@@ -133,11 +124,11 @@ defmodule Sequin.YamlLoaderTest do
       assert http_endpoint.path == "/webhook"
       assert http_endpoint.port == 443
 
-      change_capture_pipeline = Enum.find(planned_resources, &is_struct(&1, WalPipeline))
+      wal_pipeline = Enum.find(planned_resources, &is_struct(&1, WalPipeline))
 
-      assert change_capture_pipeline.name == "test-pipeline"
-      assert change_capture_pipeline.status == :active
-      assert [%SourceTable{} = source_table] = change_capture_pipeline.source_tables
+      assert wal_pipeline.name == "test-pipeline"
+      assert wal_pipeline.status == :active
+      assert [%SourceTable{} = source_table] = wal_pipeline.source_tables
       assert source_table.oid == Character.table_oid()
       assert source_table.actions == [:insert, :delete]
     end
@@ -391,7 +382,7 @@ defmodule Sequin.YamlLoaderTest do
     end
   end
 
-  describe "webhook_subscriptions" do
+  describe "sink_consumers" do
     def account_db_and_sequence_yml do
       """
       account:
@@ -403,17 +394,14 @@ defmodule Sequin.YamlLoaderTest do
           database: "sequin_test"
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
-
-      streams:
-        - name: "characters"
-          database: "test-db"
-          table_schema: "public"
-          table_name: "Characters"
-          sort_column_name: "updated_at"
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+              sort_column_name: "updated_at"
       """
     end
 
-    test "creates basic webhook subscription" do
+    test "creates webhook subscription" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
@@ -422,10 +410,13 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "sequin-playground-http"
                    url: "https://api.example.com/webhook"
 
-               webhook_subscriptions:
+               sink_consumers:
                  - name: "sequin-playground-webhook"
-                   sequence: "characters"
-                   http_endpoint: "sequin-playground-http"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "http_push"
+                     http_endpoint: "sequin-playground-http"
                    consumer_start:
                      position: "beginning"
                """)
@@ -434,7 +425,7 @@ defmodule Sequin.YamlLoaderTest do
       consumer = Repo.preload(consumer, :sequence)
 
       assert consumer.name == "sequin-playground-webhook"
-      assert consumer.sequence.name == "characters"
+      assert consumer.sequence.name == "test-db.public.Characters"
 
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
@@ -443,7 +434,7 @@ defmodule Sequin.YamlLoaderTest do
              }
     end
 
-    test "creates webhook subscription with filters" do
+    test "creates sink consumer with filters" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
@@ -452,10 +443,13 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "sequin-playground-http"
                    url: "https://api.example.com/webhook"
 
-               webhook_subscriptions:
+               sink_consumers:
                  - name: "sequin-playground-webhook"
-                   sequence: "characters"
-                   http_endpoint: "sequin-playground-http"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "http_push"
+                     http_endpoint: "sequin-playground-http"
                    filters:
                      - column_name: "house"
                        operator: "="
@@ -510,19 +504,34 @@ defmodule Sequin.YamlLoaderTest do
         - name: "sequin-playground-http"
           url: "https://api.example.com/webhook"
 
-      webhook_subscriptions:
+      sink_consumers:
         - name: "sequin-playground-webhook"
-          sequence: "characters"
-          http_endpoint: "sequin-playground-http"
+          database: "test-db"
+          table: "Characters"
+          sink:
+            type: "http_push"
+            http_endpoint: "sequin-playground-http"
           consumer_start:
             position: "beginning"
+        - name: "sequin-playground-kafka"
+          database: "test-db"
+          table: "Characters"
+          sink:
+            type: "kafka"
+            hosts: "localhost:9092"
+            topic: "test-topic"
       """
 
       assert :ok = YamlLoader.apply_from_yml!(yaml)
       assert :ok = YamlLoader.apply_from_yml!(yaml)
 
-      assert [consumer] = Repo.all(SinkConsumer)
-      assert consumer.name == "sequin-playground-webhook"
+      assert consumers = Repo.all(SinkConsumer)
+
+      assert http_push_consumer = Enum.find(consumers, &(&1.sink.type == :http_push))
+      assert http_push_consumer.name == "sequin-playground-webhook"
+
+      assert kafka_consumer = Enum.find(consumers, &(&1.sink.type == :kafka))
+      assert kafka_consumer.name == "sequin-playground-kafka"
     end
 
     test "updates webhook subscription" do
@@ -533,10 +542,13 @@ defmodule Sequin.YamlLoaderTest do
         - name: "sequin-playground-http"
           url: "https://api.example.com/webhook"
 
-      webhook_subscriptions:
+      sink_consumers:
         - name: "sequin-playground-webhook"
-          sequence: "characters"
-          http_endpoint: "sequin-playground-http"
+          database: "test-db"
+          table: "Characters"
+          sink:
+            type: "http_push"
+            http_endpoint: "sequin-playground-http"
       """
 
       assert :ok =
@@ -555,10 +567,13 @@ defmodule Sequin.YamlLoaderTest do
         - name: "new-http-endpoint"
           url: "https://api.example.com/webhook"
 
-      webhook_subscriptions:
+      sink_consumers:
         - name: "sequin-playground-webhook"
-          sequence: "characters"
-          http_endpoint: "new-http-endpoint"
+          database: "test-db"
+          table: "Characters"
+          sink:
+            type: "http_push"
+            http_endpoint: "new-http-endpoint"
       """
 
       # Update with different filters
@@ -570,137 +585,141 @@ defmodule Sequin.YamlLoaderTest do
       assert updated_consumer.name == "sequin-playground-webhook"
       assert updated_consumer.sink.http_endpoint.name == "new-http-endpoint"
     end
-  end
 
-  describe "consumer_groups" do
-    test "creates basic consumer group" do
+    test "creates sequin stream consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               consumer_groups:
+               sink_consumers:
                  - name: "sequin-playground-consumer"
-                   sequence: "characters"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "sequin_stream"
                    consumer_start:
                      position: "beginning"
                """)
 
-      # assert [consumer] = Repo.all(HttpPullConsumer)
-      # consumer = Repo.preload(consumer, :sequence)
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
 
-      # assert consumer.name == "sequin-playground-consumer"
-      # assert consumer.sequence.name == "characters"
+      assert consumer.name == "sequin-playground-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
 
-      # assert consumer.sequence_filter == %SequenceFilter{
-      #          actions: [:insert, :update, :delete],
-      #          column_filters: [],
-      #          group_column_attnums: [1]
-      #        }
+      assert consumer.sequence_filter == %SequenceFilter{
+               actions: [:insert, :update, :delete],
+               column_filters: [],
+               group_column_attnums: [1]
+             }
+
+      assert %SequinStreamSink{} = consumer.sink
     end
 
-    test "creates consumer group with filters" do
+    test "creates kafka sink consumer" do
       assert :ok =
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               consumer_groups:
-                 - name: "sequin-playground-consumer"
-                   sequence: "characters"
-                   filters:
-                     - column_name: "house"
-                       operator: "="
-                       comparison_value: "Stark"
-                     - column_name: "name"
-                       operator: "is not null"
-                     - column_name: "metadata"
-                       field_path: "rank.title"
-                       operator: "="
-                       comparison_value: "Lord"
-                       field_type: "string"
-                     - column_name: "is_active"
-                       operator: "="
-                       comparison_value: true
-                   consumer_start:
-                     position: "end"
+               sink_consumers:
+                 - name: "kafka-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "kafka"
+                     hosts: "localhost:9092"
+                     topic: "test-topic"
+                     tls: false
+                     username: "test-user"
+                     password: "test-pass"
+                     sasl_mechanism: "plain"
                """)
 
-      # assert [consumer] = Repo.all(HttpPullConsumer)
-      # assert consumer.name == "sequin-playground-consumer"
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
 
-      # filters = consumer.sequence_filter.column_filters
-      # assert length(filters) == 4
+      assert consumer.name == "kafka-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
 
-      # # House filter
-      # house_filter = Enum.find(filters, &(&1.value.value == "Stark"))
-      # assert house_filter.operator == :==
-      # assert house_filter.is_jsonb == false
-
-      # # Name filter
-      # name_filter = Enum.find(filters, &(&1.operator == :not_null))
-      # assert name_filter.value == %NullValue{value: nil}
-      # assert name_filter.is_jsonb == false
-
-      # # Metadata filter
-      # metadata_filter = Enum.find(filters, &(&1.jsonb_path == "rank.title"))
-      # assert metadata_filter.operator == :==
-      # assert metadata_filter.is_jsonb == true
-      # assert metadata_filter.value == %StringValue{value: "Lord"}
-
-      # # Is active filter
-      # active_filter = Enum.find(filters, &(&1.value.value == true))
-      # assert active_filter.operator == :==
-      # assert active_filter.is_jsonb == false
+      assert %KafkaSink{
+               type: :kafka,
+               hosts: "localhost:9092",
+               topic: "test-topic",
+               tls: false,
+               username: "test-user",
+               password: "test-pass",
+               sasl_mechanism: :plain
+             } = consumer.sink
     end
 
-    test "applying yml twice creates no duplicates" do
-      yaml = """
-      #{account_db_and_sequence_yml()}
+    test "creates sqs sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
 
-      consumer_groups:
-        - name: "sequin-playground-consumer"
-          sequence: "characters"
-          consumer_start:
-            position: "beginning"
-      """
+               sink_consumers:
+                 - name: "sqs-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "sqs"
+                     queue_url: "https://sqs.us-west-2.amazonaws.com/123456789012/MyQueue.fifo"
+                     access_key_id: "AKIAXXXXXXXXXXXXXXXX"
+                     secret_access_key: "secret123"
+               """)
 
-      assert :ok = YamlLoader.apply_from_yml!(yaml)
-      assert :ok = YamlLoader.apply_from_yml!(yaml)
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
 
-      # assert [consumer] = Repo.all(HttpPullConsumer)
-      # assert consumer.name == "sequin-playground-consumer"
+      assert consumer.name == "sqs-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %SqsSink{
+               type: :sqs,
+               queue_url: "https://sqs.us-west-2.amazonaws.com/123456789012/MyQueue.fifo",
+               region: "us-west-2",
+               access_key_id: "AKIAXXXXXXXXXXXXXXXX",
+               secret_access_key: "secret123",
+               is_fifo: true
+             } = consumer.sink
     end
 
-    test "updates consumer group" do
-      create_yaml = """
-      #{account_db_and_sequence_yml()}
+    test "creates redis sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
 
-      consumer_groups:
-        - name: "sequin-playground-consumer"
-          sequence: "characters"
-          max_ack_pending: 100
-      """
+               sink_consumers:
+                 - name: "redis-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   sink:
+                     type: "redis"
+                     host: "localhost"
+                     port: 6379
+                     stream_key: "test-stream"
+                     database: 1
+                     tls: false
+                     username: "test-user"
+                     password: "test-pass"
+               """)
 
-      assert :ok = YamlLoader.apply_from_yml!(create_yaml)
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
 
-      # assert [consumer] = Repo.all(HttpPullConsumer)
-      # assert consumer.name == "sequin-playground-consumer"
-      # assert consumer.max_ack_pending == 100
+      assert consumer.name == "redis-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
 
-      # update_yaml = """
-      # #{account_db_and_sequence_yml()}
-
-      # consumer_groups:
-      #   - name: "sequin-playground-consumer"
-      #     sequence: "characters"
-      #     max_ack_pending: 200
-      # """
-
-      # # Update with different batch size
-      # assert :ok = YamlLoader.apply_from_yml!(update_yaml)
-
-      # assert [updated_consumer] = Repo.all(HttpPullConsumer)
-      # assert updated_consumer.name == "sequin-playground-consumer"
-      # assert updated_consumer.max_ack_pending == 200
+      assert %RedisSink{
+               type: :redis,
+               host: "localhost",
+               port: 6379,
+               stream_key: "test-stream",
+               database: 1,
+               tls: false,
+               username: "test-user",
+               password: "test-pass"
+             } = consumer.sink
     end
   end
 end

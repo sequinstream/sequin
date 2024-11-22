@@ -40,13 +40,10 @@ defmodule SequinWeb.YamlControllerTest do
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
           pool_size: 10
-
-      streams:
-        - name: "characters"
-          database: "test-db"
-          table_schema: "public"
-          table_name: "Characters"
-          sort_column_name: "updated_at"
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+              sort_column_name: "updated_at"
       """
 
       conn = post(conn, ~p"/api/config/plan", %{yaml: yaml})
@@ -76,19 +73,14 @@ defmodule SequinWeb.YamlControllerTest do
                      "ssl" => false,
                      "use_local_tunnel" => false,
                      "username" => "postgres",
-                     "id" => postgres_database_id
-                   },
-                   "old" => nil
-                 },
-                 %{
-                   "action" => "create",
-                   "resource_type" => "stream",
-                   "new" => %{
-                     "name" => "characters",
-                     "sort_column_name" => "updated_at",
-                     "table_name" => "Characters",
-                     "table_schema" => "public",
-                     "id" => sequence_id
+                     "id" => postgres_database_id,
+                     "tables" => [
+                       %{
+                         "table_schema" => "public",
+                         "table_name" => "Characters",
+                         "sort_column_name" => "updated_at"
+                       }
+                     ]
                    },
                    "old" => nil
                  },
@@ -110,7 +102,6 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.is_uuid?(account_id)
       assert Sequin.String.is_uuid?(user_id)
       assert Sequin.String.is_uuid?(postgres_database_id)
-      assert Sequin.String.is_uuid?(sequence_id)
     end
 
     test "returns error for invalid yaml", %{conn: conn} do
@@ -145,7 +136,7 @@ defmodule SequinWeb.YamlControllerTest do
           publication_name: "#{@publication}"
           pool_size: 10
 
-      change_capture_pipelines:
+      change_retentions:
         - name: "characters"
           source_database: "test-db"
           source_table_schema: "public"
@@ -153,13 +144,6 @@ defmodule SequinWeb.YamlControllerTest do
           destination_database: "test-db"
           destination_table_schema: "public"
           destination_table_name: "Characters"
-
-      streams:
-        - name: "characters"
-          database: "test-db"
-          table_schema: "public"
-          table_name: "Characters"
-          sort_column_name: "updated_at"
       """
 
       conn = post(conn, ~p"/api/config/apply", %{yaml: yaml})
@@ -212,15 +196,6 @@ defmodule SequinWeb.YamlControllerTest do
                      }
                    ],
                    "status" => "active"
-                 },
-                 %{
-                   "id" => sequence_id,
-                   "name" => "characters",
-                   "sort_column_attnum" => sort_column_attnum,
-                   "sort_column_name" => "updated_at",
-                   "table_name" => "Characters",
-                   "table_oid" => table_oid,
-                   "table_schema" => "public"
                  }
                ]
              } = json_response(conn, 200)
@@ -229,10 +204,7 @@ defmodule SequinWeb.YamlControllerTest do
       assert Sequin.String.is_uuid?(account_id)
       assert Sequin.String.is_uuid?(user_id)
       assert Sequin.String.is_uuid?(database_id)
-      assert Sequin.String.is_uuid?(sequence_id)
       assert Sequin.String.is_uuid?(wal_pipeline_id)
-      assert is_integer(sort_column_attnum)
-      assert is_integer(table_oid)
     end
 
     test "returns error for invalid yaml", %{conn: conn} do
@@ -267,17 +239,26 @@ defmodule SequinWeb.YamlControllerTest do
           slot_name: "#{replication_slot()}"
           publication_name: "#{@publication}"
           pool_size: 10
+          tables:
+            - table_name: "Characters"
+              table_schema: "public"
+              sort_column_name: "updated_at"
 
-      streams:
-        - name: "characters"
+      http_endpoints:
+        - name: "sequin-playground-webhook"
+          url: "https://example.com/webhook"
+
+      sink_consumers:
+        - name: "sequin-playground-webhook"
           database: "test-db"
-          table_schema: "public"
-          table_name: "Characters"
-          sort_column_name: "updated_at"
+          table: "Characters"
+          sink:
+            type: "http_push"
+            http_endpoint: "sequin-playground-webhook"
       """
 
       # Apply the configuration first
-      post(conn, ~p"/api/config/apply", %{yaml: yaml})
+      assert conn |> post(~p"/api/config/apply", %{yaml: yaml}) |> json_response(200)
 
       # Now test the export endpoint
       conn = get(conn, ~p"/api/config/export")
@@ -286,6 +267,7 @@ defmodule SequinWeb.YamlControllerTest do
 
       [database] = Repo.all(PostgresDatabase)
       [sequence] = Repo.all(Sequence)
+      assert sequence.name == "test-db.public.Characters"
 
       # Parse the exported YAML to verify its structure
       parsed_yaml = YamlElixir.read_from_string!(exported_yaml)
@@ -303,17 +285,30 @@ defmodule SequinWeb.YamlControllerTest do
                "ssl" => false,
                "ipv6" => false,
                "use_local_tunnel" => false,
-               "username" => "postgres"
+               "username" => "postgres",
+               "tables" => [
+                 %{
+                   "table_schema" => "public",
+                   "table_name" => "Characters",
+                   "sort_column_name" => "updated_at"
+                 }
+               ]
              }
 
-      assert get_in(parsed_yaml, ["streams", Access.at(0)]) == %{
-               "id" => sequence.id,
+      assert %{
+               "name" => "sequin-playground-webhook",
+               "url" => "https://example.com/webhook"
+             } = get_in(parsed_yaml, ["http_endpoints", Access.at(0)])
+
+      assert %{
+               "name" => "sequin-playground-webhook",
                "database" => "test-db",
-               "name" => "characters",
-               "sort_column_name" => "updated_at",
-               "table_name" => "Characters",
-               "table_schema" => "public"
-             }
+               "table" => "public.Characters",
+               "sink" => %{
+                 "type" => "http_push",
+                 "http_endpoint" => "sequin-playground-webhook"
+               }
+             } = get_in(parsed_yaml, ["sink_consumers", Access.at(0)])
     end
   end
 end

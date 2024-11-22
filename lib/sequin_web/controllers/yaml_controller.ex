@@ -110,11 +110,11 @@ defmodule SequinWeb.YamlController do
 
   defp get_resource_type(%Account{}), do: "account"
   defp get_resource_type(%HttpEndpoint{}), do: "http_endpoint"
-  defp get_resource_type(%SinkConsumer{}), do: "webhook_subscription"
+  defp get_resource_type(%SinkConsumer{}), do: "sink_consumer"
   defp get_resource_type(%PostgresDatabase{}), do: "database"
   defp get_resource_type(%Sequence{}), do: "stream"
   defp get_resource_type(%User{}), do: "user"
-  defp get_resource_type(%WalPipeline{}), do: "change_capture_pipeline"
+  defp get_resource_type(%WalPipeline{}), do: "change_retention"
 
   defp same_resource?(%Account{name: name}, %Account{name: name}), do: true
   defp same_resource?(%HttpEndpoint{name: name}, %HttpEndpoint{name: name}), do: true

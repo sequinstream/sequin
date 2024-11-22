@@ -211,7 +211,27 @@
 
   $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
+  let showLocalhostWarningDialog = false;
+
   function onTestConnection() {
+    // Add check for localhost in sink configuration
+    const sinkConfig = form.sink;
+    let hasLocalhost = false;
+
+    if (sinkConfig) {
+      const configStr = JSON.stringify(sinkConfig).toLowerCase();
+      hasLocalhost =
+        configStr.includes("localhost") || configStr.includes("127.0.0.1");
+    }
+
+    if (hasLocalhost) {
+      showLocalhostWarningDialog = true;
+    } else {
+      runConnectionTest();
+    }
+  }
+
+  function runConnectionTest() {
     testConnectionState = {
       status: "loading",
       lastTestStatus: testConnectionState.lastTestStatus,
@@ -905,6 +925,43 @@
 
       <Dialog.Footer class="mt-4">
         <Button on:click={() => (showExampleModal = false)}>Close</Button>
+      </Dialog.Footer>
+      <Dialog.Close />
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showLocalhostWarningDialog}>
+  <Dialog.Portal>
+    <Dialog.Overlay />
+    <Dialog.Content>
+      <Dialog.Header class="my-4">
+        <Dialog.Title>Warning: localhost detected</Dialog.Title>
+      </Dialog.Header>
+
+      <div>
+        <p>
+          Using '<code>localhost</code>' in your configuration may not work as
+          expected. Consider using '<code>host.docker.internal</code>' instead
+          to connect to services running on your machine.
+        </p>
+      </div>
+
+      <Dialog.Footer class="mt-4 space-x-2">
+        <Button
+          variant="outline"
+          on:click={() => (showLocalhostWarningDialog = false)}
+        >
+          Cancel
+        </Button>
+        <Button
+          on:click={() => {
+            showLocalhostWarningDialog = false;
+            runConnectionTest();
+          }}
+        >
+          Test anyway
+        </Button>
       </Dialog.Footer>
       <Dialog.Close />
     </Dialog.Content>

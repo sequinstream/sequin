@@ -683,6 +683,9 @@
       {isEditMode}
       {selectedTable}
       bind:groupColumnAttnums={form.groupColumnAttnums}
+      infoText={consumer.type === "kafka"
+        ? "For Kafka sinks, the group column values are joined with ':' delimiters to generate the message key. Messages are published using hash partitioning on the message key."
+        : null}
     />
 
     {#if consumer.type === "http_push"}

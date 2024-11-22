@@ -4,6 +4,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabaseTable
@@ -342,7 +343,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   defp handle_event_messages(consumer, table, matching_records) do
     consumer_events =
       Enum.map(matching_records, fn record_attnums_to_values ->
-        %{
+        Sequin.Map.from_ecto(%ConsumerEvent{
           consumer_id: consumer.id,
           # You may need to get this from somewhere
           commit_lsn: 0,
@@ -351,7 +352,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
           deliver_count: 0,
           replication_message_trace_id: UUID.uuid4(),
           data: build_event_data(table, consumer, record_attnums_to_values)
-        }
+        })
       end)
 
     Consumers.insert_consumer_events(consumer_events)

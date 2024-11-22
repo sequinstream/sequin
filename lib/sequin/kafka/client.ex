@@ -2,26 +2,31 @@ defmodule Sequin.Kafka.Client do
   @moduledoc false
   @behaviour Sequin.Kafka
 
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Kafka.ConnectionCache
   alias Sequin.NetworkUtils
 
   require Logger
 
   @impl Sequin.Kafka
-  def publish(%KafkaSink{} = sink, %ConsumerRecord{} = record), do: do_publish(sink, record)
-  def publish(%KafkaSink{} = sink, %ConsumerEvent{} = event), do: do_publish(sink, event)
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record), do: do_publish(consumer, record)
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event), do: do_publish(consumer, event)
 
-  defp do_publish(%KafkaSink{} = sink, record_or_event) do
-    with {:ok, connection} <- ConnectionCache.connection(sink),
+  defp do_publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, record_or_event) do
+    message_key = message_key(consumer, record_or_event)
+    dbg(message_key)
+
+    with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
            :brod.produce_sync(
              connection,
-             sink.topic,
+             consumer.sink.topic,
              :hash,
-             to_string(record_or_event.record_pks),
+             message_key,
              Jason.encode!(record_or_event.data)
            ) do
       :ok
@@ -100,5 +105,17 @@ defmodule Sequin.Kafka.Client do
     else
       {:error, Sequin.Error.validation(summary: "Unable to reach Kafka hosts")}
     end
+  end
+
+  defp message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record) do
+    consumer
+    |> Consumers.group_column_values(record.data)
+    |> Enum.join(":")
+  end
+
+  defp message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event) do
+    consumer
+    |> Consumers.group_column_values(event.data)
+    |> Enum.join(":")
   end
 end

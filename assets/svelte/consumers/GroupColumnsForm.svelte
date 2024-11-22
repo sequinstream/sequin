@@ -11,6 +11,7 @@
   export let isEditMode: boolean;
   export let selectedTable: any;
   export let groupColumnAttnums: number[] = [];
+  export let infoText: string | null = null;
 
   let defaultGroupColumns = selectedTable?.default_group_columns || [];
   let groupColumnError: string | null = null;
@@ -127,31 +128,38 @@
       </div>
     </CardHeader>
     <CardContent>
-      {#if !useCustomGrouping && !selectedTable.is_event_table}
-        <p class="text-sm text-muted-foreground">
-          By default, Sequin uses primary keys to group messages. This ensures
-          that records are processed serially for each individual record.
-        </p>
-      {:else if !useCustomGrouping && selectedTable.is_event_table}
-        <p class="text-sm text-muted-foreground">
-          By default, Sequin uses these columns to group event table messages:
-          <code>source_database_id</code>, <code>source_table_oid</code>, and
-          <code>record_pk</code>. This ensures that records are processed
-          serially.
-        </p>
-      {:else}
-        <p class="text-sm text-muted-foreground mb-4">
-          Select the columns to use for custom grouping.
-        </p>
-        <ColumnList
-          columns={selectedTable.columns}
-          selectedAttnums={groupColumnAttnums}
-          onToggle={toggleColumnGrouping}
-        />
-      {/if}
-      {#if groupColumnError}
-        <p class="text-destructive text-sm mt-2">{groupColumnError}</p>
-      {/if}
+      <div class="space-y-4">
+        {#if !useCustomGrouping && !selectedTable.is_event_table}
+          <p class="text-sm text-muted-foreground">
+            By default, Sequin uses primary keys to group messages. This ensures
+            that records are processed serially for each individual record.
+          </p>
+        {:else if !useCustomGrouping && selectedTable.is_event_table}
+          <p class="text-sm text-muted-foreground">
+            By default, Sequin uses these columns to group event table messages:
+            <code>source_database_id</code>, <code>source_table_oid</code>, and
+            <code>record_pk</code>. This ensures that records are processed
+            serially.
+          </p>
+        {:else}
+          <p class="text-sm text-muted-foreground mb-4">
+            Select the columns to use for custom grouping.
+          </p>
+          <ColumnList
+            columns={selectedTable.columns}
+            selectedAttnums={groupColumnAttnums}
+            onToggle={toggleColumnGrouping}
+          />
+        {/if}
+        {#if infoText}
+          <p class="text-sm text-muted-foreground mb-4">
+            {infoText}
+          </p>
+        {/if}
+        {#if groupColumnError}
+          <p class="text-destructive text-sm mt-2">{groupColumnError}</p>
+        {/if}
+      </div>
     </CardContent>
   </Card>
 {/if}

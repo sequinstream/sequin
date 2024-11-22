@@ -52,7 +52,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
   def handle_message(_, %Broadway.Message{data: [consumer_record_or_event]} = message, %{
-        consumer: %SinkConsumer{sink: %KafkaSink{} = sink} = consumer,
+        consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer,
         test_pid: test_pid
       }) do
     setup_allowances(test_pid)
@@ -62,7 +62,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       consumer_id: consumer.id
     )
 
-    case Kafka.publish(sink, consumer_record_or_event) do
+    case Kafka.publish(consumer, consumer_record_or_event) do
       :ok ->
         Health.update(consumer, :push, :healthy)
 

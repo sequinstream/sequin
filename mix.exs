@@ -82,7 +82,8 @@ defmodule Sequin.MixProject do
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:yaml_elixir, "~> 2.11"},
       {:ymlr, "~> 5.0"},
-      {:brod, "~> 4.3"}
+      {:brod, "~> 4.3"},
+      {:jose, "~> 1.11"}
     ]
   end
 

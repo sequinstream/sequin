@@ -68,4 +68,37 @@ defmodule Sequin.Factory do
   def utc_datetime_usec, do: Faker.DateTime.backward(365)
   def uuid, do: UUID.uuid4()
   def word, do: Faker.Lorem.word()
+
+  def rsa_key do
+    """
+    -----BEGIN PRIVATE KEY-----
+    MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCtFfJBTI+O80vm
+    EzPKWlLrLFgy8S33dBs1nSTn4KUvJqiY2pFtSu4YRtllBo/fcw7GqhUWkpfbL5hv
+    ownHDxRtjprrr1dXogmxxVIOMC+VrKG3kGdzZCenCWGrSWfAdgCUe9zZaoduUHI1
+    92xRcb+lQshPdgcgU1SKakR8l2grFRN0EX9xUFBsDuhQfYf0vWNl3EQ4KK0q3Alr
+    TT5BppEggT+0/aFR6pUBRMa7Z3eV/5by1L9MR5LAnj9AFOlQSzHiMk8BCAU06Kgc
+    zZAdIHL8eGP4vn+qucJDodmboL+fINF6Bdzv9nlpirTFUeWtPTyctpBZTO77pwx8
+    IAivSQh3AgMBAAECggEAVBEfu9WKuHy09YeIFRVvxqegIwX/NHwhJxYvMaxrro4R
+    P0SRc8r7/7CRsD7SrE3+9EDxwyfqN9xTJo3ClvtdCaVE24orWvXpzX0wUJHY2tKh
+    LT4m8OXJWJj25jHeAZ2OxI+wgaz7IHpULqAA7UHZOlRIZEfISEwQ+LWKlBUZ1Co4
+    vyrK3zWE5vcaRaiUMsAVfw61CpFN1Y8Btw8DkVn1nIGvu10B+Fuzdf+I1j+SEldo
+    b7VRVEFNVxGhI1/1GKV50r4z5EC7lquiqF7KMg8b300pfnc+bWUD2rj5HpPd7xaP
+    TJLoYIPceK9iBndbAU76PUsBELiVu/KhO9fB3F6RIQKBgQDb3ACGChChycJeyKy4
+    6rQ4cdstH5A9KJ520xBrK67fCYElbanRXDBOsSdJzyHIkZZ3QdK9P3TRtUTN/KBc
+    13xMcOo9c+IA0O7aWp6qY1T+8vUBReF8mzEbeEZG2Q9468aXLOGfOK3Fq9/NKATT
+    iPmPChjPQEqfSRmG61OStY2PRwKBgQDJiaRN0z1t65solqWtmI/xC9MN5rzFK+8Z
+    mmlHP5VHu3+vwXJIWEAmsT6C/ysyfP7iblRlEo1uY4sccIIpLLa3gIvByE3N9r/I
+    Xrnye3qs2pv3CX2tZSiQ68MhI7qN2D1DgDe4aJYimhzs2/9DoTRP/xEpMZLUtzj6
+    UH26NwM1UQKBgFTy2ljwBqEcfbd1vhbsyJmOlGsI6QhYa3Hp90wRYs3WtEmr55N3
+    FUsyc8W2/IyshACsNCrfG9nzOhSE6ck1kVdPwZHg9o/uKnu/y9J18t9XLIdDYu5s
+    YDsG69BwCeRk5SSAOOT2V14rHJv+PG8nW5WDBzb81lhZPD2/K1liQMH9AoGAEsFn
+    dAKrndYmS2Gxq3UeOC2Eh6+oc6UCDFztXT8SkmllmaKkEw17ct5d1e0PRRSS19my
+    qvFODi7fXFcwFcreejdRSkhszTUgZfJC1ckeAoYZq6TLeF6Ipuv57dSYYOj10plV
+    FilNh4zWEkjq+Y1ABA3VuAKwCnG+sLTa7oB+IPECgYBtJkkf2ljUccYHONAn6a9q
+    hexxXaQsKmTS3wefUs23kYOUAWAk6Ev8nEF3DKP+8ep+sIQfukdlvEkCEwOotcy7
+    jWtPhsc2L/dT6y91gENeAYG7XgnGnJZUJNpRyrwhm5WkqsLOFIX/Ivj09UvZ/n2X
+    QVH5unLV4h1YJkM3Qoc4Zw==
+    -----END PRIVATE KEY-----
+    """
+  end
 end

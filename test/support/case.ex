@@ -14,7 +14,7 @@ defmodule Sequin.Case do
       import unquote(__MODULE__)
 
       setup :start_supervisors
-      setup :verify_mox
+      setup :verify_stubs
     end
   end
 
@@ -31,8 +31,9 @@ defmodule Sequin.Case do
     {:ok, supervisors: sup_tree}
   end
 
-  def verify_mox(_context) do
+  def verify_stubs(_context) do
     Mox.verify_on_exit!()
+    Req.Test.verify_on_exit!()
     :ok
   end
 

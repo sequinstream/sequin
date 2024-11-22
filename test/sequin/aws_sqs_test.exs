@@ -1,5 +1,5 @@
 defmodule Sequin.Aws.SQSTest do
-  use ExUnit.Case, async: true
+  use Sequin.Case, async: true
 
   alias Sequin.Aws.HttpClient
   alias Sequin.Aws.SQS

@@ -67,6 +67,9 @@ config :sequin,
   aws_sqs: [
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]
   ],
+  google_pubsub: [
+    req_opts: [plug: {Req.Test, Sequin.GCP.PubSub}]
+  ],
   redis_module: Sequin.RedisMock,
   kafka_module: Sequin.KafkaMock
 

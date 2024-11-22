@@ -109,7 +109,7 @@
       <Label for="username">Username</Label>
       <div hidden={form.sink.sasl_mechanism === null}>
         <Input
-          id="username"
+          id="username-input"
           bind:value={internalUsername}
           placeholder="Username"
           data-1p-ignore
@@ -117,7 +117,11 @@
         />
       </div>
       <div hidden={form.sink.sasl_mechanism !== null}>
-        <Input id="username" placeholder="Username requires SASL" disabled />
+        <Input
+          id="username-disabled"
+          placeholder="Username requires SASL"
+          disabled
+        />
       </div>
       {#if errors.sink?.username}
         <p class="text-destructive text-sm">{errors.sink.username}</p>
@@ -129,7 +133,7 @@
       <div class="relative">
         <div hidden={form.sink.sasl_mechanism === null}>
           <Input
-            id="password"
+            id="password-input"
             type={showPassword ? "text" : "password"}
             bind:value={internalPassword}
             placeholder="Password"
@@ -139,7 +143,7 @@
         </div>
         <div hidden={form.sink.sasl_mechanism !== null}>
           <Input
-            id="password"
+            id="password-disabled"
             type="password"
             placeholder="Password requires SASL"
             disabled

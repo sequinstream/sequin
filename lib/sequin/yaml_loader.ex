@@ -129,9 +129,8 @@ defmodule Sequin.YamlLoader do
   def all_resources(account_id) do
     account = Accounts.get_account!(account_id)
     users = Accounts.list_users_for_account(account_id)
-    databases = Databases.list_dbs_for_account(account_id, [:replication_slot])
+    databases = Databases.list_dbs_for_account(account_id, [:sequences, :replication_slot])
     wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
-    sequences = Databases.list_sequences_for_account(account_id, [:postgres_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
 
     sink_consumers =
@@ -139,7 +138,7 @@ defmodule Sequin.YamlLoader do
       |> Consumers.list_sink_consumers_for_account(sequence: [:postgres_database])
       |> Enum.map(&SinkConsumer.preload_http_endpoint/1)
 
-    [account | users] ++ databases ++ wal_pipelines ++ sequences ++ http_endpoints ++ sink_consumers
+    [account | users] ++ databases ++ wal_pipelines ++ http_endpoints ++ sink_consumers
   end
 
   #############
@@ -238,6 +237,8 @@ defmodule Sequin.YamlLoader do
     Logger.info("Upserting databases: #{inspect(databases, pretty: true)}")
 
     Enum.reduce_while(databases, {:ok, []}, fn database_attrs, {:ok, acc} ->
+      database_attrs = Map.delete(database_attrs, "tables")
+
       case upsert_database(account_id, database_attrs) do
         {:ok, database} -> {:cont, {:ok, [database | acc]}}
         {:error, error} -> {:halt, {:error, error}}
@@ -320,11 +321,32 @@ defmodule Sequin.YamlLoader do
   ## Sequences ##
   ###############
 
-  defp find_or_create_sequences(account_id, %{"streams" => sequences}, databases) do
-    Logger.info("Creating streams: #{inspect(sequences, pretty: true)}")
+  defp find_or_create_sequences(account_id, %{"databases" => databases}, db_records) do
+    Logger.info("Creating sequences from database tables")
 
-    Enum.reduce_while(sequences, {:ok, []}, fn sequence, {:ok, acc} ->
-      database = database_for_sequence!(sequence, databases)
+    # Flatten all tables from all databases into sequence configs
+    sequence_configs =
+      Enum.flat_map(databases, fn database ->
+        tables = database["tables"] || []
+
+        Enum.map(tables, fn table ->
+          database_name = database["name"]
+          table_name = table["table_name"]
+          schema = table["table_schema"] || "public"
+          name = "#{database_name}.#{schema}.#{table_name}"
+
+          %{
+            "name" => name,
+            "database" => database_name,
+            "table_schema" => schema,
+            "table_name" => table_name,
+            "sort_column_name" => table["sort_column_name"]
+          }
+        end)
+      end)
+
+    Enum.reduce_while(sequence_configs, {:ok, []}, fn sequence, {:ok, acc} ->
+      database = database_for_sequence!(sequence, db_records)
 
       case find_or_create_sequence(account_id, database, sequence) do
         {:ok, sequence} -> {:cont, {:ok, [sequence | acc]}}
@@ -334,7 +356,7 @@ defmodule Sequin.YamlLoader do
   end
 
   defp find_or_create_sequences(_account_id, _config, _databases) do
-    Logger.info("No streams found in config")
+    Logger.info("No database tables found in config")
     {:ok, []}
   end
 
@@ -342,14 +364,10 @@ defmodule Sequin.YamlLoader do
     Sequin.Enum.find!(databases, fn database -> database.name == database_name end)
   end
 
-  defp database_for_sequence!(%{}, _databases) do
-    raise "`database` is required for each stream and must be a valid database name"
-  end
-
-  defp find_or_create_sequence(account_id, %PostgresDatabase{} = database, %{"name" => name} = sequence_attrs) do
-    case Databases.find_sequence_for_account(account_id, name: name) do
+  defp find_or_create_sequence(account_id, %PostgresDatabase{} = database, sequence_attrs) do
+    case Databases.find_sequence_for_account(account_id, name: sequence_attrs["name"]) do
       {:ok, sequence} ->
-        Logger.info("Found stream: #{inspect(sequence, pretty: true)}")
+        Logger.info("Found sequence: #{inspect(sequence, pretty: true)}")
         {:ok, sequence}
 
       {:error, %NotFoundError{}} ->
@@ -416,7 +434,7 @@ defmodule Sequin.YamlLoader do
   ## Change Retention         ##
   ##############################
 
-  defp upsert_wal_pipelines(account_id, %{"change_capture_pipelines" => wal_pipelines}, databases) do
+  defp upsert_wal_pipelines(account_id, %{"change_retentions" => wal_pipelines}, databases) do
     Logger.info("Setting up change retention: #{inspect(wal_pipelines, pretty: true)}")
 
     Enum.reduce_while(wal_pipelines, {:ok, []}, fn wal_pipeline, {:ok, acc} ->
@@ -738,7 +756,7 @@ defmodule Sequin.YamlLoader do
   ## HTTP Push Consumers ##
   #########################
 
-  defp upsert_sink_consumers(account_id, %{"webhook_subscriptions" => consumers}, databases, http_endpoints) do
+  defp upsert_sink_consumers(account_id, %{"sink_consumers" => consumers}, databases, http_endpoints) do
     Logger.info("Upserting HTTP push consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
@@ -772,16 +790,20 @@ defmodule Sequin.YamlLoader do
   end
 
   defp parse_sink_consumer_params(
-         %{"name" => name, "sequence" => sequence_name, "http_endpoint" => http_endpoint_name} = consumer_attrs,
+         %{"name" => name, "database" => database_name, "table" => table_ref, "sink" => sink_attrs} = consumer_attrs,
          databases,
          http_endpoints
        ) do
-    # Find the sequence and its associated database
-    with {:ok, sequence} <- sequence_by_name(databases, sequence_name),
-         database = Sequin.Enum.find!(databases, fn db -> db.id == sequence.postgres_database_id end),
-         table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid)),
-         table = %{table | sort_column_attnum: sequence.sort_column_attnum},
-         {:ok, http_endpoint} <- http_endpoint_by_name(http_endpoints, http_endpoint_name) do
+    # Split table reference into schema and name
+    {schema, table_name} = parse_table_reference(table_ref)
+
+    # Find the database and sequence
+    with {:ok, database} <- find_database_by_name(database_name, databases),
+         sequence_name = "#{database_name}.#{schema}.#{table_name}",
+         {:ok, sequence} <- find_sequence_by_name(databases, sequence_name),
+         {:ok, sink} <- parse_sink(sink_attrs, %{http_endpoints: http_endpoints}) do
+      table = Sequin.Enum.find!(database.tables, &(&1.schema == schema && &1.name == table_name))
+
       {:ok,
        %{
          name: name,
@@ -789,21 +811,98 @@ defmodule Sequin.YamlLoader do
          size: Map.get(consumer_attrs, "batch_size", 1),
          sequence_id: sequence.id,
          replication_slot_id: database.replication_slot.id,
-         destination: %{
-           type: :http_push,
-           http_endpoint_id: http_endpoint.id,
-           http_endpoint_path: consumer_attrs["http_endpoint_path"]
-         },
          sequence_filter: %{
            actions: ["insert", "update", "delete"],
            group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
            column_filters: column_filters(consumer_attrs["filters"], table)
-         }
+         },
+         sink: sink
        }}
     end
   end
 
-  defp sequence_by_name(databases, sequence_name) do
+  defp parse_sink(nil, _resources), do: {:error, Error.validation(summary: "`sink` is required on sink consumers.")}
+
+  defp parse_sink(%{"type" => "sequin_stream"}, _resources) do
+    {:ok, %{type: :sequin_stream}}
+  end
+
+  defp parse_sink(%{"type" => "http_push"} = attrs, resources) do
+    http_endpoints = resources.http_endpoints
+
+    with {:ok, http_endpoint} <- find_http_endpoint_by_name(http_endpoints, attrs["http_endpoint"]) do
+      {:ok,
+       %{
+         type: :http_push,
+         http_endpoint_id: http_endpoint.id,
+         http_endpoint_path: attrs["http_endpoint_path"]
+       }}
+    end
+  end
+
+  defp parse_sink(%{"type" => "kafka"} = attrs, _resources) do
+    with {:ok, sasl_mechanism} <- parse_sasl_mechanism(attrs["sasl_mechanism"]) do
+      {:ok,
+       %{
+         type: :kafka,
+         hosts: attrs["hosts"],
+         topic: attrs["topic"],
+         tls: attrs["tls"] || false,
+         username: attrs["username"],
+         password: attrs["password"],
+         sasl_mechanism: sasl_mechanism
+       }}
+    end
+  end
+
+  defp parse_sink(%{"type" => "sqs"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :sqs,
+       queue_url: attrs["queue_url"],
+       region: attrs["region"],
+       access_key_id: attrs["access_key_id"],
+       secret_access_key: attrs["secret_access_key"]
+     }}
+  end
+
+  defp parse_sink(%{"type" => "redis"} = attrs, _resources) do
+    {:ok,
+     %{
+       type: :redis,
+       host: attrs["host"],
+       port: attrs["port"],
+       stream_key: attrs["stream_key"],
+       database: attrs["database"] || 0,
+       tls: attrs["tls"] || false,
+       username: attrs["username"],
+       password: attrs["password"]
+     }}
+  end
+
+  defp find_database_by_name(name, databases) do
+    case Enum.find(databases, &(&1.name == name)) do
+      nil -> {:error, Error.not_found(entity: :database, params: %{name: name})}
+      database -> {:ok, database}
+    end
+  end
+
+  defp find_http_endpoint_by_name(http_endpoints, name) do
+    case Enum.find(http_endpoints, &(&1.name == name)) do
+      nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: name})}
+      http_endpoint -> {:ok, http_endpoint}
+    end
+  end
+
+  # Helper to parse table reference into schema and name
+  defp parse_table_reference(table_ref) do
+    case String.split(table_ref, ".", parts: 2) do
+      [table_name] -> {"public", table_name}
+      [schema, table_name] -> {schema, table_name}
+    end
+  end
+
+  defp find_sequence_by_name(databases, sequence_name) do
     databases
     |> Enum.find_value(fn database ->
       Enum.find(database.sequences, &(&1.name == sequence_name))
@@ -811,15 +910,6 @@ defmodule Sequin.YamlLoader do
     |> case do
       nil -> {:error, Error.not_found(entity: :sequence, params: %{name: sequence_name})}
       sequence -> {:ok, sequence}
-    end
-  end
-
-  defp http_endpoint_by_name(http_endpoints, http_endpoint_name) do
-    http_endpoints
-    |> Enum.find(fn endpoint -> endpoint.name == http_endpoint_name end)
-    |> case do
-      nil -> {:error, Error.not_found(entity: :http_endpoint, params: %{name: http_endpoint_name})}
-      endpoint -> {:ok, endpoint}
     end
   end
 
@@ -928,4 +1018,17 @@ defmodule Sequin.YamlLoader do
   defp env do
     Application.fetch_env!(@app, :env)
   end
+
+  # Helper function to parse SASL mechanism
+  defp parse_sasl_mechanism(nil), do: {:ok, nil}
+  defp parse_sasl_mechanism("plain"), do: {:ok, :plain}
+  defp parse_sasl_mechanism("scram_sha_256"), do: {:ok, :scram_sha_256}
+  defp parse_sasl_mechanism("scram_sha_512"), do: {:ok, :scram_sha_512}
+
+  defp parse_sasl_mechanism(invalid),
+    do:
+      {:error,
+       Error.validation(
+         summary: "Invalid SASL mechanism '#{invalid}'. Must be one of: plain, scram_sha_256, scram_sha_512"
+       )}
 end

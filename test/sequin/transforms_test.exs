@@ -21,12 +21,20 @@ defmodule Sequin.TransformsTest do
     end
 
     test "returns a map of the postgres database" do
-      database = DatabasesFactory.insert_postgres_database!()
+      database = DatabasesFactory.insert_postgres_database!(table_count: 1)
+      [table] = database.tables
 
       _replication_slot =
         ReplicationFactory.insert_postgres_replication!(
           postgres_database_id: database.id,
           account_id: database.account_id
+        )
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: database.account_id,
+          postgres_database_id: database.id,
+          table_oid: table.oid
         )
 
       json = Transforms.to_external(database)
@@ -44,7 +52,8 @@ defmodule Sequin.TransformsTest do
                pool_size: pool_size,
                ssl: ssl,
                ipv6: ipv6,
-               use_local_tunnel: use_local_tunnel
+               use_local_tunnel: use_local_tunnel,
+               tables: [table_json]
              } = json
 
       assert id == database.id
@@ -59,6 +68,10 @@ defmodule Sequin.TransformsTest do
       assert is_boolean(use_local_tunnel)
       assert is_binary(slot_name)
       assert is_binary(publication_name)
+      assert is_map(table_json)
+      assert table_json.table_schema == table.schema
+      assert table_json.table_name == table.name
+      assert table_json.sort_column_name == sequence.sort_column_name
     end
 
     test "returns a map of the column filter" do
@@ -130,37 +143,6 @@ defmodule Sequin.TransformsTest do
       end)
 
       assert is_list(actions)
-    end
-
-    test "returns a map of the sequence" do
-      database = DatabasesFactory.insert_postgres_database!()
-
-      sequence =
-        DatabasesFactory.sequence(
-          postgres_database_id: database.id,
-          name: "test_sequence",
-          table_schema: "public",
-          table_name: "users",
-          sort_column_name: "id"
-        )
-
-      json = Transforms.to_external(sequence)
-
-      assert %{
-               id: id,
-               name: name,
-               table_schema: table_schema,
-               table_name: table_name,
-               sort_column_name: sort_column_name,
-               database: database_name
-             } = json
-
-      assert id == sequence.id
-      assert name == sequence.name
-      assert table_schema == sequence.table_schema
-      assert table_name == sequence.table_name
-      assert sort_column_name == sequence.sort_column_name
-      assert database_name == database.name
     end
 
     test "returns a map of webhook.site endpoint" do
@@ -263,10 +245,14 @@ defmodule Sequin.TransformsTest do
 
     assert %{
              name: name,
-             http_endpoint: endpoint_name,
-             sequence: sequence_name,
              status: status,
              max_deliver: max_deliver,
+             database: database_name,
+             table: schema_and_table,
+             sink: %{
+               type: "http_push",
+               http_endpoint: endpoint_name
+             },
              consumer_start: %{
                position: "beginning | end | from with value"
              },
@@ -276,7 +262,8 @@ defmodule Sequin.TransformsTest do
 
     assert name == "test-consumer"
     assert endpoint_name == "test-endpoint"
-    assert sequence_name == sequence.name
+    assert database_name == database.name
+    assert schema_and_table == "#{table.schema}.#{table.name}"
     assert status == :active
     assert max_deliver == 5
     assert group_column_attnums == [1, 2, 3]
@@ -285,7 +272,7 @@ defmodule Sequin.TransformsTest do
 
     assert %{
              column_name: _,
-             operator: :==,
+             operator: "==",
              comparison_value: "test"
            } = filter
   end

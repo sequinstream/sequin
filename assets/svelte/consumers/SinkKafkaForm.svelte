@@ -44,18 +44,6 @@
     form.sink.username = null;
     form.sink.password = null;
   }
-
-  // Function to prepare and emit form data
-  function handleSubmit() {
-    const payload = {
-      ...form.sink,
-      // Only include username and password if SASL is enabled
-      ...(form.sink.sasl_mechanism !== "none" && {
-        username: internalUsername,
-        password: internalPassword,
-      }),
-    };
-  }
 </script>
 
 <Card>

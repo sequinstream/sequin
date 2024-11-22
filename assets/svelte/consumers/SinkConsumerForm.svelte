@@ -98,6 +98,7 @@
   };
 
   let form = { ...initialForm };
+  let lastPushedFormJSON = null;
   let isDirty = false;
   let isSubmitting = false;
   let sortColumnName = null;
@@ -116,7 +117,13 @@
 
   $: {
     isDirty = JSON.stringify(form) !== JSON.stringify(initialForm);
-    pushEvent("form_updated", { form });
+
+    // Only push the form if it has changed since the last push
+    // Prevents infinite loop of pushing the same form over and over
+    if (JSON.stringify(form) !== lastPushedFormJSON) {
+      pushEvent("form_updated", { form });
+      lastPushedFormJSON = JSON.stringify(form);
+    }
   }
 
   const pushEvent = (event, payload = {}, cb = (result: any) => {}) => {

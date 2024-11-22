@@ -2,6 +2,7 @@ defmodule Sequin.Kafka.Client do
   @moduledoc false
   @behaviour Sequin.Kafka
 
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Kafka.ConnectionCache
@@ -10,15 +11,18 @@ defmodule Sequin.Kafka.Client do
   require Logger
 
   @impl Sequin.Kafka
-  def publish(%KafkaSink{} = sink, %ConsumerRecord{} = record) do
+  def publish(%KafkaSink{} = sink, %ConsumerRecord{} = record), do: do_publish(sink, record)
+  def publish(%KafkaSink{} = sink, %ConsumerEvent{} = event), do: do_publish(sink, event)
+
+  defp do_publish(%KafkaSink{} = sink, record_or_event) do
     with {:ok, connection} <- ConnectionCache.connection(sink),
          :ok <-
            :brod.produce_sync(
              connection,
              sink.topic,
              :hash,
-             to_string(record.record_pks),
-             Jason.encode!(record.data)
+             to_string(record_or_event.record_pks),
+             Jason.encode!(record_or_event.data)
            ) do
       :ok
     else

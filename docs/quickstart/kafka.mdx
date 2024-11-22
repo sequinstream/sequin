@@ -61,7 +61,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
           environment:
             KAFKA_BROKER_ID: 1
             KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092
+            KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
             KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
             KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       ```
@@ -104,7 +104,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
     <Step title='Configure "Kafka Configuration"'>
       In the "Kafka Configuration" card, enter your Kafka connection details:
 
-      - Hosts: If running locally with the provided docker-compose, use `host.docker.internal:9092`
+      - Hosts: If running locally with the provided docker-compose, use `localhost:9092`
       - Topic: The Kafka topic to stream to (e.g., `products`)
       - SASL Mechanism: Select if your Kafka cluster requires authentication
       - Username/Password: Required if SASL is enabled

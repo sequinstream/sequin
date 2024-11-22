@@ -313,10 +313,6 @@ defmodule Sequin.YamlLoader do
 
       {:error, error} when is_exception(error) ->
         {:error, Error.bad_request(message: "Error updating database '#{database.name}': #{Exception.message(error)}")}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        {:error,
-         Error.bad_request(message: "Error updating database '#{database.name}': #{inspect(changeset, pretty: true)}")}
     end
   end
 

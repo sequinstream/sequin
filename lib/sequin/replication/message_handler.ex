@@ -209,11 +209,9 @@ defmodule Sequin.Replication.MessageHandler do
   defp insert_or_delete_consumer_messages(messages) do
     messages
     |> Enum.chunk_every(1000)
-    |> Enum.reduce_while({:ok, 0}, fn batch, {:ok, acc} ->
-      case insert_or_delete_consumer_message_batch(batch) do
-        {:ok, count} -> {:cont, {:ok, acc + count}}
-        error -> {:halt, error}
-      end
+    |> Enum.reduce({:ok, 0}, fn batch, {:ok, acc} ->
+      {:ok, count} = insert_or_delete_consumer_message_batch(batch)
+      {:ok, acc + count}
     end)
   end
 
@@ -243,11 +241,9 @@ defmodule Sequin.Replication.MessageHandler do
   defp insert_wal_events(wal_events) do
     wal_events
     |> Enum.chunk_every(1000)
-    |> Enum.reduce_while({:ok, 0}, fn batch, {:ok, acc} ->
-      case Replication.insert_wal_events(batch) do
-        {:ok, count} -> {:cont, {:ok, acc + count}}
-        error -> {:halt, error}
-      end
+    |> Enum.reduce({:ok, 0}, fn batch, {:ok, acc} ->
+      {:ok, count} = Replication.insert_wal_events(batch)
+      {:ok, acc + count}
     end)
   end
 

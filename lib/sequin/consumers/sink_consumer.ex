@@ -12,6 +12,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.PubsubSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -47,7 +48,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
 
-    field :type, Ecto.Enum, values: [:http_push, :sqs, :redis, :kafka, :sequin_stream], read_after_writes: true
+    field :type, Ecto.Enum, values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :pubsub], read_after_writes: true
 
     field :health, :map, virtual: true
 
@@ -68,7 +69,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         sqs: SqsSink,
         redis: RedisSink,
         kafka: KafkaSink,
-        sequin_stream: SequinStreamSink
+        sequin_stream: SequinStreamSink,
+        pubsub: PubsubSink
       ],
       on_replace: :update,
       type_field_name: :type

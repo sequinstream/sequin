@@ -107,7 +107,7 @@ defmodule Sequin.Transforms do
       group_column_attnums: consumer.sequence_filter.group_column_attnums,
       table: "#{table.schema}.#{table.name}",
       sink: %{
-        type: "http_push",
+        type: "webhook",
         http_endpoint: consumer.sink.http_endpoint.name
       },
       filters: Enum.map(filters, &format_filter(&1, table)),

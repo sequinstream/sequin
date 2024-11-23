@@ -827,7 +827,7 @@ defmodule Sequin.YamlLoader do
     {:ok, %{type: :sequin_stream}}
   end
 
-  defp parse_sink(%{"type" => "http_push"} = attrs, resources) do
+  defp parse_sink(%{"type" => "webhook"} = attrs, resources) do
     http_endpoints = resources.http_endpoints
 
     with {:ok, http_endpoint} <- find_http_endpoint_by_name(http_endpoints, attrs["http_endpoint"]) do

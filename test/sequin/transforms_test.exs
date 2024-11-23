@@ -250,7 +250,7 @@ defmodule Sequin.TransformsTest do
              database: database_name,
              table: schema_and_table,
              sink: %{
-               type: "http_push",
+               type: "webhook",
                http_endpoint: endpoint_name
              },
              consumer_start: %{

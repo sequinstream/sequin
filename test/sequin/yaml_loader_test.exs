@@ -415,7 +415,7 @@ defmodule Sequin.YamlLoaderTest do
                    database: "test-db"
                    table: "Characters"
                    sink:
-                     type: "http_push"
+                     type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    consumer_start:
                      position: "beginning"
@@ -448,7 +448,7 @@ defmodule Sequin.YamlLoaderTest do
                    database: "test-db"
                    table: "Characters"
                    sink:
-                     type: "http_push"
+                     type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    filters:
                      - column_name: "house"
@@ -509,7 +509,7 @@ defmodule Sequin.YamlLoaderTest do
           database: "test-db"
           table: "Characters"
           sink:
-            type: "http_push"
+            type: "webhook"
             http_endpoint: "sequin-playground-http"
           consumer_start:
             position: "beginning"
@@ -547,12 +547,11 @@ defmodule Sequin.YamlLoaderTest do
           database: "test-db"
           table: "Characters"
           sink:
-            type: "http_push"
+            type: "webhook"
             http_endpoint: "sequin-playground-http"
       """
 
-      assert :ok =
-               YamlLoader.apply_from_yml!(create_yaml)
+      assert :ok = YamlLoader.apply_from_yml!(create_yaml)
 
       assert [consumer] = Repo.all(SinkConsumer)
       consumer = SinkConsumer.preload_http_endpoint(consumer)
@@ -572,7 +571,7 @@ defmodule Sequin.YamlLoaderTest do
           database: "test-db"
           table: "Characters"
           sink:
-            type: "http_push"
+            type: "webhook"
             http_endpoint: "new-http-endpoint"
       """
 

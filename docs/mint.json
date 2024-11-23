@@ -95,7 +95,8 @@
         "reference/messages",
         "reference/filters",
         "reference/backfills",
-        "reference/change-retention"
+        "reference/change-retention",
+        "reference/sequin_yaml"
       ]
     },
     {

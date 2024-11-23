@@ -1,0 +1,259 @@
+---
+title: 'Sequin YAML'
+sidebarTitle: 'Sequin YAML'
+description: 'Reference for Sequin YAML configuration'
+---
+
+## Overview
+
+Configure Sequin resources like databases, sinks, and HTTP endpoints using YAML.
+
+You can provide YAML configuration to Sequin in three ways:
+
+1. Via a configuration file using the `CONFIG_FILE_PATH` environment variable
+2. Directly as base64-encoded YAML using the `CONFIG_FILE_YAML` environment variable
+3. Via the Sequin CLI using the `sequin config plan|apply` command group
+
+## Schema
+
+### Account Configuration
+
+```yaml
+account:
+  name: "account-name"  # Required for self-hosted deployments
+```
+
+### User Configuration
+
+```yaml
+users:
+  - email: "user@example.com"    # Required
+    password: "userpassword123"  # Required
+```
+
+### Database Configuration 
+
+```yaml
+databases:
+  - name: "my-database"          # Required, unique identifier
+    username: "postgres"         # Default: postgres
+    password: "postgres"         # Default: postgres
+    hostname: "localhost"        # Required
+    port: 5432                  # Default: 5432
+    database: "my_database"     # Required
+    pool_size: 10               # Default: 3
+    slot_name: "sequin_slot"    # Required
+    publication_name: "sequin_pub" # Required
+    tables:                     # Optional, list of tables to track
+      - table_name: "users"     # Required if tables specified
+        table_schema: "public"  # Default: public
+        sort_column_name: "updated_at" # Required
+```
+
+### HTTP Endpoint Configuration
+
+You can configure HTTP endpoints in three ways:
+
+#### 1. External URL
+```yaml
+http_endpoints:
+  - name: "external-endpoint"         # Required
+    url: "https://api.example.com/webhook"  # Required
+    headers:                          # Optional
+      - key: "Content-Type"
+        value: "application/json"
+    encrypted_headers:                # Optional, for sensitive headers
+      - key: "Authorization" 
+        value: "Bearer token123"
+```
+
+#### 2. Local Development Endpoint
+```yaml
+http_endpoints:
+  - name: "local-endpoint"     # Required
+    local: "true"             # Required
+    path: "/webhook"          # Optional
+    headers:                  # Optional
+      - key: "X-Test"
+        value: "test"
+    encrypted_headers:        # Optional
+      - key: "X-Secret"
+        value: "secret123"
+```
+
+#### 3. Webhook.site Testing Endpoint
+```yaml
+http_endpoints:
+  - name: "webhook-site"     # Required
+    webhook.site: "true"     # Required
+```
+
+### Sink Consumer Configuration
+
+A sink consumer streams data from a table to a destination (sink). All sink consumers share these configuration options:
+
+```yaml
+sink_consumers:
+  - name: "my-consumer"            # Required, unique name for this consumer
+    database: "my-database"        # Required, references database name
+    table: "public.users"          # Required, [schema.]table to consume
+    batch_size: 1                  # Optional, messages per batch, default: 1
+    status: "active"               # Optional: active or disabled, default: active
+    group_column_attnums: [1, 2]   # Optional, columns to group messages by
+    filters:                       # Optional, filter which rows to consume
+      - column_name: "status"      
+        operator: "="
+        comparison_value: "active"
+      - column_name: "metadata"    # JSONB example
+        field_path: "type.name"
+        operator: "="
+        comparison_value: "premium"
+        field_type: "string"
+    sink:                         # Required, sink-specific configuration
+      type: "..."                # Required, sink type
+      ...                        # Additional sink-specific options
+```
+
+The `sink` configuration varies by sink type. Below are the configurations for each supported sink type:
+
+#### Webhook Sink
+For sending changes to HTTP endpoints:
+```yaml
+sink:
+  type: "http_push"               # Required
+  http_endpoint: "endpoint-name"  # Required, references HTTP endpoint
+  http_endpoint_path: "/custom"   # Optional, path to append to endpoint URL
+```
+
+#### Sequin Stream Sink
+For pulling changes via the Sequin Stream API:
+```yaml
+sink:
+  type: "sequin_stream"          # Required
+```
+
+#### Kafka Sink
+For publishing changes to Kafka topics:
+```yaml
+sink:
+  type: "kafka"                  # Required
+  hosts: "localhost:9092"        # Required, comma-separated list of brokers
+  topic: "my-topic"             # Required
+  tls: false                    # Optional, enable TLS, default: false
+  username: "kafka-user"        # Optional, for SASL authentication
+  password: "kafka-pass"        # Optional, for SASL authentication
+  sasl_mechanism: "plain"       # Optional: plain, scram_sha_256, scram_sha_512
+```
+
+#### SQS Sink
+For sending changes to Amazon SQS queues:
+```yaml
+sink:
+  type: "sqs"                   # Required
+  queue_url: "https://sqs.us-west-2.amazonaws.com/123/MyQueue.fifo" # Required
+  access_key_id: "AKIAXXXX"    # Required
+  secret_access_key: "secret"   # Required
+```
+
+#### Redis Sink
+For publishing changes to Redis streams:
+```yaml
+sink:
+  type: "redis"                 # Required
+  host: "localhost"             # Required
+  port: 6379                    # Required
+  stream_key: "my-stream"       # Required
+  database: 0                   # Optional, Redis database number, default: 0
+  tls: false                    # Optional, enable TLS, default: false
+  username: "redis-user"        # Optional, for authentication
+  password: "redis-pass"        # Optional, for authentication
+```
+
+All sink types support filtering messages based on columns in your source table. The filtering syntax is consistent across sink types:
+
+```yaml
+filters:
+  # Basic column filter
+  - column_name: "status"           
+    operator: "="                   # =, !=, >, >=, <, <=, in, not in, is null, is not null
+    comparison_value: "active"
+  
+  # JSONB field filter
+  - column_name: "metadata"         
+    field_path: "preferences.theme" # Dot notation for nested fields
+    operator: "="
+    comparison_value: "dark"
+    field_type: "string"           # string, number, boolean, null, list
+```
+
+### Change Retention Configuration
+```yaml
+change_retentions:
+  - name: "my-retention"                  # Required
+    source_database: "source-db"          # Required
+    source_table_schema: "public"         # Required
+    source_table_name: "users"            # Required
+    destination_database: "dest-db"       # Required
+    destination_table_schema: "public"    # Required  
+    destination_table_name: "user_events" # Required
+    actions:                             # Optional, defaults to all
+      - insert
+      - update 
+      - delete
+    filters:                             # Optional
+      - column_name: "status"           
+        operator: "="
+        comparison_value: "active"
+      - column_name: "metadata"          # JSONB column example
+        field_path: "type.name"
+        operator: "="
+        comparison_value: "premium"
+        field_type: "string"
+```
+
+## Example Configuration
+
+Here's a complete example combining multiple configuration types:
+
+```yaml
+account:
+  name: "my-account"
+
+users:
+  - email: "admin@example.com"
+    password: "adminpass123"
+
+databases:
+  - name: "production-db"
+    hostname: "prod.db.example.com"  
+    database: "app_production"
+    slot_name: "sequin_slot"
+    publication_name: "sequin_pub"
+    tables:
+      - table_name: "users"
+        sort_column_name: "updated_at"
+
+http_endpoints:
+  - name: "webhook-endpoint"
+    url: "https://api.example.com/webhook"
+    encrypted_headers:
+      - key: "Authorization"
+        value: "Bearer token123"
+
+sink_consumers:
+  - name: "user-changes"
+    database: "production-db"
+    table: "users"
+    sink:
+      type: "http_push"
+      http_endpoint: "webhook-endpoint"
+
+change_retentions:
+  - name: "user-audit"
+    source_database: "production-db" 
+    source_table_schema: "public"
+    source_table_name: "users"
+    destination_database: "production-db"
+    destination_table_schema: "audit"
+    destination_table_name: "user_events"
+```

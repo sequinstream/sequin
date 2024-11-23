@@ -241,6 +241,7 @@ defmodule Sequin.TransformsTest do
         }
       )
 
+    consumer = %{consumer | sink: %{consumer.sink | http_endpoint: endpoint}}
     json = Transforms.to_external(consumer)
 
     assert %{

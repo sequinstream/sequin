@@ -4,8 +4,13 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.User
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.HttpPushSink
+  alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
+  alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
@@ -90,7 +95,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%SinkConsumer{type: :http_push} = consumer) do
+  def to_external(%SinkConsumer{sink: sink} = consumer) do
     consumer =
       consumer
       |> Repo.preload(sequence: [:postgres_database])
@@ -106,15 +111,61 @@ defmodule Sequin.Transforms do
       max_deliver: consumer.max_deliver,
       group_column_attnums: consumer.sequence_filter.group_column_attnums,
       table: "#{table.schema}.#{table.name}",
-      sink: %{
-        type: "webhook",
-        http_endpoint: consumer.sink.http_endpoint.name
-      },
+      sink: to_external(sink),
       filters: Enum.map(filters, &format_filter(&1, table)),
       consumer_start: %{
         position: "beginning | end | from with value"
       }
     }
+  end
+
+  def to_external(%HttpPushSink{} = sink) do
+    %{
+      type: "webhook",
+      http_endpoint: sink.http_endpoint.name
+    }
+  end
+
+  def to_external(%SequinStreamSink{}) do
+    %{
+      type: "sequin_stream"
+    }
+  end
+
+  def to_external(%KafkaSink{} = sink) do
+    Sequin.Map.reject_nil_values(%{
+      type: "kafka",
+      hosts: sink.hosts,
+      topic: sink.topic,
+      tls: sink.tls,
+      username: sink.username,
+      password: if(sink.password, do: "********"),
+      sasl_mechanism: sink.sasl_mechanism
+    })
+  end
+
+  def to_external(%RedisSink{} = sink) do
+    Sequin.Map.reject_nil_values(%{
+      type: "redis",
+      host: sink.host,
+      port: sink.port,
+      stream_key: sink.stream_key,
+      database: sink.database,
+      tls: sink.tls,
+      username: sink.username,
+      password: if(sink.password, do: "********")
+    })
+  end
+
+  def to_external(%SqsSink{} = sink) do
+    Sequin.Map.reject_nil_values(%{
+      type: "sqs",
+      queue_url: sink.queue_url,
+      region: sink.region,
+      access_key_id: if(sink.access_key_id, do: "********"),
+      secret_access_key: if(sink.secret_access_key, do: "********"),
+      is_fifo: sink.is_fifo
+    })
   end
 
   def to_external(%ColumnFilter{} = column_filter) do

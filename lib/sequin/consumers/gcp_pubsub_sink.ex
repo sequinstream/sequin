@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.GooglePubsubSink do
+defmodule Sequin.Consumers.GcpPubsubSink do
   @moduledoc false
   use Ecto.Schema
   use TypedEctoSchema
@@ -10,7 +10,7 @@ defmodule Sequin.Consumers.GooglePubsubSink do
   @derive {Jason.Encoder, only: [:project_id, :topic_id]}
   @primary_key false
   typed_embedded_schema do
-    field :type, Ecto.Enum, values: [:pubsub], default: :pubsub
+    field :type, Ecto.Enum, values: [:gcp_pubsub], default: :gcp_pubsub
     field :project_id, :string
     field :topic_id, :string
     field :credentials, Encrypted.Field

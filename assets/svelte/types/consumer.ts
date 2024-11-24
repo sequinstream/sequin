@@ -88,10 +88,21 @@ export type SequinStreamConsumer = BaseConsumer & {
   };
 };
 
+// Gcp Pubsub specific sink
+export type GcpPubsubConsumer = BaseConsumer & {
+  sink: {
+    type: "gcp_pubsub";
+    project_id: string;
+    topic_id: string;
+    connection_id: string;
+  };
+};
+
 // Union type for all consumer types
 export type Consumer =
   | HttpPushConsumer
   | SqsConsumer
   | RedisConsumer
   | KafkaConsumer
-  | SequinStreamConsumer;
+  | SequinStreamConsumer
+  | GcpPubsubConsumer;

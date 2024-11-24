@@ -8,7 +8,6 @@
     SelectTrigger,
     SelectValue,
   } from "$lib/components/ui/select";
-  import SequenceSelector from "../components/SequenceSelector.svelte";
   import {
     Card,
     CardContent,
@@ -24,6 +23,7 @@
   import SinkSqsForm from "$lib/consumers/SinkSqsForm.svelte";
   import SinkRedisForm from "$lib/consumers/SinkRedisForm.svelte";
   import SinkKafkaForm from "$lib/consumers/SinkKafkaForm.svelte";
+  import SinkGcpPubsubForm from "./SinkGcpPubsubForm.svelte";
   import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
   import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
@@ -126,14 +126,35 @@
     }
   }
 
+  let selectedDatabase: any;
+  let selectedTable: any;
+  let isCreateConsumerDisabled: boolean = true;
+
   const pushEvent = (event, payload = {}, cb = (result: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
-  let selectedDatabase: any;
-  let selectedTable: any;
-
   $: {
+    if (!enableBackfill) {
+      form.initialBackfill = {
+        enabled: false,
+        startPosition: "beginning",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "beginning") {
+      form.initialBackfill = {
+        enabled: true,
+        startPosition: "beginning",
+        initialMinSortCol: null,
+      };
+    } else if (startPosition === "specific") {
+      form.initialBackfill = {
+        enabled: true,
+        startPosition: "specific",
+        initialMinSortCol: form.initialBackfill.initialMinSortCol,
+      };
+    }
+
     if (form.postgresDatabaseId) {
       selectedDatabase = databases.find(
         (db) => db.id === form.postgresDatabaseId,
@@ -159,6 +180,8 @@
         form.messageKind = "record";
       }
     }
+
+    isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
   }
 
   const isEditMode = !!consumer.id;
@@ -208,8 +231,6 @@
   function handleClose() {
     pushEvent("form_closed");
   }
-
-  $: isCreateConsumerDisabled = !form.postgresDatabaseId || !form.tableOid;
 
   let showLocalhostWarningDialog = false;
 
@@ -269,27 +290,6 @@
   let minSortColError: string = "";
   let enableBackfill = false;
 
-  $: {
-    if (!enableBackfill) {
-      form.initialBackfill = {
-        enabled: false,
-        startPosition: "beginning",
-        initialMinSortCol: null,
-      };
-    } else if (startPosition === "beginning") {
-      form.initialBackfill = {
-        enabled: true,
-        startPosition: "beginning",
-        initialMinSortCol: null,
-      };
-    } else if (startPosition === "specific") {
-      form.initialBackfill = {
-        enabled: true,
-        startPosition: "specific",
-        initialMinSortCol: form.initialBackfill.initialMinSortCol,
-      };
-    }
-  }
   let showExampleModal = false;
   let selectedExampleType: "change" | "record" = "change";
 
@@ -722,6 +722,8 @@
       <SinkRedisForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "kafka"}
       <SinkKafkaForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "gcp_pubsub"}
+      <SinkGcpPubsubForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}
       <SinkSequinStreamForm errors={errors.consumer} bind:form />
     {/if}
@@ -758,7 +760,7 @@
           <p class="text-destructive text-sm">Validation errors, see above</p>
         {/if}
         <div class="flex justify-end items-center gap-2">
-          {#if consumer.type === "sqs" || consumer.type === "redis" || consumer.type === "kafka"}
+          {#if consumer.type !== "http_push" && consumer.type !== "sequin_stream"}
             <Button
               loading={testConnectionState.status === "loading"}
               type="button"

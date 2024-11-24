@@ -8,7 +8,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
-  alias Sequin.Consumers.GooglePubsubSink
+  alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -37,7 +37,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :pubsub])
+        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub])
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -185,10 +185,10 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(%SequinStreamSink{type: :sequin_stream}, attrs)
   end
 
-  defp sink(:pubsub, _account_id, attrs) do
+  defp sink(:gcp_pubsub, _account_id, attrs) do
     merge_attributes(
-      %GooglePubsubSink{
-        type: :pubsub,
+      %GcpPubsubSink{
+        type: :gcp_pubsub,
         project_id: "test-project-123",
         topic_id: "test-topic-#{Factory.word()}",
         credentials:

@@ -28,6 +28,10 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     :ok
   end
 
+  def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :gcp_pubsub}, _opts) do
+    :ok
+  end
+
   def start_for_sink_consumer(supervisor, %SinkConsumer{} = consumer, opts) do
     default_opts = [consumer: consumer]
     consumer_features = Consumers.consumer_features(consumer)
@@ -53,6 +57,10 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   def stop_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
 
   def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}) do
+    :ok
+  end
+
+  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :gcp_pubsub}) do
     :ok
   end
 

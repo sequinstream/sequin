@@ -10,6 +10,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -507,6 +508,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%GcpPubsubSink{} = sink) do
+    %{
+      type: :gcp_pubsub,
+      project_id: sink.project_id,
+      topic_id: sink.topic_id,
+      connection_id: sink.connection_id
+    }
+  end
+
   defp encode_sink(%SequinStreamSink{}) do
     %{type: :sequin_stream}
   end
@@ -838,4 +848,5 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :redis}}), do: "Redis Sink"
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
+  defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
 end

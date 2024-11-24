@@ -50,7 +50,7 @@ defmodule Sequin.GCP.PubSubTest do
       end)
 
       assert {:error, error} = PubSub.topic_metadata(client, @topic_id)
-      assert error.service == :google_pubsub
+      assert error.service == :gcp_pubsub
       assert error.message =~ "Failed to exchange JWT for access token"
     end
   end
@@ -122,7 +122,7 @@ defmodule Sequin.GCP.PubSubTest do
       end)
 
       assert {:error, error} = PubSub.publish_messages(client, @topic_id, [%{data: "test"}])
-      assert error.service == :google_pubsub
+      assert error.service == :gcp_pubsub
       assert error.message =~ "publish messages"
       assert error.message =~ "GCP internal error"
     end

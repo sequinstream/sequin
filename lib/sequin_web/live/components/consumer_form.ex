@@ -4,6 +4,7 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
+  alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -21,6 +22,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.GCP.PubSub
   alias Sequin.Kafka
   alias Sequin.Name
   alias Sequin.Postgres
@@ -207,6 +209,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :gcp_pubsub ->
+        case test_pubsub_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -267,6 +275,33 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       case Kafka.test_connection(sink) do
         :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_pubsub_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %GcpPubsubSink{} = sink -> GcpPubsubSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      client =
+        PubSub.new(
+          sink.project_id,
+          Jason.decode!(sink.credentials)
+        )
+
+      case PubSub.topic_metadata(client, sink.topic_id) do
+        {:ok, _} -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -357,6 +392,15 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp decode_sink(:sequin_stream, _sink) do
     %{
       "type" => "sequin_stream"
+    }
+  end
+
+  defp decode_sink(:gcp_pubsub, sink) do
+    %{
+      "type" => "gcp_pubsub",
+      "project_id" => sink["project_id"],
+      "topic_id" => sink["topic_id"],
+      "credentials" => sink["credentials"]
     }
   end
 
@@ -455,6 +499,14 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp encode_sink(%SequinStreamSink{}) do
     %{
       "type" => "sequin_stream"
+    }
+  end
+
+  defp encode_sink(%GcpPubsubSink{} = sink) do
+    %{
+      "type" => "gcp_pubsub",
+      "project_id" => sink.project_id,
+      "topic_id" => sink.topic_id
     }
   end
 
@@ -735,6 +787,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :redis -> "Redis Sink"
       :sqs -> "SQS Sink"
       :sequin_stream -> "Sequin Stream Sink"
+      :gcp_pubsub -> "GCP Pub/Sub Sink"
     end
   end
 

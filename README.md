@@ -46,7 +46,7 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
 | NATS JetStream | Coming soon | (Nov 2024) |
 | Azure EventHubs | Coming soon | (Nov 2024) |
-| Google Pub/Sub | Coming soon | (Nov 2024) |
+| GCP Pub/Sub | Coming soon | (Nov 2024) |
 | Amazon SNS | Coming soon | (Nov 2024) |
 | AWS Kinesis | Coming soon | (Dec 2024) |
 | RabbitMQ | Coming soon | (Dec 2024) |

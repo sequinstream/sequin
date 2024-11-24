@@ -104,21 +104,21 @@ defmodule Sequin.GCP.PubSub do
       {:ok, %{body: %{"error" => error} = body}} ->
         {:error,
          Error.service(
-           service: :google_pubsub,
-           message: "Request failed: #{req_desc}, error: #{error}",
-           details: body
+           service: :gcp_pubsub,
+           message: "Request failed: #{req_desc}, error: #{inspect(error)}",
+           details: error
          )}
 
       {:ok, res} ->
         {:error,
          Error.service(
-           service: :google_pubsub,
+           service: :gcp_pubsub,
            message: "Request failed: #{req_desc}, bad status (status=#{res.status})",
            details: res
          )}
 
       {:error, error} ->
-        {:error, Error.service(service: :google_pubsub, message: "Failed to get topic metadata", details: error)}
+        {:error, Error.service(service: :gcp_pubsub, message: "Failed to get topic metadata", details: error)}
     end
   end
 
@@ -207,6 +207,14 @@ defmodule Sequin.GCP.PubSub do
     {_, signed} = JOSE.JWT.sign(jwk, jws, jwt)
     compact = signed |> JOSE.JWS.compact() |> elem(1)
     {:ok, compact}
+  rescue
+    # Will happen with a bad key
+    _e ->
+      {:error,
+       Error.service(
+         service: :gcp_pubsub,
+         message: "Failed to sign JWT. Credentials may be invalid."
+       )}
   end
 
   defp exchange_jwt_for_token(jwt, req_opts) do
@@ -232,7 +240,7 @@ defmodule Sequin.GCP.PubSub do
       {:ok, %{status: status, body: body}} ->
         {:error,
          Error.service(
-           service: :google_pubsub,
+           service: :gcp_pubsub,
            message: "Failed to exchange JWT for access token",
            details: %{status: status, body: body}
          )}
@@ -247,26 +255,20 @@ defmodule Sequin.GCP.PubSub do
   end
 
   defp parse_topic_metadata(body) do
-    %{
-      "name" => name,
-      "labels" => labels,
-      "messageStoragePolicy" => storage_policy,
-      "kmsKeyName" => kms_key,
-      "schemaSettings" => schema_settings,
-      "messageRetentionDuration" => retention
-    } = body
+    # Everything but `name` is optional in response
+    %{"name" => name} = body
 
     %{
       name: name,
-      labels: labels || %{},
-      storage_policy: storage_policy,
-      kms_key: kms_key,
-      schema_settings: schema_settings,
-      message_retention: retention
+      labels: Map.get(body, "labels", %{}),
+      storage_policy: Map.get(body, "messageStoragePolicy"),
+      kms_key: Map.get(body, "kmsKeyName"),
+      schema_settings: Map.get(body, "schemaSettings"),
+      message_retention: Map.get(body, "messageRetentionDuration")
     }
   end
 
   defp default_req_opts do
-    Application.get_env(:sequin, :google_pubsub, [])[:req_opts] || []
+    Application.get_env(:sequin, :gcp_pubsub, [])[:req_opts] || []
   end
 end

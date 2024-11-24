@@ -5,7 +5,6 @@
     HelpCircle,
     XCircle,
   } from "lucide-svelte";
-  import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
@@ -19,12 +18,14 @@
     RedisConsumer,
     KafkaConsumer,
     SequinStreamConsumer,
+    GcpPubsubConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SinkCardSqs from "../components/SinkCardSqs.svelte";
   import SinkCardRedis from "../components/SinkCardRedis.svelte";
   import SinkCardKafka from "../components/SinkCardKafka.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
+  import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
   export let live;
   export let parent;
   export let consumer: Consumer;
@@ -66,6 +67,12 @@
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
     return consumer.sink.type === "kafka";
+  }
+
+  function isGcpPubsubConsumer(
+    consumer: Consumer,
+  ): consumer is GcpPubsubConsumer {
+    return consumer.sink.type === "gcp_pubsub";
   }
 
   function isSequinStreamConsumer(
@@ -244,6 +251,8 @@
         <SinkCardRedis {consumer} />
       {:else if isKafkaConsumer(consumer)}
         <SinkCardKafka {consumer} />
+      {:else if isGcpPubsubConsumer(consumer)}
+        <SinkCardGcpPubSub {consumer} />
       {:else if isSequinStreamConsumer(consumer)}
         <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
       {/if}

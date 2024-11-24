@@ -13,8 +13,6 @@
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import { ChevronRight } from "lucide-svelte";
   import {
-    AlertCircle,
-    ListOrdered,
     CirclePlay,
     CircleStop,
     Database,
@@ -22,19 +20,14 @@
     Webhook,
   } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import {
-    Alert,
-    AlertDescription,
-    AlertTitle,
-  } from "$lib/components/ui/alert";
   import HealthPill from "../health/HealthPill.svelte";
   import { Badge } from "$lib/components/ui/badge";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
-  import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
   import KafkaIcon from "../../icons/kafka.svelte";
+  import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
 
   export let consumers: Array<{
@@ -76,6 +69,11 @@
       id: "kafka",
       name: "Kafka",
       icon: KafkaIcon,
+    },
+    {
+      id: "gcp_pubsub",
+      name: "GCP Pub/Sub",
+      icon: GcpPubsubIcon,
     },
     {
       id: "sequin_stream",

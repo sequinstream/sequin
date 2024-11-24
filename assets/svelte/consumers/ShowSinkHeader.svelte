@@ -16,6 +16,7 @@
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
   import KafkaIcon from "../../icons/kafka.svelte";
+  import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
 
   export let consumer;
@@ -118,6 +119,8 @@
             <RedisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kafka"}
             <KafkaIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "gcp_pubsub"}
+            <GcpPubsubIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sequin_stream"}
             <SequinStreamIcon class="h-6 w-6 mr-2" />
           {/if}

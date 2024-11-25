@@ -77,7 +77,8 @@ defmodule Sequin.Gcp.PubSub do
       Enum.map(messages, fn msg ->
         %{
           "data" => Base.encode64(Jason.encode!(msg.data)),
-          "attributes" => msg[:attributes] || %{}
+          "attributes" => msg[:attributes] || %{},
+          "orderingKey" => msg[:ordering_key]
         }
       end)
 
@@ -129,6 +130,27 @@ defmodule Sequin.Gcp.PubSub do
 
       error ->
         handle_error(error, "pull messages")
+    end
+  end
+
+  @doc """
+  Acknowledges messages in a subscription by their ack_ids.
+  Takes a list of ack_ids and sends them to be acknowledged.
+  """
+  @spec ack_messages(Client.t(), String.t(), list(String.t())) :: :ok | {:error, Error.t()}
+  def ack_messages(%Client{} = client, subscription_id, ack_ids) when is_list(ack_ids) do
+    path = "projects/#{client.project_id}/subscriptions/#{subscription_id}:acknowledge"
+
+    payload = %{
+      "ackIds" => ack_ids
+    }
+
+    case authenticated_request(client, :post, path, json: payload) do
+      {:ok, %{status: 200}} ->
+        :ok
+
+      error ->
+        handle_error(error, "acknowledge messages")
     end
   end
 

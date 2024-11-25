@@ -18,7 +18,6 @@ defmodule Sequin.Kafka.Client do
 
   defp do_publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, record_or_event) do
     message_key = message_key(consumer, record_or_event)
-    dbg(message_key)
 
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-

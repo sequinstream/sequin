@@ -22,7 +22,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.GCP.PubSub
+  alias Sequin.Gcp.PubSub
   alias Sequin.Kafka
   alias Sequin.Name
   alias Sequin.Postgres
@@ -297,7 +297,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       client =
         PubSub.new(
           sink.project_id,
-          Jason.decode!(sink.credentials)
+          sink.credentials
         )
 
       case PubSub.topic_metadata(client, sink.topic_id) do
@@ -396,11 +396,19 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp decode_sink(:gcp_pubsub, sink) do
+    creds =
+      with true <- is_binary(sink["credentials"]),
+           {:ok, creds} <- Jason.decode(sink["credentials"]) do
+        creds
+      else
+        _ -> sink["credentials"]
+      end
+
     %{
       "type" => "gcp_pubsub",
       "project_id" => sink["project_id"],
       "topic_id" => sink["topic_id"],
-      "credentials" => sink["credentials"]
+      "credentials" => creds
     }
   end
 

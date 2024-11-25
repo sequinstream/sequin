@@ -8,7 +8,7 @@ ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 ARG SELF_HOSTED=0
 
 # ---- Build Stage ----
-FROM ${BUILDER_IMAGE} as builder
+FROM ${BUILDER_IMAGE} AS builder
 
 # Pass the SELF_HOSTED arg as an environment variable
 ARG SELF_HOSTED
@@ -73,7 +73,7 @@ RUN mix release
 # start a new build stage so that the final image will only contain
 # the compiled release and other runtime necessities
 # ---- App Stage ----
-FROM ${RUNNER_IMAGE} as app
+FROM ${RUNNER_IMAGE} AS app
 
 # Pass the SELF_HOSTED arg again in this stage
 ARG SELF_HOSTED
@@ -86,9 +86,9 @@ RUN apt-get update -y && \
 # Set the locale
 RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
 
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US:en
-ENV LC_ALL en_US.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 # Copy over the build artifact from the previous step and create a non root user
 RUN useradd --create-home app

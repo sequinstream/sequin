@@ -24,13 +24,14 @@ defmodule SequinWeb.Router do
     plug VerifyApiToken
   end
 
-  ## Authentication routes
-
   scope "/", SequinWeb do
     pipe_through [:browser]
 
     get "/auth/github", UserSessionController, :start_oauth
     get "/auth/github/callback", UserSessionController, :callback
+    delete "/logout", UserSessionController, :delete
+
+    get "/version", VersionController, :show
 
     live_session :home do
       live "/", HomeLive, :index
@@ -38,6 +39,13 @@ defmodule SequinWeb.Router do
       if @self_hosted do
         live "/migration-oct-2024", MigrationOct2024Live, :index
       end
+    end
+
+    live_session :current_user,
+      on_mount: [{SequinWeb.UserAuth, :mount_current_user}],
+      layout: {SequinWeb.Layouts, :app_no_sidenav} do
+      live "/users/confirm/:token", UserConfirmationLive, :edit
+      live "/users/confirm", UserConfirmationInstructionsLive, :new
     end
   end
 
@@ -67,19 +75,6 @@ defmodule SequinWeb.Router do
       on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}] do
       live "/users/settings", UserSettingsLive, :edit
       live "/users/settings/confirm_email/:token", UserSettingsLive, :confirm_email
-    end
-  end
-
-  scope "/", SequinWeb do
-    pipe_through [:browser]
-
-    delete "/logout", UserSessionController, :delete
-
-    live_session :current_user,
-      on_mount: [{SequinWeb.UserAuth, :mount_current_user}],
-      layout: {SequinWeb.Layouts, :app_no_sidenav} do
-      live "/users/confirm/:token", UserConfirmationLive, :edit
-      live "/users/confirm", UserConfirmationInstructionsLive, :new
     end
   end
 

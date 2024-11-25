@@ -177,6 +177,7 @@ build_and_push_docker() {
     docker buildx build \
         --platform linux/amd64,linux/arm64 \
         --build-arg SELF_HOSTED=1 \
+        --build-arg RELEASE_VERSION="$version" \
         -t sequin/sequin:latest \
         -t sequin/sequin:"$version" \
         . \

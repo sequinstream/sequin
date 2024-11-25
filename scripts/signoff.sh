@@ -73,7 +73,7 @@ echo -e "${BLUE}Attempting to sign off on ${SHA} in ${OWNER}/${REPO} as ${USER}$
 # Run steps
 run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
-run_step "mix test"
+run_step "mix test --max-failures 1"
 
 # Run CLI tests
 cd cli

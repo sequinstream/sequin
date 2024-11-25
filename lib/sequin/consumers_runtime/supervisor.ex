@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime
+  alias Sequin.ConsumersRuntime.GcpPubsubPipeline
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.ConsumersRuntime.KafkaPipeline
   alias Sequin.ConsumersRuntime.RedisPipeline
@@ -25,10 +26,6 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   def start_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
 
   def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}, _opts) do
-    :ok
-  end
-
-  def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :gcp_pubsub}, _opts) do
     :ok
   end
 
@@ -60,10 +57,6 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     :ok
   end
 
-  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :gcp_pubsub}) do
-    :ok
-  end
-
   def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id}) do
     stop_for_sink_consumer(supervisor, id)
   end
@@ -88,6 +81,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
       :sqs -> SqsPipeline
       :redis -> RedisPipeline
       :kafka -> KafkaPipeline
+      :gcp_pubsub -> GcpPubsubPipeline
     end
   end
 

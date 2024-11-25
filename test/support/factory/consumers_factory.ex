@@ -24,6 +24,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Gcp
   alias Sequin.Repo
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
@@ -191,18 +192,34 @@ defmodule Sequin.Factory.ConsumersFactory do
         type: :gcp_pubsub,
         project_id: "test-project-123",
         topic_id: "test-topic-#{Factory.word()}",
-        credentials:
-          Jason.encode!(%{
-            "type" => "service_account",
-            "project_id" => "test-project-123",
-            "private_key_id" => Factory.uuid(),
-            "private_key" => Factory.rsa_key(),
-            "client_email" => "test@test-project-123.iam.gserviceaccount.com",
-            "client_id" => Factory.uuid()
-          })
+        credentials: gcp_credential_attrs()
       },
       attrs
     )
+  end
+
+  def gcp_credential(attrs \\ []) do
+    merge_attributes(
+      %Gcp.Credentials{
+        type: "service_account",
+        project_id: "test-project-123",
+        private_key_id: Factory.uuid(),
+        private_key: Factory.rsa_key(),
+        client_email: "#{Factory.unique_word()}@test-project-123.iam.gserviceaccount.com",
+        client_id: Factory.uuid(),
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url:
+          "https://www.googleapis.com/robot/v1/metadata/x509/test@test-project-123.iam.gserviceaccount.com",
+        universe_domain: "googleapis.com"
+      },
+      attrs
+    )
+  end
+
+  def gcp_credential_attrs(attrs \\ []) do
+    Sequin.Map.from_ecto(gcp_credential(attrs))
   end
 
   def source_table(attrs \\ []) do

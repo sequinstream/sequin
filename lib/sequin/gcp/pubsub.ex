@@ -38,7 +38,20 @@ defmodule Sequin.Gcp.PubSub do
   """
   @spec new(String.t(), map(), keyword()) :: Client.t()
   def new(project_id, credentials, req_opts \\ []) do
+    # Ensure the Credentials module is loaded, as it contains necessary atom keys
+    Code.ensure_loaded(Sequin.Gcp.Credentials)
+
     req_opts = Keyword.merge(default_req_opts(), req_opts)
+
+    credentials =
+      case credentials do
+        %Credentials{} = creds ->
+          creds
+
+        map ->
+          creds = Sequin.Map.atomize_keys(map)
+          struct(Credentials, creds)
+      end
 
     %Client{
       project_id: project_id,

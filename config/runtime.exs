@@ -116,7 +116,8 @@ if config_env() == :prod and self_hosted do
   config :sequin,
     api_base_url: "http://#{server_host}:#{server_port}",
     config_file_path: System.get_env("CONFIG_FILE_PATH"),
-    config_file_yaml: System.get_env("CONFIG_FILE_YAML")
+    config_file_yaml: System.get_env("CONFIG_FILE_YAML"),
+    release_version: System.get_env("RELEASE_VERSION")
 end
 
 if config_env() == :prod and not self_hosted do

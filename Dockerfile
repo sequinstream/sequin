@@ -1,6 +1,7 @@
 ARG ELIXIR_VERSION=1.17.2
 ARG OTP_VERSION=27.0.1
 ARG DEBIAN_VERSION=buster-20240612-slim
+ARG RELEASE_VERSION
 
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
@@ -13,6 +14,10 @@ FROM ${BUILDER_IMAGE} AS builder
 # Pass the SELF_HOSTED arg as an environment variable
 ARG SELF_HOSTED
 ENV SELF_HOSTED=${SELF_HOSTED}
+
+# Pass through RELEASE_VERSION to the build environment
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
 
 # install build dependencies
 RUN apt-get update -y && apt-get install -y build-essential git curl \
@@ -78,6 +83,10 @@ FROM ${RUNNER_IMAGE} AS app
 # Pass the SELF_HOSTED arg again in this stage
 ARG SELF_HOSTED
 ENV SELF_HOSTED=${SELF_HOSTED}
+
+# Pass through RELEASE_VERSION to the runtime environment
+ARG RELEASE_VERSION
+ENV RELEASE_VERSION=${RELEASE_VERSION}
 
 RUN apt-get update -y && \
     apt-get install -y libstdc++6 openssl libncurses5 locales ca-certificates curl ssh jq telnet netcat htop \

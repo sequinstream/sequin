@@ -1,14 +1,14 @@
 defmodule Sequin.Gcp.PubSubTest do
   use Sequin.Case, async: true
 
-  alias Sequin.Factory
+  alias Sequin.Factory.ConsumersFactory
   alias Sequin.Gcp.PubSub
 
   @project_id "test-project"
   @topic_id "test-topic"
 
   setup do
-    credentials = generate_credentials()
+    credentials = ConsumersFactory.gcp_credential_attrs()
     client = PubSub.new(@project_id, credentials)
     {:ok, client: client, credentials: credentials}
   end
@@ -130,24 +130,17 @@ defmodule Sequin.Gcp.PubSubTest do
 
   describe "cache_key" do
     test "generates consistent keys for same credentials" do
-      creds = generate_credentials()
+      creds = ConsumersFactory.gcp_credential()
       key1 = PubSub.cache_key(creds)
       key2 = PubSub.cache_key(creds)
       assert key1 == key2
     end
 
     test "generates different keys for different credentials" do
-      key1 = PubSub.cache_key(generate_credentials())
-      key2 = PubSub.cache_key(generate_credentials())
+      key1 = PubSub.cache_key(ConsumersFactory.gcp_credential())
+      key2 = PubSub.cache_key(ConsumersFactory.gcp_credential())
       refute key1 == key2
     end
-  end
-
-  defp generate_credentials do
-    %{
-      "client_email" => "test-#{Sequin.Factory.uuid()}@project.iam.gserviceaccount.com",
-      "private_key" => Factory.rsa_key()
-    }
   end
 
   defp expect_jwt_request(_) do

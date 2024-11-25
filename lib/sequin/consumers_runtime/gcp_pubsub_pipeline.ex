@@ -64,7 +64,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       consumer_id: consumer.id
     )
 
-    pubsub_messages = Enum.map(messages, &build_pubsub_message/1)
+    pubsub_messages = Enum.map(messages, &build_pubsub_message(consumer, &1))
 
     case PubSub.publish_messages(pubsub_client, consumer.sink.topic_id, pubsub_messages) do
       :ok ->
@@ -99,7 +99,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
     end
   end
 
-  defp build_pubsub_message(%Sequin.Consumers.ConsumerRecord{} = record) do
+  defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerRecord{} = record) do
     %{
       data: %{
         record: record.data.record,
@@ -114,11 +114,12 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       attributes: %{
         "trace_id" => record.replication_message_trace_id,
         "type" => "record"
-      }
+      },
+      ordering_key: ordering_key(consumer, record.data)
     }
   end
 
-  defp build_pubsub_message(%Sequin.Consumers.ConsumerEvent{} = event) do
+  defp build_pubsub_message(consumer, %Sequin.Consumers.ConsumerEvent{} = event) do
     %{
       data: %{
         record: event.data.record,
@@ -136,8 +137,15 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       attributes: %{
         "trace_id" => event.replication_message_trace_id,
         "type" => "event"
-      }
+      },
+      ordering_key: ordering_key(consumer, event.data)
     }
+  end
+
+  defp ordering_key(consumer, data) do
+    consumer
+    |> Sequin.Consumers.group_column_values(data)
+    |> Enum.join(":")
   end
 
   defp setup_allowances(nil), do: :ok

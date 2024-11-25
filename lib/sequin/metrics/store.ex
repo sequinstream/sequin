@@ -66,6 +66,7 @@ defmodule Sequin.Metrics.Store do
     |> Redix.pipeline([
       ["ZADD", "metrics:throughput:#{key}", now, now],
       ["ZREMRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
+      ["ZREMRANGEBYRANK", "metrics:throughput:#{key}", "0", "-10001"],
       ["ZCARD", "metrics:throughput:#{key}"]
     ])
     |> handle_response()

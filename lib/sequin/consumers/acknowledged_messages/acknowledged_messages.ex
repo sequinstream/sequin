@@ -6,7 +6,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Error
 
-  @max_messages 10_000
+  @max_messages 1_000
 
   @doc """
   Stores messages for a given consumer_id in a Redis sorted set and trims to the latest @max_messages.

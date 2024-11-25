@@ -1,9 +1,10 @@
-defmodule Sequin.GCP.PubSub do
+defmodule Sequin.Gcp.PubSub do
   @moduledoc false
 
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Error
+  alias Sequin.Gcp.Credentials
 
   require Logger
 
@@ -19,9 +20,11 @@ defmodule Sequin.GCP.PubSub do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Gcp.Credentials
+
     typedstruct do
       field :project_id, String.t(), enforce: true
-      field :credentials, map(), enforce: true
+      field :credentials, Credentials.t(), enforce: true
       field :auth_token, String.t()
       field :req_opts, keyword(), enforce: true
     end
@@ -91,6 +94,44 @@ defmodule Sequin.GCP.PubSub do
     end
   end
 
+  @doc """
+  Pulls messages from a Pub/Sub subscription.
+  Returns a list of messages with their ack_ids.
+  Options:
+    * :max_messages - Maximum number of messages to return (default: 10)
+    * :return_immediately - Whether to return immediately if no messages (default: true)
+  """
+  @spec pull_messages(Client.t(), String.t(), keyword()) :: {:ok, list(map())} | {:error, Error.t()}
+  def pull_messages(%Client{} = client, subscription_id, opts \\ []) do
+    path = "projects/#{client.project_id}/subscriptions/#{subscription_id}:pull"
+
+    payload = %{
+      "maxMessages" => Keyword.get(opts, :max_messages, 10),
+      "returnImmediately" => Keyword.get(opts, :return_immediately, true)
+    }
+
+    case authenticated_request(client, :post, path, json: payload) do
+      {:ok, %{status: 200, body: %{"receivedMessages" => messages}}} ->
+        decoded_messages =
+          Enum.map(messages, fn msg ->
+            %{
+              ack_id: msg["ackId"],
+              data: msg["message"]["data"] |> Base.decode64!() |> Jason.decode!(),
+              attributes: msg["message"]["attributes"] || %{},
+              publish_time: msg["message"]["publishTime"]
+            }
+          end)
+
+        {:ok, decoded_messages}
+
+      {:ok, %{status: 200, body: %{}}} ->
+        {:ok, []}
+
+      error ->
+        handle_error(error, "pull messages")
+    end
+  end
+
   # Private helpers
 
   defp handle_error(error, req_desc) do
@@ -101,7 +142,7 @@ defmodule Sequin.GCP.PubSub do
       {:error, error} when is_error(error) ->
         {:error, error}
 
-      {:ok, %{body: %{"error" => error} = body}} ->
+      {:ok, %{body: %{"error" => error}}} ->
         {:error,
          Error.service(
            service: :gcp_pubsub,
@@ -160,7 +201,8 @@ defmodule Sequin.GCP.PubSub do
   # Hash the credentials to generate a (safe) cache key
   def cache_key(credentials) do
     credentials
-    |> Map.take(["client_email", "private_key"])
+    |> Map.from_struct()
+    |> Map.take([:client_email, :private_key])
     |> Jason.encode!()
     |> then(&:crypto.hash(:sha256, &1))
     |> Base.encode16(case: :lower)
@@ -178,18 +220,18 @@ defmodule Sequin.GCP.PubSub do
     end
   end
 
-  defp generate_jwt_token(%Client{} = client) do
+  defp generate_jwt_token(%Client{credentials: %Credentials{} = credentials} = client) do
     now = System.system_time(:second)
 
     claims = %{
-      "iss" => client.credentials["client_email"],
+      "iss" => credentials.client_email,
       "scope" => @pubsub_scope,
       "aud" => "https://oauth2.googleapis.com/token",
       "exp" => now + 3600,
       "iat" => now
     }
 
-    with {:ok, jwt} <- sign_jwt(claims, client.credentials["private_key"]) do
+    with {:ok, jwt} <- sign_jwt(claims, credentials.private_key) do
       exchange_jwt_for_token(jwt, client.req_opts)
     end
   end

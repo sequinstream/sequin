@@ -142,32 +142,34 @@
             <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span>
           </div>
         </div>
-        {#if statusTransitioning}
-          {#if displayStatus === "active"}
-            <Button variant="outline" size="sm" disabled>
-              <CirclePlay class="h-4 w-4 mr-1" />
-              Resuming...
+        {#if consumer.sink.type !== "sequin_stream"}
+          {#if statusTransitioning}
+            {#if displayStatus === "active"}
+              <Button variant="outline" size="sm" disabled>
+                <CirclePlay class="h-4 w-4 mr-1" />
+                Resuming...
+              </Button>
+            {:else}
+              <Button variant="outline" size="sm" disabled>
+                <Pause class="h-4 w-4 mr-1" />
+                Pausing...
+              </Button>
+            {/if}
+          {:else if displayStatus === "active"}
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={() => (showPauseConfirmDialog = true)}
+            >
+              <Pause class="h-4 w-4 mr-1" />
+              Pause
             </Button>
           {:else}
-            <Button variant="outline" size="sm" disabled>
-              <Pause class="h-4 w-4 mr-1" />
-              Pausing...
+            <Button variant="outline" size="sm" on:click={enableConsumer}>
+              <CirclePlay class="h-4 w-4 mr-1" />
+              Resume
             </Button>
           {/if}
-        {:else if displayStatus === "active"}
-          <Button
-            variant="outline"
-            size="sm"
-            on:click={() => (showPauseConfirmDialog = true)}
-          >
-            <Pause class="h-4 w-4 mr-1" />
-            Pause
-          </Button>
-        {:else}
-          <Button variant="outline" size="sm" on:click={enableConsumer}>
-            <CirclePlay class="h-4 w-4 mr-1" />
-            Resume
-          </Button>
         {/if}
         <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button>
         <Button

@@ -1,0 +1,70 @@
+---
+title: "GCP Pub/Sub sink"
+sidebarTitle: "GCP Pub/Sub sink"
+description: "Reference for the GCP Pub/Sub sink"
+---
+
+The GCP Pub/Sub sink sends messages to a Google Cloud Pub/Sub topic.
+
+## Configuration
+
+- **Project ID**
+
+    Your Google Cloud project ID (e.g., `my-project-123`).
+
+- **Topic ID**
+
+    The ID of your Pub/Sub topic (e.g., `postgres-changes`).
+
+- **Service Account Credentials**
+
+    The JSON key file contents for a service account with permissions to publish to the specified topic.
+
+## Service account permissions
+
+Sequin requires a service account with the following roles:
+
+- `roles/pubsub.publisher`: Allows publishing messages to topics
+- `roles/pubsub.viewer`: Allows viewing topic configuration and metadata
+
+For more information on creating a service account, see the [how-to guide](/how-to/stream-postgres-to-gcp-pubsub#create-a-service-account).
+
+## Message format
+
+Sequin sends messages to Pub/Sub as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+
+## Retry behavior
+
+If Sequin is unable to deliver a message to Pub/Sub, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Message size limits
+
+Pub/Sub has a [maximum message size of 10MB](https://cloud.google.com/pubsub/quotas#resource_limits). If Pub/Sub rejects a message due to size limitations, Sequin will cancel the message's delivery.
+
+<Info>
+  If you want to see logging/alerting for this situation, please [upvote the corresponding issue](https://github.com/sequinstream/sequin/issues/596).
+</Info>
+
+## Grouping and ordering
+
+When you create a subscription in Pub/Sub, you can enable "[message ordering](https://cloud.google.com/pubsub/docs/ordering)" on the subscription. When enabled, messages in Pub/Sub tagged with the same ordering key will be received in the order they are published.
+
+When you configure a Pub/Sub sink in Sequin, you can specify message grouping behavior. This will be used to set the `ordering_key` on the messages published to Pub/Sub.
+
+The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping.
+
+Sequin will order the delivery of messages with the same group according to their commit timestamp.
+
+## Debugging
+
+You can view the status of your Pub/Sub sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to Pub/Sub, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from Pub/Sub.
+
+Common issues to check when debugging:
+- Service account credentials are valid and not expired
+- Service account has the required Pub/Sub roles
+- Project ID and Topic ID match exactly
+- Topic exists in the specified project

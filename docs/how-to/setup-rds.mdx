@@ -119,6 +119,13 @@ With your AWS RDS database connected to Sequin, you are ready to create a sink. 
     Send database changes to your HTTP endpoints to trigger workflows and keep services in sync
   </Card>
   <Card
+    title="Stream to SQS"
+    icon="aws"
+    href="/how-to/stream-postgres-to-sqs"
+  >
+    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+  </Card>
+  <Card
     title="Stream to Redis"
     icon="layer-group"
     href="/how-to/stream-postgres-to-redis"
@@ -133,10 +140,10 @@ With your AWS RDS database connected to Sequin, you are ready to create a sink. 
     Publish database changes to Kafka topics for event streaming and processing
   </Card>
   <Card
-    title="Stream to SQS"
+    title="Stream to GCP Pub/Sub"
     icon="aws"
-    href="/how-to/stream-postgres-to-sqs"
+    href="/how-to/stream-postgres-to-gcp-pubsub"
   >
-    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
+    Send changes to GCP Pub/Sub topics to trigger Cloud Functions and power event-driven architectures
   </Card>
 </CardGroup>

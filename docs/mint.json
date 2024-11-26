@@ -57,6 +57,7 @@
             "quickstart/sqs",
             "quickstart/kafka",
             "quickstart/redis",
+            "quickstart/gcp-pubsub",
             "quickstart/sequin-stream"
           ],
           "icon": "gauge-max"
@@ -73,7 +74,8 @@
         "how-to/stream-postgres-to-sqs",
         "how-to/stream-postgres-to-kafka",
         "how-to/stream-postgres-to-redis",
-        "how-to/stream-postgres-to-sequin-stream"
+        "how-to/stream-postgres-to-sequin-stream",
+        "how-to/stream-postgres-to-gcp-pubsub"
       ]
     },
     {
@@ -107,6 +109,7 @@
         "reference/sinks/sqs",
         "reference/sinks/kafka",
         "reference/sinks/redis",
+        "reference/sinks/gcp-pubsub",
         "reference/sinks/sequin-stream",
         {
           "group": "Sequin Stream API",

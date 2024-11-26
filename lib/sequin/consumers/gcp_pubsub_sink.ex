@@ -16,7 +16,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     field :topic_id, :string
     field :connection_id, :string
 
-    embeds_one :credentials, Credentials
+    embeds_one :credentials, Credentials, on_replace: :delete
   end
 
   def changeset(struct, params) do

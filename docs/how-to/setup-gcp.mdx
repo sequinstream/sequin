@@ -96,6 +96,13 @@ After enabling logical replication on GCP Cloud SQL, you'll now connect to your 
 With your GCP Cloud SQL database connected to Sequin, you are ready to create a sink. Follow one of our guides below to get started:
 
 <CardGroup cols={2}>
+   <Card
+      title="Stream to GCP Pub/Sub"
+      icon="aws"
+      href="/how-to/stream-postgres-to-gcp-pubsub"
+   >
+      Send changes to GCP Pub/Sub topics to trigger Cloud Functions and power event-driven architectures
+   </Card>
   <Card
     title="Stream to Webhooks"
     icon="webhook"
@@ -116,13 +123,6 @@ With your GCP Cloud SQL database connected to Sequin, you are ready to create a 
     href="/how-to/stream-postgres-to-kafka"
   >
     Publish database changes to Kafka topics for event streaming and processing
-  </Card>
-  <Card
-    title="Stream to SQS"
-    icon="aws"
-    href="/how-to/stream-postgres-to-sqs"
-  >
-    Send changes to AWS SQS queues to trigger Lambda functions and other AWS services
   </Card>
 </CardGroup>
 

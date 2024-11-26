@@ -44,9 +44,9 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 | Redis | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
+| GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | |
 | NATS JetStream | Coming soon | (Nov 2024) |
 | Azure EventHubs | Coming soon | (Nov 2024) |
-| GCP Pub/Sub | Coming soon | (Nov 2024) |
 | Amazon SNS | Coming soon | (Nov 2024) |
 | AWS Kinesis | Coming soon | (Dec 2024) |
 | RabbitMQ | Coming soon | (Dec 2024) |

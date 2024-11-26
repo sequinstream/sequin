@@ -177,7 +177,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       consumer={
         %SinkConsumer{
           type: :gcp_pubsub,
-          sink: %GcpPubsubSink{project_id: "decode-275716", topic_id: "sequin-acco-dev"}
+          sink: %GcpPubsubSink{}
         }
       }
     />

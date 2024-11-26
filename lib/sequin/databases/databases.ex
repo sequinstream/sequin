@@ -339,12 +339,20 @@ defmodule Sequin.Databases do
 
   def test_slot_permissions(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
     with_uncached_connection(database, fn conn ->
-      with :ok <- Postgres.check_replication_slot_exists(conn, slot.slot_name),
+      with {:ok, status} <- Postgres.replication_slot_status(conn, slot.slot_name),
+           :ok <- validate_slot_status(status, slot.slot_name),
            :ok <- Postgres.check_publication_exists(conn, slot.publication_name) do
         Postgres.check_replication_permissions(conn)
       end
     end)
   end
+
+  defp validate_slot_status(:not_found, slot_name) do
+    {:error,
+     Error.validation(summary: "Replication slot '#{slot_name}' does not exist", code: :replication_slot_not_found)}
+  end
+
+  defp validate_slot_status(_status, _slot_name), do: :ok
 
   def verify_table_in_publication(%PostgresDatabase{} = database, table_oid) do
     database = Repo.preload(database, :replication_slot)

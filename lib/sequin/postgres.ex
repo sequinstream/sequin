@@ -14,6 +14,8 @@ defmodule Sequin.Postgres do
 
   require Logger
 
+  @type db_conn() :: pid() | module() | DBConnection.t()
+
   @event_table_columns [
     %{name: "id", type: "serial"},
     %{name: "seq", type: "bigint"},
@@ -391,23 +393,33 @@ defmodule Sequin.Postgres do
     end)
   end
 
-  def check_replication_slot_exists(conn, slot_name) do
-    query = "select 1 from pg_replication_slots where slot_name = $1"
+  @doc """
+  Check if a replication slot (1) exists and (2) is currently busy or available.
+  """
+  @spec replication_slot_status(db_conn(), String.t()) :: {:ok, :busy | :available | :not_found} | {:error, Error.t()}
+  def replication_slot_status(conn, slot_name) do
+    query = """
+    select active
+    from pg_replication_slots
+    where slot_name = $1
+    """
 
     case query(conn, query, [slot_name]) do
-      {:ok, %{num_rows: 1}} ->
-        :ok
+      {:ok, %{rows: []}} ->
+        {:ok, :not_found}
 
-      {:ok, %{num_rows: 0}} ->
-        {:error,
-         Error.validation(summary: "Replication slot '#{slot_name}' does not exist", code: :replication_slot_not_found)}
+      {:ok, %{rows: [[true]]}} ->
+        {:ok, :busy}
+
+      {:ok, %{rows: [[false]]}} ->
+        {:ok, :available}
 
       {:error, %Postgrex.Error{} = error} ->
-        {:error, ValidationError.from_postgrex("Failed to check replication slot: ", error)}
+        {:error, ValidationError.from_postgrex("Failed to check replication slot status: ", error)}
     end
   rescue
     error in [DBConnection.ConnectionError] ->
-      {:error, Error.validation(summary: "Failed to check replication slot: #{error.message}")}
+      {:error, Error.validation(summary: "Failed to check replication slot status: #{error.message}")}
   end
 
   def check_publication_exists(conn, publication_name) do

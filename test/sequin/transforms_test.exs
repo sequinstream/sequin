@@ -202,6 +202,99 @@ defmodule Sequin.TransformsTest do
                encrypted_headers: "(1 encrypted header(s)) - sha256sum: " <> _
              } = json
     end
+
+    test "returns a map of the gcp pubsub consumer" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id, table_count: 1)
+      [table] = database.tables
+      [column | _] = table.columns
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account.id,
+          postgres_database_id: database.id,
+          table_oid: table.oid
+        )
+
+      credentials = %{
+        "type" => "service_account",
+        "project_id" => "my-project",
+        "private_key_id" => "key123",
+        "private_key" => "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
+        "client_email" => "my-service-account@my-project.iam.gserviceaccount.com",
+        "client_id" => "123456789",
+        "auth_uri" => "https://accounts.google.com/o/oauth2/auth",
+        "token_uri" => "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url" => "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url" =>
+          "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
+      }
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "pubsub-consumer",
+          account_id: account.id,
+          status: :active,
+          max_deliver: 5,
+          sink: %{
+            type: :gcp_pubsub,
+            project_id: "my-project",
+            topic_id: "my-topic",
+            credentials: credentials
+          },
+          sequence_id: sequence.id,
+          sequence_filter: %{
+            group_column_attnums: [column.attnum],
+            actions: [:insert, :update],
+            column_filters: [
+              ConsumersFactory.sequence_filter_column_filter_attrs(
+                column_attnum: column.attnum,
+                operator: :==,
+                value: %{__type__: :string, value: "test"}
+              )
+            ]
+          }
+        )
+
+      json = Transforms.to_external(consumer)
+
+      assert %{
+               name: name,
+               status: status,
+               max_deliver: max_deliver,
+               database: database_name,
+               table: schema_and_table,
+               destination: %{
+                 type: "gcp_pubsub",
+                 project_id: project_id,
+                 topic_id: topic_id,
+                 credentials: "(credentials present) - sha256sum: " <> _
+               },
+               consumer_start: %{
+                 position: "beginning | end | from with value"
+               },
+               group_column_names: group_column_names,
+               filters: filters
+             } = json
+
+      assert name == "pubsub-consumer"
+      assert project_id == "my-project"
+      assert topic_id == "my-topic"
+      assert database_name == database.name
+      assert schema_and_table == "#{table.schema}.#{table.name}"
+      assert status == :active
+      assert max_deliver == 5
+      assert group_column_names == [column.name]
+      assert length(filters) == 1
+
+      [filter] = filters
+
+      assert %{
+               column_name: _,
+               operator: "==",
+               comparison_value: "test"
+             } = filter
+    end
   end
 
   test "returns a map of the http push consumer" do

@@ -138,13 +138,16 @@ defmodule Sequin.Extensions.Replication do
     conn = get_cached_conn(state)
 
     error_msg =
-      case Postgres.check_replication_slot_exists(conn, state.slot_name) do
-        :ok ->
+      case Postgres.replication_slot_status(conn, state.slot_name) do
+        {:ok, :available} ->
           "Failed to connect to replication slot after 5 attempts"
 
-        {:error, %Error.ValidationError{code: :replication_slot_not_found} = error} ->
+        {:ok, :busy} ->
+          "Replication slot '#{state.slot_name}' is currently in use by another connection"
+
+        {:ok, :not_found} ->
           maybe_recreate_slot(state)
-          Exception.message(error)
+          "Replication slot '#{state.slot_name}' does not exist"
 
         {:error, error} ->
           Exception.message(error)

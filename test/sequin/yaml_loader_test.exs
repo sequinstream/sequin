@@ -382,7 +382,7 @@ defmodule Sequin.YamlLoaderTest do
     end
   end
 
-  describe "sink_consumers" do
+  describe "sinks" do
     def account_db_and_sequence_yml do
       """
       account:
@@ -410,11 +410,11 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "sequin-playground-http"
                    url: "https://api.example.com/webhook"
 
-               sink_consumers:
+               sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    consumer_start:
@@ -443,11 +443,11 @@ defmodule Sequin.YamlLoaderTest do
                  - name: "sequin-playground-http"
                    url: "https://api.example.com/webhook"
 
-               sink_consumers:
+               sinks:
                  - name: "sequin-playground-webhook"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   destination:
                      type: "webhook"
                      http_endpoint: "sequin-playground-http"
                    filters:
@@ -464,6 +464,11 @@ defmodule Sequin.YamlLoaderTest do
                      - column_name: "is_active"
                        operator: "="
                        comparison_value: true
+                     - column_name: "planet"
+                       operator: "in"
+                       comparison_value:
+                        - "Alderaan"
+                        - "Tatooine"
                    consumer_start:
                      position: "end"
                """)
@@ -472,7 +477,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.name == "sequin-playground-webhook"
 
       filters = consumer.sequence_filter.column_filters
-      assert length(filters) == 4
+      assert length(filters) == 5
 
       # House filter
       house_filter = Enum.find(filters, &(&1.value.value == "Stark"))
@@ -494,6 +499,11 @@ defmodule Sequin.YamlLoaderTest do
       active_filter = Enum.find(filters, &(&1.value.value == true))
       assert active_filter.operator == :==
       assert active_filter.is_jsonb == false
+
+      # Planet filter
+      planet_filter = Enum.find(filters, &(&1.value.value == ["Alderaan", "Tatooine"]))
+      assert planet_filter.operator == :in
+      assert planet_filter.is_jsonb == false
     end
 
     test "applying yml twice creates no duplicates" do
@@ -504,11 +514,11 @@ defmodule Sequin.YamlLoaderTest do
         - name: "sequin-playground-http"
           url: "https://api.example.com/webhook"
 
-      sink_consumers:
+      sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
           table: "Characters"
-          sink:
+          destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
           consumer_start:
@@ -516,7 +526,7 @@ defmodule Sequin.YamlLoaderTest do
         - name: "sequin-playground-kafka"
           database: "test-db"
           table: "Characters"
-          sink:
+          destination:
             type: "kafka"
             hosts: "localhost:9092"
             topic: "test-topic"
@@ -542,11 +552,11 @@ defmodule Sequin.YamlLoaderTest do
         - name: "sequin-playground-http"
           url: "https://api.example.com/webhook"
 
-      sink_consumers:
+      sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
           table: "Characters"
-          sink:
+          destination:
             type: "webhook"
             http_endpoint: "sequin-playground-http"
       """
@@ -566,11 +576,11 @@ defmodule Sequin.YamlLoaderTest do
         - name: "new-http-endpoint"
           url: "https://api.example.com/webhook"
 
-      sink_consumers:
+      sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
           table: "Characters"
-          sink:
+          destination:
             type: "webhook"
             http_endpoint: "new-http-endpoint"
       """
@@ -590,11 +600,12 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               sink_consumers:
+               sinks:
                  - name: "sequin-playground-consumer"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   group_column_names: ["house"]
+                   destination:
                      type: "sequin_stream"
                    consumer_start:
                      position: "beginning"
@@ -609,7 +620,7 @@ defmodule Sequin.YamlLoaderTest do
       assert consumer.sequence_filter == %SequenceFilter{
                actions: [:insert, :update, :delete],
                column_filters: [],
-               group_column_attnums: [1]
+               group_column_attnums: [Character.column_attnum("house")]
              }
 
       assert %SequinStreamSink{} = consumer.sink
@@ -620,11 +631,11 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               sink_consumers:
+               sinks:
                  - name: "kafka-consumer"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   destination:
                      type: "kafka"
                      hosts: "localhost:9092"
                      topic: "test-topic"
@@ -656,11 +667,11 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               sink_consumers:
+               sinks:
                  - name: "sqs-consumer"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   destination:
                      type: "sqs"
                      queue_url: "https://sqs.us-west-2.amazonaws.com/123456789012/MyQueue.fifo"
                      access_key_id: "AKIAXXXXXXXXXXXXXXXX"
@@ -688,11 +699,11 @@ defmodule Sequin.YamlLoaderTest do
                YamlLoader.apply_from_yml!("""
                #{account_db_and_sequence_yml()}
 
-               sink_consumers:
+               sinks:
                  - name: "redis-consumer"
                    database: "test-db"
                    table: "Characters"
-                   sink:
+                   destination:
                      type: "redis"
                      host: "localhost"
                      port: 6379

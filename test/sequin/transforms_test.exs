@@ -229,7 +229,7 @@ defmodule Sequin.TransformsTest do
         sink: %{type: :http_push, http_endpoint_id: endpoint.id},
         sequence_id: sequence.id,
         sequence_filter: %{
-          group_column_attnums: [1, 2, 3],
+          group_column_attnums: [column.attnum],
           actions: [:insert, :update],
           column_filters: [
             ConsumersFactory.sequence_filter_column_filter_attrs(
@@ -250,14 +250,14 @@ defmodule Sequin.TransformsTest do
              max_deliver: max_deliver,
              database: database_name,
              table: schema_and_table,
-             sink: %{
+             destination: %{
                type: "webhook",
                http_endpoint: endpoint_name
              },
              consumer_start: %{
                position: "beginning | end | from with value"
              },
-             group_column_attnums: group_column_attnums,
+             group_column_names: group_column_names,
              filters: filters
            } = json
 
@@ -267,7 +267,7 @@ defmodule Sequin.TransformsTest do
     assert schema_and_table == "#{table.schema}.#{table.name}"
     assert status == :active
     assert max_deliver == 5
-    assert group_column_attnums == [1, 2, 3]
+    assert group_column_names == [column.name]
     assert length(filters) == 1
     [filter] = filters
 

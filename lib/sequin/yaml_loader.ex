@@ -130,7 +130,7 @@ defmodule Sequin.YamlLoader do
     account = Accounts.get_account!(account_id)
     users = Accounts.list_users_for_account(account_id)
     databases = Databases.list_dbs_for_account(account_id, [:sequences, :replication_slot])
-    wal_pipelines = Replication.list_wal_pipelines_for_account(account_id)
+    wal_pipelines = Replication.list_wal_pipelines_for_account(account_id, [:source_database, :destination_database])
     http_endpoints = Consumers.list_http_endpoints_for_account(account_id)
 
     sink_consumers =
@@ -756,7 +756,7 @@ defmodule Sequin.YamlLoader do
   ## HTTP Push Consumers ##
   #########################
 
-  defp upsert_sink_consumers(account_id, %{"sink_consumers" => consumers}, databases, http_endpoints) do
+  defp upsert_sink_consumers(account_id, %{"sinks" => consumers}, databases, http_endpoints) do
     Logger.info("Upserting HTTP push consumers: #{inspect(consumers, pretty: true)}")
 
     Enum.reduce_while(consumers, {:ok, []}, fn consumer, {:ok, acc} ->
@@ -790,7 +790,8 @@ defmodule Sequin.YamlLoader do
   end
 
   defp parse_sink_consumer_params(
-         %{"name" => name, "database" => database_name, "table" => table_ref, "sink" => sink_attrs} = consumer_attrs,
+         %{"name" => name, "database" => database_name, "table" => table_ref, "destination" => sink_attrs} =
+           consumer_attrs,
          databases,
          http_endpoints
        ) do
@@ -813,7 +814,7 @@ defmodule Sequin.YamlLoader do
          replication_slot_id: database.replication_slot.id,
          sequence_filter: %{
            actions: ["insert", "update", "delete"],
-           group_column_attnums: group_column_attnums(consumer_attrs["group_column_attnums"], table),
+           group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
            column_filters: column_filters(consumer_attrs["filters"], table)
          },
          sink: sink
@@ -917,8 +918,10 @@ defmodule Sequin.YamlLoader do
     PostgresDatabaseTable.default_group_column_attnums(table)
   end
 
-  defp group_column_attnums(attnums, _table) when is_list(attnums) do
-    attnums
+  defp group_column_attnums(column_names, table) when is_list(column_names) do
+    table.columns
+    |> Enum.filter(&(&1.name in column_names))
+    |> Enum.map(& &1.attnum)
   end
 
   defp parse_status(nil), do: :active

@@ -248,11 +248,11 @@ defmodule SequinWeb.YamlControllerTest do
         - name: "sequin-playground-webhook"
           url: "https://example.com/webhook"
 
-      sink_consumers:
+      sinks:
         - name: "sequin-playground-webhook"
           database: "test-db"
           table: "Characters"
-          sink:
+          destination:
             type: "webhook"
             http_endpoint: "sequin-playground-webhook"
       """
@@ -304,11 +304,11 @@ defmodule SequinWeb.YamlControllerTest do
                "name" => "sequin-playground-webhook",
                "database" => "test-db",
                "table" => "public.Characters",
-               "sink" => %{
+               "destination" => %{
                  "type" => "webhook",
                  "http_endpoint" => "sequin-playground-webhook"
                }
-             } = get_in(parsed_yaml, ["sink_consumers", Access.at(0)])
+             } = get_in(parsed_yaml, ["sinks", Access.at(0)])
     end
   end
 end

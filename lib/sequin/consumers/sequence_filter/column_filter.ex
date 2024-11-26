@@ -240,8 +240,8 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
       end
 
     value =
-      case value_type do
-        :list ->
+      cond do
+        value_type == :list and is_binary(value) ->
           (value || "")
           |> to_string()
           |> String.trim()
@@ -252,10 +252,10 @@ defmodule Sequin.Consumers.SequenceFilter.ColumnFilter do
           |> String.split(",")
           |> Enum.map(&String.trim/1)
 
-        :null ->
+        value_type == :null ->
           nil
 
-        _ ->
+        true ->
           value
       end
 

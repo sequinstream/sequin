@@ -91,11 +91,16 @@ defmodule Sequin.Health do
   end
 
   defp do_update(entity, check_id, status, error) do
-    with {:ok, old_health} <- get_health(entity) do
-      %Check{} = expected_check = expected_check(entity, check_id, status, error)
-      new_health = update_health_with_check(old_health, expected_check)
-      set_health(entity.id, new_health)
-    end
+    resource_id = "#{entity.id}:#{check_id}"
+    lock_requester_id = self()
+
+    :global.trans({resource_id, lock_requester_id}, fn ->
+      with {:ok, old_health} <- get_health(entity) do
+        %Check{} = expected_check = expected_check(entity, check_id, status, error)
+        new_health = update_health_with_check(old_health, expected_check)
+        set_health(entity.id, new_health)
+      end
+    end)
   end
 
   @doc """

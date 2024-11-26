@@ -109,9 +109,9 @@ defmodule Sequin.Transforms do
       database: consumer.sequence.postgres_database.name,
       status: consumer.status,
       max_deliver: consumer.max_deliver,
-      group_column_attnums: consumer.sequence_filter.group_column_attnums,
+      group_column_names: group_column_names(consumer.sequence_filter.group_column_attnums, table),
       table: "#{table.schema}.#{table.name}",
-      sink: to_external(sink),
+      destination: to_external(sink),
       filters: Enum.map(filters, &format_filter(&1, table)),
       consumer_start: %{
         position: "beginning | end | from with value"
@@ -195,6 +195,14 @@ defmodule Sequin.Transforms do
       filters: Enum.map(source_table.column_filters, &to_external/1),
       actions: source_table.actions
     }
+  end
+
+  def group_column_names(nil, _table), do: []
+
+  def group_column_names(column_attnums, table) when is_list(column_attnums) do
+    table.columns
+    |> Enum.filter(&(&1.attnum in column_attnums))
+    |> Enum.map(& &1.name)
   end
 
   # Helper functions

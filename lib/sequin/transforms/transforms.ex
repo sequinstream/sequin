@@ -3,6 +3,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers
+  alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -195,6 +196,15 @@ defmodule Sequin.Transforms do
       filters: Enum.map(source_table.column_filters, &to_external/1),
       actions: source_table.actions
     }
+  end
+
+  def to_external(%GcpPubsubSink{} = sink) do
+    Sequin.Map.reject_nil_values(%{
+      type: "gcp_pubsub",
+      project_id: sink.project_id,
+      topic_id: sink.topic_id,
+      credentials: "(credentials present) - sha256sum: #{sha256sum(sink.credentials)}"
+    })
   end
 
   def group_column_names(nil, _table), do: []

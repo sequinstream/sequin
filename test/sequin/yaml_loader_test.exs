@@ -3,6 +3,7 @@ defmodule Sequin.YamlLoaderTest do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.RedisSink
@@ -729,6 +730,58 @@ defmodule Sequin.YamlLoaderTest do
                tls: false,
                username: "test-user",
                password: "test-pass"
+             } = consumer.sink
+    end
+
+    test "creates gcp pubsub sink consumer" do
+      assert :ok =
+               YamlLoader.apply_from_yml!("""
+               #{account_db_and_sequence_yml()}
+
+               sinks:
+                 - name: "pubsub-consumer"
+                   database: "test-db"
+                   table: "Characters"
+                   destination:
+                     type: "gcp_pubsub"
+                     project_id: "my-project"
+                     topic_id: "my-topic"
+                     credentials:
+                       type: "service_account"
+                       project_id: "my-project"
+                       private_key_id: "key123"
+                       private_key: "-----BEGIN PRIVATE KEY-----\\nMIIE...\\n-----END PRIVATE KEY-----\\n"
+                       client_email: "my-service-account@my-project.iam.gserviceaccount.com"
+                       client_id: "123456789"
+                       auth_uri: "https://accounts.google.com/o/oauth2/auth"
+                       token_uri: "https://oauth2.googleapis.com/token"
+                       auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs"
+                       client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
+               """)
+
+      assert [consumer] = Repo.all(SinkConsumer)
+      consumer = Repo.preload(consumer, :sequence)
+
+      assert consumer.name == "pubsub-consumer"
+      assert consumer.sequence.name == "test-db.public.Characters"
+
+      assert %GcpPubsubSink{
+               type: :gcp_pubsub,
+               project_id: "my-project",
+               topic_id: "my-topic",
+               credentials: %{
+                 type: "service_account",
+                 project_id: "my-project",
+                 private_key_id: "key123",
+                 private_key: "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
+                 client_email: "my-service-account@my-project.iam.gserviceaccount.com",
+                 client_id: "123456789",
+                 auth_uri: "https://accounts.google.com/o/oauth2/auth",
+                 token_uri: "https://oauth2.googleapis.com/token",
+                 auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+                 client_x509_cert_url:
+                   "https://www.googleapis.com/robot/v1/metadata/x509/my-service-account%40my-project.iam.gserviceaccount.com"
+               }
              } = consumer.sink
     end
   end

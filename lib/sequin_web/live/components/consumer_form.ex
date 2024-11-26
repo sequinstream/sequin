@@ -511,10 +511,27 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_sink(%GcpPubsubSink{} = sink) do
+    creds = %{
+      "type" => sink.credentials.type,
+      "project_id" => sink.credentials.project_id,
+      "private_key_id" => sink.credentials.private_key_id,
+      "private_key" => sink.credentials.private_key,
+      "client_email" => sink.credentials.client_email,
+      "client_id" => sink.credentials.client_id,
+      "auth_uri" => sink.credentials.auth_uri,
+      "token_uri" => sink.credentials.token_uri,
+      "auth_provider_x509_cert_url" => sink.credentials.auth_provider_x509_cert_url,
+      "client_x509_cert_url" => sink.credentials.client_x509_cert_url,
+      "universe_domain" => sink.credentials.universe_domain,
+      "client_secret" => sink.credentials.client_secret,
+      "api_key" => sink.credentials.api_key
+    }
+
     %{
       "type" => "gcp_pubsub",
       "project_id" => sink.project_id,
-      "topic_id" => sink.topic_id
+      "topic_id" => sink.topic_id,
+      "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
     }
   end
 

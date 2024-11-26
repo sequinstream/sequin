@@ -1,6 +1,6 @@
 ---
-title: 'Sequin YAML'
-sidebarTitle: 'Sequin YAML'
+title: 'sequin.yaml'
+sidebarTitle: 'sequin.yaml'
 description: 'Reference for Sequin YAML configuration'
 ---
 
@@ -16,14 +16,14 @@ You can provide YAML configuration to Sequin in three ways:
 
 ## Schema
 
-### Account Configuration
+### Account configuration
 
 ```yaml
 account:
   name: "account-name"  # Required for self-hosted deployments
 ```
 
-### User Configuration
+### User configuration
 
 ```yaml
 users:
@@ -31,7 +31,7 @@ users:
     password: "userpassword123"  # Required
 ```
 
-### Database Configuration 
+### Database configuration
 
 ```yaml
 databases:
@@ -45,12 +45,12 @@ databases:
     slot_name: "sequin_slot"    # Required
     publication_name: "sequin_pub" # Required
     tables:                     # Optional, list of tables to track
-      - table_name: "users"     # Required if tables specified
+      - table_name: "users"     # Required
         table_schema: "public"  # Default: public
         sort_column_name: "updated_at" # Required
 ```
 
-### HTTP Endpoint Configuration
+### HTTP endpoint configuration
 
 You can configure HTTP endpoints in three ways:
 
@@ -67,7 +67,10 @@ http_endpoints:
         value: "Bearer token123"
 ```
 
-#### 2. Local Development Endpoint
+#### 2. Local development endpoint
+
+Sequin Cloud offers tunneling to your local machine for development. Learn more about tunneling in the [CLI documentation](/reference/cli/overview#tunnel).
+
 ```yaml
 http_endpoints:
   - name: "local-endpoint"     # Required
@@ -81,26 +84,26 @@ http_endpoints:
         value: "secret123"
 ```
 
-#### 3. Webhook.site Testing Endpoint
+#### 3. Webhook.site testing endpoint
 ```yaml
 http_endpoints:
   - name: "webhook-site"     # Required
     webhook.site: "true"     # Required
 ```
 
-### Sink Consumer Configuration
+### Sink configuration
 
-A sink consumer streams data from a table to a destination (sink). All sink consumers share these configuration options:
+A sink streams data from a table to a destination (sink). All sinks share these configuration options:
 
 ```yaml
-sink_consumers:
-  - name: "my-consumer"            # Required, unique name for this consumer
+sinks:
+  - name: "my-sink"                # Required, unique name for this sink
     database: "my-database"        # Required, references database name
     table: "public.users"          # Required, [schema.]table to consume
     batch_size: 1                  # Optional, messages per batch, default: 1
     status: "active"               # Optional: active or disabled, default: active
-    group_column_attnums: [1, 2]   # Optional, columns to group messages by
-    filters:                       # Optional, filter which rows to consume
+    group_column_names: ["id"]   # Optional, columns to group messages by
+    filters:                       # Optional, filter which rows to consume with `where` clause
       - column_name: "status"      
         operator: "="
         comparison_value: "active"
@@ -109,33 +112,36 @@ sink_consumers:
         operator: "="
         comparison_value: "premium"
         field_type: "string"
-    sink:                         # Required, sink-specific configuration
+    destination:                 # Required, sink-specific configuration
       type: "..."                # Required, sink type
       ...                        # Additional sink-specific options
 ```
 
-The `sink` configuration varies by sink type. Below are the configurations for each supported sink type:
+The `destination` configuration varies by sink type. Below are the configurations for each sink type:
 
-#### Webhook Sink
+#### Webhook sink
 For sending changes to HTTP endpoints:
 ```yaml
-sink:
-  type: "http_push"               # Required
+destination:
+  type: "webhook"                 # Required
   http_endpoint: "endpoint-name"  # Required, references HTTP endpoint
   http_endpoint_path: "/custom"   # Optional, path to append to endpoint URL
 ```
 
-#### Sequin Stream Sink
+#### Sequin Stream sink
+[Sequin Stream](/reference/sinks/sequin-stream) is a durable, scalable, and fault-tolerant message stream that you can use with Sequin in place of additional infrastructure like Kafka or SQS.
+
 For pulling changes via the Sequin Stream API:
+
 ```yaml
-sink:
+destination:
   type: "sequin_stream"          # Required
 ```
 
-#### Kafka Sink
+#### Kafka sink
 For publishing changes to Kafka topics:
 ```yaml
-sink:
+destination:
   type: "kafka"                  # Required
   hosts: "localhost:9092"        # Required, comma-separated list of brokers
   topic: "my-topic"             # Required
@@ -145,20 +151,20 @@ sink:
   sasl_mechanism: "plain"       # Optional: plain, scram_sha_256, scram_sha_512
 ```
 
-#### SQS Sink
+#### SQS sink
 For sending changes to Amazon SQS queues:
 ```yaml
-sink:
+destination:
   type: "sqs"                   # Required
   queue_url: "https://sqs.us-west-2.amazonaws.com/123/MyQueue.fifo" # Required
   access_key_id: "AKIAXXXX"    # Required
   secret_access_key: "secret"   # Required
 ```
 
-#### Redis Sink
+#### Redis sink
 For publishing changes to Redis streams:
 ```yaml
-sink:
+destination:
   type: "redis"                 # Required
   host: "localhost"             # Required
   port: 6379                    # Required
@@ -169,24 +175,37 @@ sink:
   password: "redis-pass"        # Optional, for authentication
 ```
 
+### Sink filters
+
 All sink types support filtering messages based on columns in your source table. The filtering syntax is consistent across sink types:
 
 ```yaml
 filters:
-  # Basic column filter
+  # Comparison filter
   - column_name: "status"           
-    operator: "="                   # =, !=, >, >=, <, <=, in, not in, is null, is not null
+    operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "active"
+  
+  # List filter
+  - column_name: "status"
+    operator: "in"                  # in, not in
+    comparison_value:
+      - "active"
+      - "inactive"
+
+  # Is null filter
+  - column_name: "status"
+    operator: "is null"              # is null, is not null
   
   # JSONB field filter
   - column_name: "metadata"         
     field_path: "preferences.theme" # Dot notation for nested fields
-    operator: "="
+    operator: "="                   # =, !=, >, >=, <, <=
     comparison_value: "dark"
     field_type: "string"           # string, number, boolean, null, list
 ```
 
-### Change Retention Configuration
+### Change retention configuration
 ```yaml
 change_retentions:
   - name: "my-retention"                  # Required
@@ -211,9 +230,9 @@ change_retentions:
         field_type: "string"
 ```
 
-## Example Configuration
+## Example configuration
 
-Here's a complete example combining multiple configuration types:
+Here's a complete example combining multiple resource:
 
 ```yaml
 account:
@@ -240,11 +259,11 @@ http_endpoints:
       - key: "Authorization"
         value: "Bearer token123"
 
-sink_consumers:
+sinks:
   - name: "user-changes"
     database: "production-db"
     table: "users"
-    sink:
+    destination:
       type: "http_push"
       http_endpoint: "webhook-endpoint"
 

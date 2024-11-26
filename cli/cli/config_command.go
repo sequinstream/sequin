@@ -316,7 +316,43 @@ func formatValue(v interface{}) string {
 	if v == nil {
 		return "<nil>"
 	}
+
+	// Handle slices of maps specially
+	if slice, ok := v.([]interface{}); ok {
+		var parts []string
+		for _, item := range slice {
+			if m, ok := item.(map[string]interface{}); ok {
+				// Format each map in the slice
+				parts = append(parts, formatMap(m))
+			} else {
+				parts = append(parts, fmt.Sprintf("%v", item))
+			}
+		}
+		return "[\n    " + strings.Join(parts, ",\n    ") + "\n  ]"
+	}
+
+	// Handle individual maps
+	if m, ok := v.(map[string]interface{}); ok {
+		return formatMap(m)
+	}
+
 	return fmt.Sprintf("%v", v)
+}
+
+// Helper function to format maps
+func formatMap(m map[string]interface{}) string {
+	var parts []string
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := m[k]
+		parts = append(parts, fmt.Sprintf("%s: %v", k, v))
+	}
+	return "{" + strings.Join(parts, ", ") + "}"
 }
 
 // Add the export action

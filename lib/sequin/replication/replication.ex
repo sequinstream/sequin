@@ -28,7 +28,9 @@ defmodule Sequin.Replication do
   end
 
   def list_pg_replications_for_account(account_id) do
-    Repo.all(PostgresReplicationSlot.where_account(account_id))
+    account_id
+    |> PostgresReplicationSlot.where_account()
+    |> Repo.all()
   end
 
   def get_pg_replication(id) do
@@ -180,9 +182,10 @@ defmodule Sequin.Replication do
     Repo.all(WalPipeline)
   end
 
-  def list_wal_pipelines_for_account(account_id) do
+  def list_wal_pipelines_for_account(account_id, preloads \\ []) do
     account_id
     |> WalPipeline.where_account_id()
+    |> preload(^preloads)
     |> Repo.all()
   end
 

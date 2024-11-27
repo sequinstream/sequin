@@ -11,7 +11,12 @@ defmodule Sequin.Posthog do
   def capture(event, properties, opts) when is_list(opts) do
     with {:ok, config} <- config() do
       body = build_event(event, properties, Keyword.get(opts, :timestamp))
-      async_post("/capture", body, config)
+
+      if Keyword.get(opts, :async, true) do
+        async_post("/capture", body, config)
+      else
+        post("/capture", body, config)
+      end
     end
   end
 
@@ -22,7 +27,7 @@ defmodule Sequin.Posthog do
   @doc """
   Captures a batch of events.
   """
-  def batch(events, _opts \\ []) do
+  def batch(events, opts \\ []) do
     with {:ok, config} <- config() do
       body = %{
         batch:
@@ -31,7 +36,11 @@ defmodule Sequin.Posthog do
           end)
       }
 
-      async_post("/capture", body, config)
+      if Keyword.get(opts, :async, true) do
+        async_post("/capture", body, config)
+      else
+        post("/capture", body, config)
+      end
     end
   end
 
@@ -54,13 +63,50 @@ defmodule Sequin.Posthog do
     }
   end
 
+  defp base_req(path, body, config) do
+    url = config |> Keyword.get(:api_url, "https://us.i.posthog.com") |> URI.merge(path) |> URI.to_string()
+    body = Map.put(body, :api_key, Keyword.get(config, :api_key))
+    req_opts = Keyword.get(config, :req_opts, [])
+
+    [url: url, json: body, method: :post]
+    |> Req.new()
+    |> Req.merge(req_opts)
+  end
+
+  defp post(path, body, config) do
+    unless is_disabled() do
+      path
+      |> base_req(body, config)
+      |> Req.run()
+    end
+  rescue
+    e in RuntimeError ->
+      case {env(), e.message} do
+        {:test, "cannot find mock/stub Sequin.Posthog in process" <> _rest} ->
+          {:error, :req_stub_not_configured}
+
+        _ ->
+          reraise e, __STACKTRACE__
+      end
+  end
+
   defp async_post(path, body, config) do
     unless is_disabled() do
-      url = config |> Keyword.get(:api_url) |> URI.merge(path) |> URI.to_string()
-      body = Map.put(body, :api_key, Keyword.get(config, :api_key))
-
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
-        Req.post(url, json: body)
+        try do
+          path
+          |> base_req(body, config)
+          |> Req.run()
+        rescue
+          e in RuntimeError ->
+            case {env(), e.message} do
+              {:test, "cannot find mock/stub Sequin.Posthog in process" <> _rest} ->
+                {:error, :req_stub_not_configured}
+
+              _ ->
+                reraise e, __STACKTRACE__
+            end
+        end
       end)
     end
   end
@@ -77,5 +123,9 @@ defmodule Sequin.Posthog do
       {:ok, config} -> {:ok, config}
       :error -> {:error, :not_configured}
     end
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
   end
 end

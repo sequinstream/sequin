@@ -1,16 +1,10 @@
 ---
-title: "CLI"
-sidebarTitle: "CLI"
-description: "Use the CLI to develop locally"
-icon: "terminal"
-iconType: "solid"
+title: "Sequin CLI"
+sidebarTitle: "Sequin CLI"
+description: "Use the CLI to manage resources and develop locally"
 ---
 
-With the Sequin CLI, you can easily build and test features locally. Use `sequin tunnel` to establish a connection between Sequin's cloud platform and your local development environment. You can use `sequin tunnel` to connect Sequin to either local databases or HTTP endpoints.
-
-<Info>
-At the moment, the only utility command available in the CLI is `tunnel`. More commands will be added in the future.
-</Info>
+With the Sequin CLI, you can easily manage resources and build and test features locally.
 
 ## Installation
 
@@ -40,25 +34,123 @@ Reload your console and test that it's installed:
 sequin --help
 ```
 
-## Setup
+## Contexts
 
-Sequin CLI's **contexts** store settings and account information. The most important property in context is your API token. You can create a new context (called "default") like this:
+The Sequin CLI uses **contexts** to manage different configurations and environments. Each context stores:
+- API token for authentication
+- Hostname configuration (for self-hosted Sequin instances)
+- TLS settings (for self-hosted Sequin instances)
+- Tunnel port configurations (for Sequin Cloud)
+
+### `sequin context`
+
+Display available context commands:
 
 ```bash
-sequin context add default --api-token={{my-token-from-sequinstream.com}} --set-default
+sequin context --help
 ```
 
-After running this command, this API token will be included in future CLI commands by default.
+### `sequin context add`
 
-If you have multiple contexts, you can specify a non-default context with a `context` flag:
+Create a new context:
+
+```bash
+sequin context add default --api-token={{my-token}} --set-default
+```
+
+#### Flags
+
+- `--api-token`: Your authentication token
+- `--set-default`: Set as the default context
+
+**Self-hosted flags:**
+
+For self-hosted Sequin instances, you'll specify:
+
+- `--hostname`: API hostname of your Sequin instance (defaults to api.sequinstream.com)
+- `--tls`: Enable/disable TLS (enabled by default)
+
+**Cloud flags:**
+- `--tunnel-ports`: Configure default tunnel ports
+
+### `sequin context ls`
+
+List all contexts:
+
+```bash
+sequin context ls
+```
+
+### `sequin context select`
+
+Switch between contexts:
+
+```bash
+sequin context select <context-name>
+```
+
+### Using contexts with commands
+
+Use a specific context for any command with the `--context` flag:
 
 ```bash
 sequin tunnel --ports=5432:my-pg-db --context=staging
 ```
 
-## Tunnel
+## Config
+
+The `config` command group allows you to manage Sequin resources using YAML configuration files. This provides a declarative way to create and manage databases, sinks, HTTP endpoints, and other resources.
+
+### `sequin config`
+
+See the [sequin.yaml reference](/reference/sequin-yaml) for detailed configuration options and examples.
+
+#### Commands
+
+- `sequin config export` - Export current configuration as YAML
+- `sequin config plan [file]` - Preview changes from a YAML file
+- `sequin config apply [file]` - Apply changes from a YAML file
+
+The `file` argument defaults to `sequin.yaml` if not specified.
+
+#### Example Workflow
+
+```bash
+# Export current config
+sequin config export > sequin.yaml
+
+# Edit the configuration
+vim sequin.yaml
+
+# Preview changes
+sequin config plan
+
+# Apply changes if they look correct
+sequin config apply
+```
+
+#### Using with Contexts
+
+All config commands respect the current context and can be used with the `--context` flag:
+
+```bash
+sequin --context=prod config plan
+sequin --context=staging config apply
+```
+
+<Info>
+The `export` command is experimental. Exported configurations may need manual adjustments before use:
+
+- `account` and `user` sections are not exported
+- Encrypted fields like passwords need to be manually specified
+- The `consumer_start` field requires manual configuration
+</Info>
+
+## Tunnel (Sequin Cloud only)
 
 The `tunnel` command creates a secure connection between your local development environment and Sequin's cloud platform. You can use it to connect Sequin to either local databases or HTTP endpoints.
+
+### `sequin tunnel`
 
 First, you'll need to setup your database or HTTP endpoint on [Sequin's platform](https://sequinstream.com).
 

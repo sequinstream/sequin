@@ -98,7 +98,8 @@
         "reference/filters",
         "reference/backfills",
         "reference/change-retention",
-        "reference/sequin-yaml"
+        "reference/sequin-yaml",
+        "reference/cli/overview"
       ]
     },
     {
@@ -119,12 +120,6 @@
             "reference/sequin-stream-api/nack"
           ]
         }
-      ]
-    },
-    {
-      "group": "CLI",
-      "pages": [
-        "reference/cli/overview"
       ]
     },
     {

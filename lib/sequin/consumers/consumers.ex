@@ -28,7 +28,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Postgres
-  alias Sequin.Posthog
   alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
@@ -635,6 +634,23 @@ defmodule Sequin.Consumers do
         events = Enum.map(events, fn event -> Ecto.embedded_load(ConsumerEvent, event, :json) end)
 
         if length(events) > 0 do
+          :telemetry.execute(
+            [:sequin, :posthog, :event],
+            %{event: "consumer_receive"},
+            %{
+              distinct_id: "00000000-0000-0000-0000-000000000000",
+              properties: %{
+                consumer_id: consumer.id,
+                consumer_name: consumer.name,
+                message_count: length(events),
+                message_kind: :event,
+                "$groups": %{account: consumer.account_id}
+              }
+            }
+          )
+        end
+
+        if length(events) > 0 do
           Health.update(consumer, :receive, :healthy)
           TracerServer.messages_received(consumer, events)
 
@@ -688,6 +704,21 @@ defmodule Sequin.Consumers do
           if length(fetched_records) > 0 do
             Health.update(consumer, :receive, :healthy)
             TracerServer.messages_received(consumer, fetched_records)
+
+            :telemetry.execute(
+              [:sequin, :posthog, :event],
+              %{event: "consumer_receive"},
+              %{
+                distinct_id: "00000000-0000-0000-0000-000000000000",
+                properties: %{
+                  consumer_id: consumer.id,
+                  consumer_name: consumer.name,
+                  message_count: length(fetched_records),
+                  message_kind: :record,
+                  "$groups": %{account: consumer.account_id}
+                }
+              }
+            )
           end
 
           Enum.each(
@@ -882,6 +913,10 @@ defmodule Sequin.Consumers do
   end
 
   @spec ack_messages(consumer(), [integer()]) :: :ok
+  def ack_messages(_consumer, []) do
+    {:ok, 0}
+  end
+
   def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
     {count, events} =
       consumer.id
@@ -890,7 +925,20 @@ defmodule Sequin.Consumers do
       |> select([ce], ce)
       |> Repo.delete_all()
 
-    send_posthog_ack_event(consumer)
+    :telemetry.execute(
+      [:sequin, :posthog, :event],
+      %{event: "consumer_ack"},
+      %{
+        distinct_id: "00000000-0000-0000-0000-000000000000",
+        properties: %{
+          consumer_id: consumer.id,
+          consumer_name: consumer.name,
+          message_count: count,
+          message_kind: :event,
+          "$groups": %{account: consumer.account_id}
+        }
+      }
+    )
 
     Health.update(consumer, :acknowledge, :healthy)
     Metrics.incr_consumer_messages_processed_count(consumer, count)
@@ -931,7 +979,22 @@ defmodule Sequin.Consumers do
       |> select([cr], cr)
       |> Repo.update_all(set: [state: :available, not_visible_until: nil])
 
-    send_posthog_ack_event(consumer)
+    total_count = count_deleted + count_updated
+
+    :telemetry.execute(
+      [:sequin, :posthog, :event],
+      %{event: "consumer_ack"},
+      %{
+        distinct_id: "00000000-0000-0000-0000-000000000000",
+        properties: %{
+          consumer_id: consumer.id,
+          consumer_name: consumer.name,
+          message_count: total_count,
+          message_kind: :record,
+          "$groups": %{account: consumer.account_id}
+        }
+      }
+    )
 
     Health.update(consumer, :acknowledge, :healthy)
 
@@ -963,35 +1026,6 @@ defmodule Sequin.Consumers do
     AcknowledgedMessages.store_messages(consumer.id, deleted_records ++ updated_records)
 
     {:ok, count_deleted + count_updated}
-  end
-
-  defp send_posthog_ack_event(consumer) do
-    now = :os.system_time(:second)
-    key = consumer.id
-
-    case :ets.lookup(posthog_ets_table(), key) do
-      [] ->
-        # No previous event, send it and store the timestamp
-        do_send_posthog_event(consumer)
-        :ets.insert(posthog_ets_table(), {key, now})
-
-      [{^key, last_sent}] ->
-        # Check if an hour has passed since the last event
-        if now - last_sent >= 3600 do
-          do_send_posthog_event(consumer)
-          :ets.insert(posthog_ets_table(), {key, now})
-        end
-    end
-  end
-
-  defp do_send_posthog_event(consumer) do
-    Posthog.capture("Consumer Messages Acked", %{
-      distinct_id: "00000000-0000-0000-0000-000000000000",
-      properties: %{
-        consumer_id: consumer.id,
-        "$groups": %{account: consumer.account_id}
-      }
-    })
   end
 
   @spec nack_messages(consumer(), [String.t()]) :: {:ok, integer()}

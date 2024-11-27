@@ -106,6 +106,35 @@ Or all tables in a schema:
 create publication sequin_publication for all tables in schema public;
 ```
 
+### Working with partitioned tables
+
+When using partitioned tables, you have two options to ensure Sequin captures changes correctly:
+
+- Enable [`publish_via_partition_root`](https://www.postgresql.org/docs/current/sql-createpublication.html#SQL-CREATEPUBLICATION-PARAMS-WITH-PUBLISH-VIA-PARTITION-ROOT):
+    ```sql
+    -- Create publication for a partitioned table
+    create publication sequin_publication for table orders 
+    with (publish_via_partition_root = true);
+
+    -- Or modify an existing publication
+    alter publication sequin_publication set (publish_via_partition_root = true);
+    ```
+
+- Add each partition table explicitly to the publication:
+    ```sql
+    create publication sequin_publication for table
+        orders_2024_q1,
+        orders_2024_q2,
+        orders_2024_q3,
+        orders_2024_q4;
+    ```
+
+Choose the first option if you're dynamically creating partitions. The second option is fine if you have a fixed set of partitions.
+
+<Note>
+If you created your publication using `for all tables` or `for all tables in schema`, partitioned tables will work automatically without additional configuration.
+</Note>
+
 ### Modifying Publications
 
 To add or remove tables from a publication, use the `ALTER PUBLICATION` statement:

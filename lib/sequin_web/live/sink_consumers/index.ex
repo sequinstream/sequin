@@ -11,6 +11,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases
+  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Health
   alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
@@ -101,6 +102,11 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   end
 
   defp apply_action(socket, :new, %{"kind" => kind}) do
+    # Refresh tables for all databases in the account
+    account = current_account(socket)
+    databases = Databases.list_dbs_for_account(account.id)
+    Enum.each(databases, &DatabaseUpdateWorker.enqueue(&1.id))
+
     socket
     |> assign(:page_title, "New Sink")
     |> assign(:live_action, :new)
@@ -188,6 +194,13 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
     {:noreply, assign(socket, :consumers, load_consumer_health(socket.assigns.consumers))}
+  end
+
+  def handle_info({:database_tables_updated, _updated_database}, socket) do
+    # Proxy down to ConsumerForm
+    send_update(ConsumerForm, id: "new-consumer", event: :database_tables_updated)
+
+    {:noreply, socket}
   end
 
   defp load_consumer_health(consumers) do

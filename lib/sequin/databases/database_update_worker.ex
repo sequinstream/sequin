@@ -9,8 +9,15 @@ defmodule Sequin.Databases.DatabaseUpdateWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"postgres_database_id" => postgres_database_id}}) do
-    with {:ok, database} <- Databases.get_db(postgres_database_id) do
-      Databases.update_tables(database)
+    with {:ok, database} <- Databases.get_db(postgres_database_id),
+         {:ok, updated_database} <- Databases.update_tables(database) do
+      Phoenix.PubSub.broadcast(
+        Sequin.PubSub,
+        "account:#{database.account_id}:database_tables_updated",
+        {:database_tables_updated, updated_database}
+      )
+
+      {:ok, updated_database}
     end
   end
 

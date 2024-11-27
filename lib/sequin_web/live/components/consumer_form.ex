@@ -76,6 +76,11 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   @impl Phoenix.LiveComponent
+  def update(%{event: :database_tables_updated}, socket) do
+    socket = assign_databases(socket)
+    {:ok, socket}
+  end
+
   def update(assigns, socket) do
     consumer = assigns[:consumer]
 
@@ -97,6 +102,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign_databases()
       |> assign_http_endpoints()
       |> reset_changeset()
+
+    account_id = current_account_id(socket)
+
+    Phoenix.PubSub.subscribe(Sequin.PubSub, "account:#{account_id}:database_tables_updated")
 
     {:ok, socket}
   end

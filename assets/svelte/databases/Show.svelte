@@ -16,6 +16,7 @@
   import type { Health } from "$lib/health/Types";
   import { Badge } from "$lib/components/ui/badge";
   import { writable } from "svelte/store";
+  import { formatRelativeTimestamp } from "$lib/utils";
 
   interface Table {
     schema_name: string;
@@ -79,24 +80,31 @@
 
       <Card>
         <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
+          <div class="flex justify-between items-center mb-2">
             <span class="text-sm font-medium text-gray-500">Tables</span>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               on:click={handleRefreshTables}
               disabled={$refreshingTables}
             >
               {#if $refreshingTables}
-                <span class="sr-only">Refreshing tables</span>
-                <Loader2 class="h-4 w-4 animate-spin" />
+                <Loader2 class="h-4 w-4 mr-2 animate-spin" />
               {:else}
-                <span class="sr-only">Refresh tables</span>
-                <RefreshCw class="h-4 w-4 text-gray-500" />
+                <RefreshCw class="h-4 w-4 mr-2" />
               {/if}
+              Refresh
             </Button>
           </div>
-          <div class="text-4xl font-bold">{database.tables.length}</div>
+          <div class="text-4xl font-bold mb-1">{database.tables.length}</div>
+          <div
+            class="text-sm text-gray-500"
+            class:hidden={!database.tables_refreshed_at}
+          >
+            Last refreshed {formatRelativeTimestamp(
+              database.tables_refreshed_at,
+            )}
+          </div>
         </CardContent>
       </Card>
 

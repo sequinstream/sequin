@@ -206,9 +206,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      # Start the pipeline
-      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
-
       # Insert a consumer record
       record = %{
         "id" => Faker.UUID.v4(),
@@ -231,8 +228,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
             )
         )
 
+      # Start the pipeline
+      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
+
       # Wait for the message to be processed
-      assert_receive {:http_request, req}, 5_000
+      assert_receive {:http_request, req}, 1_000
 
       # Assert the request details
       assert to_string(req.url) == HttpEndpoint.url(consumer.sink.http_endpoint)

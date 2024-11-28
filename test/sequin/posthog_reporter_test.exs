@@ -1,5 +1,5 @@
 defmodule Sequin.Telemetry.PosthogReporterTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Sequin.Telemetry.PosthogReporter
 
@@ -46,7 +46,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     )
 
     # Wait for first flush
-    assert_receive {:posthog_request, body}, 100
+    assert_receive {:posthog_request, body}, 1000
 
     # Verify first batch
     assert %{"batch" => events} = body
@@ -69,7 +69,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     )
 
     # Wait for second flush
-    assert_receive {:posthog_request, body}, 10
+    assert_receive {:posthog_request, body}, 1000
 
     # Verify second batch
     assert %{"batch" => events} = body

@@ -1,5 +1,5 @@
 defmodule SequinWeb.PullControllerTest do
-  use SequinWeb.ConnCase, async: false
+  use SequinWeb.ConnCase, async: true
 
   alias Sequin.Consumers
   alias Sequin.Databases.ConnectionCache

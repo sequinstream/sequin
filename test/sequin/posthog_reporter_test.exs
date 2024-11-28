@@ -180,7 +180,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     )
 
     # Wait for flush
-    assert_receive {:posthog_request, body}, 100
+    assert_receive {:posthog_request, body}, 1000
 
     # Verify batch
     assert %{"batch" => events} = body

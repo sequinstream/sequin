@@ -556,47 +556,31 @@ defmodule Sequin.Consumers do
 
   # Consumer Lifecycle
 
-  def create_consumer_partition(%{message_kind: :event} = consumer) do
-    """
-    CREATE TABLE #{stream_schema()}.#{partition_name(consumer)} PARTITION OF #{stream_schema()}.consumer_events FOR VALUES IN ('#{consumer.id}');
-    """
-    |> Repo.query()
-    |> case do
-      {:ok, %Postgrex.Result{command: :create_table}} -> :ok
-      {:error, error} -> {:error, error}
+  # Convert the string to 16-bit int
+  # Completely arbitrary number, but must be consistent
+  @partition_lock_key "partition_lock_key" |> :erlang.crc32() |> rem(32_768)
+
+  def create_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+    table_name = if kind == :event, do: "consumer_events", else: "consumer_records"
+
+    with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
+         {:ok, %Postgrex.Result{command: :create_table}} <-
+           Repo.query("""
+           CREATE TABLE #{stream_schema()}.#{partition_name(consumer)}
+           PARTITION OF #{stream_schema()}.#{table_name}
+           FOR VALUES IN ('#{consumer.id}');
+           """) do
+      :ok
     end
   end
 
-  def create_consumer_partition(%{message_kind: :record} = consumer) do
-    """
-    CREATE TABLE #{stream_schema()}.#{partition_name(consumer)} PARTITION OF #{stream_schema()}.consumer_records FOR VALUES IN ('#{consumer.id}');
-    """
-    |> Repo.query()
-    |> case do
-      {:ok, %Postgrex.Result{command: :create_table}} -> :ok
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  defp delete_consumer_partition(%{message_kind: :event} = consumer) do
-    """
-    DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
-    """
-    |> Repo.query()
-    |> case do
-      {:ok, %Postgrex.Result{command: :drop_table}} -> :ok
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  defp delete_consumer_partition(%{message_kind: :record} = consumer) do
-    """
-    DROP TABLE IF EXISTS #{stream_schema()}.#{partition_name(consumer)};
-    """
-    |> Repo.query()
-    |> case do
-      {:ok, %Postgrex.Result{command: :drop_table}} -> :ok
-      {:error, error} -> {:error, error}
+  defp delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+    with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
+         {:ok, %Postgrex.Result{command: :drop_table}} <-
+           Repo.query("""
+           drop table if exists #{stream_schema()}.#{partition_name(consumer)};
+           """) do
+      :ok
     end
   end
 

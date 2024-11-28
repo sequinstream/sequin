@@ -19,7 +19,8 @@ defmodule Sequin.Telemetry.PosthogReporter do
 
     state = %{
       table_id: table_id,
-      publish_interval: Keyword.get(opts, :publish_interval, @default_publish_interval)
+      publish_interval: Keyword.get(opts, :publish_interval, @default_publish_interval),
+      posthog_opts: Keyword.get(opts, :posthog_opts, [])
     }
 
     schedule_flush(state.publish_interval)
@@ -39,7 +40,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
     unless Enum.empty?(events) do
       merged_events = merge_events(events)
 
-      Sequin.Posthog.batch(merged_events)
+      Sequin.Posthog.batch(merged_events, state.posthog_opts)
 
       :ets.select_delete(state.table_id, [
         {{:"$1", :"$2", :"$3"}, [{:<, :"$1", now}], [true]}
@@ -64,7 +65,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
       ])
 
     unless Enum.empty?(events) do
-      Sequin.Posthog.batch(events, async: false)
+      Sequin.Posthog.batch(events, state.posthog_opts)
     end
 
     :ets.delete(state.table_id)

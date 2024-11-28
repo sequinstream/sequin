@@ -19,7 +19,8 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
   # Add this private helper function
   defp start_reporter(opts) do
     default_opts = [
-      name: Module.concat(__MODULE__, PosthogReporter)
+      name: Module.concat(__MODULE__, PosthogReporter),
+      posthog_opts: [req_opts: [plug: {Req.Test, Sequin.Posthog}], api_key: "test_api_key"]
     ]
 
     opts = Keyword.merge(default_opts, opts)

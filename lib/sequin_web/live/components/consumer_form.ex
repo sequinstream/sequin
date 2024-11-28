@@ -22,6 +22,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Gcp.Credentials
   alias Sequin.Gcp.PubSub
   alias Sequin.Kafka
   alias Sequin.Name
@@ -520,20 +521,22 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp encode_sink(%GcpPubsubSink{} = sink) do
+    credentials = sink.credentials || %Credentials{}
+
     creds = %{
-      "type" => sink.credentials.type,
-      "project_id" => sink.credentials.project_id,
-      "private_key_id" => sink.credentials.private_key_id,
-      "private_key" => sink.credentials.private_key,
-      "client_email" => sink.credentials.client_email,
-      "client_id" => sink.credentials.client_id,
-      "auth_uri" => sink.credentials.auth_uri,
-      "token_uri" => sink.credentials.token_uri,
-      "auth_provider_x509_cert_url" => sink.credentials.auth_provider_x509_cert_url,
-      "client_x509_cert_url" => sink.credentials.client_x509_cert_url,
-      "universe_domain" => sink.credentials.universe_domain,
-      "client_secret" => sink.credentials.client_secret,
-      "api_key" => sink.credentials.api_key
+      "type" => credentials.type,
+      "project_id" => credentials.project_id,
+      "private_key_id" => credentials.private_key_id,
+      "private_key" => credentials.private_key,
+      "client_email" => credentials.client_email,
+      "client_id" => credentials.client_id,
+      "auth_uri" => credentials.auth_uri,
+      "token_uri" => credentials.token_uri,
+      "auth_provider_x509_cert_url" => credentials.auth_provider_x509_cert_url,
+      "client_x509_cert_url" => credentials.client_x509_cert_url,
+      "universe_domain" => credentials.universe_domain,
+      "client_secret" => credentials.client_secret,
+      "api_key" => credentials.api_key
     }
 
     %{

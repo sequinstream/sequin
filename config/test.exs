@@ -19,7 +19,6 @@ config :phoenix_live_view,
 
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
-config :sequin, Sequin.Posthog, req_opts: [plug: {Req.Test, Sequin.Posthog}]
 
 config :sequin, Sequin.Repo,
   username: "postgres",

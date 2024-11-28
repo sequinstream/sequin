@@ -86,7 +86,7 @@ if config_env() == :prod and self_hosted do
       """
 
   config :sequin, Sequin.Posthog,
-    api_url: "https://us.i.posthog.com",
+    req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     frontend_api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
@@ -135,7 +135,7 @@ if config_env() == :prod and not self_hosted do
     release: System.fetch_env!("CURRENT_GIT_SHA")
 
   config :sequin, Sequin.Posthog,
-    api_url: "https://us.i.posthog.com",
+    req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY",
     frontend_api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY"
 

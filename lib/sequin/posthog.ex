@@ -9,14 +9,17 @@ defmodule Sequin.Posthog do
   def capture(event, properties, opts \\ [])
 
   def capture(event, properties, opts) when is_list(opts) do
-    with {:ok, config} <- config() do
-      body = build_event(event, properties, Keyword.get(opts, :timestamp))
+    body = build_event(event, properties, Keyword.get(opts, :timestamp))
 
-      if Keyword.get(opts, :async, true) do
-        async_post("/capture", body, config)
-      else
-        post("/capture", body, config)
-      end
+    opts =
+      opts
+      |> with_defaults()
+      |> Keyword.update!(:req_opts, &Keyword.put(&1, :url, "/capture"))
+
+    if Keyword.get(opts, :async, true) do
+      async_post(body, opts)
+    else
+      post(body, opts)
     end
   end
 
@@ -28,19 +31,22 @@ defmodule Sequin.Posthog do
   Captures a batch of events.
   """
   def batch(events, opts \\ []) do
-    with {:ok, config} <- config() do
-      body = %{
-        batch:
-          Enum.map(events, fn {event, properties, timestamp} ->
-            build_event(event, properties, timestamp)
-          end)
-      }
+    body = %{
+      batch:
+        Enum.map(events, fn {event, properties, timestamp} ->
+          build_event(event, properties, timestamp)
+        end)
+    }
 
-      if Keyword.get(opts, :async, true) do
-        async_post("/capture", body, config)
-      else
-        post("/capture", body, config)
-      end
+    opts =
+      opts
+      |> with_defaults()
+      |> Keyword.update!(:req_opts, &Keyword.put(&1, :url, "/capture"))
+
+    if Keyword.get(opts, :async, true) do
+      async_post(body, opts)
+    else
+      post(body, opts)
     end
   end
 
@@ -63,69 +69,50 @@ defmodule Sequin.Posthog do
     }
   end
 
-  defp base_req(path, body, config) do
-    url = config |> Keyword.get(:api_url, "https://us.i.posthog.com") |> URI.merge(path) |> URI.to_string()
-    body = Map.put(body, :api_key, Keyword.get(config, :api_key))
-    req_opts = Keyword.get(config, :req_opts, [])
+  defp base_req(body, opts) do
+    body = Map.put(body, :api_key, Keyword.get(opts, :api_key))
 
-    [url: url, json: body, method: :post]
+    [json: body, method: :post]
     |> Req.new()
-    |> Req.merge(req_opts)
+    |> Req.merge(opts[:req_opts])
   end
 
-  defp post(path, body, config) do
-    unless is_disabled() do
-      path
-      |> base_req(body, config)
+  defp post(body, opts) do
+    unless is_disabled(opts) do
+      body
+      |> base_req(opts)
       |> Req.run()
     end
-  rescue
-    e in RuntimeError ->
-      case {env(), e.message} do
-        {:test, "cannot find mock/stub Sequin.Posthog in process" <> _rest} ->
-          {:error, :req_stub_not_configured}
-
-        _ ->
-          reraise e, __STACKTRACE__
-      end
   end
 
-  defp async_post(path, body, config) do
-    unless is_disabled() do
+  defp async_post(body, opts) do
+    unless is_disabled(opts) do
       Task.Supervisor.start_child(Sequin.TaskSupervisor, fn ->
-        try do
-          path
-          |> base_req(body, config)
-          |> Req.run()
-        rescue
-          e in RuntimeError ->
-            case {env(), e.message} do
-              {:test, "cannot find mock/stub Sequin.Posthog in process" <> _rest} ->
-                {:error, :req_stub_not_configured}
-
-              _ ->
-                reraise e, __STACKTRACE__
-            end
-        end
+        body
+        |> base_req(opts)
+        |> Req.run()
       end)
     end
   end
 
-  defp is_disabled do
-    case config() do
-      {:ok, config} -> Keyword.get(config, :is_disabled, false)
-      {:error, :not_configured} -> false
+  defp is_disabled(opts) do
+    cond do
+      Keyword.get(opts, :is_disabled, false) -> true
+      is_nil(Keyword.get(opts, :api_key)) -> true
+      true -> false
     end
+  end
+
+  defp with_defaults(opts) do
+    {default_req_opts, default_opts} = Keyword.pop(config(), :req_opts, [])
+    {req_opts, opts} = Keyword.pop(opts, :req_opts, [])
+
+    default_opts
+    |> Keyword.merge(opts)
+    |> Keyword.put(:req_opts, Keyword.merge(default_req_opts, req_opts))
   end
 
   defp config do
-    case Application.fetch_env(:sequin, Sequin.Posthog) do
-      {:ok, config} -> {:ok, config}
-      :error -> {:error, :not_configured}
-    end
-  end
-
-  defp env do
-    Application.get_env(:sequin, :env)
+    Application.get_env(:sequin, Sequin.Posthog, [])
   end
 end

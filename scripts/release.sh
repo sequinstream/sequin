@@ -174,15 +174,14 @@ build_and_push_docker() {
     fi
 
     echo "Building and pushing Docker images..."
-
+ 
     # Build amd64 with architecture-specific tag
     echo "Building amd64 image..."
     docker buildx build \
         --platform linux/amd64 \
         --build-arg SELF_HOSTED=1 \
         --build-arg RELEASE_VERSION="$version" \
-        -t sequin/sequin:${version} \
-        --metadata-file metadata-amd64.json \
+        -t sequin/sequin:${version}-amd64 \
         . \
         --push
 
@@ -197,8 +196,7 @@ build_and_push_docker() {
         --platform linux/arm64 \
         --build-arg SELF_HOSTED=1 \
         --build-arg RELEASE_VERSION="$version" \
-        -t sequin/sequin:${version} \
-        --metadata-file metadata-arm64.json \
+        -t sequin/sequin:${version}-arm64 \
         . \
         --push
 
@@ -207,19 +205,24 @@ build_and_push_docker() {
         exit 1
     fi
 
-    # Tag latest
-    echo "Tagging latest..."
-    docker buildx imagetools create -t sequin/sequin:latest sequin/sequin:${version}
+    echo "Creating multi-arch images using imagetools..."
+
+    # Create version-specific multi-arch image
+    docker buildx imagetools create -t sequin/sequin:${version} \
+        sequin/sequin:${version}-amd64 \
+        sequin/sequin:${version}-arm64
+
+    # Create latest multi-arch image
+    docker buildx imagetools create -t sequin/sequin:latest \
+        sequin/sequin:${version}-amd64 \
+        sequin/sequin:${version}-arm64
 
     if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Docker images built, pushed, and tagged successfully.${RESET}"
+        echo -e "${GREEN}Docker images created and pushed successfully.${RESET}"
     else
-        echo -e "${RED}Error: Docker tagging failed.${RESET}"
+        echo -e "${RED}Error: Failed to create multi-arch images.${RESET}"
         exit 1
     fi
-
-    # Cleanup
-    rm -f metadata-amd64.json metadata-arm64.json
 }
 
 if [[ "$DIRTY" == false ]] && [[ -n $(git status --porcelain) ]]; then

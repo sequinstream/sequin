@@ -35,6 +35,12 @@ release:
 release-dirty:
 	@./scripts/release.sh --dirty
 
+release-gh:
+	@./scripts/release.sh --github-actions
+
+release-dirty-gh:
+	@./scripts/release.sh --dirty --github-actions
+
 spellcheck:
 	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
 
@@ -75,6 +81,10 @@ help:
 	@echo "  make buildpush-dirty - Run mix buildpush with --dirty flag"
 	@echo "  make connectdb [id=<id>] [open=<open>] - Connect to the production database"
 	@echo "  make connect - Connect to the production database"
+	@echo "  make release     - Run the release script"
+	@echo "  make release-dirty - Run the release script with --dirty flag"
+	@echo "  make release-gh  - Run the release script using GitHub Actions for Docker builds"
+	@echo "  make release-dirty-gh - Run the release script with --dirty flag using GitHub Actions"
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \

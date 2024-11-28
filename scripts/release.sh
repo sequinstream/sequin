@@ -20,10 +20,12 @@ check_docker
 # Parse command line arguments
 DIRTY=false
 DRY_RUN=false
+GITHUB_ACTIONS=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --dirty) DIRTY=true ;;
         --dry-run) DRY_RUN=true ;;
+        --github-actions) GITHUB_ACTIONS=true ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -166,6 +168,7 @@ build_cli() {
 # Function to build and push Docker image
 build_and_push_docker() {
     local version=$1
+    local use_github_actions=${2:-false}
     
     # Check if we're in the correct directory
     if [ ! -f "Dockerfile" ]; then
@@ -173,55 +176,69 @@ build_and_push_docker() {
         exit 1
     fi
 
-    echo "Building and pushing Docker images..."
- 
-    # Build amd64 with architecture-specific tag
-    echo "Building amd64 image..."
-    docker buildx build \
-        --platform linux/amd64 \
-        --build-arg SELF_HOSTED=1 \
-        --build-arg RELEASE_VERSION="$version" \
-        -t sequin/sequin:${version}-amd64 \
-        . \
-        --push
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Error: Docker build failed for amd64.${RESET}"
-        exit 1
-    fi
-
-    # Build arm64 with architecture-specific tag
-    echo "Building arm64 image..."
-    docker buildx build \
-        --platform linux/arm64 \
-        --build-arg SELF_HOSTED=1 \
-        --build-arg RELEASE_VERSION="$version" \
-        -t sequin/sequin:${version}-arm64 \
-        . \
-        --push
-
-    if [ $? -ne 0 ]; then
-        echo -e "${RED}Error: Docker build failed for arm64.${RESET}"
-        exit 1
-    fi
-
-    echo "Creating multi-arch images using imagetools..."
-
-    # Create version-specific multi-arch image
-    docker buildx imagetools create -t sequin/sequin:${version} \
-        sequin/sequin:${version}-amd64 \
-        sequin/sequin:${version}-arm64
-
-    # Create latest multi-arch image
-    docker buildx imagetools create -t sequin/sequin:latest \
-        sequin/sequin:${version}-amd64 \
-        sequin/sequin:${version}-arm64
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Docker images created and pushed successfully.${RESET}"
+    if [ "$use_github_actions" = true ]; then
+        echo "Triggering Docker builds in GitHub Actions..."
+        gh workflow run docker-build.yml -f version="$version"
+        
+        # Wait for workflow to complete
+        echo "Waiting for Docker builds to complete in GitHub Actions..."
+        gh run watch $(gh run list --workflow=docker-build.yml --limit 1 --json databaseId --jq '.[0].databaseId')
     else
-        echo -e "${RED}Error: Failed to create multi-arch images.${RESET}"
-        exit 1
+        echo "Building and pushing Docker images locally..."
+        # Build amd64 with architecture-specific tag
+        echo "Building amd64 image..."
+        docker buildx build \
+            --platform linux/amd64 \
+            --build-arg SELF_HOSTED=1 \
+            --build-arg RELEASE_VERSION="$version" \
+            --cache-from "type=registry,ref=sequin/sequin:buildcache-amd64" \
+            --cache-to "type=registry,ref=sequin/sequin:buildcache-amd64,mode=max" \
+            --provenance=false \
+            -t sequin/sequin:${version}-amd64 \
+            . \
+            --push
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Docker build failed for amd64.${RESET}"
+            exit 1
+        fi
+
+        # Build arm64 with architecture-specific tag
+        echo "Building arm64 image..."
+        docker buildx build \
+            --platform linux/arm64 \
+            --build-arg SELF_HOSTED=1 \
+            --build-arg RELEASE_VERSION="$version" \
+            --cache-from "type=registry,ref=sequin/sequin:buildcache-arm64" \
+            --cache-to "type=registry,ref=sequin/sequin:buildcache-arm64,mode=max" \
+            --provenance=false \
+            -t sequin/sequin:${version}-arm64 \
+            . \
+            --push
+
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}Error: Docker build failed for arm64.${RESET}"
+            exit 1
+        fi
+
+        echo "Creating multi-arch images using imagetools..."
+
+        # Create version-specific multi-arch image
+        docker buildx imagetools create -t sequin/sequin:${version} \
+            sequin/sequin:${version}-amd64 \
+            sequin/sequin:${version}-arm64
+
+        # Create latest multi-arch image
+        docker buildx imagetools create -t sequin/sequin:latest \
+            sequin/sequin:${version}-amd64 \
+            sequin/sequin:${version}-arm64
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Docker images created and pushed successfully.${RESET}"
+        else
+            echo -e "${RED}Error: Failed to create multi-arch images.${RESET}"
+            exit 1
+        fi
     fi
 }
 
@@ -308,7 +325,7 @@ if [[ "$DRY_RUN" == true ]]; then
 fi
 
 # Build and push Docker image
-build_and_push_docker "$new_version"
+build_and_push_docker "$new_version" "$GITHUB_ACTIONS"
 
 # Create and push the new tag
 git tag "$new_version"

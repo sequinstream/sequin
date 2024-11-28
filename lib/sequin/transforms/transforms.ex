@@ -49,15 +49,19 @@ defmodule Sequin.Transforms do
       ipv6: database.ipv6,
       use_local_tunnel: database.use_local_tunnel,
       tables:
-        Enum.map(database.sequences, fn sequence ->
-          table = Sequin.Enum.find!(database.tables, &(&1.oid == sequence.table_oid))
+        database.sequences
+        |> Enum.map(fn sequence ->
+          table = Enum.find(database.tables, &(&1.oid == sequence.table_oid))
 
-          %{
-            table_name: table.name,
-            table_schema: table.schema,
-            sort_column_name: sequence.sort_column_name
-          }
+          if table do
+            %{
+              table_name: table.name,
+              table_schema: table.schema,
+              sort_column_name: sequence.sort_column_name
+            }
+          end
         end)
+        |> Enum.filter(& &1)
     }
   end
 

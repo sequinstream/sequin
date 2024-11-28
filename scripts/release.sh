@@ -173,22 +173,53 @@ build_and_push_docker() {
         exit 1
     fi
 
-    echo "Building and pushing Docker image..."
+    echo "Building and pushing Docker images..."
+
+    # Build amd64 with architecture-specific tag
+    echo "Building amd64 image..."
     docker buildx build \
-        --platform linux/amd64,linux/arm64 \
+        --platform linux/amd64 \
         --build-arg SELF_HOSTED=1 \
         --build-arg RELEASE_VERSION="$version" \
-        -t sequin/sequin:latest \
-        -t sequin/sequin:"$version" \
+        -t sequin/sequin:${version} \
+        --metadata-file metadata-amd64.json \
         . \
         --push
 
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Docker image built and pushed successfully.${RESET}"
-    else
-        echo -e "${RED}Error: Docker build or push failed.${RESET}"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Docker build failed for amd64.${RESET}"
         exit 1
     fi
+
+    # Build arm64 with architecture-specific tag
+    echo "Building arm64 image..."
+    docker buildx build \
+        --platform linux/arm64 \
+        --build-arg SELF_HOSTED=1 \
+        --build-arg RELEASE_VERSION="$version" \
+        -t sequin/sequin:${version} \
+        --metadata-file metadata-arm64.json \
+        . \
+        --push
+
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Error: Docker build failed for arm64.${RESET}"
+        exit 1
+    fi
+
+    # Tag latest
+    echo "Tagging latest..."
+    docker buildx imagetools create -t sequin/sequin:latest sequin/sequin:${version}
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Docker images built, pushed, and tagged successfully.${RESET}"
+    else
+        echo -e "${RED}Error: Docker tagging failed.${RESET}"
+        exit 1
+    fi
+
+    # Cleanup
+    rm -f metadata-amd64.json metadata-arm64.json
 }
 
 if [[ "$DIRTY" == false ]] && [[ -n $(git status --porcelain) ]]; then
@@ -273,14 +304,14 @@ if [[ "$DRY_RUN" == true ]]; then
     exit 0
 fi
 
+# Build and push Docker image
+build_and_push_docker "$new_version"
+
 # Create and push the new tag
 git tag "$new_version"
 git push origin "$new_version"
 
 echo "New tag $new_version created and pushed to GitHub"
-
-# Build and push Docker image
-build_and_push_docker "$new_version"
 
 # Create a GitHub release for the new tag and upload assets
 create_github_release "$new_version"

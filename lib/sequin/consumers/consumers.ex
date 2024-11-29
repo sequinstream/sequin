@@ -2,10 +2,12 @@ defmodule Sequin.Consumers do
   @moduledoc false
   import Ecto.Query
 
+  alias Ecto.Changeset
   alias Sequin.Accounts
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerLifecycleWorker
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
@@ -28,7 +30,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Postgres
-  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
+  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationRuntimeSupervisor
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -169,36 +171,55 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def update_consumer(%SinkConsumer{} = consumer, attrs) do
-    consumer
-    |> SinkConsumer.update_changeset(attrs)
-    |> Repo.update()
-  end
-
-  def update_consumer_with_lifecycle(consumer, attrs) do
-    with {:ok, updated_consumer} <- update_consumer(consumer, attrs) do
-      :ok = notify_consumer_update(updated_consumer)
-
-      {:ok, updated_consumer}
-    end
-  end
-
-  def delete_consumer_with_lifecycle(consumer) do
+  def create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
     Repo.transact(fn ->
-      case delete_consumer(consumer) do
-        {:ok, _} ->
-          notify_consumer_delete(consumer)
-          :ok = delete_consumer_partition(consumer)
-          {:ok, consumer}
+      res =
+        %SinkConsumer{account_id: account_id}
+        |> SinkConsumer.create_changeset(attrs)
+        |> Changeset.put_change(:status, :creating)
+        |> Repo.insert()
 
-        {:error, error} ->
-          {:error, error}
+      with {:ok, consumer} <- res,
+           {:ok, _job} <- ConsumerLifecycleWorker.enqueue_create(consumer.id) do
+        consumer = Repo.reload!(consumer)
+
+        {:ok, consumer}
       end
     end)
   end
 
-  def delete_consumer(consumer) do
-    Repo.delete(consumer)
+  def create_sink_consumer_with_lifecycle(attrs) do
+    account_id = Map.fetch!(attrs, :account_id)
+    create_sink_consumer_for_account_with_lifecycle(account_id, attrs)
+  end
+
+  def update_consumer_with_lifecycle(consumer, attrs) do
+    Repo.transact(fn ->
+      res =
+        consumer
+        |> SinkConsumer.update_changeset(attrs)
+        |> Changeset.put_change(:status, :updating)
+        |> Repo.update()
+
+      with {:ok, updated_consumer} <- res,
+           {:ok, _job} <- ConsumerLifecycleWorker.enqueue_update(consumer.id) do
+        {:ok, updated_consumer}
+      end
+    end)
+  end
+
+  def delete_consumer_with_lifecycle(consumer) do
+    Repo.transact(fn ->
+      res =
+        consumer
+        |> SinkConsumer.update_changeset(%{status: :deleting})
+        |> Repo.update()
+
+      with {:ok, updated_consumer} <- res,
+           {:ok, _job} <- ConsumerLifecycleWorker.enqueue_delete(consumer.id) do
+        {:ok, updated_consumer}
+      end
+    end)
   end
 
   def partition_name(%{message_kind: :event} = consumer) do
@@ -207,6 +228,41 @@ defmodule Sequin.Consumers do
 
   def partition_name(%{message_kind: :record} = consumer) do
     "consumer_records_#{consumer.seq}"
+  end
+
+  def handle_consumer_create(consumer) do
+    with :ok <- create_consumer_partition(consumer),
+         :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      maybe_start_table_producer(consumer)
+      ConsumersSupervisor.start_for_sink_consumer(consumer)
+      update_consumer_status(consumer, :ready)
+    end
+  end
+
+  def handle_consumer_update(consumer) do
+    with :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      case consumer.status do
+        :active ->
+          ConsumersSupervisor.restart_for_sink_consumer(consumer)
+          maybe_start_table_producer(consumer)
+
+        :disabled ->
+          ConsumersSupervisor.stop_for_sink_consumer(consumer)
+          maybe_stop_table_producer(consumer)
+      end
+
+      update_consumer_status(consumer, :ready)
+    end
+  end
+
+  def handle_consumer_delete(consumer) do
+    with :ok <- delete_consumer_partition(consumer),
+         :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      ConsumersSupervisor.stop_for_sink_consumer(consumer)
+      maybe_stop_table_producer(consumer)
+
+      Repo.delete(consumer)
+    end
   end
 
   # SinkConsumer
@@ -249,31 +305,6 @@ defmodule Sequin.Consumers do
     |> SinkConsumer.where_status()
     |> preload(^preloads)
     |> Repo.all()
-  end
-
-  def create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
-    Repo.transact(fn ->
-      with {:ok, consumer} <- create_sink_consumer(account_id, attrs),
-           :ok <- create_consumer_partition(consumer) do
-        :ok = notify_consumer_update(consumer)
-        notify_consumer_create(consumer)
-
-        consumer = Repo.reload!(consumer)
-
-        {:ok, consumer}
-      end
-    end)
-  end
-
-  def create_sink_consumer_with_lifecycle(attrs) do
-    account_id = Map.fetch!(attrs, :account_id)
-    create_sink_consumer_for_account_with_lifecycle(account_id, attrs)
-  end
-
-  def create_sink_consumer(account_id, attrs) do
-    %SinkConsumer{account_id: account_id}
-    |> SinkConsumer.create_changeset(attrs)
-    |> Repo.insert()
   end
 
   @legacy_event_singleton_transform_cutoff_date ~D[2024-11-06]
@@ -574,7 +605,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+  def delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
          {:ok, %Postgrex.Result{command: :drop_table}} <-
            Repo.query("""
@@ -1560,61 +1591,6 @@ defmodule Sequin.Consumers do
       to_string(field_value) not in Enum.map(filter_value, &to_string/1)
   end
 
-  defp notify_consumer_update(%SinkConsumer{} = consumer) do
-    if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
-
-    if env() == :test do
-      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-    else
-      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-        case consumer.status do
-          :active ->
-            ConsumersSupervisor.restart_for_sink_consumer(consumer)
-            :ok
-
-          :disabled ->
-            ConsumersSupervisor.stop_for_sink_consumer(consumer)
-            :ok
-        end
-      end
-    end
-  end
-
-  defp notify_consumer_create(%SinkConsumer{}) do
-    :ok
-  end
-
-  defp notify_consumer_delete(%SinkConsumer{} = consumer) do
-    maybe_disable_table_producer(consumer)
-
-    if env() == :test do
-      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-    else
-      with %Task{} <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
-        ConsumersSupervisor.stop_for_sink_consumer(consumer)
-      end
-    end
-  end
-
-  defp maybe_disable_table_producer(%{message_kind: :record} = consumer) do
-    unless env() == :test do
-      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
-    end
-  end
-
-  defp maybe_disable_table_producer(_consumer), do: :ok
-
-  defp async_refresh_message_handler_ctx(replication_slot_id) do
-    Task.Supervisor.async_nolink(
-      Sequin.TaskSupervisor,
-      fn ->
-        ReplicationSupervisor.refresh_message_handler_ctx(replication_slot_id)
-      end,
-      # Until we make Replication more responsive, this can take a while
-      timeout: :timer.minutes(2)
-    )
-  end
-
   defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do
     sink_consumers = list_sink_consumers_for_http_endpoint(http_endpoint.id)
     Enum.each(sink_consumers, &ConsumersSupervisor.restart_for_sink_consumer(&1))
@@ -1744,4 +1720,26 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_backfill_update(_backfill), do: :ok
+
+  defp maybe_start_table_producer(consumer) do
+    consumer = Repo.preload(consumer, :active_backfill)
+
+    unless is_nil(consumer.active_backfill) do
+      DatabasesRuntimeSupervisor.start_table_producer(consumer)
+    end
+  end
+
+  defp maybe_stop_table_producer(consumer) do
+    consumer = Repo.preload(consumer, :active_backfill)
+
+    unless is_nil(consumer.active_backfill) do
+      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
+    end
+  end
+
+  defp update_consumer_status(consumer, status) do
+    consumer
+    |> SinkConsumer.update_changeset(%{status: status})
+    |> Repo.update!()
+  end
 end

@@ -231,35 +231,42 @@ defmodule Sequin.Consumers do
   end
 
   def handle_consumer_create(consumer) do
-    with :ok <- create_consumer_partition(consumer),
-         :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-      maybe_start_table_producer(consumer)
-      ConsumersSupervisor.start_for_sink_consumer(consumer)
-      update_consumer_status(consumer, :ready)
-    end
-  end
+    with :ok <- create_consumer_partition(consumer) do
+      :ok = ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
-  def handle_consumer_update(consumer) do
-    with :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-      case consumer.status do
-        :active ->
-          ConsumersSupervisor.restart_for_sink_consumer(consumer)
-          maybe_start_table_producer(consumer)
-
-        :disabled ->
-          ConsumersSupervisor.stop_for_sink_consumer(consumer)
-          maybe_stop_table_producer(consumer)
+      unless env() == :test do
+        maybe_start_table_producer(consumer)
+        ConsumersSupervisor.start_for_sink_consumer(consumer)
       end
 
       update_consumer_status(consumer, :ready)
     end
   end
 
+  def handle_consumer_update(consumer) do
+    unless env() == :test do
+      :ok = ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+
+      if consumer.enabled do
+        ConsumersSupervisor.restart_for_sink_consumer(consumer)
+        maybe_start_table_producer(consumer)
+      else
+        ConsumersSupervisor.stop_for_sink_consumer(consumer)
+        maybe_stop_table_producer(consumer)
+      end
+    end
+
+    update_consumer_status(consumer, :ready)
+  end
+
   def handle_consumer_delete(consumer) do
-    with :ok <- delete_consumer_partition(consumer),
-         :ok <- ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-      ConsumersSupervisor.stop_for_sink_consumer(consumer)
-      maybe_stop_table_producer(consumer)
+    with :ok <- delete_consumer_partition(consumer) do
+      ReplicationRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+
+      unless env() == :test do
+        ConsumersSupervisor.stop_for_sink_consumer(consumer)
+        maybe_stop_table_producer(consumer)
+      end
 
       Repo.delete(consumer)
     end

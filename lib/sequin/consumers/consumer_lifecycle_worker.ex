@@ -9,15 +9,21 @@ defmodule Sequin.Consumers.ConsumerLifecycleWorker do
 
   # Public API for enqueueing jobs
   def enqueue_create(consumer_id) do
-    Oban.insert(%{consumer_id: consumer_id, event: "create"})
+    %{consumer_id: consumer_id, event: "create"}
+    |> new()
+    |> Oban.insert()
   end
 
   def enqueue_delete(consumer_id) do
-    Oban.insert(%{consumer_id: consumer_id, event: "delete"})
+    %{consumer_id: consumer_id, event: "delete"}
+    |> new()
+    |> Oban.insert()
   end
 
   def enqueue_update(consumer_id) do
-    Oban.insert(%{consumer_id: consumer_id, event: "update"})
+    %{consumer_id: consumer_id, event: "update"}
+    |> new()
+    |> Oban.insert()
   end
 
   @impl Oban.Worker

@@ -85,7 +85,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
         source_tables: source_tables,
-        status: :active,
+        enabled: true,
+        status: :ready,
         sequence_id: sequence_id,
         sequence_filter: sequence_filter
       },
@@ -120,13 +121,15 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Map.put(:account_id, account_id)
       |> sink_consumer_attrs()
 
-    case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
-      {:ok, consumer} ->
-        consumer
+    Oban.Testing.with_testing_mode(:inline, fn ->
+      case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
+        {:ok, consumer} ->
+          consumer
 
-      {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
-        insert_sink_consumer!(attrs)
-    end
+        {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
+          insert_sink_consumer!(attrs)
+      end
+    end)
   end
 
   defp sink(:http_push, account_id, attrs) do

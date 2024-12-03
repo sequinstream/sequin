@@ -46,6 +46,10 @@ You can provide a YAML configuration file to Sequin. This configuration file wil
 
 The `PG_POOL_SIZE` variable controls the maximum number of concurrent connections that Sequin will maintain to Postgres. For higher throughput on larger Postgres instances, you should increase this value.
 
+### Runtime configuration
+
+- `BACKFILL_MAX_PENDING_MESSAGES`: When backfilling, the maximum number of pending messages to accumulate in the sink's outbox before pausing the backfill. When messages start draining to the sink, the backfill will automatically resume. The default is 1M messages.
+
 ### Redis configuration
 
 - `REDIS_URL`: Redis connection URL

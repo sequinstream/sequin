@@ -364,5 +364,39 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       event_consumer = Repo.preload(event_consumer, :active_backfill, force: true)
       refute event_consumer.active_backfill
     end
+
+    test "pauses backfill when too many pending messages exist", %{
+      consumer: consumer,
+      table_oid: table_oid
+    } do
+      # Start with a lower max_pending_messages threshold
+      # Set below 8 characters in table
+      max_pending_messages = 6
+
+      pid =
+        start_supervised!(
+          {TableProducerServer,
+           [
+             consumer: consumer,
+             page_size: 1,
+             table_oid: table_oid,
+             test_pid: self(),
+             max_pending_messages: max_pending_messages,
+             consumer_reload_timeout: 1
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {TableProducerServer, :paused}, 1000
+
+      # Now clear the messages
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> Repo.delete_all()
+
+      # Wait for the TableProducerServer to finish processing
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+    end
   end
 end

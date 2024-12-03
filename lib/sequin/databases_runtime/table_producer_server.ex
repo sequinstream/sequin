@@ -70,6 +70,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
+      field :max_pending_messages, integer()
+      field :consumer_reload_timeout, integer()
     end
   end
 
@@ -83,11 +85,16 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
     Logger.metadata(consumer_id: consumer.id)
 
+    max_pending_messages =
+      Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
+
     state = %State{
       consumer: consumer,
       page_size: Keyword.get(opts, :page_size, 1000),
       test_pid: test_pid,
-      table_oid: Keyword.fetch!(opts, :table_oid)
+      table_oid: Keyword.fetch!(opts, :table_oid),
+      max_pending_messages: max_pending_messages,
+      consumer_reload_timeout: Keyword.get(opts, :consumer_reload_timeout, :timer.seconds(30))
     }
 
     actions = [
@@ -126,7 +133,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
           end
         end
 
-        actions = [reload_consumer_timeout()]
+        actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
 
         {:next_state, :query_max_cursor, state, actions}
     end
@@ -257,27 +264,55 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
     {:next_state, state_name, state}
   end
 
-  def handle_event({:timeout, :reload_consumer}, _evt, _state_name, state) do
+  def handle_event({:timeout, :reload_consumer}, _evt, state_name, state) do
     case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableProducerServer] Consumer #{state.consumer.id} not found, shutting down")
         {:stop, :normal}
 
       consumer ->
-        case consumer.active_backfill do
-          nil ->
+        message_count = Consumers.fast_count_messages_for_consumer(consumer)
+        actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
+
+        cond do
+          is_nil(consumer.active_backfill) ->
             Logger.info("[TableProducerServer] No active backfill found, shutting down")
             {:stop, :normal}
 
-          _backfill ->
-            actions = [reload_consumer_timeout()]
+          # If there are too many pending messages, pause the backfill
+          message_count > state.max_pending_messages and state_name != :paused ->
+            if state.test_pid do
+              send(state.test_pid, {__MODULE__, :paused})
+            end
+
+            Logger.info("[TableProducerServer] Pausing backfill for consumer #{consumer.id} due to many pending messages")
+            {:next_state, :paused, state, actions}
+
+          message_count > state.max_pending_messages and state_name == :paused ->
+            {:keep_state_and_data, actions}
+
+          state_name == :paused ->
+            Logger.info("[TableProducerServer] Resuming backfill for consumer #{consumer.id}")
+            {:next_state, :query_max_cursor, %{state | consumer: consumer}, actions}
+
+          true ->
             {:keep_state, %{state | consumer: consumer}, actions}
         end
     end
   end
 
-  defp reload_consumer_timeout do
-    {{:timeout, :reload_consumer}, :timer.minutes(1), nil}
+  # Ignore results that come back after we've paused
+  def handle_event(:info, {ref, _}, :paused, %State{task_ref: ref} = state) do
+    Process.demonitor(ref, [:flush])
+    {:keep_state, %{state | task_ref: nil}}
+  end
+
+  def handle_event(:enter, _old_state, :paused, _state) do
+    :keep_state_and_data
+  end
+
+  defp reload_consumer_timeout(timeout) do
+    {{:timeout, :reload_consumer}, timeout, nil}
   end
 
   defp database(%State{consumer: consumer}) do

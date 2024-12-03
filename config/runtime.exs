@@ -12,6 +12,18 @@ get_env = fn key ->
   end
 end
 
+maybe_parse_int_env = fn key ->
+  try do
+    if System.get_env(key) do
+      String.to_integer(System.get_env(key))
+    end
+  rescue
+    e in ArgumentError ->
+      IO.puts("Environment variable #{key} must be a valid integer: #{inspect(e)}")
+      reraise(e, __STACKTRACE__)
+  end
+end
+
 server_port = String.to_integer(System.get_env("SERVER_PORT") || System.get_env("PORT") || "7376")
 server_host = System.get_env("SERVER_HOST") || System.get_env("PHX_HOST") || "localhost"
 
@@ -54,6 +66,8 @@ if config_env() == :prod and self_hosted do
 
   provision_default_user =
     if System.get_env("FEATURE_PROVISION_DEFAULT_USER", "enabled") in enabled_feature_value, do: :enabled, else: :disabled
+
+  backfill_max_pending_messages = maybe_parse_int_env.("BACKFILL_MAX_PENDING_MESSAGES")
 
   database_url =
     case System.get_env("PG_URL") do
@@ -125,7 +139,8 @@ if config_env() == :prod and self_hosted do
     api_base_url: "http://#{server_host}:#{server_port}",
     config_file_path: System.get_env("CONFIG_FILE_PATH"),
     config_file_yaml: System.get_env("CONFIG_FILE_YAML"),
-    release_version: System.get_env("RELEASE_VERSION")
+    release_version: System.get_env("RELEASE_VERSION"),
+    backfill_max_pending_messages: backfill_max_pending_messages
 end
 
 if config_env() == :prod and not self_hosted do

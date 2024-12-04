@@ -24,7 +24,6 @@ defmodule Sequin.Replication.MessageHandler do
     typedstruct do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
-      field :replication_slot_id, String.t()
     end
   end
 
@@ -33,22 +32,20 @@ defmodule Sequin.Replication.MessageHandler do
 
     %Context{
       consumers: pr.sink_consumers,
-      wal_pipelines: pr.wal_pipelines,
-      replication_slot_id: pr.id
+      wal_pipelines: pr.wal_pipelines
     }
   end
 
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
-    Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
-    max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+    Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
     messages_by_consumer =
       Enum.flat_map(messages, fn message ->
         ctx.consumers
         |> Enum.map(fn consumer ->
           if Consumers.matches_message?(consumer, message) do
-            Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
+            Logger.debug("[MessageHandler] Matched message to consumer #{consumer.id}")
 
             cond do
               consumer.message_kind == :event ->
@@ -110,8 +107,6 @@ defmodule Sequin.Replication.MessageHandler do
             {{:delete, _consumer}, _messages} -> :ok
           end)
 
-          Replication.put_last_processed_seq!(ctx.replication_slot_id, max_seq)
-
           {:ok, count + wal_event_count}
         end
       end)
@@ -130,8 +125,7 @@ defmodule Sequin.Replication.MessageHandler do
   defp consumer_event(consumer, message) do
     %ConsumerEvent{
       consumer_id: consumer.id,
-      commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0,
@@ -143,8 +137,7 @@ defmodule Sequin.Replication.MessageHandler do
   defp consumer_record(consumer, message) do
     %ConsumerRecord{
       consumer_id: consumer.id,
-      commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -257,8 +250,7 @@ defmodule Sequin.Replication.MessageHandler do
   defp wal_event(pipeline, message) do
     %WalEvent{
       wal_pipeline_id: pipeline.id,
-      commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
       record_pks: Enum.map(message.ids, &to_string/1),
       record: fields_to_map(get_fields(message)),
       changes: get_changes(message),

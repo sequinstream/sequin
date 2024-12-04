@@ -85,6 +85,14 @@ if config_env() == :prod and self_hosted do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  repo_ssl =
+    case System.get_env("PG_SSL") do
+      "true" -> [verify: :verify_none]
+      "1" -> [verify: :verify_none]
+      "verify-none" -> [verify: :verify_none]
+      _ -> false
+    end
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -92,7 +100,7 @@ if config_env() == :prod and self_hosted do
     is_disabled: System.get_env("SEQUIN_TELEMETRY_DISABLED") in ~w(true 1)
 
   config :sequin, Sequin.Repo,
-    ssl: System.get_env("PG_SSL") in ~w(true 1),
+    ssl: repo_ssl,
     pool_size: String.to_integer(System.get_env("PG_POOL_SIZE", "10")),
     url: database_url,
     socket_options: ecto_socket_opts

@@ -384,38 +384,41 @@
             Pending invites are users that have been invited to the account but
             have not yet accepted the invite.
           </p>
-          <Button
-            variant="outline"
-            class="flex items-center gap-2"
-            on:click={() => (showInviteLinkDialog = true)}
-          >
-            <Link class="h-4 w-4" />
-            Invite link
-          </Button>
-          {#if emailEnabled}
+          <div class="flex gap-2">
             <Button
+              variant="outline"
               class="flex items-center gap-2"
-              on:click={openInviteMemberDialog}
+              on:click={() => (showInviteLinkDialog = true)}
             >
-              <Plus class="h-4 w-4" />
-              Invite user
+              <Link class="h-4 w-4" />
+              Invite link
             </Button>
-          {:else}
-            <Tooltip.Root>
-              <Tooltip.Trigger>
-                <Button disabled class="flex items-center gap-2">
-                  <Plus class="h-4 w-4" />
-                  Invite user
-                </Button>
-              </Tooltip.Trigger>
-              <Tooltip.Content style="width: 200px">
-                <p class="text-xs">
-                  Inviting users is disabled because email is not yet supported
-                  on self-hosted Sequin. Use your account's invite link instead.
-                </p>
-              </Tooltip.Content>
-            </Tooltip.Root>
-          {/if}
+            {#if emailEnabled}
+              <Button
+                class="flex items-center gap-2"
+                on:click={openInviteMemberDialog}
+              >
+                <Plus class="h-4 w-4" />
+                Invite user
+              </Button>
+            {:else}
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <Button disabled class="flex items-center gap-2">
+                    <Plus class="h-4 w-4" />
+                    Invite user
+                  </Button>
+                </Tooltip.Trigger>
+                <Tooltip.Content style="width: 200px">
+                  <p class="text-xs">
+                    Inviting users is disabled because email is not yet
+                    supported on self-hosted Sequin. Use your account's invite
+                    link instead.
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+            {/if}
+          </div>
         </div>
       {:else}
         <Table.Root>

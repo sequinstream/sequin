@@ -5,6 +5,7 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Accounts.AccountUser
   alias Sequin.Accounts.User
   alias Sequin.Accounts.UserToken
+  alias Sequin.Error
   alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
   alias Sequin.Factory.AccountsFactory
@@ -916,6 +917,101 @@ defmodule Sequin.AccountsTest do
       {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
 
       assert {:error, %NotFoundError{}} = Accounts.accept_invite(invited_user, hashed_token)
+    end
+  end
+
+  describe "team invites" do
+    test "get_or_insert_team_invite_token/2 creates a new token if none exists" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+
+      assert {:ok, token} = Accounts.get_or_insert_team_invite_token(user, account)
+      assert is_binary(token)
+
+      # Verify token exists in database
+      assert [stored_token] =
+               UserToken
+               |> where(context: "account-team-invite")
+               |> where([t], fragment("? @> ?", t.annotations, ^%{"account_id" => account.id}))
+               |> Repo.all()
+
+      assert stored_token.user_id == user.id
+    end
+
+    test "get_or_insert_team_invite_token/2 returns existing token if less than 24h old" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+
+      {:ok, first_token} = Accounts.get_or_insert_team_invite_token(user, account)
+      {:ok, second_token} = Accounts.get_or_insert_team_invite_token(user, account)
+
+      assert first_token == second_token
+    end
+
+    test "get_or_insert_team_invite_token/2 creates new token if existing is over 24h old" do
+      user = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+
+      old_token =
+        AccountsFactory.insert_user_token!(
+          user: user,
+          context: "account-team-invite",
+          annotations: %{"account_id" => account.id},
+          inserted_at: DateTime.utc_now() |> DateTime.add(-2, :day) |> DateTime.truncate(:second)
+        )
+
+      first_token = Base.url_encode64(old_token.token, padding: false)
+      {:ok, second_token} = Accounts.get_or_insert_team_invite_token(user, account)
+
+      refute first_token == second_token
+    end
+
+    test "accept_team_invite/2 adds user to account with valid token" do
+      owner = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      new_user = AccountsFactory.insert_user!()
+
+      {:ok, token} = Accounts.get_or_insert_team_invite_token(owner, account)
+      assert {:ok, _} = Accounts.accept_team_invite(new_user, token)
+
+      # Verify user was added to account
+      assert Repo.get_by(AccountUser, user_id: new_user.id, account_id: account.id)
+    end
+
+    @tag capture_log: true
+    test "accept_team_invite/2 fails if token is expired" do
+      owner = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      new_user = AccountsFactory.insert_user!()
+
+      {:ok, token} = Accounts.get_or_insert_team_invite_token(owner, account)
+
+      # Update token timestamp to be expired
+      Repo.update_all(UserToken, set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
+
+      assert {:error, %Error.NotFoundError{}} = Accounts.accept_team_invite(new_user, token)
+      refute Repo.get_by(AccountUser, user_id: new_user.id, account_id: account.id)
+    end
+
+    @tag capture_log: true
+    test "accept_team_invite/2 fails if user is already in account" do
+      owner = AccountsFactory.insert_user!()
+      account = AccountsFactory.insert_account!()
+      new_user = AccountsFactory.insert_user!()
+
+      # Add user to account first
+      {:ok, _} = Accounts.associate_user_with_account(new_user, account)
+
+      {:ok, token} = Accounts.get_or_insert_team_invite_token(owner, account)
+
+      assert {:error, %Error.InvariantError{message: "User already in account"}} =
+               Accounts.accept_team_invite(new_user, token)
+    end
+
+    test "accept_team_invite/2 fails with invalid token" do
+      user = AccountsFactory.insert_user!()
+
+      assert :error = Accounts.accept_team_invite(user, "invalid_token")
     end
   end
 end

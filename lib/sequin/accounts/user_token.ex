@@ -17,14 +17,23 @@ defmodule Sequin.Accounts.UserToken do
   @session_validity_in_days 60
   @impersonate_validity_in_days 1
   @account_invite_validity_in_days 7
+  @team_invite_validity_in_days 7
+  @team_invite_current_in_days 1
   schema "users_tokens" do
+    # `token` may be a hashed or encrypted token, depending on the context.
     field :token, :binary
+    field :hashed_token, :binary
     field :context, :string
     field :sent_to, :string
     field :annotations, :map, default: %{}
     belongs_to :user, Sequin.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)
+  end
+
+  def decrypt_team_invite_token(%UserToken{context: "account-team-invite", token: token} = t) do
+    decrypted_token = token |> Sequin.Vault.decrypt!() |> Base.url_encode64(padding: false)
+    %{t | token: decrypted_token}
   end
 
   @doc """
@@ -171,6 +180,20 @@ defmodule Sequin.Accounts.UserToken do
     end
   end
 
+  def verify_team_invite_token_query(token) do
+    with {:ok, decoded_token} <- Base.url_decode64(token, padding: false) do
+      hashed_token = :crypto.hash(@hash_algorithm, decoded_token)
+
+      query =
+        from token in UserToken,
+          where: token.context == "account-team-invite",
+          where: token.hashed_token == ^hashed_token,
+          where: token.inserted_at > ago(@team_invite_validity_in_days, "day")
+
+      {:ok, query}
+    end
+  end
+
   @doc """
   Returns the token struct for the given token value and context.
   """
@@ -206,6 +229,20 @@ defmodule Sequin.Accounts.UserToken do
     {encoded_token, %{user_token | annotations: %{account_id: account_id}}}
   end
 
+  def build_team_invite_token(user, account_id) do
+    token = :crypto.strong_rand_bytes(@rand_size)
+    encrypted_token = Sequin.Vault.encrypt!(token)
+
+    {Base.url_encode64(token, padding: false),
+     %UserToken{
+       token: encrypted_token,
+       hashed_token: :crypto.hash(@hash_algorithm, token),
+       context: "account-team-invite",
+       user_id: user.id,
+       annotations: %{account_id: account_id}
+     }}
+  end
+
   def account_invite_token_query(account_id, sent_to) do
     from t in UserToken,
       where: t.context == "account-invite",
@@ -232,5 +269,12 @@ defmodule Sequin.Accounts.UserToken do
       where: ut.context == "account-invite",
       where: ut.token == ^token,
       where: ut.inserted_at > ago(@account_invite_validity_in_days, "day")
+  end
+
+  def current_team_invite_query(account_id) do
+    from t in UserToken,
+      where: t.context == "account-team-invite",
+      where: fragment("? @> ?", t.annotations, ^%{"account_id" => account_id}),
+      where: t.inserted_at > ago(@team_invite_current_in_days, "day")
   end
 end

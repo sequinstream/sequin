@@ -4,6 +4,7 @@ defmodule Sequin.Factory.AccountsFactory do
 
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
+  alias Sequin.Accounts.UserToken
   alias Sequin.Factory
   alias Sequin.Repo
 
@@ -92,5 +93,36 @@ defmodule Sequin.Factory.AccountsFactory do
     |> tap(fn user ->
       Sequin.Accounts.associate_user_with_account(user, %Sequin.Accounts.Account{id: account_id})
     end)
+  end
+
+  def user_token(attrs \\ []) do
+    attrs = Map.new(attrs)
+    user = Map.get_lazy(attrs, :user, fn -> insert_user!() end)
+    {token, attrs} = Map.pop_lazy(attrs, :token, fn -> :crypto.strong_rand_bytes(32) end)
+    context = Map.get(attrs, :context, "session")
+
+    merge_attributes(
+      %UserToken{
+        user_id: user.id,
+        token: token,
+        hashed_token: if(context == "account-team-invite", do: :crypto.hash(:sha256, token)),
+        context: context,
+        sent_to: Map.get(attrs, :sent_to),
+        annotations: Map.get(attrs, :annotations, %{})
+      },
+      attrs
+    )
+  end
+
+  def user_token_attrs(attrs \\ []) do
+    attrs
+    |> user_token()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_user_token!(attrs \\ []) do
+    attrs
+    |> user_token()
+    |> Repo.insert!()
   end
 end

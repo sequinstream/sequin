@@ -4,7 +4,7 @@
   import * as Select from "$lib/components/ui/select";
   import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
-  import { Trash, Cog, Plus, Ellipsis, UserMinus } from "lucide-svelte";
+  import { Trash, Cog, Plus, Ellipsis, UserMinus, Link } from "lucide-svelte";
   import * as Table from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
@@ -15,6 +15,7 @@
   } from "$lib/components/ui/dropdown-menu";
   import { Label } from "$lib/components/ui/label";
   import CopyIcon from "$lib/components/CopyIcon.svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   interface Account {
     id: string;
@@ -45,10 +46,10 @@
   export let selectedAccount: Account;
   export let currentAccountUsers: User[];
   export let currentUser: User;
-
+  export let emailEnabled: boolean;
   export let parent: string;
   export let live;
-
+  export let teamInviteLink: string;
   let form = { ...selectedAccount };
   let renameLoading = false;
   let renameErrorMessage: string | null = null;
@@ -69,6 +70,8 @@
   let removeUserLoading = false;
   let removeUserError: string | null = null;
   let userToRemove: User | null = null;
+
+  let showInviteLinkDialog = false;
 
   $: renameDisabled = selectedAccount.name === form.name;
 
@@ -338,10 +341,37 @@
           Invitations
         </h3>
         {#if pendingInvites.length}
-          <Button on:click={openInviteMemberDialog}>
-            <Plus class="h-4 w-4 mr-2" />
-            Invite user
-          </Button>
+          <div class="flex gap-2">
+            <Button
+              variant="outline"
+              on:click={() => (showInviteLinkDialog = true)}
+            >
+              <Link class="h-4 w-4 mr-2" />
+              Invite link
+            </Button>
+            {#if emailEnabled}
+              <Button on:click={openInviteMemberDialog}>
+                <Plus class="h-4 w-4 mr-2" />
+                Invite user
+              </Button>
+            {:else}
+              <Tooltip.Root>
+                <Tooltip.Trigger>
+                  <Button disabled>
+                    <Plus class="h-4 w-4 mr-2" />
+                    Invite user
+                  </Button>
+                </Tooltip.Trigger>
+                <Tooltip.Content style="width: 200px">
+                  <p class="text-xs">
+                    Inviting users is disabled because email is not yet
+                    supported on self-hosted Sequin. Use your account's invite
+                    link instead.
+                  </p>
+                </Tooltip.Content>
+              </Tooltip.Root>
+            {/if}
+          </div>
         {/if}
       </div>
 
@@ -355,12 +385,37 @@
             have not yet accepted the invite.
           </p>
           <Button
+            variant="outline"
             class="flex items-center gap-2"
-            on:click={openInviteMemberDialog}
+            on:click={() => (showInviteLinkDialog = true)}
           >
-            <Plus class="h-4 w-4" />
-            Invite user
+            <Link class="h-4 w-4" />
+            Invite link
           </Button>
+          {#if emailEnabled}
+            <Button
+              class="flex items-center gap-2"
+              on:click={openInviteMemberDialog}
+            >
+              <Plus class="h-4 w-4" />
+              Invite user
+            </Button>
+          {:else}
+            <Tooltip.Root>
+              <Tooltip.Trigger>
+                <Button disabled class="flex items-center gap-2">
+                  <Plus class="h-4 w-4" />
+                  Invite user
+                </Button>
+              </Tooltip.Trigger>
+              <Tooltip.Content style="width: 200px">
+                <p class="text-xs">
+                  Inviting users is disabled because email is not yet supported
+                  on self-hosted Sequin. Use your account's invite link instead.
+                </p>
+              </Tooltip.Content>
+            </Tooltip.Root>
+          {/if}
         </div>
       {:else}
         <Table.Root>
@@ -651,5 +706,32 @@
         </Button>
       </Dialog.Footer>
     </form>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showInviteLinkDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title>Invite link for {selectedAccount.name}</Dialog.Title>
+      <Dialog.Description>
+        Share this link with users you want to invite to your account. The link
+        will expire in 7 days.
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="py-4">
+      <div class="flex items-center gap-4">
+        <pre
+          class="bg-gray-50 rounded-xl border border-border p-2 font-mono whitespace-nowrap overflow-y-auto max-w-[400px]">{teamInviteLink}</pre>
+        <CopyIcon
+          content={teamInviteLink}
+          class="hover:text-gray-700 hover:bg-gray-100 rounded-md p-2 shrink-0"
+        />
+      </div>
+    </div>
+    <Dialog.Footer>
+      <Button variant="outline" on:click={() => (showInviteLinkDialog = false)}>
+        Close
+      </Button>
+    </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

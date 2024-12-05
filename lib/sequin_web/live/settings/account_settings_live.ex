@@ -11,7 +11,8 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
   alias Sequin.Error.NotFoundError
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, :accounts, accounts(socket))}
+    email_enabled? = :sequin |> Application.get_env(Sequin.Mailer) |> Keyword.has_key?(:api_key)
+    {:ok, assign(socket, accounts: accounts(socket), email_enabled?: email_enabled?)}
   end
 
   def handle_event("change_selected_account", %{"accountId" => account_id}, socket) do
@@ -155,6 +156,11 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
   def render(assigns) do
     current_account = User.current_account(assigns.current_user)
 
+    {:ok, team_invite_token} =
+      Accounts.get_or_insert_team_invite_token(assigns.current_user, current_account)
+
+    team_invite_link = url(~p"/accept-team-invite/#{team_invite_token}")
+
     assigns =
       assigns
       |> assign(:parent_id, "account_settings")
@@ -162,6 +168,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
       |> assign(:current_account_users, Accounts.list_users_for_account(current_account.id))
       |> assign(:pending_invites, Accounts.list_pending_invites_for_account(current_account))
       |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
+      |> assign(:team_invite_link, team_invite_link)
 
     ~H"""
     <div id={@parent_id}>
@@ -175,7 +182,9 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
             currentAccountUsers: @current_account_users,
             currentUser: @current_user,
             parent: @parent_id,
-            pendingInvites: @pending_invites
+            pendingInvites: @pending_invites,
+            emailEnabled: @email_enabled?,
+            teamInviteLink: @team_invite_link
           }
         }
         socket={@socket}

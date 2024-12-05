@@ -58,6 +58,13 @@ defmodule SequinWeb.UserRegistrationLive do
             </.alert_description>
           </.alert>
 
+          <.alert :if={@accepting_team_invite?}>
+            <.alert_title>Accepting invite</.alert_title>
+            <.alert_description>
+              Register to join the account.
+            </.alert_description>
+          </.alert>
+
           <div class="space-y-4">
             <.link href={if @github_disabled, do: "#", else: "/auth/github"}>
               <.button
@@ -132,6 +139,7 @@ defmodule SequinWeb.UserRegistrationLive do
         |> assign(github_disabled: github_disabled?())
         |> assign(redirect_to: session["user_return_to"])
         |> assign(accepting_invite?: accepting_invite?(session))
+        |> assign(accepting_team_invite?: accepting_team_invite?(session))
         |> assign_form(changeset)
 
       {:ok, socket, temporary_assigns: [form: nil]}
@@ -184,6 +192,13 @@ defmodule SequinWeb.UserRegistrationLive do
   defp accepting_invite?(session) do
     case session["user_return_to"] do
       "/accept-invite/" <> _ -> true
+      _ -> false
+    end
+  end
+
+  defp accepting_team_invite?(session) do
+    case session["user_return_to"] do
+      "/accept-team-invite/" <> _ -> true
       _ -> false
     end
   end

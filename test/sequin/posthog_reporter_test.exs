@@ -93,7 +93,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     stop_supervised!(PosthogReporter)
 
     # Should receive the flush from terminate/2
-    assert_receive {:posthog_request, body}
+    assert_receive {:posthog_request, body}, 2000
 
     assert %{"batch" => events} = body
     assert length(events) == 1

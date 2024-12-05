@@ -43,7 +43,7 @@ defmodule Sequin.Extensions.Replication do
 
     typedstruct do
       field :current_commit_ts, nil | integer()
-      field :current_commit_seq, nil | integer()
+      field :current_commit_idx, nil | integer()
       field :current_xaction_lsn, nil | integer()
       field :current_xid, nil | integer()
       field :message_handler_ctx, any()
@@ -325,7 +325,7 @@ defmodule Sequin.Extensions.Replication do
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
          %State{accumulated_messages: {0, []}} = state
        ) do
-    %{state | current_commit_ts: ts, current_commit_seq: 0, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
+    %{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
@@ -347,7 +347,7 @@ defmodule Sequin.Extensions.Replication do
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
-        current_commit_seq: 0
+        current_commit_idx: 0
     }
   end
 
@@ -356,8 +356,10 @@ defmodule Sequin.Extensions.Replication do
 
     record = %Message{
       action: :insert,
+      commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
-      commit_seq: state.current_commit_seq,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
@@ -382,8 +384,10 @@ defmodule Sequin.Extensions.Replication do
 
     record = %Message{
       action: :update,
+      commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
-      commit_seq: state.current_commit_seq,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
       ids: data_tuple_to_ids(columns, msg.tuple_data),
       table_schema: schema,
@@ -411,8 +415,10 @@ defmodule Sequin.Extensions.Replication do
 
     record = %Message{
       action: :delete,
+      commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
-      commit_seq: state.current_commit_seq,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
       ids: data_tuple_to_ids(columns, prev_tuple_data),
       table_schema: schema,
@@ -461,7 +467,7 @@ defmodule Sequin.Extensions.Replication do
     %{
       state
       | accumulated_messages: {new_size, [message | acc_messages]},
-        current_commit_seq: state.current_commit_seq + 1
+        current_commit_idx: state.current_commit_idx + 1
     }
   end
 

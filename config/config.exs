@@ -64,6 +64,7 @@ config :sequin, Sequin.Repo,
     read_after_writes: true,
     default: {:fragment, "uuid_generate_v4()"}
   ],
+  migration_lock: :pg_advisory_lock,
   log: false
 
 # Configures the endpoint

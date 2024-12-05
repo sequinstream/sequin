@@ -335,6 +335,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %ConsumerEvent{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
+        seq: Factory.unique_integer(),
         record_pks: record_pks,
         table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
@@ -415,6 +416,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %ConsumerRecord{
         consumer_id: Factory.uuid(),
         commit_lsn: Enum.random(1..1_000_000),
+        seq: Factory.unique_integer(),
         record_pks: record_pks,
         group_id: Enum.join(record_pks, ","),
         table_oid: Enum.random(1..100_000),

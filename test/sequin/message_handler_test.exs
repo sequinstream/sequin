@@ -19,7 +19,7 @@ defmodule Sequin.MessageHandlerTest do
       [event] = Consumers.list_consumer_events_for_consumer(consumer.id)
       assert event.consumer_id == consumer.id
       assert event.table_oid == 123
-      assert event.commit_lsn == DateTime.to_unix(message.commit_timestamp, :microsecond)
+      assert event.commit_lsn == message.commit_lsn
       assert event.record_pks == Enum.map(message.ids, &to_string/1)
       assert event.data.action == :insert
       assert event.data.record == fields_to_map(message.fields)
@@ -27,6 +27,7 @@ defmodule Sequin.MessageHandlerTest do
       assert event.data.metadata.table_name == message.table_name
       assert event.data.metadata.table_schema == message.table_schema
       assert event.data.metadata.commit_timestamp == message.commit_timestamp
+      assert event.seq == message.seq
     end
 
     test "handles message_kind: record correctly" do
@@ -40,10 +41,11 @@ defmodule Sequin.MessageHandlerTest do
       [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
       assert record.consumer_id == consumer.id
       assert record.table_oid == 456
-      assert record.commit_lsn == DateTime.to_unix(message.commit_timestamp, :microsecond)
+      assert record.commit_lsn == message.commit_lsn
       assert record.record_pks == Enum.map(message.ids, &to_string/1)
       assert record.group_id == Enum.join(message.ids, ",")
       assert record.state == :available
+      assert record.seq == message.seq
     end
 
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
@@ -116,8 +118,8 @@ defmodule Sequin.MessageHandlerTest do
       assert length(wal_events) == 2
 
       all_messages = consumer1_messages ++ consumer2_messages ++ wal_events
-      assert Enum.any?(all_messages, &(&1.commit_lsn == DateTime.to_unix(message1.commit_timestamp, :microsecond)))
-      assert Enum.any?(all_messages, &(&1.commit_lsn == DateTime.to_unix(message2.commit_timestamp, :microsecond)))
+      assert Enum.any?(all_messages, &(&1.commit_lsn == message1.commit_lsn))
+      assert Enum.any?(all_messages, &(&1.commit_lsn == message2.commit_lsn))
     end
 
     test "inserts message for consumer with matching source table and no filters" do
@@ -217,13 +219,14 @@ defmodule Sequin.MessageHandlerTest do
 
       assert insert_event.action == :insert
       assert insert_event.wal_pipeline_id == wal_pipeline.id
-      assert insert_event.commit_lsn == DateTime.to_unix(insert_message.commit_timestamp, :microsecond)
+      assert insert_event.commit_lsn == insert_message.commit_lsn
       assert insert_event.record_pks == Enum.map(insert_message.ids, &to_string/1)
       assert insert_event.replication_message_trace_id == insert_message.trace_id
       assert insert_event.source_table_oid == insert_message.table_oid
       assert insert_event.record == fields_to_map(insert_message.fields)
       assert insert_event.changes == nil
       assert insert_event.committed_at == insert_message.commit_timestamp
+      assert insert_event.seq == insert_message.seq
 
       assert update_event.action == :update
       assert update_event.changes == %{"name" => "old_name"}

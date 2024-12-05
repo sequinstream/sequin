@@ -125,7 +125,8 @@ defmodule Sequin.Replication.MessageHandler do
   defp consumer_event(consumer, message) do
     %ConsumerEvent{
       consumer_id: consumer.id,
-      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+      commit_lsn: message.commit_lsn,
+      seq: message.seq,
       record_pks: Enum.map(message.ids, &to_string/1),
       table_oid: message.table_oid,
       deliver_count: 0,
@@ -137,7 +138,8 @@ defmodule Sequin.Replication.MessageHandler do
   defp consumer_record(consumer, message) do
     %ConsumerRecord{
       consumer_id: consumer.id,
-      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+      commit_lsn: message.commit_lsn,
+      seq: message.seq,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -250,7 +252,8 @@ defmodule Sequin.Replication.MessageHandler do
   defp wal_event(pipeline, message) do
     %WalEvent{
       wal_pipeline_id: pipeline.id,
-      commit_lsn: DateTime.to_unix(message.commit_timestamp, :microsecond),
+      commit_lsn: message.commit_lsn,
+      seq: message.seq,
       record_pks: Enum.map(message.ids, &to_string/1),
       record: fields_to_map(get_fields(message)),
       changes: get_changes(message),

@@ -5,6 +5,7 @@ defmodule SequinWeb.AcceptInviteLive do
   alias Sequin.Accounts
   alias Sequin.Accounts.User
   alias Sequin.Error.InvariantError
+  alias Sequin.Error.NotFoundError
 
   require Logger
 
@@ -14,13 +15,14 @@ defmodule SequinWeb.AcceptInviteLive do
 
     user = current_user(socket)
     pid = self()
+    live_action = socket.assigns.live_action
 
     {:ok,
      socket
      |> assign(:token, token)
      |> assign(:logout, false)
      |> assign_async(:invite_result, fn ->
-       accept_invite(user, token, pid)
+       accept_invite(live_action, user, token, pid)
      end), layout: {SequinWeb.Layouts, :app_no_main_no_sidenav}}
   end
 
@@ -34,7 +36,7 @@ defmodule SequinWeb.AcceptInviteLive do
             <.status_card
               icon="hero-arrow-path"
               header="Accepting Invite"
-              body="Please wait while we accept your invite..."
+              body="Please wait while we process your invite..."
               icon_class="animate-spin text-black dark:text-white"
             />
           </:loading>
@@ -71,7 +73,7 @@ defmodule SequinWeb.AcceptInviteLive do
             <.status_card
               icon="hero-check-circle"
               header="Success"
-              body="Your invite has been accepted successfully! Redirecting you shortly..."
+              body="Your invite was processed. Redirecting you shortly..."
               icon_class="text-green-500"
             />
           <% end %>
@@ -101,7 +103,7 @@ defmodule SequinWeb.AcceptInviteLive do
     """
   end
 
-  defp accept_invite(%User{} = user, token, pid) do
+  defp accept_invite(:accept_invite, %User{} = user, token, pid) do
     Logger.info("[AcceptInviteLive] Accepting invite with token: #{token}")
 
     with {:ok, token} <- Base.url_decode64(token, padding: false),
@@ -125,6 +127,29 @@ defmodule SequinWeb.AcceptInviteLive do
       {:error, error} when is_exception(error) ->
         Logger.error("Error accepting invite: #{Exception.message(error)}")
         {:error, "Invalid token. Please double check the invitation link and try again."}
+    end
+  end
+
+  defp accept_invite(:accept_team_invite, %User{} = user, token, pid) do
+    Logger.info("[AcceptInviteLive] Accepting team invite with token: #{token}")
+
+    case Accounts.accept_team_invite(user, token) do
+      {:ok, _} ->
+        Logger.info("Team invite accepted successfully, redirecting to home page")
+        Process.send_after(pid, :redirect, 3000)
+        {:ok, %{invite_result: :ok}}
+
+      {:error, %InvariantError{message: message}} ->
+        Logger.error("Error accepting team invite: #{message}")
+        {:error, message}
+
+      {:error, %NotFoundError{}} ->
+        Logger.error("Invalid team invite token: #{token}")
+        {:error, "Invalid or expired token. Please double check the invitation link and try again."}
+
+      {:error, error} when is_exception(error) ->
+        Logger.error("Error accepting team invite: #{Exception.message(error)}")
+        {:error, "An error occurred while accepting the invite. Please try again later."}
     end
   end
 

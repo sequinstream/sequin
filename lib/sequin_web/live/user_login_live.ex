@@ -7,9 +7,16 @@ defmodule SequinWeb.UserLoginLive do
     <div class="flex items-center justify-center h-[80vh]">
       <div class="mx-auto max-w-sm w-full">
         <.alert :if={@accepting_invite?} class="mb-4">
-          <.alert_title>Accepting Invite</.alert_title>
+          <.alert_title>Accepting invite</.alert_title>
           <.alert_description>
-            Sign in with the same email address as your invite to join the account.
+            Sign in or sign up with the same email address as your invite to join the account.
+          </.alert_description>
+        </.alert>
+
+        <.alert :if={@accepting_team_invite?} class="mb-4">
+          <.alert_title>Accepting invite</.alert_title>
+          <.alert_description>
+            Sign in or sign up to join the account.
           </.alert_description>
         </.alert>
 
@@ -27,7 +34,9 @@ defmodule SequinWeb.UserLoginLive do
         <.header class="text-center">
           Welcome back
           <:subtitle :if={!@accepting_invite?}>Sign in to your account</:subtitle>
-          <:subtitle :if={@accepting_invite?}>Sign in to accept your invite</:subtitle>
+          <:subtitle :if={@accepting_invite? || @accepting_team_invite?}>
+            Sign in to accept your invite
+          </:subtitle>
         </.header>
         <div class="mt-6 space-y-4">
           <.link href={if @github_disabled, do: "#", else: "/auth/github"}>
@@ -119,6 +128,7 @@ defmodule SequinWeb.UserLoginLive do
       |> assign(github_disabled: github_disabled?())
       |> assign(redirect_to: session["user_return_to"])
       |> assign(accepting_invite?: accepting_invite?(session))
+      |> assign(accepting_team_invite?: accepting_team_invite?(session))
       |> assign(account_self_signup?: Sequin.feature_enabled?(:account_self_signup))
       |> assign(display_default_user_login?: Sequin.Accounts.only_default_user_and_first_login?())
 
@@ -137,6 +147,13 @@ defmodule SequinWeb.UserLoginLive do
   defp accepting_invite?(session) do
     case session["user_return_to"] do
       "/accept-invite/" <> _ -> true
+      _ -> false
+    end
+  end
+
+  defp accepting_team_invite?(session) do
+    case session["user_return_to"] do
+      "/accept-team-invite/" <> _ -> true
       _ -> false
     end
   end

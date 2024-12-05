@@ -883,4 +883,58 @@ defmodule Sequin.Accounts do
       _ -> false
     end
   end
+
+  @doc """
+  Gets or creates a team invite token for an account.
+  Creates a new token if none exists or if the existing token is older than 24 hours.
+  """
+  def get_or_insert_team_invite_token(%User{} = user, %Account{} = account) do
+    token =
+      account.id
+      |> UserToken.current_team_invite_query()
+      |> Repo.one()
+
+    if token do
+      user_token = UserToken.decrypt_team_invite_token(token)
+      {:ok, user_token.token}
+    else
+      create_team_invite_token(user, account)
+    end
+  end
+
+  defp create_team_invite_token(user, account) do
+    {encoded_token, user_token} = UserToken.build_team_invite_token(user, account.id)
+
+    case Repo.insert(user_token) do
+      {:ok, _token} -> {:ok, encoded_token}
+      error -> error
+    end
+  end
+
+  @doc """
+  Accepts a team invite token and adds the user to the account.
+  """
+  def accept_team_invite(%User{} = user, token) do
+    with {:ok, query} <- UserToken.verify_team_invite_token_query(token),
+         %UserToken{annotations: %{"account_id" => account_id}} <- Repo.one(query),
+         {:ok, account} <- get_account(account_id),
+         {:error, %Error.NotFoundError{}} <- verify_account_user(account, user.email) do
+      associate_user_with_account(user, account)
+    else
+      :ok ->
+        Logger.error("Team invite token is valid but user is already in account")
+        {:error, Error.invariant(message: "User already in account")}
+
+      nil ->
+        Logger.error("Supplied team invite token not found in database")
+        {:error, Error.not_found(entity: :user_token)}
+
+      {:ok, _} ->
+        Logger.error("Team invite token is valid but user is already in account")
+        {:error, Error.invariant(message: "User already in account")}
+
+      error ->
+        error
+    end
+  end
 end

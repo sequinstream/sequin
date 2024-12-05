@@ -24,8 +24,10 @@ defmodule Sequin.Replication.Message do
   typedstruct do
     field :action, :insert | :update | :delete
     field :columns, list(map())
+    field :commit_lsn, integer()
+    field :commit_idx, integer()
     field :commit_timestamp, DateTime.t()
-    field :commit_seq, integer()
+    field :seq, integer()
     field :errors, any()
     field :ids, list()
     field :table_schema, String.t()

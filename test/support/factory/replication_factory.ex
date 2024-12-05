@@ -80,6 +80,9 @@ defmodule Sequin.Factory.ReplicationFactory do
       %Message{
         action: :insert,
         commit_timestamp: Factory.timestamp(),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(1..100),
+        seq: Factory.unique_integer(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: "__postgres_replication_test_schema__",
@@ -104,6 +107,9 @@ defmodule Sequin.Factory.ReplicationFactory do
       %Message{
         action: :update,
         commit_timestamp: Factory.timestamp(),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(1..100),
+        seq: Factory.unique_integer(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: Factory.postgres_object(),
@@ -131,6 +137,9 @@ defmodule Sequin.Factory.ReplicationFactory do
       %Message{
         action: :delete,
         commit_timestamp: Factory.timestamp(),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(1..100),
+        seq: Factory.unique_integer(),
         errors: nil,
         ids: [Factory.unique_integer()],
         table_schema: Factory.postgres_object(),
@@ -253,6 +262,7 @@ defmodule Sequin.Factory.ReplicationFactory do
       %WalEvent{
         wal_pipeline_id: Factory.uuid(),
         commit_lsn: Factory.unique_integer(),
+        seq: Factory.unique_integer(),
         record_pks: record_pks,
         record: %{"column" => Factory.word()},
         changes: if(action == :update, do: %{"column" => Factory.word()}),

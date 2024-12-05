@@ -23,6 +23,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :consumer_id, Ecto.UUID, primary_key: true
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
+    field :seq, :integer
     field :record_pks, {:array, :string}
     field :group_id, :string
     field :table_oid, :integer
@@ -46,6 +47,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     |> cast(attrs, [
       :consumer_id,
       :commit_lsn,
+      :seq,
       :record_pks,
       :group_id,
       :state,
@@ -57,6 +59,8 @@ defmodule Sequin.Consumers.ConsumerRecord do
     ])
     |> validate_required([
       :consumer_id,
+      :commit_lsn,
+      :seq,
       :record_pks,
       :group_id,
       :table_oid,

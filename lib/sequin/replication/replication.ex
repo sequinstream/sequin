@@ -176,6 +176,21 @@ defmodule Sequin.Replication do
     end
   end
 
+  # Replication runtime lifecycle
+  def put_last_processed_seq!(replication_slot_id, seq) do
+    Redix.command!(:redix, ["SET", last_processed_seq_key(replication_slot_id), seq])
+  end
+
+  def last_processed_seq(replication_slot_id) do
+    case Redix.command(:redix, ["GET", last_processed_seq_key(replication_slot_id)]) do
+      {:ok, nil} -> {:ok, -1}
+      {:ok, seq} -> {:ok, String.to_integer(seq)}
+      error -> error
+    end
+  end
+
+  defp last_processed_seq_key(replication_slot_id), do: "sequin:replication:last_processed_seq:#{replication_slot_id}"
+
   # WAL Pipeline
 
   def list_wal_pipelines do

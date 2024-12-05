@@ -24,6 +24,7 @@ defmodule Sequin.Replication.MessageHandler do
     typedstruct do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
+      field :replication_slot_id, String.t()
     end
   end
 
@@ -32,13 +33,15 @@ defmodule Sequin.Replication.MessageHandler do
 
     %Context{
       consumers: pr.sink_consumers,
-      wal_pipelines: pr.wal_pipelines
+      wal_pipelines: pr.wal_pipelines,
+      replication_slot_id: pr.id
     }
   end
 
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
     Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
+    max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
 
     messages_by_consumer =
       Enum.flat_map(messages, fn message ->
@@ -106,6 +109,8 @@ defmodule Sequin.Replication.MessageHandler do
             {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
             {{:delete, _consumer}, _messages} -> :ok
           end)
+
+          Replication.put_last_processed_seq!(ctx.replication_slot_id, max_seq)
 
           {:ok, count + wal_event_count}
         end

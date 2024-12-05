@@ -2,7 +2,7 @@
 
 # Sequin
 
-### Postgres CDC to streams and queues like Kafka, SQS, HTTP endpoints, and more
+### Postgres change data capture to streams and queues like Kafka, SQS, HTTP endpoints, and more
 
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
@@ -24,14 +24,14 @@ Sequin is a tool for change data capture (CDC) in Postgres. Sequin makes it easy
 
 Sequin even supports native sinks (HTTP GET and webhooks), so you can get started without any other infrastructure.
 
-CDC enables applications and services to track and respond to row-level changes in database tables as they occur. With CDC via Sequin, you can:
+Change data capture enables applications and services to track and respond to row-level changes in database tables as they occur. With CDC via Sequin, you can:
 
 1. **Replicate data** from your existing tables to other apps, databases, caches, materialized views, or frontend clients.
 2. **Build event driven workflows** such as triggering side effects when data in Postgres changes.
 
 Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store sink state.
 
-Unlike Debezium, another CDC tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
+Unlike Debezium, another change data capture tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 
 Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
@@ -59,9 +59,9 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 - **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
-## CDC use cases
+## Change data capture use cases
 
-Sequin works great for CDC use cases like:
+Sequin works great for change data capture use cases like:
 
 - **Triggering a workflow when data changes in Postgres:** Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
 - **Making events available to downstream services:** Stream changes from your database tables as events that other services can consume.
@@ -104,9 +104,9 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ### Sequin vs Debezium
 
-Debezium is also a CDC tool that captures changes from Postgres and streams them to messaging systems like Kafka. Debezium requires significant infrastructure (Kafka, Zookeeper, Connect) to operate.
+Debezium is also a change data capture tool that captures changes from Postgres and streams them to messaging systems like Kafka. Debezium requires significant infrastructure (Kafka, Zookeeper, Connect) to operate.
 
-Sequin provides the same CDC capabilities but with a much simpler setup:
+Sequin provides the same change data capture capabilities but with a much simpler setup:
 
 1. **No Kafka required**: Sequin doesn't require Kafka or Zookeeper.
 2. **Native destinations**: With Debezium, you route to destinations via Kafka Connect. With Sequin, you stream directly to your destination of choice. This means simpler setup, fewer transforms, and fewer moving parts.
@@ -132,11 +132,11 @@ Sequin is purpose-built for real-time operational use cases. Key differences:
 
 <details>
 
-<summary>Sequin vs custom CDC solutions</summary>
+<summary>Sequin vs custom change data capture solutions</summary>
 
-### Sequin vs custom CDC solutions
+### Sequin vs custom change data capture solutions
 
-Many teams build custom CDC solutions using triggers, LISTEN/NOTIFY, or logical replication. While these can work, they often:
+Many teams build custom change data capture solutions using triggers, LISTEN/NOTIFY, or logical replication. While these can work, they often:
 
 - Lack exactly-once processing guarantees
 - Don't scale
@@ -149,7 +149,7 @@ Sequin provides all this functionality out of the box:
 - Seamless backfills
 - Automatic retries and error handling
 - Simple monitoring and observability
-- Zero maintenance of CDC infrastructure
+- Zero maintenance of change data capture infrastructure
 
 </details>
 

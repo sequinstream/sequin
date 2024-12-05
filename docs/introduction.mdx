@@ -69,7 +69,7 @@ We all know Postgres is great for storing and querying data. But what about when
 
 **Postgres has limited support for change streaming.** While Postgres supports logical replication, it's ephemeral and doesn't support features developers need like exactly-once processing, backfills, or delivery tracking.
 
-Debezium is a popular CDC tool, but is complicated to setup and requires Kafka and Zookeeper to operate. Adding to the complexity, Debezium doesn't have native sinks, instead relying on Kafka Connect.
+Debezium is a popular change data capture tool, but is complicated to setup and requires Kafka and Zookeeper to operate. Adding to the complexity, Debezium doesn't have native sinks, instead relying on Kafka Connect.
 
 ETL tools like Fivetran and Airbyte have limited support for operational destinations. And they write changes in batches, not in real-time.
 

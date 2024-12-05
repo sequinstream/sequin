@@ -179,6 +179,9 @@ build_and_push_docker() {
     if [ "$use_github_actions" = true ]; then
         echo "Triggering Docker builds in GitHub Actions..."
         gh workflow run docker-build.yml -f version="$version"
+
+        # Add delay to allow GitHub Actions to start the workflow
+        sleep 5
         
         # Wait for workflow to complete
         echo "Waiting for Docker builds to complete in GitHub Actions..."

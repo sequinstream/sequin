@@ -7,6 +7,7 @@ defmodule SequinWeb.YamlController do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
+  alias Sequin.Posthog
   alias Sequin.Replication.WalPipeline
   alias Sequin.Transforms
   alias Sequin.YamlLoader
@@ -17,8 +18,24 @@ defmodule SequinWeb.YamlController do
   def apply(conn, %{"yaml" => yaml}) do
     account_id = conn.assigns.account_id
 
+    Posthog.capture("YAML Apply", %{
+      distinct_id: "00000000-0000-0000-0000-000000000000",
+      properties: %{
+        "$groups": %{account: account_id}
+      }
+    })
+
     case YamlLoader.apply_from_yml(account_id, yaml) do
       {:ok, {:ok, resources}} ->
+        Posthog.capture("YAML Applied", %{
+          distinct_id: "00000000-0000-0000-0000-000000000000",
+          properties: %{
+            resource_count: length(resources),
+            resource_types: resources |> Enum.map(&get_resource_type/1) |> Enum.uniq(),
+            "$groups": %{account: account_id}
+          }
+        })
+
         json(conn, %{resources: resources})
 
       {:ok, {:error, error}} ->
@@ -32,9 +49,28 @@ defmodule SequinWeb.YamlController do
   def plan(conn, %{"yaml" => yaml}) do
     account_id = conn.assigns.account_id
 
+    Posthog.capture("YAML Plan", %{
+      distinct_id: "00000000-0000-0000-0000-000000000000",
+      properties: %{
+        "$groups": %{account: account_id}
+      }
+    })
+
     case YamlLoader.plan_from_yml(account_id, yaml) do
       {:ok, planned_resources, current_resources} ->
         envelopes = diff_resources(planned_resources, current_resources)
+
+        Posthog.capture("YAML Planned", %{
+          distinct_id: "00000000-0000-0000-0000-000000000000",
+          properties: %{
+            changes_count: length(envelopes),
+            creates: Enum.count(envelopes, &(&1.action == "create")),
+            updates: Enum.count(envelopes, &(&1.action == "update")),
+            deletes: Enum.count(envelopes, &(&1.action == "delete")),
+            "$groups": %{account: account_id}
+          }
+        })
+
         json(conn, %{changes: envelopes})
 
       {:error, error} ->
@@ -43,9 +79,20 @@ defmodule SequinWeb.YamlController do
   end
 
   def export(conn, _params) do
+    account_id = conn.assigns.account_id
+
+    Posthog.capture("YAML Export", %{
+      distinct_id: "00000000-0000-0000-0000-000000000000",
+      properties: %{
+        "$groups": %{account: account_id}
+      }
+    })
+
+    resources = YamlLoader.all_resources(account_id)
+    resource_types = resources |> Enum.map(&get_resource_type/1) |> Enum.uniq()
+
     yaml =
-      conn.assigns.account_id
-      |> YamlLoader.all_resources()
+      resources
       |> Enum.group_by(&get_resource_type/1)
       # Skip support at this time
       |> Enum.reject(fn {resource_type, _resources} -> resource_type in ["account", "user"] end)
@@ -53,6 +100,15 @@ defmodule SequinWeb.YamlController do
         {"#{resource_type}s", Enum.map(resources, &Transforms.to_external/1)}
       end)
       |> Ymlr.document!()
+
+    Posthog.capture("YAML Exported", %{
+      distinct_id: "00000000-0000-0000-0000-000000000000",
+      properties: %{
+        resource_count: length(resources),
+        resource_types: resource_types,
+        "$groups": %{account: account_id}
+      }
+    })
 
     json(conn, %{yaml: yaml})
   end

@@ -32,7 +32,6 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import CodeWithCopy from "./CodeWithCopy.svelte";
   import { Label } from "$lib/components/ui/label";
-  import * as Tabs from "$lib/components/ui/tabs";
   import * as RadioGroup from "$lib/components/ui/radio-group";
 
   type Table = {

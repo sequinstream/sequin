@@ -134,6 +134,37 @@
     return live.pushEventTo("#" + parent, event, payload, cb);
   };
 
+  const defaultSortColumnNames = [
+    "updated_at",
+    "last_modified",
+    "last_modified_at",
+    "last_updated",
+    "last_updated_at",
+    "modified_at",
+    "modified_date",
+    "modified_on",
+    "UpdatedAt",
+    "LastModified",
+    "LastModifiedAt",
+    "ModifiedAt",
+    "update_time",
+    "modification_date",
+    "created_at",
+    "inserted_at",
+    "creation_date",
+    "creation_time",
+    "insert_date",
+    "created_date",
+    "created_on",
+    "CreatedAt",
+    "InsertedAt",
+    "CreationDate",
+    "DateCreated",
+    "create_time",
+    "timestamp",
+    "insert_time",
+  ];
+
   $: {
     if (!enableBackfill) {
       form.initialBackfill = {
@@ -170,6 +201,18 @@
     if (selectedTable) {
       form.sortColumnAttnum =
         selectedTable.sort_column?.attnum || form.sortColumnAttnum;
+
+      if (!form.sortColumnAttnum) {
+        // Look for a matching column name in the default list, in order
+        let sortColumnName = defaultSortColumnNames.find((name) =>
+          selectedTable.columns.find((column) => column.name === name),
+        );
+        if (sortColumnName) {
+          form.sortColumnAttnum = selectedTable.columns.find(
+            (column) => column.name === sortColumnName,
+          )?.attnum;
+        }
+      }
 
       sortColumnName = selectedTable.columns.find(
         (column) => column.attnum === form.sortColumnAttnum,
@@ -475,11 +518,10 @@
               <div class="space-y-2">
                 <Label for="sort_column_attnum">Sort and start</Label>
                 <p class="text-sm text-muted-foreground mt-1 mb-2">
-                  Select the sort column for the table. Your system should
-                  update the sort column whenever a row is updated. A good
-                  example of a sort column is <code>updated_at</code>.
+                  Select a sort column for the table to use during backfills. A
+                  good example of a sort column is <code>updated_at</code>.
                   <a
-                    href="https://sequinstream.com/docs/how-sequin-works#creating-a-table-stream"
+                    href="https://sequinstream.com/docs/reference/backfills#backfill-ordering"
                     target="_blank"
                     rel="noopener noreferrer"
                     class="inline-flex items-center text-link hover:underline"

@@ -9,6 +9,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Repo
   alias Sequin.Tracer
   alias Sequin.Tracer.Server
+  alias Sequin.Tracer.State, as: TracerState
   alias SequinWeb.RouteHelpers
 
   # Add this alias
@@ -283,7 +284,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     end)
   end
 
-  defp enrich_trace_state(account_id, state) do
+  defp enrich_trace_state(account_id, %TracerState{} = state) do
     databases = Databases.list_dbs_for_account(account_id)
     consumers = Consumers.list_consumers_for_account(account_id)
 
@@ -312,17 +313,13 @@ defmodule SequinWeb.DatabasesLive.Show do
   defp encode_trace_state(assigns) do
     message_traces =
       assigns.trace_state.message_traces
-      |> Enum.flat_map(&encode_message_trace/1)
+      |> Enum.map(&encode_message_trace/1)
       |> Enum.filter(&filter_trace?(&1, assigns.params))
 
     total_count = length(message_traces)
     message_traces = Enum.slice(message_traces, (assigns.page - 1) * assigns.per_page, assigns.per_page)
 
-    %{
-      message_traces: message_traces,
-      started_at: assigns.trace_state.started_at,
-      total_count: total_count
-    }
+    %{message_traces: message_traces, total_count: total_count}
   end
 
   defp get_primary_keys(nil), do: []
@@ -343,49 +340,50 @@ defmodule SequinWeb.DatabasesLive.Show do
     table = find_table(message_trace.database, message_trace.message.table_oid)
     primary_keys = get_primary_keys(table)
 
-    Enum.map(message_trace.consumer_traces, fn consumer_trace ->
-      %{
-        date: message_trace.message.commit_timestamp,
-        consumer_id: consumer_trace.consumer_id,
-        consumer: %{
-          id: consumer_trace.consumer.id,
-          name: consumer_trace.consumer.name
-        },
-        database: %{
-          id: message_trace.database.id,
-          name: message_trace.database.name
-        },
-        table: encode_table(table),
-        primary_keys: encode_primary_keys(message_trace.message.ids, primary_keys),
-        state: get_message_state([consumer_trace]),
-        spans: [
-          %{
-            type: "replicated",
-            timestamp: message_trace.replicated_at,
-            duration: DateTime.diff(message_trace.replicated_at, message_trace.message.commit_timestamp, :millisecond)
-          }
-          | consumer_trace.spans
-            |> Enum.map(fn span ->
-              %{
-                type: span.type,
-                timestamp: span.timestamp,
-                duration: span.duration
-                # Add more span details as needed
-              }
-            end)
-            |> Enum.reverse()
-        ],
-        trace_id: message_trace.message.trace_id,
-        span_types: Enum.map(consumer_trace.spans, & &1.type)
-      }
-    end)
+    %{
+      date: message_trace.message.commit_timestamp,
+      table: encode_table(table),
+      primary_keys: encode_primary_keys(message_trace.message.ids, primary_keys),
+      trace_id: message_trace.message.trace_id,
+      action: message_trace.message.action,
+      consumer_traces: Enum.map(message_trace.consumer_traces, &encode_consumer_trace(message_trace, &1))
+    }
   end
 
-  defp get_message_state(consumer_traces) do
-    states =
-      Enum.flat_map(consumer_traces, fn ct ->
-        Enum.map(ct.spans, & &1.type)
-      end)
+  defp encode_consumer_trace(message_trace, consumer_trace) do
+    %{
+      consumer_id: consumer_trace.consumer_id,
+      consumer: %{
+        id: consumer_trace.consumer.id,
+        name: consumer_trace.consumer.name
+      },
+      database: %{
+        id: message_trace.database.id,
+        name: message_trace.database.name
+      },
+      state: consumer_trace_state(consumer_trace),
+      spans: [
+        %{
+          type: "replicated",
+          timestamp: message_trace.replicated_at,
+          duration: DateTime.diff(message_trace.replicated_at, message_trace.message.commit_timestamp, :millisecond)
+        }
+        | consumer_trace.spans
+          |> Enum.map(fn span ->
+            %{
+              type: span.type,
+              timestamp: span.timestamp,
+              duration: span.duration
+            }
+          end)
+          |> Enum.reverse()
+      ],
+      span_types: Enum.map(consumer_trace.spans, & &1.type)
+    }
+  end
+
+  defp consumer_trace_state(consumer_trace) do
+    states = Enum.map(consumer_trace.spans, & &1.type)
 
     cond do
       :acked in states -> "Acked"
@@ -405,27 +403,15 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   defp get_trace_state(account_id) do
     case Server.get_state(account_id) do
-      %Sequin.Tracer.State{} = state -> enrich_trace_state(account_id, state)
+      %TracerState{} = state -> enrich_trace_state(account_id, state)
       {:error, _reason} -> nil
     end
   end
 
   defp filter_trace?(trace, params) do
-    database_match?(trace, params["database"]) and
-      consumer_match?(trace, params["consumer"]) and
-      table_match?(trace, params["table"]) and
-      state_match?(trace, params["state"])
+    table_match?(trace, params["table"])
   end
-
-  defp database_match?(_trace, nil), do: true
-  defp database_match?(trace, database_id), do: trace.database.id == database_id
-
-  defp consumer_match?(_trace, nil), do: true
-  defp consumer_match?(trace, consumer_id), do: trace.consumer_id == consumer_id
 
   defp table_match?(_trace, nil), do: true
   defp table_match?(trace, table), do: trace.table == table
-
-  defp state_match?(_trace, nil), do: true
-  defp state_match?(trace, state), do: String.downcase(trace.state) == String.downcase(state)
 end

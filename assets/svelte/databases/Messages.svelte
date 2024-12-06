@@ -12,14 +12,50 @@
   import { slide, fade } from "svelte/transition";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
 
-  export let trace_state: any;
-  export let consumers: any;
+  interface Consumer {
+    id: string;
+    name: string;
+  }
+
+  interface Database {
+    id: string;
+    name: string;
+  }
+
+  interface Span {
+    type: string;
+    timestamp: string;
+    duration: number;
+  }
+
+  interface ConsumerTrace {
+    consumer_id: string;
+    consumer: Consumer;
+    database: Database;
+    state: string;
+    spans: Span[];
+    span_types: string[];
+  }
+
+  interface MessageTrace {
+    date: string;
+    table: string;
+    action: string;
+    primary_keys: string;
+    trace_id: string;
+    consumer_traces: ConsumerTrace[];
+  }
+
+  interface TraceState {
+    message_traces: MessageTrace[];
+    total_count: number;
+  }
+
+  export let trace_state: TraceState;
   export let tables: any;
   export let paused: boolean = false;
 
-  let selectedConsumer = "";
   let selectedTable = "";
-  let selectedState = "";
 
   const spanTypeMapping = {
     received: { frontend: "Delivered", backend: "received" },
@@ -55,21 +91,17 @@
     }
   };
 
-  const getVerticalLineColor = (spanTypes: string[]) => {
-    const mappedTypes = spanTypes.map((type) =>
-      getFrontendSpanType(type).toLowerCase(),
-    );
-    if (mappedTypes.includes("acked")) return "bg-green-500";
-    if (mappedTypes.includes("excluded by filters")) return "bg-gray-400";
-    if (mappedTypes.filter((type) => type === "delivered").length > 1)
-      return "bg-red-500";
-    if (
-      mappedTypes.some((type) =>
-        ["replicated", "delivered", "ingested"].includes(type),
-      )
-    )
-      return "bg-blue-500";
-    return "bg-transparent";
+  const getVerticalLineColor = (action: string) => {
+    switch (action.toLowerCase()) {
+      case "insert":
+        return "bg-green-500";
+      case "update":
+        return "bg-blue-500";
+      case "delete":
+        return "bg-red-500";
+      default:
+        return "bg-transparent";
+    }
   };
 
   function getSpanColor(spanType: string) {
@@ -135,22 +167,10 @@
   function updateFilters() {
     const searchParams = new URLSearchParams(window.location.search);
 
-    if (selectedConsumer) {
-      searchParams.set("consumer", selectedConsumer);
-    } else {
-      searchParams.delete("consumer");
-    }
-
     if (selectedTable) {
       searchParams.set("table", selectedTable);
     } else {
       searchParams.delete("table");
-    }
-
-    if (selectedState) {
-      searchParams.set("state", selectedState);
-    } else {
-      searchParams.delete("state");
     }
 
     if (paused) {
@@ -173,9 +193,7 @@
 
   onMount(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    selectedConsumer = searchParams.get("consumer") || "";
     selectedTable = searchParams.get("table") || "";
-    selectedState = searchParams.get("state") || "";
     paused = searchParams.get("paused") === "true";
     currentPage = parseInt(searchParams.get("page") || "1");
   });
@@ -186,9 +204,7 @@
   $: {
     if (trace_state && selectedTrace) {
       const updatedTrace = trace_state.message_traces.find(
-        (trace) =>
-          trace.trace_id === selectedTrace.trace_id &&
-          trace.consumer_id === selectedTrace.consumer_id,
+        (trace) => trace.trace_id === selectedTrace.trace_id,
       );
       if (updatedTrace) {
         selectedTrace = updatedTrace;
@@ -210,17 +226,6 @@
   <div class="flex justify-between items-center mb-6">
     <div class="flex flex-wrap gap-4">
       <select
-        bind:value={selectedConsumer}
-        on:change={updateFilters}
-        class="select-filter text-sm"
-      >
-        <option value="">All Consumers</option>
-        {#each consumers as consumer}
-          <option value={consumer.id}>{consumer.name}</option>
-        {/each}
-      </select>
-
-      <select
         bind:value={selectedTable}
         on:change={updateFilters}
         class="select-filter text-sm"
@@ -228,17 +233,6 @@
         <option value="">All Tables</option>
         {#each tables as table}
           <option value={table.name}>{table.name}</option>
-        {/each}
-      </select>
-
-      <select
-        bind:value={selectedState}
-        on:change={updateFilters}
-        class="select-filter text-sm"
-      >
-        <option value="">All States</option>
-        {#each states as state}
-          <option value={state.backend}>{state.frontend}</option>
         {/each}
       </select>
     </div>
@@ -265,23 +259,19 @@
             >
             <th
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >Consumer</th
+              >Table</th
             >
             <th
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-              >Table</th
+              >Action</th
             >
             <th
               class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
               >Primary Keys</th
             >
             <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px]"
-              >State</th
-            >
-            <th
-              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]"
-              >Errors</th
+              class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >Consumers</th
             >
           </tr>
         </thead>
@@ -293,36 +283,33 @@
             >
               <td class="w-1 p-0">
                 <div
-                  class={`w-1 h-full absolute left-0 top-0 ${getVerticalLineColor(trace.span_types)}`}
+                  class={`w-1 h-full absolute left-0 top-0 ${getVerticalLineColor(trace.action)}`}
                 ></div>
               </td>
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{new Date(trace.date).toLocaleString()}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{trace.consumer.name}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{trace.table}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{trace.primary_keys}</td
-              >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[100px]">
-                <span
-                  class={`px-1 py-0.5 inline-flex text-2xs leading-3 font-semibold rounded-full ${getStateColor(getFrontendSpanType(trace.state))}`}
-                >
-                  {getFrontendSpanType(trace.state)}
-                </span>
+              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+                {new Date(trace.date).toLocaleString()}
               </td>
-              <td
-                class="px-2 py-1 whitespace-nowrap text-2xs font-semibold min-w-[120px]"
-                class:text-red-500={getErrorMessage(trace.span_types).color ===
-                  "text-red-500"}
-                class:text-gray-500={getErrorMessage(trace.span_types).color ===
-                  "text-gray-500"}
-              >
-                {getErrorMessage(trace.span_types).message}
+              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+                {trace.table}
+              </td>
+              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+                {trace.action}
+              </td>
+              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+                {trace.primary_keys}
+              </td>
+              <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500">
+                {#if trace.consumer_traces.length === 0}
+                  No consumers
+                {:else if trace.consumer_traces.length === 1}
+                  {trace.consumer_traces[0].consumer.name}
+                {:else if trace.consumer_traces.length === 2}
+                  {trace.consumer_traces[0].consumer.name}, {trace
+                    .consumer_traces[1].consumer.name}
+                {:else}
+                  {trace.consumer_traces[0].consumer.name} and {trace
+                    .consumer_traces.length - 1} other consumers
+                {/if}
               </td>
             </tr>
           {/each}
@@ -386,7 +373,7 @@
         class="absolute inset-y-0 right-0 pl-10 max-w-full flex sm:pl-16"
       >
         <div
-          class="w-screen max-w-md"
+          class="w-screen max-w-2xl"
           transition:slide={{ duration: 300, axis: "x" }}
         >
           <div
@@ -409,7 +396,7 @@
             <div class="mt-6 relative flex-1 px-4 sm:px-6">
               {#if selectedTrace}
                 <div class="space-y-8">
-                  <!-- Trace Details Section -->
+                  <!-- Message Details Section -->
                   <div class="bg-gray-50 p-4 rounded-lg space-y-2">
                     <div class="flex justify-between items-center">
                       <span class="text-sm font-medium text-gray-500"
@@ -421,89 +408,110 @@
                     </div>
                     <div class="flex justify-between items-center">
                       <span class="text-sm font-medium text-gray-500"
+                        >Table:</span
+                      >
+                      <span class="text-sm text-gray-900"
+                        >{selectedTrace.table}</span
+                      >
+                    </div>
+                    <div class="flex justify-between items-center">
+                      <span class="text-sm font-medium text-gray-500"
                         >Primary Keys:</span
                       >
                       <span class="text-sm text-gray-900"
                         >{selectedTrace.primary_keys}</span
                       >
                     </div>
-                    <div class="flex justify-between items-center">
-                      <span class="text-sm font-medium text-gray-500"
-                        >State:</span
-                      >
-                      <span
-                        class={`text-sm px-2 py-1 rounded-full ${getStateColor(getFrontendSpanType(selectedTrace.state))}`}
-                      >
-                        {getFrontendSpanType(selectedTrace.state)}
-                      </span>
-                    </div>
                   </div>
 
-                  <!-- Spans Section -->
+                  <!-- Consumer Traces Section -->
                   <div>
-                    <h3 class="text-lg font-semibold mb-4">Spans</h3>
-                    <div class="overflow-x-auto">
-                      <table class="min-w-full bg-white border border-gray-300">
-                        <thead>
-                          <tr class="bg-gray-100">
-                            <th class="w-1"></th>
-                            <th
-                              class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >Event</th
+                    <h3 class="text-lg font-semibold mb-4">Consumers</h3>
+                    {#each selectedTrace.consumer_traces as consumer_trace}
+                      <div class="mb-6 border rounded-lg overflow-hidden">
+                        <!-- Consumer Header -->
+                        <div
+                          class="bg-gray-50 p-4 flex justify-between items-center border-b"
+                        >
+                          <div class="space-y-1">
+                            <h4 class="font-medium">
+                              {consumer_trace.consumer.name}
+                            </h4>
+                            <span
+                              class={`px-2 py-1 text-xs rounded-full ${getStateColor(getFrontendSpanType(consumer_trace.state))}`}
                             >
-                            <th
-                              class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >Timestamp</th
-                            >
-                            <th
-                              class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                              >Duration</th
-                            >
-                          </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200">
-                          {#each selectedTrace.spans as span}
-                            <tr class="relative hover:bg-gray-50">
-                              <td class="w-1 p-0">
-                                <div
-                                  class={`w-1 h-full absolute left-0 top-0 ${getSpanColor(span.type)}`}
-                                ></div>
-                              </td>
-                              <td
-                                class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                                >{getFrontendSpanType(span.type)}</td
-                              >
-                              <td
-                                class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                              >
-                                {new Date(span.timestamp).toLocaleString()}
-                              </td>
-                              <td
-                                class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                              >
-                                {span.duration ? `${span.duration}ms` : "-"}
-                              </td>
-                            </tr>
-                          {/each}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                              {getFrontendSpanType(consumer_trace.state)}
+                            </span>
+                          </div>
+                          <LinkPushNavigate
+                            href={`/consumers/${consumer_trace.consumer_id}`}
+                          >
+                            <Button variant="outline" size="sm">
+                              View Consumer
+                              <ArrowUpRight class="h-4 w-4 ml-2" />
+                            </Button>
+                          </LinkPushNavigate>
+                        </div>
 
-                  <!-- Consumer Section -->
-                  <div>
-                    <h3 class="text-lg font-semibold mb-4">Consumer</h3>
-                    <div
-                      class="bg-gray-100 p-4 rounded-lg flex justify-between items-center"
-                    >
-                      <h4 class="font-medium">{selectedTrace.consumer.name}</h4>
-                      <LinkPushNavigate href={selectedTrace.consumer.href}>
-                        <Button variant="outline" size="sm">
-                          View Consumer
-                          <ArrowUpRight class="h-4 w-4 ml-2" />
-                        </Button>
-                      </LinkPushNavigate>
-                    </div>
+                        <!-- Consumer Spans -->
+                        <div class="overflow-x-auto">
+                          <table class="min-w-full">
+                            <thead>
+                              <tr class="bg-gray-50">
+                                <th class="w-1"></th>
+                                <th
+                                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                  >Event</th
+                                >
+                                <th
+                                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                  >Timestamp</th
+                                >
+                                <th
+                                  class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                                  >Duration</th
+                                >
+                              </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200">
+                              {#each consumer_trace.spans as span}
+                                <tr class="relative hover:bg-gray-50">
+                                  <td class="w-1 p-0">
+                                    <div
+                                      class={`w-1 h-full absolute left-0 top-0 ${getSpanColor(span.type)}`}
+                                    ></div>
+                                  </td>
+                                  <td
+                                    class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+                                  >
+                                    {getFrontendSpanType(span.type)}
+                                  </td>
+                                  <td
+                                    class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+                                  >
+                                    {new Date(span.timestamp).toLocaleString()}
+                                  </td>
+                                  <td
+                                    class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
+                                  >
+                                    {span.duration ? `${span.duration}ms` : "-"}
+                                  </td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <!-- Error Message if applicable -->
+                        {#if getErrorMessage(consumer_trace.span_types).message}
+                          <div
+                            class={`px-4 py-2 text-sm ${getErrorMessage(consumer_trace.span_types).color}`}
+                          >
+                            {getErrorMessage(consumer_trace.span_types).message}
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
                   </div>
                 </div>
               {/if}

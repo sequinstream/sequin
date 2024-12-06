@@ -328,6 +328,9 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     {action, attrs} = Map.pop_lazy(attrs, :action, fn -> Enum.random([:insert, :update, :delete]) end)
 
+    state = Map.get_lazy(attrs, :state, fn -> Enum.random([:available, :delivered]) end)
+    not_visible_until = if state == :available, do: nil, else: Factory.timestamp()
+
     {record_pks, attrs} = Map.pop_lazy(attrs, :record_pks, fn -> [Faker.UUID.v4()] end)
     record_pks = Enum.map(record_pks, &to_string/1)
 
@@ -341,7 +344,8 @@ defmodule Sequin.Factory.ConsumersFactory do
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
-        not_visible_until: Enum.random([nil, Factory.timestamp()]),
+        not_visible_until: not_visible_until,
+        state: state,
         data: consumer_event_data(action: action),
         replication_message_trace_id: Factory.uuid()
       },

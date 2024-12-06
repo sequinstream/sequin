@@ -28,7 +28,8 @@ set
   not_visible_until = :not_visible_until,
   deliver_count = ce.deliver_count + 1,
   last_delivered_at = :now,
-  updated_at = :now
+  updated_at = :now,
+  state = 'delivered'
 where
   ce.id in (select de.id from deliverable_events de)
 returning

@@ -29,6 +29,8 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :record_pks, {:array, :string}
     field :table_oid, :integer
 
+    field :state, Ecto.Enum, values: [:available, :delivered], default: :available
+
     field :ack_id, Ecto.UUID, read_after_writes: true
     field :deliver_count, :integer
     field :last_delivered_at, :utc_datetime_usec
@@ -50,6 +52,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :seq,
       :record_pks,
       :table_oid,
+      :state,
       :not_visible_until,
       :deliver_count,
       :last_delivered_at,
@@ -70,7 +73,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   def update_changeset(consumer_event, attrs) do
     consumer_event
-    |> cast(attrs, [:not_visible_until, :deliver_count, :last_delivered_at])
+    |> cast(attrs, [:not_visible_until, :deliver_count, :last_delivered_at, :state])
     |> validate_required([:not_visible_until, :deliver_count, :last_delivered_at])
   end
 
@@ -148,16 +151,5 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   defp base_query(query \\ __MODULE__) do
     from(ce in query, as: :consumer_event)
-  end
-
-  @spec external_state(%__MODULE__{}) :: :available | :pending
-  def external_state(%__MODULE__{} = ce) do
-    now = DateTime.utc_now()
-
-    if is_nil(ce.not_visible_until) or DateTime.compare(ce.not_visible_until, now) != :gt do
-      :available
-    else
-      :pending
-    end
   end
 end

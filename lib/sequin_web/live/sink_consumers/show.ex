@@ -721,6 +721,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_message(consumer, message) do
+    state = get_message_state(consumer, message)
+
     case message do
       %ConsumerRecord{} = message ->
         %{
@@ -737,7 +739,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           inserted_at: message.inserted_at,
           data: message.data,
           trace_id: message.replication_message_trace_id,
-          state: get_message_state(consumer, message)
+          state: state,
+          state_color: get_message_state_color(consumer, state)
         }
 
       %ConsumerEvent{} = message ->
@@ -755,7 +758,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           inserted_at: message.inserted_at,
           data: message.data,
           trace_id: message.replication_message_trace_id,
-          state: get_message_state(consumer, message)
+          state: state,
+          state_color: get_message_state_color(consumer, state)
         }
 
       %AcknowledgedMessage{} = message ->
@@ -773,7 +777,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           inserted_at: message.inserted_at,
           data: nil,
           trace_id: message.trace_id,
-          state: get_message_state(consumer, message)
+          state: state,
+          state_color: "green-200"
         }
     end
   end
@@ -824,22 +829,38 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
-  defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "acknowledged"
-  defp get_message_state(_consumer, %{deliver_count: 0}), do: "available"
+  defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "delivered"
+  defp get_message_state(_consumer, %{deliver_count: 0}), do: "not delivered"
 
-  defp get_message_state(%{ack_wait_ms: ack_wait_ms}, %{
-         last_delivered_at: last_delivered_at,
-         not_visible_until: not_visible_until
-       }) do
+  defp get_message_state(consumer, %{not_visible_until: not_visible_until, state: state}) do
     cond do
-      DateTime.after?(DateTime.add(last_delivered_at, ack_wait_ms, :millisecond), DateTime.utc_now()) ->
+      state == :delivered and consumer.type == :sequin_stream ->
         "delivered"
 
+      state == :delivered ->
+        "delivering"
+
       DateTime.after?(not_visible_until, DateTime.utc_now()) ->
-        "not visible"
+        "backing off"
 
       true ->
-        "available"
+        "pending re-delivery"
+    end
+  end
+
+  defp get_message_state_color(%{type: :sequin_stream}, state) do
+    case state do
+      "delivered" -> "blue"
+      "backing off" -> "yellow"
+      _ -> "gray"
+    end
+  end
+
+  defp get_message_state_color(_consumer, state) do
+    case state do
+      "delivered" -> "green"
+      "backing off" -> "yellow"
+      _ -> "gray"
     end
   end
 

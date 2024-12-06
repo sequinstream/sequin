@@ -15,6 +15,7 @@
   interface Consumer {
     id: string;
     name: string;
+    type: string;
   }
 
   interface Database {
@@ -444,7 +445,7 @@
                             </span>
                           </div>
                           <LinkPushNavigate
-                            href={`/consumers/${consumer_trace.consumer_id}`}
+                            href={`/sinks/${consumer_trace.consumer.type}/${consumer_trace.consumer_id}`}
                           >
                             <Button variant="outline" size="sm">
                               View Consumer

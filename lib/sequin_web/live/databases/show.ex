@@ -355,7 +355,8 @@ defmodule SequinWeb.DatabasesLive.Show do
       consumer_id: consumer_trace.consumer_id,
       consumer: %{
         id: consumer_trace.consumer.id,
-        name: consumer_trace.consumer.name
+        name: consumer_trace.consumer.name,
+        type: consumer_trace.consumer.type
       },
       database: %{
         id: message_trace.database.id,

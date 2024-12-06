@@ -182,7 +182,7 @@ defmodule SequinWeb.Components.ConsumerForm do
            use_local_tunnel: endpoint_params["useLocalTunnel"]
          }) do
       {:ok, http_endpoint} ->
-        {:reply, %{ok: true, http_endpoint_id: http_endpoint.id}, assign_http_endpoints(socket)}
+        {:reply, %{ok: true, http_endpoint: encode_http_endpoint(http_endpoint)}, assign_http_endpoints(socket)}
 
       {:error, changeset} ->
         {:reply, %{ok: false, errors: Error.errors_on(changeset)}, socket}
@@ -220,15 +220,11 @@ defmodule SequinWeb.Components.ConsumerForm do
   def handle_event("generate_webhook_site_url", _params, socket) do
     case generate_webhook_site_endpoint(socket) do
       {:ok, %HttpEndpoint{} = http_endpoint} ->
-        {:reply, %{http_endpoint_id: http_endpoint.id}, socket}
+        {:reply, %{http_endpoint: encode_http_endpoint(http_endpoint)}, assign_http_endpoints(socket)}
 
       {:error, reason} ->
         {:reply, %{error: reason}, socket}
     end
-  end
-
-  def handle_event("refresh_http_endpoints", _params, socket) do
-    {:noreply, assign_http_endpoints(socket)}
   end
 
   def handle_event("test_connection", _params, socket) do
@@ -634,7 +630,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_http_endpoint(http_endpoint) do
+  defp encode_http_endpoint(%HttpEndpoint{} = http_endpoint) do
     %{
       "id" => http_endpoint.id,
       "name" => http_endpoint.name,

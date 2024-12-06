@@ -65,10 +65,9 @@
     isGeneratingWebhookSite = true;
     pushEvent("generate_webhook_site_url", {}, (result: any) => {
       isGeneratingWebhookSite = false;
-      if (result.http_endpoint_id) {
-        pushEvent("refresh_http_endpoints", {}, () => {
-          form.sink.httpEndpointId = result.http_endpoint_id;
-        });
+      if (result.http_endpoint) {
+        httpEndpoints = [...httpEndpoints, result.http_endpoint];
+        form.sink.httpEndpointId = result.http_endpoint.id;
       } else if (result.error) {
         toast.error("Failed to generate Webhook.site URL:", result.error);
       } else {
@@ -257,7 +256,12 @@
                   builders={[builder]}
                   class="ml-2"
                 >
-                  New HTTP Endpoint
+                  {#if isGeneratingWebhookSite}
+                    <Loader2 class="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  {:else}
+                    New HTTP Endpoint
+                  {/if}
                   <ChevronDown class="h-4 w-4 ml-2" />
                 </Button>
               </DropdownMenuTrigger>
@@ -359,7 +363,8 @@
           (reply) => {
             if (reply.ok) {
               showCreateEndpointModal = false;
-              form.sink.httpEndpointId = reply.http_endpoint_id;
+              httpEndpoints = [...httpEndpoints, reply.http_endpoint];
+              form.sink.httpEndpointId = reply.http_endpoint.id;
             } else {
               endpointErrors = reply.errors || {};
             }

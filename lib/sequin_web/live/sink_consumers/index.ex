@@ -95,10 +95,10 @@ defmodule SequinWeb.SinkConsumersLive.Index do
     {:noreply, push_navigate(socket, to: ~p"/sinks/#{type}/#{id}")}
   end
 
-  defp apply_action(socket, :list, _params) do
+  defp apply_action(socket, :index, _params) do
     socket
     |> assign(:page_title, "Sinks")
-    |> assign(:live_action, :list)
+    |> assign(:live_action, :index)
   end
 
   defp apply_action(socket, :new, %{"kind" => kind}) do

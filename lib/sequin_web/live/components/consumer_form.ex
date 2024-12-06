@@ -173,6 +173,19 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   @impl Phoenix.LiveComponent
+  def handle_event("refresh_tables", %{"database_id" => database_id}, socket) do
+    with index when not is_nil(index) <- Enum.find_index(socket.assigns.databases, &(&1.id == database_id)),
+         database = Enum.at(socket.assigns.databases, index),
+         {:ok, updated_database} <- Databases.update_tables(database) do
+      updated_databases = List.replace_at(socket.assigns.databases, index, updated_database)
+      {:noreply, assign(socket, databases: updated_databases)}
+    else
+      _ ->
+        {:noreply, put_flash(socket, :toast, %{kind: :error, title: "Failed to refresh tables"})}
+    end
+  end
+
+  @impl Phoenix.LiveComponent
   def handle_event("refresh_sequences", %{"database_id" => database_id}, socket) do
     with {:ok, database} <- Databases.get_db(database_id),
          {:ok, _updated_database} <- Databases.update_tables(database) do

@@ -82,7 +82,7 @@ defmodule SequinWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
-      live "/sinks", SinkConsumersLive.Index, :list
+      live "/sinks", SinkConsumersLive.Index, :index
       live "/sinks/new", SinkConsumersLive.Index, :new
       live "/sinks/:type/:id", SinkConsumersLive.Show, :show
       live "/sinks/:type/:id/messages", SinkConsumersLive.Show, :messages

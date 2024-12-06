@@ -20,8 +20,6 @@
     Cog,
     Plug,
     Logs,
-    ListOrdered,
-    ChevronsLeftRightEllipsis,
   } from "lucide-svelte";
 
   export let live;
@@ -55,11 +53,6 @@
           path: "/change-capture-pipelines",
           text: "Change Retention",
           icon: Logs,
-        },
-        {
-          path: "/http-endpoints",
-          text: "HTTP Endpoints",
-          icon: ChevronsLeftRightEllipsis,
         },
       ],
     },

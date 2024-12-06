@@ -9,6 +9,7 @@
   export let showConfirmDialog = false;
   export let showConfirmOnExit = false;
   export let bodyPadding = 6;
+  export let id: string = "full-page-modal";
 
   const dispatch = createEventDispatcher();
 
@@ -62,7 +63,7 @@
       closeButton={false}
       class="w-full h-full max-w-full max-h-full min-h-screen"
     >
-      <div id="full-page-modal"></div>
+      <div {id}></div>
       <div class="flex flex-col h-full bg-background">
         <div class="flex justify-between items-center p-6 border-b">
           {#if $$slots.header}

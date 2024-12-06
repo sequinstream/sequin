@@ -40,22 +40,6 @@
   let totalAvailableHeight = 0;
   let resettingMessageVisibility = false;
 
-  // Update this function to get the appropriate color for the state
-  function getStateColor(state) {
-    switch (state) {
-      case "available":
-        return "bg-gray-200";
-      case "delivered":
-        return "bg-blue-200";
-      case "acknowledged":
-        return "bg-green-200";
-      case "not visible":
-        return "bg-yellow-200";
-      default:
-        return "bg-gray-200";
-    }
-  }
-
   onMount(() => {
     // Calculate row height after the component is mounted
     const sampleRow = document.querySelector("tr.sample-row");
@@ -147,6 +131,19 @@
         return "bg-gray-500";
       default:
         return "bg-gray-400";
+    }
+  }
+
+  function getMessageStateColor(state) {
+    switch (state) {
+      case "blue":
+        return "bg-blue-200";
+      case "yellow":
+        return "bg-yellow-200";
+      case "green":
+        return "bg-green-200";
+      default:
+        return "bg-gray-200";
     }
   }
 
@@ -340,7 +337,7 @@
               ID
             </th>
             <th
-              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
+              class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
             >
               State
             </th>
@@ -363,7 +360,7 @@
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              Not Visible Until
+              Backoff Until
             </th>
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
@@ -396,11 +393,9 @@
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
                 >{message.id}</td
               >
-              <td class="px-2 py-1 whitespace-nowrap text-2xs">
+              <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[150px]">
                 <span
-                  class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                    message.state,
-                  )} text-gray-800`}
+                  class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(message.state_color)} text-gray-800`}
                 >
                   {message.state}
                 </span>
@@ -519,9 +514,7 @@
                         >State:</span
                       >
                       <span
-                        class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getStateColor(
-                          selectedMessage.state,
-                        )} text-gray-800`}
+                        class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getMessageStateColor(selectedMessage.state_color)} text-gray-800`}
                       >
                         {selectedMessage.state}
                       </span>
@@ -553,16 +546,16 @@
                   </div>
 
                   <!-- Add this block for the "Redeliver now" button -->
-                  {#if selectedMessage.state === "not visible"}
+                  {#if selectedMessage.state === "backing off"}
                     <div>
                       <h3 class="text-lg font-semibold mb-2">Redeliver</h3>
                       <div class="bg-gray-50 p-4 rounded-lg space-y-4">
                         <p class="text-sm text-gray-700">
-                          This message is not visible due to consecutive
-                          failures. The push consumer will not attempt to
-                          redeliver it until the visibility window has passed.
-                          Reset the visibility window to immediately redeliver
-                          the message.
+                          This message is not being delivered due to consecutive
+                          failures. The sink consumer will not attempt to
+                          redeliver the message until the visibility window has
+                          passed. Reset the visibility window to immediately
+                          redeliver the message.
                         </p>
                         <Button
                           variant="outline"
@@ -597,7 +590,7 @@
                       </div>
                       <div class="flex justify-between items-center">
                         <span class="text-sm font-medium text-gray-500"
-                          >Not Visible Until:</span
+                          >Backoff Until:</span
                         >
                         <span class="text-sm text-gray-900">
                           {selectedMessage.not_visible_until

@@ -1018,7 +1018,7 @@ defmodule Sequin.Consumers do
       consumer.id
       |> ConsumerEvent.where_consumer_id()
       |> ConsumerEvent.where_ack_ids(ack_ids)
-      |> Repo.update_all(set: [not_visible_until: nil])
+      |> Repo.update_all(set: [not_visible_until: nil, state: :available])
 
     {:ok, count}
   end
@@ -1076,7 +1076,7 @@ defmodule Sequin.Consumers do
 
       # Perform the upsert
       Repo.insert_all(model, updates,
-        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until"))]],
+        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")), state: :available]],
         conflict_target: [:consumer_id, :ack_id]
       )
     end)

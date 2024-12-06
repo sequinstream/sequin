@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ChevronsLeftRightEllipsis, ExternalLink } from "lucide-svelte";
+  import { ExternalLink } from "lucide-svelte";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { concatenateUrl } from "../databases/utils";
   import { Button } from "$lib/components/ui/button";
@@ -27,16 +27,6 @@
     <div class="flex justify-between items-center mb-4">
       <h2 class="text-lg font-semibold">HTTP Endpoint</h2>
       <div class="flex space-x-2">
-        <a
-          href={`/http-endpoints/${consumer.sink.http_endpoint.id}`}
-          data-phx-link="redirect"
-          data-phx-link-state="push"
-        >
-          <Button variant="outline" size="sm">
-            <ExternalLink class="h-4 w-4 mr-2" />
-            View Endpoint
-          </Button>
-        </a>
         {#if isWebhookSiteUrl(consumer.sink.http_endpoint.url)}
           <a
             href={getWebhookSiteViewUrl(consumer.sink.http_endpoint.url)}

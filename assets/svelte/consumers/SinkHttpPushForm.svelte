@@ -23,14 +23,7 @@
   import { Label } from "$lib/components/ui/label";
   import { truncateMiddle } from "$lib/utils";
   import { toast } from "svelte-sonner";
-  import {
-    Loader2,
-    ExternalLink,
-    RefreshCwIcon,
-    CheckIcon,
-    ChevronDown,
-    Plus,
-  } from "lucide-svelte";
+  import { Loader2, Plus, ChevronDown, Sparkles } from "lucide-svelte";
   import { concatenateUrl } from "../databases/utils";
   import {
     DropdownMenu,
@@ -38,6 +31,8 @@
     DropdownMenuContent,
     DropdownMenuItem,
   } from "$lib/components/ui/dropdown-menu";
+  import FullPageModal from "../components/FullPageModal.svelte";
+  import HttpEndpointForm from "./HttpEndpointForm.svelte";
 
   export let live;
   export let form;
@@ -56,7 +51,7 @@
     : null;
 
   $: {
-    if (form.sink.httpEndpointId) {
+    if (form.sink.httpEndpointId && httpEndpoints.length > 0) {
       selectedHttpEndpoint = httpEndpoints.find(
         (endpoint) => endpoint.id === form.sink.httpEndpointId,
       );
@@ -82,20 +77,6 @@
     });
   }
 
-  // Updated refreshHttpEndpoints function
-  function refreshHttpEndpoints() {
-    httpEndpointsRefreshState = "refreshing";
-    pushEvent("refresh_http_endpoints", {}, () => {
-      httpEndpointsRefreshState = "done";
-      setTimeout(() => {
-        httpEndpointsRefreshState = "idle";
-      }, 2000);
-    });
-  }
-
-  // Declare the httpEndpointsRefreshState variable
-  let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
-
   $: fullUrl =
     selectedHttpEndpoint?.baseUrl && form.sink.httpEndpointPath
       ? concatenateUrl(
@@ -103,6 +84,18 @@
           form.sink.httpEndpointPath,
         )
       : "";
+
+  let showCreateEndpointModal = false;
+  let newEndpoint = {
+    name: "",
+    baseUrl: "",
+    headers: {},
+    encryptedHeaders: {},
+    useLocalTunnel: false,
+  };
+  let endpointErrors = {};
+
+  let dropdownOpen = false;
 </script>
 
 <Card>
@@ -207,72 +200,94 @@
         </button>
       </p>
     {/if}
-    <div class="flex items-center space-x-2">
-      <Select
-        selected={{
-          value: form.sink.httpEndpointId,
-          label: selectedHttpEndpoint?.name || "Select an endpoint",
-        }}
-        onSelectedChange={(event) => {
-          form.sink.httpEndpointId = event.value;
-        }}
-      >
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Select an endpoint" />
-        </SelectTrigger>
-        <SelectContent>
-          {#each httpEndpoints as endpoint}
-            <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
-          {/each}
-        </SelectContent>
-      </Select>
-      <div class="flex items-center">
-        <Button
-          variant="outline"
-          size="sm"
-          on:click={refreshHttpEndpoints}
-          disabled={httpEndpointsRefreshState === "refreshing"}
-          class="p-2"
-          aria-label="Refresh HTTP Endpoints"
-        >
-          {#if httpEndpointsRefreshState === "refreshing"}
-            <RefreshCwIcon class="h-5 w-5 animate-spin" />
-          {:else if httpEndpointsRefreshState === "done"}
-            <CheckIcon class="h-5 w-5 text-green-500" />
-          {:else}
-            <RefreshCwIcon class="h-5 w-5" />
-          {/if}
-        </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild let:builder>
-            <Button
-              variant="outline"
-              size="sm"
-              builders={[builder]}
-              class="ml-2"
-            >
-              New HTTP Endpoint
-              <ChevronDown class="h-4 w-4 ml-2" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem class="cursor-pointer">
-              <!-- Keep it a link to enable right click -->
-              <ExternalLink class="h-4 w-4 mr-2" />
-              <a href="/http-endpoints/new" target="_blank">
-                Create new HTTP Endpoint
-              </a>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              on:click={createWebhookSiteEndpoint}
-              class="cursor-pointer"
-            >
-              <Plus class="h-4 w-4 mr-2" />
+    <div class="space-y-4">
+      {#if httpEndpoints.length === 0}
+        <div class="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            class="flex-1"
+            on:click={() => (showCreateEndpointModal = true)}
+          >
+            <Plus class="h-4 w-4 mr-2" />
+            Create new HTTP Endpoint
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="flex-1"
+            on:click={createWebhookSiteEndpoint}
+            disabled={isGeneratingWebhookSite}
+          >
+            {#if isGeneratingWebhookSite}
+              <Loader2 class="h-4 w-4 mr-2 animate-spin" />
+              Generating...
+            {:else}
+              <Sparkles class="h-4 w-4 mr-2" />
               Create Webhook.site endpoint
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            {/if}
+          </Button>
+        </div>
+      {:else}
+        <div class="flex items-center space-x-2">
+          <Select
+            selected={{
+              value: form.sink.httpEndpointId,
+              label: selectedHttpEndpoint?.name || "Select an endpoint",
+            }}
+            onSelectedChange={(event) => {
+              form.sink.httpEndpointId = event.value;
+            }}
+          >
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select an endpoint" />
+            </SelectTrigger>
+            <SelectContent>
+              {#each httpEndpoints as endpoint}
+                <SelectItem value={endpoint.id}>{endpoint.name}</SelectItem>
+              {/each}
+            </SelectContent>
+          </Select>
+          <div class="flex items-center">
+            <DropdownMenu bind:open={dropdownOpen}>
+              <DropdownMenuTrigger asChild let:builder>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  builders={[builder]}
+                  class="ml-2"
+                >
+                  New HTTP Endpoint
+                  <ChevronDown class="h-4 w-4 ml-2" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem class="cursor-pointer">
+                  <Plus class="h-4 w-4 mr-2" />
+                  <button
+                    on:click|preventDefault={() => {
+                      showCreateEndpointModal = true;
+                      dropdownOpen = false;
+                    }}
+                  >
+                    Create new HTTP Endpoint
+                  </button>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  on:click={() => {
+                    createWebhookSiteEndpoint();
+                    dropdownOpen = false;
+                  }}
+                  class="cursor-pointer"
+                >
+                  <Sparkles class="h-4 w-4 mr-2" />
+                  Create Webhook.site endpoint
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      {/if}
     </div>
 
     {#if errors.sink?.http_endpoint_id}
@@ -323,3 +338,34 @@
     {/if}
   </CardContent>
 </Card>
+
+{#if showCreateEndpointModal}
+  <FullPageModal
+    id="create-http-endpoint-modal"
+    title="Create HTTP Endpoint"
+    bind:open={showCreateEndpointModal}
+    on:close={() => (showCreateEndpointModal = false)}
+  >
+    <HttpEndpointForm
+      {live}
+      {parent}
+      httpEndpoint={newEndpoint}
+      errors={endpointErrors}
+      api_tokens={[]}
+      onSubmit={(endpointForm) => {
+        pushEvent(
+          "create_http_endpoint",
+          { endpoint: endpointForm },
+          (reply) => {
+            if (reply.ok) {
+              showCreateEndpointModal = false;
+              form.sink.httpEndpointId = reply.http_endpoint_id;
+            } else {
+              endpointErrors = reply.errors || {};
+            }
+          },
+        );
+      }}
+    />
+  </FullPageModal>
+{/if}

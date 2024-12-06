@@ -98,7 +98,8 @@ defmodule SequinWeb.Components.ConsumerForm do
         changeset: nil,
         sequence_changeset: nil,
         component: component,
-        prev_params: %{}
+        prev_params: %{},
+        new_http_endpoint: %HttpEndpoint{}
       )
       |> assign_databases()
       |> assign_http_endpoints()
@@ -128,6 +129,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     {:noreply, socket}
   end
 
+  @impl Phoenix.LiveComponent
   def handle_event("form_submitted", %{"form" => form}, socket) do
     socket = assign(socket, :submit_error, nil)
 
@@ -165,6 +167,26 @@ defmodule SequinWeb.Components.ConsumerForm do
       end
 
     {:noreply, socket}
+  end
+
+  @impl Phoenix.LiveComponent
+  def handle_event("create_http_endpoint", %{"endpoint" => endpoint_params}, socket) do
+    case Consumers.create_http_endpoint_for_account(current_account_id(socket), %{
+           name: endpoint_params["name"],
+           scheme: URI.parse(endpoint_params["baseUrl"]).scheme,
+           host: URI.parse(endpoint_params["baseUrl"]).host,
+           port: URI.parse(endpoint_params["baseUrl"]).port,
+           path: URI.parse(endpoint_params["baseUrl"]).path,
+           headers: endpoint_params["headers"],
+           encrypted_headers: endpoint_params["encryptedHeaders"],
+           use_local_tunnel: endpoint_params["useLocalTunnel"]
+         }) do
+      {:ok, http_endpoint} ->
+        {:reply, %{ok: true, http_endpoint_id: http_endpoint.id}, assign_http_endpoints(socket)}
+
+      {:error, changeset} ->
+        {:reply, %{ok: false, errors: Error.errors_on(changeset)}, socket}
+    end
   end
 
   @impl Phoenix.LiveComponent
@@ -346,7 +368,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "table_oid" => form["tableOid"],
         "sort_column_attnum" => form["sortColumnAttnum"],
         "sequence_filter" => %{
-          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
+          "column_filters" => Enum.map(form["sourceTableFilters"] || [], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },

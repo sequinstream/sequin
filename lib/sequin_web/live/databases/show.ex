@@ -47,8 +47,6 @@ defmodule SequinWeb.DatabasesLive.Show do
           )
 
         if connected?(socket) do
-          Tracer.DynamicSupervisor.start_for_account(account_id)
-
           Process.send_after(self(), :update_health, 1000)
           Process.send_after(self(), :update_metrics, 1000)
           Process.send_after(self(), :update_messages, 1000)

@@ -254,7 +254,7 @@
                   variant="outline"
                   size="sm"
                   builders={[builder]}
-                  class="ml-2"
+                  class="ml-2 {isGeneratingWebhookSite ? 'opacity-50' : ''}"
                 >
                   {#if isGeneratingWebhookSite}
                     <Loader2 class="h-4 w-4 mr-2 animate-spin" />

@@ -2,7 +2,6 @@ defmodule Sequin.MessageHandlerTest do
   use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
-  alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
@@ -13,7 +12,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -35,7 +34,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
       source_table = ConsumersFactory.source_table(oid: 456, column_filters: [])
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -66,8 +65,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{
         consumers: [consumer1, consumer2, consumer3],
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4()
+        wal_pipelines: [wal_pipeline]
       }
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
@@ -100,8 +98,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{
         consumers: [consumer1, consumer2],
-        wal_pipelines: [wal_pipeline],
-        replication_slot_id: UUID.uuid4()
+        wal_pipelines: [wal_pipeline]
       }
 
       {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
@@ -129,7 +126,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -143,7 +140,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -167,7 +164,7 @@ defmodule Sequin.MessageHandlerTest do
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
 
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -193,7 +190,7 @@ defmodule Sequin.MessageHandlerTest do
       # Ensure the message has a non-matching field for the filter
       message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
 
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -213,7 +210,7 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
@@ -239,7 +236,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -252,7 +249,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
-      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -276,7 +273,7 @@ defmodule Sequin.MessageHandlerTest do
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields], old_fields: [test_field | message.old_fields]}
 
-      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -301,7 +298,7 @@ defmodule Sequin.MessageHandlerTest do
       # Ensure the message has a non-matching field for the filter
       message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
 
-      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{wal_pipelines: [wal_pipeline]}
 
       {:ok, 0} = MessageHandler.handle_messages(context, [message])
 
@@ -313,7 +310,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [1, 2])
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: nil)
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
@@ -336,30 +333,12 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: [2])
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+      context = %MessageHandler.Context{consumers: [consumer]}
 
       {:ok, 1} = MessageHandler.handle_messages(context, [message])
 
       [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
       assert record.group_id == "A"
-    end
-
-    test "puts the largest sequence number into last_processed_seq" do
-      # Messages should be ordered, but mess it up just in case
-      messages =
-        for seq <- [1, 2, 5, 3] do
-          ReplicationFactory.postgres_message(table_oid: 123, action: :insert, seq: seq)
-        end
-
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-
-      replication_slot_id = Factory.uuid()
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: replication_slot_id}
-
-      {:ok, 4} = MessageHandler.handle_messages(context, messages)
-
-      assert {:ok, 5} = Replication.last_processed_seq(replication_slot_id)
     end
   end
 

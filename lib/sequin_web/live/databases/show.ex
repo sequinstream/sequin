@@ -7,7 +7,6 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
-  alias Sequin.Tracer
   alias Sequin.Tracer.Server
   alias Sequin.Tracer.State, as: TracerState
   alias SequinWeb.RouteHelpers

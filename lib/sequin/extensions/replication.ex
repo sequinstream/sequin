@@ -50,7 +50,6 @@ defmodule Sequin.Extensions.Replication do
       field :message_handler_module, atom()
       field :id, String.t()
       field :last_committed_lsn, integer(), default: 0
-      field :last_processed_seq, integer()
       field :publication, String.t()
       field :slot_name, String.t()
       field :postgres_database, PostgresDatabase.t()
@@ -185,13 +184,10 @@ defmodule Sequin.Extensions.Replication do
     Logger.debug("[Replication] Handling connect (attempt #{state.connect_attempts + 1})")
     Health.update(state.postgres_database, :replication_connected, :initializing)
 
-    {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)
-
     query =
       "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
 
-    {:stream, query, [],
-     %{state | step: :streaming, connect_attempts: state.connect_attempts + 1, last_processed_seq: last_processed_seq}}
+    {:stream, query, [], %{state | step: :streaming, connect_attempts: state.connect_attempts + 1}}
   end
 
   @impl Postgrex.ReplicationConnection
@@ -220,7 +216,7 @@ defmodule Sequin.Extensions.Replication do
     cond do
       is_struct(msg, Commit) ->
         next_state = flush_messages(next_state)
-        {:noreply, next_state}
+        {:noreply, ack_message(next_state.last_committed_lsn), next_state}
 
       acc_size > @max_accumulated_bytes ->
         next_state = flush_messages(next_state)
@@ -240,6 +236,8 @@ defmodule Sequin.Extensions.Replication do
   end
 
   # keepalive
+  # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+  # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
     Health.update(state.postgres_database, :replication_connected, :healthy)
 
@@ -280,8 +278,6 @@ defmodule Sequin.Extensions.Replication do
   end
 
   defp ack_message(lsn) when is_integer(lsn) do
-    # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-    # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
     lsn = lsn + 1
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
@@ -467,39 +463,29 @@ defmodule Sequin.Extensions.Replication do
     start_time = System.monotonic_time(:microsecond)
 
     # Reverse the messages because we accumulate them with list prepending
-    {rejected_messages, messages} =
-      messages
-      |> Enum.reverse()
-      |> Enum.split_with(fn message -> message.seq <= state.last_processed_seq end)
+    messages = Enum.reverse(messages)
 
-    unless rejected_messages == [] do
-      Logger.info(
-        "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq})"
-      )
+    # Flush accumulated messages
+    state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :flush_messages})
     end
 
-    if Enum.any?(messages) do
-      next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
-      # Flush accumulated messages
-      # Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-      # end)
+    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+    # Flush accumulated messages
+    # Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+    state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+    # end)
 
-      if state.test_pid do
-        send(state.test_pid, {__MODULE__, :flush_messages})
-      end
-
-      flush_time = System.monotonic_time(:microsecond) - start_time
-
-      state = record_metric(state, :flush_messages, flush_time)
-      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq}
-    else
-      if state.test_pid do
-        send(state.test_pid, {__MODULE__, :flush_messages})
-      end
-
-      %{state | accumulated_messages: {0, []}}
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :flush_messages})
     end
+
+    flush_time = System.monotonic_time(:microsecond) - start_time
+
+    state = record_metric(state, :flush_messages, flush_time)
+    %{state | accumulated_messages: {0, []}}
   end
 
   defp put_message(%State{} = state, message) do

@@ -22,7 +22,6 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Mocks.Extensions.MessageHandlerMock
-  alias Sequin.Replication
   alias Sequin.Replication.Message
   alias Sequin.ReplicationRuntime
   alias Sequin.Test.Support.Models.Character
@@ -712,9 +711,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
-      Replication.put_last_processed_seq!(@server_id, change.seq)
+      # Give the ack_message time to be sent
+      Process.sleep(20)
 
-      # Stop the replication - likely before the message was acked, but there is a race here
+      # Stop the replication
       stop_replication!()
 
       # Restart the replication

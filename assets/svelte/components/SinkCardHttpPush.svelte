@@ -55,17 +55,17 @@
     <div class="space-y-4 grid xl:grid-cols-2">
       <div>
         <span class="text-sm text-gray-500">HTTP Endpoint Path</span>
-        {#if consumer.sink.http_endpoint_path === ""}
+        {#if consumer.sink.http_endpoint_path === "" || consumer.sink.http_endpoint_path === null}
           <div class="mt-2">
             <span
-              class="bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+              class="bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
               >No path configured</span
             >
           </div>
         {:else}
-          <div class="mt-2">
+          <div class="mt-2 overflow-x-auto overflow-y-hidden">
             <span
-              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md"
+              class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
               >{consumer.sink.http_endpoint_path}</span
             >
           </div>
@@ -74,9 +74,9 @@
 
       <div>
         <span class="text-sm text-gray-500">Full Endpoint URL</span>
-        <div class="mt-2">
+        <div class="mt-2 overflow-x-auto overflow-y-hidden">
           <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            class="font-mono bg-slate-50 px-2 py-1 border border-slate-100 rounded-md"
             >{fullEndpointUrl}</span
           >
         </div>

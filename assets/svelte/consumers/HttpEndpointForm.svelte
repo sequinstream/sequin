@@ -29,7 +29,7 @@
   export let errors: Record<string, any> = {};
   export let parent: string;
   export let live;
-  export let api_tokens: any[];
+  export let apiTokens: any[];
   export let onSubmit: (form: any, callback: (reply: any) => void) => void;
 
   const url = httpEndpoint.id ? new URL(httpEndpoint.baseUrl) : ({} as any);
@@ -207,7 +207,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                       value: setupTunnelCode,
                     },
                   ]}
-                  apiTokens={api_tokens}
+                  {apiTokens}
                 />
               </div>
             </div>

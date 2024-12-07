@@ -2,6 +2,9 @@ defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
+  alias Sequin.Accounts
+  alias Sequin.ApiTokens
+  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.GcpPubsubSink
@@ -52,6 +55,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
+      |> assign(:encoded_api_tokens, Enum.map(assigns.api_tokens, &encode_api_token/1))
       |> assign(:consumer_title, consumer_title(assigns.consumer))
 
     ~H"""
@@ -67,7 +71,8 @@ defmodule SequinWeb.Components.ConsumerForm do
             submitError: @submit_error,
             parent: @id,
             databases: @encoded_databases,
-            httpEndpoints: @encoded_http_endpoints
+            httpEndpoints: @encoded_http_endpoints,
+            apiTokens: @encoded_api_tokens
           }
         }
         socket={@socket}
@@ -83,15 +88,18 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   def update(assigns, socket) do
+    socket = assign(socket, assigns)
+
     consumer = assigns[:consumer]
 
     component = "consumers/SinkConsumerForm"
     consumer = Repo.preload(consumer, [:postgres_database])
+    api_tokens = ApiTokens.list_tokens_for_account(current_account_id(socket))
 
     socket =
       socket
-      |> assign(assigns)
       |> assign(
+        api_tokens: api_tokens,
         consumer: Repo.preload(consumer, :sequence),
         show_errors?: false,
         submit_error: nil,
@@ -105,9 +113,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign_http_endpoints()
       |> reset_changeset()
 
-    account_id = current_account_id(socket)
-
-    Phoenix.PubSub.subscribe(Sequin.PubSub, "account:#{account_id}:database_tables_updated")
+    Phoenix.PubSub.subscribe(Sequin.PubSub, "account:#{current_account_id(socket)}:database_tables_updated")
 
     {:ok, socket}
   end
@@ -635,6 +641,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "id" => http_endpoint.id,
       "name" => http_endpoint.name,
       "baseUrl" => HttpEndpoint.url(http_endpoint)
+    }
+  end
+
+  defp encode_api_token(%ApiToken{} = api_token) do
+    %{
+      id: api_token.id,
+      name: api_token.name,
+      token: api_token.token,
+      inserted_at: api_token.inserted_at
     }
   end
 

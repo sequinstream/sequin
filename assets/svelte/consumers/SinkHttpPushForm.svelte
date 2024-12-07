@@ -39,6 +39,7 @@
   export let parent;
   export let httpEndpoints;
   export let errors: any = {};
+  export let apiTokens: any[];
 
   const pushEvent = (event, payload = {}, cb = (result: any) => {}) => {
     return live.pushEventTo("#" + parent, event, payload, cb);
@@ -355,7 +356,7 @@
       {parent}
       httpEndpoint={newEndpoint}
       errors={endpointErrors}
-      api_tokens={[]}
+      {apiTokens}
       onSubmit={(endpointForm) => {
         pushEvent(
           "create_http_endpoint",

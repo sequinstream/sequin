@@ -33,6 +33,7 @@ defmodule Sequin.Consumers.SinkConsumer do
              :message_kind,
              :name,
              :updated_at,
+             :enabled,
              :status,
              :health
            ]}
@@ -44,7 +45,8 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
-    field :status, Ecto.Enum, values: [:active, :disabled], default: :active
+    field :enabled, :boolean, default: true
+    field :status, Ecto.Enum, values: [:ready, :creating, :deleting, :updating], default: :ready
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
 
@@ -88,7 +90,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :replication_slot_id,
       :status,
       :sequence_id,
-      :message_kind
+      :message_kind,
+      :enabled
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
@@ -111,7 +114,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_ack_pending,
       :max_deliver,
       :backfill_completed_at,
-      :status
+      :status,
+      :enabled
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

@@ -71,7 +71,7 @@ defmodule Sequin.Health do
 
   Generates one or more `:nats` messages to notify subscribers of the new status and any status changes.
   """
-  @spec update(entity(), atom(), status(), Error.t() | nil) :: {:ok, Health.t()} | {:error, Error.t()}
+  @spec update(entity(), atom(), status(), Error.t() | nil) :: :ok | {:error, Error.t()}
   def update(entity, check_id, status, error \\ nil)
 
   def update(entity, check_id, status, error) when is_entity(entity) do
@@ -82,7 +82,7 @@ defmodule Sequin.Health do
 
     case :ets.lookup(:sequin_health_debounce, key) do
       [{^key, ^status, last_update}] when now - last_update < @debounce_window ->
-        get_health(entity)
+        :ok
 
       _ ->
         :ets.insert(:sequin_health_debounce, {key, status, now})
@@ -403,11 +403,12 @@ defmodule Sequin.Health do
   @doc """
   Public for testing
   """
+  @spec set_health(String.t(), Health.t()) :: :ok | {:error, Error.t()}
   def set_health(entity_id, %Health{} = health) do
     :redix
     |> Redix.command(["SET", key(entity_id), Jason.encode!(health)])
     |> case do
-      {:ok, "OK"} -> {:ok, health}
+      {:ok, "OK"} -> :ok
       {:error, error} -> {:error, to_service_error(error)}
     end
   end
@@ -489,7 +490,7 @@ defmodule Sequin.Health do
   @doc """
   Resets the health for the given entity to initializing.
   """
-  @spec reset(entity()) :: {:ok, Health.t()} | {:error, Error.t()}
+  @spec reset(entity()) :: :ok | {:error, Error.t()}
   def reset(entity) when is_entity(entity) do
     new_health = initial_health(entity)
     set_health(entity.id, new_health)

@@ -19,6 +19,11 @@ defmodule Sequin.Kafka.Client do
   defp do_publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, record_or_event) do
     message_key = message_key(consumer, record_or_event)
 
+    data =
+      record_or_event.data
+      |> put_in([Access.key!(:metadata), Access.key!(:delivered_timestamp)], DateTime.utc_now())
+      |> put_in([Access.key!(:metadata), Access.key!(:replicated_timestamp)], record_or_event.inserted_at)
+
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
            :brod.produce_sync(
@@ -26,7 +31,7 @@ defmodule Sequin.Kafka.Client do
              consumer.sink.topic,
              :hash,
              message_key,
-             Jason.encode!(record_or_event.data)
+             Jason.encode!(data)
            ) do
       :ok
     else

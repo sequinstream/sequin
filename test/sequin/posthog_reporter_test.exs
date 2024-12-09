@@ -192,12 +192,14 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     assert merged_receive["properties"]["event_count"] == 2
     # 5 + 3
     assert merged_receive["properties"]["message_count"] == 8
+    assert merged_receive["properties"]["$groups"] == %{"account" => "account1"}
 
     merged_ack = Enum.find(events, &(&1["event"] == "consumer_ack"))
     assert merged_ack["properties"]["consumer_id"] == "consumer1"
     assert merged_ack["properties"]["event_count"] == 2
     # 2 + 3
     assert merged_ack["properties"]["message_count"] == 5
+    assert merged_ack["properties"]["$groups"] == %{"account" => "account1"}
 
     unmergeable = Enum.find(events, &(&1["event"] == "other_event"))
     assert unmergeable["properties"]["key"] == "value1"

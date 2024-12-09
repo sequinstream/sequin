@@ -131,7 +131,7 @@ defmodule Sequin.Telemetry.PosthogReporter do
           event_count: length(events),
           message_count: total_count,
           message_kind: base_metadata.properties.message_kind,
-          "$groups": base_metadata.properties["$groups"]
+          "$groups": base_metadata.properties[:"$groups"]
         }
       },
       timestamp

@@ -99,7 +99,9 @@ defmodule Sequin.Consumers.SinkConsumer do
   end
 
   def update_changeset(consumer, attrs) do
-    changeset(consumer, attrs)
+    consumer
+    |> changeset(attrs)
+    |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
   end
 
   def changeset(consumer, attrs) do

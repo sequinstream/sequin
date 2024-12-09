@@ -2,7 +2,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
-  alias Sequin.Accounts
   alias Sequin.ApiTokens
   alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers

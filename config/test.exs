@@ -5,6 +5,21 @@ alias Sequin.Test.UnboxedRepo
 # Only in tests, remove the complexity from the password hashing algorithm
 config :argon2_elixir, t_cost: 1, m_cost: 8
 
+config :libcluster,
+  topologies: [
+    sequin: [
+      strategy: LibclusterPostgres.Strategy,
+      config: [
+        hostname: "localhost",
+        username: "postgres",
+        password: "postgres",
+        database: "sequin_test",
+        port: 5432,
+        parameters: []
+      ]
+    ]
+  ]
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

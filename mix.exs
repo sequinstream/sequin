@@ -83,7 +83,9 @@ defmodule Sequin.MixProject do
       {:yaml_elixir, "~> 2.11"},
       {:ymlr, "~> 5.0"},
       {:brod, "~> 4.3"},
-      {:jose, "~> 1.11"}
+      {:jose, "~> 1.11"},
+      {:libcluster_postgres, "~> 0.1"},
+      {:syn, "~> 3.3"}
     ]
   end
 

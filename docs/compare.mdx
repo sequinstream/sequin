@@ -41,7 +41,7 @@ Postgres triggers are database functions that execute in response to database ev
 
 3. **Scalability**: Complex trigger logic can impact database performance. Sequin offloads processing to external services while maintaining exactly-once processing guarantees.
 
-## LISTEN/NOTIFY
+## Sequin vs LISTEN/NOTIFY
 
 Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has important limitations:
 
@@ -50,6 +50,16 @@ Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has 
 2. **Persistence**: Notifications are ephemeral and cannot be replayed. Sequin can backfill historical data.
 
 3. **Scale**: LISTEN/NOTIFY is best suited for simple, low-volume use cases. Sequin is built to handle high-throughput scenarios with multiple consumers.
+
+## Sequin vs Prisma Pulse
+
+[Prisma Pulse](https://www.prisma.io/docs/pulse) is a managed change data capture (CDC) service that's part of the Prisma ecosystem. While both tools enable real-time database change subscriptions, they differ in several ways:
+
+1. **Integration model**: Prisma Pulse is tightly integrated with Prisma ORM and requires using Prisma Client (which only supports JavaScript). Sequin works with any programming language or framework.
+
+2. **Destination support**: Sequin streams directly to multiple destinations (Kafka, SQS, Redis Streams, HTTP) and as a result can be used for a wider range of use cases. Prisma Pulse works only with the Prisma SDK and ORM and is primarily designed for in-application features.
+
+3. **Infrastructure**: Prisma Pulse is a fully managed service requiring a Prisma Data Platform account and a subscription. Sequin can be self-hosted as a Docker container or used as a managed service via Sequin Cloud.
 
 ## Why Choose Sequin?
 

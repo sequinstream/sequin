@@ -41,7 +41,7 @@ Postgres triggers are database functions that execute in response to database ev
 
 3. **Scalability**: Complex trigger logic can impact database performance. Sequin offloads processing to external services while maintaining exactly-once processing guarantees.
 
-## LISTEN/NOTIFY
+## Sequin vs LISTEN/NOTIFY
 
 Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has important limitations:
 
@@ -50,6 +50,18 @@ Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has 
 2. **Persistence**: Notifications are ephemeral and cannot be replayed. Sequin can backfill historical data.
 
 3. **Scale**: LISTEN/NOTIFY is best suited for simple, low-volume use cases. Sequin is built to handle high-throughput scenarios with multiple consumers.
+
+## Sequin vs Prisma Pulse
+
+[Prisma Pulse](https://www.prisma.io/docs/pulse) is a managed change data capture (CDC) service that's part of the Prisma ecosystem. While both Prisma Pulse and Sequin enable real-time database change subscriptions, they differ in several ways:
+
+1. **Integration model**: Prisma Pulse is tightly integrated with Prisma ORM and requires using Prisma Client (which only supports JavaScript). Sequin works with any programming language or framework.
+
+2. **Destination support**: Sequin streams directly to multiple destinations (Kafka, SQS, Redis Streams, HTTP) and as a result can be used for a wider range of use cases. Prisma Pulse delivers changes to the Prisma SDK / ORM via a black-box streaming mechanism and JavaScript callbacks in the client. It is primarily designed for in-application features.
+
+3. **Guarantees**: Sequin provides exactly-once processing with automatic retries and strict ordering that you can configure. You can enable exactly-once processing with Prisma Pulse by turning on persistence.
+
+4. **Infrastructure**: Prisma Pulse is a fully managed service requiring a Prisma Data Platform account. You can run Sequin locally with a single Docker command for development and testing, self-host in production, or use as a managed service via Sequin Cloud.
 
 ## Why Choose Sequin?
 

@@ -37,7 +37,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
   end
 
   def via_tuple({replication_slot_id, destination_oid, destination_database_id}) do
-    Sequin.Registry.via_tuple({__MODULE__, {replication_slot_id, destination_oid, destination_database_id}})
+    {:via, :syn, {:replication, {__MODULE__, {replication_slot_id, destination_oid, destination_database_id}}}}
   end
 
   def child_spec(opts) do
@@ -101,8 +101,11 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
       account_id: replication_slot.account_id,
       replication_slot_id: replication_slot_id,
       table_oid: destination_oid,
-      database_id: destination_database_id
+      database_id: destination_database_id,
+      wal_pipeline_ids: wal_pipeline_ids
     )
+
+    Logger.info("[WalPipelineServer] Starting")
 
     state = %State{
       replication_slot: replication_slot,
@@ -284,7 +287,7 @@ defmodule Sequin.ReplicationRuntime.WalPipelineServer do
 
   def handle_event(:internal, :subscribe_to_pubsub, _state, %State{wal_pipelines: wal_pipelines}) do
     Enum.each(wal_pipelines, fn wal_pipeline ->
-      Phoenix.PubSub.subscribe(Sequin.PubSub, "wal_event_inserted:#{wal_pipeline.id}")
+      :syn.join(:replication, wal_pipeline.id, self())
     end)
 
     :keep_state_and_data

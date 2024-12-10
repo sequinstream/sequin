@@ -24,7 +24,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   end
 
   def via_tuple({consumer_id, table_oid}) do
-    Sequin.Registry.via_tuple({__MODULE__, {consumer_id, table_oid}})
+    {:via, :syn, {:replication, {__MODULE__, {consumer_id, table_oid}}}}
   end
 
   # Convenience function

@@ -23,6 +23,7 @@ defmodule Sequin.MutexOwner do
       field :mutex_key, String.t(), required: true
       field :mutex_token, String.t(), required: true
       field :on_acquired, (-> any()), required: true
+      field :last_emitted_passive_log, DateTime.t(), default: ~U[2000-01-01 00:00:00Z]
     end
 
     def new(opts) do
@@ -85,15 +86,16 @@ defmodule Sequin.MutexOwner do
       {:error, :mutex_taken} ->
         reattempt_timeout = round(data.lock_expiry / 2)
 
-        unless env() == :test do
-          Logger.info("MutexOwner failed to acquire mutex, trying again in #{round(reattempt_timeout / 1000)}s...")
-        end
-
         actions = [
           {{:timeout, :acquire_mutex}, reattempt_timeout, nil}
         ]
 
-        {:keep_state_and_data, actions}
+        if env() != :test and DateTime.diff(DateTime.utc_now(), data.last_emitted_passive_log, :minute) > 1 do
+          Logger.info("Running in passive mode, another instance is holding active mutex.")
+          {:keep_state, %{data | last_emitted_passive_log: DateTime.utc_now()}, actions}
+        else
+          {:keep_state_and_data, actions}
+        end
 
       :error ->
         actions = [

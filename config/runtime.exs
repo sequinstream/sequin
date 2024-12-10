@@ -107,17 +107,20 @@ if config_env() == :prod and self_hosted do
       _ -> false
     end
 
+  # Take a URL and return hostname, port, etc keyword list
+  repo_params = Ecto.Repo.Supervisor.parse_url(database_url)
+
   config :libcluster,
     topologies: [
       sequin: [
         strategy: LibclusterPostgres.Strategy,
-        config: [
-          ssl: repo_ssl,
-          socket_options: ecto_socket_opts,
-          url: database_url,
-          parameters: [],
-          channel_name: "sequin_cluster"
-        ]
+        config:
+          Keyword.merge(repo_params,
+            ssl: repo_ssl,
+            socket_options: ecto_socket_opts,
+            parameters: [],
+            channel_name: "sequin_cluster"
+          )
       ]
     ]
 

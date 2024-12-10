@@ -31,7 +31,10 @@ defmodule SequinWeb.Router do
     get "/auth/github/callback", UserSessionController, :callback
     delete "/logout", UserSessionController, :delete
 
-    get "/version", VersionController, :show
+    if @self_hosted or Application.compile_env(:sequin, :env) == :dev do
+      get "/info/version", InfoController, :version
+      get "/info", InfoController, :info
+    end
 
     live_session :home do
       live "/", HomeLive, :index

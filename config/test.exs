@@ -8,14 +8,9 @@ config :argon2_elixir, t_cost: 1, m_cost: 8
 config :libcluster,
   topologies: [
     sequin: [
-      strategy: LibclusterPostgres.Strategy,
+      strategy: Sequin.Libcluster.PostgresStrategy,
       config: [
-        hostname: "localhost",
-        username: "postgres",
-        password: "postgres",
-        database: "sequin_test",
-        port: 5432,
-        parameters: []
+        channel_name: "sequin_cluster_test"
       ]
     ]
   ]

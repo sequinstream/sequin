@@ -6,6 +6,8 @@ defmodule Sequin.Application do
 
   alias Sequin.MutexedSupervisor
 
+  require Logger
+
   @impl true
   def start(_type, _args) do
     env = Application.get_env(:sequin, :env)

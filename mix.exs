@@ -71,7 +71,7 @@ defmodule Sequin.MixProject do
       {:con_cache, "~> 1.1"},
       {:cloak_ecto, "~> 1.3.0"},
       {:gen_state_machine, "~> 3.0"},
-      {:mox, "~> 1.0"},
+      {:mox, "~> 1.0", runtime: false},
       {:oban, "~> 2.17"},
       {:hammox, "~> 0.7", only: :test},
       {:broadway, "~> 1.0"},
@@ -84,8 +84,8 @@ defmodule Sequin.MixProject do
       {:ymlr, "~> 5.0"},
       {:brod, "~> 4.3"},
       {:jose, "~> 1.11"},
-      {:libcluster_postgres, github: "acco/libcluster_postgres"},
-      {:syn, "~> 3.3"}
+      {:syn, "~> 3.3"},
+      {:libcluster, "~> 3.3"}
     ]
   end
 

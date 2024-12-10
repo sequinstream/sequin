@@ -33,7 +33,6 @@ defmodule Sequin.Application do
     base_children() ++
       [
         MutexedSupervisor.child_spec(Sequin.ReplicationRuntime.MutexedSupervisor, [Sequin.ReplicationRuntime.Supervisor]),
-        Sequin.ReplicationRuntime.Supervisor,
         Sequin.ConsumersRuntime.Supervisor,
         Sequin.DatabasesRuntime.Supervisor,
         Sequin.Tracer.Starter,

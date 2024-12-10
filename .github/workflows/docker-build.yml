@@ -6,6 +6,11 @@ on:
       version:
         description: 'Version to build'
         required: true
+      tag_as_latest:
+        description: 'Tag this version as latest'
+        type: boolean
+        default: true
+        required: false
 
 jobs:
   docker:
@@ -51,7 +56,7 @@ jobs:
           images: sequin/sequin
           tags: |
             type=semver,pattern={{version}},value=${{ inputs.version }}
-            type=raw,value=latest
+            ${{ inputs.tag_as_latest == 'true' && 'type=raw,value=latest' || '' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -87,6 +92,6 @@ jobs:
             sequin/sequin:${{ inputs.version }}-amd64 \
             sequin/sequin:${{ inputs.version }}-arm64
           
-          docker buildx imagetools create -t sequin/sequin:latest \
+          ${{ inputs.tag_as_latest == 'true' }} && docker buildx imagetools create -t sequin/sequin:latest \
             sequin/sequin:${{ inputs.version }}-amd64 \
             sequin/sequin:${{ inputs.version }}-arm64

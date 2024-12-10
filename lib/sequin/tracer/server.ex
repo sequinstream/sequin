@@ -23,7 +23,11 @@ defmodule Sequin.Tracer.Server do
   end
 
   def start_link(account_id) do
-    GenServer.start_link(__MODULE__, account_id, name: via_tuple(account_id))
+    case GenServer.start_link(__MODULE__, account_id, name: via_tuple(account_id)) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, {:already_started, pid}} -> {:ok, pid}
+      error -> error
+    end
   end
 
   def message_replicated(%PostgresDatabase{account_id: account_id} = db, %Message{} = message) do
@@ -117,6 +121,6 @@ defmodule Sequin.Tracer.Server do
   # Helper Functions
 
   defp via_tuple(account_id) do
-    Sequin.Registry.via_tuple({__MODULE__, account_id})
+    {:via, :syn, {:replication, {account_id, :tracer}}}
   end
 end

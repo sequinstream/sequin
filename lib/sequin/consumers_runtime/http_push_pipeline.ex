@@ -45,13 +45,13 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   end
 
   def via_tuple(consumer_id) do
-    Sequin.Registry.via_tuple({__MODULE__, consumer_id})
+    {:via, :syn, {:consumers, {__MODULE__, consumer_id}}}
   end
 
   # Used by Broadway to name processes in topology according to our registry
   @impl Broadway
-  def process_name({:via, Registry, {Sequin.Registry, {__MODULE__, id}}}, base_name) do
-    Sequin.Registry.via_tuple({__MODULE__, {base_name, id}})
+  def process_name({:via, :syn, {:consumers, {__MODULE__, id}}}, base_name) do
+    {:via, :syn, {:consumers, {__MODULE__, {base_name, id}}}}
   end
 
   @impl Broadway

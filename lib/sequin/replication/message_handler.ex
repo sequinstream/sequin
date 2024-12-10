@@ -117,11 +117,7 @@ defmodule Sequin.Replication.MessageHandler do
       end)
 
     Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
-      Phoenix.PubSub.broadcast(
-        Sequin.PubSub,
-        "wal_event_inserted:#{wal_pipeline_id}",
-        {:wal_event_inserted, wal_pipeline_id}
-      )
+      :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
     end)
 
     res

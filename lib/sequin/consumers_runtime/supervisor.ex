@@ -13,8 +13,10 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   require Logger
 
+  defp dynamic_supervisor, do: {:via, :syn, {:consumers, ConsumersRuntime.DynamicSupervisor}}
+
   def start_link(opts) do
-    name = Keyword.get(opts, :name, __MODULE__)
+    name = Keyword.get(opts, :name, {:via, :syn, {:consumers, __MODULE__}})
     Supervisor.start_link(__MODULE__, opts, name: name)
   end
 
@@ -23,7 +25,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id, opts \\ [])
+  def start_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id, opts \\ [])
 
   def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}, _opts) do
     :ok
@@ -51,7 +53,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     end
   end
 
-  def stop_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id)
+  def stop_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id)
 
   def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}) do
     :ok
@@ -70,7 +72,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     :ok
   end
 
-  def restart_for_sink_consumer(supervisor \\ ConsumersRuntime.DynamicSupervisor, consumer_or_id) do
+  def restart_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id) do
     stop_for_sink_consumer(supervisor, consumer_or_id)
     start_for_sink_consumer(supervisor, consumer_or_id)
   end
@@ -88,7 +90,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   defp children do
     [
       Sequin.ConsumersRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: ConsumersRuntime.DynamicSupervisor)
+      Sequin.DynamicSupervisor.child_spec(name: dynamic_supervisor())
     ]
   end
 end

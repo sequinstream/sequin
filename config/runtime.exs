@@ -107,6 +107,20 @@ if config_env() == :prod and self_hosted do
       _ -> false
     end
 
+  config :libcluster,
+    topologies: [
+      sequin: [
+        strategy: LibclusterPostgres.Strategy,
+        config: [
+          ssl: repo_ssl,
+          socket_options: ecto_socket_opts,
+          url: database_url,
+          parameters: [],
+          channel_name: "sequin_cluster"
+        ]
+      ]
+    ]
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -218,7 +232,6 @@ if config_env() == :prod do
       client_secret: get_env.("GITHUB_CLIENT_SECRET")
     ]
 
-  config :sequin, :dns_cluster_query, System.get_env("DNS_CLUSTER_QUERY")
   config :sequin, :retool_workflow_key, System.get_env("RETOOL_WORKFLOW_KEY")
 
   config :sequin,

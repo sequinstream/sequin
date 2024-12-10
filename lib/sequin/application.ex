@@ -19,6 +19,8 @@ defmodule Sequin.Application do
 
     :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
 
+    :syn.add_node_to_scopes([:account, :replication, :consumers])
+
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Sequin.Supervisor]
@@ -32,21 +34,26 @@ defmodule Sequin.Application do
   defp children(_) do
     base_children() ++
       [
-        MutexedSupervisor.child_spec(Sequin.ReplicationRuntime.MutexedSupervisor, [Sequin.ReplicationRuntime.Supervisor]),
-        Sequin.ConsumersRuntime.Supervisor,
-        Sequin.DatabasesRuntime.Supervisor,
+        MutexedSupervisor.child_spec(
+          Sequin.ReplicationRuntime.MutexedSupervisor,
+          [
+            Sequin.ReplicationRuntime.Supervisor,
+            Sequin.ConsumersRuntime.Supervisor,
+            Sequin.DatabasesRuntime.Supervisor
+          ]
+        ),
         Sequin.Tracer.Starter,
         Sequin.Telemetry.PosthogReporter
       ]
   end
 
   defp base_children do
+    topologies = Application.get_env(:libcluster, :topologies)
+
     [
-      Sequin.Registry,
       SequinWeb.Telemetry,
       Sequin.Repo,
       Sequin.Vault,
-      {DNSCluster, query: Application.get_env(:sequin, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Sequin.PubSub},
       # Start the Finch HTTP client for sending emails
       {Finch, name: Sequin.Finch},
@@ -59,6 +66,7 @@ defmodule Sequin.Application do
       Sequin.Kafka.ConnectionCache,
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
+      {Cluster.Supervisor, [topologies]},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]

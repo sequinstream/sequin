@@ -11,7 +11,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.HealthRuntime.PostgresDatabaseHealthChecker
+  alias Sequin.HealthRuntime.PostgresDatabaseHealthWorker
   alias Sequin.Name
   alias Sequin.Posthog
   alias Sequin.Replication
@@ -357,7 +357,7 @@ defmodule SequinWeb.DatabasesLive.Form do
           ReplicationSupervisor.start_replication(db.replication_slot)
 
           %{postgres_database_id: db.id}
-          |> PostgresDatabaseHealthChecker.new(
+          |> PostgresDatabaseHealthWorker.new(
             scheduled_at: DateTime.utc_now(),
             replace: [:scheduled_at]
           )

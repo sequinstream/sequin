@@ -40,7 +40,8 @@ config :sequin, Oban,
     {Oban.Plugins.Cron,
      crontab: [
        {"0 */6 * * *", Sequin.Databases.EnqueueDatabaseUpdateWorker},
-       {"0 * * * *", Sequin.Logs.RotateLogsWorker}
+       {"0 * * * *", Sequin.Logs.RotateLogsWorker},
+       {"*/10 * * * *", Sequin.HealthRuntime.HttpEndpointHealthWorker}
      ]}
   ]
 

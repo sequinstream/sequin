@@ -1,6 +1,10 @@
-defmodule Sequin.Health.HttpEndpointHealthChecker do
+defmodule Sequin.HealthRuntime.HttpEndpointHealthWorker do
   @moduledoc false
-  use GenServer
+
+  use Oban.Worker,
+    queue: :health_checks,
+    max_attempts: 1,
+    unique: [states: [:available, :scheduled, :retryable]]
 
   alias Sequin.Consumers
   alias Sequin.Error
@@ -9,26 +13,8 @@ defmodule Sequin.Health.HttpEndpointHealthChecker do
 
   require Logger
 
-  @check_interval :timer.seconds(5)
-
-  def start_link(opts) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
-
-  @impl true
-  def init(_opts) do
-    schedule_check()
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_info(:check_reachability, state) do
-    perform_check()
-    schedule_check()
-    {:noreply, state}
-  end
-
-  defp perform_check do
+  @impl Oban.Worker
+  def perform(_job) do
     Enum.each(Consumers.list_http_endpoints(), &check_endpoint/1)
   end
 
@@ -56,9 +42,5 @@ defmodule Sequin.Health.HttpEndpointHealthChecker do
     error ->
       error = Error.service(service: :http_endpoint, message: Exception.message(error))
       Health.update(endpoint, :reachable, :error, error)
-  end
-
-  defp schedule_check do
-    Process.send_after(self(), :check_reachability, @check_interval)
   end
 end

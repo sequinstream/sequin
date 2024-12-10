@@ -9,7 +9,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.HealthRuntime.PostgresDatabaseHealthChecker
+  alias Sequin.HealthRuntime.PostgresDatabaseHealthWorker
   alias Sequin.NetworkUtils
   alias Sequin.ObanQuery
   alias Sequin.Postgres
@@ -80,7 +80,7 @@ defmodule Sequin.Databases do
       with {:ok, db} <- create_db_for_account(account_id, attrs),
            {:ok, db} <- update_tables(db) do
         %{postgres_database_id: db.id}
-        |> PostgresDatabaseHealthChecker.new(
+        |> PostgresDatabaseHealthWorker.new(
           scheduled_at: DateTime.utc_now(),
           replace: [:scheduled_at]
         )
@@ -114,7 +114,7 @@ defmodule Sequin.Databases do
       health_checker_query =
         Oban.Job
         |> ObanQuery.where_args(%{postgres_database_id: db.id})
-        |> ObanQuery.where_worker(Sequin.HealthRuntime.PostgresDatabaseHealthChecker)
+        |> ObanQuery.where_worker(Sequin.HealthRuntime.PostgresDatabaseHealthWorker)
 
       # Check for related entities that need to be removed first
       with :ok <- check_related_entities(db),

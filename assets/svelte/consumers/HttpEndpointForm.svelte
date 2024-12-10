@@ -31,7 +31,7 @@
   export let live;
   export let apiTokens: any[];
   export let onSubmit: (form: any, callback: (reply: any) => void) => void;
-
+  export let onClose: () => void;
   const url = httpEndpoint.id ? new URL(httpEndpoint.baseUrl) : ({} as any);
   let baseUrl = httpEndpoint.useLocalTunnel
     ? `${url.pathname}${url.search}${url.hash}`
@@ -66,10 +66,6 @@
   }
 
   $: pushEvent("form_updated", { form });
-
-  function handleClose() {
-    pushEvent("form_closed");
-  }
 
   function addHeader() {
     form.headers = { ...form.headers, "": "" };
@@ -319,15 +315,11 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
     </CardContent>
   </Card>
 
-  <Card>
-    <CardHeader>
-      <CardTitle>HTTP Endpoint</CardTitle>
-    </CardHeader>
-    <CardContent class="space-y-4">
-      <Button type="submit" loading={validating} variant="default">
-        <span slot="loading"> Validating... </span>
-        Create HTTP Endpoint
-      </Button>
-    </CardContent>
-  </Card>
+  <div class="flex gap-2 justify-end">
+    <Button variant="outline" on:click={onClose}>Cancel</Button>
+    <Button type="submit" loading={validating} variant="default">
+      <span slot="loading"> Validating... </span>
+      Create HTTP Endpoint
+    </Button>
+  </div>
 </form>

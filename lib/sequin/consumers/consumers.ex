@@ -361,7 +361,9 @@ defmodule Sequin.Consumers do
     consumer_events
     |> Stream.map(& &1.consumer_id)
     |> Enum.uniq()
-    |> Enum.each(&Phoenix.PubSub.broadcast(Sequin.PubSub, "messages_ingested:#{&1}", :messages_ingested))
+    |> Enum.each(fn consumer_id ->
+      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
+    end)
 
     {:ok, count}
   end
@@ -531,7 +533,9 @@ defmodule Sequin.Consumers do
     consumer_records
     |> Stream.map(& &1.consumer_id)
     |> Enum.uniq()
-    |> Enum.each(&Phoenix.PubSub.broadcast(Sequin.PubSub, "messages_ingested:#{&1}", :messages_ingested))
+    |> Enum.each(fn consumer_id ->
+      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
+    end)
 
     {:ok, count}
   end

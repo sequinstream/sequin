@@ -112,7 +112,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign_http_endpoints()
       |> reset_changeset()
 
-    Phoenix.PubSub.subscribe(Sequin.PubSub, "account:#{current_account_id(socket)}:database_tables_updated")
+    :syn.join(:account, {:database_tables_updated, current_account_id(socket)}, self())
 
     {:ok, socket}
   end

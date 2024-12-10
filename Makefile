@@ -3,8 +3,14 @@
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
 
+dev2: ## Run a second node locally
+	SERVER_PORT=4001 elixir --sname sequin-stream-dev2 --cookie sequin-stream-dev -S mix phx.server
+
 deviex: ## Open an IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
+
+deviex2: ## Open an IEx session on the running local app
+	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev2 --cookie sequin-stream-dev
 
 signoff:
 	@./scripts/signoff.sh

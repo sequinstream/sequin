@@ -20,6 +20,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
+    :syn.join(:consumers, {:messages_ingested, consumer.id}, self())
+
     state = %{
       demand: 0,
       consumer: consumer,
@@ -29,9 +31,6 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       test_pid: test_pid,
       scheduled_handle_demand: false
     }
-
-    # Subscribe to PubSub
-    Phoenix.PubSub.subscribe(Sequin.PubSub, "messages_ingested:#{consumer.id}")
 
     state = schedule_receive_messages(state)
 

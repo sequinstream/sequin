@@ -14,8 +14,11 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
 
   require Logger
 
+  defp postgres_replication_supervisor, do: {:via, :syn, {:replication, PostgresReplicationSupervisor}}
+  defp wal_event_supervisor, do: {:via, :syn, {:replication, WalEventSupervisor}}
+
   def start_link(opts) do
-    name = Keyword.get(opts, :name, __MODULE__)
+    name = Keyword.get(opts, :name, {:via, :syn, {:replication, __MODULE__}})
     Supervisor.start_link(__MODULE__, opts, name: name)
   end
 
@@ -24,7 +27,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_replication(supervisor \\ PostgresReplicationSupervisor, pg_replication_or_id, opts \\ [])
+  def start_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id, opts \\ [])
 
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, :postgres_database)
@@ -82,7 +85,7 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
     end
   end
 
-  def stop_replication(supervisor \\ PostgresReplicationSupervisor, pg_replication_or_id)
+  def stop_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id)
 
   def stop_replication(supervisor, %PostgresReplicationSlot{id: id}) do
     stop_replication(supervisor, id)
@@ -93,23 +96,29 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
     :ok
   end
 
-  def restart_replication(supervisor \\ PostgresReplicationSupervisor, pg_replication_or_id) do
+  def restart_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id) do
     stop_replication(supervisor, pg_replication_or_id)
     start_replication(supervisor, pg_replication_or_id)
   end
 
-  def start_wal_pipeline_servers(pg_replication) do
+  def start_wal_pipeline_servers(supervisor \\ wal_event_supervisor(), pg_replication) do
     pg_replication = Repo.preload(pg_replication, :wal_pipelines)
 
     pg_replication.wal_pipelines
     |> Enum.filter(fn wp -> wp.status == :active end)
     |> Enum.group_by(fn wp -> {wp.replication_slot_id, wp.destination_oid, wp.destination_database_id} end)
     |> Enum.each(fn {{replication_slot_id, destination_oid, destination_database_id}, pipelines} ->
-      start_wal_pipeline_server(replication_slot_id, destination_oid, destination_database_id, pipelines)
+      start_wal_pipeline_server(supervisor, replication_slot_id, destination_oid, destination_database_id, pipelines)
     end)
   end
 
-  def start_wal_pipeline_server(replication_slot_id, destination_oid, destination_database_id, pipelines) do
+  def start_wal_pipeline_server(
+        supervisor \\ wal_event_supervisor(),
+        replication_slot_id,
+        destination_oid,
+        destination_database_id,
+        pipelines
+      ) do
     opts = [
       replication_slot_id: replication_slot_id,
       destination_oid: destination_oid,
@@ -118,38 +127,49 @@ defmodule Sequin.ReplicationRuntime.Supervisor do
     ]
 
     Sequin.DynamicSupervisor.start_child(
-      WalEventSupervisor,
+      supervisor,
       {WalPipelineServer, opts}
     )
   end
 
-  def stop_wal_pipeline_servers(pg_replication) do
+  def stop_wal_pipeline_servers(supervisor \\ wal_event_supervisor(), pg_replication) do
     pg_replication = Repo.preload(pg_replication, :wal_pipelines)
 
     pg_replication.wal_pipelines
     |> Enum.group_by(fn wp -> {wp.replication_slot_id, wp.destination_oid, wp.destination_database_id} end)
     |> Enum.each(fn {{replication_slot_id, destination_oid, destination_database_id}, _} ->
-      stop_wal_pipeline_server(replication_slot_id, destination_oid, destination_database_id)
+      stop_wal_pipeline_server(supervisor, replication_slot_id, destination_oid, destination_database_id)
     end)
   end
 
-  def stop_wal_pipeline_server(replication_slot_id, destination_oid, destination_database_id) do
+  def stop_wal_pipeline_server(
+        supervisor \\ wal_event_supervisor(),
+        replication_slot_id,
+        destination_oid,
+        destination_database_id
+      ) do
+    Logger.info("Stopping WalPipelineServer",
+      replication_slot_id: replication_slot_id,
+      destination_oid: destination_oid,
+      destination_database_id: destination_database_id
+    )
+
     Sequin.DynamicSupervisor.stop_child(
-      WalEventSupervisor,
+      supervisor,
       WalPipelineServer.via_tuple({replication_slot_id, destination_oid, destination_database_id})
     )
   end
 
-  def restart_wal_pipeline_servers(pg_replication) do
-    stop_wal_pipeline_servers(pg_replication)
-    start_wal_pipeline_servers(pg_replication)
+  def restart_wal_pipeline_servers(supervisor \\ wal_event_supervisor(), pg_replication) do
+    stop_wal_pipeline_servers(supervisor, pg_replication)
+    start_wal_pipeline_servers(supervisor, pg_replication)
   end
 
   defp children do
     [
       Sequin.ReplicationRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: Sequin.ReplicationRuntime.PostgresReplicationSupervisor),
-      Sequin.DynamicSupervisor.child_spec(name: WalEventSupervisor)
+      Sequin.DynamicSupervisor.child_spec(name: postgres_replication_supervisor()),
+      Sequin.DynamicSupervisor.child_spec(name: wal_event_supervisor())
     ]
   end
 end

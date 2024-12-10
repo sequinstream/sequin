@@ -1,5 +1,21 @@
 import Config
 
+config :libcluster,
+  topologies: [
+    sequin: [
+      strategy: LibclusterPostgres.Strategy,
+      config: [
+        hostname: "localhost",
+        username: "postgres",
+        password: "postgres",
+        database: "sequin_dev",
+        port: 5432,
+        parameters: [],
+        channel_name: "sequin_cluster_dev"
+      ]
+    ]
+  ]
+
 config :logger, :console, format: "[$level] $message\n"
 
 config :mix_test_interactive,
@@ -36,7 +52,7 @@ config :sequin, Sequin.Vault,
   ]
 
 config :sequin, SequinWeb.Endpoint,
-  http: [ip: {127, 0, 0, 1}, port: 4000],
+  http: [ip: {127, 0, 0, 1}, port: System.get_env("SERVER_PORT", "4000")],
   # For development, we disable any cache and enable
   # debugging and code reloading.
   #

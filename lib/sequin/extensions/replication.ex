@@ -116,7 +116,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   def via_tuple(id) do
-    {:via, Registry, {Sequin.Registry, {Replication, id}}}
+    {:via, :syn, {:replication, {__MODULE__, id}}}
   end
 
   @impl Postgrex.ReplicationConnection

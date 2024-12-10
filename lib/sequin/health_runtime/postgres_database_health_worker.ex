@@ -1,4 +1,4 @@
-defmodule Sequin.HealthRuntime.PostgresDatabaseHealthChecker do
+defmodule Sequin.HealthRuntime.PostgresDatabaseHealthWorker do
   @moduledoc false
 
   use Oban.Worker,

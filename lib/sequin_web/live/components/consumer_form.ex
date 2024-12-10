@@ -2,8 +2,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   @moduledoc false
   use SequinWeb, :live_component
 
-  alias Sequin.ApiTokens
-  alias Sequin.ApiTokens.ApiToken
   alias Sequin.Consumers
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.GcpPubsubSink
@@ -54,7 +52,6 @@ defmodule SequinWeb.Components.ConsumerForm do
       |> assign(:encoded_errors, encoded_errors)
       |> assign(:encoded_databases, Enum.map(assigns.databases, &encode_database/1))
       |> assign(:encoded_http_endpoints, Enum.map(assigns.http_endpoints, &encode_http_endpoint/1))
-      |> assign(:encoded_api_tokens, Enum.map(assigns.api_tokens, &encode_api_token/1))
       |> assign(:consumer_title, consumer_title(assigns.consumer))
 
     ~H"""
@@ -70,8 +67,7 @@ defmodule SequinWeb.Components.ConsumerForm do
             submitError: @submit_error,
             parent: @id,
             databases: @encoded_databases,
-            httpEndpoints: @encoded_http_endpoints,
-            apiTokens: @encoded_api_tokens
+            httpEndpoints: @encoded_http_endpoints
           }
         }
         socket={@socket}
@@ -87,26 +83,22 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   def update(assigns, socket) do
-    socket = assign(socket, assigns)
-
     consumer = assigns[:consumer]
 
     component = "consumers/SinkConsumerForm"
     consumer = Repo.preload(consumer, [:postgres_database])
-    api_tokens = ApiTokens.list_tokens_for_account(current_account_id(socket))
 
     socket =
       socket
+      |> assign(assigns)
       |> assign(
-        api_tokens: api_tokens,
         consumer: Repo.preload(consumer, :sequence),
         show_errors?: false,
         submit_error: nil,
         changeset: nil,
         sequence_changeset: nil,
         component: component,
-        prev_params: %{},
-        new_http_endpoint: %HttpEndpoint{}
+        prev_params: %{}
       )
       |> assign_databases()
       |> assign_http_endpoints()
@@ -134,7 +126,6 @@ defmodule SequinWeb.Components.ConsumerForm do
     {:noreply, socket}
   end
 
-  @impl Phoenix.LiveComponent
   def handle_event("form_submitted", %{"form" => form}, socket) do
     socket = assign(socket, :submit_error, nil)
 
@@ -175,26 +166,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   @impl Phoenix.LiveComponent
-  def handle_event("create_http_endpoint", %{"endpoint" => endpoint_params}, socket) do
-    case Consumers.create_http_endpoint_for_account(current_account_id(socket), %{
-           name: endpoint_params["name"],
-           scheme: URI.parse(endpoint_params["baseUrl"]).scheme,
-           host: URI.parse(endpoint_params["baseUrl"]).host,
-           port: URI.parse(endpoint_params["baseUrl"]).port,
-           path: URI.parse(endpoint_params["baseUrl"]).path,
-           headers: endpoint_params["headers"],
-           encrypted_headers: endpoint_params["encryptedHeaders"],
-           use_local_tunnel: endpoint_params["useLocalTunnel"]
-         }) do
-      {:ok, http_endpoint} ->
-        {:reply, %{ok: true, http_endpoint: encode_http_endpoint(http_endpoint)}, assign_http_endpoints(socket)}
-
-      {:error, changeset} ->
-        {:reply, %{ok: false, errors: Error.errors_on(changeset)}, socket}
-    end
-  end
-
-  @impl Phoenix.LiveComponent
   def handle_event("refresh_databases", _params, socket) do
     {:noreply, assign_databases(socket)}
   end
@@ -225,11 +196,15 @@ defmodule SequinWeb.Components.ConsumerForm do
   def handle_event("generate_webhook_site_url", _params, socket) do
     case generate_webhook_site_endpoint(socket) do
       {:ok, %HttpEndpoint{} = http_endpoint} ->
-        {:reply, %{http_endpoint: encode_http_endpoint(http_endpoint)}, assign_http_endpoints(socket)}
+        {:reply, %{http_endpoint_id: http_endpoint.id}, socket}
 
       {:error, reason} ->
         {:reply, %{error: reason}, socket}
     end
+  end
+
+  def handle_event("refresh_http_endpoints", _params, socket) do
+    {:noreply, assign_http_endpoints(socket)}
   end
 
   def handle_event("test_connection", _params, socket) do
@@ -369,7 +344,7 @@ defmodule SequinWeb.Components.ConsumerForm do
         "table_oid" => form["tableOid"],
         "sort_column_attnum" => form["sortColumnAttnum"],
         "sequence_filter" => %{
-          "column_filters" => Enum.map(form["sourceTableFilters"] || [], &ColumnFilter.from_external/1),
+          "column_filters" => Enum.map(form["sourceTableFilters"], &ColumnFilter.from_external/1),
           "actions" => form["sourceTableActions"],
           "group_column_attnums" => form["groupColumnAttnums"]
         },
@@ -635,20 +610,11 @@ defmodule SequinWeb.Components.ConsumerForm do
     }
   end
 
-  defp encode_http_endpoint(%HttpEndpoint{} = http_endpoint) do
+  defp encode_http_endpoint(http_endpoint) do
     %{
       "id" => http_endpoint.id,
       "name" => http_endpoint.name,
       "baseUrl" => HttpEndpoint.url(http_endpoint)
-    }
-  end
-
-  defp encode_api_token(%ApiToken{} = api_token) do
-    %{
-      id: api_token.id,
-      name: api_token.name,
-      token: api_token.token,
-      inserted_at: api_token.inserted_at
     }
   end
 

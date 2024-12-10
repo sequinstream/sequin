@@ -69,7 +69,6 @@
   export let consumerTitle;
   export let httpEndpoints;
   export let databases: Database[];
-  export let apiTokens: any[];
   export let errors: {
     consumer: Record<string, string>;
     sequence: Record<string, string>;
@@ -650,7 +649,6 @@
       <SinkHttpPushForm
         errors={errors.consumer}
         {httpEndpoints}
-        {apiTokens}
         bind:form
         {live}
         {parent}

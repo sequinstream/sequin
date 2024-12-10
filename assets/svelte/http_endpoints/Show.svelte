@@ -29,6 +29,7 @@
   export let metrics;
   export let live;
   export let parent_id;
+  export let sink_consumer_count: number;
 
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
@@ -73,6 +74,29 @@
 </script>
 
 <div class="min-h-screen font-sans bg-white">
+  {#if sink_consumer_count === 0}
+    <div class="container mx-auto px-4 pt-4">
+      <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-semibold">Create a Webhook sink</h3>
+            <p>
+              Create a webhook sink to push records or changes to your HTTP
+              Endpoint
+            </p>
+          </div>
+          <a
+            href="/sinks/new?kind=http_push"
+            data-phx-link="redirect"
+            data-phx-link-state="push"
+          >
+            <Button variant="outline">Create Webhook Sink</Button>
+          </a>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <header class="bg-white border-b sticky top-0 z-10">
     <div class="container mx-auto px-4 py-4">
       <div class="flex items-center justify-between">

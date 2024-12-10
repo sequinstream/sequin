@@ -16,6 +16,7 @@
     };
   }>;
   export let live: any;
+  export let sinkConsumerCount: number;
 
   function handleHttpEndpointClick(id: string) {
     live.pushEvent("http_endpoint_clicked", { id });
@@ -23,6 +24,27 @@
 </script>
 
 <div class="container mx-auto py-10">
+  {#if httpEndpoints.length > 0 && sinkConsumerCount === 0}
+    <div class="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="font-semibold">Create a Webhook sink</h3>
+          <p class="">
+            Create a webhook sink to push records or changes to your HTTP
+            Endpoint
+          </p>
+        </div>
+        <a
+          href="/sinks/new?kind=http_push"
+          data-phx-link="redirect"
+          data-phx-link-state="push"
+        >
+          <Button variant="outline">Create Webhook Sink</Button>
+        </a>
+      </div>
+    </div>
+  {/if}
+
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">
       <ChevronsLeftRightEllipsis class="h-6 w-6 mr-2" />

@@ -40,6 +40,13 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     assigns = assign(assigns, :parent_id, "http-endpoint-show")
+    # Get the count of sink consumers for this endpoint
+    sink_consumer_count =
+      assigns.http_endpoint.id
+      |> Consumers.list_sink_consumers_for_http_endpoint()
+      |> length()
+
+    assigns = assign(assigns, :sink_consumer_count, sink_consumer_count)
 
     ~H"""
     <div id={@parent_id}>
@@ -49,7 +56,8 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
           %{
             http_endpoint: encode_http_endpoint(@http_endpoint),
             parent_id: @parent_id,
-            metrics: @metrics
+            metrics: @metrics,
+            sink_consumer_count: @sink_consumer_count
           }
         }
       />

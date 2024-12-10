@@ -16,6 +16,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
       |> Enum.map(&HttpEndpoint.preload_sink_consumers/1)
 
     http_endpoints = load_http_endpoint_health(http_endpoints)
+    sink_consumer_count = account_id |> Consumers.list_sink_consumers_for_account() |> length()
 
     if connected?(socket) do
       Process.send_after(self(), :update_health, 1000)
@@ -25,6 +26,8 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
       socket
       |> assign(:http_endpoints, http_endpoints)
       |> assign(:form_errors, %{})
+      |> assign(:sink_consumer_count, sink_consumer_count)
+      |> assign(:api_base_url, Application.fetch_env!(:sequin, :api_base_url))
 
     {:ok, socket}
   end
@@ -40,7 +43,9 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
         props={
           %{
             httpEndpoints: @encoded_http_endpoints,
-            formErrors: @form_errors
+            formErrors: @form_errors,
+            sinkConsumerCount: @sink_consumer_count,
+            apiBaseUrl: @api_base_url
           }
         }
         socket={@socket}

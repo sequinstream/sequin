@@ -92,6 +92,8 @@ jobs:
             sequin/sequin:${{ inputs.version }}-amd64 \
             sequin/sequin:${{ inputs.version }}-arm64
           
-          ${{ inputs.tag_as_latest == 'true' }} && docker buildx imagetools create -t sequin/sequin:latest \
-            sequin/sequin:${{ inputs.version }}-amd64 \
-            sequin/sequin:${{ inputs.version }}-arm64
+          if [[ "${{ inputs.tag_as_latest }}" == "true" ]]; then
+            docker buildx imagetools create -t sequin/sequin:latest \
+              sequin/sequin:${{ inputs.version }}-amd64 \
+              sequin/sequin:${{ inputs.version }}-arm64
+          fi

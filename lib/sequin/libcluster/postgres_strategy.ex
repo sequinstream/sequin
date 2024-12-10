@@ -19,6 +19,7 @@ defmodule Sequin.Libcluster.PostgresStrategy do
 
   alias Cluster.Logger
   alias Cluster.Strategy
+  alias Sequin.Repo
 
   def start_link(args), do: GenServer.start_link(__MODULE__, args)
 
@@ -27,27 +28,12 @@ defmodule Sequin.Libcluster.PostgresStrategy do
   def init([state]) do
     channel_name = Keyword.get(state.config, :channel_name, clean_cookie(Node.get_cookie()))
 
-    opts = [
-      hostname: Keyword.fetch!(state.config, :hostname),
-      username: Keyword.fetch!(state.config, :username),
-      password: Keyword.fetch!(state.config, :password),
-      database: Keyword.fetch!(state.config, :database),
-      port: Keyword.fetch!(state.config, :port),
-      ssl: Keyword.get(state.config, :ssl),
-      ssl_opts: Keyword.get(state.config, :ssl_opts),
-      parameters: Keyword.fetch!(state.config, :parameters),
-      channel_name: channel_name
-    ]
-
     config =
       state.config
       |> Keyword.put_new(:channel_name, channel_name)
       |> Keyword.put_new(:heartbeat_interval, 5_000)
-      |> Keyword.delete(:url)
 
     meta = %{
-      opts: fn -> opts end,
-      conn: nil,
       conn_notif: nil,
       heartbeat_ref: make_ref()
     }
@@ -56,29 +42,27 @@ defmodule Sequin.Libcluster.PostgresStrategy do
   end
 
   def handle_continue(:connect, state) do
-    with {:ok, conn} <- Postgrex.start_link(state.meta.opts.()),
-         {:ok, conn_notif} <- Postgrex.Notifications.start_link(state.meta.opts.()),
+    with {:ok, conn_notif} <- Postgrex.Notifications.start_link(config()),
          {_, _} <- Postgrex.Notifications.listen(conn_notif, state.config[:channel_name]) do
-      Logger.info(state.topology, "Connected to Postgres database")
+      Logger.info(state.topology, "Listening for notifications on Postgres database")
 
       meta = %{
         state.meta
-        | conn: conn,
-          conn_notif: conn_notif,
+        | conn_notif: conn_notif,
           heartbeat_ref: heartbeat(0)
       }
 
       {:noreply, put_in(state.meta, meta)}
     else
       reason ->
-        Logger.error(state.topology, "Failed to connect to Postgres: #{inspect(reason)}")
+        Logger.error(state.topology, "Failed to start listening for Postgres notifications: #{inspect(reason)}")
         {:noreply, state}
     end
   end
 
   def handle_info(:heartbeat, state) do
     Process.cancel_timer(state.meta.heartbeat_ref)
-    Postgrex.query(state.meta.conn, "NOTIFY #{state.config[:channel_name]}, '#{node()}'", [])
+    Repo.query("notify #{state.config[:channel_name]}, '#{node()}'", [])
     ref = heartbeat(state.config[:heartbeat_interval])
     {:noreply, put_in(state.meta.heartbeat_ref, ref)}
   end
@@ -115,5 +99,36 @@ defmodule Sequin.Libcluster.PostgresStrategy do
 
   defp clean_cookie(str) when is_binary(str) do
     String.replace(str, ~r/\W/, "_")
+  end
+
+  defp config do
+    Keyword.take(Repo.config(), [
+      :hostname,
+      :endpoints,
+      :socket_dir,
+      :socket,
+      :port,
+      :database,
+      :username,
+      :password,
+      :parameters,
+      :timeout,
+      :connect_timeout,
+      :handshake_timeout,
+      :ping_timeout,
+      :ssl,
+      :socket_options,
+      :prepare,
+      :transactions,
+      :types,
+      :search_path,
+      :disconnect_on_error_codes,
+      :pool_size,
+      :idle_interval,
+      :queue_target,
+      :queue_interval,
+      :ownership_timeout,
+      :show_sensitive_data_on_connection_error
+    ])
   end
 end

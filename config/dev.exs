@@ -3,14 +3,8 @@ import Config
 config :libcluster,
   topologies: [
     sequin: [
-      strategy: LibclusterPostgres.Strategy,
+      strategy: Sequin.Libcluster.PostgresStrategy,
       config: [
-        hostname: "localhost",
-        username: "postgres",
-        password: "postgres",
-        database: "sequin_dev",
-        port: 5432,
-        parameters: [],
         channel_name: "sequin_cluster_dev"
       ]
     ]

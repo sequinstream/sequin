@@ -107,23 +107,6 @@ if config_env() == :prod and self_hosted do
       _ -> false
     end
 
-  # Take a URL and return hostname, port, etc keyword list
-  repo_params = Ecto.Repo.Supervisor.parse_url(database_url)
-
-  config :libcluster,
-    topologies: [
-      sequin: [
-        strategy: LibclusterPostgres.Strategy,
-        config:
-          Keyword.merge(repo_params,
-            ssl: repo_ssl,
-            socket_options: ecto_socket_opts,
-            parameters: [],
-            channel_name: "sequin_cluster"
-          )
-      ]
-    ]
-
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_i9k28nZwjjJG9DzUK0gDGASxXtGNusdI1zdaz9cuA7h",
@@ -170,23 +153,6 @@ if config_env() == :prod and not self_hosted do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  # Take a URL and return hostname, port, etc keyword list
-  repo_params = Ecto.Repo.Supervisor.parse_url(database_url)
-
-  config :libcluster,
-    topologies: [
-      sequin: [
-        strategy: LibclusterPostgres.Strategy,
-        config:
-          Keyword.merge(repo_params,
-            ssl: repo_ssl,
-            socket_options: ecto_socket_opts,
-            parameters: [],
-            channel_name: "sequin_cluster"
-          )
-      ]
-    ]
-
   config :sentry,
     dsn: System.fetch_env!("SENTRY_DSN"),
     release: System.fetch_env!("CURRENT_GIT_SHA")
@@ -230,6 +196,16 @@ if config_env() == :prod do
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
   redix_socket_opts = if System.get_env("REDIS_IPV6") in ~w(true 1), do: [:inet6], else: []
+
+  config :libcluster,
+    topologies: [
+      sequin: [
+        strategy: Sequin.Libcluster.PostgresStrategy,
+        config: [
+          channel_name: "sequin_cluster"
+        ]
+      ]
+    ]
 
   config :redix, start_opts: {System.fetch_env!("REDIS_URL"), [name: :redix] ++ [socket_opts: redix_socket_opts]}
 

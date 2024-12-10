@@ -170,6 +170,23 @@ if config_env() == :prod and not self_hosted do
       You can generate one by calling: mix phx.gen.secret
       """
 
+  # Take a URL and return hostname, port, etc keyword list
+  repo_params = Ecto.Repo.Supervisor.parse_url(database_url)
+
+  config :libcluster,
+    topologies: [
+      sequin: [
+        strategy: LibclusterPostgres.Strategy,
+        config:
+          Keyword.merge(repo_params,
+            ssl: repo_ssl,
+            socket_options: ecto_socket_opts,
+            parameters: [],
+            channel_name: "sequin_cluster"
+          )
+      ]
+    ]
+
   config :sentry,
     dsn: System.fetch_env!("SENTRY_DSN"),
     release: System.fetch_env!("CURRENT_GIT_SHA")

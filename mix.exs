@@ -84,7 +84,7 @@ defmodule Sequin.MixProject do
       {:ymlr, "~> 5.0"},
       {:brod, "~> 4.3"},
       {:jose, "~> 1.11"},
-      {:libcluster_postgres, "~> 0.1"},
+      {:libcluster_postgres, github: "acco/libcluster_postgres"},
       {:syn, "~> 3.3"}
     ]
   end

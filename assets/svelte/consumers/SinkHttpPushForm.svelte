@@ -33,6 +33,7 @@
   } from "$lib/components/ui/dropdown-menu";
   import FullPageModal from "../components/FullPageModal.svelte";
   import HttpEndpointForm from "./HttpEndpointForm.svelte";
+  import * as Dialog from "$lib/components/ui/dialog";
 
   export let live;
   export let form;
@@ -345,33 +346,35 @@
 </Card>
 
 {#if showCreateEndpointModal}
-  <FullPageModal
-    id="create-http-endpoint-modal"
-    title="Create HTTP Endpoint"
-    bind:open={showCreateEndpointModal}
-    on:close={() => (showCreateEndpointModal = false)}
-  >
-    <HttpEndpointForm
-      {live}
-      {parent}
-      httpEndpoint={newEndpoint}
-      errors={endpointErrors}
-      {apiTokens}
-      onSubmit={(endpointForm) => {
-        pushEvent(
-          "create_http_endpoint",
-          { endpoint: endpointForm },
-          (reply) => {
-            if (reply.ok) {
-              showCreateEndpointModal = false;
-              httpEndpoints = [...httpEndpoints, reply.http_endpoint];
-              form.sink.httpEndpointId = reply.http_endpoint.id;
-            } else {
-              endpointErrors = reply.errors || {};
-            }
-          },
-        );
-      }}
-    />
-  </FullPageModal>
+  <Dialog.Root bind:open={showCreateEndpointModal}>
+    <Dialog.Content class="md:max-w-4xl overflow-visible">
+      <Dialog.Header>
+        <Dialog.Title>Create HTTP Endpoint</Dialog.Title>
+      </Dialog.Header>
+
+      <HttpEndpointForm
+        {live}
+        {parent}
+        httpEndpoint={newEndpoint}
+        errors={endpointErrors}
+        {apiTokens}
+        onSubmit={(endpointForm) => {
+          pushEvent(
+            "create_http_endpoint",
+            { endpoint: endpointForm },
+            (reply) => {
+              if (reply.ok) {
+                showCreateEndpointModal = false;
+                httpEndpoints = [...httpEndpoints, reply.http_endpoint];
+                form.sink.httpEndpointId = reply.http_endpoint.id;
+              } else {
+                endpointErrors = reply.errors || {};
+              }
+            },
+          );
+        }}
+        onClose={() => (showCreateEndpointModal = false)}
+      />
+    </Dialog.Content>
+  </Dialog.Root>
 {/if}

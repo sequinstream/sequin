@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # Only set RELEASE_NODE if AUTO_ASSIGN_RELEASE_NODE is true and RELEASE_NODE is not already set
-if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ] && [ -z "${RELEASE_NODE:-}" ]; then
+if [ "${AUTO_ASSIGN_RELEASE_NODE:-false}" = "true" ]; then
     # Generate random string (8 characters)
     RANDOM_ID=$(head -c 8 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 8)
     export RELEASE_NODE="sequin-${RANDOM_ID}@${RELEASE_HOST:-$(hostname -i | awk '{print $1}')}"

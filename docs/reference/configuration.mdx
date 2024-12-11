@@ -82,6 +82,7 @@ We recommend using the `AUTO_ASSIGN_RELEASE_NODE` setting, unless it doesn't sui
 - `AUTO_ASSIGN_RELEASE_NODE`: Set to `true` to automatically assign a node name (default: `false`). See [`start_commands.sh`](https://github.com/sequinstream/sequin/blob/main/scripts/start_commands.sh) to see how Sequin generates node names. `RELEASE_NODE` must not be set.
 - `RELEASE_NODE`: Manually set the node name. Each node must have a unique name. Format is `{node_name}@{ip_address_or_hostname}`.
 - `RELEASE_COOKIE`: The secret key nodes will use to authenticate with each other. Must be same for all nodes. Use a strong random string.
+- `ELIXIR_ERL_OPTIONS`: Set to `-proto_dist inet6_tcp` to enable IPv6 support when clustering (default is unset).
 
 ### Email configuration
 

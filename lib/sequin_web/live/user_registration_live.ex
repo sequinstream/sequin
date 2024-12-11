@@ -29,11 +29,10 @@ defmodule SequinWeb.UserRegistrationLive do
         <div class="flex-grow flex items-center">
           <div>
             <h2 class="text-7xl font-bold mb-4">
-              Start <span class="text-purple-500">streaming</span>
-              data, right from <span class="text-purple-500">Postgres</span>
+              Start <span class="text-purple-500">streaming</span> changes from <span class="text-purple-500">Postgres</span>
             </h2>
             <p class="text-lg mb-6">
-              Sequin is designed to be 10X better for any streaming use case that starts with Postgres.
+              Sequin is designed to be a simple, fast, and reliable way to add change data capture to any Postgres database.
             </p>
           </div>
         </div>

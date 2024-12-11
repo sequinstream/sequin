@@ -1,9 +1,9 @@
-defmodule Sequin.TableProducerTest do
+defmodule Sequin.BackfillProducerTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.TableProducer
+  alias Sequin.DatabasesRuntime.BackfillProducer
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
@@ -50,46 +50,46 @@ defmodule Sequin.TableProducerTest do
 
   describe "cursor operations" do
     test "fetch_cursors returns :error when no cursors exist", %{consumer_id: consumer_id} do
-      assert :error == TableProducer.fetch_cursors(consumer_id)
+      assert :error == BackfillProducer.fetch_cursors(consumer_id)
     end
 
     test "update_cursor and fetch_cursors work correctly", %{consumer_id: consumer_id} do
       min_cursor = %{1 => "2023-01-01", 2 => 123}
       max_cursor = %{1 => "2023-01-31", 2 => 456}
 
-      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
 
-      assert {:ok, %{"min" => ^min_cursor, "max" => ^max_cursor}} = TableProducer.fetch_cursors(consumer_id)
+      assert {:ok, %{"min" => ^min_cursor, "max" => ^max_cursor}} = BackfillProducer.fetch_cursors(consumer_id)
     end
 
     test "cursor retrieves individual cursors", %{consumer_id: consumer_id} do
       min_cursor = %{1 => "2023-02-01", 2 => 789}
       max_cursor = %{1 => "2023-02-28", 2 => 1011}
 
-      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
 
-      assert ^min_cursor = TableProducer.cursor(consumer_id, :min)
-      assert ^max_cursor = TableProducer.cursor(consumer_id, :max)
+      assert ^min_cursor = BackfillProducer.cursor(consumer_id, :min)
+      assert ^max_cursor = BackfillProducer.cursor(consumer_id, :max)
     end
 
     test "cursor returns nil for non-existent cursor", %{consumer_id: consumer_id} do
-      assert nil == TableProducer.cursor(consumer_id, :min)
-      assert nil == TableProducer.cursor(consumer_id, :max)
+      assert nil == BackfillProducer.cursor(consumer_id, :min)
+      assert nil == BackfillProducer.cursor(consumer_id, :max)
     end
 
     test "delete_cursor removes all cursors", %{consumer_id: consumer_id} do
       min_cursor = %{1 => "2023-03-01", 2 => 1213}
       max_cursor = %{1 => "2023-03-31", 2 => 1415}
 
-      assert :ok == TableProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == TableProducer.update_cursor(consumer_id, :max, max_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
 
-      assert {:ok, _} = TableProducer.fetch_cursors(consumer_id)
+      assert {:ok, _} = BackfillProducer.fetch_cursors(consumer_id)
 
-      assert :ok == TableProducer.delete_cursor(consumer_id)
-      assert :error == TableProducer.fetch_cursors(consumer_id)
+      assert :ok == BackfillProducer.delete_cursor(consumer_id)
+      assert :error == BackfillProducer.fetch_cursors(consumer_id)
     end
   end
 
@@ -105,15 +105,15 @@ defmodule Sequin.TableProducerTest do
       char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
       char4 = CharacterFactory.insert_character!(updated_at: now)
 
-      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
+      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
 
       assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
       assert char3.id == cursor[attnums["id"]]
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: false)
+      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: false)
 
       assert char4.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
       assert char4.id == cursor[attnums["id"]]
@@ -130,10 +130,10 @@ defmodule Sequin.TableProducerTest do
       char3 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
       limit = 3
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
+      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
 
       assert_maps_equal(
         cursor,
@@ -150,7 +150,7 @@ defmodule Sequin.TableProducerTest do
       # Test with a cursor to ensure we can move past records with the same updated_at
       cursor = create_cursor(char2, attnums)
 
-      {:ok, cursor} = TableProducer.fetch_max_cursor(db, table, cursor, limit: limit, include_min: true)
+      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, cursor, limit: limit, include_min: true)
 
       assert_maps_equal(
         cursor,
@@ -179,13 +179,16 @@ defmodule Sequin.TableProducerTest do
       char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
       _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
 
-      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
       max_cursor = create_cursor(char4, attnums)
 
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(db, table, initial_min_cursor, max_cursor, limit: limit, include_min: true)
+        BackfillProducer.fetch_records_in_range(db, table, initial_min_cursor, max_cursor,
+          limit: limit,
+          include_min: true
+        )
 
       assert length(results) == 4
 
@@ -213,7 +216,7 @@ defmodule Sequin.TableProducerTest do
       limit = 10
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit: limit)
+        BackfillProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit: limit)
 
       assert length(results) == 2
 
@@ -236,7 +239,7 @@ defmodule Sequin.TableProducerTest do
         end)
 
       page_size = 2
-      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
       processed_characters = []
 
       # Simulate processing all characters
@@ -244,7 +247,7 @@ defmodule Sequin.TableProducerTest do
         Enum.reduce_while(1..10, {processed_characters, initial_min_cursor}, fn _, {acc, current_cursor} ->
           include_min = current_cursor == initial_min_cursor
 
-          case TableProducer.fetch_max_cursor(db, table, current_cursor,
+          case BackfillProducer.fetch_max_cursor(db, table, current_cursor,
                  limit: page_size,
                  include_min: include_min
                ) do
@@ -253,7 +256,7 @@ defmodule Sequin.TableProducerTest do
 
             {:ok, max_cursor} ->
               {:ok, records} =
-                TableProducer.fetch_records_in_range(
+                BackfillProducer.fetch_records_in_range(
                   db,
                   table,
                   current_cursor,
@@ -289,7 +292,7 @@ defmodule Sequin.TableProducerTest do
       char = CharacterFactory.insert_character_multi_pk!()
 
       # Fetch the first row
-      {:ok, first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
+      {:ok, first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
 
       # Assert that the first_row matches the inserted character
       assert first_row["id_integer"] == char.id_integer
@@ -313,7 +316,7 @@ defmodule Sequin.TableProducerTest do
       Repo.delete_all(Sequin.Test.Support.Models.Character)
 
       # Fetch the first row
-      assert {:ok, nil, nil} = TableProducer.fetch_first_row(db, table)
+      assert {:ok, nil, nil} = BackfillProducer.fetch_first_row(db, table)
     end
   end
 
@@ -326,11 +329,11 @@ defmodule Sequin.TableProducerTest do
       char1 = CharacterFactory.insert_character_detailed!(house_id: nil)
       char2 = CharacterFactory.insert_character_detailed!(house_id: UUID.uuid4())
 
-      {:ok, _first_row, initial_min_cursor} = TableProducer.fetch_first_row(db, table)
-      {:ok, max_cursor} = TableProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: 10)
+      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
+      {:ok, max_cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: 10)
 
       {:ok, results} =
-        TableProducer.fetch_records_in_range(
+        BackfillProducer.fetch_records_in_range(
           db,
           table,
           initial_min_cursor,

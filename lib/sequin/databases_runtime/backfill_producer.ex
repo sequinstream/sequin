@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.TableProducer do
+defmodule Sequin.DatabasesRuntime.BackfillProducer do
   @moduledoc false
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
@@ -45,7 +45,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
   def delete_cursor(backfill_id) do
     case fetch_cursors(backfill_id) do
       {:ok, cursors} ->
-        Logger.info("[TableProducer] Deleting cursors for backfill #{backfill_id}", cursors)
+        Logger.info("[BackfillProducer] Deleting cursors for backfill #{backfill_id}", cursors)
         {:ok, _} = Redix.command(:redix, ["DEL", cursor_key(backfill_id)])
         :ok
 
@@ -174,7 +174,7 @@ defmodule Sequin.DatabasesRuntime.TableProducer do
               uuid
 
             :error ->
-              Logger.error("[TableProducer] Invalid UUID: #{inspect(uuid_string)}", column: column, columns: columns)
+              Logger.error("[BackfillProducer] Invalid UUID: #{inspect(uuid_string)}", column: column, columns: columns)
               raise "Got invalid UUID: #{inspect(uuid_string)} for column: #{column.name}"
           end
       end)

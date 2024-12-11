@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.TableProducerServer do
+defmodule Sequin.DatabasesRuntime.BackfillServer do
   @moduledoc false
   use GenStateMachine, callback_mode: [:handle_event_function, :state_enter]
 
@@ -9,7 +9,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime.TableProducer
+  alias Sequin.DatabasesRuntime.BackfillProducer
   alias Sequin.Health
   alias Sequin.Repo
 
@@ -114,22 +114,22 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
     case consumer.active_backfill do
       nil ->
-        Logger.info("[TableProducerServer] No active backfill found, shutting down")
+        Logger.info("[BackfillServer] No active backfill found, shutting down")
         {:stop, :normal}
 
       backfill ->
-        cursor_min = TableProducer.cursor(backfill.id, :min)
+        cursor_min = BackfillProducer.cursor(backfill.id, :min)
         cursor_min = cursor_min || backfill.initial_min_cursor
         state = %{state | cursor_min: cursor_min}
 
         # Add initial count if not set
         if is_nil(backfill.rows_initial_count) do
-          case TableProducer.fast_count_estimate(database(state), table(state), cursor_min) do
+          case BackfillProducer.fast_count_estimate(database(state), table(state), cursor_min) do
             {:ok, count} ->
               Consumers.update_backfill(backfill, %{rows_initial_count: count})
 
             {:error, error} ->
-              Logger.error("[TableProducerServer] Failed to get initial count: #{inspect(error)}")
+              Logger.error("[BackfillServer] Failed to get initial count: #{inspect(error)}")
           end
         end
 
@@ -148,7 +148,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          TableProducer.fetch_max_cursor(
+          BackfillProducer.fetch_max_cursor(
             database(state),
             table(state),
             state.cursor_min,
@@ -164,16 +164,16 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   def handle_event(:info, {ref, {:ok, nil}}, :query_max_cursor, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    Logger.info("[TableProducerServer] Max cursor query returned nil. Table pagination complete.")
-    Consumers.table_producer_finished(state.consumer.id)
-    TableProducer.delete_cursor(state.consumer.active_backfill.id)
+    Logger.info("[BackfillServer] Max cursor query returned nil. Table pagination complete.")
+    Consumers.backfill_producer_finished(state.consumer.id)
+    BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
 
     {:stop, :normal}
   end
 
   def handle_event(:info, {ref, {:ok, result}}, :query_max_cursor, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    :ok = TableProducer.update_cursor(state.consumer.active_backfill.id, :max, result)
+    :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, :max, result)
     state = %{state | cursor_max: result, task_ref: nil, successive_failure_count: 0}
 
     {:next_state, :query_fetch_records, state}
@@ -189,7 +189,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          TableProducer.fetch_records_in_range(
+          BackfillProducer.fetch_records_in_range(
             database(state),
             table(state),
             state.cursor_min,
@@ -216,12 +216,12 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
       # This happens if a lot of records were suddenly committed inside of our page. We got back way
       # more results than expected.
-      Logger.info("[TableProducerServer] Fetch records result size equals the limit. Resetting process.")
+      Logger.info("[BackfillServer] Fetch records result size equals the limit. Resetting process.")
       {:next_state, :query_max_cursor, state}
     else
       # Call handle_records inline
       {:ok, _count} = handle_records(state.consumer, table(state), result)
-      :ok = TableProducer.update_cursor(state.consumer.active_backfill.id, :min, state.cursor_max)
+      :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, :min, state.cursor_max)
       state = %State{state | cursor_min: state.cursor_max, cursor_max: nil, consumer: preload_consumer(state.consumer)}
       {:next_state, :query_max_cursor, state}
     end
@@ -229,7 +229,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   # Implement retry logic in case of task failure
   def handle_event(:info, {:DOWN, ref, _, _, reason}, state_name, %State{task_ref: ref} = state) do
-    Logger.error("[TableProducerServer] Task for #{state_name} failed with reason #{inspect(reason)}")
+    Logger.error("[BackfillServer] Task for #{state_name} failed with reason #{inspect(reason)}")
 
     state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
     backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
@@ -243,7 +243,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   def handle_event(:info, {ref, {:error, error}}, state_name, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    Logger.error("[TableProducerServer] Task for #{state_name} failed with reason #{inspect(error)}", error: error)
+    Logger.error("[BackfillServer] Task for #{state_name} failed with reason #{inspect(error)}", error: error)
 
     state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
     backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
@@ -267,7 +267,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
   def handle_event({:timeout, :reload_consumer}, _evt, state_name, state) do
     case preload_consumer(state.consumer) do
       nil ->
-        Logger.info("[TableProducerServer] Consumer #{state.consumer.id} not found, shutting down")
+        Logger.info("[BackfillServer] Consumer #{state.consumer.id} not found, shutting down")
         {:stop, :normal}
 
       consumer ->
@@ -276,7 +276,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
         cond do
           is_nil(consumer.active_backfill) ->
-            Logger.info("[TableProducerServer] No active backfill found, shutting down")
+            Logger.info("[BackfillServer] No active backfill found, shutting down")
             {:stop, :normal}
 
           # If there are too many pending messages, pause the backfill
@@ -285,14 +285,14 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
               send(state.test_pid, {__MODULE__, :paused})
             end
 
-            Logger.info("[TableProducerServer] Pausing backfill for consumer #{consumer.id} due to many pending messages")
+            Logger.info("[BackfillServer] Pausing backfill for consumer #{consumer.id} due to many pending messages")
             {:next_state, :paused, state, actions}
 
           message_count > state.max_pending_messages and state_name == :paused ->
             {:keep_state_and_data, actions}
 
           state_name == :paused ->
-            Logger.info("[TableProducerServer] Resuming backfill for consumer #{consumer.id}")
+            Logger.info("[BackfillServer] Resuming backfill for consumer #{consumer.id}")
             {:next_state, :query_max_cursor, %{state | consumer: consumer}, actions}
 
           true ->
@@ -338,7 +338,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServer do
 
   # Message handling
   defp handle_records(consumer, table, records) do
-    Logger.info("[TableProducerServer] Handling #{length(records)} record(s)")
+    Logger.info("[BackfillServer] Handling #{length(records)} record(s)")
 
     records_by_column_attnum = records_by_column_attnum(table, records)
     total_processed = length(records)

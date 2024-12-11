@@ -4,11 +4,11 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   """
   use Supervisor
 
-  alias Sequin.DatabasesRuntime.TableProducerServer
-  alias Sequin.DatabasesRuntime.TableProducerSupervisor
+  alias Sequin.DatabasesRuntime.BackfillProducerSupervisor
+  alias Sequin.DatabasesRuntime.BackfillServer
   alias Sequin.Repo
 
-  defp table_producer_supervisor, do: {:via, :syn, {:replication, TableProducerSupervisor}}
+  defp backfill_producer_supervisor, do: {:via, :syn, {:replication, BackfillProducerSupervisor}}
 
   def start_link(opts) do
     name = Keyword.get(opts, :name, {:via, :syn, {:replication, __MODULE__}})
@@ -20,7 +20,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Supervisor.init(children(opts), strategy: :one_for_one)
   end
 
-  def start_table_producer(supervisor \\ table_producer_supervisor(), consumer, opts \\ []) do
+  def start_backfill_producer(supervisor \\ backfill_producer_supervisor(), consumer, opts \\ []) do
     consumer = Repo.preload(consumer, :sequence, replication_slot: :postgres_database)
 
     default_opts = [
@@ -30,25 +30,25 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
 
     opts = Keyword.merge(default_opts, opts)
 
-    Sequin.DynamicSupervisor.start_child(supervisor, {TableProducerServer, opts})
+    Sequin.DynamicSupervisor.start_child(supervisor, {BackfillServer, opts})
   end
 
-  def stop_table_producer(supervisor \\ table_producer_supervisor(), consumer) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, TableProducerServer.via_tuple(consumer))
+  def stop_backfill_producer(supervisor \\ backfill_producer_supervisor(), consumer) do
+    Sequin.DynamicSupervisor.stop_child(supervisor, BackfillServer.via_tuple(consumer))
     :ok
   end
 
-  def restart_table_producer(supervisor \\ table_producer_supervisor(), consumer, opts \\ []) do
-    stop_table_producer(supervisor, consumer)
-    start_table_producer(supervisor, consumer, opts)
+  def restart_backfill_producer(supervisor \\ backfill_producer_supervisor(), consumer, opts \\ []) do
+    stop_backfill_producer(supervisor, consumer)
+    start_backfill_producer(supervisor, consumer, opts)
   end
 
   defp children(opts) do
-    table_producer_supervisor = Keyword.get(opts, :table_producer_supervisor, table_producer_supervisor())
+    backfill_producer_supervisor = Keyword.get(opts, :backfill_producer_supervisor, backfill_producer_supervisor())
 
     [
       Sequin.DatabasesRuntime.Starter,
-      Sequin.DynamicSupervisor.child_spec(name: table_producer_supervisor)
+      Sequin.DynamicSupervisor.child_spec(name: backfill_producer_supervisor)
     ]
   end
 end

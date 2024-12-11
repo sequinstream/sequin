@@ -38,7 +38,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
 
   defp start do
     Enum.each(Consumers.list_sink_consumers_with_active_backfill(), fn consumer ->
-      Supervisor.start_table_producer(consumer)
+      Supervisor.start_backfill_producer(consumer)
     end)
   end
 

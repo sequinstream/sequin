@@ -157,7 +157,7 @@ defmodule Sequin.Consumers do
     Repo.all(SinkConsumer.where_active_backfill())
   end
 
-  def table_producer_finished(consumer_id) do
+  def backfill_producer_finished(consumer_id) do
     consumer = get_consumer!(consumer_id)
 
     case Repo.preload(consumer, :active_backfill) do
@@ -1565,7 +1565,7 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_update(%SinkConsumer{} = consumer) do
-    if consumer.status == :disabled, do: maybe_disable_table_producer(consumer)
+    if consumer.status == :disabled, do: maybe_disable_backfill_producer(consumer)
 
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
@@ -1589,7 +1589,7 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_delete(%SinkConsumer{} = consumer) do
-    maybe_disable_table_producer(consumer)
+    maybe_disable_backfill_producer(consumer)
 
     if env() == :test do
       ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
@@ -1600,13 +1600,13 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp maybe_disable_table_producer(%{message_kind: :record} = consumer) do
+  defp maybe_disable_backfill_producer(%{message_kind: :record} = consumer) do
     unless env() == :test do
-      DatabasesRuntimeSupervisor.stop_table_producer(consumer)
+      DatabasesRuntimeSupervisor.stop_backfill_producer(consumer)
     end
   end
 
-  defp maybe_disable_table_producer(_consumer), do: :ok
+  defp maybe_disable_backfill_producer(_consumer), do: :ok
 
   defp async_refresh_message_handler_ctx(replication_slot_id) do
     Task.Supervisor.async_nolink(
@@ -1719,7 +1719,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.start_table_producer()
+      |> DatabasesRuntimeSupervisor.start_backfill_producer()
     end
 
     :ok
@@ -1731,7 +1731,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.restart_table_producer()
+      |> DatabasesRuntimeSupervisor.restart_backfill_producer()
     end
 
     :ok
@@ -1741,7 +1741,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.stop_table_producer()
+      |> DatabasesRuntimeSupervisor.stop_backfill_producer()
     end
 
     :ok

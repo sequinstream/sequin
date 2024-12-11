@@ -72,6 +72,17 @@ See [secret generation](#secret-generation) for how to generate these values.
 - `SEQUIN_TELEMETRY_DISABLED`: Disable telemetry data collection (default: false)
   - Sequin collects telemetry data by default. While we're early, this **greatly** helps us improve the product. To opt-out, set this to `true`.
 
+### Clustering configuration
+
+You can cluster Sequin nodes in an active-passive configuration for high availability. See [Active-passive architecture](#active-passive-architecture) for more information.
+
+We recommend using the `AUTO_ASSIGN_RELEASE_NODE` setting, unless it doesn't suit your requirements.
+
+- `RELEASE_DISTRIBUTION`: Must be set to `name` (default: `sname`, which disables network clustering).
+- `AUTO_ASSIGN_RELEASE_NODE`: Set to `true` to automatically assign a node name (default: `false`). See [`start_commands.sh`](https://github.com/sequinstream/sequin/blob/main/scripts/start_commands.sh) to see how Sequin generates node names. `RELEASE_NODE` must not be set.
+- `RELEASE_NODE`: Manually set the node name. Each node must have a unique name. Format is `{node_name}@{ip_address_or_hostname}`.
+- `RELEASE_COOKIE`: The secret key nodes will use to authenticate with each other. Must be same for all nodes. Use a strong random string.
+
 ### Email configuration
 
 Email configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/579) if you'd like to see this feature.
@@ -86,10 +97,6 @@ To use GitHub OAuth as a sign-in/sign-up method, provide the following environme
 ### Monitoring/stats configuration
 
 Monitoring/stats configuration is coming soon. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/580) if you'd like to see this feature.
-
-## Clustering
-
-At the moment, Sequin does not support clustering. That means you should run Sequin as a **single-node** instance. [Please comment on this issue](https://github.com/sequinstream/sequin/issues/581) if you'd like high availability.
 
 ## Deploying to production
 
@@ -106,6 +113,27 @@ openssl rand -base64 64
 # Generate VAULT_KEY
 openssl rand -base64 32
 ```
+
+### Active-passive architecture
+
+Sequin supports deployment in an active-passive configuration for high availability. In this setup:
+
+- One node operates as the active node, running all sinks
+- Additional nodes operate as passive ("hot standby") nodes
+- All nodes can serve web traffic and API requests
+- If the active node fails, a passive node automatically promotes to active
+
+Requirements for multi-node deployment:
+
+- All nodes must share:
+  - The same Postgres database
+  - The same Redis instance
+  - Identical configuration
+- Nodes must be able to communicate directly with each other
+- Network latency between nodes should be minimal
+- Environment variables for [Clustering configuration](#clustering-configuration) must be properly set
+
+Sequin uses Postgres for node discovery and Redis for distributed locking and leader election.
 
 ### Runtime requirements
 

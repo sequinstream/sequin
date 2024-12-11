@@ -78,13 +78,15 @@ defmodule SequinWeb.YamlController do
     end
   end
 
-  def export(conn, _params) do
+  def export(conn, params) do
     account_id = conn.assigns.account_id
+    show_sensitive = params["show-sensitive"] == "true"
 
     Posthog.capture("YAML Export", %{
       distinct_id: "00000000-0000-0000-0000-000000000000",
       properties: %{
-        "$groups": %{account: account_id}
+        "$groups": %{account: account_id},
+        show_sensitive: show_sensitive
       }
     })
 
@@ -94,10 +96,9 @@ defmodule SequinWeb.YamlController do
     yaml =
       resources
       |> Enum.group_by(&get_resource_type/1)
-      # Skip support at this time
       |> Enum.reject(fn {resource_type, _resources} -> resource_type in ["account", "user"] end)
       |> Map.new(fn {resource_type, resources} ->
-        {"#{resource_type}s", Enum.map(resources, &Transforms.to_external/1)}
+        {"#{resource_type}s", Enum.map(resources, &Transforms.to_external(&1, show_sensitive))}
       end)
       |> Ymlr.document!()
 

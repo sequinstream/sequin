@@ -16,29 +16,31 @@ defmodule Sequin.Transforms do
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
 
-  def to_external(%Account{} = account) do
+  def to_external(resource, show_sensitive \\ false)
+
+  def to_external(%Account{} = account, _show_sensitive) do
     %{
       id: account.id,
       name: account.name
     }
   end
 
-  def to_external(%User{} = user) do
+  def to_external(%User{} = user, show_sensitive) do
     %{
       id: user.id,
       email: user.email,
-      password: "********"
+      password: maybe_obfuscate(user.password, show_sensitive)
     }
   end
 
-  def to_external(%PostgresDatabase{} = database) do
+  def to_external(%PostgresDatabase{} = database, show_sensitive) do
     database = Repo.preload(database, [:replication_slot, :sequences])
 
     %{
       id: database.id,
       name: database.name,
       username: database.username,
-      password: "********",
+      password: maybe_obfuscate(database.password, show_sensitive),
       hostname: database.hostname,
       database: database.database,
       slot_name: database.replication_slot.slot_name,
@@ -65,24 +67,25 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint) do
+  def to_external(%HttpEndpoint{host: "webhook.site"} = http_endpoint, _show_sensitive) do
     %{
       name: http_endpoint.name,
       "webhook.site": true
     }
   end
 
-  def to_external(%HttpEndpoint{use_local_tunnel: true} = http_endpoint) do
+  def to_external(%HttpEndpoint{use_local_tunnel: true} = http_endpoint, show_sensitive) do
     %{
       name: http_endpoint.name,
       local: true,
       path: http_endpoint.path,
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers: encrypted_headers(http_endpoint)
+      encrypted_headers:
+        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
     }
   end
 
-  def to_external(%HttpEndpoint{} = http_endpoint) do
+  def to_external(%HttpEndpoint{} = http_endpoint, show_sensitive) do
     %{
       name: http_endpoint.name,
       url:
@@ -96,11 +99,12 @@ defmodule Sequin.Transforms do
           fragment: http_endpoint.fragment
         }),
       headers: format_headers(http_endpoint.headers),
-      encrypted_headers: encrypted_headers(http_endpoint)
+      encrypted_headers:
+        if(show_sensitive, do: format_headers(http_endpoint.encrypted_headers), else: encrypted_headers(http_endpoint))
     }
   end
 
-  def to_external(%SinkConsumer{sink: sink} = consumer) do
+  def to_external(%SinkConsumer{sink: sink} = consumer, _show_sensitive) do
     consumer =
       consumer
       |> Repo.preload(sequence: [:postgres_database])
@@ -124,32 +128,32 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%HttpPushSink{} = sink) do
+  def to_external(%HttpPushSink{} = sink, _show_sensitive) do
     %{
       type: "webhook",
       http_endpoint: sink.http_endpoint.name
     }
   end
 
-  def to_external(%SequinStreamSink{}) do
+  def to_external(%SequinStreamSink{}, _show_sensitive) do
     %{
       type: "sequin_stream"
     }
   end
 
-  def to_external(%KafkaSink{} = sink) do
+  def to_external(%KafkaSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "kafka",
       hosts: sink.hosts,
       topic: sink.topic,
       tls: sink.tls,
       username: sink.username,
-      password: if(sink.password, do: "********"),
+      password: maybe_obfuscate(sink.password, show_sensitive),
       sasl_mechanism: sink.sasl_mechanism
     })
   end
 
-  def to_external(%RedisSink{} = sink) do
+  def to_external(%RedisSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "redis",
       host: sink.host,
@@ -158,22 +162,22 @@ defmodule Sequin.Transforms do
       database: sink.database,
       tls: sink.tls,
       username: sink.username,
-      password: if(sink.password, do: "********")
+      password: maybe_obfuscate(sink.password, show_sensitive)
     })
   end
 
-  def to_external(%SqsSink{} = sink) do
+  def to_external(%SqsSink{} = sink, show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "sqs",
       queue_url: sink.queue_url,
       region: sink.region,
-      access_key_id: if(sink.access_key_id, do: "********"),
-      secret_access_key: if(sink.secret_access_key, do: "********"),
+      access_key_id: maybe_obfuscate(sink.access_key_id, show_sensitive),
+      secret_access_key: maybe_obfuscate(sink.secret_access_key, show_sensitive),
       is_fifo: sink.is_fifo
     })
   end
 
-  def to_external(%ColumnFilter{} = column_filter) do
+  def to_external(%ColumnFilter{} = column_filter, _show_sensitive) do
     %{
       column_name: column_filter.column_name,
       operator: column_filter.operator,
@@ -181,7 +185,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%WalPipeline{} = wal_pipeline) do
+  def to_external(%WalPipeline{} = wal_pipeline, _show_sensitive) do
     wal_pipeline = Repo.preload(wal_pipeline, [:source_database, :destination_database])
     [source_table] = Consumers.enrich_source_tables(wal_pipeline.source_tables, wal_pipeline.source_database)
 
@@ -202,7 +206,7 @@ defmodule Sequin.Transforms do
     }
   end
 
-  def to_external(%GcpPubsubSink{} = sink) do
+  def to_external(%GcpPubsubSink{} = sink, _show_sensitive) do
     Sequin.Map.reject_nil_values(%{
       type: "gcp_pubsub",
       project_id: sink.project_id,
@@ -255,4 +259,8 @@ defmodule Sequin.Transforms do
     |> Base.encode16(case: :lower)
     |> String.slice(0, 8)
   end
+
+  defp maybe_obfuscate(nil, _), do: nil
+  defp maybe_obfuscate(value, true), do: value
+  defp maybe_obfuscate(_value, false), do: "********"
 end

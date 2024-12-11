@@ -154,14 +154,14 @@ func Apply(ctx *context.Context, yamlPath string) (*ApplyResponse, error) {
 	return &applyResp, nil
 }
 
-func Export(ctx *context.Context) (*ExportResponse, error) {
+func Export(ctx *context.Context, showSensitive bool) (*ExportResponse, error) {
 	// Get server URL
 	serverURL, err := context.GetServerURL(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/api/config/export", serverURL)
+	url := fmt.Sprintf("%s/api/config/export?show-sensitive=%t", serverURL, showSensitive)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

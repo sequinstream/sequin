@@ -14,9 +14,10 @@ import (
 )
 
 type ConfigCommands struct {
-	config   *Config
-	yamlPath string
-	changes  int
+	config        *Config
+	yamlPath      string
+	changes       int
+	showSensitive bool
 }
 
 // AddYamlCommands adds the 'plan' and 'apply' commands for YAML-based operations
@@ -43,6 +44,7 @@ func AddConfigCommands(app *fisk.Application, cfg *Config) {
 	// Export command
 	export := config.Command("export", "Export current configuration as YAML")
 	export.Action(cmd.exportAction)
+	export.Flag("show-sensitive", "Show sensitive values like passwords and encrypted headers").BoolVar(&cmd.showSensitive)
 }
 
 func (c *ConfigCommands) applyAction(_ *fisk.ParseContext) error {
@@ -356,26 +358,49 @@ func formatMap(m map[string]interface{}) string {
 }
 
 // Add the export action
-func (c *ConfigCommands) exportAction(_ *fisk.ParseContext) error {
-	ctx, err := context.LoadContext(c.config.ContextName)
+func (c *ConfigCommands) exportAction(ctx *fisk.ParseContext) error {
+	// Load the proper context first
+	context, err := context.LoadContext(c.config.ContextName)
 	if err != nil {
 		return fmt.Errorf("failed to load context: %w", err)
 	}
 
-	exportResp, err := config.Export(ctx)
+	exportResp, err := config.Export(context, c.showSensitive)
 	if err != nil {
 		return err
 	}
+
+	// Print YAML content in default color
 	fmt.Println(exportResp.YAML)
-	fmt.Println("\n`export` is *experimental*. You will need to make modifications to the document before using it in `plan`/`apply`. Notably:")
-	fmt.Println("\n- `account` and `user` are not exported. If you need them, add them manually.")
-	fmt.Println("\n- You will need to replace values for encrypted fields, like `password` and `encrypted_headers`.")
-	fmt.Println("- The field `consumer_start` is not properly exported. So, you'll have to specify it. (Your consumer will *not* be rewound to the specified position. It only indicates where new consumers should be started.)")
-	fmt.Println("\nSo:")
-	fmt.Println("\n1. Save the above to a YAML file (e.g., `sequin.yaml`)")
-	fmt.Println("2. Make tweaks as necessary, per above.")
-	fmt.Println("3. Review the changes with `sequin config plan sequin.yaml`.")
-	fmt.Println("4. Apply changes in the future with `sequin config apply sequin.yaml`.")
+
+	// Create color styles
+	dim := color.New(color.Faint).SprintFunc()
+	yellow := color.New(color.FgYellow).SprintFunc()
+
+	// Print separator
+	fmt.Printf("%s\n", dim("───────────────────────────────────────────"))
+
+	// Print experimental warning and notes
+	fmt.Printf("%s %s%s\n\n",
+		"⚠️",
+		"export may be ",
+		yellow("INCOMPLETE")+". You may need to make modifications to the document before using it in plan/apply. Notably:",
+	)
+
+	// Print limitations in dim gray
+	fmt.Printf("%s\n", dim("• account and user are not exported. If you need them, add them manually."))
+	if !c.showSensitive {
+		fmt.Printf("%s\n", dim("• You will need to replace values for encrypted fields, like password and encrypted_headers. "))
+		fmt.Printf("\t%s\n", dim("• You can use the --show-sensitive flag to see the actual values."))
+	}
+	fmt.Printf("%s\n", dim("• The field consumer_start is not properly exported. You'll have to specify it."))
+
+	// Print usage instructions
+	fmt.Printf("\n%s\n\n", dim("To use this export:"))
+	fmt.Printf("%s\n", dim("1. Save the above YAML to a file (e.g., sequin.yaml)"))
+	fmt.Printf("%s\n", dim("2. Make tweaks as necessary, per above"))
+	fmt.Printf("%s\n", dim("3. Review changes with sequin config plan sequin.yaml"))
+	fmt.Printf("%s\n", dim("4. Apply changes with sequin config apply sequin.yaml"))
 
 	return nil
 }

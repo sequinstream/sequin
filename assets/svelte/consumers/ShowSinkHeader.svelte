@@ -18,6 +18,7 @@
   import KafkaIcon from "../../icons/kafka.svelte";
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
+  import NatsIcon from "../../icons/nats.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -123,6 +124,8 @@
             <GcpPubsubIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sequin_stream"}
             <SequinStreamIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "nats"}
+            <NatsIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

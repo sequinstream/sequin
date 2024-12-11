@@ -67,6 +67,16 @@ export type RedisConsumer = BaseConsumer & {
   };
 };
 
+// NATS specific sink
+export type NatsConsumer = BaseConsumer & {
+  sink: {
+    type: "nats";
+    host: string;
+    port: number;
+    subject: string;
+  };
+};
+
 // Kafka specific sink
 export type KafkaConsumer = BaseConsumer & {
   sink: {
@@ -105,4 +115,5 @@ export type Consumer =
   | RedisConsumer
   | KafkaConsumer
   | SequinStreamConsumer
-  | GcpPubsubConsumer;
+  | GcpPubsubConsumer
+  | NatsConsumer;

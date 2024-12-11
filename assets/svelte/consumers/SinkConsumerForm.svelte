@@ -25,6 +25,7 @@
   import SinkKafkaForm from "$lib/consumers/SinkKafkaForm.svelte";
   import SinkGcpPubsubForm from "./SinkGcpPubsubForm.svelte";
   import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
+  import SinkNatsForm from "$lib/consumers/SinkNatsForm.svelte";
   import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
@@ -663,6 +664,8 @@
       <SinkGcpPubsubForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}
       <SinkSequinStreamForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "nats"}
+      <SinkNatsForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>

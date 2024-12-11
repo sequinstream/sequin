@@ -14,6 +14,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -517,6 +518,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%NatsSink{} = sink) do
+    %{
+      type: :nats,
+      host: sink.host,
+      port: sink.port,
+      subject: sink.subject,
+      connection_id: sink.connection_id
+    }
+  end
+
   defp encode_sink(%SequinStreamSink{}) do
     %{type: :sequin_stream}
   end
@@ -870,4 +881,5 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :kafka}}), do: "Kafka Sink"
   defp consumer_title(%{sink: %{type: :sequin_stream}}), do: "Sequin Stream Sink"
   defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
+  defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
 end

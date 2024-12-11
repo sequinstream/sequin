@@ -8,6 +8,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -26,6 +27,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Gcp.PubSub
   alias Sequin.Kafka
   alias Sequin.Name
+  alias Sequin.Nats
   alias Sequin.Postgres
   alias Sequin.Posthog
   alias Sequin.Redis
@@ -209,6 +211,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   def handle_event("test_connection", _params, socket) do
     case socket.assigns.consumer.type do
+      :nats ->
+        case test_nats_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
       :sqs ->
         case test_sqs_connection(socket) do
           :ok ->
@@ -330,6 +338,13 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_nats_connection(socket) do
+    case Nats.test_connection(socket.assigns.consumer.sink) do
+      :ok -> :ok
+      {:error, error} -> {:error, Exception.message(error)}
+    end
+  end
+
   defp decode_params(form, socket) do
     params =
       %{
@@ -407,6 +422,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink["tls"],
       "username" => sink["username"],
       "password" => sink["password"]
+    }
+  end
+
+  defp decode_sink(:nats, sink) do
+    %{
+      "type" => "nats",
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "subject" => sink["subject"]
     }
   end
 
@@ -522,6 +546,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink.tls,
       "username" => sink.username,
       "password" => sink.password
+    }
+  end
+
+  defp encode_sink(%NatsSink{} = sink) do
+    %{
+      "type" => "nats",
+      "host" => sink.host,
+      "port" => sink.port,
+      "subject" => sink.subject
     }
   end
 
@@ -836,6 +869,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :sqs -> "SQS Sink"
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
+      :nats -> "NATS Sink"
     end
   end
 

@@ -29,6 +29,7 @@
   import KafkaIcon from "../../icons/kafka.svelte";
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
+  import NatsIcon from "../../icons/nats.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -79,6 +80,11 @@
       id: "sequin_stream",
       name: "Sequin Stream",
       icon: SequinStreamIcon,
+    },
+    {
+      id: "nats",
+      name: "NATS",
+      icon: NatsIcon,
     },
   ];
 

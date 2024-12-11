@@ -311,4 +311,17 @@ defmodule SequinWeb.YamlControllerTest do
              } = get_in(parsed_yaml, ["sinks", Access.at(0)])
     end
   end
+
+  describe "apply_from_yml!/1" do
+    test "returns error for invalid yaml", %{conn: conn} do
+      yaml = """
+      ---
+      - -
+      databases:
+        - name: "test-db"
+      """
+
+      assert conn |> post(~p"/api/config/apply", %{yaml: yaml}) |> json_response(400)
+    end
+  end
 end

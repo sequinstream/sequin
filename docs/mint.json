@@ -58,7 +58,8 @@
             "quickstart/kafka",
             "quickstart/redis",
             "quickstart/gcp-pubsub",
-            "quickstart/sequin-stream"
+            "quickstart/sequin-stream",
+            "quickstart/redpanda"
           ],
           "icon": "gauge-max"
         },

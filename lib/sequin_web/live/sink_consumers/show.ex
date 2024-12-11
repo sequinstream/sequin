@@ -778,7 +778,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           data: nil,
           trace_id: message.trace_id,
           state: state,
-          state_color: "green-200"
+          state_color: "green"
         }
     end
   end

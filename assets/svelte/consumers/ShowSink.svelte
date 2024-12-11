@@ -107,7 +107,7 @@
                   ? formatNumberWithCommas(metrics.messages_processed_count)
                   : "0"}
               </span>
-              <span class="font-medium ml-1">acked</span>
+              <span class="font-medium ml-1">delivered</span>
             </span>
             <span>
               <span

@@ -12,6 +12,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -38,7 +39,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub])
+        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub, :nats])
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -166,6 +167,18 @@ defmodule Sequin.Factory.ConsumersFactory do
         database: 0,
         tls: false,
         stream_key: Factory.word()
+      },
+      attrs
+    )
+  end
+
+  defp sink(:nats, _account_id, attrs) do
+    merge_attributes(
+      %NatsSink{
+        type: :nats,
+        host: "localhost",
+        port: 4222,
+        subject: Factory.word()
       },
       attrs
     )

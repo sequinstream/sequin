@@ -19,6 +19,7 @@
     KafkaConsumer,
     SequinStreamConsumer,
     GcpPubsubConsumer,
+    NatsConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SinkCardSqs from "../components/SinkCardSqs.svelte";
@@ -26,6 +27,7 @@
   import SinkCardKafka from "../components/SinkCardKafka.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
+  import SinkCardNats from "../components/SinkCardNats.svelte";
   export let live;
   export let parent;
   export let consumer: Consumer;
@@ -67,6 +69,10 @@
 
   function isKafkaConsumer(consumer: Consumer): consumer is KafkaConsumer {
     return consumer.sink.type === "kafka";
+  }
+
+  function isNatsConsumer(consumer: Consumer): consumer is NatsConsumer {
+    return consumer.sink.type === "nats";
   }
 
   function isGcpPubsubConsumer(
@@ -255,6 +261,8 @@
         <SinkCardGcpPubSub {consumer} />
       {:else if isSequinStreamConsumer(consumer)}
         <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
+      {:else if isNatsConsumer(consumer)}
+        <SinkCardNats {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

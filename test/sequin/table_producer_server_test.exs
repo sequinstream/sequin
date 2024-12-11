@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
+defmodule Sequin.DatabasesRuntime.BackfillServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
@@ -8,8 +8,8 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
   alias Sequin.Databases
   # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.TableProducer
-  alias Sequin.DatabasesRuntime.TableProducerServer
+  alias Sequin.DatabasesRuntime.BackfillProducer
+  alias Sequin.DatabasesRuntime.BackfillServer
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -125,7 +125,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
      sequence_filter: sequence_filter}
   end
 
-  describe "TableProducerServer" do
+  describe "BackfillServer" do
     test "processes only characters after initial_min_cursor", %{
       consumer: consumer,
       table_oid: table_oid,
@@ -145,7 +145,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: Repo.reload(consumer),
              page_size: page_size,
@@ -156,7 +156,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       Process.monitor(pid)
 
-      # Wait for the TableProducerServer to finish processing
+      # Wait for the BackfillServer to finish processing
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
 
       # Fetch ConsumerRecords from the database
@@ -175,7 +175,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         assert consumer_record.record_pks == [to_string(character.id)]
       end
 
-      cursor = TableProducer.fetch_cursors(consumer.id)
+      cursor = BackfillProducer.fetch_cursors(consumer.id)
       # Cursor should be nil after completion
       assert cursor == :error
 
@@ -197,7 +197,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: consumer,
              page_size: page_size,
@@ -232,7 +232,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: consumer,
              page_size: page_size,
@@ -274,7 +274,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: filtered_consumer,
              page_size: page_size,
@@ -285,7 +285,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       Process.monitor(pid)
 
-      # Wait for the TableProducerServer to finish processing
+      # Wait for the BackfillServer to finish processing
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
 
       # Fetch ConsumerRecords from the database
@@ -309,7 +309,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
       processed_ids = Enum.flat_map(consumer_records, & &1.record_pks)
       assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
 
-      cursor = TableProducer.fetch_cursors(filtered_consumer.id)
+      cursor = BackfillProducer.fetch_cursors(filtered_consumer.id)
       # Cursor should be nil after completion
       assert cursor == :error
 
@@ -327,7 +327,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: event_consumer,
              page_size: page_size,
@@ -357,7 +357,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
         assert is_map(consumer_event.data)
       end
 
-      cursor = TableProducer.fetch_cursors(event_consumer.id)
+      cursor = BackfillProducer.fetch_cursors(event_consumer.id)
       assert cursor == :error
 
       # Verify that the consumer's backfill has been updated
@@ -375,7 +375,7 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       pid =
         start_supervised!(
-          {TableProducerServer,
+          {BackfillServer,
            [
              consumer: consumer,
              page_size: 1,
@@ -388,14 +388,14 @@ defmodule Sequin.DatabasesRuntime.TableProducerServerTest do
 
       Process.monitor(pid)
 
-      assert_receive {TableProducerServer, :paused}, 1000
+      assert_receive {BackfillServer, :paused}, 1000
 
       # Now clear the messages
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> Repo.delete_all()
 
-      # Wait for the TableProducerServer to finish processing
+      # Wait for the BackfillServer to finish processing
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
     end
   end

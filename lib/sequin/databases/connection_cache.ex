@@ -27,9 +27,10 @@ defmodule Sequin.Databases.ConnectionCache do
   defmodule Cache do
     @moduledoc false
 
+    @type conn :: pid() | atom()
     @type database :: PostgresDatabase.t()
     @type entry :: %{
-            conn: pid() | atom(),
+            conn: conn(),
             options_hash: binary()
           }
     @type t :: %{binary() => entry()}
@@ -64,7 +65,7 @@ defmodule Sequin.Databases.ConnectionCache do
       end
     end
 
-    @spec pop(t(), database()) :: {pid() | nil, t()}
+    @spec pop(t(), database()) :: {conn() | nil, t()}
     def pop(cache, db) do
       {entry, new_cache} = Map.pop(cache, db.id, nil)
 
@@ -149,7 +150,11 @@ defmodule Sequin.Databases.ConnectionCache do
     def invalidate_connection(%__MODULE__{} = state, db) do
       {conn, new_cache} = Cache.pop(state.cache, db)
 
-      if conn, do: state.stop_fn.(conn)
+      # We don't want to accidentally kill the Sequin.Repo connection, which we can store in the
+      # ConnectionCache during test. Leads to very hard to debug error!
+      if not is_nil(conn) and conn != Sequin.Repo do
+        state.stop_fn.(conn)
+      end
 
       %{state | cache: new_cache}
     end

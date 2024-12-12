@@ -126,7 +126,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
   end
 
   describe "BackfillServer" do
-    test "processes only characters after initial_min_cursor", %{
+    test "processes records in batches", %{
       consumer: consumer,
       table_oid: table_oid,
       characters: characters
@@ -156,8 +156,11 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       Process.monitor(pid)
 
-      # Wait for the BackfillServer to finish processing
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      for n <- 1..2 do
+        assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
+
+        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: []})
+      end
 
       # Fetch ConsumerRecords from the database
       consumer_records =
@@ -168,6 +171,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       # We expect only 5 records (the last 5 characters)
       assert length(consumer_records) == 5
+      assert Enum.frequencies_by(consumer_records, & &1.seq) == %{1 => 3, 2 => 2}
 
       # Verify that the records match the last 5 inserted characters
       for {consumer_record, character} <- Enum.zip(consumer_records, Enum.drop(characters, 3)) do
@@ -175,19 +179,68 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         assert consumer_record.record_pks == [to_string(character.id)]
       end
 
-      cursor = BackfillProducer.fetch_cursors(consumer.id)
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
+
+      cursor = BackfillProducer.cursor(consumer.active_backfill.id)
       # Cursor should be nil after completion
-      assert cursor == :error
+      assert cursor == nil
 
       # Verify that the consumer's backfill has been updated
       consumer = Repo.preload(consumer, :active_backfill, force: true)
       refute consumer.active_backfill
     end
 
+    test "handles batch flushing with dropped PKs", %{
+      consumer: consumer,
+      table_oid: table_oid,
+      characters: characters
+    } do
+      page_size = 3
+
+      pid =
+        start_supervised!(
+          {BackfillServer,
+           [
+             consumer: consumer,
+             page_size: page_size,
+             table_oid: table_oid,
+             test_pid: self()
+           ]}
+        )
+
+      Process.monitor(pid)
+
+      {dropped_characters, kept_characters} = characters |> Enum.shuffle() |> Enum.split(3)
+
+      dropped_pks = Enum.map(dropped_characters, fn character -> %{"id" => character.id} end)
+
+      for n <- 1..3 do
+        assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
+
+        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
+      end
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
+
+      # Verify records
+      consumer_records =
+        consumer.id
+        |> ConsumerRecord.where_consumer_id()
+        |> Repo.all()
+        |> Enum.sort_by(& &1.id)
+
+      assert length(consumer_records) == length(kept_characters)
+
+      processed_ids = Enum.map(consumer_records, fn r -> List.first(r.record_pks) end)
+      assert Enum.all?(kept_characters, fn character -> to_string(character.id) in processed_ids end)
+      refute Enum.any?(dropped_characters, fn character -> to_string(character.id) in processed_ids end)
+    end
+
     test "sets group_id based on PKs when group_column_attnums is nil", %{
       consumer: consumer,
       table_oid: table_oid,
-      sequence_filter: sequence_filter
+      sequence_filter: sequence_filter,
+      characters: characters
     } do
       page_size = 3
 
@@ -206,14 +259,14 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
            ]}
         )
 
-      Process.monitor(pid)
-
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      flush_batches(pid)
 
       consumer_records =
         consumer.id
         |> ConsumerRecord.where_consumer_id()
         |> Repo.all()
+
+      assert length(consumer_records) == length(characters)
 
       assert Enum.all?(consumer_records, &(&1.group_id == Enum.join(&1.record_pks, ",")))
     end
@@ -241,9 +294,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
            ]}
         )
 
-      Process.monitor(pid)
-
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      flush_batches(pid)
 
       consumer_records =
         consumer.id
@@ -283,10 +334,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
            ]}
         )
 
-      Process.monitor(pid)
-
-      # Wait for the BackfillServer to finish processing
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      flush_batches(pid)
 
       # Fetch ConsumerRecords from the database
       consumer_records =
@@ -337,9 +385,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
            ]}
         )
 
-      Process.monitor(pid)
-
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      flush_batches(pid)
 
       consumer_events =
         event_consumer.id
@@ -380,7 +426,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
           {BackfillServer,
            [
              consumer: consumer,
-             page_size: 1,
+             page_size: 7,
              table_oid: table_oid,
              test_pid: self(),
              max_pending_messages: max_pending_messages,
@@ -389,6 +435,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         )
 
       Process.monitor(pid)
+      assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
+      assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: []})
 
       assert_receive {BackfillServer, :paused}, 1000
 
@@ -397,8 +445,24 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       |> ConsumerRecord.where_consumer_id()
       |> Repo.delete_all()
 
-      # Wait for the BackfillServer to finish processing
-      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 5000
+      flush_batches(pid)
+    end
+  end
+
+  defp flush_batches(pid, seq \\ 0, message_history \\ []) do
+    Process.monitor(pid)
+
+    receive do
+      {BackfillServer, {:batch_fetched, batch_id}} = msg ->
+        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: []})
+
+        flush_batches(pid, seq + 1, [msg | message_history])
+
+      {:DOWN, _ref, :process, ^pid, :normal} ->
+        :ok
+    after
+      1000 ->
+        raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
     end
   end
 end

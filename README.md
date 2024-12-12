@@ -31,7 +31,7 @@ Change data capture enables applications and services to track and respond to ro
 
 Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store sink state.
 
-Unlike Debezium, another change data capture tool, Sequin doesn't require Kafka or Zookeeper to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
+Unlike Debezium, another change data capture tool, Sequin doesn't require Kafka to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
 
 Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
@@ -104,11 +104,11 @@ Postgres Performance is highly dependent on machine resources. But to give you a
 
 ### Sequin vs Debezium
 
-Debezium is also a change data capture tool that captures changes from Postgres and streams them to messaging systems like Kafka. Debezium requires significant infrastructure (Kafka, Zookeeper, Connect) to operate.
+Debezium is also a change data capture tool that captures changes from Postgres and streams them to messaging systems like Kafka. Debezium requires significant infrastructure (Kafka, Connect) to operate.
 
 Sequin provides the same change data capture capabilities but with a much simpler setup:
 
-1. **No Kafka required**: Sequin doesn't require Kafka or Zookeeper.
+1. **No Kafka required**: Sequin doesn't require Kafka.
 2. **Native destinations**: With Debezium, you route to destinations via Kafka Connect. With Sequin, you stream directly to your destination of choice. This means simpler setup, fewer transforms, and fewer moving parts.
 3. **Full-featured web console**: Sequin includes a web console for configuration and monitoring.
 

@@ -24,6 +24,10 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     GenStateMachine.start_link(__MODULE__, opts, name: via_tuple({consumer.id, table_oid}))
   end
 
+  def flush_batch(server, batch_info) do
+    GenStateMachine.call(server, {:flush_batch, batch_info})
+  end
+
   def via_tuple({consumer_id, table_oid}) do
     {:via, :syn, {:replication, {__MODULE__, {consumer_id, table_oid}}}}
   end
@@ -64,15 +68,17 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
 
     typedstruct do
       field :consumer, String.t()
-      field :cursor_max, map()
-      field :cursor_min, map()
+      field :cursor, map()
       field :page_size, integer()
       field :task_ref, reference()
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
       field :max_pending_messages, integer()
+      field :max_pending_batches, integer()
       field :consumer_reload_timeout, integer()
+      field :batches, map(), default: %{}
+      field :current_batch_id, String.t()
     end
   end
 
@@ -89,13 +95,18 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
+    page_size = Keyword.get(opts, :page_size, 1000)
+
     state = %State{
       consumer: consumer,
-      page_size: Keyword.get(opts, :page_size, 1000),
+      page_size: page_size,
       test_pid: test_pid,
       table_oid: Keyword.fetch!(opts, :table_oid),
       max_pending_messages: max_pending_messages,
-      consumer_reload_timeout: Keyword.get(opts, :consumer_reload_timeout, :timer.seconds(30))
+      # Default to 100_000 rows
+      max_pending_batches: Keyword.get(opts, :max_pending_batches, div(100_000, page_size)),
+      consumer_reload_timeout: Keyword.get(opts, :consumer_reload_timeout, :timer.seconds(30)),
+      batches: %{}
     }
 
     actions = [
@@ -119,13 +130,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         {:stop, :normal}
 
       backfill ->
-        cursor_min = BackfillProducer.cursor(backfill.id, :min)
-        cursor_min = cursor_min || backfill.initial_min_cursor
-        state = %{state | cursor_min: cursor_min}
+        cursor = BackfillProducer.cursor(backfill.id)
+        cursor = cursor || backfill.initial_min_cursor
+        state = %{state | cursor: cursor}
 
         # Add initial count if not set
         if is_nil(backfill.rows_initial_count) do
-          case BackfillProducer.fast_count_estimate(database(state), table(state), cursor_min) do
+          case BackfillProducer.fast_count_estimate(database(state), table(state), cursor) do
             {:ok, count} ->
               Consumers.update_backfill(backfill, %{rows_initial_count: count})
 
@@ -136,12 +147,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
 
         actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
 
-        {:next_state, :query_max_cursor, state, actions}
+        {:next_state, :fetch_batch, state, actions}
     end
   end
 
-  def handle_event(:enter, _old_state, :query_max_cursor, state) do
-    include_min = state.cursor_min == initial_min_cursor(state.consumer)
+  def handle_event(:enter, _old_state, :fetch_batch, state) do
+    include_min = state.cursor == initial_min_cursor(state.consumer)
+    current_batch_id = UUID.uuid4()
 
     task =
       Task.Supervisor.async_nolink(
@@ -149,82 +161,55 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          BackfillProducer.fetch_max_cursor(
-            database(state),
-            table(state),
-            state.cursor_min,
-            limit: state.page_size,
-            include_min: include_min
-          )
+          BackfillProducer.with_watermark(database(state), current_batch_id, table_oid(state.consumer), fn t_conn ->
+            BackfillProducer.fetch_batch(
+              t_conn,
+              table(state),
+              state.cursor,
+              limit: state.page_size,
+              include_min: include_min
+            )
+          end)
         end,
         timeout: 60_000
       )
 
-    {:keep_state, %{state | task_ref: task.ref}}
+    {:keep_state, %{state | task_ref: task.ref, current_batch_id: current_batch_id}}
   end
 
-  def handle_event(:info, {ref, {:ok, nil}}, :query_max_cursor, %State{task_ref: ref} = state) do
+  def handle_event(:info, {ref, {:ok, [], nil}}, :fetch_batch, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
-    Logger.info("[BackfillServer] Max cursor query returned nil. Table pagination complete.")
-    Consumers.backfill_producer_finished(state.consumer.id)
-    BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
+    Logger.info("[BackfillServer] Query returned no records. Table pagination complete.")
 
-    {:stop, :normal}
-  end
-
-  def handle_event(:info, {ref, {:ok, result}}, :query_max_cursor, %State{task_ref: ref} = state) do
-    Process.demonitor(ref, [:flush])
-    :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, :max, result)
-    state = %{state | cursor_max: result, task_ref: nil, successive_failure_count: 0}
-
-    {:next_state, :query_fetch_records, state}
-  end
-
-  @page_size_multiplier 3
-  def handle_event(:enter, _old_state, :query_fetch_records, state) do
-    include_min = state.cursor_min == initial_min_cursor(state.consumer)
-
-    task =
-      Task.Supervisor.async_nolink(
-        Sequin.TaskSupervisor,
-        fn ->
-          maybe_setup_allowances(state.test_pid)
-
-          BackfillProducer.fetch_records_in_range(
-            database(state),
-            table(state),
-            state.cursor_min,
-            state.cursor_max,
-            limit: state.page_size * @page_size_multiplier,
-            include_min: include_min
-          )
-        end,
-        timeout: 60_000
-      )
-
-    {:keep_state, %{state | task_ref: task.ref}}
-  end
-
-  def handle_event(:info, {ref, {:ok, result}}, :query_fetch_records, %State{task_ref: ref} = state) do
-    Process.demonitor(ref, [:flush])
-    # Reset failure count on success
-    state = %{state | task_ref: nil, successive_failure_count: 0}
-
-    if length(result) == state.page_size * @page_size_multiplier do
-      if state.test_pid do
-        send(state.test_pid, {__MODULE__, :page_limit_reached})
-      end
-
-      # This happens if a lot of records were suddenly committed inside of our page. We got back way
-      # more results than expected.
-      Logger.info("[BackfillServer] Fetch records result size equals the limit. Resetting process.")
-      {:next_state, :query_max_cursor, state}
+    if state.batches == %{} do
+      Consumers.backfill_producer_finished(state.consumer.id)
+      BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
+      {:stop, :normal}
     else
-      # Call handle_records inline
-      {:ok, _count, consumer} = handle_records(state.consumer, table(state), result)
-      :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, :min, state.cursor_max)
-      state = %State{state | cursor_min: state.cursor_max, cursor_max: nil, consumer: consumer}
-      {:next_state, :query_max_cursor, state}
+      {:next_state, :done_fetching, state}
+    end
+  end
+
+  def handle_event(:info, {ref, {:ok, result, next_cursor}}, :fetch_batch, %State{task_ref: ref} = state) do
+    Process.demonitor(ref, [:flush])
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, {:batch_fetched, state.current_batch_id}})
+    end
+
+    state = %{
+      state
+      | cursor: next_cursor,
+        task_ref: nil,
+        current_batch_id: nil,
+        successive_failure_count: 0,
+        batches: Map.put(state.batches, state.current_batch_id, %{batch: result, cursor: next_cursor})
+    }
+
+    if map_size(state.batches) < state.max_pending_batches do
+      {:repeat_state, state}
+    else
+      {:next_state, {:paused, :max_pending_batches}, state}
     end
   end
 
@@ -280,21 +265,24 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
             Logger.info("[BackfillServer] No active backfill found, shutting down")
             {:stop, :normal}
 
+          state_name == :done_fetching ->
+            {:keep_state_and_data, actions}
+
           # If there are too many pending messages, pause the backfill
-          message_count > state.max_pending_messages and state_name != :paused ->
+          message_count > state.max_pending_messages and state_name != {:paused, :max_pending_messages} ->
             if state.test_pid do
               send(state.test_pid, {__MODULE__, :paused})
             end
 
             Logger.info("[BackfillServer] Pausing backfill for consumer #{consumer.id} due to many pending messages")
-            {:next_state, :paused, state, actions}
+            {:next_state, {:paused, :max_pending_messages}, state, actions}
 
-          message_count > state.max_pending_messages and state_name == :paused ->
+          message_count > state.max_pending_messages and state_name == {:paused, :max_pending_messages} ->
             {:keep_state_and_data, actions}
 
-          state_name == :paused ->
+          state_name == {:paused, :max_pending_messages} ->
             Logger.info("[BackfillServer] Resuming backfill for consumer #{consumer.id}")
-            {:next_state, :query_max_cursor, %{state | consumer: consumer}, actions}
+            {:next_state, :fetch_batch, %{state | consumer: consumer}, actions}
 
           true ->
             {:keep_state, %{state | consumer: consumer}, actions}
@@ -303,13 +291,68 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   end
 
   # Ignore results that come back after we've paused
-  def handle_event(:info, {ref, _}, :paused, %State{task_ref: ref} = state) do
+  def handle_event(:info, {ref, _}, {:paused, :max_pending_messages}, %State{task_ref: ref} = state) do
     Process.demonitor(ref, [:flush])
     {:keep_state, %{state | task_ref: nil}}
   end
 
-  def handle_event(:enter, _old_state, :paused, _state) do
+  def handle_event(:enter, _old_state, {:paused, :max_pending_messages}, _state) do
     :keep_state_and_data
+  end
+
+  def handle_event(:enter, _old_state, {:paused, :max_pending_batches}, _state) do
+    :keep_state_and_data
+  end
+
+  def handle_event(:enter, _old_state, :done_fetching, _state) do
+    :keep_state_and_data
+  end
+
+  def handle_event({:call, from}, {:flush_batch, %{batch_id: batch_id, seq: seq, drop_pks: drop_pks}}, state_name, state) do
+    {%{batch: batch, cursor: cursor}, state} = pop_in(state, [Access.key(:batches), batch_id])
+
+    pk_columns =
+      table(state).columns
+      |> Enum.filter(& &1.is_pk?)
+      |> Enum.map(& &1.name)
+
+    # Make a map of the rows by their primary keys
+    filtered_batch =
+      batch
+      |> Map.new(fn row ->
+        {Map.take(row, pk_columns), row}
+      end)
+      # Then reject any rows that match the drop_pks
+      |> Enum.reject(fn {pk_map, _row} ->
+        Enum.any?(drop_pks, fn drop_pk -> Map.equal?(pk_map, drop_pk) end)
+      end)
+      # Then "unwrap" the map into a list of rows
+      |> Enum.map(fn {_pk_map, row} -> row end)
+
+    map_size_diff = length(batch) - length(filtered_batch)
+
+    if map_size_diff > 0 do
+      Logger.info("[BackfillServer] Dropped #{map_size_diff} rows from batch #{batch_id}")
+    end
+
+    {:ok, _count, consumer} = handle_records(state.consumer, table(state), seq, filtered_batch)
+    state = %State{state | consumer: consumer}
+
+    :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, cursor)
+
+    case state_name do
+      {:paused, :max_pending_batches} ->
+        {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
+
+      :done_fetching when state.batches == %{} ->
+        Consumers.backfill_producer_finished(state.consumer.id)
+        BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
+        GenServer.reply(from, :ok)
+        {:stop, :normal}
+
+      _ ->
+        {:keep_state, state, [{:reply, from, :ok}]}
+    end
   end
 
   defp reload_consumer_timeout(timeout) do
@@ -338,7 +381,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   end
 
   # Message handling
-  defp handle_records(consumer, table, records) do
+  defp handle_records(consumer, table, seq, records) do
     Logger.info("[BackfillServer] Handling #{length(records)} record(s)")
 
     records_by_column_attnum = records_by_column_attnum(table, records)
@@ -348,8 +391,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
 
     {:ok, count} =
       case consumer.message_kind do
-        :record -> handle_record_messages(consumer, table, matching_records)
-        :event -> handle_event_messages(consumer, table, matching_records)
+        :record -> handle_record_messages(consumer, table, seq, matching_records)
+        :event -> handle_event_messages(consumer, table, seq, matching_records)
       end
 
     {:ok, backfill} =
@@ -362,11 +405,12 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     {:ok, count, %{consumer | active_backfill: backfill}}
   end
 
-  defp handle_record_messages(consumer, table, matching_records) do
+  defp handle_record_messages(consumer, table, seq, matching_records) do
     consumer_records =
       Enum.map(matching_records, fn record_attnums_to_values ->
         Sequin.Map.from_ecto(%ConsumerRecord{
           consumer_id: consumer.id,
+          seq: seq,
           table_oid: table.oid,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(consumer, table, record_attnums_to_values),
@@ -377,11 +421,12 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     Consumers.insert_consumer_records(consumer_records)
   end
 
-  defp handle_event_messages(consumer, table, matching_records) do
+  defp handle_event_messages(consumer, table, seq, matching_records) do
     consumer_events =
       Enum.map(matching_records, fn record_attnums_to_values ->
         Sequin.Map.from_ecto(%ConsumerEvent{
           consumer_id: consumer.id,
+          seq: seq,
           # You may need to get this from somewhere
           commit_lsn: 0,
           record_pks: record_pks(table, record_attnums_to_values),

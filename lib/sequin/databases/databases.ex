@@ -161,11 +161,23 @@ defmodule Sequin.Databases do
   def find_sequence_for_account(account_id, params \\ []) do
     params
     |> Enum.reduce(Sequence.where_account(account_id), fn
-      {:id, id}, query -> Sequence.where_id(query, id)
-      {:table_schema, table_schema}, query -> Sequence.where_table_schema(query, table_schema)
-      {:table_name, table_name}, query -> Sequence.where_table_name(query, table_name)
-      {:name, name}, query -> Sequence.where_name(query, name)
-      {:table_oid, table_oid}, query -> Sequence.where_table_oid(query, table_oid)
+      {:id, id}, query ->
+        Sequence.where_id(query, id)
+
+      {:table_schema, table_schema}, query ->
+        Sequence.where_table_schema(query, table_schema)
+
+      {:table_name, table_name}, query ->
+        Sequence.where_table_name(query, table_name)
+
+      {:name, name}, query ->
+        Sequence.where_name(query, name)
+
+      {:table_oid, table_oid}, query ->
+        Sequence.where_table_oid(query, table_oid)
+
+      {:postgres_database_id, postgres_database_id}, query ->
+        Sequence.where_postgres_database_id(query, postgres_database_id)
     end)
     |> Repo.one()
     |> case do

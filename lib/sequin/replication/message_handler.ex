@@ -120,7 +120,18 @@ defmodule Sequin.Replication.MessageHandler do
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
     end)
 
-    res
+    case res do
+      {:ok, count} ->
+        {:ok, count, ctx}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @impl MessageHandlerBehaviour
+  def handle_logical_message(ctx, _msg) do
+    ctx
   end
 
   defp consumer_event(consumer, message) do

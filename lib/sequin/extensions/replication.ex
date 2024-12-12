@@ -21,6 +21,7 @@ defmodule Sequin.Extensions.Replication do
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Commit
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Delete
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
+  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Health
@@ -180,7 +181,7 @@ defmodule Sequin.Extensions.Replication do
     {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)
 
     query =
-      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
+      "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
 
     {:stream, query, [],
      %{state | step: :streaming, connect_attempts: state.connect_attempts + 1, last_processed_seq: last_processed_seq}}
@@ -443,6 +444,26 @@ defmodule Sequin.Extensions.Replication do
     state
   end
 
+  # defp process_message(%LogicalMessage{prefix: @backfill_batch_wm_start} = msg, state) do
+  #   %{table_oid: table_oid, batch_id: batch_id} = Jason.decode!(msg.content)
+  #   Map.update!(state, :backfill_)
+  #   state
+  # end
+
+  # defp process_message(%LogicalMessage{prefix: @backfill_batch_wm_end} = msg, state) do
+  #   state
+  # end
+
+  defp process_message(%LogicalMessage{prefix: "sequin:" <> _} = msg, state) do
+    message_handler_ctx = state.message_handler_module.handle_logical_message(state.message_handler_ctx, msg)
+    %{state | message_handler_ctx: message_handler_ctx}
+  end
+
+  # Ignore other logical messages
+  defp process_message(%LogicalMessage{}, state) do
+    state
+  end
+
   defp process_message(msg, state) do
     Logger.error("Unknown message: #{inspect(msg)}")
     state
@@ -466,13 +487,14 @@ defmodule Sequin.Extensions.Replication do
     if Enum.any?(messages) do
       next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
       # Flush accumulated messages
-      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+      {:ok, _count, message_handler_ctx} =
+        state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})
       end
 
-      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq}
+      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: message_handler_ctx}
     else
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})

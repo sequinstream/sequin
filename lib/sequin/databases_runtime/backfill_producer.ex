@@ -8,6 +8,8 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
   require Logger
 
   # Cursor
+  # Note: We previously had min and max cursors. We're switching to just use min cursors.
+  # We are keeping around the HSET data structure for now to allow for backwards compatibility.
   def fetch_cursors(backfill_id) do
     case Redix.command(:redix, ["HGETALL", cursor_key(backfill_id)]) do
       {:ok, []} ->
@@ -23,15 +25,15 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
     end
   end
 
-  def cursor(backfill_id, type) when type in [:min, :max] do
-    case Redix.command(:redix, ["HGET", cursor_key(backfill_id), type]) do
+  def cursor(backfill_id) do
+    case Redix.command(:redix, ["HGET", cursor_key(backfill_id), "min"]) do
       {:ok, nil} -> nil
       {:ok, cursor} -> decode_cursor(cursor)
     end
   end
 
-  def update_cursor(backfill_id, type, cursor) when type in [:min, :max] do
-    with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(backfill_id), type, Jason.encode!(cursor)]) do
+  def update_cursor(backfill_id, cursor) do
+    with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(backfill_id), "min", Jason.encode!(cursor)]) do
       :ok
     end
   end
@@ -76,89 +78,148 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
   end
 
   # Queries
-  def fetch_records_in_range(db, table, min_cursor, max_cursor, opts \\ [])
+  def with_watermark(%PostgresDatabase{} = db, current_batch_id, table_oid, fun) do
+    table_and_batch = "#{table_oid}:#{current_batch_id}"
 
-  def fetch_records_in_range(_db, _table, min_cursor, max_cursor, _opts)
-      when map_size(max_cursor) == 0 or is_nil(max_cursor) or map_size(min_cursor) == 0 or is_nil(min_cursor),
-      do: raise(ArgumentError, "cursors cannot be empty")
+    res =
+      Postgres.transaction(db, fn t_conn ->
+        Postgres.query(t_conn, "select pg_logical_emit_message(true, 'backfill_batch_wm_start', $1)", [table_and_batch])
+        res = fun.(t_conn)
+        Postgres.query(t_conn, "select pg_logical_emit_message(true, 'backfill_batch_wm_end', $1)", [table_and_batch])
+        res
+      end)
 
-  def fetch_records_in_range(%PostgresDatabase{} = db, %Table{} = table, min_cursor, max_cursor, opts) do
-    order_by_clause = KeysetCursor.order_by_sql(table)
-
-    include_min = Keyword.get(opts, :include_min, false)
-    min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
-    min_cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
-
-    max_where_clause = KeysetCursor.where_sql(table, "<=")
-    max_cursor_values = KeysetCursor.casted_cursor_values(table, max_cursor)
-
-    limit = Keyword.get(opts, :limit, 1000)
-
-    select_columns = Postgres.safe_select_columns(table)
-
-    sql =
-      """
-      select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)}
-      where #{min_where_clause} and #{max_where_clause}
-      order by #{order_by_clause}
-      limit ?
-      """
-
-    sql = Postgres.parameterize_sql(sql)
-
-    # Careful about ordering! Note order of `?` above
-    params = min_cursor_values ++ max_cursor_values ++ [limit]
-
-    with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
-      result = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
-      {:ok, result}
+    case res do
+      {:ok, res} -> res
+      error -> error
     end
   end
 
-  def fetch_max_cursor(%PostgresDatabase{} = db, %Table{} = table, min_cursor, opts \\ []) do
-    select_columns =
-      table
-      |> KeysetCursor.cursor_columns()
-      |> Enum.map_join(", ", fn %Table.Column{} = col -> Postgres.quote_name(col.name) end)
-
-    {inner_sql, params} = fetch_window_query(table, select_columns, min_cursor, opts)
-
-    sql = """
-    with window_data as (
-      #{inner_sql}
-    )
-    select #{select_columns}
-    from window_data
-    where row_num = (select max(row_num) from window_data)
-    """
-
-    sql = Postgres.parameterize_sql(sql)
-
-    with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
-      case result.num_rows do
-        0 -> {:ok, nil}
-        _ -> {:ok, KeysetCursor.cursor_from_result(table, result)}
-      end
-    end
-  end
-
-  defp fetch_window_query(%Table{} = table, select_columns, min_cursor, opts) do
+  def fetch_batch(db_or_conn, %Table{} = table, min_cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, 1000)
     include_min = Keyword.get(opts, :include_min, false)
+
     order_by = KeysetCursor.order_by_sql(table)
     min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
     cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
 
+    select_columns = Postgres.safe_select_columns(table)
+
     sql = """
-    select #{select_columns}, row_number() over (order by #{order_by}) as row_num
+    select #{select_columns}
     from #{Postgres.quote_name(table.schema, table.name)}
     where #{min_where_clause}
     order by #{order_by}
     limit ?
     """
 
-    {sql, cursor_values ++ [limit]}
+    sql = Postgres.parameterize_sql(sql)
+    params = cursor_values ++ [limit]
+
+    case Postgres.query(db_or_conn, sql, params) do
+      {:ok, %Postgrex.Result{num_rows: 0}} ->
+        {:ok, [], nil}
+
+      {:ok, %Postgrex.Result{} = result} ->
+        records = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
+        last_row = List.last(records)
+
+        next_cursor =
+          case records do
+            [] -> nil
+            _records -> KeysetCursor.cursor_from_row(table, last_row)
+          end
+
+        {:ok, records, next_cursor}
+
+      error ->
+        error
+    end
   end
+
+  # def fetch_records_in_range(db, table, min_cursor, max_cursor, opts \\ [])
+
+  # def fetch_records_in_range(_db, _table, min_cursor, max_cursor, _opts)
+  #     when map_size(max_cursor) == 0 or is_nil(max_cursor) or map_size(min_cursor) == 0 or is_nil(min_cursor),
+  #     do: raise(ArgumentError, "cursors cannot be empty")
+
+  # def fetch_records_in_range(%PostgresDatabase{} = db, %Table{} = table, min_cursor, max_cursor, opts) do
+  #   order_by_clause = KeysetCursor.order_by_sql(table)
+
+  #   include_min = Keyword.get(opts, :include_min, false)
+  #   min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
+  #   min_cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
+
+  #   max_where_clause = KeysetCursor.where_sql(table, "<=")
+  #   max_cursor_values = KeysetCursor.casted_cursor_values(table, max_cursor)
+
+  #   limit = Keyword.get(opts, :limit, 1000)
+
+  #   select_columns = Postgres.safe_select_columns(table)
+
+  #   sql =
+  #     """
+  #     select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)}
+  #     where #{min_where_clause} and #{max_where_clause}
+  #     order by #{order_by_clause}
+  #     limit ?
+  #     """
+
+  #   sql = Postgres.parameterize_sql(sql)
+
+  #   # Careful about ordering! Note order of `?` above
+  #   params = min_cursor_values ++ max_cursor_values ++ [limit]
+
+  #   with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
+  #     result = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
+  #     {:ok, result}
+  #   end
+  # end
+
+  # def fetch_max_cursor(%PostgresDatabase{} = db, %Table{} = table, min_cursor, opts \\ []) do
+  #   select_columns =
+  #     table
+  #     |> KeysetCursor.cursor_columns()
+  #     |> Enum.map_join(", ", fn %Table.Column{} = col -> Postgres.quote_name(col.name) end)
+
+  #   {inner_sql, params} = fetch_window_query(table, select_columns, min_cursor, opts)
+
+  #   sql = """
+  #   with window_data as (
+  #     #{inner_sql}
+  #   )
+  #   select #{select_columns}
+  #   from window_data
+  #   where row_num = (select max(row_num) from window_data)
+  #   """
+
+  #   sql = Postgres.parameterize_sql(sql)
+
+  #   with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
+  #     case result.num_rows do
+  #       0 -> {:ok, nil}
+  #       _ -> {:ok, KeysetCursor.cursor_from_result(table, result)}
+  #     end
+  #   end
+  # end
+
+  # defp fetch_window_query(%Table{} = table, select_columns, min_cursor, opts) do
+  #   limit = Keyword.get(opts, :limit, 1000)
+  #   include_min = Keyword.get(opts, :include_min, false)
+  #   order_by = KeysetCursor.order_by_sql(table)
+  #   min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
+  #   cursor_values = KeysetCursor.casted_cursor_values(table, min_cursor)
+
+  #   sql = """
+  #   select #{select_columns}, row_number() over (order by #{order_by}) as row_num
+  #   from #{Postgres.quote_name(table.schema, table.name)}
+  #   where #{min_where_clause}
+  #   order by #{order_by}
+  #   limit ?
+  #   """
+
+  #   {sql, cursor_values ++ [limit]}
+  # end
 
   defp parse_uuids(columns, map) do
     uuid_columns = Enum.filter(columns, &(&1.type == "uuid"))
@@ -204,7 +265,7 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
 
         _ ->
           [row] = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
-          {:ok, row, KeysetCursor.cursor_from_result(table, result)}
+          {:ok, row, KeysetCursor.cursor_from_row(table, row)}
       end
     end
   end

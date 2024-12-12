@@ -165,6 +165,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             properties: %{
               database_id: database.id,
               database_name: database.name,
+              database_hostname: database.hostname,
               "$groups": %{account: database.account_id}
             }
           })

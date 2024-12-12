@@ -19,42 +19,39 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   # Client API
 
   def start_link(opts \\ []) do
-    consumer = Keyword.fetch!(opts, :consumer)
-    table_oid = Keyword.fetch!(opts, :table_oid)
-    GenStateMachine.start_link(__MODULE__, opts, name: via_tuple({consumer.id, table_oid}))
+    id = Keyword.fetch!(opts, :id)
+    GenStateMachine.start_link(__MODULE__, opts, name: via_tuple(id))
   end
 
   def flush_batch(server, batch_info) do
     GenStateMachine.call(server, {:flush_batch, batch_info})
   end
 
-  def via_tuple({consumer_id, table_oid}) do
-    {:via, :syn, {:replication, {__MODULE__, {consumer_id, table_oid}}}}
-  end
-
   # Convenience function
   def via_tuple(%_{} = consumer) do
-    consumer = Repo.preload(consumer, :sequence)
-    via_tuple({consumer.id, consumer.sequence.table_oid})
+    consumer = Repo.preload(consumer, :active_backfill)
+    via_tuple(consumer.active_backfill.id)
+  end
+
+  def via_tuple(backfill_id) do
+    {:via, :syn, {:replication, {__MODULE__, backfill_id}}}
   end
 
   # Convenience function
-  def via_tuple(consumer_id) do
+  def via_tuple_for_consumer(consumer_id) do
     consumer =
       consumer_id
       |> Consumers.get_consumer!()
-      |> Repo.preload(:sequence)
+      |> Repo.preload(:active_backfill)
 
-    table_oid = table_oid(consumer)
-    via_tuple({consumer.id, table_oid})
+    via_tuple(consumer.active_backfill.id)
   end
 
   def child_spec(opts) do
-    consumer = Keyword.fetch!(opts, :consumer)
-    table_oid = Keyword.fetch!(opts, :table_oid)
+    id = Keyword.fetch!(opts, :id)
 
     %{
-      id: {__MODULE__, {consumer.id, table_oid}},
+      id: {__MODULE__, id},
       start: {__MODULE__, :start_link, [opts]},
       # Will get restarted by Starter in event of crash
       restart: :temporary,
@@ -66,8 +63,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Consumers.Backfill
+    alias Sequin.Consumers.SinkConsumer
+
     typedstruct do
-      field :consumer, String.t()
+      field :id, String.t()
+      field :backfill, Backfill.t()
+      field :consumer, SinkConsumer.t()
       field :cursor, map()
       field :page_size, integer()
       field :task_ref, reference()
@@ -88,9 +90,10 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   def init(opts) do
     test_pid = Keyword.get(opts, :test_pid)
     maybe_setup_allowances(test_pid)
-    consumer = opts |> Keyword.fetch!(:consumer) |> preload_consumer()
+    backfill = opts |> Keyword.fetch!(:id) |> Consumers.get_backfill!() |> Repo.preload(:sink_consumer)
+    consumer = preload_consumer(backfill.sink_consumer)
 
-    Logger.metadata(consumer_id: consumer.id)
+    Logger.metadata(consumer_id: consumer.id, backfill_id: backfill.id)
 
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
@@ -98,6 +101,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     page_size = Keyword.get(opts, :page_size, 1000)
 
     state = %State{
+      id: backfill.id,
+      backfill: backfill,
       consumer: consumer,
       page_size: page_size,
       test_pid: test_pid,
@@ -122,33 +127,26 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   end
 
   def handle_event(:internal, :init, :initializing, state) do
-    consumer = state.consumer
+    backfill = state.backfill
 
-    case consumer.active_backfill do
-      nil ->
-        Logger.info("[BackfillServer] No active backfill found, shutting down")
-        {:stop, :normal}
+    cursor = BackfillProducer.cursor(backfill.id)
+    cursor = cursor || backfill.initial_min_cursor
+    state = %{state | cursor: cursor}
 
-      backfill ->
-        cursor = BackfillProducer.cursor(backfill.id)
-        cursor = cursor || backfill.initial_min_cursor
-        state = %{state | cursor: cursor}
+    # Add initial count if not set
+    if is_nil(backfill.rows_initial_count) do
+      case BackfillProducer.fast_count_estimate(database(state), table(state), cursor) do
+        {:ok, count} ->
+          Consumers.update_backfill(backfill, %{rows_initial_count: count})
 
-        # Add initial count if not set
-        if is_nil(backfill.rows_initial_count) do
-          case BackfillProducer.fast_count_estimate(database(state), table(state), cursor) do
-            {:ok, count} ->
-              Consumers.update_backfill(backfill, %{rows_initial_count: count})
-
-            {:error, error} ->
-              Logger.error("[BackfillServer] Failed to get initial count: #{inspect(error)}")
-          end
-        end
-
-        actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
-
-        {:next_state, :fetch_batch, state, actions}
+        {:error, error} ->
+          Logger.error("[BackfillServer] Failed to get initial count: #{inspect(error)}")
+      end
     end
+
+    actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
+
+    {:next_state, :fetch_batch, state, actions}
   end
 
   def handle_event(:enter, _old_state, :fetch_batch, state) do
@@ -161,15 +159,21 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          BackfillProducer.with_watermark(database(state), current_batch_id, table_oid(state.consumer), fn t_conn ->
-            BackfillProducer.fetch_batch(
-              t_conn,
-              table(state),
-              state.cursor,
-              limit: state.page_size,
-              include_min: include_min
-            )
-          end)
+          BackfillProducer.with_watermark(
+            database(state),
+            state.id,
+            current_batch_id,
+            table_oid(state.consumer),
+            fn t_conn ->
+              BackfillProducer.fetch_batch(
+                t_conn,
+                table(state),
+                state.cursor,
+                limit: state.page_size,
+                include_min: include_min
+              )
+            end
+          )
         end,
         timeout: 60_000
       )

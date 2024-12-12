@@ -18,9 +18,9 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/jpillora/sizestr v1.0.0
 	github.com/r3labs/diff/v3 v3.0.1
-	golang.org/x/crypto v0.27.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/net v0.29.0
-	golang.org/x/sync v0.8.0
+	golang.org/x/sync v0.10.0
 	moul.io/http2curl v1.0.0
 )
 
@@ -43,7 +43,7 @@ require (
 	github.com/smartystreets/goconvey v1.8.1 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.3.5 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.24.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/sys v0.28.0 // indirect
+	golang.org/x/term v0.27.0 // indirect
+	golang.org/x/text v0.21.0 // indirect
 )

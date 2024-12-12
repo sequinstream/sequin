@@ -53,18 +53,10 @@ defmodule Sequin.Posthog do
   defp build_event(event, properties, timestamp) do
     {distinct_id, other_properties} = Map.pop(properties, :distinct_id)
 
-    # If self-hosted, remove PII from properties
-    properties =
-      if Application.get_env(:sequin, :self_hosted, false) do
-        Map.delete(other_properties.properties, :email)
-      else
-        other_properties.properties
-      end
-
     %{
       event: to_string(event),
       distinct_id: distinct_id,
-      properties: properties,
+      properties: other_properties.properties,
       timestamp: timestamp
     }
   end

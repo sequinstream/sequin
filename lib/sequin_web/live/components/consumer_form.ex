@@ -732,7 +732,7 @@ defmodule SequinWeb.Components.ConsumerForm do
        ) do
     sort_column_attnum = params["sort_column_attnum"]
 
-    case Databases.find_sequence_for_account(account_id, table_oid: table_oid) do
+    case Databases.find_sequence_for_account(account_id, postgres_database_id: postgres_database_id, table_oid: table_oid) do
       {:ok, sequence} ->
         {:ok, sequence}
 

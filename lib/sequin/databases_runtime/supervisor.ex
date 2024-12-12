@@ -21,11 +21,10 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   end
 
   def start_backfill_producer(supervisor \\ backfill_producer_supervisor(), consumer, opts \\ []) do
-    consumer = Repo.preload(consumer, :sequence, replication_slot: :postgres_database)
+    consumer = Repo.preload(consumer, :active_backfill)
 
     default_opts = [
-      consumer: consumer,
-      table_oid: consumer.sequence.table_oid
+      id: consumer.active_backfill.id
     ]
 
     opts = Keyword.merge(default_opts, opts)

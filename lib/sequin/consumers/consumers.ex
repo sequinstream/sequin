@@ -1668,6 +1668,10 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  def get_backfill!(id) do
+    Repo.get!(Backfill, id)
+  end
+
   def create_backfill_with_lifecycle(attrs) do
     with {:ok, backfill} <- create_backfill(attrs),
          :ok <- notify_backfill_create(backfill) do

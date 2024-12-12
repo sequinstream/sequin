@@ -4,6 +4,7 @@ defmodule Sequin.BackfillProducerTest do
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.BackfillProducer
+  alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
@@ -54,38 +55,28 @@ defmodule Sequin.BackfillProducerTest do
     end
 
     test "update_cursor and fetch_cursors work correctly", %{consumer_id: consumer_id} do
-      min_cursor = %{1 => "2023-01-01", 2 => 123}
-      max_cursor = %{1 => "2023-01-31", 2 => 456}
+      cursor = %{1 => "2023-01-01", 2 => 123}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
 
-      assert {:ok, %{"min" => ^min_cursor, "max" => ^max_cursor}} = BackfillProducer.fetch_cursors(consumer_id)
+      assert {:ok, %{"min" => ^cursor}} = BackfillProducer.fetch_cursors(consumer_id)
     end
 
-    test "cursor retrieves individual cursors", %{consumer_id: consumer_id} do
-      min_cursor = %{1 => "2023-02-01", 2 => 789}
-      max_cursor = %{1 => "2023-02-28", 2 => 1011}
+    test "cursor retrieves cursor value", %{consumer_id: consumer_id} do
+      cursor = %{1 => "2023-02-01", 2 => 789}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
-
-      assert ^min_cursor = BackfillProducer.cursor(consumer_id, :min)
-      assert ^max_cursor = BackfillProducer.cursor(consumer_id, :max)
+      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
+      assert ^cursor = BackfillProducer.cursor(consumer_id)
     end
 
     test "cursor returns nil for non-existent cursor", %{consumer_id: consumer_id} do
-      assert nil == BackfillProducer.cursor(consumer_id, :min)
-      assert nil == BackfillProducer.cursor(consumer_id, :max)
+      assert nil == BackfillProducer.cursor(consumer_id)
     end
 
-    test "delete_cursor removes all cursors", %{consumer_id: consumer_id} do
-      min_cursor = %{1 => "2023-03-01", 2 => 1213}
-      max_cursor = %{1 => "2023-03-31", 2 => 1415}
+    test "delete_cursor removes cursor", %{consumer_id: consumer_id} do
+      cursor = %{1 => "2023-03-01", 2 => 1213}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :min, min_cursor)
-      assert :ok == BackfillProducer.update_cursor(consumer_id, :max, max_cursor)
-
+      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
       assert {:ok, _} = BackfillProducer.fetch_cursors(consumer_id)
 
       assert :ok == BackfillProducer.delete_cursor(consumer_id)
@@ -93,234 +84,57 @@ defmodule Sequin.BackfillProducerTest do
     end
   end
 
-  describe "fetch_max_cursor/4" do
-    test "fetches max cursor with timestamp sort_column", %{
-      db: db,
-      characters_table: table,
-      character_col_attnums: attnums
-    } do
-      now = NaiveDateTime.utc_now()
-      _char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -3, :second))
-      _char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
-      char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
-      char4 = CharacterFactory.insert_character!(updated_at: now)
+  describe "with_watermark/4" do
+    test "emits watermark messages around the given function", %{db: db} do
+      table_oid = 12_345
+      batch_id = "test_batch"
 
-      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-      limit = 3
+      # Let an actual connection be created
+      ConnectionCache.invalidate_connection(db)
 
-      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
+      # This does not test that watermark messages are emitted, we will do this in a separate test
 
-      assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
-      assert char3.id == cursor[attnums["id"]]
-
-      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: false)
-
-      assert char4.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
-      assert char4.id == cursor[attnums["id"]]
-    end
-
-    test "fetches max cursor with compound primary key", %{
-      db: db,
-      characters_multi_pk_table: table,
-      character_multi_pk_attnums: attnums
-    } do
-      now = NaiveDateTime.utc_now()
-      _char1 = CharacterFactory.insert_character_multi_pk!(updated_at: NaiveDateTime.add(now, -2, :second))
-      char2 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      char3 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-
-      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-      limit = 3
-
-      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: limit, include_min: true)
-
-      assert_maps_equal(
-        cursor,
-        %{
-          attnums["id_integer"] => char3.id_integer,
-          attnums["id_string"] => char3.id_string,
-          attnums["id_uuid"] => char3.id_uuid
-        },
-        ["id_integer", "id_string", "id_uuid"]
-      )
-
-      assert char3.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
-
-      # Test with a cursor to ensure we can move past records with the same updated_at
-      cursor = create_cursor(char2, attnums)
-
-      {:ok, cursor} = BackfillProducer.fetch_max_cursor(db, table, cursor, limit: limit, include_min: true)
-
-      assert_maps_equal(
-        cursor,
-        %{
-          attnums["id_integer"] => char4.id_integer,
-          attnums["id_string"] => char4.id_string,
-          attnums["id_uuid"] => char4.id_uuid
-        },
-        ["id_integer", "id_string", "id_uuid"]
-      )
-
-      assert char4.updated_at == NaiveDateTime.truncate(cursor[table.sort_column_attnum], :second)
-    end
-  end
-
-  describe "fetch_records_in_range/5" do
-    test "fetches records in range with compound primary key", %{
-      db: db,
-      characters_multi_pk_table: table,
-      character_multi_pk_attnums: attnums
-    } do
-      now = NaiveDateTime.utc_now()
-      char1 = CharacterFactory.insert_character_multi_pk!(updated_at: NaiveDateTime.add(now, -3, :second))
-      char2 = CharacterFactory.insert_character_multi_pk!(updated_at: NaiveDateTime.add(now, -2, :second))
-      char3 = CharacterFactory.insert_character_multi_pk!(updated_at: NaiveDateTime.add(now, -1, :second))
-      char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-
-      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-      max_cursor = create_cursor(char4, attnums)
-
-      limit = 10
-
-      {:ok, results} =
-        BackfillProducer.fetch_records_in_range(db, table, initial_min_cursor, max_cursor,
-          limit: limit,
-          include_min: true
-        )
-
-      assert length(results) == 4
-
-      assert_character_equal(Enum.at(results, 0), char1)
-      assert_character_equal(Enum.at(results, 1), char2)
-      assert_character_equal(Enum.at(results, 2), char3)
-      assert_character_equal(Enum.at(results, 3), char4)
-    end
-
-    test "fetches records in range with compound primary key and same timestamp", %{
-      db: db,
-      characters_multi_pk_table: table,
-      character_multi_pk_attnums: attnums
-    } do
-      now = NaiveDateTime.utc_now()
-      _char1 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      char2 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      char3 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      char4 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-      _char5 = CharacterFactory.insert_character_multi_pk!(updated_at: now)
-
-      min_cursor = create_cursor(char2, attnums)
-      max_cursor = create_cursor(char4, attnums)
-
-      limit = 10
-
-      {:ok, results} =
-        BackfillProducer.fetch_records_in_range(db, table, min_cursor, max_cursor, limit: limit)
-
-      assert length(results) == 2
-
-      assert_character_equal(Enum.at(results, 0), char3)
-      assert_character_equal(Enum.at(results, 1), char4)
-    end
-  end
-
-  describe "fetch_max_cursor and fetch_records_in_range combined" do
-    test "processes all characters with same updated_at using small page size", %{
-      db: db,
-      characters_multi_pk_table: table
-    } do
-      # Insert 6 characters with the same updated_at
-      now = NaiveDateTime.utc_now()
-
-      characters =
-        Enum.map(1..6, fn _ ->
-          CharacterFactory.insert_character_multi_pk!(updated_at: now)
+      {:ok, result} =
+        BackfillProducer.with_watermark(db, batch_id, table_oid, fn conn ->
+          Postgrex.query(conn, "select 1", [])
         end)
 
-      page_size = 2
-      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-      processed_characters = []
-
-      # Simulate processing all characters
-      {processed_characters, _} =
-        Enum.reduce_while(1..10, {processed_characters, initial_min_cursor}, fn _, {acc, current_cursor} ->
-          include_min = current_cursor == initial_min_cursor
-
-          case BackfillProducer.fetch_max_cursor(db, table, current_cursor,
-                 limit: page_size,
-                 include_min: include_min
-               ) do
-            {:ok, nil} ->
-              {:halt, {acc, current_cursor}}
-
-            {:ok, max_cursor} ->
-              {:ok, records} =
-                BackfillProducer.fetch_records_in_range(
-                  db,
-                  table,
-                  current_cursor,
-                  max_cursor,
-                  limit: page_size,
-                  include_min: include_min
-                )
-
-              new_acc = acc ++ records
-              {:cont, {new_acc, max_cursor}}
-          end
-        end)
-
-      # Verify that all characters were processed
-      assert length(processed_characters) == 6
-
-      # Verify that all original characters are in the processed list
-      assert_lists_equal(characters, processed_characters, fn char, processed ->
-        char.id_integer == processed["id_integer"] &&
-          char.id_string == processed["id_string"] &&
-          char.id_uuid == processed["id_uuid"]
-      end)
+      assert result.rows == [[1]]
     end
   end
 
-  describe "fetch_first_row/2" do
-    test "fetches the first row and initial min cursor for characters_multi_pk table", %{
-      db: db,
-      characters_multi_pk_table: table,
-      character_multi_pk_attnums: attnums
-    } do
-      # Insert a character with multiple primary keys
-      char = CharacterFactory.insert_character_multi_pk!()
-
-      # Fetch the first row
-      {:ok, first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-
-      # Assert that the first_row matches the inserted character
-      assert first_row["id_integer"] == char.id_integer
-      assert first_row["id_string"] == char.id_string
-      assert first_row["id_uuid"] == char.id_uuid
-      assert first_row["name"] == char.name
-      assert NaiveDateTime.compare(first_row["updated_at"], char.updated_at) == :eq
-
-      # Assert that the initial_min_cursor is correct
-      assert NaiveDateTime.truncate(initial_min_cursor[table.sort_column_attnum], :second) == char.updated_at
-      assert initial_min_cursor[attnums["id_integer"]] == char.id_integer
-      assert initial_min_cursor[attnums["id_string"]] == char.id_string
-      assert initial_min_cursor[attnums["id_uuid"]] == char.id_uuid
-    end
-
-    test "returns nil when the table is empty", %{
+  describe "fetch_batch/4" do
+    test "fetches a batch of records with default limit", %{
       db: db,
       characters_table: table
     } do
-      # Ensure the table is empty
-      Repo.delete_all(Sequin.Test.Support.Models.Character)
+      now = NaiveDateTime.utc_now()
+      char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -3, :second))
+      char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
+      char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
 
-      # Fetch the first row
-      assert {:ok, nil, nil} = BackfillProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_cursor} = BackfillProducer.fetch_first_row(db, table)
+
+      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, include_min: true)
+
+      assert length(records) == 3
+      assert_character_equal(Enum.at(records, 0), char1)
+      assert_character_equal(Enum.at(records, 1), char2)
+      assert_character_equal(Enum.at(records, 2), char3)
+
+      # Verify next cursor matches last record
+      assert next_cursor[table.sort_column_attnum] == char3.updated_at
+
+      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, include_min: false)
+
+      assert length(records) == 2
+      assert_character_equal(Enum.at(records, 0), char2)
+      assert_character_equal(Enum.at(records, 1), char3)
+
+      # Verify next cursor matches last record
+      assert next_cursor[table.sort_column_attnum] == char3.updated_at
     end
-  end
 
-  describe "fetch_records_in_range/5 with special column types" do
     test "correctly handles nil and populated UUID, UUID[] and bytea fields", %{
       db: db,
       characters_detailed_table: table
@@ -343,14 +157,12 @@ defmodule Sequin.BackfillProducerTest do
         )
 
       {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
-      {:ok, max_cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: 10)
 
-      {:ok, results} =
-        BackfillProducer.fetch_records_in_range(
+      {:ok, results, _next_cursor} =
+        BackfillProducer.fetch_batch(
           db,
           table,
           initial_min_cursor,
-          max_cursor,
           limit: 10,
           include_min: true
         )
@@ -380,19 +192,43 @@ defmodule Sequin.BackfillProducerTest do
       assert result1["binary_data"] == "\\x010203"
       assert result2["binary_data"] == "\\x040506"
     end
+
+    test "respects the limit parameter", %{
+      db: db,
+      characters_table: table
+    } do
+      now = NaiveDateTime.utc_now()
+      char1 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
+      char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
+      _char3 = CharacterFactory.insert_character!(updated_at: now)
+
+      {:ok, _first_row, initial_cursor} = BackfillProducer.fetch_first_row(db, table)
+
+      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
+
+      assert length(records) == 2
+      assert_character_equal(Enum.at(records, 0), char1)
+      assert_character_equal(Enum.at(records, 1), char2)
+
+      # Verify next cursor matches last record in batch
+      assert next_cursor[table.sort_column_attnum] == char2.updated_at
+    end
+
+    test "handles empty result set", %{
+      db: db,
+      characters_table: table
+    } do
+      cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
+
+      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, cursor)
+
+      assert records == []
+      assert next_cursor == nil
+    end
   end
 
   defp map_column_attnums(table) do
     Map.new(table.columns, fn column -> {column.name, column.attnum} end)
-  end
-
-  defp create_cursor(character, attnums) do
-    %{
-      attnums["updated_at"] => character.updated_at,
-      attnums["id_integer"] => character.id_integer,
-      attnums["id_string"] => character.id_string,
-      attnums["id_uuid"] => character.id_uuid
-    }
   end
 
   defp assert_character_equal(result, character) do
@@ -400,10 +236,9 @@ defmodule Sequin.BackfillProducerTest do
       result,
       Map.from_struct(character),
       [
-        "id_integer",
-        "id_string",
-        "id_uuid",
-        "name"
+        "id",
+        "name",
+        "updated_at"
       ],
       indifferent_keys: true
     )

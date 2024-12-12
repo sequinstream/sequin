@@ -80,11 +80,12 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
   end
 
   # Queries
-  def with_watermark(%PostgresDatabase{} = db, current_batch_id, table_oid, fun) do
+  def with_watermark(%PostgresDatabase{} = db, backfill_id, current_batch_id, table_oid, fun) do
     payload =
       Jason.encode!(%{
         table_oid: table_oid,
-        batch_id: current_batch_id
+        batch_id: current_batch_id,
+        backfill_id: backfill_id
       })
 
     res =

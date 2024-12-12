@@ -138,6 +138,18 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       """
       defstruct [:data]
     end
+
+    defmodule LogicalMessage do
+      @moduledoc """
+      Struct representing a logical message emitted via pg_logical_emit_message() in PostgreSQL's logical decoding output.
+
+      * `transactional` - Boolean indicating if the message is transactional
+      * `prefix` - The prefix/tag of the message
+      * `content` - The content of the message
+      * `lsn` - The LSN where the message was written
+      """
+      defstruct [:transactional, :prefix, :content, :lsn]
+    end
   end
 
   @pg_epoch DateTime.from_iso8601("2000-01-01T00:00:00Z")
@@ -287,6 +299,17 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       id: data_type_id,
       namespace: namespace,
       name: name
+    }
+  end
+
+  defp decode_message_impl(<<"M", transactional::binary-1, lsn::binary-8, rest::binary>>) do
+    [prefix, <<_length::integer-32, content::binary>>] = String.split(rest, <<0>>, parts: 2)
+
+    %Messages.LogicalMessage{
+      transactional: transactional == "t",
+      prefix: prefix,
+      content: content,
+      lsn: decode_lsn(lsn)
     }
   end
 

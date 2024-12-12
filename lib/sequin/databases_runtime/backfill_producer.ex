@@ -1,5 +1,6 @@
 defmodule Sequin.DatabasesRuntime.BackfillProducer do
   @moduledoc false
+  alias Sequin.Constants
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.DatabasesRuntime.KeysetCursor
@@ -79,13 +80,26 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
 
   # Queries
   def with_watermark(%PostgresDatabase{} = db, current_batch_id, table_oid, fun) do
-    table_and_batch = "#{table_oid}:#{current_batch_id}"
+    payload =
+      Jason.encode!(%{
+        table_oid: table_oid,
+        batch_id: current_batch_id
+      })
 
     res =
       Postgres.transaction(db, fn t_conn ->
-        Postgres.query(t_conn, "select pg_logical_emit_message(true, 'backfill_batch_wm_start', $1)", [table_and_batch])
+        Postgres.query(t_conn, "select pg_logical_emit_message(true, $1, $2)", [
+          Constants.backfill_batch_wm_start(),
+          payload
+        ])
+
         res = fun.(t_conn)
-        Postgres.query(t_conn, "select pg_logical_emit_message(true, 'backfill_batch_wm_end', $1)", [table_and_batch])
+
+        Postgres.query(t_conn, "select pg_logical_emit_message(true, $1, $2)", [
+          Constants.backfill_batch_wm_end(),
+          payload
+        ])
+
         res
       end)
 

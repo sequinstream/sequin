@@ -16,7 +16,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, :postgres_database)
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [event] = Consumers.list_consumer_events_for_consumer(consumer.id)
       assert event.consumer_id == consumer.id
@@ -39,7 +39,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
       assert record.consumer_id == consumer.id
@@ -76,7 +76,7 @@ defmodule Sequin.MessageHandlerTest do
         replication_slot_id: UUID.uuid4()
       }
 
-      {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 6, _} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
@@ -112,7 +112,7 @@ defmodule Sequin.MessageHandlerTest do
         replication_slot_id: UUID.uuid4()
       }
 
-      {:ok, 6} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 6, _} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
@@ -140,7 +140,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, :postgres_database)
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert length(messages) == 1
@@ -154,7 +154,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert Enum.empty?(messages)
@@ -178,7 +178,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert length(messages) == 1
@@ -204,7 +204,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
 
       messages = list_messages(consumer.id)
       assert Enum.empty?(messages)
@@ -224,7 +224,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 2} = MessageHandler.handle_messages(context, [insert_message, update_message])
+      {:ok, 2, _} = MessageHandler.handle_messages(context, [insert_message, update_message])
 
       {[insert_event], [update_event]} =
         wal_pipeline.id |> Replication.list_wal_events() |> Enum.split_with(&(&1.action == :insert))
@@ -250,7 +250,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
@@ -263,7 +263,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
@@ -287,7 +287,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert length(wal_events) == 1
@@ -312,7 +312,7 @@ defmodule Sequin.MessageHandlerTest do
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 0} = MessageHandler.handle_messages(context, [message])
+      {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
 
       wal_events = Replication.list_wal_events(wal_pipeline.id)
       assert Enum.empty?(wal_events)
@@ -324,7 +324,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
       assert record.group_id == "1,2"
@@ -347,7 +347,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
-      {:ok, 1} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
       assert record.group_id == "A"
@@ -366,7 +366,7 @@ defmodule Sequin.MessageHandlerTest do
       replication_slot_id = Factory.uuid()
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: replication_slot_id}
 
-      {:ok, 4} = MessageHandler.handle_messages(context, messages)
+      {:ok, 4, _} = MessageHandler.handle_messages(context, messages)
 
       assert {:ok, 5} = Replication.last_processed_seq(replication_slot_id)
     end

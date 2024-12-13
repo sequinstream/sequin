@@ -52,9 +52,22 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 
 ### Redis configuration
 
-- `REDIS_URL`: Redis connection URL
-  - (e.g. `redis://localhost:6379`)
-- `REDIS_IPV6`: Enable IPv6 support (default: false)
+- `REDIS_URL`: Redis connection URL (required)
+  - Format: `redis://localhost:6379` or `rediss://localhost:6379`
+  - Using `rediss://` automatically enables SSL
+- `REDIS_SSL`: Enable SSL for Redis connection (optional)
+  - Valid values: `"true"`, `"1"`
+  - Default: disabled
+- `REDIS_IPV6`: Enable IPv6 support (optional)
+  - Valid values: `"true"` or `"1"` to enable
+  - Default: disabled
+
+#### SSL Configuration
+
+SSL can be enabled in two ways:
+
+1. Using a `rediss://` URL scheme in `REDIS_URL`
+2. Setting `REDIS_SSL` to one of the enabling values
 
 ### Security configuration
 
@@ -135,7 +148,6 @@ Requirements for multi-node deployment:
 - Environment variables for [Clustering configuration](#clustering-configuration) must be properly set
 
 Sequin uses Postgres for node discovery and Redis for distributed locking and leader election.
-
 ### Runtime requirements
 
 #### Redis

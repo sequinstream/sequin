@@ -1,8 +1,12 @@
 import Config
 
+alias Sequin.ConfigParser
+
 require Logger
 
 self_hosted = Application.compile_env(:sequin, :self_hosted)
+
+env_vars = System.get_env()
 
 get_env = fn key ->
   if self_hosted do
@@ -195,8 +199,6 @@ if config_env() == :prod do
   datadog_api_key = get_env.("DATADOG_API_KEY")
   datadog_app_key = get_env.("DATADOG_APP_KEY")
 
-  redix_socket_opts = if System.get_env("REDIS_IPV6") in ~w(true 1), do: [:inet6], else: []
-
   config :libcluster,
     topologies: [
       sequin: [
@@ -207,7 +209,7 @@ if config_env() == :prod do
       ]
     ]
 
-  config :redix, start_opts: {System.fetch_env!("REDIS_URL"), [name: :redix] ++ [socket_opts: redix_socket_opts]}
+  config :redix, start_opts: {RuntimeConfig.redis_url(env_vars), [name: :redix] ++ RuntimeConfig.redis_opts(env_vars)}
 
   config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
 

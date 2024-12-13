@@ -91,10 +91,10 @@ defmodule Sequin.Nats.Client do
   end
 
   defp get_headers(%ConsumerEvent{} = message) do
-    [{"Nats-Msg-Id", message.id}]
+    [{"Nats-Msg-Id", to_string(message.id)}]
   end
 
   defp get_headers(%ConsumerRecord{} = message) do
-    [{"Nats-Msg-Id", message.id}]
+    [{"Nats-Msg-Id", to_string(message.id)}]
   end
 end

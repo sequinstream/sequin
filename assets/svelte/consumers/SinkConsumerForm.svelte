@@ -276,6 +276,7 @@
   }
 
   let showLocalhostWarningDialog = false;
+  let dismissedLocalhostWarning = false;
 
   function onTestConnection() {
     // Add check for localhost in sink configuration
@@ -288,7 +289,7 @@
         configStr.includes("localhost") || configStr.includes("127.0.0.1");
     }
 
-    if (hasLocalhost) {
+    if (hasLocalhost && !dismissedLocalhostWarning) {
       showLocalhostWarningDialog = true;
     } else {
       runConnectionTest();
@@ -698,36 +699,72 @@
         {/if}
         <div class="flex justify-end items-center gap-2">
           {#if consumer.type !== "http_push" && consumer.type !== "sequin_stream"}
-            <Button
-              loading={testConnectionState.status === "loading"}
-              type="button"
-              variant="outline"
-              class="self-end"
-              on:click={onTestConnection}
-            >
-              {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
-                <span
-                  class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
-                ></span>
-                Connection succeeded
-              {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
-                <span
-                  class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
-                ></span>
-                Connection failed
-              {:else}
-                <span
-                  class="flex items-center w-2 h-2 mr-2 rounded-full"
-                  class:bg-green-500={testConnectionState.lastTestStatus ===
-                    "success"}
-                  class:bg-red-500={testConnectionState.lastTestStatus ===
-                    "error"}
-                  class:bg-gray-300={testConnectionState.lastTestStatus ===
-                    "none"}
-                ></span>
-                Test Connection
-              {/if}
-            </Button>
+            <Popover.Root bind:open={showLocalhostWarningDialog}>
+              <Popover.Trigger />
+              <Button
+                loading={testConnectionState.status === "loading"}
+                variant="outline"
+                class="self-end"
+                on:click={onTestConnection}
+              >
+                {#if testConnectionState.status === "success" && testConnectionState.displayStatus}
+                  <span
+                    class="flex items-center p-1 gap-1 mr-2 bg-green-500 rounded-full"
+                  ></span>
+                  Connection succeeded
+                {:else if testConnectionState.status === "error" && testConnectionState.displayStatus}
+                  <span
+                    class="flex items-center p-1 gap-1 mr-2 bg-red-500 rounded-full"
+                  ></span>
+                  Connection failed
+                {:else}
+                  <span
+                    class="flex items-center w-2 h-2 mr-2 rounded-full"
+                    class:bg-green-500={testConnectionState.lastTestStatus ===
+                      "success"}
+                    class:bg-red-500={testConnectionState.lastTestStatus ===
+                      "error"}
+                    class:bg-gray-300={testConnectionState.lastTestStatus ===
+                      "none"}
+                  ></span>
+                  Test Connection
+                {/if}
+              </Button>
+              <Popover.Content class="w-80">
+                <div class="grid gap-4">
+                  <div class="space-y-2">
+                    <h4 class="font-medium leading-none">
+                      Warning: localhost detected
+                    </h4>
+                    <p class="text-sm text-muted-foreground">
+                      Using '<code>localhost</code>' in your configuration may
+                      not work as expected. Consider using '<code
+                        >host.docker.internal</code
+                      >' instead to connect to services running on your machine.
+                    </p>
+                  </div>
+                  <div class="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      on:click={() => (showLocalhostWarningDialog = false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      on:click={() => {
+                        dismissedLocalhostWarning = true;
+                        showLocalhostWarningDialog = false;
+                        runConnectionTest();
+                      }}
+                    >
+                      Test anyway
+                    </Button>
+                  </div>
+                </div>
+              </Popover.Content>
+            </Popover.Root>
           {/if}
           <Button
             loading={isSubmitting}
@@ -820,43 +857,6 @@
 
       <Dialog.Footer class="mt-4">
         <Button on:click={() => (showExampleModal = false)}>Close</Button>
-      </Dialog.Footer>
-      <Dialog.Close />
-    </Dialog.Content>
-  </Dialog.Portal>
-</Dialog.Root>
-
-<Dialog.Root bind:open={showLocalhostWarningDialog}>
-  <Dialog.Portal>
-    <Dialog.Overlay />
-    <Dialog.Content>
-      <Dialog.Header class="my-4">
-        <Dialog.Title>Warning: localhost detected</Dialog.Title>
-      </Dialog.Header>
-
-      <div>
-        <p>
-          Using '<code>localhost</code>' in your configuration may not work as
-          expected. Consider using '<code>host.docker.internal</code>' instead
-          to connect to services running on your machine.
-        </p>
-      </div>
-
-      <Dialog.Footer class="mt-4 space-x-2">
-        <Button
-          variant="outline"
-          on:click={() => (showLocalhostWarningDialog = false)}
-        >
-          Cancel
-        </Button>
-        <Button
-          on:click={() => {
-            showLocalhostWarningDialog = false;
-            runConnectionTest();
-          }}
-        >
-          Test anyway
-        </Button>
       </Dialog.Footer>
       <Dialog.Close />
     </Dialog.Content>

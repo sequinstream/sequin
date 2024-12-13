@@ -348,9 +348,23 @@ defmodule SequinWeb.Components.ConsumerForm do
   end
 
   defp test_nats_connection(socket) do
-    case Nats.test_connection(socket.assigns.consumer.sink) do
-      :ok -> :ok
-      {:error, error} -> {:error, Exception.message(error)}
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %NatsSink{} = sink -> NatsSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case Nats.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
     end
   end
 

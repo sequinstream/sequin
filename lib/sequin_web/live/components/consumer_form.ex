@@ -82,6 +82,15 @@ defmodule SequinWeb.Components.ConsumerForm do
     {:ok, socket}
   end
 
+  # If the changeset is not nil, we avoid re-updating the assigns
+  # the parent will cause update to fire if the props change
+  # if you need to handle props changing, refactor - be sure to preserve the changeset
+  @impl Phoenix.LiveComponent
+  def update(_assigns, %{assigns: %{changeset: %Ecto.Changeset{}}} = socket) do
+    {:ok, socket}
+  end
+
+  @impl Phoenix.LiveComponent
   def update(assigns, socket) do
     consumer = assigns[:consumer]
 

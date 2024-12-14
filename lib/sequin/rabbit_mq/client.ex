@@ -4,7 +4,9 @@ defmodule Sequin.RabbitMq.Client do
 
   alias AMQP.Basic
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Error
   alias Sequin.NetworkUtils
@@ -43,7 +45,7 @@ defmodule Sequin.RabbitMq.Client do
     opts = [message_id: to_string(message.id), content_type: "application/json"]
     payload = to_payload(message)
     # TODO: figure out how to get the routing key
-    routing_key = "sequin.#{sink.connection_id}"
+    routing_key = routing_key(message)
 
     try do
       with {:error, reason} <- Basic.publish(channel, sink.exchange, routing_key, Jason.encode!(payload), opts) do
@@ -79,5 +81,15 @@ defmodule Sequin.RabbitMq.Client do
       action: message.data.action,
       metadata: message.data.metadata
     }
+  end
+
+  defp routing_key(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
+    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
+    "sequin.changes.#{database_name}.#{table_schema}.#{table_name}.#{data.action}"
+  end
+
+  defp routing_key(%ConsumerRecord{data: %ConsumerRecordData{} = data}) do
+    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
+    "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
   end
 end

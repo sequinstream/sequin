@@ -5,17 +5,12 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
-  alias Sequin.Nats.Client
-  alias Sequin.Repo
+  alias Sequin.Nats
 
   require Logger
 
   def start_link(opts) do
-    %SinkConsumer{} =
-      consumer =
-      opts
-      |> Keyword.fetch!(:consumer)
-      |> Repo.lazy_preload([:sequence, :postgres_database])
+    %SinkConsumer{} = consumer = Keyword.fetch!(opts, :consumer)
 
     producer = Keyword.get(opts, :producer, Sequin.ConsumersRuntime.ConsumerProducer)
 
@@ -31,7 +26,8 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
         ]
       ],
       context: %{
-        consumer: consumer
+        consumer: consumer,
+        test_pid: Keyword.get(opts, :test_pid)
       }
     )
   end
@@ -49,13 +45,15 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: messages} = message, %{consumer: consumer}) do
+  def handle_message(_, %Broadway.Message{data: messages} = message, %{consumer: consumer} = ctx) do
+    setup_allowances(ctx)
+
     Logger.metadata(
       account_id: consumer.account_id,
       consumer_id: consumer.id
     )
 
-    case Client.send_messages(consumer.sink, messages) do
+    case Nats.send_messages(consumer.sink, messages) do
       :ok ->
         Health.update(consumer, :push, :healthy)
 
@@ -97,4 +95,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
         Broadway.Message.failed(message, reason)
     end
   end
+
+  defp setup_allowances(%{test_pid: nil}), do: :ok
+  defp setup_allowances(%{test_pid: test_pid}), do: Mox.allow(Sequin.Mocks.NatsMock, test_pid, self())
 end

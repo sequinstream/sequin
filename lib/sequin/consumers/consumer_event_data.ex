@@ -6,7 +6,7 @@ defmodule Sequin.Consumers.ConsumerEventData do
 
   @type t :: %__MODULE__{
           record: map(),
-          changes: map(),
+          changes: map() | nil,
           action: atom(),
           metadata: map()
         }

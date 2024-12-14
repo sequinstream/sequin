@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -91,6 +91,7 @@ help:
 	@echo "  make release-dirty - Run the release script with --dirty flag"
 	@echo "  make release-gh  - Run the release script using GitHub Actions for Docker builds"
 	@echo "  make release-dirty-gh - Run the release script with --dirty flag using GitHub Actions"
+	@echo "  make docs      - Run mintlify dev server for documentation"
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
@@ -111,6 +112,9 @@ connectdb:
 connect:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_ssh.sh
+
+docs: ## Run mintlify dev server for documentation
+	@cd docs && mintlify dev
 
 %:
 	@:

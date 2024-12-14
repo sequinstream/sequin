@@ -77,6 +77,16 @@ export type NatsConsumer = BaseConsumer & {
   };
 };
 
+// RabbitMQ specific sink
+export type RabbitMqConsumer = BaseConsumer & {
+  sink: {
+    type: "rabbitmq";
+    host: string;
+    port: number;
+    exchange: string;
+  };
+};
+
 // Kafka specific sink
 export type KafkaConsumer = BaseConsumer & {
   sink: {
@@ -116,4 +126,5 @@ export type Consumer =
   | KafkaConsumer
   | SequinStreamConsumer
   | GcpPubsubConsumer
-  | NatsConsumer;
+  | NatsConsumer
+  | RabbitMqConsumer;

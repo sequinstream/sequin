@@ -7,6 +7,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
@@ -199,6 +200,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%SinkConsumer{type: :nats, sink: %NatsSink{}}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "rabbitmq"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%SinkConsumer{type: :rabbitmq, sink: %RabbitMqSink{}}}
     />
     """
   end

@@ -5,3 +5,7 @@ Mox.defmock(Sequin.Mocks.Extensions.MessageHandlerMock,
 Mox.defmock(Sequin.Mocks.NatsMock,
   for: Sequin.Nats
 )
+
+Mox.defmock(Sequin.Mocks.RabbitMqMock,
+  for: Sequin.RabbitMq
+)

@@ -5,6 +5,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabaseTable
@@ -394,10 +395,11 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   end
 
   defp build_event_data(table, consumer, record_attnums_to_values) do
-    %{
+    Sequin.Map.from_ecto(%ConsumerEventData{
       action: :read,
       record: build_event_payload(table, record_attnums_to_values),
       metadata: %{
+        database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
         table_schema: table.schema,
         consumer: %{
@@ -408,7 +410,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         },
         commit_timestamp: DateTime.utc_now()
       }
-    }
+    })
   end
 
   defp build_event_payload(table, record_attnums_to_values) do

@@ -11,6 +11,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
       field :table_schema, :string
       field :table_name, :string
       field :consumer, :map
+      field :database_name, :string
     end
   end
 

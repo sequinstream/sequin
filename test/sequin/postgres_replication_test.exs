@@ -115,6 +115,9 @@ defmodule Sequin.PostgresReplicationTest do
 
       {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
+      event_consumer = Repo.preload(event_consumer, :postgres_database)
+      record_consumer = Repo.preload(record_consumer, :postgres_database)
+
       %{
         pg_replication: pg_replication,
         source_db: source_db,
@@ -145,7 +148,13 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert is_nil(data.changes)
       assert data.action == :insert
-      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
+
+      assert_maps_equal(
+        data.metadata,
+        %{table_name: "Characters", table_schema: "public", database_name: consumer.postgres_database.name},
+        [:table_name, :table_schema, :database_name]
+      )
+
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
@@ -208,7 +217,13 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert data.changes == %{}
       assert data.action == :update
-      assert_maps_equal(data.metadata, %{table_name: "Characters", table_schema: "public"}, [:table_name, :table_schema])
+
+      assert_maps_equal(
+        data.metadata,
+        %{table_name: "Characters", table_schema: "public", database_name: consumer.postgres_database.name},
+        [:table_name, :table_schema, :database_name]
+      )
+
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 

@@ -29,7 +29,7 @@ defmodule Sequin.Replication.MessageHandler do
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:wal_pipelines, sink_consumers: [:sequence]])
+    pr = Repo.preload(pr, [:wal_pipelines, sink_consumers: [:sequence, :postgres_database]])
 
     %Context{
       consumers: pr.sink_consumers,
@@ -180,6 +180,7 @@ defmodule Sequin.Replication.MessageHandler do
 
   defp metadata(%Message{} = message, consumer) do
     %{
+      database_name: consumer.postgres_database.name,
       table_name: message.table_name,
       table_schema: message.table_schema,
       commit_timestamp: message.commit_timestamp,

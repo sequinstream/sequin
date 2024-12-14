@@ -392,6 +392,7 @@ defmodule Sequin.ConsumersTest do
       assert delivered_record.data.record["name"] == character.name
       assert delivered_record.data.metadata.table_name == "Characters"
       assert delivered_record.data.metadata.table_schema == "public"
+      assert delivered_record.data.metadata.database_name == consumer.postgres_database.name
     end
 
     test "delivers record when it does not share a group_id with outstanding records", %{consumer: consumer} do

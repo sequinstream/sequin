@@ -392,6 +392,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         changes: changes,
         action: action,
         metadata: %{
+          database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
@@ -531,6 +532,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %ConsumerRecordData{
         record: %{"column" => Factory.word()},
         metadata: %{
+          database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),

@@ -846,6 +846,7 @@ defmodule Sequin.Consumers do
               id: consumer.id,
               name: consumer.name
             },
+            database_name: postgres_db.name,
             table_name: table.name,
             table_schema: table.schema
           }

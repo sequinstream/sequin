@@ -321,7 +321,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     test "processes events for event consumers", %{
       event_consumer: event_consumer,
       table_oid: table_oid,
-      characters: characters
+      characters: characters,
+      database: database
     } do
       page_size = 3
 
@@ -354,6 +355,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         assert consumer_event.table_oid == table_oid
         assert consumer_event.data.action == :read
         assert consumer_event.data.metadata.commit_timestamp
+        assert consumer_event.data.metadata.database_name == database.name
         assert is_map(consumer_event.data)
       end
 

@@ -44,7 +44,7 @@ defmodule Sequin.NetworkUtils do
               {:error, Error.validation(summary: "Timed out attempting to reach the host on that port.", code: :timeout)}
 
             error ->
-              {:error, Error.validation(summary: "Unknown error connecting to database: #{inspect(error)}")}
+              {:error, Error.validation(summary: "Unknown error connecting to host: #{inspect(error)}")}
           end
       end
     end

@@ -189,7 +189,7 @@ defmodule SequinWeb.DatabaseController do
         {:error, Error.validation(summary: summary)}
 
       {:error, error} ->
-        {:error, Error.validation(summary: "Unknown error connecting to database: #{inspect(error)}")}
+        {:error, Error.validation(summary: "Unknown error connecting to host: #{inspect(error)}")}
     end
   end
 

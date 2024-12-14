@@ -43,9 +43,9 @@ defmodule Sequin.Consumers.NatsSink do
   end
 
   def ipv6?(%__MODULE__{} = sink) do
-    case :inet.getaddr(to_charlist(sink.host), :inet6) do
-      {:ok, _} -> true
-      {:error, _} -> false
+    case :inet.getaddr(to_charlist(sink.host), :inet) do
+      {:ok, _} -> false
+      {:error, _} -> true
     end
   end
 end

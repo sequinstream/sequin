@@ -44,7 +44,6 @@ defmodule Sequin.RabbitMq.Client do
     # https://hexdocs.pm/amqp/AMQP.Basic.html#publish/5-options
     opts = [message_id: to_string(message.id), content_type: "application/json"]
     payload = to_payload(message)
-    # TODO: figure out how to get the routing key
     routing_key = routing_key(message)
 
     try do
@@ -70,6 +69,8 @@ defmodule Sequin.RabbitMq.Client do
   defp to_payload(%ConsumerEvent{} = message) do
     %{
       record: message.data.record,
+      action: message.data.action,
+      changes: message.data.changes,
       metadata: message.data.metadata
     }
   end
@@ -77,8 +78,6 @@ defmodule Sequin.RabbitMq.Client do
   defp to_payload(%ConsumerRecord{} = message) do
     %{
       record: message.data.record,
-      changes: message.data.changes,
-      action: message.data.action,
       metadata: message.data.metadata
     }
   end

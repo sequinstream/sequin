@@ -84,6 +84,7 @@ export type RabbitMqConsumer = BaseConsumer & {
     host: string;
     port: number;
     exchange: string;
+    topic: string;
   };
 };
 

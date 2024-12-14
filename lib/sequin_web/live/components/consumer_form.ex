@@ -99,13 +99,12 @@ defmodule SequinWeb.Components.ConsumerForm do
     consumer = assigns[:consumer]
 
     component = "consumers/SinkConsumerForm"
-    consumer = Repo.preload(consumer, [:postgres_database])
 
     socket =
       socket
       |> assign(assigns)
       |> assign(
-        consumer: Repo.preload(consumer, :sequence),
+        consumer: Repo.preload(consumer, [:sequence, :postgres_database]),
         show_errors?: false,
         submit_error: nil,
         changeset: nil,

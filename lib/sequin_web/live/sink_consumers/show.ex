@@ -458,7 +458,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       max_waiting: consumer.max_waiting,
       inserted_at: consumer.inserted_at,
       updated_at: consumer.updated_at,
-      sink: encode_sink(consumer.sink),
+      sink: encode_sink(consumer),
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
       health: Health.to_external(consumer.health),
@@ -468,7 +468,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%HttpPushSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %HttpPushSink{} = sink}) do
     %{
       type: :http_push,
       http_endpoint: encode_http_endpoint(sink.http_endpoint),
@@ -476,7 +476,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%SqsSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %SqsSink{} = sink}) do
     %{
       type: :sqs,
       queue_url: sink.queue_url,
@@ -485,7 +485,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%KafkaSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %KafkaSink{} = sink}) do
     %{
       type: :kafka,
       kafka_url: KafkaSink.kafka_url(sink),
@@ -498,7 +498,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%RedisSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %RedisSink{} = sink}) do
     %{
       type: :redis,
       host: sink.host,
@@ -510,7 +510,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%GcpPubsubSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %GcpPubsubSink{} = sink}) do
     %{
       type: :gcp_pubsub,
       project_id: sink.project_id,
@@ -519,7 +519,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%NatsSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %NatsSink{} = sink}) do
     %{
       type: :nats,
       host: sink.host,
@@ -529,12 +529,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%RabbitMqSink{} = sink) do
+  defp encode_sink(%SinkConsumer{sink: %RabbitMqSink{} = sink} = consumer) do
+    database_name = consumer.postgres_database.name
+    schema_name = consumer.sequence.table_schema
+    table_name = consumer.sequence.table_name
+
+    topic =
+      if consumer.message_kind == :event do
+        "sequin.changes.#{database_name}.#{schema_name}.#{table_name}.{action}"
+      else
+        "sequin.rows.#{database_name}.#{schema_name}.#{table_name}"
+      end
+
     %{
       type: :rabbitmq,
       host: sink.host,
       port: sink.port,
-      exchange: sink.exchange
+      exchange: sink.exchange,
+      topic: topic
     }
   end
 

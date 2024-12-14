@@ -45,11 +45,11 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
 | GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | |
+| NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | |
+| RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | |
 | Azure EventHubs | Coming soon | (Early Dec 2024) |
-| NATS | Coming soon | (Dec 2024) |
 | Amazon SNS | Coming soon | (Late Dec 2024) |
 | AWS Kinesis | Coming soon | (Late Dec 2024) |
-| RabbitMQ | Coming soon | (Jan 2025) |
 
 ## Killer features
 

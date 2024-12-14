@@ -30,12 +30,21 @@
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
   import NatsIcon from "../../icons/nats.svelte";
+  import RabbitMqIcon from "../../icons/rabbitmq.svelte";
 
   export let consumers: Array<{
     id: string;
     name: string;
     insertedAt: string;
-    type: "http_push" | "sqs";
+    type:
+      | "http_push"
+      | "sqs"
+      | "redis"
+      | "kafka"
+      | "gcp_pubsub"
+      | "sequin_stream"
+      | "nats"
+      | "rabbitmq";
     status: "active" | "disabled";
     database_name: string;
     health: {
@@ -85,6 +94,11 @@
       id: "nats",
       name: "NATS",
       icon: NatsIcon,
+    },
+    {
+      id: "rabbitmq",
+      name: "RabbitMQ",
+      icon: RabbitMqIcon,
     },
   ];
 

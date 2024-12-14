@@ -20,6 +20,7 @@
     SequinStreamConsumer,
     GcpPubsubConsumer,
     NatsConsumer,
+    RabbitMqConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SinkCardSqs from "../components/SinkCardSqs.svelte";
@@ -28,6 +29,8 @@
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
   import SinkCardNats from "../components/SinkCardNats.svelte";
+  import SinkCardRabbitMq from "../components/SinkCardRabbitMq.svelte";
+
   export let live;
   export let parent;
   export let consumer: Consumer;
@@ -85,6 +88,12 @@
     consumer: Consumer,
   ): consumer is SequinStreamConsumer {
     return consumer.sink.type === "sequin_stream";
+  }
+
+  function isRabbitMqConsumer(
+    consumer: Consumer,
+  ): consumer is RabbitMqConsumer {
+    return consumer.sink.type === "rabbitmq";
   }
 </script>
 
@@ -263,6 +272,8 @@
         <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
       {:else if isNatsConsumer(consumer)}
         <SinkCardNats {consumer} />
+      {:else if isRabbitMqConsumer(consumer)}
+        <SinkCardRabbitMq {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

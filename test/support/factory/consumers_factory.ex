@@ -13,6 +13,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -39,7 +40,7 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     type =
       attrs[:type] || get_in(attrs, [:sink, :type]) ||
-        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub, :nats])
+        Enum.random([:http_push, :redis, :sqs, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq])
 
     {sink_attrs, attrs} = Map.pop(attrs, :sink, %{})
     sink = sink(type, account_id, sink_attrs)
@@ -179,6 +180,18 @@ defmodule Sequin.Factory.ConsumersFactory do
         host: "localhost",
         port: 4222,
         subject: Factory.word()
+      },
+      attrs
+    )
+  end
+
+  defp sink(:rabbitmq, _account_id, attrs) do
+    merge_attributes(
+      %RabbitMqSink{
+        type: :rabbitmq,
+        host: "localhost",
+        port: 5672,
+        exchange: "test-exchange"
       },
       attrs
     )

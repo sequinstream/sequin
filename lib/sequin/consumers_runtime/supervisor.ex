@@ -9,6 +9,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.ConsumersRuntime.KafkaPipeline
   alias Sequin.ConsumersRuntime.NatsPipeline
+  alias Sequin.ConsumersRuntime.RabbitMqPipeline
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.ConsumersRuntime.SqsPipeline
 
@@ -86,6 +87,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
       :kafka -> KafkaPipeline
       :gcp_pubsub -> GcpPubsubPipeline
       :nats -> NatsPipeline
+      :rabbitmq -> RabbitMqPipeline
     end
   end
 

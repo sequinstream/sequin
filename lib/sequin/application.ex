@@ -67,6 +67,7 @@ defmodule Sequin.Application do
       Sequin.Redis.ConnectionCache,
       Sequin.Kafka.ConnectionCache,
       Sequin.Nats.ConnectionCache,
+      Sequin.RabbitMq.ConnectionCache,
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
       {Cluster.Supervisor, [topologies]},

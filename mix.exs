@@ -86,7 +86,9 @@ defmodule Sequin.MixProject do
       {:brod, "~> 4.3"},
       {:jose, "~> 1.11"},
       {:syn, "~> 3.3"},
-      {:libcluster, "~> 3.3"}
+      {:libcluster, "~> 3.3"},
+      {:amqp, "~> 4.0"},
+      {:recon, "~> 2.5.6"}
     ]
   end
 

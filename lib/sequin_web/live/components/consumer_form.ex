@@ -9,6 +9,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.NatsSink
+  alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
@@ -30,6 +31,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Nats
   alias Sequin.Postgres
   alias Sequin.Posthog
+  alias Sequin.RabbitMq
   alias Sequin.Redis
   alias Sequin.Repo
   alias SequinWeb.RouteHelpers
@@ -220,6 +222,12 @@ defmodule SequinWeb.Components.ConsumerForm do
 
   def handle_event("test_connection", _params, socket) do
     case socket.assigns.consumer.type do
+      :rabbitmq ->
+        case test_rabbit_mq_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
+
       :nats ->
         case test_nats_connection(socket) do
           :ok -> {:reply, %{ok: true}, socket}
@@ -347,6 +355,27 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_rabbit_mq_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %RabbitMqSink{} = sink -> RabbitMqSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case RabbitMq.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp test_nats_connection(socket) do
     sink_changeset =
       socket.assigns.changeset
@@ -445,6 +474,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink["tls"],
       "username" => sink["username"],
       "password" => sink["password"]
+    }
+  end
+
+  defp decode_sink(:rabbitmq, sink) do
+    %{
+      "type" => "rabbitmq",
+      "host" => sink["host"],
+      "port" => sink["port"],
+      "exchange" => sink["exchange"]
     }
   end
 
@@ -569,6 +607,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "tls" => sink.tls,
       "username" => sink.username,
       "password" => sink.password
+    }
+  end
+
+  defp encode_sink(%RabbitMqSink{} = sink) do
+    %{
+      "type" => "rabbitmq",
+      "host" => sink.host,
+      "port" => sink.port,
+      "exchange" => sink.exchange
     }
   end
 
@@ -893,6 +940,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :sequin_stream -> "Sequin Stream Sink"
       :gcp_pubsub -> "GCP Pub/Sub Sink"
       :nats -> "NATS Sink"
+      :rabbitmq -> "RabbitMQ Sink"
     end
   end
 

@@ -1,0 +1,200 @@
+---
+title: 'Get started with NATS'
+sidebarTitle: 'NATS'
+description: 'Stream Postgres changes to a NATS subject'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to a NATS subject. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database 
+- Configure a NATS subject to receive database changes
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to setup your own Postgres CDC pipeline with NATS.
+
+<Steps titleSize="h2">
+ <Step title="Boot NATS" icon="database">
+  If you don't already have NATS running, start NATS with Docker:
+
+  ```bash
+  docker run --name nats -p 4222:4222 -d nats:latest
+  ```
+
+  <Note>
+    If you're using another NATS instance, ensure you have the connection details ready.
+  </Note>
+ </Step>
+
+ <QuickstartInitialSteps />
+
+ <Step title="Subscribe to NATS" icon="eye">
+  Before creating the sink, let's set up a subscriber to watch for messages. You can use the NATS CLI container:
+
+  ```bash
+  docker run --rm -it --network host natsio/nats-box:latest
+  nats sub products.events
+  ```
+
+  Keep this terminal window open - you'll see messages start flowing once we create the sink.
+ </Step>
+
+ <Step title="Create a NATS Sink" icon="database">
+  With the playground database connected, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your NATS subject:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "NATS" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note Source configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a backfill">
+      In the "Initial backfill" card, click the toggle to enable an initial backfill. You can leave the default start position, which will backfill all existing rows in the `products` table:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure "NATS Configuration"'>
+      In the "NATS Configuration" card, enter your NATS connection details:
+
+      - Host: If running NATS and Sequin locally with Docker, use `host.docker.internal`
+      - Port: The port NATS is listening on (default: 4222)
+      - Subject: The NATS subject to publish to (e.g., `products.events`)
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/nats/nats-config-card.png" alt="NATS configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Test the connection">
+      At the bottom of the form, click the "Test Connection" button. If you provided proper credentials, it should succeed.
+
+      <Check>
+        Sequin can connect to your NATS server.
+      </Check>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, the NATS subject will first receive a backfill of all rows currently in the `products` table. Then, it will receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your NATS sink.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="See changes flow to your NATS subject" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to your NATS subject.
+
+    Let's confirm messages are flowing:
+
+    <Steps>
+    <Step title="Messages tab">
+      Click the "Messages" tab. You'll see a list of the recently delivered messages:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/nats/messages-tab.png" alt="List of recently delivered messages" />
+      </Frame>
+
+      <Check>
+        Sequin indicates it backfilled the `products` table to your NATS subject.
+      </Check>
+    </Step>
+      <Step title="Check your NATS subscription">
+        Return to the terminal where you started the NATS subscription earlier. You should see the messages that were sent from Sequin:
+
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/nats/nats-box-messages.png" alt="NATS subscription terminal" />
+        </Frame>
+
+        These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+
+        <Check>
+          Messages are flowing from Sequin to your NATS subject.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow to your subject.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        In your NATS subscription terminal, you should see a message corresponding to the inserted row.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will appear in your NATS subject within a few seconds.
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres change data capture pipeline
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing to your NATS subject
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  {/* <Card title="Guide: Setting up a NATS sink" icon="database" href="/how-to/stream-postgres-to-nats">
+    Setup a NATS sink to send changes to your subject.
+  </Card> */}
+</CardGroup>

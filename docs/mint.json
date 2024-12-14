@@ -58,6 +58,7 @@
             "quickstart/kafka",
             "quickstart/redis",
             "quickstart/gcp-pubsub",
+            "quickstart/nats",
             "quickstart/sequin-stream",
             "quickstart/redpanda"
           ],

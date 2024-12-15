@@ -49,7 +49,7 @@ defmodule Sequin.Extensions.Replication do
       field :message_handler_ctx, any()
       field :message_handler_module, atom()
       field :id, String.t()
-      field :last_committed_lsn, integer(), default: 0
+      field :last_committed_lsn, integer()
       field :last_processed_seq, integer()
       field :publication, String.t()
       field :slot_name, String.t()

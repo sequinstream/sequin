@@ -3,6 +3,10 @@ name: Docker Cloud Build
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  statuses: write
+
 jobs:
   build-and-push:
     runs-on: ubicloud-standard-16-arm

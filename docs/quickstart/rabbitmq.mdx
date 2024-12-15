@@ -1,0 +1,278 @@
+---
+title: 'Get started with RabbitMQ'
+sidebarTitle: 'RabbitMQ'
+description: 'Stream Postgres changes to RabbitMQ'
+---
+
+import QuickstartInitialSteps from '/snippets/quickstart-initial-steps.mdx';
+
+In this quickstart, you'll create a real-time data pipeline that streams changes from a Postgres database to RabbitMQ. You'll:
+
+- Boot Sequin
+- Connect to a sample playground database 
+- Configure RabbitMQ to receive database changes
+- See your changes flow in real-time
+
+By the end, you'll have hands-on experience setting up Postgres change data capture (CDC) with Sequin. This same pattern can be used to setup your own Postgres CDC pipeline with RabbitMQ.
+
+<Steps titleSize="h2">
+ <Step title="Boot RabbitMQ" icon="database">
+  If you don't already have RabbitMQ running, start it with Docker:
+
+  ```bash
+  docker run -d --name rabbitmq \
+    -p 5672:5672 \
+    -p 15672:15672 \
+    rabbitmq:3-management
+  ```
+
+  This starts RabbitMQ with the management plugin enabled, which we'll use to set up our exchange and queue.
+
+  <Note>
+    If you're using another RabbitMQ instance, ensure you have the connection details ready.
+  </Note>
+ </Step>
+
+ <Step title="Configure RabbitMQ" icon="gear">
+  Before creating our sink, we need to set up RabbitMQ to receive messages. We'll:
+  1. Create an exchange
+  2. Create a queue
+  3. Bind the queue to the exchange
+
+  <Steps>
+    <Step title="Open RabbitMQ Management UI">
+      Open http://localhost:15672 in your browser. Login with:
+      - Username: guest
+      - Password: guest
+    </Step>
+
+    <Step title="Create an exchange">
+      1. Click "Exchanges" in the top navigation
+      2. Find the "Add a new exchange" accordion and expand it if needed
+      3. Enter:
+         - Name: sequin
+         - Type: topic
+         - Leave other settings as default
+      4. Click "Add exchange"
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/add-exchange.png" alt="Adding a new exchange in RabbitMQ" />
+      </Frame>
+    </Step>
+
+    <Step title="Create a queue">
+      1. Click "Queues and streams" in the top navigation
+      2. Find the "Add a new queue" accordion and expand it if needed
+      3. Enter:
+         - Name: products
+         - Leave other settings as default
+      4. Click "Add queue"
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/add-queue.png" alt="Adding a new queue in RabbitMQ" />
+      </Frame>
+    </Step>
+
+   
+
+    <Step title="Create a binding">
+      1. On the "Queues and streams" page, click on your new "products" queue
+      2. Find the "Bindings" section and expand it if needed
+      3. In "Add binding to this queue", enter:
+         - From exchange: sequin
+         - Routing key: `sequin.changes.sequin-playground.public.products.*`
+      4. Click "Bind"
+
+      This routing key pattern will match all changes to the products table. The format is:
+      `sequin.changes.<database>.<schema>.<table>.<action>`
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/add-binding.png" alt="Adding a binding in RabbitMQ" />
+      </Frame>
+
+
+      <Check>
+        You've successfully created an exchange, queue, and binding in RabbitMQ.
+      </Check>
+    </Step>
+  </Steps>
+ </Step>
+
+ <QuickstartInitialSteps />
+
+ <Step title="Create a RabbitMQ Sink" icon="database">
+  With the playground database connected and RabbitMQ configured, you can create a [sink](/reference/sinks/overview). This sink will send changes to the `products` table to your RabbitMQ exchange:
+
+  <Steps>
+    <Step title="Navigate to Sinks">
+      Click "Sinks" in the sidebar navigation, then click "Create Sink".
+    </Step>
+
+    <Step title="Select sink type">
+      Select "RabbitMQ" as the sink type and click "Continue".
+    </Step>
+
+    <Step title='Note "Source" configuration'>
+      In the "Source" card, note that the `sequin-playground` database and `products` table are pre-selected. Leave these defaults:
+
+      <Frame>
+        <img style={{ maxWidth: '500px' }} src="/images/quickstart/source-card.png" alt="Source card showing the sequin_playground database and products table" />
+      </Frame>
+    </Step>
+
+    <Step title="Setup a backfill">
+      In the "Initial backfill" card, click the toggle to enable an initial backfill. You can leave the default start position, which will backfill all existing rows in the `products` table:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/backfill-card.png" alt="Initial backfill card, backfill toggled on" />
+      </Frame>
+    </Step>
+
+    <Step title='Configure "RabbitMQ Configuration"'>
+      In the "RabbitMQ Configuration" card, enter your connection details:
+
+      - Host: If running locally with Docker, use `host.docker.internal`
+      - Port: The port RabbitMQ is listening on (default: 5672)
+      - Exchange: The exchange name we created earlier (`sequin`)
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/rabbitmq-config-card.png" alt="RabbitMQ configuration card" />
+      </Frame>
+    </Step>
+
+    <Step title="Test the connection">
+      At the bottom of the form, click the "Test Connection" button. If you provided proper credentials, it should succeed.
+
+      <Check>
+        Sequin can connect to your RabbitMQ server.
+      </Check>
+    </Step>
+
+    <Step title="Create the sink">
+      You can leave the rest of the defaults. As configured, messages will first flow for all existing rows in the `products` table. Then, you'll receive all changes to the `products` table in real-time.
+
+      Click "Create Sink" to finish setting up your RabbitMQ sink.
+    </Step>
+  </Steps>
+ </Step>
+
+  <Step title="See changes flow through RabbitMQ" icon="waveform-lines">
+    On the new sink's overview page, you should see the "Health" status turn green, indicating data is flowing to RabbitMQ.
+
+    Let's confirm messages are flowing:
+
+    <Steps>
+    <Step title="Messages tab">
+      Click the "Messages" tab. You'll see a list of the recently delivered messages:
+
+      <Frame>
+        <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/messages-tab.png" alt="List of recently delivered messages" />
+      </Frame>
+
+      <Check>
+        Sequin indicates it backfilled the `products` table to RabbitMQ.
+      </Check>
+    </Step>
+      <Step title="View in RabbitMQ">
+        You can view messages in your queue using the RabbitMQ management UI or CLI:
+
+        ```bash
+        docker exec -it rabbitmq rabbitmqadmin get queue=products count=5 --format=pretty_json
+        ```
+
+        You should see the messages that were sent from Sequin. These are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table:
+
+        <Frame>
+          <img style={{ maxWidth: '700px' }} src="/images/quickstart/rabbitmq/messages-in-queue.png" alt="Messages in the products queue" />
+        </Frame>
+
+        <Check>
+          Messages are flowing from Sequin to RabbitMQ.
+        </Check>
+      </Step>
+
+      <Step title="Make some changes">
+        Let's make some changes to the `products` table and see them flow through RabbitMQ.
+
+        In your terminal, run the following command to insert a new row into the `products` table:
+
+        ```bash
+        docker exec -i sequin-sequin_postgres-1 \
+          psql -U postgres -d sequin_playground -c \
+          "insert into products (name, price) values ('Organic Honey (16 oz)', 12.99);"
+        ```
+
+        Check your queue for the new message:
+
+        ```bash
+        docker exec -it rabbitmq rabbitmqadmin get queue=products count=10 --format=pretty_json
+        ```
+
+        You should see a message corresponding to the inserted row.
+
+        Feel free to try other changes:
+
+        <AccordionGroup>
+          <Accordion title="Update a product's price">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set price = 7.99 where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Change a product's name">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "update products set name = 'Organic Avocados (3 pack)' where name = 'Avocados (3 pack)';"
+            ```
+          </Accordion>
+
+          <Accordion title="Delete a product">
+            ```bash
+            docker exec -i sequin-sequin_postgres-1 \
+              psql -U postgres -d sequin_playground -c \
+              "delete from products where name = 'Blueberries (6 oz)';"
+            ```
+          </Accordion>
+        </AccordionGroup>
+
+        Each change will appear in your RabbitMQ queue within a few seconds.
+
+        <Info>
+          If you want to purge your RabbitMQ queue, you can do so by running:
+
+          ```bash
+          docker exec -it rabbitmq rabbitmqadmin purge queue name=products
+          ```
+        </Info>
+      </Step>
+    </Steps>
+  </Step>
+</Steps>
+
+<Check>
+  Great work!
+</Check>
+
+You've successfully:
+
+- Set up a complete Postgres change data capture pipeline
+- Configured RabbitMQ with an exchange, queue, and binding
+- Loaded existing data through a backfill
+- Made changes to the `products` table
+- Verified changes are flowing through RabbitMQ
+
+## Ready to stream
+
+Now you're ready to connect your own database to Sequin and start streaming changes:
+
+<CardGroup cols={2}>
+  <Card title="Guide: Connect Postgres" icon="elephant" href="/connect-postgres">
+    Connect your Postgres database to Sequin.
+  </Card>
+  {/* <Card title="Guide: Setting up a RabbitMQ sink" icon="database" href="/how-to/stream-postgres-to-rabbitmq">
+    Setup a RabbitMQ sink to stream your changes.
+  </Card> */}
+</CardGroup>

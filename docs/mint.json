@@ -59,6 +59,7 @@
             "quickstart/redis",
             "quickstart/gcp-pubsub",
             "quickstart/nats",
+            "quickstart/rabbitmq",
             "quickstart/sequin-stream",
             "quickstart/redpanda"
           ],

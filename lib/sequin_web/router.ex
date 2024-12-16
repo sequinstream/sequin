@@ -124,7 +124,11 @@ defmodule SequinWeb.Router do
   end
 
   scope "/health", SequinWeb do
-    get "/", HealthCheckController, :check
+    if @self_hosted do
+      get "/", HealthCheckController, :check
+    else
+      get "/", HealthCheckController, :check_cloud
+    end
   end
 
   scope "/api", SequinWeb do

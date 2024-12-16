@@ -31,16 +31,6 @@
           >
         </div>
       </div>
-
-      <div>
-        <span class="text-sm text-gray-500">Subject</span>
-        <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.subject}</span
-          >
-        </div>
-      </div>
     </div>
   </CardContent>
 </Card>

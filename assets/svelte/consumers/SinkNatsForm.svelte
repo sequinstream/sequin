@@ -37,17 +37,5 @@
         <p class="text-destructive text-sm">{errors.sink.port}</p>
       {/if}
     </div>
-
-    <div class="space-y-2">
-      <Label for="subject">Subject</Label>
-      <Input
-        id="subject"
-        bind:value={form.sink.subject}
-        placeholder="my-stream"
-      />
-      {#if errors.sink?.subject}
-        <p class="text-destructive text-sm">{errors.sink.subject}</p>
-      {/if}
-    </div>
   </CardContent>
 </Card>

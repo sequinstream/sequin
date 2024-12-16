@@ -4,6 +4,7 @@ defmodule Sequin.Application do
   @moduledoc false
   use Application
 
+  alias Sequin.CheckSystemHealthWorker
   alias Sequin.MutexedSupervisor
 
   require Logger
@@ -71,6 +72,7 @@ defmodule Sequin.Application do
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
       {Cluster.Supervisor, [topologies]},
+      {Task, fn -> CheckSystemHealthWorker.enqueue() end},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]

@@ -20,7 +20,7 @@ defmodule Sequin.Mutex do
         {:error, :mutex_taken}
 
       err ->
-        Logger.error("Redis error while trying to acquire mutex", error: err)
+        Logger.error("Redis error while trying to acquire mutex #{inspect(err)}", error: err)
         :error
     end
   end
@@ -38,7 +38,7 @@ defmodule Sequin.Mutex do
         {:error, :mutex_taken}
 
       err ->
-        Logger.error("Redis error while trying to release mutex", error: err)
+        Logger.error("Redis error while trying to release mutex #{inspect(err)}", error: err)
         :error
     end
   end

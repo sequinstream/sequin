@@ -489,8 +489,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "nats",
       "host" => sink["host"],
-      "port" => sink["port"],
-      "subject" => sink["subject"]
+      "port" => sink["port"]
     }
   end
 
@@ -622,8 +621,7 @@ defmodule SequinWeb.Components.ConsumerForm do
     %{
       "type" => "nats",
       "host" => sink.host,
-      "port" => sink.port,
-      "subject" => sink.subject
+      "port" => sink.port
     }
   end
 

@@ -5,13 +5,12 @@ defmodule Sequin.Consumers.NatsSink do
 
   import Ecto.Changeset
 
-  @derive {Jason.Encoder, only: [:host, :port, :subject]}
+  @derive {Jason.Encoder, only: [:host, :port]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:nats], default: :nats
     field :host, :string
     field :port, :integer
-    field :subject, :string
     field :connection_id, :string
   end
 
@@ -19,12 +18,10 @@ defmodule Sequin.Consumers.NatsSink do
     struct
     |> cast(params, [
       :host,
-      :port,
-      :subject
+      :port
     ])
-    |> validate_required([:host, :port, :subject])
+    |> validate_required([:host, :port])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
-    |> validate_length(:subject, max: 255)
     |> put_connection_id()
   end
 

@@ -35,7 +35,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
   ```bash
   docker run --rm -it --network host natsio/nats-box:latest
-  nats sub products.events
+  nats sub "sequin.>"
   ```
 
   Keep this terminal window open - you'll see messages start flowing once we create the sink.
@@ -74,7 +74,6 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
 
       - Host: If running NATS and Sequin locally with Docker, use `host.docker.internal`
       - Port: The port NATS is listening on (default: 4222)
-      - Subject: The NATS subject to publish to (e.g., `products.events`)
 
       <Frame>
         <img style={{ maxWidth: '700px' }} src="/images/quickstart/nats/nats-config-card.png" alt="NATS configuration card" />

@@ -3,7 +3,9 @@ defmodule Sequin.Nats.Client do
   @behaviour Sequin.Nats
 
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.NatsSink
   alias Sequin.Error
   alias Sequin.Nats.ConnectionCache
@@ -13,7 +15,7 @@ defmodule Sequin.Nats.Client do
   def send_messages(%NatsSink{} = sink, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       Enum.reduce_while(messages, :ok, fn message, :ok ->
-        case publish_message(message, connection, sink) do
+        case publish_message(message, connection) do
           :ok ->
             {:cont, :ok}
 
@@ -52,16 +54,27 @@ defmodule Sequin.Nats.Client do
       {:error, to_sequin_error(error)}
   end
 
-  defp publish_message(message, connection, sink) do
+  defp publish_message(message, connection) do
     opts = [headers: get_headers(message)]
     payload = to_payload(message)
+    subject = subject(message)
 
     try do
-      Gnat.pub(connection, sink.subject, Jason.encode_to_iodata!(payload), opts)
+      Gnat.pub(connection, subject, Jason.encode_to_iodata!(payload), opts)
     catch
       error ->
         {:error, to_sequin_error(error)}
     end
+  end
+
+  defp subject(%ConsumerEvent{data: %ConsumerEventData{} = data}) do
+    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
+    "sequin.changes.#{database_name}.#{table_schema}.#{table_name}.#{data.action}"
+  end
+
+  defp subject(%ConsumerRecord{data: %ConsumerRecordData{} = data}) do
+    %{metadata: %{database_name: database_name, table_schema: table_schema, table_name: table_name}} = data
+    "sequin.rows.#{database_name}.#{table_schema}.#{table_name}"
   end
 
   defp to_sequin_error(error) do

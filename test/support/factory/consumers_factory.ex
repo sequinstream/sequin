@@ -178,8 +178,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       %NatsSink{
         type: :nats,
         host: "localhost",
-        port: 4222,
-        subject: Factory.word()
+        port: 4222
       },
       attrs
     )

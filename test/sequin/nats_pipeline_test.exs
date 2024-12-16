@@ -16,8 +16,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
           sink: %{
             type: :nats,
             host: "localhost",
-            port: 4222,
-            subject: "test.subject"
+            port: 4222
           }
         )
 

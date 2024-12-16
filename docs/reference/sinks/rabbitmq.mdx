@@ -1,0 +1,101 @@
+---
+title: "RabbitMQ sink"
+sidebarTitle: "RabbitMQ sink"
+description: "Reference for the RabbitMQ sink"
+---
+
+The RabbitMQ sink publishes messages to RabbitMQ exchanges.
+
+## Configuration
+
+- **Host**
+
+    The hostname of your RabbitMQ server (e.g., `localhost`).
+
+- **Port**
+
+    The port number for your RabbitMQ server (default: `5672`).
+
+- **Exchange**
+
+    The name of the exchange to publish messages to. Maximum length is 255 characters.
+
+<Info>
+  Support for authenticated connections is coming soon. Upvote or comment on [this issue](https://github.com/sequin-io/sequin/issues/733) and we'll prioritize it.
+</Info>
+
+## Message format
+
+Sequin sends messages to RabbitMQ as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+
+## Routing keys
+
+Messages are published with routing keys using the following patterns:
+
+For change events:
+```
+sequin.changes.<database_name>.<schema_name>.<table_name>.<action>
+```
+
+For record events:
+```
+sequin.rows.<database_name>.<schema_name>.<table_name>
+```
+
+For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop`, you would see routing keys like:
+
+- `sequin.changes.shop_prod.public.products.insert`
+- `sequin.changes.shop_prod.public.products.update`
+- `sequin.changes.shop_prod.public.products.delete`
+
+## Message properties
+
+Each message includes the following AMQP properties:
+
+- `message_id`: A unique Sequin identifier for the message
+- `content_type`: Set to "application/json"
+
+## Retry behavior
+
+If Sequin is unable to deliver a message to RabbitMQ, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Message ordering
+
+RabbitMQ preserves message order within a queue. Messages are published to RabbitMQ exchanges in the same order that they are received from your source table.
+
+<Note>
+  If you have multiple consumers on a queue or use different queues bound to the same exchange, you may not receive messages in the same order that they were published.
+</Note>
+
+## Exchange and queue setup
+
+Before using the RabbitMQ sink, you need to:
+
+1. Create an exchange
+2. Create one or more queues
+3. Bind the queues to the exchange with appropriate routing key patterns
+
+You can do this through the RabbitMQ management UI or using the `rabbitmqadmin` CLI tool.
+
+For example, to receive all changes to a table:
+```bash
+# Create a topic exchange
+rabbitmqadmin declare exchange name=sequin type=topic
+
+# Create a queue
+rabbitmqadmin declare queue name=my-queue
+
+# Bind queue to exchange with wildcard routing key
+rabbitmqadmin declare binding \
+  source=sequin \
+  destination=my-queue \
+  routing_key="sequin.changes.mydb.public.mytable.*"
+```
+
+## Debugging
+
+You can view the status of your RabbitMQ sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to RabbitMQ, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from RabbitMQ.

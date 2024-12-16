@@ -1,0 +1,127 @@
+---
+title: "How to stream Postgres to NATS"
+sidebarTitle: "NATS"
+description: "Receive Postgres changes in NATS subjects in real-time"
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to NATS using Sequin.
+
+With Postgres data streaming to NATS, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
+
+By the end of this how-to, you'll have database changes flowing to a NATS subject.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/connect-postgres)
+3. A NATS server ready to go
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. A NATS server ready to go
+
+## Basic setup
+
+### Prepare your NATS server
+
+You'll need a NATS server ready for Sequin to stream changes to. You can use either a local server for development or a cloud-hosted NATS service in production.
+
+#### Local development with Docker
+
+For local development with Sequin, you can quickly spin up a NATS server using Docker:
+
+```bash
+docker run --name nats -p 4222:4222 -d nats:latest
+```
+
+## Create NATS sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select "NATS Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+    If you're not sure which to choose, you can start with the default, "Changes".
+  </Step>
+
+  <Step title="Specify filters">
+    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
+
+    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  </Step>
+
+  <Step title="Specify backfill">
+    You can optionally indicate if you want NATS to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. Backfills are useful if you want to use NATS to process historical data.
+
+    You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
+  </Step>
+
+  <Step title="Specify message grouping">
+    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to NATS in order.
+  </Step>
+</Steps>
+
+### Configure NATS
+
+<Steps>
+  <Step title="Enter NATS connection details">
+    Fill in your NATS connection details:
+
+    - **Host** (required): The hostname of your NATS server (e.g., `localhost` or `nats.example.com`)
+    - **Port** (required): The port number (default: 4222)
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create NATS Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your NATS sink is working:
+
+1. Using the NATS CLI, subscribe to your subjects:
+   ```bash
+   nats sub "sequin.>"
+   ```
+2. Make some changes in your source table
+3. Verify that the count of messages for your sink increases in the Sequin web console
+4. Verify that the messages appear in your NATS subscription
+
+If messages don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink
+2. Click any failed message
+3. Check the delivery logs for error details, including any NATS connection errors
+
+Common issues to check:
+- NATS server is running and accessible
+- Host and port are correct
+- Network connectivity between Sequin and NATS
+
+## Next steps
+
+- **Setup a processor**
+
+   Now that your Postgres data is flowing into NATS, you can setup a subscriber to read from the subjects and process the data. See the [NATS documentation](https://docs.nats.io/nats-concepts/subjects) for details on consuming messages.
+   
+   Refer to the [NATS sink reference](/reference/sinks/nats) for the shape of messages that Sequin will publish.
+
+- **Deploy your implementation**
+
+   When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+   For more about how NATS sinks work, see the [NATS sink reference](/reference/sinks/nats).

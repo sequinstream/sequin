@@ -1,0 +1,143 @@
+---
+title: "How to stream Postgres to RabbitMQ"
+sidebarTitle: "RabbitMQ"
+description: "Receive Postgres changes in RabbitMQ in real-time"
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to RabbitMQ using Sequin.
+
+With Postgres data streaming to RabbitMQ, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
+
+By the end of this how-to, you'll have database changes flowing to a RabbitMQ exchange.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/connect-postgres)
+3. A RabbitMQ server ready to go
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. A RabbitMQ server ready to go
+
+## Basic setup
+
+### Prepare RabbitMQ
+
+You'll need a RabbitMQ server and exchange ready for Sequin to stream changes to. You can use either a local server for development or a cloud-hosted RabbitMQ service in production.
+
+#### Local development with Docker
+
+For local development, you can quickly spin up RabbitMQ using Docker:
+
+```bash
+docker run -d --name rabbitmq \
+  -p 5672:5672 \
+  -p 15672:15672 \
+  rabbitmq:3-management
+```
+
+This starts RabbitMQ with the management plugin enabled at http://localhost:15672 (login with guest/guest).
+
+#### Configure RabbitMQ
+
+Before creating your sink, set up RabbitMQ to receive messages:
+
+1. Create an exchange:
+   - Name: Choose a name for your exchange (e.g., "sequin")
+   - Type: topic
+   
+2. Create a queue:
+   - Name: Choose a name for your queue (e.g., "my-table-changes")
+   
+3. Create a binding:
+   - From exchange: The exchange you created
+   - To queue: The queue you created
+   - Routing key: `sequin.changes.<database>.<schema>.<table>.*`
+   
+   This routing key pattern will match all changes to your table. The format is:
+   `sequin.changes.<database>.<schema>.<table>.<action>`
+
+## Create RabbitMQ sink
+
+Navigate to the "Sinks" tab, click "Create Sink", and select "RabbitMQ Sink".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+    If you're not sure which to choose, you can start with the default, "Changes".
+  </Step>
+
+  <Step title="Specify filters">
+    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
+
+    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  </Step>
+
+  <Step title="Specify backfill">
+    You can optionally indicate if you want to [backfill](reference/backfills) all or a portion of the table's existing data into RabbitMQ. Backfills are useful if you want to use RabbitMQ to process historical data.
+
+    You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
+  </Step>
+</Steps>
+
+### Configure RabbitMQ
+
+<Steps>
+  <Step title="Enter RabbitMQ connection details">
+    Fill in your RabbitMQ connection details:
+
+    - **Host** (required): The hostname of your RabbitMQ server
+    - **Port** (required): The port number (default: 5672)
+    - **Exchange** (required): The name of the exchange where messages will be published (max 255 characters)
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create RabbitMQ Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your RabbitMQ sink is working:
+
+1. Make some changes in your source table
+2. Verify that the count of messages for your sink increases in the Sequin web console
+3. Using the RabbitMQ management UI or CLI, check your queue:
+   ```bash
+   rabbitmqadmin get queue=your-queue count=5
+   ```
+   You should see the messages from Sequin appear in the queue.
+
+If messages don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink
+2. Click any failed message
+3. Check the delivery logs for error details, including any RabbitMQ connection errors
+
+## Next steps
+
+- **Setup a consumer**
+
+   Now that your Postgres data is flowing into RabbitMQ, you can setup a consumer to read from the queue and process the data.
+   
+   Refer to the [RabbitMQ sink reference](/reference/sinks/rabbitmq) for the shape of messages that Sequin will publish.
+
+- **Deploy your implementation**
+
+   When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+   For more about how RabbitMQ sinks work, see the [RabbitMQ sink reference](/reference/sinks/rabbitmq).

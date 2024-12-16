@@ -12,7 +12,7 @@ To use Sequin, you'll configure [sinks](/reference/sinks/overview) for one or mo
 Sequin works great for CDC use cases like:
 
 <CardGroup cols={3}>
-  <Card title="Trigger Workflows" icon="bolt">
+  <Card title="Trigger Workflows" icon="bolt" href="/how-to/trigger-automated-workflows" >
     Execute custom business logic whenever specific rows are inserted, updated, or deleted in your database.
   </Card>
   <Card title="Stream Events" icon="arrow-right">
@@ -21,7 +21,7 @@ Sequin works great for CDC use cases like:
   <Card title="Keep Services in Sync" icon="arrows-rotate">
     Notify dependent services about data changes to keep systems in sync.
   </Card>
-  <Card title="Audit Logging" icon="clipboard-list">
+  <Card title="Audit Logging" icon="clipboard-list" href="/how-to/create-audit-logs">
     Track and record all changes made to data in your database for compliance or feature development.
   </Card>
   <Card title="Database Sync" icon="database">
@@ -30,10 +30,10 @@ Sequin works great for CDC use cases like:
   <Card title="Derived Tables" icon="table">
     Create and maintain derived tables based on changes to source tables.
   </Card>
-  <Card title="Cache Management" icon="memory">
+  <Card title="Cache Management" icon="memory" href="/how-to/maintain-caches">
     Keep application caches up-to-date by streaming database changes.
   </Card>
-  <Card title="Redis Integration" icon="server">
+  <Card title="Redis Integration" icon="server" href="/how-to/stream-postgres-to-redis">
     Automatically update Redis when your Postgres data changes.
   </Card>
   <Card title="Search Indexing" icon="magnifying-glass">
@@ -79,36 +79,46 @@ Sequin is a fast, simple alternative to Debezium. It's built on Postgres, stream
 
 ## Getting started
 
-Sequin is available as a Docker image or cloud service. See the following docs to get up and running:
+Sequin is available as a Docker image or cloud service. See the following docs to get up and running in a couple of minutes:
 
 <Card title="Run Sequin" icon="docker" href="/running-sequin" horizontal>
-  If you're not using Sequin Cloud, install and setup Sequin in about 5 minutes.
+    Install and setup Sequin on your own infrastructure.
 </Card>
 
-<Card title="Webhooks Quickstart" icon="webhook" href="/quickstart/webhooks" horizontal>
-  Stream changes to a webhook endpoint in about 3 minutes.
-</Card>
+<CardGroup cols={2}>
 
-<Card title="SQS Quickstart" icon="aws" href="/quickstart/sqs" horizontal>
-  Stream changes to an Amazon SQS queue in about 3 minutes.
-</Card>
+  <Card title="Webhooks Quickstart" icon="webhook" href="/quickstart/webhooks" horizontal>
+    Stream changes to a webhook endpoint.
+  </Card>
 
-<Card title="GCP Pub/Sub" icon="gcp" href="/quickstart/gcp-pubsub" horizontal>
-  Stream changes to a GCP Pub/Sub topic in about 3 minutes.
-</Card>
+  <Card title="Kafka Quickstart" icon="code-branch" href="/quickstart/kafka" horizontal>
+    Stream changes to a Kafka topic.
+  </Card>
 
-<Card title="Kafka Quickstart" icon="code-branch" href="/quickstart/kafka" horizontal>
-  Stream changes to a Kafka topic in about 3 minutes.
-</Card>
+  <Card title="Redis Quickstart" icon="layer-group" href="/quickstart/redis" horizontal>
+    Stream changes to a Redis stream.
+  </Card>
 
-<Card title="Redis Quickstart" icon="layer-group" href="/quickstart/redis" horizontal>
-  Stream changes to a Redis stream in about 3 minutes.
-</Card>
+  <Card title="SQS Quickstart" icon="aws" href="/quickstart/sqs" horizontal>
+    Stream changes to an Amazon SQS queue.
+  </Card>
 
-<Card title="Sequin Stream Quickstart" icon="wifi" href="/quickstart/sequin-stream" horizontal>
-  Stream changes to a Sequin Stream in about 3 minutes.
-</Card>
+  <Card title="GCP Pub/Sub Quickstart" icon="google" href="/quickstart/gcp-pubsub" horizontal>
+    Stream changes to a GCP Pub/Sub topic.
+  </Card>
 
+  <Card title="NATS Quickstart" icon="message" href="/quickstart/nats" horizontal>
+    Stream changes to a NATS subject.
+  </Card>
+
+  <Card title="RabbitMQ Quickstart" icon="rabbit" href="/quickstart/rabbitmq" horizontal>
+    Stream changes to a RabbitMQ queue.
+  </Card>
+
+  <Card title="Sequin Stream Quickstart" icon="wifi" href="/quickstart/sequin-stream" horizontal>
+    Stream changes to a Sequin Stream.
+  </Card>
+</CardGroup>
 
 ## Getting help
 <CardGroup>

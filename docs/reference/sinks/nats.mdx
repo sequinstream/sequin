@@ -1,0 +1,75 @@
+---
+title: "NATS sink"
+sidebarTitle: "NATS sink"
+description: "Reference for the NATS sink"
+---
+
+The NATS sink publishes messages to NATS subjects.
+
+## Configuration
+
+- **Host**
+
+    The hostname of your NATS server (e.g., `localhost`).
+
+- **Port**
+
+    The port number for your NATS server (default: `4222`).
+
+<Info>
+  Support for authenticated connections is coming soon. Upvote or comment on [this issue](https://github.com/sequin-io/sequin/issues/731) and we'll prioritize it.
+</Info>
+
+## Message format
+
+Sequin sends messages to SQS as JSON. You can find the shape of the messages in the [messages reference](/reference/messages).
+
+## Subject naming
+
+Messages are published to subjects using the following patterns:
+
+For change events:
+```
+sequin.changes.<database_name>.<schema_name>.<table_name>.<action>
+```
+
+For record events:
+```
+sequin.rows.<database_name>.<schema_name>.<table_name>
+```
+
+For example, if you're streaming changes from a table called `products` in the `public` schema of a database called `shop`, you would see routing keys like:
+
+- `sequin.changes.shop_prod.public.products.insert`
+- `sequin.changes.shop_prod.public.products.update`
+- `sequin.changes.shop_prod.public.products.delete`
+
+<Info>
+  Support for subject prefixes is on our radar. Upvote or comment on [this issue](https://github.com/sequin-io/sequin/issues/732) and we'll prioritize it.
+</Info>
+
+## Message headers
+
+Each message includes the following NATS headers:
+
+- `Nats-Msg-Id`: A unique Sequin identifier for the message
+
+## Retry behavior
+
+If Sequin is unable to deliver a message to NATS, it will retry the message indefinitely. Sequin will exponentially back off the retry interval, with a maximum backoff of roughly 3 minutes.
+
+## Message ordering
+
+NATS preserves message order within a subject. Messages are published to NATS subjects in the same order that they are received from your source table.
+
+<Note>
+  NATS does not support ordering for message consumption. If you consume messages from a NATS subject with multiple, parallel consumers, you may not receive messages in the same order that they were published.
+</Note>
+
+## Debugging
+
+You can view the status of your NATS sink in the Sequin web console.
+
+On the "Messages" tab, you can see which messages are in-flight to NATS, which messages Sequin is unable to deliver, and recently delivered messages.
+
+Messages that Sequin is unable to deliver will have a "Deliver count" greater than `1`. You can click on a message to see more details, including the last error response received from NATS.

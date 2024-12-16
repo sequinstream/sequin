@@ -114,6 +114,8 @@
         "reference/sinks/kafka",
         "reference/sinks/redis",
         "reference/sinks/gcp-pubsub",
+        "reference/sinks/nats",
+        "reference/sinks/rabbitmq",
         "reference/sinks/sequin-stream",
         {
           "group": "Sequin Stream API",

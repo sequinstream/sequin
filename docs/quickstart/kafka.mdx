@@ -25,7 +25,7 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
   ```bash
   mkdir kafka-quickstart && cd kafka-quickstart
   # On macOS:
-  mv ~/Downloads/docker-compose.yaml .
+  mv ~/Downloads/kafka-docker-compose.yaml docker-compose.yaml
   docker compose up
   ```
 
@@ -70,6 +70,24 @@ By the end, you'll have hands-on experience setting up Postgres change data capt
   <Note>
     If you're using another Kafka instance, ensure you have the connection details ready.
   </Note>
+ </Step>
+
+ <Step title="Create the Kafka topic" icon="plus">
+  Next, create the Kafka topic that will receive our database changes. Create this using the Kafka container you just started:
+
+  ```bash
+  docker exec playground-kafka-kafka-1 \
+    kafka-topics --create \
+    --topic products \
+    --bootstrap-server localhost:9092 \
+    --partitions 1 \
+    --replication-factor 1
+  ```
+
+  You should see output confirming the topic was created:
+  ```plaintext
+  Created topic products.
+  ```
  </Step>
 
  <QuickstartInitialSteps />

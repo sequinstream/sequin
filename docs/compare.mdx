@@ -11,6 +11,10 @@ Sequin is a change data capture (CDC) tool that makes it easy to stream changes 
 
 Debezium is an open-source platform for change data capture (CDC), built on Apache Kafka. While both Sequin and Debezium excel at capturing changes from Postgres, they differ in significant ways:
 
+<Note>
+See how Sequin outperforms Debezium in our [benchmark](/performance).
+</Note>
+
 1. **Infrastructure requirements**: Debezium requires Kafka and Zookeeper to operate. Sequin is a standalone Docker container that works directly with your Postgres database.
 
 2. **Destination support**: Debezium sends changes to Kafka, requiring Kafka Connect to route to other destinations. Sequin streams directly to popular destinations like Kafka, SQS, Redis Streams, and HTTP endpoints. This means less setup, transforms, and maintenance.
@@ -67,6 +71,7 @@ Postgres' LISTEN/NOTIFY is a built-in pub/sub system. While lightweight, it has 
 
 Sequin brings together the best aspects of these tools while eliminating complexity:
 
+- **Performance**: Sequin is the fastest change data capture tool. See our [benchmark](/performance).
 - **Simple setup**: Deploy a single Docker container - no Kafka or Zookeeper required
 - **Flexible destinations**: Stream directly to Kafka, SQS, Redis, or HTTP endpoints
 - **Exactly-once processing**: Never miss a change or process it twice

@@ -1,0 +1,88 @@
+---
+title: "Performance"
+description: "Sequin change data capture (CDC) performance benchmarks"
+icon: "gauge-high"
+iconType: "solid"
+---
+
+Sequin delivers industry-leading performance for change data capture (CDC), consistently achieving sub-200ms latency at 2,000 sustained operations per second. Here's how Sequin compares to other solutions:
+
+| Tool | Latency at 2k ops/s |
+|------|-------------------|
+| **Sequin** | **192ms** |
+| Debezium | 234ms |
+| PeerDB | 30 seconds |
+| Fivetran | 5 minutes |
+| Airbyte | 1+ hours |
+
+## Test Setup
+
+Our benchmarks are conducted in a production-like environment. Sequin and Debezium are compared head-to-head capturing changes from [AWS RDS](https://aws.amazon.com/rds/) and delivering to [AWS MSK Kafka](https://aws.amazon.com/msk/):
+
+- AWS RDS Postgres `db.r6g.xlarge` instance (4 vCPUs, 16GB RAM)
+- AWS MSK Kafka provisioned with 3 brokers
+- Sequin running via ECS on an `m8g.xlarge` instance (4 vCPUs, 16GB RAM)
+- Debezium deployed on MSK Connect with 8 [MCUs](https://docs.aws.amazon.com/msk/latest/developerguide/msk-connect-capacity.html).
+- Continuous load of 2,000 operations per second applied to a single Postgres table
+- 30-minute test duration
+- Latency determined end-to-end from the time a change occurs in Postgres until it's available in AWS MSK Kafka
+
+## Methodology
+
+We measure end-to-end latency from the time a change occurs in Postgres until it's available in Kafka. This includes:
+
+1. WAL read time
+2. Processing time (filters, transformations, etc.)
+3. Network transit time
+4. Destination write time
+
+The test is conducted with dedicated instances that apply load to the RDS instance and read from AWS MSK Kafka.
+
+The load generation script applies a mixed workload of `INSERT`, `UPDATE`, and `DELETE` operations to the `benchmark_records` table at a total throughput of >= 2,000 operations per second.
+
+The Posgres schema includes a single table with this schema:
+```
+                                           Table "public.benchmark_records"
+     Column      |            Type             | Collation | Nullable |                    Default
+-----------------+-----------------------------+-----------+----------+-----------------------------------------------
+ id              | integer                     |           | not null | nextval('benchmark_records_id_seq'::regclass)
+ string_field    | text                        |           |          |
+ numeric_field   | numeric                     |           |          |
+ timestamp_field | timestamp with time zone    |           |          |
+ json_field      | jsonb                       |           |          |
+ inserted_at     | timestamp without time zone |           |          | now()
+ updated_at      | timestamp without time zone |           |          | now()
+```
+
+Records delivered to Kafka are annotated with a `delivered_at` timestamp. Full end-to-end latency is calculated by subtracting the `delivered_at` timestamp from the `updated_at` timestamp.
+
+### Throughput Stability
+
+Sequin maintains consistent performance even under sustained load: 
+
+```bash
+Average throughput: 2,054.4 ops/sec
+Average latency: 192ms
+99th percentile latency: 245ms
+```
+
+By comparison, Debezium achieves a slightly higher latency of 234ms at similar throughput:
+
+```bash
+Average throughput: 2000.6 ops/sec
+Average latency: 234ms
+99th percentile latency: 286ms
+```
+
+### Resource Utilization
+
+The Sequin ECS task makes efficient use of provisioned resources, employing parallelism with lightweight processes. During the test, the Sequin ECS task averaged 34% CPU utilization and 10% memory utilization.
+
+## Next Steps
+
+Ready to see Sequin's performance for yourself?
+
+- [Quick Start Guide](/quickstart)
+- [Deploy to Production](/how-to/deploy-to-production)
+- [Compare to Other CDC Tools](/compare)
+

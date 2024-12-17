@@ -549,7 +549,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
-  defp encode_sink(%SequinStreamSink{}) do
+  defp encode_sink(%SinkConsumer{sink: %SequinStreamSink{}}) do
     %{type: :sequin_stream}
   end
 

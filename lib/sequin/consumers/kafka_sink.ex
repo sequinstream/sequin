@@ -6,6 +6,8 @@ defmodule Sequin.Consumers.KafkaSink do
   import Ecto.Changeset
 
   alias __MODULE__
+  alias Sequin.Encrypted.Field, as: EncryptedField
+  alias Sequin.Kafka.AwsMskIam
 
   @derive {Jason.Encoder, only: [:hosts, :topic]}
   @primary_key false
@@ -13,10 +15,13 @@ defmodule Sequin.Consumers.KafkaSink do
     field :type, Ecto.Enum, values: [:kafka], default: :kafka
     field :hosts, :string
     field :username, :string
-    field :password, Sequin.Encrypted.Field
+    field :password, EncryptedField
     field :tls, :boolean, default: false
     field :topic, :string
-    field :sasl_mechanism, Ecto.Enum, values: [:plain, :scram_sha_256, :scram_sha_512]
+    field :sasl_mechanism, Ecto.Enum, values: [:plain, :scram_sha_256, :scram_sha_512, :aws_msk_iam]
+    field :aws_region, :string
+    field :aws_access_key_id, :string
+    field :aws_secret_access_key, EncryptedField
     field :connection_id, :string
   end
 
@@ -28,7 +33,10 @@ defmodule Sequin.Consumers.KafkaSink do
       :password,
       :tls,
       :topic,
-      :sasl_mechanism
+      :sasl_mechanism,
+      :aws_region,
+      :aws_access_key_id,
+      :aws_secret_access_key
     ])
     |> validate_required([:hosts, :topic, :tls])
     |> validate_length(:topic, max: 255)
@@ -73,8 +81,22 @@ defmodule Sequin.Consumers.KafkaSink do
     password = get_field(changeset, :password)
 
     cond do
-      sasl_mechanism ->
-        validate_required(changeset, [:username, :password], message: "is required when SASL is enabled")
+      sasl_mechanism in [:plain, :scram_sha_256, :scram_sha_512] ->
+        validate_required(changeset, [:username, :password],
+          message: "is required when SASL Mechanism is #{sasl_mechanism}"
+        )
+
+      sasl_mechanism == :aws_msk_iam ->
+        changeset =
+          validate_required(changeset, [:aws_access_key_id, :aws_secret_access_key, :aws_region],
+            message: "is required when SASL Mechanism is #{sasl_mechanism}"
+          )
+
+        if get_field(changeset, :tls) do
+          changeset
+        else
+          add_error(changeset, :tls, "is required when SASL Mechanism is #{sasl_mechanism}")
+        end
 
       username || password ->
         add_error(changeset, :sasl_mechanism, "must be set when SASL credentials are provided")
@@ -138,6 +160,14 @@ defmodule Sequin.Consumers.KafkaSink do
   end
 
   # Add SASL authentication if username/password are configured
+  defp maybe_add_sasl(config, %{sasl_mechanism: :aws_msk_iam} = sink) do
+    Keyword.put(
+      config,
+      :sasl,
+      {:callback, AwsMskIam.Auth, {:AWS_MSK_IAM, sink.aws_access_key_id, sink.aws_secret_access_key, sink.aws_region}}
+    )
+  end
+
   defp maybe_add_sasl(config, %{sasl_mechanism: mechanism} = sink) when not is_nil(mechanism) do
     Keyword.put(config, :sasl, {mechanism, sink.username, sink.password})
   end

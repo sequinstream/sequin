@@ -88,7 +88,8 @@ defmodule Sequin.MixProject do
       {:syn, "~> 3.3"},
       {:libcluster, "~> 3.3"},
       {:amqp, "~> 4.0"},
-      {:recon, "~> 2.5.6"}
+      {:recon, "~> 2.5.6"},
+      {:aws_signature, "~> 0.3.2"}
     ]
   end
 

@@ -21,11 +21,13 @@ defmodule Sequin.HealthTest do
     test "updates the health of an entity with an expected check" do
       entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
+      assert :ok = Health.update(entity, :receive, :healthy)
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :initializing
       assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :push, :warning)
+      assert :ok = Health.update(entity, :push, :warning)
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :warning
       assert Enum.find(health.checks, &(&1.id == :push)).status == :warning
       assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
@@ -49,17 +51,21 @@ defmodule Sequin.HealthTest do
     test "sets status to the worst status of any incoming check" do
       entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
+      assert :ok = Health.update(entity, :receive, :healthy)
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :initializing
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :push, :warning)
+      assert :ok = Health.update(entity, :push, :warning)
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :warning
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :filters, :error, ErrorFactory.random_error())
+      assert :ok = Health.update(entity, :filters, :error, ErrorFactory.random_error())
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :error
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
+      assert :ok = Health.update(entity, :receive, :healthy)
       # Still error because other checks are in error state
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :error
     end
   end
@@ -68,8 +74,7 @@ defmodule Sequin.HealthTest do
     test "finds the health of an entity" do
       entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :receive, :healthy)
-      assert health.status == :initializing
+      assert :ok = Health.update(entity, :receive, :healthy)
 
       assert {:ok, %Health{} = health} = Health.get(entity)
       assert health.status == :initializing
@@ -84,7 +89,9 @@ defmodule Sequin.HealthTest do
       assert external = Health.to_external(health)
       assert external.status == :initializing
 
-      assert {:ok, %Health{} = health} = Health.update(entity, :receive, :error, ErrorFactory.random_error())
+      assert :ok = Health.update(entity, :receive, :error, ErrorFactory.random_error())
+
+      assert {:ok, %Health{} = health} = Health.get(entity)
       assert external = Health.to_external(health)
       assert external.status == :error
       assert Enum.find(external.checks, &(not is_nil(&1.error)))

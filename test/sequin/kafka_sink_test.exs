@@ -115,8 +115,8 @@ defmodule Sequin.Consumers.KafkaSinkTest do
           })
 
         refute changeset.valid?
-        assert "is required when SASL is enabled" in errors_on(changeset).username
-        assert "is required when SASL is enabled" in errors_on(changeset).password
+        assert "is required when SASL Mechanism is #{mechanism}" in errors_on(changeset).username
+        assert "is required when SASL Mechanism is #{mechanism}" in errors_on(changeset).password
 
         # Test with valid credentials
         changeset =

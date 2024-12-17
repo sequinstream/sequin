@@ -61,6 +61,14 @@ defmodule Sequin.Extensions.Replication do
       field :accumulated_messages, {non_neg_integer(), [Message.t()]}, default: {0, []}
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
+
+      field :metrics, %{},
+        default: %{
+          handle_data: [],
+          process_message: [],
+          flush_messages: [],
+          last_metrics_emit: System.monotonic_time(:millisecond)
+        }
     end
   end
 
@@ -199,9 +207,16 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
+    start_time = System.monotonic_time(:microsecond)
+
     msg = Decoder.decode_message(msg)
     next_state = process_message(msg, state)
+
     {acc_size, _acc_messages} = next_state.accumulated_messages
+
+    handle_time = System.monotonic_time(:microsecond) - start_time
+    next_state = record_metric(next_state, :handle_data, handle_time)
+    next_state = maybe_emit_metrics(next_state)
 
     Health.update(state.postgres_database, :replication_messages, :healthy)
 
@@ -469,6 +484,7 @@ defmodule Sequin.Extensions.Replication do
 
   defp flush_messages(%State{} = state) do
     {_, messages} = state.accumulated_messages
+    start_time = System.monotonic_time(:microsecond)
 
     # Reverse the messages because we accumulate them with list prepending
     {rejected_messages, messages} =
@@ -487,12 +503,17 @@ defmodule Sequin.Extensions.Replication do
     if Enum.any?(messages) do
       next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
       # Flush accumulated messages
+      # Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
       state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+      # end)
 
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})
       end
 
+      flush_time = System.monotonic_time(:microsecond) - start_time
+
+      state = record_metric(state, :flush_messages, flush_time)
       %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq}
     else
       if state.test_pid do
@@ -686,5 +707,57 @@ defmodule Sequin.Extensions.Replication do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  defp record_metric(%State{} = state, metric_name, time) do
+    metrics =
+      Map.update(
+        state.metrics,
+        metric_name,
+        [time],
+        # Keep last 100,000 measurements
+        &Enum.take([time | &1], 100_000)
+      )
+
+    %{state | metrics: metrics}
+  end
+
+  defp maybe_emit_metrics(%State{metrics: metrics} = state) do
+    now = System.monotonic_time(:millisecond)
+    last_emit = Map.get(metrics, :last_metrics_emit, 0)
+
+    # Emit every 10 seconds
+    if now - last_emit > 10_000 do
+      Enum.each([:handle_data, :process_message, :flush_messages], fn metric ->
+        values = Map.get(metrics, metric, [])
+
+        if length(values) > 0 do
+          total = Enum.sum(values)
+          avg = Float.round(total / length(values), 2)
+          max = Enum.max(values)
+          min = Enum.min(values)
+
+          Logger.info(
+            "[Replication Metrics] #{metric}: total=#{format_time(total)} avg=#{format_time(avg)} min=#{format_time(min)} max=#{format_time(max)} samples=#{length(values)}"
+          )
+        end
+      end)
+
+      %{state | metrics: %{metrics | last_metrics_emit: now, handle_data: [], process_message: [], flush_messages: []}}
+    else
+      state
+    end
+  end
+
+  defp format_time(time) when time > 1_000_000 do
+    "#{Float.round(time / 1_000_000, 2)}s"
+  end
+
+  defp format_time(time) when time > 1_000 do
+    "#{Float.round(time / 1_000, 2)}ms"
+  end
+
+  defp format_time(time) do
+    "#{time}µs"
   end
 end

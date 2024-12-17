@@ -40,7 +40,7 @@ defmodule Sequin.Replication.MessageHandler do
 
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
-    Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
+    Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
     max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
 
     messages_by_consumer =

@@ -39,8 +39,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @impl GenStage
   def handle_demand(incoming_demand, %{demand: demand} = state) do
-    new_state = maybe_schedule_demand(state)
-    new_state = %{new_state | demand: demand + incoming_demand}
+    new_state = %{state | demand: demand + incoming_demand}
+    new_state = maybe_schedule_demand(new_state)
 
     {:noreply, [], new_state}
   end
@@ -132,7 +132,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     :ok
   end
 
-  defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do
+  defp maybe_schedule_demand(%{scheduled_handle_demand: false, demand: demand} = state) when demand > 0 do
     send(self(), :handle_demand)
     %{state | scheduled_handle_demand: true}
   end

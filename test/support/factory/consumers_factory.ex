@@ -395,7 +395,9 @@ defmodule Sequin.Factory.ConsumersFactory do
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
           commit_timestamp: Factory.timestamp(),
-          consumer: %{}
+          consumer: %{},
+          delivered_timestamp: nil,
+          replicated_timestamp: nil
         }
       },
       attrs

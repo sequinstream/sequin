@@ -57,17 +57,14 @@ defmodule Sequin.Metrics.Store do
 
   # Throughput functions
   def incr_throughput(key) do
-    now = :os.system_time(:nanosecond)
-
-    # ms to nano
-    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
+    window = get_current_window()
+    window_key = "metrics:throughput:#{key}:window:#{window}"
 
     :redix
     |> Redix.pipeline([
-      ["ZADD", "metrics:throughput:#{key}", now, now],
-      ["ZREMRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
-      ["ZREMRANGEBYRANK", "metrics:throughput:#{key}", "0", "-10001"],
-      ["ZCARD", "metrics:throughput:#{key}"]
+      ["INCR", window_key],
+      # 10 minute TTL
+      ["EXPIRE", window_key, 600]
     ])
     |> handle_response()
     |> case do
@@ -77,39 +74,39 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_throughput(key) do
-    now = :os.system_time(:nanosecond)
-
-    # ms to nano
-    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
+    current_window = get_current_window()
+    window_keys = for i <- 0..9, do: "metrics:throughput:#{key}:window:#{current_window - i}"
 
     :redix
-    |> Redix.pipeline([
-      ["ZREVRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
-      ["ZRANGE", "metrics:throughput:#{key}", 0, 0, "WITHSCORES"],
-      ["ZCARD", "metrics:throughput:#{key}"]
-    ])
+    |> Redix.command(["MGET"] ++ window_keys)
     |> handle_response()
     |> case do
-      {:ok, [_, [], _]} ->
-        {:ok, 0.0}
-
-      {:ok, [_, [_oldest, oldest_score], count]} ->
-        {decimal_oldest, ""} = Decimal.parse(oldest_score)
-        oldest = Decimal.to_integer(decimal_oldest)
-
-        time_diff = max(now - oldest, 1)
-
-        # Nanoseconds to seconds
-        time_diff_seconds = time_diff / 1_000_000_000
-
-        # Require at least 60 seconds to avoid spikes
-        time_diff_seconds = max(time_diff_seconds, 60)
-
-        {:ok, count / time_diff_seconds}
+      {:ok, counts} ->
+        counts_with_weights = Enum.zip(counts, weighted_factors())
+        weighted_sum = calculate_weighted_sum(counts_with_weights)
+        # Convert to per-second rate
+        {:ok, weighted_sum / 60.0}
 
       error ->
         error
     end
+  end
+
+  # Private helpers
+  defp get_current_window do
+    :second |> System.system_time() |> div(60)
+  end
+
+  defp weighted_factors do
+    # More recent windows have higher weights
+    [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+  end
+
+  defp calculate_weighted_sum(counts_with_weights) do
+    Enum.reduce(counts_with_weights, 0, fn
+      {nil, _weight}, acc -> acc
+      {count, weight}, acc -> acc + String.to_integer(count) * weight
+    end)
   end
 
   @spec handle_response(any()) :: {:ok, any()} | {:error, Error.t()}

@@ -80,6 +80,9 @@ config :sequin,
   gcp_pubsub: [
     req_opts: [plug: {Req.Test, Sequin.Gcp.PubSub}]
   ],
+  azure_event_hub: [
+    req_opts: [plug: {Req.Test, Sequin.Azure.EventHub}]
+  ],
   redis_module: Sequin.RedisMock,
   kafka_module: Sequin.KafkaMock,
   nats_module: Sequin.Mocks.NatsMock

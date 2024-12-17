@@ -67,7 +67,8 @@
         },
         "compare",
         "running-sequin",
-        "connect-postgres"
+        "connect-postgres",
+        "performance"
       ]
     },
     {

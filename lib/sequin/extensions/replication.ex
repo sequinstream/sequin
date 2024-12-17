@@ -60,6 +60,7 @@ defmodule Sequin.Extensions.Replication do
       field :schemas, %{}, default: %{}
       field :accumulated_messages, {non_neg_integer(), [Message.t()]}, default: {0, []}
       field :connect_attempts, non_neg_integer(), default: 0
+      field :dirty, boolean(), default: false
     end
   end
 
@@ -88,7 +89,8 @@ defmodule Sequin.Extensions.Replication do
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
-      connection: connection
+      connection: connection,
+      last_committed_lsn: nil
     }
 
     Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
@@ -205,6 +207,8 @@ defmodule Sequin.Extensions.Replication do
 
     cond do
       is_struct(msg, Commit) ->
+        if next_state.dirty or state.dirty, do: Logger.warning("Got a commit message while DIRTY")
+
         next_state = flush_messages(next_state)
         {:noreply, next_state}
 
@@ -269,6 +273,7 @@ defmodule Sequin.Extensions.Replication do
     # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
     # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
     lsn = lsn + 1
+    Logger.info("Acking LSN #{lsn}")
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
 
@@ -327,9 +332,22 @@ defmodule Sequin.Extensions.Replication do
 
   defp process_message(
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
-         %State{accumulated_messages: {0, []}} = state
+         %State{accumulated_messages: {0, []}, last_committed_lsn: last_committed_lsn} = state
        ) do
-    %{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: lsn_to_int(lsn), current_xid: xid}
+    begin_lsn = lsn_to_int(lsn)
+
+    state =
+      if not is_nil(last_committed_lsn) and begin_lsn < last_committed_lsn do
+        Logger.error(
+          "Received a Begin message with an LSN that is less than the last committed LSN (#{begin_lsn} < #{last_committed_lsn})"
+        )
+
+        %{state | dirty: true}
+      else
+        state
+      end
+
+    %{state | current_commit_ts: ts, current_commit_idx: 0, current_xaction_lsn: begin_lsn, current_xid: xid}
   end
 
   # Ensure we do not have an out-of-order bug by asserting equality
@@ -340,7 +358,7 @@ defmodule Sequin.Extensions.Replication do
     lsn = lsn_to_int(lsn)
 
     unless current_lsn == lsn do
-      raise "Unexpectedly received a commit LSN that does not match current LSN #{current_lsn} != #{lsn}"
+      raise "Unexpectedly received a commit LSN that does not match current LSN (#{current_lsn} != #{lsn})"
     end
 
     :ets.insert(ets_table(), {{id, :last_committed_at}, ts})
@@ -351,7 +369,8 @@ defmodule Sequin.Extensions.Replication do
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
-        current_commit_idx: 0
+        current_commit_idx: 0,
+        dirty: false
     }
   end
 
@@ -458,8 +477,10 @@ defmodule Sequin.Extensions.Replication do
       |> Enum.split_with(fn message -> message.seq <= state.last_processed_seq end)
 
     unless rejected_messages == [] do
+      max_rejected_seq = rejected_messages |> Enum.map(& &1.seq) |> Enum.max()
+
       Logger.info(
-        "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq})"
+        "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq}, max_rejected_seq=#{max_rejected_seq})"
       )
     end
 

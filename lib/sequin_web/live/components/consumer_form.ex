@@ -459,7 +459,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       "password" => sink["password"],
       "topic" => sink["topic"],
       "tls" => sink["tls"],
-      "sasl_mechanism" => sink["sasl_mechanism"]
+      "sasl_mechanism" => sink["sasl_mechanism"],
+      "aws_access_key_id" => sink["aws_access_key_id"],
+      "aws_secret_access_key" => sink["aws_secret_access_key"],
+      "aws_region" => sink["aws_region"]
     }
   end
 
@@ -591,7 +594,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       "password" => sink.password,
       "topic" => sink.topic,
       "tls" => sink.tls,
-      "sasl_mechanism" => sink.sasl_mechanism
+      "sasl_mechanism" => sink.sasl_mechanism,
+      "aws_access_key_id" => sink.aws_access_key_id,
+      "aws_secret_access_key" => sink.aws_secret_access_key,
+      "aws_region" => sink.aws_region
     }
   end
 

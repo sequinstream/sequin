@@ -48,8 +48,6 @@ defmodule Sequin.Replication.MessageHandler do
         ctx.consumers
         |> Enum.map(fn consumer ->
           if Consumers.matches_message?(consumer, message) do
-            Logger.info("[MessageHandler] Matched message to consumer #{consumer.id}")
-
             cond do
               consumer.message_kind == :event ->
                 {{:insert, consumer_event(consumer, message)}, consumer}

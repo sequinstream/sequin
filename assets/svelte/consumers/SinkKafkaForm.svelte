@@ -30,19 +30,39 @@
     { value: "plain", label: "Plain" },
     { value: "scram_sha_256", label: "SCRAM-SHA-256" },
     { value: "scram_sha_512", label: "SCRAM-SHA-512" },
+    { value: "aws_msk_iam", label: "AWS MSK IAM" },
   ];
+
+  // Add internal state for AWS credentials
+  let internalAwsKeyId = form.sink.aws_access_key_id || "";
+  let internalAwsSecretKey = form.sink.aws_secret_access_key || "";
+  let internalAwsRegion = form.sink.aws_region || "";
 
   function togglePasswordVisibility() {
     showPassword = !showPassword;
   }
 
-  // Reactive statement to handle SASL credentials
-  $: if (form.sink.sasl_mechanism !== null) {
-    form.sink.username = internalUsername;
-    form.sink.password = internalPassword;
-  } else {
-    form.sink.username = null;
-    form.sink.password = null;
+  // Updated reactive statement to handle credentials
+  $: {
+    if (form.sink.sasl_mechanism === null) {
+      form.sink.username = null;
+      form.sink.password = null;
+      form.sink.aws_access_key_id = null;
+      form.sink.aws_secret_access_key = null;
+      form.sink.aws_region = null;
+    } else if (form.sink.sasl_mechanism === "aws_msk_iam") {
+      form.sink.username = null;
+      form.sink.password = null;
+      form.sink.aws_access_key_id = internalAwsKeyId;
+      form.sink.aws_secret_access_key = internalAwsSecretKey;
+      form.sink.aws_region = internalAwsRegion;
+    } else {
+      form.sink.username = internalUsername;
+      form.sink.password = internalPassword;
+      form.sink.aws_access_key_id = null;
+      form.sink.aws_secret_access_key = null;
+      form.sink.aws_region = null;
+    }
   }
 </script>
 
@@ -93,50 +113,40 @@
       {/if}
     </div>
 
-    <div class="space-y-2">
+    <!-- Username/Password fields -->
+    <div
+      class="space-y-2"
+      hidden={form.sink.sasl_mechanism === null ||
+        form.sink.sasl_mechanism === "aws_msk_iam"}
+    >
       <Label for="username">Username</Label>
-      <div hidden={form.sink.sasl_mechanism === null}>
-        <Input
-          id="username-input"
-          bind:value={internalUsername}
-          placeholder="Username"
-          data-1p-ignore
-          autocomplete="off"
-        />
-      </div>
-      <div hidden={form.sink.sasl_mechanism !== null}>
-        <Input
-          id="username-disabled"
-          placeholder="Username requires SASL"
-          disabled
-        />
-      </div>
+      <Input
+        id="username-input"
+        bind:value={internalUsername}
+        placeholder="Username"
+        data-1p-ignore
+        autocomplete="off"
+      />
       {#if errors.sink?.username}
         <p class="text-destructive text-sm">{errors.sink.username}</p>
       {/if}
     </div>
 
-    <div class="space-y-2">
+    <div
+      class="space-y-2"
+      hidden={form.sink.sasl_mechanism === null ||
+        form.sink.sasl_mechanism === "aws_msk_iam"}
+    >
       <Label for="password">Password</Label>
       <div class="relative">
-        <div hidden={form.sink.sasl_mechanism === null}>
-          <Input
-            id="password-input"
-            type={showPassword ? "text" : "password"}
-            bind:value={internalPassword}
-            placeholder="Password"
-            data-1p-ignore
-            autocomplete="off"
-          />
-        </div>
-        <div hidden={form.sink.sasl_mechanism !== null}>
-          <Input
-            id="password-disabled"
-            type="password"
-            placeholder="Password requires SASL"
-            disabled
-          />
-        </div>
+        <Input
+          id="password-input"
+          type={showPassword ? "text" : "password"}
+          bind:value={internalPassword}
+          placeholder="Password"
+          data-1p-ignore
+          autocomplete="off"
+        />
         <button
           type="button"
           class="absolute inset-y-0 right-0 flex items-center pr-3"
@@ -151,6 +161,65 @@
       </div>
       {#if errors.sink?.password}
         <p class="text-destructive text-sm">{errors.sink.password}</p>
+      {/if}
+    </div>
+
+    <!-- AWS Credentials fields -->
+    <div class="space-y-2" hidden={form.sink.sasl_mechanism !== "aws_msk_iam"}>
+      <Label for="aws_region">AWS Region</Label>
+      <Input
+        id="aws_region"
+        bind:value={internalAwsRegion}
+        placeholder="us-east-1"
+        data-1p-ignore
+        autocomplete="off"
+      />
+      {#if errors.sink?.aws_region}
+        <p class="text-destructive text-sm">{errors.sink.aws_region}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2" hidden={form.sink.sasl_mechanism !== "aws_msk_iam"}>
+      <Label for="aws_key_id">AWS Access Key ID</Label>
+      <Input
+        id="aws_key_id"
+        bind:value={internalAwsKeyId}
+        placeholder="AWS Access Key ID"
+        data-1p-ignore
+        autocomplete="off"
+      />
+      {#if errors.sink?.aws_access_key_id}
+        <p class="text-destructive text-sm">{errors.sink.aws_access_key_id}</p>
+      {/if}
+    </div>
+
+    <div class="space-y-2" hidden={form.sink.sasl_mechanism !== "aws_msk_iam"}>
+      <Label for="aws_secret_key">AWS Secret Access Key</Label>
+      <div class="relative">
+        <Input
+          id="aws_secret_key"
+          type={showPassword ? "text" : "password"}
+          bind:value={internalAwsSecretKey}
+          placeholder="AWS Secret Access Key"
+          data-1p-ignore
+          autocomplete="off"
+        />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-0 flex items-center pr-3"
+          on:click={togglePasswordVisibility}
+        >
+          {#if showPassword}
+            <EyeOff class="h-4 w-4 text-gray-400" />
+          {:else}
+            <Eye class="h-4 w-4 text-gray-400" />
+          {/if}
+        </button>
+      </div>
+      {#if errors.sink?.aws_secret_access_key}
+        <p class="text-destructive text-sm">
+          {errors.sink.aws_secret_access_key}
+        </p>
       {/if}
     </div>
 

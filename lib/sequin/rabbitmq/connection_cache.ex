@@ -42,7 +42,7 @@ defmodule Sequin.RabbitMq.ConnectionCache do
       Enum.each(cache, fn {_id, entry} -> function.(entry.conn) end)
     end
 
-    @spec lookup(t(), sink()) :: {:ok, pid()} | {:error, :stale} | {:error, :not_found}
+    @spec lookup(t(), sink()) :: {:ok, AMQP.Channel.t()} | {:error, :stale} | {:error, :not_found}
     def lookup(cache, sink) do
       new_hash = options_hash(sink)
       entry = Map.get(cache, sink.connection_id)
@@ -78,7 +78,7 @@ defmodule Sequin.RabbitMq.ConnectionCache do
     end
 
     defp options_hash(sink) do
-      :erlang.phash2({sink.host, sink.port})
+      :erlang.phash2({sink.host, sink.port, sink.virtual_host, sink.username, sink.password, sink.tls})
     end
   end
 
@@ -116,8 +116,15 @@ defmodule Sequin.RabbitMq.ConnectionCache do
     @spec find_or_create_connection(t(), sink(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
     def find_or_create_connection(%__MODULE__{} = state, sink, create_on_miss) do
       case Cache.lookup(state.cache, sink) do
-        {:ok, conn} ->
-          {:ok, conn, state}
+        {:ok, %AMQP.Channel{conn: %AMQP.Connection{pid: conn_pid}, pid: channel_pid} = conn} ->
+          if Process.alive?(conn_pid) and Process.alive?(channel_pid) do
+            {:ok, conn, state}
+          else
+            # RabbitMQ processes will die on error.
+            state
+            |> invalidate_connection(sink)
+            |> find_or_create_connection(sink, create_on_miss)
+          end
 
         {:error, :stale} ->
           state
@@ -153,8 +160,20 @@ defmodule Sequin.RabbitMq.ConnectionCache do
     end
 
     defp default_stop(%AMQP.Channel{} = channel) do
-      with :ok <- AMQP.Channel.close(channel),
-           do: AMQP.Connection.close(channel.conn)
+      close_channel(channel)
+      close_connection(channel.conn)
+    end
+
+    defp close_channel(%AMQP.Channel{} = channel) do
+      AMQP.Channel.close(channel)
+    catch
+      :exit, _ -> :ok
+    end
+
+    defp close_connection(%AMQP.Connection{} = connection) do
+      AMQP.Connection.close(connection)
+    catch
+      :exit, _ -> :ok
     end
 
     defp default_start(%RabbitMqSink{} = sink) do

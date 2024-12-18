@@ -12,6 +12,8 @@ defmodule Sequin.RabbitMq.Client do
   alias Sequin.NetworkUtils
   alias Sequin.RabbitMq.ConnectionCache
 
+  require Logger
+
   @impl Sequin.RabbitMq
   def send_messages(%RabbitMqSink{} = sink, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
@@ -59,18 +61,27 @@ defmodule Sequin.RabbitMq.Client do
     end
   end
 
-  # Will return errors like {:auth_failure, "Authentication failed"}
-  defp to_sequin_error({tag, error}) when is_atom(tag) do
-    to_sequin_error(error)
-  end
-
   defp to_sequin_error(error) do
     case error do
       # Errors returned as char strings
-      error when is_binary(error) or is_atom(error) or is_list(error) ->
+      error when is_binary(error) or is_atom(error) ->
         Error.service(service: :rabbitmq, message: "RabbitMQ error: #{error}")
 
+      {:server_sent_malformed_header, _header} ->
+        Error.service(
+          service: :rabbitmq,
+          message:
+            "RabbitMQ server sent malformed header. It's possible your SSL setting is incorrect. Should SSL be enabled?"
+        )
+
+      {:auth_failure, _error} ->
+        Error.service(
+          service: :rabbitmq,
+          message: "Authentication failed. Please check your credentials and try again."
+        )
+
       _ ->
+        Logger.warning("Unknown RabbitMQ error: #{inspect(error)}", error: error)
         Error.service(service: :rabbitmq, message: "Unknown RabbitMQ error")
     end
   end

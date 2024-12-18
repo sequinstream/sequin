@@ -31,15 +31,13 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   Given a table and a minimum sort column value, return a cursor with the minimum values for all columns
   """
   @spec min_cursor(%Table{}, any()) :: map()
-  def min_cursor(%Table{} = table, min_sort_col_cursor_value) do
+  def min_cursor(%Table{} = table, sort_col_value) do
     [sort_column | pk_columns] = cursor_columns(table)
 
     pk_cursor =
       Map.new(pk_columns, fn column ->
         {column.attnum, min_for_type(column.type)}
       end)
-
-    sort_col_value = cast_value(sort_column, min_sort_col_cursor_value)
 
     Map.put(pk_cursor, sort_column.attnum, sort_col_value)
   end

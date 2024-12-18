@@ -16,6 +16,16 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   require Logger
 
+  @sinks_to_pipelines %{
+    http_push: HttpPushPipeline,
+    sqs: SqsPipeline,
+    redis: RedisPipeline,
+    kafka: KafkaPipeline,
+    gcp_pubsub: GcpPubsubPipeline,
+    nats: NatsPipeline,
+    rabbitmq: RabbitMqPipeline
+  }
+
   defp dynamic_supervisor, do: {:via, :syn, {:consumers, ConsumersRuntime.DynamicSupervisor}}
 
   def start_link(opts) do
@@ -83,7 +93,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def stop_for_sink_consumer(supervisor, id) do
     Enum.each(
-      [HttpPushPipeline, SqsPipeline, RedisPipeline, KafkaPipeline],
+      Map.values(@sinks_to_pipelines),
       &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id))
     )
 
@@ -96,15 +106,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   end
 
   defp pipeline(%SinkConsumer{} = consumer) do
-    case consumer.type do
-      :http_push -> HttpPushPipeline
-      :sqs -> SqsPipeline
-      :redis -> RedisPipeline
-      :kafka -> KafkaPipeline
-      :gcp_pubsub -> GcpPubsubPipeline
-      :nats -> NatsPipeline
-      :rabbitmq -> RabbitMqPipeline
-    end
+    Map.fetch!(@sinks_to_pipelines, consumer.type)
   end
 
   defp children do

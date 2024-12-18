@@ -13,24 +13,56 @@ You'll need Docker and Docker Compose installed.
 
 ## Quick start
 
-1. Create a directory for Sequin and download the Docker Compose file:
-```bash
-mkdir sequin && cd sequin
-curl -O https://raw.githubusercontent.com/sequinstream/sequin/main/docker/docker-compose.yaml
-docker compose up -d
-```
+The easiest way to get started with Sequin is with our [Docker Compose file](https://github.com/sequinstream/sequin/blob/main/docker/docker-compose.yaml). This file starts a Postgres database, Redis instance, and Sequin server.
 
-Alternatively, clone the repository:
+  <Steps>
+    <Step title="Create directory and start services">
+      1. Download [sequin-docker-compose.zip](https://github.com/sequinstream/sequin/releases/latest/download/sequin-docker-compose.zip).
+      2. Unzip the file.
+      3. Navigate to the unzipped directory and start the services:
 
-```bash
-git clone git@github.com:sequinstream/sequin.git
-cd sequin/docker
-docker compose up -d
-```
+      ```bash
+      cd sequin-docker-compose && docker compose up -d
+      ```
 
-<Check>
-  That's it! Sequin is now running locally with default configurations.
-</Check>
+      <AccordionGroup>
+        <Accordion title="Alternative: Download with curl">
+          ```bash
+          curl -L https://github.com/sequinstream/sequin/releases/latest/download/sequin-docker-compose.zip -o sequin-docker-compose.zip \
+            && unzip sequin-docker-compose.zip && rm sequin-docker-compose.zip
+          cd sequin-docker-compose && docker compose up -d
+          ```
+        </Accordion>
+        <Accordion title="Alternative: Clone the repository">
+          ```bash
+          git clone git@github.com:sequinstream/sequin.git
+          cd sequin/docker
+          docker compose up -d
+          ```
+        </Accordion>
+      </AccordionGroup>
+    </Step>
+    <Step title="Verify services are running">
+      Check that Sequin is running using `docker ps`:
+
+      ```bash
+      docker ps
+      ```
+
+      You should see output like the following:
+
+      ```
+      CONTAINER ID   IMAGE                                 STATUS          PORTS                                       NAMES
+      abc123def456   sequinstream/sequin:latest           Up 10 seconds    0.0.0.0:7376->7376/tcp                     sequin
+      def456ghi789   redis:7.0                            Up 10 seconds    0.0.0.0:6379->6379/tcp                     sequin-redis
+      ghi789jkl012   postgres:15                          Up 10 seconds    0.0.0.0:5432->5432/tcp                     sequin-postgres
+      ```
+
+      <Check>
+        All three containers should be up and running (status: `Up`).
+      </Check>
+    </Step>
+  </Steps>
 
 ## Using your own database
 

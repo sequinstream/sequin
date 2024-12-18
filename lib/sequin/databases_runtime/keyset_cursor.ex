@@ -55,6 +55,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
 
   # Return the lexographically smallest value for the given type
   defp min_for_type("uuid"), do: "00000000-0000-0000-0000-000000000000"
+  defp min_for_type("timestamp"), do: ~N[0001-01-01 00:00:00]
   defp min_for_type("timestamp without time zone"), do: ~N[0001-01-01 00:00:00]
   defp min_for_type("timestamp with time zone"), do: ~U[0001-01-01 00:00:00Z]
 
@@ -100,7 +101,8 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     Sequin.String.string_to_binary!(val)
   end
 
-  defp cast_value(%Table.Column{type: "timestamp without time zone"}, val) when is_binary(val) do
+  defp cast_value(%Table.Column{type: type}, val)
+       when is_binary(val) and type in ["timestamp", "timestamp without time zone"] do
     NaiveDateTime.from_iso8601!(val)
   end
 
@@ -116,24 +118,20 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
 
   defp cast_value(_, val), do: val
 
-  @doc """
-  Result is the result of fetching the cursor column values of a single row from the database
-  """
-  @spec cursor_from_result(Table.t(), Postgrex.Result.t()) :: map()
-  def cursor_from_result(%Table{} = table, %Postgrex.Result{num_rows: 1} = result) do
+  @spec cursor_from_row(Table.t(), map()) :: map()
+  def cursor_from_row(%Table{} = table, row) do
     cursor_columns = cursor_columns(table)
-    result = result |> Postgres.result_to_maps() |> List.first()
 
     Map.new(cursor_columns, fn
       %Table.Column{type: "uuid"} = column ->
-        value = Map.fetch!(result, column.name)
+        value = Map.fetch!(row, column.name)
 
         # Cursor column shouldn't be nil, this guard may be unnecessary
         value = value && Sequin.String.binary_to_string!(value)
         {column.attnum, value}
 
       %Table.Column{} = column ->
-        value = Map.fetch!(result, column.name)
+        value = Map.fetch!(row, column.name)
 
         {column.attnum, value}
     end)

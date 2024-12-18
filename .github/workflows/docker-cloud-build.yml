@@ -57,13 +57,13 @@ jobs:
 
       - name: Verify commit signoff
         run: |
-          SIGNOFF_STATUS=$(gh api \
+          SIGNOFF_COUNT=$(gh api \
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "/repos/${{ steps.repo-info.outputs.owner }}/${{ steps.repo-info.outputs.repo }}/commits/${{ steps.repo-info.outputs.sha }}/statuses" \
-            | jq -r '.[] | select(.context=="signoff" and .state=="success") | .state')
+            | jq '[.[] | select(.context=="signoff" and .state=="success")] | length')
           
-          if [ "$SIGNOFF_STATUS" != "success" ]; then
+          if [ "$SIGNOFF_COUNT" -eq 0 ]; then
             echo "Commit has not been successfully signed off. Run 'mix signoff' first."
             exit 1
           fi

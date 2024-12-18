@@ -65,6 +65,9 @@ check-links:
 buildpush:
 	mix buildpush
 
+buildpush-gh:
+	gh workflow run docker-cloud-build.yml --ref main
+
 buildpush-dirty:
 	mix buildpush --dirty
 

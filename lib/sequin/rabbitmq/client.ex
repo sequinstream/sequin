@@ -34,6 +34,9 @@ defmodule Sequin.RabbitMq.Client do
       # TODO: figure out how to test connection
       # Check https://www.rabbitmq.com/docs/troubleshooting-networking
       :ok
+    else
+      {:error, error} ->
+        {:error, to_sequin_error(error)}
     end
   catch
     :exit, error ->
@@ -56,9 +59,15 @@ defmodule Sequin.RabbitMq.Client do
     end
   end
 
+  # Will return errors like {:auth_failure, "Authentication failed"}
+  defp to_sequin_error({tag, error}) when is_atom(tag) do
+    to_sequin_error(error)
+  end
+
   defp to_sequin_error(error) do
     case error do
-      error when is_binary(error) or is_atom(error) ->
+      # Errors returned as char strings
+      error when is_binary(error) or is_atom(error) or is_list(error) ->
         Error.service(service: :rabbitmq, message: "RabbitMQ error: #{error}")
 
       _ ->

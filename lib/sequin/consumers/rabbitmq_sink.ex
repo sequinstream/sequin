@@ -5,12 +5,18 @@ defmodule Sequin.Consumers.RabbitMqSink do
 
   import Ecto.Changeset
 
+  alias Sequin.Encrypted.Binary, as: EncryptedBinary
+
   @derive {Jason.Encoder, only: [:host, :port, :exchange]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:rabbitmq], default: :rabbitmq
     field :host, :string
     field :port, :integer
+    field :username, :string
+    field :password, EncryptedBinary
+    field :virtual_host, :string, default: "/"
+    field :tls, :boolean, default: false
     field :exchange, :string
     field :connection_id, :string
   end
@@ -20,11 +26,16 @@ defmodule Sequin.Consumers.RabbitMqSink do
     |> cast(params, [
       :host,
       :port,
+      :username,
+      :password,
+      :virtual_host,
+      :tls,
       :exchange
     ])
     |> validate_required([:host, :port, :exchange])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
     |> validate_length(:exchange, max: 255)
+    |> validate_length(:virtual_host, max: 255)
     |> put_connection_id()
   end
 

@@ -178,11 +178,11 @@ defmodule Sequin.Replication do
 
   # Replication runtime lifecycle
   def put_last_processed_seq!(replication_slot_id, seq) do
-    Redix.command!(:redix, ["SET", last_processed_seq_key(replication_slot_id), seq])
+    RedixCluster.command!(["SET", last_processed_seq_key(replication_slot_id), seq])
   end
 
   def last_processed_seq(replication_slot_id) do
-    case Redix.command(:redix, ["GET", last_processed_seq_key(replication_slot_id)]) do
+    case RedixCluster.command(["GET", last_processed_seq_key(replication_slot_id)]) do
       {:ok, nil} -> {:ok, -1}
       {:ok, seq} -> {:ok, String.to_integer(seq)}
       error -> error

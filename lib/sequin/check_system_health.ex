@@ -9,7 +9,7 @@ defmodule Sequin.CheckSystemHealth do
 
   def check do
     with {:ok, %Postgrex.Result{rows: [[1]]}} <- Repo.query("SELECT 1"),
-         {:ok, "PONG"} <- Redix.command(:redix, ["PING"]) do
+         {:ok, "PONG"} <- RedixCluster.command(["PING"]) do
       :ok
     else
       {:error, %Redix.ConnectionError{} = error} ->

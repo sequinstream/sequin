@@ -9,7 +9,7 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
 
   # Cursor
   def fetch_cursors(backfill_id) do
-    case Redix.command(:redix, ["HGETALL", cursor_key(backfill_id)]) do
+    case RedixCluster.command(["HGETALL", cursor_key(backfill_id)]) do
       {:ok, []} ->
         :error
 
@@ -24,14 +24,14 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
   end
 
   def cursor(backfill_id, type) when type in [:min, :max] do
-    case Redix.command(:redix, ["HGET", cursor_key(backfill_id), type]) do
+    case RedixCluster.command(["HGET", cursor_key(backfill_id), type]) do
       {:ok, nil} -> nil
       {:ok, cursor} -> decode_cursor(cursor)
     end
   end
 
   def update_cursor(backfill_id, type, cursor) when type in [:min, :max] do
-    with {:ok, _} <- Redix.command(:redix, ["HSET", cursor_key(backfill_id), type, Jason.encode!(cursor)]) do
+    with {:ok, _} <- RedixCluster.command(["HSET", cursor_key(backfill_id), type, Jason.encode!(cursor)]) do
       :ok
     end
   end
@@ -46,7 +46,7 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
     case fetch_cursors(backfill_id) do
       {:ok, cursors} ->
         Logger.info("[BackfillProducer] Deleting cursors for backfill #{backfill_id}", cursors)
-        {:ok, _} = Redix.command(:redix, ["DEL", cursor_key(backfill_id)])
+        {:ok, _} = RedixCluster.command(["DEL", cursor_key(backfill_id)])
         :ok
 
       :error ->
@@ -58,12 +58,12 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
     if env() == :test do
       pattern = "sequin:test:table_producer:cursor:*"
 
-      case Redix.command(:redix, ["KEYS", pattern]) do
+      case RedixCluster.command(["KEYS", pattern]) do
         {:ok, []} ->
           :ok
 
         {:ok, keys} ->
-          case Redix.command(:redix, ["DEL" | keys]) do
+          case RedixCluster.command(["DEL" | keys]) do
             {:ok, _} -> :ok
             {:error, error} -> raise error
           end

@@ -5,8 +5,8 @@ defmodule Sequin.Metrics.Store do
 
   # Count functions
   def incr_count(key, amount \\ 1) do
-    :redix
-    |> Redix.command(["INCRBY", "metrics:count:#{key}", amount])
+    ["INCRBY", "metrics:count:#{key}", amount]
+    |> RedixCluster.command()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -15,8 +15,8 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_count(key) do
-    :redix
-    |> Redix.command(["GET", "metrics:count:#{key}"])
+    ["GET", "metrics:count:#{key}"]
+    |> RedixCluster.command()
     |> handle_response()
     |> case do
       {:ok, nil} -> {:ok, 0}
@@ -27,11 +27,11 @@ defmodule Sequin.Metrics.Store do
 
   # Average functions
   def incr_avg(key, value) do
-    :redix
-    |> Redix.pipeline([
+    [
       ["HINCRBY", "metrics:avg:#{key}", "total", round(value)],
       ["HINCRBY", "metrics:avg:#{key}", "count", 1]
-    ])
+    ]
+    |> RedixCluster.pipeline()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -40,8 +40,8 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_avg(key) do
-    :redix
-    |> Redix.command(["HMGET", "metrics:avg:#{key}", "total", "count"])
+    ["HMGET", "metrics:avg:#{key}", "total", "count"]
+    |> RedixCluster.command()
     |> handle_response()
     |> case do
       {:ok, [total, count]} when is_binary(total) and is_binary(count) ->
@@ -62,13 +62,13 @@ defmodule Sequin.Metrics.Store do
     # ms to nano
     one_hour_ago = now - :timer.seconds(3600) * 1_000_000
 
-    :redix
-    |> Redix.pipeline([
+    [
       ["ZADD", "metrics:throughput:#{key}", now, now],
       ["ZREMRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
       ["ZREMRANGEBYRANK", "metrics:throughput:#{key}", "0", "-10001"],
       ["ZCARD", "metrics:throughput:#{key}"]
-    ])
+    ]
+    |> RedixCluster.pipeline()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -82,12 +82,12 @@ defmodule Sequin.Metrics.Store do
     # ms to nano
     one_hour_ago = now - :timer.seconds(3600) * 1_000_000
 
-    :redix
-    |> Redix.pipeline([
+    [
       ["ZREVRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
       ["ZRANGE", "metrics:throughput:#{key}", 0, 0, "WITHSCORES"],
       ["ZCARD", "metrics:throughput:#{key}"]
-    ])
+    ]
+    |> RedixCluster.pipeline()
     |> handle_response()
     |> case do
       {:ok, [_, [], _]} ->

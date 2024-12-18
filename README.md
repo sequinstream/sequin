@@ -7,7 +7,7 @@
 [![Docs](https://img.shields.io/badge/docs-sequinstream.com%2Fdocs-blue)](https://sequinstream.com/docs) [![License: MIT](https://img.shields.io/badge/License-MIT-purple.svg)](https://opensource.org/licenses/MIT)
 
 <p align="center">
-  <a href="https://console.sequinstream.com">Sequinstream.com</a>
+  <a href="https://console.sequinstream.com">Sequin Cloud</a>
   ·
   <a href="https://sequinstream.com/docs">Documentation</a>
   ·
@@ -31,7 +31,7 @@ Change data capture enables applications and services to track and respond to ro
 
 Sequin itself is [built on Postgres](https://sequinstream.com/docs/how-sequin-works). It uses a logical replication slot to detect changes and internal tables to store sink state.
 
-Unlike Debezium, another change data capture tool, Sequin doesn't require Kafka to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://sequinstream.com).
+Unlike Debezium, another change data capture tool, Sequin doesn't require Kafka to operate. Sequin is a standalone Docker container that you can deploy next to your Postgres database. Or, you can use [our hosted offering](https://console.sequinstream.com).
 
 Sequin is open source/MIT. To help us make this project great, tell us what you're building in our [Discord Server](https://discord.gg/BV8wFXvNtY).
 
@@ -39,14 +39,14 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 
 | Sink | Support | Description |
 |-------------|---------|-------------|
-| Kafka | ✅ Real-time streaming<br />✅ Backfill existing rows | |
-| SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | |
+| Kafka | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to Apache Kafka topics |
+| SQS | ✅ Real-time streaming<br />✅ Backfill existing rows | Send messages to Amazon SQS queues |
 | Redis | ✅ Real-time streaming<br />✅ Backfill existing rows | `XADD` to Redis Streams |
 | Webhook Subscription (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Send changes to any HTTP endpoint |
 | HTTP Pull (Native) | ✅ Real-time streaming<br />✅ Backfill existing rows | Consume changes directly from Sequin with exactly-once processing |
-| GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | |
-| NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | |
-| RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | |
+| GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to Google Cloud Pub/Sub topics |
+| NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to NATS subjects |
+| RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to RabbitMQ exchanges |
 | Azure EventHubs | Coming soon | (Late Dec 2024) |
 | Amazon SNS | Coming soon | (Jan 2025) |
 | AWS Kinesis | Coming soon | (Jan 2025) |
@@ -74,7 +74,7 @@ Sequin works great for change data capture use cases like:
 
 ## Getting started
 
-See our [quickstart](https://sequinstream.com/docs/quickstart/setup).
+See our [quickstart](https://sequinstream.com/docs/quickstart/webhooks).
 
 Alternatively, you can try Sequin for free on [Sequin Cloud](https://console.sequinstream.com/register). Follow the instructions in the app to start streaming your data in a couple minutes.
 
@@ -92,9 +92,23 @@ You can also configure Sequin as code using YAML config files.
 
 ## Benchmarks
 
-Sequin efficiently captures changes using logical replication. Except at very extreme scale, logical replication adds little overhead to the performance of your database. If your database can handle the transaction, so can Sequin with minimal latency.
+Sequin delivers industry-leading performance for change data capture (CDC), consistently achieving sub-200ms latency at 2,000 sustained operations per second. Here's how Sequin compares to other solutions:
 
-Postgres Performance is highly dependent on machine resources. But to give you an idea, a `db.m5.xlarge` RDS instance (4 vCPU, 16 GB RAM, $260/mo) can handle inserts at 5,000 messages/second, with bursts up to 10k messages/second.
+| Tool | Latency at 2k ops/s |
+|------|-------------------|
+| **Sequin** | **192ms** |
+| Debezium | 234ms |
+| PeerDB | 30 seconds |
+| Fivetran | 5 minutes |
+| Airbyte | 1+ hours |
+
+In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintains consistent performance under sustained load:
+
+- Average throughput: 2,054.4 ops/sec
+- Average latency: 192ms
+- 99th percentile latency: 245ms
+
+[Learn more](https://sequinstream.com/docs/performance) about Sequin's current performance in our docs.
 
 ## How Sequin compares
 

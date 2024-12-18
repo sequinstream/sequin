@@ -545,6 +545,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       host: sink.host,
       port: sink.port,
       exchange: sink.exchange,
+      username: sink.username,
+      virtual_host: sink.virtual_host,
+      tls: sink.tls,
       topic: topic
     }
   end

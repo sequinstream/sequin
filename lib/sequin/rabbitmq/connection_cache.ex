@@ -159,12 +159,36 @@ defmodule Sequin.RabbitMq.ConnectionCache do
 
     defp default_start(%RabbitMqSink{} = sink) do
       # https://hexdocs.pm/amqp/AMQP.Connection.html#open/2-options
-      opts = [host: sink.host, port: sink.port, name: "sequin-#{sink.connection_id}"]
+      opts =
+        [
+          host: sink.host,
+          port: sink.port,
+          virtual_host: sink.virtual_host,
+          name: "sequin-#{sink.connection_id}"
+        ]
+        |> put_tls(sink)
+        |> put_basic_auth(sink)
 
       with {:ok, connection} <- AMQP.Connection.open(opts) do
         AMQP.Channel.open(connection)
       end
     end
+
+    defp put_tls(opts, %RabbitMqSink{tls: true}) do
+      Keyword.put(opts, :ssl_options, verify: :verify_none)
+    end
+
+    defp put_tls(opts, _), do: opts
+
+    defp put_basic_auth(opts, %RabbitMqSink{username: username, password: password})
+         when not is_nil(username) or not is_nil(password) do
+      Keyword.merge(opts,
+        username: username,
+        password: password
+      )
+    end
+
+    defp put_basic_auth(opts, _), do: opts
   end
 
   @type sink :: RabbitMqSink.t()

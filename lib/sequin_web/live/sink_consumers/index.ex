@@ -211,7 +211,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%SinkConsumer{type: :rabbitmq, sink: %RabbitMqSink{}}}
+      consumer={%SinkConsumer{type: :rabbitmq, sink: %RabbitMqSink{virtual_host: "/"}}}
     />
     """
   end

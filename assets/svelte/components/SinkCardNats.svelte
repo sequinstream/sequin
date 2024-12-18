@@ -15,20 +15,24 @@
       <div>
         <span class="text-sm text-gray-500">Host</span>
         <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.host}</span
-          >
+          <div class="overflow-x-auto">
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
+              >{consumer.sink.host}</span
+            >
+          </div>
         </div>
       </div>
 
       <div>
         <span class="text-sm text-gray-500">Port</span>
         <div class="mt-2">
-          <span
-            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
-            >{consumer.sink.port}</span
-          >
+          <div class="overflow-x-auto">
+            <span
+              class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md inline-block whitespace-nowrap"
+              >{consumer.sink.port}</span
+            >
+          </div>
         </div>
       </div>
     </div>

@@ -484,7 +484,11 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "rabbitmq",
       "host" => sink["host"],
       "port" => sink["port"],
-      "exchange" => sink["exchange"]
+      "exchange" => sink["exchange"],
+      "username" => sink["username"],
+      "password" => sink["password"],
+      "virtual_host" => sink["virtual_host"],
+      "tls" => sink["tls"]
     }
   end
 
@@ -619,7 +623,11 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "rabbitmq",
       "host" => sink.host,
       "port" => sink.port,
-      "exchange" => sink.exchange
+      "tls" => sink.tls,
+      "exchange" => sink.exchange,
+      "username" => sink.username,
+      "password" => sink.password,
+      "virtual_host" => sink.virtual_host
     }
   end
 

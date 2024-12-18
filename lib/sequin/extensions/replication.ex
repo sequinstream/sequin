@@ -13,6 +13,7 @@ defmodule Sequin.Extensions.Replication do
 
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
@@ -275,6 +276,16 @@ defmodule Sequin.Extensions.Replication do
     {:noreply, state}
   end
 
+  def handle_call({:produce_messages, consumer_id, count}, from, state) do
+    {ctx, messages} = state.message_handler_module.produce_messages(state.message_handler_ctx, consumer_id, count)
+    GenServer.reply(from, {:ok, messages})
+    {:noreply, %{state | message_handler_ctx: ctx}}
+  end
+
+  def receive_messages(%SinkConsumer{} = consumer, count) do
+    GenServer.call(via_tuple(consumer.replication_slot_id), {:produce_messages, consumer.id, count})
+  end
+
   defp maybe_recreate_slot(%State{connection: connection} = state) do
     # Neon databases have ephemeral replication slots. At time of writing, this
     # happens after 45min of inactivity.
@@ -502,10 +513,7 @@ defmodule Sequin.Extensions.Replication do
 
     if Enum.any?(messages) do
       next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
-      # Flush accumulated messages
-      # Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-      # end)
+      ctx = state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})
@@ -514,7 +522,7 @@ defmodule Sequin.Extensions.Replication do
       flush_time = System.monotonic_time(:microsecond) - start_time
 
       state = record_metric(state, :flush_messages, flush_time)
-      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq}
+      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: ctx}
     else
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})

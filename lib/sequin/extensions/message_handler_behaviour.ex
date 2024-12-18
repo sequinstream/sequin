@@ -18,4 +18,7 @@ defmodule Sequin.Extensions.MessageHandlerBehaviour do
     The return value is implementation-specific and may vary based on the needs of the consumer.
   """
   @callback handle_messages(context :: any(), messages :: [Message.t()]) :: any()
+
+  @callback produce_messages(context :: any(), consumer_id :: String.t(), count :: non_neg_integer()) ::
+              {context :: any(), messages :: [Message.t()]}
 end

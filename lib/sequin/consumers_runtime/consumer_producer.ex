@@ -6,8 +6,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.Consumers
-  alias Sequin.Time
+  alias Sequin.Extensions.Replication
 
   require Logger
 
@@ -27,7 +26,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       consumer: consumer,
       receive_timer: nil,
       batch_size: Keyword.get(opts, :batch_size, 10),
-      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
+      batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(1)),
       test_pid: test_pid,
       scheduled_handle_demand: false
     }
@@ -63,7 +62,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand)
+    {:ok, messages} = Replication.receive_messages(state.consumer, demand)
 
     broadway_messages =
       messages
@@ -96,37 +95,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil}}
   end
 
-  @exponential_backoff_max :timer.minutes(3)
-  def ack({consumer, test_pid}, successful, failed) do
-    successful_ids = successful |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-    failed_ids = failed |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-
-    if test_pid do
-      Sandbox.allow(Sequin.Repo, test_pid, self())
-    end
-
-    if length(successful_ids) > 0 do
-      Consumers.ack_messages(consumer, successful_ids)
-    end
-
-    failed
-    |> Enum.flat_map(fn message ->
-      Enum.map(message.data, fn record ->
-        deliver_count = record.deliver_count
-        backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
-        not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
-
-        {record.ack_id, not_visible_until}
-      end)
-    end)
-    |> Enum.chunk_every(1000)
-    |> Enum.each(fn chunk ->
-      ack_ids_with_not_visible_until = Map.new(chunk)
-      Consumers.nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until)
-    end)
-
-    if test_pid do
-      send(test_pid, {__MODULE__, :ack_finished, successful_ids, failed_ids})
+  def ack({consumer, _test_pid}, _successful, failed) do
+    if length(failed) > 0 do
+      Logger.warning("Failed to ack messages for consumer #{consumer.id}")
     end
 
     :ok

@@ -1,6 +1,7 @@
 defmodule Sequin.DatabasesRuntime.BackfillProducer do
   @moduledoc false
   alias Sequin.Constants
+  alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.DatabasesRuntime.KeysetCursor
@@ -88,26 +89,20 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
         backfill_id: backfill_id
       })
 
-    res =
-      Postgres.transaction(db, fn t_conn ->
-        Postgres.query(t_conn, "select pg_logical_emit_message(true, $1, $2)", [
-          Constants.backfill_batch_wm_start(),
-          payload
-        ])
+    with {:ok, conn} <- ConnectionCache.connection(db) do
+      Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
+        Constants.backfill_batch_wm_start(),
+        payload
+      ])
 
-        res = fun.(t_conn)
+      res = fun.(conn)
 
-        Postgres.query(t_conn, "select pg_logical_emit_message(true, $1, $2)", [
-          Constants.backfill_batch_wm_end(),
-          payload
-        ])
+      Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
+        Constants.backfill_batch_wm_end(),
+        payload
+      ])
 
-        res
-      end)
-
-    case res do
-      {:ok, res} -> res
-      error -> error
+      res
     end
   end
 

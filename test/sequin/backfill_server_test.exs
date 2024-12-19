@@ -2,6 +2,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
@@ -41,7 +42,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         sort_column_attnum: Character.column_attnum("updated_at")
       )
 
-    sequence_filter = ConsumersFactory.sequence_filter(column_filters: [])
+    sequence_filter = ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
 
     filtered_sequence_filter =
       ConsumersFactory.sequence_filter(
@@ -78,11 +79,12 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         sequence_filter: Map.from_struct(sequence_filter)
       )
 
-    ConsumersFactory.insert_active_backfill!(
-      account_id: database.account_id,
-      sink_consumer_id: consumer.id,
-      initial_min_cursor: initial_min_cursor
-    )
+    backfill =
+      ConsumersFactory.insert_active_backfill!(
+        account_id: database.account_id,
+        sink_consumer_id: consumer.id,
+        initial_min_cursor: initial_min_cursor
+      )
 
     filtered_consumer =
       ConsumersFactory.insert_sink_consumer!(
@@ -93,11 +95,12 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         sequence_filter: Map.from_struct(filtered_sequence_filter)
       )
 
-    ConsumersFactory.insert_active_backfill!(
-      account_id: database.account_id,
-      sink_consumer_id: filtered_consumer.id,
-      initial_min_cursor: initial_min_cursor
-    )
+    filtered_consumer_backfill =
+      ConsumersFactory.insert_active_backfill!(
+        account_id: database.account_id,
+        sink_consumer_id: filtered_consumer.id,
+        initial_min_cursor: initial_min_cursor
+      )
 
     event_consumer =
       ConsumersFactory.insert_sink_consumer!(
@@ -108,16 +111,20 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         sequence_filter: Map.from_struct(sequence_filter)
       )
 
-    ConsumersFactory.insert_active_backfill!(
-      account_id: database.account_id,
-      sink_consumer_id: event_consumer.id,
-      initial_min_cursor: initial_min_cursor
-    )
+    event_consumer_backfill =
+      ConsumersFactory.insert_active_backfill!(
+        account_id: database.account_id,
+        sink_consumer_id: event_consumer.id,
+        initial_min_cursor: initial_min_cursor
+      )
 
     {:ok,
-     consumer: Repo.preload(consumer, :active_backfill),
-     filtered_consumer: Repo.preload(filtered_consumer, :active_backfill),
-     event_consumer: Repo.preload(event_consumer, :active_backfill),
+     consumer: consumer,
+     backfill: backfill,
+     filtered_consumer: filtered_consumer,
+     filtered_consumer_backfill: filtered_consumer_backfill,
+     event_consumer: event_consumer,
+     event_consumer_backfill: event_consumer_backfill,
      table: table,
      table_oid: table_oid,
      database: database,
@@ -127,6 +134,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
   describe "BackfillServer" do
     test "processes records in batches", %{
+      backfill: backfill,
       consumer: consumer,
       table_oid: table_oid,
       characters: characters
@@ -139,7 +147,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         Character.column_attnum("id") => Enum.at(characters, 3).id
       }
 
-      consumer.active_backfill
+      backfill
       |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
       |> Repo.update!()
 
@@ -147,7 +155,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         start_supervised!(
           {BackfillServer,
            [
-             consumer: Repo.reload(consumer),
+             id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -181,7 +189,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
 
-      cursor = BackfillProducer.cursor(consumer.active_backfill.id)
+      cursor = BackfillProducer.cursor(backfill.id)
       # Cursor should be nil after completion
       assert cursor == nil
 
@@ -191,6 +199,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     end
 
     test "handles batch flushing with dropped PKs", %{
+      backfill: backfill,
       consumer: consumer,
       table_oid: table_oid,
       characters: characters
@@ -201,7 +210,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         start_supervised!(
           {BackfillServer,
            [
-             consumer: consumer,
+             id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -236,23 +245,19 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       refute Enum.any?(dropped_characters, fn character -> to_string(character.id) in processed_ids end)
     end
 
-    test "sets group_id based on PKs when group_column_attnums is nil", %{
+    test "sets group_id based on PKs by default", %{
+      backfill: backfill,
       consumer: consumer,
       table_oid: table_oid,
-      sequence_filter: sequence_filter,
       characters: characters
     } do
       page_size = 3
-
-      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: nil}
-
-      consumer = %{consumer | sequence_filter: sequence_filter}
 
       pid =
         start_supervised!(
           {BackfillServer,
            [
-             consumer: consumer,
+             id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -272,6 +277,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     end
 
     test "sets group_id based on group_column_attnums when it's set", %{
+      backfill: backfill,
       consumer: consumer,
       table_oid: table_oid,
       characters: characters,
@@ -280,14 +286,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       page_size = 3
 
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
-
-      consumer = %{consumer | sequence_filter: sequence_filter}
+      {:ok, _} = Consumers.update_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
       pid =
         start_supervised!(
           {BackfillServer,
            [
-             consumer: consumer,
+             id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -307,6 +312,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     end
 
     test "processes only characters matching the filter", %{
+      filtered_consumer_backfill: filtered_consumer_backfill,
       filtered_consumer: filtered_consumer,
       table_oid: table_oid
     } do
@@ -327,7 +333,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         start_supervised!(
           {BackfillServer,
            [
-             consumer: filtered_consumer,
+             id: filtered_consumer_backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -367,6 +373,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     end
 
     test "processes events for event consumers", %{
+      event_consumer_backfill: event_consumer_backfill,
       event_consumer: event_consumer,
       table_oid: table_oid,
       characters: characters,
@@ -378,7 +385,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         start_supervised!(
           {BackfillServer,
            [
-             consumer: event_consumer,
+             id: event_consumer_backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -414,6 +421,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     end
 
     test "pauses backfill when too many pending messages exist", %{
+      backfill: backfill,
       consumer: consumer,
       table_oid: table_oid
     } do
@@ -425,7 +433,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         start_supervised!(
           {BackfillServer,
            [
-             consumer: consumer,
+             id: backfill.id,
              page_size: 7,
              table_oid: table_oid,
              test_pid: self(),

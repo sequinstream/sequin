@@ -551,8 +551,8 @@ defmodule Sequin.PostgresReplicationTest do
     end
   end
 
-  @server_id __MODULE__
-  @server_via ReplicationExt.via_tuple(@server_id)
+  def server_id, do: :"#{__MODULE__}-#{inspect(self())}"
+  def server_via, do: ReplicationExt.via_tuple(server_id())
 
   describe "replication in isolation" do
     test "changes are buffered in the WAL, even if the listener is not up" do
@@ -732,7 +732,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
-      Replication.put_last_processed_seq!(@server_id, change.seq)
+      Replication.put_last_processed_seq!(server_id(), change.seq)
 
       # Stop the replication - likely before the message was acked, but there is a race here
       stop_replication!()
@@ -1298,9 +1298,6 @@ defmodule Sequin.PostgresReplicationTest do
     end
   end
 
-  @server_id __MODULE__
-  @server_via ReplicationExt.via_tuple(@server_id)
-
   defp start_replication!(opts) do
     opts =
       Keyword.merge(
@@ -1309,7 +1306,7 @@ defmodule Sequin.PostgresReplicationTest do
           connection: config(),
           slot_name: replication_slot(),
           test_pid: self(),
-          id: @server_id,
+          id: server_id(),
           message_handler_module: MessageHandlerMock,
           message_handler_ctx: nil,
           postgres_database: %PostgresDatabase{id: "test_db_id"}
@@ -1325,7 +1322,7 @@ defmodule Sequin.PostgresReplicationTest do
   end
 
   defp stop_replication! do
-    stop_supervised!(@server_via)
+    stop_supervised!(server_via())
   end
 
   defp config do

@@ -74,33 +74,119 @@ defmodule Sequin.DatabasesRuntime.KeysetCursorTest do
       table = create_test_table()
 
       cursor = %{
-        1 => "2023-01-01",
+        1 => "2023-01-01T00:00:00",
         2 => 123,
         3 => "550e8400-e29b-41d4-a716-446655440000"
       }
 
       result = KeysetCursor.casted_cursor_values(table, cursor)
 
-      assert result == ["2023-01-01", 123, Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]
+      assert result == [
+               ~N[2023-01-01 00:00:00],
+               123,
+               Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")
+             ]
     end
   end
 
-  describe "cursor_from_result/2" do
-    test "converts Postgrex.Result to cursor keyed by attnum" do
+  describe "attnums_to_names/2" do
+    test "converts cursor with attnums to cursor with column names" do
       table = create_test_table()
 
-      result = %Postgrex.Result{
-        columns: ["updated_at", "id1", "id2"],
-        rows: [["2023-01-01", 123, Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")]],
-        num_rows: 1
+      cursor = %{
+        1 => "2023-01-01",
+        2 => 123,
+        3 => "550e8400-e29b-41d4-a716-446655440000"
       }
 
-      cursor = KeysetCursor.cursor_from_result(table, result)
+      result = KeysetCursor.attnums_to_names(table, cursor)
 
-      assert cursor == %{
-               1 => "2023-01-01",
+      assert result == %{
+               "updated_at" => "2023-01-01",
+               "id1" => 123,
+               "id2" => "550e8400-e29b-41d4-a716-446655440000"
+             }
+    end
+  end
+
+  describe "min_cursor/1" do
+    test "returns cursor with minimum values for all columns" do
+      table = create_test_table()
+      result = KeysetCursor.min_cursor(table)
+
+      assert result == %{
+               1 => ~N[0001-01-01 00:00:00],
+               2 => 0,
+               3 => "00000000-0000-0000-0000-000000000000"
+             }
+    end
+
+    test "handles different column types" do
+      table =
+        create_test_table([
+          {"updated_at", "timestamp with time zone", @sort_column_attnum, false},
+          {"id1", "numeric", 2, true},
+          {"id2", "text", 3, true}
+        ])
+
+      result = KeysetCursor.min_cursor(table)
+
+      assert result == %{
+               1 => ~U[0001-01-01 00:00:00Z],
+               2 => 0,
+               3 => ""
+             }
+    end
+  end
+
+  describe "min_cursor/2" do
+    test "returns cursor with specified minimum sort column value" do
+      table = create_test_table()
+      min_sort_value = ~N[2023-01-01 00:00:00]
+      result = KeysetCursor.min_cursor(table, min_sort_value)
+
+      assert result == %{
+               1 => ~N[2023-01-01 00:00:00],
+               2 => 0,
+               3 => "00000000-0000-0000-0000-000000000000"
+             }
+    end
+  end
+
+  describe "cursor_from_row/2" do
+    test "converts row map to cursor" do
+      table = create_test_table()
+
+      row = %{
+        "updated_at" => ~N[2023-01-01 00:00:00],
+        "id1" => 123,
+        "id2" => Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")
+      }
+
+      result = KeysetCursor.cursor_from_row(table, row)
+
+      assert result == %{
+               1 => ~N[2023-01-01 00:00:00],
                2 => 123,
                3 => "550e8400-e29b-41d4-a716-446655440000"
+             }
+    end
+
+    test "handles nil UUID values" do
+      table = create_test_table()
+
+      row = %{
+        "updated_at" => ~N[2023-01-01 00:00:00],
+        "id1" => 123,
+        "id2" => nil
+      }
+
+      result = KeysetCursor.cursor_from_row(table, row)
+
+      assert result == %{
+               1 => ~N[2023-01-01 00:00:00],
+               2 => 123,
+               3 => nil
              }
     end
   end

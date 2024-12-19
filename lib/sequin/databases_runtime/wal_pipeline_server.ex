@@ -1,4 +1,4 @@
-defmodule Sequin.ReplicationRuntime.WalPipelineServer do
+defmodule Sequin.DatabasesRuntime.WalPipelineServer do
   @moduledoc false
   use GenStateMachine, callback_mode: [:handle_event_function, :state_enter]
 

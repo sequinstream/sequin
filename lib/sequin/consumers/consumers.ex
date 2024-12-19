@@ -28,7 +28,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Postgres
-  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -157,7 +156,7 @@ defmodule Sequin.Consumers do
     Repo.all(SinkConsumer.where_active_backfill())
   end
 
-  def backfill_producer_finished(consumer_id) do
+  def table_reader_finished(consumer_id) do
     consumer = get_consumer!(consumer_id)
 
     case Repo.preload(consumer, :active_backfill) do
@@ -1566,12 +1565,12 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_update(%SinkConsumer{} = consumer) do
-    if consumer.status == :disabled, do: maybe_disable_backfill_producer(consumer)
+    if consumer.status == :disabled, do: maybe_disable_table_reader(consumer)
 
     if env() == :test do
-      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+      DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
-      with :ok <- ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+      with :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
         case consumer.status do
           :active ->
             ConsumersSupervisor.restart_for_sink_consumer(consumer)
@@ -1590,10 +1589,10 @@ defmodule Sequin.Consumers do
   end
 
   defp notify_consumer_delete(%SinkConsumer{} = consumer) do
-    maybe_disable_backfill_producer(consumer)
+    maybe_disable_table_reader(consumer)
 
     if env() == :test do
-      ReplicationSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+      DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
       with %Task{} <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
         ConsumersSupervisor.stop_for_sink_consumer(consumer)
@@ -1601,21 +1600,21 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp maybe_disable_backfill_producer(%{message_kind: :record} = consumer) do
+  defp maybe_disable_table_reader(%{message_kind: :record} = consumer) do
     unless env() == :test do
-      DatabasesRuntimeSupervisor.stop_backfill_producer(consumer)
+      DatabasesRuntimeSupervisor.stop_table_reader(consumer)
     end
   end
 
-  defp maybe_disable_backfill_producer(_consumer), do: :ok
+  defp maybe_disable_table_reader(_consumer), do: :ok
 
   defp async_refresh_message_handler_ctx(replication_slot_id) do
     Task.Supervisor.async_nolink(
       Sequin.TaskSupervisor,
       fn ->
-        ReplicationSupervisor.refresh_message_handler_ctx(replication_slot_id)
+        DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
       end,
-      # Until we make Replication more responsive, this can take a while
+      # Until we make SlotProcessor more responsive, this can take a while
       timeout: :timer.minutes(2)
     )
   end
@@ -1724,7 +1723,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.start_backfill_producer()
+      |> DatabasesRuntimeSupervisor.start_table_reader()
     end
 
     :ok
@@ -1736,7 +1735,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.restart_backfill_producer()
+      |> DatabasesRuntimeSupervisor.restart_table_reader()
     end
 
     :ok
@@ -1746,7 +1745,7 @@ defmodule Sequin.Consumers do
     unless env() == :test do
       backfill.sink_consumer_id
       |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.stop_backfill_producer()
+      |> DatabasesRuntimeSupervisor.stop_table_reader()
     end
 
     :ok

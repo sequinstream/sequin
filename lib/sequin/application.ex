@@ -14,7 +14,7 @@ defmodule Sequin.Application do
     env = Application.get_env(:sequin, :env)
     children = children(env)
 
-    :ets.new(Sequin.Extensions.Replication.ets_table(), [:set, :public, :named_table])
+    :ets.new(Sequin.DatabasesRuntime.SlotProcessor.ets_table(), [:set, :public, :named_table])
     # Add this line to create the new ETS table for health debouncing
     :ets.new(Sequin.Health.debounce_ets_table(), [:set, :public, :named_table])
 
@@ -38,9 +38,8 @@ defmodule Sequin.Application do
     base_children() ++
       [
         MutexedSupervisor.child_spec(
-          Sequin.ReplicationRuntime.MutexedSupervisor,
+          Sequin.Runtime.MutexedSupervisor,
           [
-            Sequin.ReplicationRuntime.Supervisor,
             Sequin.ConsumersRuntime.Supervisor,
             Sequin.DatabasesRuntime.Supervisor
           ]

@@ -1,18 +1,18 @@
-defmodule Sequin.Extensions.MessageHandlerBehaviour do
+defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
   @moduledoc """
   Defines a behaviour for handling replication messages from Postgres.
   """
 
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.Replication.Message
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
 
   @doc """
   Callback invoked to handle a batch of replication messages.
 
   ## Parameters
 
-    * `context` - Any context passed by the caller to Replication.
-    * `messages` - A list of Record types (InsertedRecord, UpdatedRecord, or DeletedRecord) that Replication handles.
+    * `context` - Any context passed by the caller to SlotProcessor.
+    * `messages` - A list of Record types (InsertedRecord, UpdatedRecord, or DeletedRecord) that SlotProcessor handles.
 
   ## Returns
 
@@ -26,7 +26,7 @@ defmodule Sequin.Extensions.MessageHandlerBehaviour do
 
   ## Parameters
 
-    * `context` - Any context passed by the caller to Replication.
+    * `context` - Any context passed by the caller to SlotProcessor.
     * `message` - A single logical message.
 
   ## Returns

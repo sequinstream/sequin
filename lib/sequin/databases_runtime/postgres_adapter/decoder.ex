@@ -2,12 +2,12 @@
 # which in turns draws from https://github.com/cainophile/pgoutput_decoder
 # License: https://github.com/cainophile/pgoutput_decoder/blob/master/LICENSE
 
-defmodule Sequin.Extensions.PostgresAdapter.Decoder do
+defmodule Sequin.DatabasesRuntime.PostgresAdapter.Decoder do
   @moduledoc """
   Functions for decoding different types of logical replication messages.
   """
 
-  alias Sequin.Extensions.PostgresAdapter.OidDatabase
+  alias Sequin.DatabasesRuntime.PostgresAdapter.OidDatabase
 
   require Logger
 
@@ -15,6 +15,8 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
     @moduledoc """
     Different types of logical replication messages from Postgres
     """
+    use TypedStruct
+
     defmodule Begin do
       @moduledoc """
       Struct representing the BEGIN message in PostgreSQL's logical decoding output.
@@ -23,7 +25,14 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `commit_timestamp` - The timestamp of the commit that this transaction ended at.
       * `xid` - The transaction ID of this transaction.
       """
-      defstruct [:final_lsn, :commit_timestamp, :xid]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "BEGIN message in PostgreSQL's logical decoding output"
+        field :final_lsn, {non_neg_integer(), non_neg_integer()}
+        field :commit_timestamp, DateTime.t()
+        field :xid, non_neg_integer()
+      end
     end
 
     defmodule Commit do
@@ -35,7 +44,15 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `end_lsn` - The LSN of the next record in the WAL stream.
       * `commit_timestamp` - The timestamp of the commit.
       """
-      defstruct [:flags, :lsn, :end_lsn, :commit_timestamp]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "COMMIT message in PostgreSQL's logical decoding output"
+        field :flags, list(), default: []
+        field :lsn, {non_neg_integer(), non_neg_integer()}
+        field :end_lsn, {non_neg_integer(), non_neg_integer()}
+        field :commit_timestamp, DateTime.t()
+      end
     end
 
     defmodule Origin do
@@ -45,7 +62,37 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `origin_commit_lsn` - The LSN of the commit in the database that the change originated from.
       * `name` - The name of the origin.
       """
-      defstruct [:origin_commit_lsn, :name]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "ORIGIN message in PostgreSQL's logical decoding output"
+        field :origin_commit_lsn, {non_neg_integer(), non_neg_integer()}
+        field :name, String.t()
+      end
+    end
+
+    defmodule Relation.Column do
+      @moduledoc """
+      Struct representing a column in a relation.
+
+      * `flags` - Bitmask of flags associated with this column.
+      * `name` - The name of the column.
+      * `type` - The OID of the data type of the column.
+      * `pk?` - Whether the column is a primary key. Added post decoder when handling the relation message.
+      * `type_modifier` - The type modifier of the column.
+      * `attnum` - The attribute number (column position) in the table. Added post decoder when handling the relation message.
+      """
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "Column in a relation"
+        field :flags, list(atom()), default: []
+        field :name, String.t()
+        field :type, String.t()
+        field :pk?, boolean()
+        field :type_modifier, integer()
+        field :attnum, integer()
+      end
     end
 
     defmodule Relation do
@@ -58,20 +105,15 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `replica_identity` - The replica identity setting of the relation.
       * `columns` - A list of columns in the relation.
       """
-      defstruct [:id, :namespace, :name, :replica_identity, :columns]
+      use TypedStruct
 
-      defmodule Column do
-        @moduledoc """
-        Struct representing a column in a relation.
-
-        * `flags` - Bitmask of flags associated with this column.
-        * `name` - The name of the column.
-        * `type` - The OID of the data type of the column.
-        * `pk?` - Whether the column is a primary key. Added post decoder when handling the relation message.
-        * `type_modifier` - The type modifier of the column.
-        * `attnum` - The attribute number (column position) in the table. Added post decoder when handling the relation message.
-        """
-        defstruct [:flags, :name, :type, :pk?, :type_modifier, :attnum]
+      typedstruct do
+        @typedoc "RELATION message in PostgreSQL's logical decoding output"
+        field :id, non_neg_integer()
+        field :namespace, String.t()
+        field :name, String.t()
+        field :replica_identity, atom()
+        field :columns, list(Relation.Column.t())
       end
     end
 
@@ -82,7 +124,13 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `relation_id` - The OID of the relation that the tuple was inserted into.
       * `tuple_data` - The data of the inserted tuple.
       """
-      defstruct [:relation_id, :tuple_data]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "INSERT message in PostgreSQL's logical decoding output"
+        field :relation_id, non_neg_integer()
+        field :tuple_data, {String.t(), String.t()}
+      end
     end
 
     defmodule Update do
@@ -94,7 +142,15 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `old_tuple_data` - The data of the tuple before the update.
       * `tuple_data` - The data of the tuple after the update.
       """
-      defstruct [:relation_id, :changed_key_tuple_data, :old_tuple_data, :tuple_data]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "UPDATE message in PostgreSQL's logical decoding output"
+        field :relation_id, non_neg_integer()
+        field :changed_key_tuple_data, {String.t(), String.t()}
+        field :old_tuple_data, {String.t(), String.t()}
+        field :tuple_data, {String.t(), String.t()}
+      end
     end
 
     defmodule Delete do
@@ -105,7 +161,14 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `changed_key_tuple_data` - The data of the tuple with the old key values.
       * `old_tuple_data` - The data of the tuple before the delete.
       """
-      defstruct [:relation_id, :changed_key_tuple_data, :old_tuple_data]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "DELETE message in PostgreSQL's logical decoding output"
+        field :relation_id, non_neg_integer()
+        field :changed_key_tuple_data, {String.t(), String.t()}
+        field :old_tuple_data, {String.t(), String.t()}
+      end
     end
 
     defmodule Truncate do
@@ -116,7 +179,14 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `options` - Additional options provided when truncating the relations.
       * `truncated_relations` - List of relations that have been truncated.
       """
-      defstruct [:number_of_relations, :options, :truncated_relations]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "TRUNCATE message in PostgreSQL's logical decoding output"
+        field :number_of_relations, non_neg_integer()
+        field :options, list(atom())
+        field :truncated_relations, list({non_neg_integer(), non_neg_integer()})
+      end
     end
 
     defmodule Type do
@@ -127,7 +197,14 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `namespace` - The namespace of the type.
       * `name` - The name of the type.
       """
-      defstruct [:id, :namespace, :name]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "TYPE message in PostgreSQL's logical decoding output"
+        field :id, non_neg_integer()
+        field :namespace, String.t()
+        field :name, String.t()
+      end
     end
 
     defmodule Unsupported do
@@ -136,7 +213,12 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
 
       * `data` - The raw data of the unsupported message.
       """
-      defstruct [:data]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "Unsupported message in PostgreSQL's logical decoding output"
+        field :data, String.t()
+      end
     end
 
     defmodule LogicalMessage do
@@ -148,7 +230,15 @@ defmodule Sequin.Extensions.PostgresAdapter.Decoder do
       * `content` - The content of the message
       * `lsn` - The LSN where the message was written
       """
-      defstruct [:transactional, :prefix, :content, :lsn]
+      use TypedStruct
+
+      typedstruct do
+        @typedoc "Logical message emitted via pg_logical_emit_message() in PostgreSQL's logical decoding output"
+        field :transactional, boolean()
+        field :prefix, String.t()
+        field :content, String.t()
+        field :lsn, {non_neg_integer(), non_neg_integer()}
+      end
     end
   end
 

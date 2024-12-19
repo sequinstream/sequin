@@ -6,6 +6,7 @@ defmodule Sequin.DatabasesRuntime.Starter do
 
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.Supervisor
+  alias Sequin.Replication
 
   require Logger
 
@@ -37,8 +38,13 @@ defmodule Sequin.DatabasesRuntime.Starter do
   end
 
   defp start do
+    Enum.each(Replication.all_active_pg_replications(), fn pg_replication ->
+      Supervisor.start_replication(pg_replication)
+      Supervisor.start_wal_pipeline_servers(pg_replication)
+    end)
+
     Enum.each(Consumers.list_sink_consumers_with_active_backfill(), fn consumer ->
-      Supervisor.start_backfill_producer(consumer)
+      Supervisor.start_table_reader(consumer)
     end)
   end
 

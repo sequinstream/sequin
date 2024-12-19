@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.BackfillProducer do
+defmodule Sequin.DatabasesRuntime.TableReader do
   @moduledoc false
   alias Sequin.Constants
   alias Sequin.Databases.ConnectionCache
@@ -50,7 +50,7 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
   def delete_cursor(backfill_id) do
     case fetch_cursors(backfill_id) do
       {:ok, cursors} ->
-        Logger.info("[BackfillProducer] Deleting cursors for backfill #{backfill_id}", cursors)
+        Logger.info("[TableReader] Deleting cursors for backfill #{backfill_id}", cursors)
         {:ok, _} = Redis.command(["DEL", cursor_key(backfill_id)])
         :ok
 
@@ -91,14 +91,14 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
 
     with {:ok, conn} <- ConnectionCache.connection(db) do
       Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
-        Constants.backfill_batch_wm_start(),
+        Constants.backfill_batch_low_watermark(),
         payload
       ])
 
       res = fun.(conn)
 
       Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
-        Constants.backfill_batch_wm_end(),
+        Constants.backfill_batch_high_watermark(),
         payload
       ])
 

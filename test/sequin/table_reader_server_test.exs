@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.BackfillServerTest do
+defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
@@ -9,8 +9,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
   alias Sequin.Databases
   # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.BackfillProducer
-  alias Sequin.DatabasesRuntime.BackfillServer
+  alias Sequin.DatabasesRuntime.TableReader
+  alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -132,7 +132,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
      sequence_filter: sequence_filter}
   end
 
-  describe "BackfillServer" do
+  describe "TableReaderServer" do
     test "processes records in batches", %{
       backfill: backfill,
       consumer: consumer,
@@ -153,7 +153,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: backfill.id,
              page_size: page_size,
@@ -165,9 +165,9 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       Process.monitor(pid)
 
       for n <- 1..2 do
-        assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
+        assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: []})
+        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: []})
       end
 
       # Fetch ConsumerRecords from the database
@@ -189,7 +189,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
 
-      cursor = BackfillProducer.cursor(backfill.id)
+      cursor = TableReader.cursor(backfill.id)
       # Cursor should be nil after completion
       assert cursor == nil
 
@@ -208,7 +208,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: backfill.id,
              page_size: page_size,
@@ -224,9 +224,9 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       dropped_pks = Enum.map(dropped_characters, fn character -> %{"id" => character.id} end)
 
       for n <- 1..3 do
-        assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
+        assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
+        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
       end
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
@@ -255,7 +255,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: backfill.id,
              page_size: page_size,
@@ -290,7 +290,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: backfill.id,
              page_size: page_size,
@@ -331,7 +331,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: filtered_consumer_backfill.id,
              page_size: page_size,
@@ -363,7 +363,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
       processed_ids = Enum.flat_map(consumer_records, & &1.record_pks)
       assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
 
-      cursor = BackfillProducer.fetch_cursors(filtered_consumer.id)
+      cursor = TableReader.fetch_cursors(filtered_consumer.id)
       # Cursor should be nil after completion
       assert cursor == :error
 
@@ -383,7 +383,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: event_consumer_backfill.id,
              page_size: page_size,
@@ -412,7 +412,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         assert is_map(consumer_event.data)
       end
 
-      cursor = BackfillProducer.fetch_cursors(event_consumer.id)
+      cursor = TableReader.fetch_cursors(event_consumer.id)
       assert cursor == :error
 
       # Verify that the consumer's backfill has been updated
@@ -431,7 +431,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
 
       pid =
         start_supervised!(
-          {BackfillServer,
+          {TableReaderServer,
            [
              id: backfill.id,
              page_size: 7,
@@ -443,10 +443,10 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
         )
 
       Process.monitor(pid)
-      assert_receive {BackfillServer, {:batch_fetched, batch_id}}, 1000
-      assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: []})
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
+      assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: []})
 
-      assert_receive {BackfillServer, :paused}, 1000
+      assert_receive {TableReaderServer, :paused}, 1000
 
       # Now clear the messages
       consumer.id
@@ -461,8 +461,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServerTest do
     Process.monitor(pid)
 
     receive do
-      {BackfillServer, {:batch_fetched, batch_id}} = msg ->
-        assert :ok = BackfillServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: []})
+      {TableReaderServer, {:batch_fetched, batch_id}} = msg ->
+        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: []})
 
         flush_batches(pid, seq + 1, [msg | message_history])
 

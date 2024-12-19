@@ -2,12 +2,12 @@ defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline

@@ -5,7 +5,7 @@ defmodule Sequin.Tracer.State do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Replication.Message
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Tracer.State
   alias Sequin.Tracer.State.ConsumerTrace
   alias Sequin.Tracer.State.MessageTrace

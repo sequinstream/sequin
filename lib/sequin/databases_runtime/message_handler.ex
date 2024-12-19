@@ -1,14 +1,14 @@
-defmodule Sequin.Replication.MessageHandler do
+defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   @moduledoc false
-  @behaviour Sequin.Extensions.MessageHandlerBehaviour
+  @behaviour Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Extensions.MessageHandlerBehaviour
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
+  alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.Health
   alias Sequin.Replication
-  alias Sequin.Replication.Message
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline

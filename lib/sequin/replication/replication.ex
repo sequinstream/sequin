@@ -4,16 +4,15 @@ defmodule Sequin.Replication do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.DatabasesRuntime.SlotProcessor
+  alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Postgres
   alias Sequin.Redis
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
-  alias Sequin.ReplicationRuntime
-  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationSupervisor
   alias Sequin.Repo
 
   require Logger
@@ -71,7 +70,7 @@ defmodule Sequin.Replication do
           # We skip the start when creating the replication slot inside a transaction, because
           # the transaction might be rolled back, leaving a zombie process.
           unless Application.get_env(:sequin, :env) == :test or Repo.in_transaction?() do
-            ReplicationRuntime.Supervisor.start_replication(pg_replication)
+            DatabasesRuntimeSupervisor.start_replication(pg_replication)
           end
 
           {:ok, pg_replication}
@@ -100,14 +99,14 @@ defmodule Sequin.Replication do
 
   def delete_pg_replication_with_lifecycle(%PostgresReplicationSlot{} = pg_replication) do
     res = Repo.delete(pg_replication)
-    ReplicationRuntime.Supervisor.stop_replication(pg_replication)
+    DatabasesRuntimeSupervisor.stop_replication(pg_replication)
     res
   end
 
   def add_info(%PostgresReplicationSlot{} = pg_replication) do
     pg_replication = Repo.preload(pg_replication, [:postgres_database])
 
-    last_committed_at = ReplicationExt.get_last_committed_at(pg_replication.id)
+    last_committed_at = SlotProcessor.get_last_committed_at(pg_replication.id)
     # key_pattern = "#{pg_replication.postgres_database.name}.>"
 
     # total_ingested_messages =
@@ -295,10 +294,10 @@ defmodule Sequin.Replication do
     pipeline = Repo.preload(pipeline, :replication_slot)
 
     unless env() == :test do
-      ReplicationSupervisor.restart_wal_pipeline_servers(pipeline.replication_slot)
+      DatabasesRuntimeSupervisor.restart_wal_pipeline_servers(pipeline.replication_slot)
     end
 
-    ReplicationSupervisor.refresh_message_handler_ctx(pipeline.replication_slot_id)
+    DatabasesRuntimeSupervisor.refresh_message_handler_ctx(pipeline.replication_slot_id)
   end
 
   # WAL Event

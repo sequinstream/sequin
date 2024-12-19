@@ -221,9 +221,9 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
       {:next_state, :query_max_cursor, state}
     else
       # Call handle_records inline
-      {:ok, _count} = handle_records(state.consumer, table(state), result)
+      {:ok, _count, consumer} = handle_records(state.consumer, table(state), result)
       :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, :min, state.cursor_max)
-      state = %State{state | cursor_min: state.cursor_max, cursor_max: nil, consumer: preload_consumer(state.consumer)}
+      state = %State{state | cursor_min: state.cursor_max, cursor_max: nil, consumer: consumer}
       {:next_state, :query_max_cursor, state}
     end
   end
@@ -352,13 +352,14 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         :event -> handle_event_messages(consumer, table, matching_records)
       end
 
-    Consumers.update_backfill(consumer.active_backfill, %{
-      rows_processed_count: consumer.active_backfill.rows_processed_count + total_processed,
-      rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
-    })
+    {:ok, backfill} =
+      Consumers.update_backfill(consumer.active_backfill, %{
+        rows_processed_count: consumer.active_backfill.rows_processed_count + total_processed,
+        rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
+      })
 
     Health.update(consumer, :ingestion, :healthy)
-    {:ok, count}
+    {:ok, count, %{consumer | active_backfill: backfill}}
   end
 
   defp handle_record_messages(consumer, table, matching_records) do

@@ -1,4 +1,4 @@
-defmodule Sequin.Extensions.Replication do
+defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @moduledoc """
   Subscribes to the Postgres replication slot, decodes write ahead log binary messages
   and publishes them to a stream.
@@ -15,19 +15,19 @@ defmodule Sequin.Extensions.Replication do
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.DatabasesRuntime
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Begin
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Commit
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Delete
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Insert
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Relation
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Error
-  alias Sequin.Extensions.PostgresAdapter.Decoder
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Begin
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Commit
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Delete
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Insert
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.LogicalMessage
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Relation
-  alias Sequin.Extensions.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.Health
   alias Sequin.Postgres
-  alias Sequin.Replication.Message
-  alias Sequin.ReplicationRuntime
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
 
@@ -94,7 +94,7 @@ defmodule Sequin.Extensions.Replication do
       last_committed_lsn: nil
     }
 
-    Postgrex.ReplicationConnection.start_link(Replication, init, rep_conn_opts)
+    Postgrex.ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
   end
 
   def child_spec(opts) do
@@ -107,7 +107,7 @@ defmodule Sequin.Extensions.Replication do
     }
 
     # Eventually, we can wrap this in a Supervisor, to get faster retries on restarts before "giving up"
-    # The Starter will eventually restart this Replication GenServer.
+    # The Starter will eventually restart this SlotProcessor GenServer.
     Supervisor.child_spec(spec, restart: :temporary)
   end
 
@@ -125,10 +125,10 @@ defmodule Sequin.Extensions.Replication do
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
-    Logger.info("[Replication] Initialized with opts: #{inspect(state.connection, pretty: true)}")
+    Logger.info("[SlotProcessor] Initialized with opts: #{inspect(state.connection, pretty: true)}")
 
     if state.test_pid do
-      Mox.allow(Sequin.Mocks.Extensions.MessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.Mocks.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
@@ -137,7 +137,7 @@ defmodule Sequin.Extensions.Replication do
 
   @impl Postgrex.ReplicationConnection
   def handle_connect(%State{connect_attempts: attempts} = state) when attempts >= 5 do
-    Logger.error("[Replication] Failed to connect to replication slot after 5 attempts")
+    Logger.error("[SlotProcessor] Failed to connect to replication slot after 5 attempts")
 
     conn = get_cached_conn(state)
 
@@ -169,7 +169,7 @@ defmodule Sequin.Extensions.Replication do
       if env() == :test and not is_nil(state.test_pid) do
         send(state.test_pid, {:stop_replication, state.id})
       else
-        ReplicationRuntime.Supervisor.stop_replication(state.id)
+        DatabasesRuntime.Supervisor.stop_replication(state.id)
       end
     end)
 
@@ -177,7 +177,7 @@ defmodule Sequin.Extensions.Replication do
   end
 
   def handle_connect(state) do
-    Logger.debug("[Replication] Handling connect (attempt #{state.connect_attempts + 1})")
+    Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
     Health.update(state.postgres_database, :replication_connected, :initializing)
 
     {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)

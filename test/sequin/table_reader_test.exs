@@ -1,10 +1,10 @@
-defmodule Sequin.BackfillProducerTest do
+defmodule Sequin.TableReaderTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.DatabasesRuntime.BackfillProducer
   alias Sequin.DatabasesRuntime.KeysetCursor
+  alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Factory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.DatabasesFactory
@@ -51,36 +51,36 @@ defmodule Sequin.BackfillProducerTest do
 
   describe "cursor operations" do
     test "fetch_cursors returns :error when no cursors exist", %{consumer_id: consumer_id} do
-      assert :error == BackfillProducer.fetch_cursors(consumer_id)
+      assert :error == TableReader.fetch_cursors(consumer_id)
     end
 
     test "update_cursor and fetch_cursors work correctly", %{consumer_id: consumer_id} do
       cursor = %{1 => "2023-01-01", 2 => 123}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
+      assert :ok == TableReader.update_cursor(consumer_id, cursor)
 
-      assert {:ok, %{"min" => ^cursor}} = BackfillProducer.fetch_cursors(consumer_id)
+      assert {:ok, %{"min" => ^cursor}} = TableReader.fetch_cursors(consumer_id)
     end
 
     test "cursor retrieves cursor value", %{consumer_id: consumer_id} do
       cursor = %{1 => "2023-02-01", 2 => 789}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
-      assert ^cursor = BackfillProducer.cursor(consumer_id)
+      assert :ok == TableReader.update_cursor(consumer_id, cursor)
+      assert ^cursor = TableReader.cursor(consumer_id)
     end
 
     test "cursor returns nil for non-existent cursor", %{consumer_id: consumer_id} do
-      assert nil == BackfillProducer.cursor(consumer_id)
+      assert nil == TableReader.cursor(consumer_id)
     end
 
     test "delete_cursor removes cursor", %{consumer_id: consumer_id} do
       cursor = %{1 => "2023-03-01", 2 => 1213}
 
-      assert :ok == BackfillProducer.update_cursor(consumer_id, cursor)
-      assert {:ok, _} = BackfillProducer.fetch_cursors(consumer_id)
+      assert :ok == TableReader.update_cursor(consumer_id, cursor)
+      assert {:ok, _} = TableReader.fetch_cursors(consumer_id)
 
-      assert :ok == BackfillProducer.delete_cursor(consumer_id)
-      assert :error == BackfillProducer.fetch_cursors(consumer_id)
+      assert :ok == TableReader.delete_cursor(consumer_id)
+      assert :error == TableReader.fetch_cursors(consumer_id)
     end
   end
 
@@ -95,7 +95,7 @@ defmodule Sequin.BackfillProducerTest do
       # This does not test that watermark messages are emitted, we will do this in a separate test
 
       {:ok, result} =
-        BackfillProducer.with_watermark(db, UUID.uuid4(), batch_id, table_oid, fn conn ->
+        TableReader.with_watermark(db, UUID.uuid4(), batch_id, table_oid, fn conn ->
           Postgrex.query(conn, "select 1", [])
         end)
 
@@ -113,9 +113,9 @@ defmodule Sequin.BackfillProducerTest do
       char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -2, :second))
       char3 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
 
-      {:ok, _first_row, initial_cursor} = BackfillProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, include_min: true)
+      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, include_min: true)
 
       assert length(records) == 3
       assert_character_equal(Enum.at(records, 0), char1)
@@ -125,7 +125,7 @@ defmodule Sequin.BackfillProducerTest do
       # Verify next cursor matches last record
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
-      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, include_min: false)
+      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, include_min: false)
 
       assert length(records) == 2
       assert_character_equal(Enum.at(records, 0), char2)
@@ -156,10 +156,10 @@ defmodule Sequin.BackfillProducerTest do
           status: :retired
         )
 
-      {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_min_cursor} = TableReader.fetch_first_row(db, table)
 
       {:ok, results, _next_cursor} =
-        BackfillProducer.fetch_batch(
+        TableReader.fetch_batch(
           db,
           table,
           initial_min_cursor,
@@ -202,9 +202,9 @@ defmodule Sequin.BackfillProducerTest do
       char2 = CharacterFactory.insert_character!(updated_at: NaiveDateTime.add(now, -1, :second))
       _char3 = CharacterFactory.insert_character!(updated_at: now)
 
-      {:ok, _first_row, initial_cursor} = BackfillProducer.fetch_first_row(db, table)
+      {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
+      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
 
       assert length(records) == 2
       assert_character_equal(Enum.at(records, 0), char1)
@@ -220,7 +220,7 @@ defmodule Sequin.BackfillProducerTest do
     } do
       cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
 
-      {:ok, records, next_cursor} = BackfillProducer.fetch_batch(db, table, cursor)
+      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, cursor)
 
       assert records == []
       assert next_cursor == nil

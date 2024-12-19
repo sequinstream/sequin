@@ -1,5 +1,5 @@
-Mox.defmock(Sequin.Mocks.Extensions.MessageHandlerMock,
-  for: Sequin.Extensions.MessageHandlerBehaviour
+Mox.defmock(Sequin.Mocks.DatabasesRuntime.MessageHandlerMock,
+  for: Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
 )
 
 Mox.defmock(Sequin.Mocks.NatsMock,

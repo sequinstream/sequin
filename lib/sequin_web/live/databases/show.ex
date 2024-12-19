@@ -407,6 +407,8 @@ defmodule SequinWeb.DatabasesLive.Show do
       %TracerState{} = state -> enrich_trace_state(account_id, state)
       {:error, _reason} -> nil
     end
+  catch
+    :exit, _ -> nil
   end
 
   defp filter_trace?(trace, params) do

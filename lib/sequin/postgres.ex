@@ -651,18 +651,24 @@ defmodule Sequin.Postgres do
 
         casted_val =
           cond do
-            # This is the catch-all when encode is not implemented
-            Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
-              Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
-              nil
-
             # Binary data types
+            col.type in ["bytea", "bit", "varbit"] and String.starts_with?(value, "\\x") ->
+              value
+
             col.type in ["bytea", "bit", "varbit"] and not is_nil(value) ->
-              Base.encode64(value)
+              "\\x" <> Base.encode16(value, case: :lower)
 
             # UUID handling
             col.type == "uuid" and not is_nil(value) ->
               Sequin.String.binary_to_string!(value)
+
+            col.type in ["uuid[]", "_uuid"] and is_list(value) ->
+              Enum.map(value, &Sequin.String.binary_to_string!/1)
+
+            # This is the catch-all when encode is not implemented
+            Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
+              Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
+              nil
 
             true ->
               value

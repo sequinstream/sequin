@@ -125,7 +125,9 @@ if Mix.env() == :test do
           rating: Decimal.from_float(Factory.float(max: 10)),
           avatar: :crypto.strong_rand_bytes(16),
           house_id: UUID.uuid4(),
-          email: Faker.Internet.email()
+          email: Faker.Internet.email(),
+          binary_data: :crypto.strong_rand_bytes(32),
+          related_houses: Enum.map(1..3, fn _ -> UUID.uuid4() end)
         },
         attrs
       )

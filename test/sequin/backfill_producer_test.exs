@@ -320,14 +320,25 @@ defmodule Sequin.BackfillProducerTest do
     end
   end
 
-  describe "fetch_records_in_range/5 with UUID columns" do
-    test "correctly handles nil and populated UUID fields", %{
+  describe "fetch_records_in_range/5 with special column types" do
+    test "correctly handles nil and populated UUID, UUID[] and bytea fields", %{
       db: db,
       characters_detailed_table: table
     } do
-      # Insert two characters, one with nil house_id and one with populated house_id
-      char1 = CharacterFactory.insert_character_detailed!(house_id: nil)
-      char2 = CharacterFactory.insert_character_detailed!(house_id: UUID.uuid4())
+      # Insert two characters with different combinations of special fields
+      char1 =
+        CharacterFactory.insert_character_detailed!(
+          house_id: nil,
+          related_houses: [],
+          binary_data: <<1, 2, 3>>
+        )
+
+      char2 =
+        CharacterFactory.insert_character_detailed!(
+          house_id: UUID.uuid4(),
+          related_houses: [UUID.uuid4(), UUID.uuid4()],
+          binary_data: <<4, 5, 6>>
+        )
 
       {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
       {:ok, max_cursor} = BackfillProducer.fetch_max_cursor(db, table, initial_min_cursor, limit: 10)
@@ -348,12 +359,20 @@ defmodule Sequin.BackfillProducerTest do
       result1 = Enum.find(results, &(&1["id"] == char1.id))
       result2 = Enum.find(results, &(&1["id"] == char2.id))
 
-      # Verify that the house_id is correctly nil for the first character
+      # Verify UUID handling
       refute result1["house_id"]
-
-      # Verify that the house_id is a valid UUID for the second character
       assert {:ok, _} = UUID.info(result2["house_id"])
       assert result2["house_id"] == char2.house_id
+
+      # Verify UUID array handling
+      assert result1["related_houses"] == []
+      assert length(result2["related_houses"]) == 2
+      assert Enum.all?(result2["related_houses"], fn uuid -> match?({:ok, _}, UUID.info(uuid)) end)
+      assert result2["related_houses"] == char2.related_houses
+
+      # Verify bytea handling
+      assert result1["binary_data"] == "\\x010203"
+      assert result2["binary_data"] == "\\x040506"
     end
   end
 

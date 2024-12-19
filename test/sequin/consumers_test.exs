@@ -758,7 +758,7 @@ defmodule Sequin.ConsumersTest do
       assert fetched_record.data.record["powers"] == character.powers
       assert fetched_record.data.record["metadata"] == character.metadata
       assert Decimal.equal?(fetched_record.data.record["rating"], character.rating)
-      assert fetched_record.data.record["avatar"] == Base.encode64(character.avatar)
+      assert fetched_record.data.record["avatar"] == "\\x" <> Base.encode16(character.avatar, case: :lower)
     end
 
     @tag capture_log: true

@@ -381,7 +381,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert json["record"]["height"] == character.height
       assert json["record"]["is_hero"] == character.is_hero
       assert json["record"]["biography"] == character.biography
-      assert json["record"]["avatar"] == Base.encode64(character.avatar)
+      assert json["record"]["avatar"] == "\\x" <> Base.encode16(character.avatar, case: :lower)
 
       # Assert metadata
       assert json["metadata"]["table_name"] == "characters_detailed"

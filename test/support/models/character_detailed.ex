@@ -20,6 +20,8 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
     field :avatar, :binary
     field :house_id, Ecto.UUID
     field :email, :string
+    field :binary_data, :binary
+    field :related_houses, {:array, Ecto.UUID}
 
     timestamps()
   end
@@ -68,7 +70,9 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
       :rating,
       :avatar,
       :house_id,
-      :email
+      :email,
+      :binary_data,
+      :related_houses
     ])
   end
 end

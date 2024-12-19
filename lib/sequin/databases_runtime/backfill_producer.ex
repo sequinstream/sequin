@@ -110,8 +110,9 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
     params = min_cursor_values ++ max_cursor_values ++ [limit]
 
     with {:ok, %Postgrex.Result{} = result} <- Postgres.query(db, sql, params) do
-      result = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
-      {:ok, result}
+      rows = Postgres.result_to_maps(result)
+      rows = Postgres.load_rows(table, rows)
+      {:ok, rows}
     end
   end
 
@@ -160,27 +161,6 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
     {sql, cursor_values ++ [limit]}
   end
 
-  defp parse_uuids(columns, map) do
-    uuid_columns = Enum.filter(columns, &(&1.type == "uuid"))
-
-    Enum.reduce(uuid_columns, map, fn column, acc ->
-      Map.update(acc, column.name, nil, fn
-        nil ->
-          nil
-
-        uuid_string ->
-          case Sequin.String.binary_to_string(uuid_string) do
-            {:ok, uuid} ->
-              uuid
-
-            :error ->
-              Logger.error("[BackfillProducer] Invalid UUID: #{inspect(uuid_string)}", column: column, columns: columns)
-              raise "Got invalid UUID: #{inspect(uuid_string)} for column: #{column.name}"
-          end
-      end)
-    end)
-  end
-
   # Fetch first row
   # Can be used to both validate the sort column, show the user where we're going to start the process,
   # and initialize the min cursor
@@ -203,7 +183,7 @@ defmodule Sequin.DatabasesRuntime.BackfillProducer do
           {:ok, nil, nil}
 
         _ ->
-          [row] = result |> Postgres.result_to_maps() |> Enum.map(&parse_uuids(table.columns, &1))
+          [row] = Postgres.load_rows(table, Postgres.result_to_maps(result))
           {:ok, row, KeysetCursor.cursor_from_result(table, result)}
       end
     end

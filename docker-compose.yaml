@@ -1,11 +1,10 @@
 name: sequin-dev
-
 services:
   postgres:
     image: "postgres:17"
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all -c max_connections=200 -c pg_stat_statements.max=10000 -c track_activity_query_size=2048 -c wal_level=logical
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # Explicitly bind to IPv4 localhost
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -13,10 +12,96 @@ services:
     volumes:
       - sequin_dev_postgres:/var/lib/postgresql/data
 
-  redis:
+  redis-node-1:
     image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7001"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-node-2:
+    image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7002"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-node-3:
+    image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7003"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-node-4:
+    image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7004"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-node-5:
+    image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7005"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-node-6:
+    image: redis:7
+    command: ["/tmp/redis.sh", "127.0.0.1", "7006"]
+    volumes:
+      - ./redis.sh:/tmp/redis.sh
+    networks:
+      - redis-cluster
+
+  redis-cluster-init:
+    image: redis:7
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    command: >
+      bash -c "sleep 5 && redis-cli --cluster create 
+      redis-node-1:6379 
+      redis-node-2:6379 
+      redis-node-3:6379 
+      redis-node-4:6379 
+      redis-node-5:6379 
+      redis-node-6:6379 
+      --cluster-replicas 1 --cluster-yes"
+    networks:
+      - redis-cluster
+
+  redis-proxy:
+    image: haproxytech/haproxy-alpine:2.4
+    volumes:
+      - ./haproxy:/usr/local/etc/haproxy:ro
     ports:
-      - "6379:6379"
+      - "127.0.0.1:8404:8404"  # HAProxy stats
+      - "127.0.0.1:7001-7006:9001-9006"  # Client ports
+      - "127.0.0.1:7101-7106:9101-9106"  # Cluster bus ports
+    depends_on:
+      - redis-node-1
+      - redis-node-2
+      - redis-node-3
+      - redis-node-4
+      - redis-node-5
+      - redis-node-6
+    networks:
+      - redis-cluster
+
+networks:
+  redis-cluster:
+    driver: bridge
 
 volumes:
   sequin_dev_postgres:

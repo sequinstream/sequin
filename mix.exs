@@ -19,7 +19,7 @@ defmodule Sequin.MixProject do
   def application do
     [
       mod: {Sequin.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :redix_cluster]
     ]
   end
 
@@ -89,7 +89,8 @@ defmodule Sequin.MixProject do
       {:libcluster, "~> 3.3"},
       {:amqp, "~> 4.0"},
       {:recon, "~> 2.5.6"},
-      {:aws_signature, "~> 0.3.2"}
+      {:aws_signature, "~> 0.3.2"},
+      {:redix_cluster, path: "../redix-cluster"}
     ]
   end
 

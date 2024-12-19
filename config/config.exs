@@ -12,17 +12,27 @@ sequin_stream_schema = "sequin_streams"
 
 config :esbuild, :version, "0.17.11"
 
-# Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id]
 
-# Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :redix,
-  start_opts: {"redis://localhost:6379", [name: :redix]}
+config :redix, start_opts: {"redis://localhost:6379", [name: :redix]}
 
+config :redix_cluster,
+  cluster_nodes: [
+    %{host: "localhost", port: 7001},
+    %{host: "localhost", port: 7002},
+    %{host: "localhost", port: 7003},
+    %{host: "localhost", port: 7004},
+    %{host: "localhost", port: 7005},
+    %{host: "localhost", port: 7006}
+  ]
+
+# Configures Elixir's Logger
+
+# Use Jason for JSON parsing in Phoenix
 config :sentry,
   enable_source_code_context: true,
   environment_name: Mix.env(),

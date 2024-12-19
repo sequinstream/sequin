@@ -62,11 +62,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {:ok, messages} = Replication.receive_messages(state.consumer, demand)
+    {:ok, messages} = Replication.receive_messages(state.consumer, demand * state.consumer.batch_size)
 
     broadway_messages =
       messages
-      |> Enum.chunk_every(state.consumer.batch_size)
+      |> Stream.chunk_every(state.consumer.batch_size)
       |> Enum.map(fn batch ->
         %Message{
           data: batch,
@@ -104,7 +104,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp maybe_schedule_demand(%{scheduled_handle_demand: false, demand: demand} = state) when demand > 0 do
-    send(self(), :handle_demand)
+    Process.send_after(self(), :handle_demand, 10)
     %{state | scheduled_handle_demand: true}
   end
 

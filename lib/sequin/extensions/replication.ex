@@ -277,13 +277,25 @@ defmodule Sequin.Extensions.Replication do
   end
 
   def handle_call({:produce_messages, consumer_id, count}, from, state) do
-    {ctx, messages} = state.message_handler_module.produce_messages(state.message_handler_ctx, consumer_id, count)
+    {duration, {ctx, messages}} =
+      :timer.tc(fn ->
+        state.message_handler_module.produce_messages(state.message_handler_ctx, consumer_id, count)
+      end)
+
     GenServer.reply(from, {:ok, messages})
+
+    state = record_metric(state, :produce_messages, duration)
     {:noreply, %{state | message_handler_ctx: ctx}}
   end
 
   def receive_messages(%SinkConsumer{} = consumer, count) do
-    GenServer.call(via_tuple(consumer.replication_slot_id), {:produce_messages, consumer.id, count})
+    {duration, {:ok, messages}} =
+      :timer.tc(fn ->
+        GenServer.call(via_tuple(consumer.replication_slot_id), {:produce_messages, consumer.id, count})
+      end)
+
+    # Logger.info("Received #{length(messages)} messages in #{duration / 1000}ms (#{count} requested)")
+    {:ok, messages}
   end
 
   defp maybe_recreate_slot(%State{connection: connection} = state) do
@@ -418,7 +430,7 @@ defmodule Sequin.Extensions.Replication do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    # TracerServer.message_replicated(state.postgres_database, record)
 
     put_message(state, record)
   end
@@ -447,7 +459,7 @@ defmodule Sequin.Extensions.Replication do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    # TracerServer.message_replicated(state.postgres_database, record)
 
     put_message(state, record)
   end
@@ -477,7 +489,7 @@ defmodule Sequin.Extensions.Replication do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    # TracerServer.message_replicated(state.postgres_database, record)
 
     put_message(state, record)
   end
@@ -498,21 +510,22 @@ defmodule Sequin.Extensions.Replication do
     start_time = System.monotonic_time(:microsecond)
 
     # Reverse the messages because we accumulate them with list prepending
-    {rejected_messages, messages} =
-      messages
-      |> Enum.reverse()
-      |> Enum.split_with(fn message -> message.seq <= state.last_processed_seq end)
+    messages = Enum.reverse(messages)
+    # {rejected_messages, messages} =
+    #   messages
+    #   |> Enum.reverse()
+    # |> Enum.split_with(fn message -> message.seq <= state.last_processed_seq end)
 
-    unless rejected_messages == [] do
-      max_rejected_seq = rejected_messages |> Enum.map(& &1.seq) |> Enum.max()
+    # unless rejected_messages == [] do
+    #   max_rejected_seq = rejected_messages |> Enum.map(& &1.seq) |> Enum.max()
 
-      Logger.info(
-        "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq}, max_rejected_seq=#{max_rejected_seq})"
-      )
-    end
+    #   Logger.info(
+    #     "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq}, max_rejected_seq=#{max_rejected_seq})"
+    #   )
+    # end
 
     if Enum.any?(messages) do
-      next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+      next_seq = messages |> Stream.map(& &1.seq) |> Enum.max()
       ctx = state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
       if state.test_pid do
@@ -520,13 +533,16 @@ defmodule Sequin.Extensions.Replication do
       end
 
       flush_time = System.monotonic_time(:microsecond) - start_time
-
       state = record_metric(state, :flush_messages, flush_time)
+
       %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: ctx}
     else
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :flush_messages})
       end
+
+      flush_time = System.monotonic_time(:microsecond) - start_time
+      state = record_metric(state, :flush_messages, flush_time)
 
       %{state | accumulated_messages: {0, []}}
     end
@@ -534,7 +550,7 @@ defmodule Sequin.Extensions.Replication do
 
   defp put_message(%State{} = state, message) do
     {acc_size, acc_messages} = state.accumulated_messages
-    new_size = acc_size + :erlang.external_size(message)
+    new_size = acc_size + 100
 
     %{
       state
@@ -723,8 +739,7 @@ defmodule Sequin.Extensions.Replication do
         state.metrics,
         metric_name,
         [time],
-        # Keep last 100,000 measurements
-        &Enum.take([time | &1], 100_000)
+        &[time | &1]
       )
 
     %{state | metrics: metrics}
@@ -736,7 +751,7 @@ defmodule Sequin.Extensions.Replication do
 
     # Emit every 10 seconds
     if now - last_emit > 10_000 do
-      Enum.each([:handle_data, :process_message, :flush_messages], fn metric ->
+      Enum.each([:handle_data, :process_message, :flush_messages, :produce_messages], fn metric ->
         values = Map.get(metrics, metric, [])
 
         if length(values) > 0 do
@@ -751,7 +766,17 @@ defmodule Sequin.Extensions.Replication do
         end
       end)
 
-      %{state | metrics: %{metrics | last_metrics_emit: now, handle_data: [], process_message: [], flush_messages: []}}
+      %{
+        state
+        | metrics: %{
+            metrics
+            | last_metrics_emit: now,
+              handle_data: [],
+              process_message: [],
+              flush_messages: [],
+              produce_messages: []
+          }
+      }
     else
       state
     end

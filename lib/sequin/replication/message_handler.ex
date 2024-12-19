@@ -42,8 +42,8 @@ defmodule Sequin.Replication.MessageHandler do
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
     Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
-    max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
-    Replication.put_last_processed_seq!(ctx.replication_slot_id, max_seq)
+    # max_seq = messages |> Stream.map(& &1.seq) |> Enum.max()
+    # Replication.put_last_processed_seq!(ctx.replication_slot_id, max_seq)
 
     %Context{ctx | messages: ctx.messages ++ messages}
   end
@@ -54,18 +54,15 @@ defmodule Sequin.Replication.MessageHandler do
 
     messages =
       ctx.messages
-      |> Enum.take(count)
-      |> Enum.map(fn message ->
+      |> Stream.take(count)
+      |> Stream.map(fn message ->
         if Consumers.matches_message?(consumer, message) do
           cond do
             consumer.message_kind == :event ->
-              {{:insert, consumer_event(consumer, message)}, consumer}
-
-            consumer.message_kind == :record and message.action == :delete ->
-              {{:delete, consumer_record(consumer, message)}, consumer}
+              consumer_event(consumer, message)
 
             consumer.message_kind == :record ->
-              {{:insert, consumer_record(consumer, message)}, consumer}
+              consumer_record(consumer, message)
           end
         else
           TracerServer.message_filtered(consumer, message)
@@ -77,19 +74,18 @@ defmodule Sequin.Replication.MessageHandler do
     Health.update(consumer, :ingestion, :healthy)
 
     # Trace Messages
-    messages
-    |> Enum.group_by(
-      fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
-      fn {{_action, event_or_record}, _consumer} -> event_or_record end
-    )
-    |> Enum.each(fn
-      {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
-      {{:delete, _consumer}, _messages} -> :ok
-    end)
+    # messages
+    # |> Enum.group_by(
+    #   fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
+    #   fn {{_action, event_or_record}, _consumer} -> event_or_record end
+    # )
+    # |> Enum.each(fn
+    #   {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
+    #   {{:delete, _consumer}, _messages} -> :ok
+    # end)
 
     # Return the messages that were produced
     context = %Context{ctx | messages: Enum.drop(ctx.messages, count)}
-    messages = Enum.map(messages, fn {{_action, event_or_record}, _consumer} -> event_or_record end)
     {context, messages}
   end
 

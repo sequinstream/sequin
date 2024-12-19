@@ -817,6 +817,8 @@ defmodule Sequin.ConsumersTest do
       ConnectionCache.cache_connection(consumer.postgres_database, conn)
 
       assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(consumer, [record])
+
+      GenServer.stop(conn)
     end
 
     test "deletes consumer records when they are missing from the source table", %{consumer: consumer} do

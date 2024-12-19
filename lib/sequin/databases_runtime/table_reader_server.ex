@@ -1,4 +1,4 @@
-defmodule Sequin.DatabasesRuntime.BackfillServer do
+defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @moduledoc false
   use GenStateMachine, callback_mode: [:handle_event_function, :state_enter]
 
@@ -10,7 +10,7 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime.BackfillProducer
+  alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Health
   alias Sequin.Repo
 
@@ -129,13 +129,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
   def handle_event(:internal, :init, :initializing, state) do
     backfill = state.backfill
 
-    cursor = BackfillProducer.cursor(backfill.id)
+    cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
     state = %{state | cursor: cursor}
 
     # Add initial count if not set
     if is_nil(backfill.rows_initial_count) do
-      case BackfillProducer.fast_count_estimate(database(state), table(state), cursor) do
+      case TableReader.fast_count_estimate(database(state), table(state), cursor) do
         {:ok, count} ->
           Consumers.update_backfill(backfill, %{rows_initial_count: count})
 
@@ -159,13 +159,13 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
         fn ->
           maybe_setup_allowances(state.test_pid)
 
-          BackfillProducer.with_watermark(
+          TableReader.with_watermark(
             database(state),
             state.id,
             current_batch_id,
             table_oid(state.consumer),
             fn t_conn ->
-              BackfillProducer.fetch_batch(
+              TableReader.fetch_batch(
                 t_conn,
                 table(state),
                 state.cursor,
@@ -186,8 +186,8 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     Logger.info("[BackfillServer] Query returned no records. Table pagination complete.")
 
     if state.batches == %{} do
-      Consumers.backfill_producer_finished(state.consumer.id)
-      BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
+      Consumers.table_reader_finished(state.consumer.id)
+      TableReader.delete_cursor(state.consumer.active_backfill.id)
       {:stop, :normal}
     else
       {:next_state, :done_fetching, state}
@@ -342,15 +342,15 @@ defmodule Sequin.DatabasesRuntime.BackfillServer do
     {:ok, _count, consumer} = handle_records(state.consumer, table(state), seq, filtered_batch)
     state = %State{state | consumer: consumer}
 
-    :ok = BackfillProducer.update_cursor(state.consumer.active_backfill.id, cursor)
+    :ok = TableReader.update_cursor(state.consumer.active_backfill.id, cursor)
 
     case state_name do
       {:paused, :max_pending_batches} ->
         {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
 
       :done_fetching when state.batches == %{} ->
-        Consumers.backfill_producer_finished(state.consumer.id)
-        BackfillProducer.delete_cursor(state.consumer.active_backfill.id)
+        Consumers.table_reader_finished(state.consumer.id)
+        TableReader.delete_cursor(state.consumer.active_backfill.id)
         GenServer.reply(from, :ok)
         {:stop, :normal}
 

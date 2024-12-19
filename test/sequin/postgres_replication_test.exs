@@ -15,16 +15,16 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase
-  alias Sequin.Extensions.Replication, as: ReplicationExt
+  alias Sequin.DatabasesRuntime
+  alias Sequin.DatabasesRuntime.SlotProcessor
+  alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.Extensions.MessageHandlerMock
+  alias Sequin.Mocks.DatabasesRuntime.MessageHandlerMock
   alias Sequin.Replication
-  alias Sequin.Replication.Message
-  alias Sequin.ReplicationRuntime
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
   # alias Sequin.Replication
@@ -110,10 +110,10 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       event_consumer = Repo.preload(event_consumer, :postgres_database)
       record_consumer = Repo.preload(record_consumer, :postgres_database)
@@ -131,7 +131,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -163,7 +163,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
       [consumer_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
@@ -183,13 +183,13 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Update the character
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [_insert_event, update_event] =
@@ -232,7 +232,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
 
@@ -240,7 +240,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
       [update_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
@@ -268,7 +268,7 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Update the character
       UnboxedRepo.update!(
@@ -281,7 +281,7 @@ defmodule Sequin.PostgresReplicationTest do
       )
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [_insert_event, update_event] =
@@ -307,10 +307,10 @@ defmodule Sequin.PostgresReplicationTest do
     test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       UnboxedRepo.delete!(character)
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
 
@@ -337,12 +337,12 @@ defmodule Sequin.PostgresReplicationTest do
     test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [_insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
 
       UnboxedRepo.delete!(character)
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [] = Consumers.list_consumer_records_for_consumer(consumer.id)
     end
@@ -350,10 +350,10 @@ defmodule Sequin.PostgresReplicationTest do
     test "deletes are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character_ident_full!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       UnboxedRepo.delete!(character)
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
 
@@ -384,7 +384,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Insert
       character = CharacterFactory.insert_character_multi_pk!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 1000
+      assert_receive {SlotProcessor, :flush_messages}, 1000
 
       [insert_message] = list_messages(consumer)
 
@@ -430,7 +430,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Verify no consumer message was created
       assert list_messages(consumer) == []
@@ -439,7 +439,7 @@ defmodule Sequin.PostgresReplicationTest do
       matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer messages
       [consumer_message] = list_messages(consumer)
@@ -451,7 +451,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Verify no new consumer message was created
       assert length(list_messages(consumer)) == 1
@@ -465,7 +465,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(event_consumer.id)
@@ -487,7 +487,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([tags: []], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -509,7 +509,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([tags: [""]], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -527,13 +527,13 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character_ident_full!([tags: ["tag1", "tag2"]], repo: UnboxedRepo)
 
       # Wait for the insert message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Update the character with an empty array
       UnboxedRepo.update!(Ecto.Changeset.change(character, tags: []))
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [_insert_event, update_event] =
@@ -552,7 +552,7 @@ defmodule Sequin.PostgresReplicationTest do
   end
 
   def server_id, do: :"#{__MODULE__}-#{inspect(self())}"
-  def server_via, do: ReplicationExt.via_tuple(server_id())
+  def server_via, do: SlotProcessor.via_tuple(server_id())
 
   describe "replication in isolation" do
     test "changes are buffered in the WAL, even if the listener is not up" do
@@ -817,10 +817,10 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
         pg_replication: pg_replication,
@@ -835,7 +835,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -861,7 +861,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
       [consumer_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
@@ -881,13 +881,13 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Update the character
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [_insert_event, update_event] =
@@ -924,7 +924,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
 
@@ -932,7 +932,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(character, planet: "Arrakis"))
 
       # Wait for the update message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
       [update_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
@@ -948,10 +948,10 @@ defmodule Sequin.PostgresReplicationTest do
     test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       UnboxedRepo.delete!(character)
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [_insert_event, delete_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
 
@@ -978,12 +978,12 @@ defmodule Sequin.PostgresReplicationTest do
     test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [_insert_record] = Consumers.list_consumer_records_for_consumer(consumer.id)
 
       UnboxedRepo.delete!(character)
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       [] = Consumers.list_consumer_records_for_consumer(consumer.id)
     end
@@ -1022,7 +1022,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Verify no consumer message was created
       assert list_messages(consumer) == []
@@ -1031,7 +1031,7 @@ defmodule Sequin.PostgresReplicationTest do
       matching_character = CharacterFactory.insert_character!([is_active: true], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer messages
       [consumer_message] = list_messages(consumer)
@@ -1043,7 +1043,7 @@ defmodule Sequin.PostgresReplicationTest do
       UnboxedRepo.update!(Ecto.Changeset.change(matching_character, is_active: false))
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Verify no new consumer message was created
       assert length(list_messages(consumer)) == 1
@@ -1057,7 +1057,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(event_consumer.id)
@@ -1079,7 +1079,7 @@ defmodule Sequin.PostgresReplicationTest do
       character = CharacterFactory.insert_character!([tags: []], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -1101,7 +1101,7 @@ defmodule Sequin.PostgresReplicationTest do
       CharacterFactory.insert_character!([tags: [""]], repo: UnboxedRepo)
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer events
       [consumer_event] = Consumers.list_consumer_events_for_consumer(consumer.id)
@@ -1150,10 +1150,10 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Start replication
-      sup = Module.concat(__MODULE__, ReplicationRuntime.Supervisor)
+      sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
 
-      {:ok, _} = ReplicationRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
+      {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
 
       %{
         source_db: source_db,
@@ -1235,7 +1235,7 @@ defmodule Sequin.PostgresReplicationTest do
         end)
 
       # Wait for the messages to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer messages
       messages = list_messages(consumer)
@@ -1288,7 +1288,7 @@ defmodule Sequin.PostgresReplicationTest do
         end)
 
       # Wait for message handling
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Verify message was created and matched case-insensitively
       [consumer_message] = list_messages(consumer)
@@ -1314,7 +1314,7 @@ defmodule Sequin.PostgresReplicationTest do
         opts
       )
 
-    start_supervised!(ReplicationExt.child_spec(opts))
+    start_supervised!(SlotProcessor.child_spec(opts))
   end
 
   defp is_action(change, action) do

@@ -771,7 +771,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       {:ok, consumer} ->
         case consumer.active_backfill do
           nil -> :ok
-          %Backfill{state: :active} -> DatabasesRuntime.Supervisor.start_backfill_producer(consumer)
+          %Backfill{state: :active} -> DatabasesRuntime.Supervisor.start_table_reader(consumer)
           %Backfill{state: _} -> :ok
         end
 

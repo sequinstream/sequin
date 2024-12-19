@@ -1,4 +1,4 @@
-defmodule Sequin.Replication.Message do
+defmodule Sequin.DatabasesRuntime.SlotProcessor.Message do
   @moduledoc """
   This module provides structures of CDC changes.
 

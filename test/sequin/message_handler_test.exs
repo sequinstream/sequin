@@ -2,11 +2,11 @@ defmodule Sequin.MessageHandlerTest do
   use Sequin.DataCase, async: false
 
   alias Sequin.Consumers
+  alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
-  alias Sequin.Replication.MessageHandler
 
   describe "handle_messages/2" do
     test "handles message_kind: event correctly" do

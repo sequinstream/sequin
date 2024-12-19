@@ -3,9 +3,9 @@ defmodule Sequin.Workers.CreateReplicationSlotWorker do
   use Oban.Worker, queue: :default, max_attempts: 1
 
   alias Sequin.Databases
+  alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Postgres
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.ReplicationRuntime.Supervisor, as: ReplicationRuntimeSupervisor
   alias Sequin.Repo
 
   # 15 minutes in seconds
@@ -16,7 +16,7 @@ defmodule Sequin.Workers.CreateReplicationSlotWorker do
     with {:ok, replication_slot} <- get_replication_slot(replication_slot_id),
          {:ok, database} <- Databases.get_db(replication_slot.postgres_database_id),
          :ok <- create_replication_slot(database, replication_slot) do
-      ReplicationRuntimeSupervisor.restart_replication(replication_slot)
+      DatabasesRuntimeSupervisor.restart_replication(replication_slot)
     end
   end
 

@@ -1,4 +1,4 @@
-defmodule Sequin.Extensions.PostgresAdapter.OidDatabase do
+defmodule Sequin.DatabasesRuntime.PostgresAdapter.OidDatabase do
   @moduledoc """
   This module maps a numeric PostgreSQL type ID to a descriptive string.
 

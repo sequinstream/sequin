@@ -1743,9 +1743,7 @@ defmodule Sequin.Consumers do
 
   defp notify_backfill_update(%Backfill{state: state} = backfill) when state in [:completed, :cancelled] do
     unless env() == :test do
-      backfill.sink_consumer_id
-      |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.stop_table_reader()
+      DatabasesRuntimeSupervisor.stop_table_reader(backfill.id)
     end
 
     :ok

@@ -1,4 +1,4 @@
-defmodule Sequin.Nats.ConnectionCache do
+defmodule Sequin.Sinks.Nats.ConnectionCache do
   @moduledoc """
   Cache connections to customer NATS instances.
 

@@ -5,8 +5,8 @@ defmodule Sequin.Consumers.GcpPubsubSink do
 
   import Ecto.Changeset
 
-  alias Sequin.Gcp.Credentials
-  alias Sequin.Gcp.PubSub
+  alias Sequin.Sinks.Gcp.Credentials
+  alias Sequin.Sinks.Gcp.PubSub
 
   @derive {Jason.Encoder, only: [:project_id, :topic_id]}
   @primary_key false

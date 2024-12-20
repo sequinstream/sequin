@@ -5,8 +5,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
-  alias Sequin.Redis
   alias Sequin.Repo
+  alias Sequin.Sinks.Redis
 
   require Logger
 
@@ -101,6 +101,6 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
-    Mox.allow(Sequin.RedisMock, test_pid, self())
+    Mox.allow(Sequin.Sinks.RedisMock, test_pid, self())
   end
 end

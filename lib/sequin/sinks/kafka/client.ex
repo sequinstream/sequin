@@ -1,18 +1,19 @@
-defmodule Sequin.Kafka.Client do
+defmodule Sequin.Sinks.Kafka.Client do
   @moduledoc false
-  @behaviour Sequin.Kafka
+  @behaviour Sequin.Sinks.Kafka
 
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Kafka.ConnectionCache
   alias Sequin.NetworkUtils
+  alias Sequin.Sinks.Kafka
+  alias Sequin.Sinks.Kafka.ConnectionCache
 
   require Logger
 
-  @impl Sequin.Kafka
+  @impl Kafka
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record), do: do_publish(consumer, record)
   def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event), do: do_publish(consumer, event)
 
@@ -34,7 +35,7 @@ defmodule Sequin.Kafka.Client do
     end
   end
 
-  @impl Sequin.Kafka
+  @impl Kafka
   def test_connection(%KafkaSink{} = sink) do
     with :ok <- test_hosts_reachability(sink),
          {:ok, metadata} <- get_metadata(sink) do
@@ -61,7 +62,7 @@ defmodule Sequin.Kafka.Client do
       {:error, Sequin.Error.service(service: :kafka, message: "Kafka error: #{inspect(error)}")}
   end
 
-  @impl Sequin.Kafka
+  @impl Kafka
   def get_metadata(%KafkaSink{} = sink) do
     hosts = KafkaSink.hosts(sink)
     topics = [sink.topic]

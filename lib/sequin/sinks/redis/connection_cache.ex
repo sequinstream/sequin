@@ -1,17 +1,17 @@
-defmodule Sequin.Kafka.ConnectionCache do
+defmodule Sequin.Sinks.Redis.ConnectionCache do
   @moduledoc """
-  Cache connections to customer Kafka brokers.
+  Cache connections to customer Redis instances.
 
   By caching these connections, we can avoid paying a significant startup
-  penalty when performing multiple operations on the same Kafka broker.
+  penalty when performing multiple operations on the same Redis instance.
 
-  Each `Sequin.Consumers.KafkaSink` gets its own connection in the cache.
+  Each `Sequin.Consumers.RedisSink` gets its own connection in the cache.
 
-  The cache takes ownership of the Kafka connections and is responsible for
+  The cache takes ownership of the Redis connections and is responsible for
   closing them when they are invalidated (or when the cache is stopped). Thus,
-  callers should not call `:brod.stop_client/1` on these connections.
+  callers should not call `GenServer.stop/1` on these connections.
 
-  Cached connections are invalidated and recreated when their Kafka sink's
+  Cached connections are invalidated and recreated when their Redis sink's
   connection options change.
 
   The cache will detect dead connections and create new ones as needed.
@@ -19,7 +19,7 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   use GenServer
 
-  alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.RedisSink
   alias Sequin.Error.NotFoundError
 
   require Logger
@@ -27,9 +27,9 @@ defmodule Sequin.Kafka.ConnectionCache do
   defmodule Cache do
     @moduledoc false
 
-    @type sink :: KafkaSink.t()
+    @type sink :: RedisSink.t()
     @type entry :: %{
-            conn: atom(),
+            conn: pid() | atom(),
             options_hash: binary()
           }
     @type t :: %{binary() => entry()}
@@ -37,12 +37,12 @@ defmodule Sequin.Kafka.ConnectionCache do
     @spec new :: t()
     def new, do: %{}
 
-    @spec each(t(), (atom() -> any())) :: :ok
+    @spec each(t(), (pid() -> any())) :: :ok
     def each(cache, function) do
       Enum.each(cache, fn {_id, entry} -> function.(entry.conn) end)
     end
 
-    @spec lookup(t(), sink()) :: {:ok, atom()} | {:error, :stale} | {:error, :not_found}
+    @spec lookup(t(), sink()) :: {:ok, pid()} | {:error, :stale} | {:error, :not_found}
     def lookup(cache, sink) do
       new_hash = options_hash(sink)
       entry = Map.get(cache, sink.connection_id)
@@ -52,11 +52,11 @@ defmodule Sequin.Kafka.ConnectionCache do
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached Kafka connection was dead upon lookup", sink_id: sink.connection_id)
+          Logger.warning("Cached Redis connection was dead upon lookup", sink_id: sink.connection_id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached Kafka sink connection was stale", sink_id: sink.connection_id)
+          Logger.info("Cached Redis sink connection was stale", sink_id: sink.connection_id)
           {:error, :stale}
 
         true ->
@@ -64,21 +64,21 @@ defmodule Sequin.Kafka.ConnectionCache do
       end
     end
 
-    @spec pop(t(), sink()) :: {atom() | nil, t()}
+    @spec pop(t(), sink()) :: {pid() | nil, t()}
     def pop(cache, sink) do
       {entry, new_cache} = Map.pop(cache, sink.connection_id, nil)
 
       if entry, do: {entry.conn, new_cache}, else: {nil, new_cache}
     end
 
-    @spec store(t(), sink(), atom()) :: t()
+    @spec store(t(), sink(), pid()) :: t()
     def store(cache, sink, conn) do
       entry = %{conn: conn, options_hash: options_hash(sink)}
       Map.put(cache, sink.connection_id, entry)
     end
 
     defp options_hash(sink) do
-      :erlang.phash2({KafkaSink.hosts(sink), KafkaSink.to_brod_config(sink)})
+      :erlang.phash2(RedisSink.redis_url(sink, obscure_password: false))
     end
   end
 
@@ -86,14 +86,15 @@ defmodule Sequin.Kafka.ConnectionCache do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Consumers.KafkaSink
-    alias Sequin.Error
+    alias Sequin.Consumers.RedisSink
 
-    @type sink :: KafkaSink.t()
+    @type sink :: RedisSink.t()
     @type opt :: {:start_fn, State.start_function()} | {:stop_fn, State.stop_function()}
     @type start_function :: (sink() -> start_result())
-    @type start_result :: {:ok, atom()} | {:error, Error.t()}
-    @type stop_function :: (atom() -> :ok)
+    @type start_result ::
+            {:ok, pid()}
+            | {:error, Postgrex.Error.t()}
+    @type stop_function :: (pid() -> :ok)
 
     typedstruct do
       field :cache, Cache.t(), default: Cache.new()
@@ -104,7 +105,7 @@ defmodule Sequin.Kafka.ConnectionCache do
     @spec new([opt]) :: t()
     def new(opts) do
       start_fn = Keyword.get(opts, :start_fn, &default_start/1)
-      stop_fn = Keyword.get(opts, :stop_fn, &:brod.stop_client/1)
+      stop_fn = Keyword.get(opts, :stop_fn, &GenServer.stop/1)
 
       %__MODULE__{
         start_fn: start_fn,
@@ -151,22 +152,14 @@ defmodule Sequin.Kafka.ConnectionCache do
       %{state | cache: new_cache}
     end
 
-    defp default_start(%KafkaSink{} = sink) do
-      client_id = :"brod_client_#{sink.connection_id}"
-      endpoints = KafkaSink.hosts(sink)
-      client_config = KafkaSink.to_brod_config(sink)
-
-      with :ok <- :brod.start_client(endpoints, client_id, client_config),
-           :ok <- :brod.start_producer(client_id, sink.topic, []) do
-        {:ok, client_id}
-      else
-        {:error, {:already_started, client_pid}} -> {:ok, client_pid}
-        {:error, reason} -> {:error, reason}
-      end
+    defp default_start(%RedisSink{} = sink) do
+      sink
+      |> RedisSink.redis_url(obscure_password: false)
+      |> Redix.start_link()
     end
   end
 
-  @type sink :: KafkaSink.t()
+  @type sink :: RedisSink.t()
   @type opt :: State.opt()
   @type start_result :: State.start_result()
 
@@ -178,23 +171,23 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   @spec connection(sink()) :: start_result()
   @spec connection(GenServer.server(), sink()) :: start_result()
-  def connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+  def connection(server \\ __MODULE__, %RedisSink{} = sink) do
     GenServer.call(server, {:connection, sink, true})
   end
 
   @spec existing_connection(GenServer.server(), sink()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+  def existing_connection(server \\ __MODULE__, %RedisSink{} = sink) do
     GenServer.call(server, {:connection, sink, false})
   end
 
   @spec invalidate_connection(GenServer.server(), sink()) :: :ok
-  def invalidate_connection(server \\ __MODULE__, %KafkaSink{} = sink) do
+  def invalidate_connection(server \\ __MODULE__, %RedisSink{} = sink) do
     GenServer.cast(server, {:invalidate_connection, sink})
   end
 
   # This function is intended for test purposes only
   @spec cache_connection(GenServer.server(), sink(), pid()) :: :ok
-  def cache_connection(server \\ __MODULE__, %KafkaSink{} = sink, conn) do
+  def cache_connection(server \\ __MODULE__, %RedisSink{} = sink, conn) do
     GenServer.call(server, {:cache_connection, sink, conn})
   end
 
@@ -206,7 +199,7 @@ defmodule Sequin.Kafka.ConnectionCache do
   end
 
   @impl GenServer
-  def handle_call({:connection, %KafkaSink{} = sink, create_on_miss}, _from, %State{} = state) do
+  def handle_call({:connection, %RedisSink{} = sink, create_on_miss}, _from, %State{} = state) do
     case State.find_or_create_connection(state, sink, create_on_miss) do
       {:ok, conn, new_state} ->
         {:reply, {:ok, conn}, new_state}
@@ -221,14 +214,14 @@ defmodule Sequin.Kafka.ConnectionCache do
 
   # This function is intended for test purposes only
   @impl GenServer
-  def handle_call({:cache_connection, %KafkaSink{} = sink, conn}, _from, %State{} = state) do
+  def handle_call({:cache_connection, %RedisSink{} = sink, conn}, _from, %State{} = state) do
     new_cache = Cache.store(state.cache, sink, conn)
     new_state = %{state | cache: new_cache}
     {:reply, :ok, new_state}
   end
 
   @impl GenServer
-  def handle_cast({:invalidate_connection, %KafkaSink{} = sink}, %State{} = state) do
+  def handle_cast({:invalidate_connection, %RedisSink{} = sink}, %State{} = state) do
     new_state = State.invalidate_connection(state, sink)
     {:noreply, new_state}
   end

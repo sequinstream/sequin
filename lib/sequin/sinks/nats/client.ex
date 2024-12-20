@@ -1,6 +1,6 @@
-defmodule Sequin.Nats.Client do
+defmodule Sequin.Sinks.Nats.Client do
   @moduledoc false
-  @behaviour Sequin.Nats
+  @behaviour Sequin.Sinks.Nats
 
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
@@ -8,10 +8,11 @@ defmodule Sequin.Nats.Client do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.NatsSink
   alias Sequin.Error
-  alias Sequin.Nats.ConnectionCache
   alias Sequin.NetworkUtils
+  alias Sequin.Sinks.Nats
+  alias Sequin.Sinks.Nats.ConnectionCache
 
-  @impl Sequin.Nats
+  @impl Nats
   def send_messages(%NatsSink{} = sink, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       Enum.reduce_while(messages, :ok, fn message, :ok ->
@@ -26,7 +27,7 @@ defmodule Sequin.Nats.Client do
     end
   end
 
-  @impl Sequin.Nats
+  @impl Nats
   def test_connection(%NatsSink{} = sink) do
     with :ok <-
            NetworkUtils.test_tcp_reachability(sink.host, sink.port, NatsSink.ipv6?(sink), :timer.seconds(10)),

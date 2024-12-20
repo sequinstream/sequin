@@ -1,10 +1,10 @@
-defmodule Sequin.Gcp.PubSub do
+defmodule Sequin.Sinks.Gcp.PubSub do
   @moduledoc false
 
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Error
-  alias Sequin.Gcp.Credentials
+  alias Sequin.Sinks.Gcp.Credentials
 
   require Logger
 
@@ -20,7 +20,7 @@ defmodule Sequin.Gcp.PubSub do
     @moduledoc false
     use TypedStruct
 
-    alias Sequin.Gcp.Credentials
+    alias Sequin.Sinks.Gcp.Credentials
 
     typedstruct do
       field :project_id, String.t(), enforce: true
@@ -39,7 +39,7 @@ defmodule Sequin.Gcp.PubSub do
   @spec new(String.t(), map(), keyword()) :: Client.t()
   def new(project_id, credentials, req_opts \\ []) do
     # Ensure the Credentials module is loaded, as it contains necessary atom keys
-    Code.ensure_loaded(Sequin.Gcp.Credentials)
+    Code.ensure_loaded(Sequin.Sinks.Gcp.Credentials)
 
     req_opts = Keyword.merge(default_req_opts(), req_opts)
 

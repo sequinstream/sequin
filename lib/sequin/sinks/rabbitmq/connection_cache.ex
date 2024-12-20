@@ -1,4 +1,4 @@
-defmodule Sequin.RabbitMq.ConnectionCache do
+defmodule Sequin.Sinks.RabbitMq.ConnectionCache do
   @moduledoc """
   Cache connections to customer RabbitMQ instances.
 

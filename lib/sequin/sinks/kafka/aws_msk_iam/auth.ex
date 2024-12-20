@@ -1,11 +1,11 @@
-defmodule Sequin.Kafka.AwsMskIam.Auth do
+defmodule Sequin.Sinks.Kafka.AwsMskIam.Auth do
   @moduledoc """
   SASL AWS_MSK_IAM auth backend implementation for brod Erlang library.
   To authenticate, supply aws_secret_key_id and aws_secret_access_key with access to MSK cluster
   """
   @behaviour :kpro_auth_backend
 
-  alias Sequin.Kafka.AwsMskIam.SignedPayloadGenerator
+  alias Sequin.Sinks.Kafka.AwsMskIam.SignedPayloadGenerator
 
   require Logger
 

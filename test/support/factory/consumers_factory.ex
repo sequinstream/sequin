@@ -26,8 +26,8 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Gcp
   alias Sequin.Repo
+  alias Sequin.Sinks.Gcp
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
   alias Sequin.Test.Support.Models.TestEventLog

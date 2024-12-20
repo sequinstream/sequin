@@ -1,4 +1,4 @@
-defmodule Sequin.Redis do
+defmodule Sequin.Sinks.Redis do
   @moduledoc false
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
@@ -32,6 +32,6 @@ defmodule Sequin.Redis do
   end
 
   defp impl do
-    Application.get_env(:sequin, :redis_module, Sequin.Redis.Client)
+    Application.get_env(:sequin, :redis_module, Sequin.Sinks.Redis.Client)
   end
 end

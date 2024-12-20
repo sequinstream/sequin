@@ -1,4 +1,4 @@
-defmodule Sequin.Gcp.Credentials do
+defmodule Sequin.Sinks.Gcp.Credentials do
   @moduledoc """
   Schema for Google Cloud Platform credentials.
   Supports different authentication methods including service accounts,

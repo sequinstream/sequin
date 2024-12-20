@@ -63,7 +63,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand)
+    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand * state.batch_size)
+    Logger.debug("Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand})")
 
     broadway_messages =
       messages

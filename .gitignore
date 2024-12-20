@@ -61,3 +61,4 @@ sequin.log
 sequin.yaml
 .aider*
 .env
+.iex.local.exs

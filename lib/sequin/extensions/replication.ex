@@ -456,9 +456,11 @@ defmodule Sequin.Extensions.Replication do
     put_message(state, record)
   end
 
-  # Ignore citext messages, we receive them before citext columns:
+  # Ignore type messages, we receive them before type columns:
   # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 551312, namespace: "public", name: "citext"}
-  defp process_message(%Decoder.Messages.Type{name: "citext"}, state) do
+  # Custom enum:
+  # %Sequin.Extensions.PostgresAdapter.Decoder.Messages.Type{id: 3577319, namespace: "public", name: "character_status"}
+  defp process_message(%Decoder.Messages.Type{}, state) do
     state
   end
 

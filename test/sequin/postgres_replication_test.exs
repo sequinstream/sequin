@@ -1136,7 +1136,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Create a consumer for this replication slot (record)
       consumer =
         ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
+          message_kind: :event,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
           source_tables: [],
@@ -1154,6 +1154,27 @@ defmodule Sequin.PostgresReplicationTest do
         source_db: source_db,
         consumer: consumer
       }
+    end
+
+    test "columns flow through properly", %{consumer: consumer} do
+      # Insert a character with specific enum value
+      character =
+        CharacterFactory.insert_character_detailed!(
+          [status: :retired],
+          repo: UnboxedRepo
+        )
+
+      # Wait for the message to be handled
+      assert_receive {ReplicationExt, :flush_messages}, 500
+
+      # Fetch consumer records
+      [message] = list_messages(consumer)
+
+      # Assert the consumer record details
+      assert message.consumer_id == consumer.id
+      assert message.table_oid == CharacterDetailed.table_oid()
+      assert message.record_pks == [to_string(character.id)]
+      assert message.data.record["status"] == "retired"
     end
 
     test "consumer with JSONB column filter only receives relevant messages", %{

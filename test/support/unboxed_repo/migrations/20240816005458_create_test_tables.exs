@@ -38,10 +38,12 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
     end
 
     execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+    execute "CREATE TYPE character_status AS ENUM ('active', 'inactive', 'retired')"
 
     # New table with all possible column types
     create table(:characters_detailed) do
       add :name, :string
+      add :status, :character_status
       add :age, :integer
       add :height, :float
       add :is_hero, :boolean

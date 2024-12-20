@@ -8,6 +8,7 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
 
   schema "characters_detailed" do
     field :name, :string
+    field :status, Ecto.Enum, values: [:active, :inactive, :retired]
     field :age, :integer
     field :height, :float
     field :is_hero, :boolean
@@ -58,21 +59,22 @@ defmodule Sequin.Test.Support.Models.CharacterDetailed do
 
   def changeset(character, attrs) do
     Ecto.Changeset.cast(character, attrs, [
-      :name,
       :age,
-      :height,
-      :is_hero,
+      :avatar,
+      :binary_data,
       :biography,
       :birth_date,
-      :last_seen,
-      :powers,
-      :metadata,
-      :rating,
-      :avatar,
-      :house_id,
       :email,
-      :binary_data,
-      :related_houses
+      :height,
+      :house_id,
+      :is_hero,
+      :last_seen,
+      :metadata,
+      :name,
+      :powers,
+      :rating,
+      :related_houses,
+      :status
     ])
   end
 end

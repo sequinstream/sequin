@@ -111,6 +111,7 @@ if Mix.env() == :test do
       merge_attributes(
         %CharacterDetailed{
           name: Factory.name(),
+          status: Factory.one_of([:active, :inactive, :retired]),
           age: Factory.integer(),
           height: Factory.float(min: 1, max: 3),
           is_hero: Factory.boolean(),

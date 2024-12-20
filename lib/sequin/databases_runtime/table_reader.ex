@@ -81,6 +81,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   end
 
   # Queries
+  @emit_logical_message_sql "select pg_logical_emit_message(true, $1, $2)"
   def with_watermark(%PostgresDatabase{} = db, backfill_id, current_batch_id, table_oid, fun) do
     payload =
       Jason.encode!(%{
@@ -89,20 +90,21 @@ defmodule Sequin.DatabasesRuntime.TableReader do
         backfill_id: backfill_id
       })
 
-    with {:ok, conn} <- ConnectionCache.connection(db) do
-      Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
-        Constants.backfill_batch_low_watermark(),
-        payload
-      ])
-
-      res = fun.(conn)
-
-      Postgres.query(conn, "select pg_logical_emit_message(true, $1, $2)", [
-        Constants.backfill_batch_high_watermark(),
-        payload
-      ])
-
-      res
+    with {:ok, conn} <- ConnectionCache.connection(db),
+         Logger.debug("[TableReader] Emitting low watermark for batch #{current_batch_id}"),
+         {:ok, _} <-
+           Postgres.query(conn, @emit_logical_message_sql, [
+             Constants.backfill_batch_low_watermark(),
+             payload
+           ]),
+         {:ok, res} <- fun.(conn),
+         Logger.debug("[TableReader] Emitting high watermark for batch #{current_batch_id}"),
+         {:ok, _} <-
+           Postgres.query(conn, @emit_logical_message_sql, [
+             Constants.backfill_batch_high_watermark(),
+             payload
+           ]) do
+      {:ok, res}
     end
   end
 
@@ -129,7 +131,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
     case Postgres.query(db_or_conn, sql, params) do
       {:ok, %Postgrex.Result{num_rows: 0}} ->
-        {:ok, [], nil}
+        {:ok, %{rows: [], next_cursor: nil}}
 
       {:ok, %Postgrex.Result{} = result} ->
         rows = Postgres.result_to_maps(result)
@@ -143,7 +145,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
             _records -> KeysetCursor.cursor_from_row(table, last_row)
           end
 
-        {:ok, rows, next_cursor}
+        {:ok, %{rows: rows, next_cursor: next_cursor}}
 
       error ->
         error

@@ -27,8 +27,6 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Replication
   alias Sequin.Test.Support.Models.Character
   alias Sequin.Test.Support.Models.CharacterDetailed
-  # alias Sequin.Replication
-  # alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.Support.Models.CharacterIdentFull
   alias Sequin.Test.Support.Models.CharacterMultiPK
   alias Sequin.Test.Support.ReplicationSlots
@@ -1170,7 +1168,7 @@ defmodule Sequin.PostgresReplicationTest do
         )
 
       # Wait for the message to be handled
-      assert_receive {ReplicationExt, :flush_messages}, 500
+      assert_receive {SlotProcessor, :flush_messages}, 500
 
       # Fetch consumer records
       [message] = list_messages(consumer)

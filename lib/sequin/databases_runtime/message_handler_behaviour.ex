@@ -33,6 +33,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
 
     The return value is an updated context.
   """
-  @callback handle_logical_message(context :: any(), message :: LogicalMessage.t()) ::
+  @callback handle_logical_message(context :: any(), seq :: non_neg_integer(), message :: LogicalMessage.t()) ::
               {:ok, context :: any()} | {:error, reason :: any()}
 end

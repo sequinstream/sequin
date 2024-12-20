@@ -1,5 +1,9 @@
 defmodule Sequin.Cache do
   @moduledoc false
+  def child_spec do
+    {ConCache, name: __MODULE__, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity}
+  end
+
   def get(key), do: ConCache.get(__MODULE__, key)
 
   def put(key, value, ttl \\ :infinity), do: ConCache.put(__MODULE__, key, %ConCache.Item{value: value, ttl: ttl})

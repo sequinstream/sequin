@@ -23,12 +23,12 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 20]}
       ],
       processors: [
         default: [
           concurrency: consumer.max_waiting,
-          max_demand: 20
+          max_demand: 1
         ]
       ],
       context: %{

@@ -434,11 +434,23 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
     {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
     {:ok, messages_processed_throughput} = Metrics.get_consumer_messages_processed_throughput(consumer)
+
+    {:ok, messages_processed_throughput_timeseries} =
+      Metrics.get_consumer_messages_processed_throughput_timeseries(consumer)
+
+    {smoothed_throughput_timeseries, _} =
+      Enum.reduce(messages_processed_throughput_timeseries, {[], []}, fn throughput, {smoothed_acc, acc} ->
+        acc = Enum.take([throughput | acc], 5)
+        smoothed = Enum.sum(acc) / length(acc)
+        {[smoothed | smoothed_acc], acc}
+      end)
+
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 2)
 
     metrics = %{
       messages_processed_count: messages_processed_count,
-      messages_processed_throughput: Float.round(messages_processed_throughput * 60, 1),
+      messages_processed_throughput: Float.round(messages_processed_throughput, 1),
+      messages_processed_throughput_timeseries: Enum.reverse(smoothed_throughput_timeseries),
       messages_failing_count: messages_failing_count
     }
 

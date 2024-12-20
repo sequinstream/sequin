@@ -24,16 +24,16 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.Gcp.Credentials
-  alias Sequin.Gcp.PubSub
-  alias Sequin.Kafka
   alias Sequin.Name
-  alias Sequin.Nats
   alias Sequin.Postgres
   alias Sequin.Posthog
-  alias Sequin.RabbitMq
-  alias Sequin.Redis
   alias Sequin.Repo
+  alias Sequin.Sinks.Gcp.Credentials
+  alias Sequin.Sinks.Gcp.PubSub
+  alias Sequin.Sinks.Kafka
+  alias Sequin.Sinks.Nats
+  alias Sequin.Sinks.RabbitMq
+  alias Sequin.Sinks.Redis
   alias SequinWeb.RouteHelpers
 
   require Logger

@@ -1,8 +1,8 @@
-defmodule Sequin.Gcp.PubSubTest do
+defmodule Sequin.Sinks.Gcp.PubSubTest do
   use Sequin.Case, async: true
 
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Gcp.PubSub
+  alias Sequin.Sinks.Gcp.PubSub
 
   @project_id "test-project"
   @topic_id "test-topic"

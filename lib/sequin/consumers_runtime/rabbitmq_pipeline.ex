@@ -5,7 +5,7 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
-  alias Sequin.RabbitMq
+  alias Sequin.Sinks.RabbitMq
 
   require Logger
 

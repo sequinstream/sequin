@@ -4,9 +4,9 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
 
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Gcp.PubSub
   alias Sequin.Health
   alias Sequin.Repo
+  alias Sequin.Sinks.Gcp.PubSub
 
   require Logger
 
@@ -151,6 +151,6 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
-    Req.Test.allow(Sequin.Gcp.HttpClient, test_pid, self())
+    Req.Test.allow(Sequin.Sinks.Gcp.HttpClient, test_pid, self())
   end
 end

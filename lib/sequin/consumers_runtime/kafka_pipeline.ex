@@ -5,8 +5,8 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
-  alias Sequin.Kafka
   alias Sequin.Repo
+  alias Sequin.Sinks.Kafka
 
   require Logger
 
@@ -94,6 +94,6 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   defp setup_allowances(nil), do: :ok
 
   defp setup_allowances(test_pid) do
-    Mox.allow(Sequin.KafkaMock, test_pid, self())
+    Mox.allow(Sequin.Sinks.KafkaMock, test_pid, self())
   end
 end

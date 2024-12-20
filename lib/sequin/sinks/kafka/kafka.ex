@@ -1,4 +1,4 @@
-defmodule Sequin.Kafka do
+defmodule Sequin.Sinks.Kafka do
   @moduledoc false
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
@@ -31,6 +31,6 @@ defmodule Sequin.Kafka do
   end
 
   defp impl do
-    Application.get_env(:sequin, :kafka_module, Sequin.Kafka.Client)
+    Application.get_env(:sequin, :kafka_module, Sequin.Sinks.Kafka.Client)
   end
 end

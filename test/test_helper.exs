@@ -31,5 +31,5 @@ tables =
 |> :ets.insert({:tables, tables})
 
 # Mocks
-Mox.defmock(Sequin.RedisMock, for: Sequin.Redis)
-Mox.defmock(Sequin.KafkaMock, for: Sequin.Kafka)
+Mox.defmock(Sequin.Sinks.RedisMock, for: Sequin.Sinks.Redis)
+Mox.defmock(Sequin.Sinks.KafkaMock, for: Sequin.Sinks.Kafka)

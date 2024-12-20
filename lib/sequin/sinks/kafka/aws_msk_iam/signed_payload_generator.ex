@@ -1,4 +1,4 @@
-defmodule Sequin.Kafka.AwsMskIam.SignedPayloadGenerator do
+defmodule Sequin.Sinks.Kafka.AwsMskIam.SignedPayloadGenerator do
   @moduledoc """
   AwsSignatureLib module is a facade behavior/implementation for Erlang's aws_signature module
   Ref: https://github.com/kafka4beam/kafka_protocol

@@ -1,15 +1,16 @@
-defmodule Sequin.Redis.Client do
+defmodule Sequin.Sinks.Redis.Client do
   @moduledoc false
-  @behaviour Sequin.Redis
+  @behaviour Sequin.Sinks.Redis
 
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.RedisSink
   alias Sequin.Error
   alias Sequin.NetworkUtils
-  alias Sequin.Redis.ConnectionCache
+  alias Sequin.Sinks.Redis
+  alias Sequin.Sinks.Redis.ConnectionCache
 
-  @impl Sequin.Redis
+  @impl Redis
   def send_messages(%RedisSink{} = sink, messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       commands =
@@ -48,7 +49,7 @@ defmodule Sequin.Redis.Client do
     end
   end
 
-  @impl Sequin.Redis
+  @impl Redis
   def message_count(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       case Redix.command(connection, ["XLEN", sink.stream_key]) do
@@ -58,7 +59,7 @@ defmodule Sequin.Redis.Client do
     end
   end
 
-  @impl Sequin.Redis
+  @impl Redis
   def client_info(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       case Redix.command(connection, ["INFO"]) do
@@ -68,7 +69,7 @@ defmodule Sequin.Redis.Client do
     end
   end
 
-  @impl Sequin.Redis
+  @impl Redis
   def test_connection(%RedisSink{} = sink) do
     with :ok <-
            NetworkUtils.test_tcp_reachability(sink.host, sink.port, sink.tls, :timer.seconds(10)),

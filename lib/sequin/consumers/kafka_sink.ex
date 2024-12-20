@@ -7,7 +7,7 @@ defmodule Sequin.Consumers.KafkaSink do
 
   alias __MODULE__
   alias Sequin.Encrypted.Field, as: EncryptedField
-  alias Sequin.Kafka.AwsMskIam
+  alias Sequin.Sinks.Kafka.AwsMskIam
 
   @derive {Jason.Encoder, only: [:hosts, :topic]}
   @primary_key false

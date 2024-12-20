@@ -1,6 +1,6 @@
-defmodule Sequin.RabbitMq.Client do
+defmodule Sequin.Sinks.RabbitMq.Client do
   @moduledoc false
-  @behaviour Sequin.RabbitMq
+  @behaviour Sequin.Sinks.RabbitMq
 
   alias AMQP.Basic
   alias Sequin.Consumers.ConsumerEvent
@@ -10,11 +10,12 @@ defmodule Sequin.RabbitMq.Client do
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Error
   alias Sequin.NetworkUtils
-  alias Sequin.RabbitMq.ConnectionCache
+  alias Sequin.Sinks.RabbitMq
+  alias Sequin.Sinks.RabbitMq.ConnectionCache
 
   require Logger
 
-  @impl Sequin.RabbitMq
+  @impl RabbitMq
   def send_messages(%RabbitMqSink{} = sink, messages) when is_list(messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
       Enum.reduce_while(messages, :ok, fn message, :ok ->
@@ -29,7 +30,7 @@ defmodule Sequin.RabbitMq.Client do
     end
   end
 
-  @impl Sequin.RabbitMq
+  @impl RabbitMq
   def test_connection(%RabbitMqSink{} = sink) do
     with :ok <- NetworkUtils.test_tcp_reachability(sink.host, sink.port, RabbitMqSink.ipv6?(sink), :timer.seconds(10)),
          {:ok, _connection} <- ConnectionCache.connection(sink) do

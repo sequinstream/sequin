@@ -3,9 +3,9 @@ Mox.defmock(Sequin.Mocks.Extensions.MessageHandlerMock,
 )
 
 Mox.defmock(Sequin.Mocks.NatsMock,
-  for: Sequin.Nats
+  for: Sequin.Sinks.Nats
 )
 
 Mox.defmock(Sequin.Mocks.RabbitMqMock,
-  for: Sequin.RabbitMq
+  for: Sequin.Sinks.RabbitMq
 )

@@ -5,7 +5,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
-  alias Sequin.Nats
+  alias Sequin.Sinks.Nats
 
   require Logger
 

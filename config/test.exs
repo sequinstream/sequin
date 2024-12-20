@@ -78,10 +78,10 @@ config :sequin,
     req_opts: [plug: {Req.Test, Sequin.Aws.HttpClient}]
   ],
   gcp_pubsub: [
-    req_opts: [plug: {Req.Test, Sequin.Gcp.PubSub}]
+    req_opts: [plug: {Req.Test, Sequin.Sinks.Gcp.PubSub}]
   ],
-  redis_module: Sequin.RedisMock,
-  kafka_module: Sequin.KafkaMock,
+  redis_module: Sequin.Sinks.RedisMock,
+  kafka_module: Sequin.Sinks.KafkaMock,
   nats_module: Sequin.Mocks.NatsMock
 
 # In AES.GCM, it is important to specify 12-byte IV length for

@@ -14,7 +14,7 @@ services:
 
   redis-node-1:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7001"]
+    command: ["/tmp/redis.sh", "redis-node-1"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:
@@ -22,7 +22,7 @@ services:
 
   redis-node-2:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7002"]
+    command: ["/tmp/redis.sh", "redis-node-2"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:
@@ -30,7 +30,7 @@ services:
 
   redis-node-3:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7003"]
+    command: ["/tmp/redis.sh", "redis-node-3"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:
@@ -38,7 +38,7 @@ services:
 
   redis-node-4:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7004"]
+    command: ["/tmp/redis.sh", "redis-node-4"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:
@@ -46,7 +46,7 @@ services:
 
   redis-node-5:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7005"]
+    command: ["/tmp/redis.sh", "redis-node-5"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:
@@ -54,7 +54,7 @@ services:
 
   redis-node-6:
     image: redis:7
-    command: ["/tmp/redis.sh", "127.0.0.1", "7006"]
+    command: ["/tmp/redis.sh", "redis-node-6"]
     volumes:
       - ./redis.sh:/tmp/redis.sh
     networks:

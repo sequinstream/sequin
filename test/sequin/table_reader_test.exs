@@ -115,7 +115,8 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, include_min: true)
+      {:ok, %{rows: records, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, table, initial_cursor, include_min: true)
 
       assert length(records) == 3
       assert_character_equal(Enum.at(records, 0), char1)
@@ -125,7 +126,8 @@ defmodule Sequin.TableReaderTest do
       # Verify next cursor matches last record
       assert next_cursor[table.sort_column_attnum] == char3.updated_at
 
-      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, include_min: false)
+      {:ok, %{rows: records, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, table, initial_cursor, include_min: false)
 
       assert length(records) == 2
       assert_character_equal(Enum.at(records, 0), char2)
@@ -158,7 +160,7 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_min_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, results, _next_cursor} =
+      {:ok, %{rows: results, next_cursor: _next_cursor}} =
         TableReader.fetch_batch(
           db,
           table,
@@ -204,7 +206,8 @@ defmodule Sequin.TableReaderTest do
 
       {:ok, _first_row, initial_cursor} = TableReader.fetch_first_row(db, table)
 
-      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
+      {:ok, %{rows: records, next_cursor: next_cursor}} =
+        TableReader.fetch_batch(db, table, initial_cursor, limit: 2, include_min: true)
 
       assert length(records) == 2
       assert_character_equal(Enum.at(records, 0), char1)
@@ -220,7 +223,7 @@ defmodule Sequin.TableReaderTest do
     } do
       cursor = KeysetCursor.min_cursor(table, NaiveDateTime.utc_now())
 
-      {:ok, records, next_cursor} = TableReader.fetch_batch(db, table, cursor)
+      {:ok, %{rows: records, next_cursor: next_cursor}} = TableReader.fetch_batch(db, table, cursor)
 
       assert records == []
       assert next_cursor == nil

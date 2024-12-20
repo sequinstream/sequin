@@ -330,14 +330,16 @@ defmodule Sequin.BackfillProducerTest do
         CharacterFactory.insert_character_detailed!(
           house_id: nil,
           related_houses: [],
-          binary_data: <<1, 2, 3>>
+          binary_data: <<1, 2, 3>>,
+          status: :active
         )
 
       char2 =
         CharacterFactory.insert_character_detailed!(
           house_id: UUID.uuid4(),
           related_houses: [UUID.uuid4(), UUID.uuid4()],
-          binary_data: <<4, 5, 6>>
+          binary_data: <<4, 5, 6>>,
+          status: :retired
         )
 
       {:ok, _first_row, initial_min_cursor} = BackfillProducer.fetch_first_row(db, table)
@@ -358,6 +360,10 @@ defmodule Sequin.BackfillProducerTest do
       # Find the results corresponding to our inserted characters
       result1 = Enum.find(results, &(&1["id"] == char1.id))
       result2 = Enum.find(results, &(&1["id"] == char2.id))
+
+      # Verify enum handling
+      assert result1["status"] == "active"
+      assert result2["status"] == "retired"
 
       # Verify UUID handling
       refute result1["house_id"]

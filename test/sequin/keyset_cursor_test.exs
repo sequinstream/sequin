@@ -160,7 +160,7 @@ defmodule Sequin.DatabasesRuntime.KeysetCursorTest do
       row = %{
         "updated_at" => ~N[2023-01-01 00:00:00],
         "id1" => 123,
-        "id2" => Sequin.String.string_to_binary!("550e8400-e29b-41d4-a716-446655440000")
+        "id2" => "550e8400-e29b-41d4-a716-446655440000"
       }
 
       result = KeysetCursor.cursor_from_row(table, row)

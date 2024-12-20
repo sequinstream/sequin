@@ -81,7 +81,8 @@ config :sequin,
   features: [
     account_self_signup: :enabled,
     provision_default_user: :disabled
-  ]
+  ],
+  backfill_max_pending_messages: 100_000
 
 # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
 

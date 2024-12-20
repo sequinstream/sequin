@@ -2,11 +2,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   @moduledoc false
   @behaviour Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
 
+  alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
+  alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Health
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
@@ -17,6 +20,19 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   require Logger
 
+  defmodule BatchState do
+    @moduledoc false
+    use TypedStruct
+
+    typedstruct do
+      field :batch_id, String.t()
+      field :table_oid, non_neg_integer()
+      field :backfill_id, String.t()
+      field :seq, non_neg_integer()
+      field :primary_key_values, [%{String.t() => any()}], default: []
+    end
+  end
+
   defmodule Context do
     @moduledoc false
     use TypedStruct
@@ -25,6 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
       field :replication_slot_id, String.t()
+      field :table_reader_batches, [BatchState.t()], default: []
     end
   end
 
@@ -127,8 +144,54 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     end
   end
 
+  @low_watermark_prefix Constants.backfill_batch_low_watermark()
+  @high_watermark_prefix Constants.backfill_batch_high_watermark()
+
   @impl MessageHandlerBehaviour
-  def handle_logical_message(ctx, _msg) do
+  def handle_logical_message(ctx, seq, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
+    %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
+
+    update_in(ctx.table_reader_batches, fn batches ->
+      [
+        %BatchState{
+          batch_id: batch_id,
+          table_oid: table_oid,
+          backfill_id: backfill_id,
+          primary_key_values: [],
+          seq: seq
+        }
+        | batches
+      ]
+    end)
+  end
+
+  def handle_logical_message(ctx, _seq, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
+    %{"batch_id" => batch_id, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
+
+    case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
+      nil ->
+        # TODO: Reset the table reader?
+        Logger.error("[MessageHandler] Batch #{batch_id} not found in table reader batches")
+        ctx
+
+      batch ->
+        :ok =
+          TableReaderServer.flush_batch(backfill_id, %{
+            batch_id: batch_id,
+            seq: batch.seq,
+            drop_pks: batch.primary_key_values
+          })
+
+        update_in(ctx.table_reader_batches, fn batches ->
+          Enum.reject(batches, &(&1.batch_id == batch_id))
+        end)
+    end
+  catch
+    :exit, _ ->
+      ctx
+  end
+
+  def handle_logical_message(ctx, _seq, _msg) do
     ctx
   end
 

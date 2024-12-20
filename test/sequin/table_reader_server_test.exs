@@ -155,7 +155,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: backfill.id,
+             backfill_id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -210,7 +210,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: backfill.id,
+             backfill_id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -257,7 +257,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: backfill.id,
+             backfill_id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -292,7 +292,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: backfill.id,
+             backfill_id: backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -333,7 +333,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: filtered_consumer_backfill.id,
+             backfill_id: filtered_consumer_backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -385,7 +385,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: event_consumer_backfill.id,
+             backfill_id: event_consumer_backfill.id,
              page_size: page_size,
              table_oid: table_oid,
              test_pid: self()
@@ -433,7 +433,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_supervised!(
           {TableReaderServer,
            [
-             id: backfill.id,
+             backfill_id: backfill.id,
              page_size: 7,
              table_oid: table_oid,
              test_pid: self(),

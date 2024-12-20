@@ -123,9 +123,6 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
     Map.new(cursor_columns, fn
       %Table.Column{type: "uuid"} = column ->
         value = Map.fetch!(row, column.name)
-
-        # Cursor column shouldn't be nil, this guard may be unnecessary
-        value = value && Sequin.String.binary_to_string!(value)
         {column.attnum, value}
 
       %Table.Column{} = column ->

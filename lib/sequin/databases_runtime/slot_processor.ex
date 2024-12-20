@@ -465,8 +465,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin:" <> _} = msg, state) do
-    {:ok, message_handler_ctx} = state.message_handler_module.handle_logical_message(state.message_handler_ctx, msg)
+  defp process_message(%LogicalMessage{prefix: "sequin." <> _} = msg, state) do
+    message_handler_ctx =
+      state.message_handler_module.handle_logical_message(state.message_handler_ctx, state.current_xaction_lsn, msg)
+
     %{state | message_handler_ctx: message_handler_ctx}
   end
 

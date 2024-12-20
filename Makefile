@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs
+.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs redis-console-consumer
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -96,6 +96,7 @@ help:
 	@echo "  make release-gh  - Run the release script using GitHub Actions for Docker builds"
 	@echo "  make release-dirty-gh - Run the release script with --dirty flag using GitHub Actions"
 	@echo "  make docs      - Run mintlify dev server for documentation"
+	@echo "  make redis-console-consumer <stream-key> [from-beginning] - Read from Redis stream"
 
 impersonate:
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
@@ -119,6 +120,9 @@ connect:
 
 docs: ## Run mintlify dev server for documentation
 	@cd docs && mintlify dev
+
+redis-console-consumer: ## Read from a Redis stream like a Kafka consumer
+	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
 %:
 	@:

@@ -21,7 +21,7 @@ defmodule Sequin.Encrypted.Field do
 
   def equal?(v1, v2), do: v1 == v2
 
-  def load(nil), do: {:ok, nil}
+  def load(nil), do: super(nil)
 
   def load(value) do
     super(Base.decode64!(value))

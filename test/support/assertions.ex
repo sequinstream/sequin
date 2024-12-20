@@ -17,7 +17,7 @@ defmodule Sequin.Test.Assertions do
     @doc false
     def compare_lists(left, right, comparison \\ &Kernel.==/2) when is_list(left) and is_list(right) do
       {left_diff, right_diff} =
-        Enum.reduce(1..length(left), {left, right}, &compare(&1, &2, comparison))
+        Enum.reduce(1..length(left)//1, {left, right}, &compare(&1, &2, comparison))
 
       {left_diff, right_diff, left_diff == [] and right_diff == []}
     end

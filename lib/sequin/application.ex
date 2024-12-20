@@ -63,7 +63,7 @@ defmodule Sequin.Application do
       {Task.Supervisor, name: Sequin.TaskSupervisor},
       {ConCache, name: Sequin.Cache, ttl_check_interval: :timer.seconds(1), global_ttl: :infinity},
       {Oban, Application.fetch_env!(:sequin, Oban)},
-      {Redix, Application.fetch_env!(:redix, :start_opts)},
+      Sequin.Redis.child_spec(),
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,

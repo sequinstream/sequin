@@ -5,6 +5,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Error
+  alias Sequin.Redis
 
   @max_messages 1_000
 
@@ -30,8 +31,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
           ["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]
         ]
 
-    :redix
-    |> Redix.pipeline(commands)
+    commands
+    |> Redis.pipeline()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -47,8 +48,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   def fetch_messages(consumer_id, count \\ 100, offset \\ 0) do
     key = "acknowledged_messages:#{consumer_id}"
 
-    :redix
-    |> Redix.command(["ZREVRANGE", key, offset, offset + count - 1])
+    ["ZREVRANGE", key, offset, offset + count - 1]
+    |> Redis.command()
     |> handle_response()
     |> case do
       {:ok, messages} -> {:ok, Enum.map(messages, &AcknowledgedMessage.decode/1)}
@@ -63,8 +64,8 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   def count_messages(consumer_id) do
     key = "acknowledged_messages:#{consumer_id}"
 
-    :redix
-    |> Redix.command(["ZCARD", key])
+    ["ZCARD", key]
+    |> Redis.command()
     |> handle_response()
   end
 

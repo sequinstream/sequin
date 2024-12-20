@@ -1,5 +1,7 @@
 defmodule Sequin.Mutex do
   @moduledoc false
+  alias Sequin.Redis
+
   require Logger
 
   @type acquire_return :: :ok | {:error, :mutex_taken} | :error
@@ -12,7 +14,7 @@ defmodule Sequin.Mutex do
   returns {:error, :mutex_taken}
   """
   def acquire_or_touch(key, token, expiry) do
-    case Redix.command(:redix, ["EVAL", acquire_or_touch_script(), 1, key, token, expiry]) do
+    case Redis.command(["EVAL", acquire_or_touch_script(), 1, key, token, expiry]) do
       {:ok, ^token} ->
         :ok
 
@@ -30,7 +32,7 @@ defmodule Sequin.Mutex do
   returns :ok. Otherwise, does not touch the mutex and instead returns {:error, :mutex_taken}.
   """
   def release(key, token) do
-    case Redix.command(:redix, ["EVAL", release_script(), 1, key, token]) do
+    case Redis.command(["EVAL", release_script(), 1, key, token]) do
       {:ok, 1} ->
         :ok
 

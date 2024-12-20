@@ -14,6 +14,7 @@ defmodule Sequin.Health do
   alias Sequin.Error
   alias Sequin.Health.Check
   alias Sequin.JSON
+  alias Sequin.Redis
   alias Sequin.Replication.WalPipeline
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
@@ -385,8 +386,8 @@ defmodule Sequin.Health do
   end
 
   defp get_health(entity) when is_entity(entity) do
-    :redix
-    |> Redix.command(["GET", key(entity.id)])
+    ["GET", key(entity.id)]
+    |> Redis.command()
     |> case do
       {:ok, nil} ->
         {:ok, initial_health(entity)}
@@ -405,8 +406,8 @@ defmodule Sequin.Health do
   """
   @spec set_health(String.t(), Health.t()) :: :ok | {:error, Error.t()}
   def set_health(entity_id, %Health{} = health) do
-    :redix
-    |> Redix.command(["SET", key(entity_id), Jason.encode!(health)])
+    ["SET", key(entity_id), Jason.encode!(health)]
+    |> Redis.command()
     |> case do
       {:ok, "OK"} -> :ok
       {:error, error} -> {:error, to_service_error(error)}
@@ -514,12 +515,12 @@ defmodule Sequin.Health do
       :test ->
         pattern = "ix:test:health:*"
 
-        case Redix.command(:redix, ["KEYS", pattern]) do
+        case Redis.command(["KEYS", pattern]) do
           {:ok, []} ->
             :ok
 
           {:ok, keys} ->
-            case Redix.command(:redix, ["DEL" | keys]) do
+            case Redis.command(["DEL" | keys]) do
               {:ok, _} -> :ok
               {:error, error} -> raise error
             end

@@ -8,6 +8,7 @@ defmodule Sequin.Replication do
   alias Sequin.Error.NotFoundError
   alias Sequin.Extensions.Replication, as: ReplicationExt
   alias Sequin.Postgres
+  alias Sequin.Redis
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
@@ -178,11 +179,11 @@ defmodule Sequin.Replication do
 
   # Replication runtime lifecycle
   def put_last_processed_seq!(replication_slot_id, seq) do
-    Redix.command!(:redix, ["SET", last_processed_seq_key(replication_slot_id), seq])
+    Redis.command!(["SET", last_processed_seq_key(replication_slot_id), seq])
   end
 
   def last_processed_seq(replication_slot_id) do
-    case Redix.command(:redix, ["GET", last_processed_seq_key(replication_slot_id)]) do
+    case Redis.command(["GET", last_processed_seq_key(replication_slot_id)]) do
       {:ok, nil} -> {:ok, -1}
       {:ok, seq} -> {:ok, String.to_integer(seq)}
       error -> error

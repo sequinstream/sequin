@@ -3,13 +3,14 @@ defmodule Sequin.CheckSystemHealth do
   alias Sequin.Error
   alias Sequin.Error.ValidationError
   alias Sequin.NetworkUtils
+  alias Sequin.Redis
   alias Sequin.Repo
 
   require Logger
 
   def check do
     with {:ok, %Postgrex.Result{rows: [[1]]}} <- Repo.query("SELECT 1"),
-         {:ok, "PONG"} <- Redix.command(:redix, ["PING"]) do
+         {:ok, "PONG"} <- Redis.command(["PING"]) do
       :ok
     else
       {:error, %Redix.ConnectionError{} = error} ->

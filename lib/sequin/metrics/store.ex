@@ -2,11 +2,11 @@ defmodule Sequin.Metrics.Store do
   @moduledoc false
 
   alias Sequin.Error
-
+  alias Sequin.Redis
   # Count functions
   def incr_count(key, amount \\ 1) do
-    :redix
-    |> Redix.command(["INCRBY", "metrics:count:#{key}", amount])
+    ["INCRBY", "metrics:count:#{key}", amount]
+    |> Redis.command()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -15,8 +15,8 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_count(key) do
-    :redix
-    |> Redix.command(["GET", "metrics:count:#{key}"])
+    ["GET", "metrics:count:#{key}"]
+    |> Redis.command()
     |> handle_response()
     |> case do
       {:ok, nil} -> {:ok, 0}
@@ -27,11 +27,11 @@ defmodule Sequin.Metrics.Store do
 
   # Average functions
   def incr_avg(key, value) do
-    :redix
-    |> Redix.pipeline([
+    [
       ["HINCRBY", "metrics:avg:#{key}", "total", round(value)],
       ["HINCRBY", "metrics:avg:#{key}", "count", 1]
-    ])
+    ]
+    |> Redis.pipeline()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -40,8 +40,8 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_avg(key) do
-    :redix
-    |> Redix.command(["HMGET", "metrics:avg:#{key}", "total", "count"])
+    ["HMGET", "metrics:avg:#{key}", "total", "count"]
+    |> Redis.command()
     |> handle_response()
     |> case do
       {:ok, [total, count]} when is_binary(total) and is_binary(count) ->
@@ -62,11 +62,11 @@ defmodule Sequin.Metrics.Store do
   def incr_throughput(key, count \\ 1) do
     now = :os.system_time(:second)
 
-    :redix
-    |> Redix.pipeline([
+    [
       ["INCRBY", "metrics:throughput:#{key}:#{now}", count],
       ["EXPIRE", "metrics:throughput:#{key}:#{now}", @write_buckets + 1]
-    ])
+    ]
+    |> Redis.pipeline()
     |> handle_response()
     |> case do
       {:ok, _} -> :ok
@@ -79,8 +79,8 @@ defmodule Sequin.Metrics.Store do
     buckets = Enum.to_list((now - @read_buckets + 1)..now)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
-    :redix
-    |> Redix.pipeline(commands)
+    commands
+    |> Redis.pipeline()
     |> handle_response()
     |> case do
       {:ok, results} ->
@@ -101,8 +101,8 @@ defmodule Sequin.Metrics.Store do
     buckets = Enum.to_list((now - @write_buckets + 1)..now)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
-    :redix
-    |> Redix.pipeline(commands)
+    commands
+    |> Redis.pipeline()
     |> handle_response()
     |> case do
       {:ok, results} ->

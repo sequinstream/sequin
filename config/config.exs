@@ -20,9 +20,6 @@ config :logger, :console,
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
-config :redix,
-  start_opts: {"redis://localhost:6379", [name: :redix]}
-
 config :sentry,
   enable_source_code_context: true,
   environment_name: Mix.env(),
@@ -46,8 +43,6 @@ config :sequin, Oban,
      ]}
   ]
 
-config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
-
 # Configures the mailer
 #
 # By default it uses the "Local" adapter which stores the emails
@@ -55,6 +50,9 @@ config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
 #
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
+config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
+config :sequin, Sequin.Redis, url: "redis://localhost:6379"
+
 config :sequin, Sequin.Repo,
   config_schema_prefix: sequin_config_schema,
   stream_schema_prefix: sequin_stream_schema,

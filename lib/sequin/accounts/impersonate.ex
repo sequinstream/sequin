@@ -10,11 +10,12 @@ defmodule Sequin.Accounts.Impersonate do
 
   alias Sequin.Accounts
   alias Sequin.Error
+  alias Sequin.Redis
 
   require Logger
 
   def getdel_secret(secret) do
-    case Redix.command(:redix, ["GETDEL", secret]) do
+    case Redis.command(["GETDEL", secret]) do
       {:ok, nil} ->
         {:error, Error.not_found(entity: :secret)}
 
@@ -41,7 +42,7 @@ defmodule Sequin.Accounts.Impersonate do
     secret = 48 |> :crypto.strong_rand_bytes() |> Base.encode32(padding: false)
 
     {:ok, _} =
-      Redix.command(:redix, ["SET", secret, "#{impersonating_user.id}:#{impersonated_user.id}", "PX", :timer.minutes(1)])
+      Redis.command(["SET", secret, "#{impersonating_user.id}:#{impersonated_user.id}", "PX", :timer.minutes(1)])
 
     case Application.fetch_env!(:sequin, :env) do
       :dev ->

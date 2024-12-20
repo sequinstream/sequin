@@ -24,7 +24,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: consumer.batch_size]}
       ],
       processors: [
         default: [

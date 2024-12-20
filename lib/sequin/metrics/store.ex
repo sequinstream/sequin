@@ -56,18 +56,16 @@ defmodule Sequin.Metrics.Store do
   end
 
   # Throughput functions
-  def incr_throughput(key) do
-    now = :os.system_time(:nanosecond)
-
-    # ms to nano
-    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
+  # 60 seconds of throughput telemetry is stored; 5 seconds of read telemetry is read for "instant" throughput
+  @read_buckets 5
+  @write_buckets 60
+  def incr_throughput(key, count \\ 1) do
+    now = :os.system_time(:second)
 
     :redix
     |> Redix.pipeline([
-      ["ZADD", "metrics:throughput:#{key}", now, now],
-      ["ZREMRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
-      ["ZREMRANGEBYRANK", "metrics:throughput:#{key}", "0", "-10001"],
-      ["ZCARD", "metrics:throughput:#{key}"]
+      ["INCRBY", "metrics:throughput:#{key}:#{now}", count],
+      ["EXPIRE", "metrics:throughput:#{key}:#{now}", @write_buckets + 1]
     ])
     |> handle_response()
     |> case do
@@ -77,35 +75,38 @@ defmodule Sequin.Metrics.Store do
   end
 
   def get_throughput(key) do
-    now = :os.system_time(:nanosecond)
-
-    # ms to nano
-    one_hour_ago = now - :timer.seconds(3600) * 1_000_000
+    now = :os.system_time(:second)
+    buckets = Enum.to_list((now - @read_buckets + 1)..now)
+    commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
     :redix
-    |> Redix.pipeline([
-      ["ZREVRANGEBYSCORE", "metrics:throughput:#{key}", "-inf", one_hour_ago],
-      ["ZRANGE", "metrics:throughput:#{key}", 0, 0, "WITHSCORES"],
-      ["ZCARD", "metrics:throughput:#{key}"]
-    ])
+    |> Redix.pipeline(commands)
     |> handle_response()
     |> case do
-      {:ok, [_, [], _]} ->
-        {:ok, 0.0}
+      {:ok, results} ->
+        sum =
+          results
+          |> Stream.map(&String.to_integer(&1 || "0"))
+          |> Enum.sum()
 
-      {:ok, [_, [_oldest, oldest_score], count]} ->
-        {decimal_oldest, ""} = Decimal.parse(oldest_score)
-        oldest = Decimal.to_integer(decimal_oldest)
+        {:ok, sum / @read_buckets}
 
-        time_diff = max(now - oldest, 1)
+      error ->
+        error
+    end
+  end
 
-        # Nanoseconds to seconds
-        time_diff_seconds = time_diff / 1_000_000_000
+  def get_throughput_timeseries(key) do
+    now = :os.system_time(:second)
+    buckets = Enum.to_list((now - @write_buckets + 1)..now)
+    commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
-        # Require at least 60 seconds to avoid spikes
-        time_diff_seconds = max(time_diff_seconds, 60)
-
-        {:ok, count / time_diff_seconds}
+    :redix
+    |> Redix.pipeline(commands)
+    |> handle_response()
+    |> case do
+      {:ok, results} ->
+        {:ok, Enum.map(results, &String.to_integer(&1 || "0"))}
 
       error ->
         error

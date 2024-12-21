@@ -51,6 +51,7 @@ defmodule Sequin.Application do
 
   defp base_children do
     topologies = Application.get_env(:libcluster, :topologies)
+    Sequin.Redis.connect_cluster()
 
     [
       SequinWeb.Telemetry,
@@ -62,7 +63,6 @@ defmodule Sequin.Application do
       Sequin.TaskSupervisor.child_spec(),
       Sequin.Cache.child_spec(),
       {Oban, Application.fetch_env!(:sequin, Oban)},
-      Sequin.Redis.child_spec(),
       Sequin.Databases.ConnectionCache,
       Sequin.Sinks.Redis.ConnectionCache,
       Sequin.Sinks.Kafka.ConnectionCache,

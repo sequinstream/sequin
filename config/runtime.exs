@@ -213,10 +213,7 @@ if config_env() == :prod do
     ]
 
   config :sequin, Sequin.Mailer, adapter: Sequin.Swoosh.Adapters.Loops, api_key: System.get_env("LOOPS_API_KEY")
-
-  config :sequin, Sequin.Redis,
-    url: ConfigParser.redis_url(env_vars),
-    opts: ConfigParser.redis_opts(env_vars)
+  config :sequin, Sequin.Redis, ConfigParser.redis_config(env_vars)
 
   config :sequin, Sequin.Vault,
     ciphers: [

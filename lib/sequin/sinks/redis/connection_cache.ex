@@ -105,7 +105,7 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
     @spec new([opt]) :: t()
     def new(opts) do
       start_fn = Keyword.get(opts, :start_fn, &default_start/1)
-      stop_fn = Keyword.get(opts, :stop_fn, &GenServer.stop/1)
+      stop_fn = Keyword.get(opts, :stop_fn, &:eredis.stop/1)
 
       %__MODULE__{
         start_fn: start_fn,
@@ -153,9 +153,7 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
     end
 
     defp default_start(%RedisSink{} = sink) do
-      sink
-      |> RedisSink.redis_url(obscure_password: false)
-      |> Redix.start_link()
+      :eredis.start_link(RedisSink.start_opts(sink))
     end
   end
 
@@ -224,6 +222,12 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
   def handle_cast({:invalidate_connection, %RedisSink{} = sink}, %State{} = state) do
     new_state = State.invalidate_connection(state, sink)
     {:noreply, new_state}
+  end
+
+  @impl GenServer
+  def handle_info({:EXIT, _pid, :normal}, %State{} = state) do
+    # TODO: Do we need to handle connection going down? We're the ~only ones that can invalidate it?
+    {:noreply, state}
   end
 
   @impl GenServer

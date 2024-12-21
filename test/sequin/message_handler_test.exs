@@ -586,6 +586,54 @@ defmodule Sequin.MessageHandlerTest do
       assert length(new_context.table_reader_batches) == 1
       assert Enum.all?(new_context.table_reader_batches, &(&1.batch_id != "matching-batch"))
     end
+
+    test "handles low watermark message by discarding existing batches with same backfill_id" do
+      # Create context with multiple batches, some with matching backfill_id
+      context = %MessageHandler.Context{
+        table_reader_batches: [
+          %MessageHandler.BatchState{
+            batch_id: "existing-batch",
+            table_oid: 789,
+            backfill_id: "test-backfill",
+            seq: 42,
+            primary_key_values: MapSet.new([["1"], ["2"]])
+          },
+          %MessageHandler.BatchState{
+            batch_id: "other-batch",
+            table_oid: 123,
+            backfill_id: "other-backfill",
+            seq: 44,
+            primary_key_values: MapSet.new([["4"]])
+          }
+        ]
+      }
+
+      # Create a low watermark message
+      message =
+        ReplicationFactory.postgres_logical_message(%{
+          prefix: Constants.backfill_batch_low_watermark(),
+          content:
+            Jason.encode!(%{
+              "batch_id" => "new-batch",
+              "table_oid" => 123,
+              "backfill_id" => "test-backfill"
+            })
+        })
+
+      log =
+        capture_log(fn ->
+          # Process the message
+          new_context = MessageHandler.handle_logical_message(context, 45, message)
+
+          # Assert we only have two batches now (the new one and the unrelated one)
+          assert length(new_context.table_reader_batches) == 2
+
+          assert_lists_equal(["other-batch", "new-batch"], Enum.map(new_context.table_reader_batches, & &1.batch_id))
+        end)
+
+      # Verify the warning was logged
+      assert log =~ "Discarding"
+    end
   end
 
   defp list_messages(consumer_id) do

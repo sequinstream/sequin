@@ -377,32 +377,31 @@ defmodule Sequin.MessageHandlerTest do
 
     test "updates table reader batch primary key values correctly" do
       # Create three batches with different table OIDs
-      batch1 = %MessageHandler.BatchState{
-        batch_id: "batch1",
-        table_oid: 123,
-        backfill_id: "backfill1",
-        seq: 1,
-        # Some existing PKs
-        primary_key_values: MapSet.new([["1"], ["2"]])
-      }
+      batch1 =
+        batch_state(%{
+          batch_id: "batch1",
+          table_oid: 123,
+          # Some existing PKs
+          primary_key_values: MapSet.new([["1"], ["2"]])
+        })
 
-      batch2 = %MessageHandler.BatchState{
-        batch_id: "batch2",
-        table_oid: 456,
-        backfill_id: "backfill1",
-        seq: 2,
-        # Empty initial set
-        primary_key_values: MapSet.new()
-      }
+      batch2 =
+        batch_state(%{
+          batch_id: "batch2",
+          table_oid: 456,
+          # Empty initial set
+          primary_key_values: MapSet.new()
+        })
 
-      batch3 = %MessageHandler.BatchState{
-        batch_id: "batch3",
-        table_oid: 789,
-        backfill_id: "backfill2",
-        seq: 3,
-        # One existing PK
-        primary_key_values: MapSet.new([["10"]])
-      }
+      batch3 =
+        batch_state(%{
+          batch_id: "batch3",
+          table_oid: 789,
+          backfill_id: "backfill2",
+          seq: 3,
+          # One existing PK
+          primary_key_values: MapSet.new([["10"]])
+        })
 
       context = %MessageHandler.Context{
         consumers: [],
@@ -456,13 +455,10 @@ defmodule Sequin.MessageHandlerTest do
   describe "handle_logical_message/3" do
     test "handles low watermark message by adding new batch state while preserving existing batches" do
       # Create an existing batch in the context
-      existing_batch = %MessageHandler.BatchState{
-        batch_id: "existing-batch",
-        table_oid: 789,
-        backfill_id: "existing-backfill",
-        seq: 42,
-        primary_key_values: MapSet.new([["1"], ["2"]])
-      }
+      existing_batch =
+        batch_state(%{
+          batch_id: "existing-batch"
+        })
 
       context = %MessageHandler.Context{
         table_reader_batches: [existing_batch]
@@ -507,13 +503,9 @@ defmodule Sequin.MessageHandlerTest do
       # Create a context with no matching batch
       context = %MessageHandler.Context{
         table_reader_batches: [
-          %MessageHandler.BatchState{
-            batch_id: "other-batch",
-            table_oid: 789,
-            backfill_id: "other-backfill",
-            seq: 42,
-            primary_key_values: MapSet.new()
-          }
+          batch_state(%{
+            batch_id: "other-batch"
+          })
         ],
         table_reader_mod: TableReaderServerMock
       }
@@ -541,26 +533,23 @@ defmodule Sequin.MessageHandlerTest do
 
     test "handles high watermark message by flushing batch and removing it from context" do
       # Create a context with a matching batch that has some PKs
-      existing_batch = %MessageHandler.BatchState{
-        batch_id: "matching-batch",
-        table_oid: 123,
-        backfill_id: "test-backfill",
-        seq: 42,
-        primary_key_values: MapSet.new([["1"], ["2"], ["3"]])
-      }
+      existing_batch =
+        batch_state(%{
+          batch_id: "matching-batch",
+          table_oid: 123,
+          backfill_id: "test-backfill",
+          seq: 42,
+          primary_key_values: MapSet.new([["1"], ["2"], ["3"]])
+        })
 
       batch_info = %{batch_id: "matching-batch", seq: 42, drop_pks: MapSet.new([["1"], ["2"], ["3"]])}
 
       context = %MessageHandler.Context{
         table_reader_batches: [
           existing_batch,
-          %MessageHandler.BatchState{
-            batch_id: "other-batch",
-            table_oid: 789,
-            backfill_id: "other-backfill",
-            seq: 43,
-            primary_key_values: MapSet.new()
-          }
+          batch_state(%{
+            batch_id: "other-batch"
+          })
         ],
         table_reader_mod: TableReaderServerMock
       }
@@ -591,20 +580,14 @@ defmodule Sequin.MessageHandlerTest do
       # Create context with multiple batches, some with matching backfill_id
       context = %MessageHandler.Context{
         table_reader_batches: [
-          %MessageHandler.BatchState{
+          batch_state(%{
             batch_id: "existing-batch",
-            table_oid: 789,
-            backfill_id: "test-backfill",
-            seq: 42,
-            primary_key_values: MapSet.new([["1"], ["2"]])
-          },
-          %MessageHandler.BatchState{
+            backfill_id: "test-backfill"
+          }),
+          batch_state(%{
             batch_id: "other-batch",
-            table_oid: 123,
-            backfill_id: "other-backfill",
-            seq: 44,
-            primary_key_values: MapSet.new([["4"]])
-          }
+            backfill_id: "other-backfill"
+          })
         ]
       }
 
@@ -634,6 +617,18 @@ defmodule Sequin.MessageHandlerTest do
       # Verify the warning was logged
       assert log =~ "Discarding"
     end
+  end
+
+  defp batch_state(attrs) do
+    defaults = %{
+      batch_id: "batch-#{UUID.uuid4()}",
+      table_oid: Factory.unique_integer(),
+      backfill_id: "backfill-#{UUID.uuid4()}",
+      seq: Factory.unique_integer(),
+      primary_key_values: MapSet.new()
+    }
+
+    struct(MessageHandler.BatchState, Map.merge(defaults, attrs))
   end
 
   defp list_messages(consumer_id) do

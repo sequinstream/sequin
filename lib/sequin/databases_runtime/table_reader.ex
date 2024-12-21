@@ -5,6 +5,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable, as: Table
   alias Sequin.DatabasesRuntime.KeysetCursor
+  alias Sequin.Error
   alias Sequin.Postgres
   alias Sequin.Redis
 
@@ -99,12 +100,12 @@ defmodule Sequin.DatabasesRuntime.TableReader do
            ]),
          {:ok, res} <- fun.(conn),
          Logger.debug("[TableReader] Emitting high watermark for batch #{current_batch_id}"),
-         {:ok, _} <-
+         {:ok, %{rows: [[lsn]]}} <-
            Postgres.query(conn, @emit_logical_message_sql, [
              Constants.backfill_batch_high_watermark(),
              payload
            ]) do
-      {:ok, res}
+      {:ok, res, lsn}
     end
   end
 
@@ -212,6 +213,23 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
     with {:ok, %Postgrex.Result{rows: [[count]]}} <- Postgres.query(db, sql, cursor_values) do
       {:ok, count}
+    end
+  end
+
+  # Add new function to fetch slot LSN
+  def fetch_slot_lsn(%PostgresDatabase{} = db, slot_name) do
+    sql = """
+    select confirmed_flush_lsn::pg_lsn
+    from pg_replication_slots
+    where slot_name = $1
+    """
+
+    with {:ok, conn} <- ConnectionCache.connection(db),
+         {:ok, %{rows: [[lsn]]}} <- Postgres.query(conn, sql, [slot_name]) do
+      {:ok, lsn}
+    else
+      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot)}
+      error -> error
     end
   end
 end

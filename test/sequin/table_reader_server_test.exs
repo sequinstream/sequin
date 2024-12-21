@@ -151,16 +151,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
       |> Repo.update!()
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
 
@@ -206,16 +197,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
 
@@ -253,16 +235,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       flush_batches(pid)
 
@@ -288,16 +261,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
       {:ok, _} = Consumers.update_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       flush_batches(pid)
 
@@ -329,16 +293,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       page_size = 10
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: filtered_consumer_backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(filtered_consumer_backfill, table_oid, page_size: page_size)
 
       flush_batches(pid)
 
@@ -381,16 +336,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: event_consumer_backfill.id,
-             page_size: page_size,
-             table_oid: table_oid,
-             test_pid: self()
-           ]}
-        )
+      pid = start_table_reader_server(event_consumer_backfill, table_oid, page_size: page_size)
 
       flush_batches(pid)
 
@@ -430,16 +376,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       max_pending_messages = 1
 
       pid =
-        start_supervised!(
-          {TableReaderServer,
-           [
-             backfill_id: backfill.id,
-             page_size: 2,
-             table_oid: table_oid,
-             test_pid: self(),
-             max_pending_messages: max_pending_messages,
-             consumer_reload_timeout: 1
-           ]}
+        start_table_reader_server(backfill, table_oid,
+          page_size: 2,
+          max_pending_messages: max_pending_messages,
+          consumer_reload_timeout: 1
         )
 
       Process.monitor(pid)
@@ -473,5 +413,19 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       1000 ->
         raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
     end
+  end
+
+  defp start_table_reader_server(backfill, table_oid, opts) do
+    defaults = [
+      backfill_id: backfill.id,
+      table_oid: table_oid,
+      page_size: 3,
+      test_pid: self(),
+      max_pending_messages: 100,
+      check_state_timeout: :timer.seconds(5)
+    ]
+
+    config = Keyword.merge(defaults, opts)
+    start_supervised!({TableReaderServer, config})
   end
 end

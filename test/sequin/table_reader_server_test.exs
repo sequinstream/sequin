@@ -427,14 +427,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       # Start with a lower max_pending_messages threshold
       # Set below 8 characters in table
-      max_pending_messages = 6
+      max_pending_messages = 1
 
       pid =
         start_supervised!(
           {TableReaderServer,
            [
              backfill_id: backfill.id,
-             page_size: 7,
+             page_size: 2,
              table_oid: table_oid,
              test_pid: self(),
              max_pending_messages: max_pending_messages,
@@ -443,16 +443,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         )
 
       Process.monitor(pid)
-      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
-      assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: []})
-
-      assert_receive {TableReaderServer, :paused}, 1000
+      assert :paused = flush_batches(pid)
 
       # Now clear the messages
       consumer.id
       |> ConsumerRecord.where_consumer_id()
       |> Repo.delete_all()
 
+      # We can continue more, and then may get paused again
       flush_batches(pid)
     end
   end
@@ -465,6 +463,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: []})
 
         flush_batches(pid, seq + 1, [msg | message_history])
+
+      {TableReaderServer, :paused} ->
+        :paused
 
       {:DOWN, _ref, :process, ^pid, :normal} ->
         :ok

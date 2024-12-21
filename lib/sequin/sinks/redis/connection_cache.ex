@@ -153,9 +153,7 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
     end
 
     defp default_start(%RedisSink{} = sink) do
-      sink
-      |> RedisSink.redis_url(obscure_password: false)
-      |> Redix.start_link()
+      :eredis.start_link(RedisSink.start_opts(sink))
     end
   end
 

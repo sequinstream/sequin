@@ -11,6 +11,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.TableReader
+  alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Repo
 
@@ -69,6 +70,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     alias Sequin.Consumers.Backfill
     alias Sequin.Consumers.SinkConsumer
+    alias Sequin.Databases.PostgresDatabase
 
     typedstruct do
       field :id, String.t()
@@ -83,9 +85,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :successive_failure_count, integer(), default: 0
       field :max_pending_messages, integer()
       field :count_pending_messages, integer(), default: 0
-      field :consumer_reload_timeout, integer()
+      field :check_state_timeout, integer()
       field :batch, list() | nil
       field :batch_id, String.t() | nil
+      field :batch_lsn, integer()
+      field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
     end
   end
 
@@ -114,7 +118,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       table_oid: Keyword.fetch!(opts, :table_oid),
       max_pending_messages: max_pending_messages,
       count_pending_messages: 0,
-      consumer_reload_timeout: Keyword.get(opts, :consumer_reload_timeout, :timer.seconds(30))
+      check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
+      fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2)
     }
 
     actions = [
@@ -147,7 +152,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       end
     end
 
-    actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
+    actions = [check_state_timeout(state.check_state_timeout)]
 
     {:next_state, :fetch_batch, state, actions}
   end
@@ -180,21 +185,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       )
 
     case res do
-      {:ok, %{rows: [], next_cursor: nil}} ->
+      {:ok, %{rows: [], next_cursor: nil}, _lsn} ->
         Logger.info("[TableReaderServer] Batch returned no records. Table pagination complete.")
         Consumers.table_reader_finished(state.consumer.id)
         TableReader.delete_cursor(state.consumer.active_backfill.id)
 
         {:stop, :normal}
 
-      {:ok, %{rows: rows, next_cursor: next_cursor}} ->
+      {:ok, %{rows: rows, next_cursor: next_cursor}, lsn} ->
         Logger.debug("[TableReaderServer] Batch returned #{length(rows)} records")
 
         if state.test_pid do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
 
-        state = %{state | batch: rows, batch_id: batch_id, next_cursor: next_cursor}
+        state = %{state | batch: rows, batch_id: batch_id, next_cursor: next_cursor, batch_lsn: lsn}
         {:next_state, :await_flush, state}
 
       {:error, error} ->
@@ -228,7 +233,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
   end
 
-  def handle_event({:timeout, :reload_consumer}, _evt, state_name, state) do
+  def handle_event({:timeout, :check_state}, _evt, state_name, state) do
     case preload_consumer(state.consumer) do
       nil ->
         Logger.info("[TableReaderServer] Consumer #{state.consumer.id} not found, shutting down")
@@ -236,8 +241,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
       consumer ->
         message_count = Consumers.fast_count_messages_for_consumer(consumer)
-        actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
+        actions = [check_state_timeout(state.check_state_timeout)]
         state = %{state | count_pending_messages: message_count, consumer: consumer}
+        current_slot_lsn = fetch_slot_lsn(state)
 
         cond do
           is_nil(consumer.active_backfill) ->
@@ -245,6 +251,15 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
             {:stop, :normal}
 
           state_name == {:paused, :max_pending_messages} and state.count_pending_messages < state.max_pending_messages ->
+            {:next_state, :fetch_batch, state, actions}
+
+          state_name == :await_flush and current_slot_lsn > state.batch_lsn ->
+            Logger.warning(
+              "[TableReaderServer] Detected stale batch #{state.batch_id}. " <>
+                "Batch LSN #{state.batch_lsn} is behind slot LSN #{current_slot_lsn}. Retrying."
+            )
+
+            state = %{state | batch: nil, batch_id: nil, next_cursor: nil}
             {:next_state, :fetch_batch, state, actions}
 
           true ->
@@ -269,7 +284,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       ) do
     next_state = process_batch(state, batch_info)
     Logger.metadata(current_batch_id: nil)
-    next_state = %{next_state | batch_id: nil, batch: nil}
+    next_state = %{next_state | batch_id: nil, batch: nil, next_cursor: nil, current_cursor: state.next_cursor}
 
     if state.count_pending_messages < state.max_pending_messages do
       {:next_state, :fetch_batch, next_state, [{:reply, from, :ok}]}
@@ -283,8 +298,12 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 
-  defp reload_consumer_timeout(timeout) do
-    {{:timeout, :reload_consumer}, timeout, nil}
+  defp check_state_timeout(timeout) do
+    {{:timeout, :check_state}, timeout, nil}
+  end
+
+  defp replication_slot(%State{consumer: consumer}) do
+    consumer.replication_slot
   end
 
   defp database(%State{consumer: consumer}) do
@@ -338,9 +357,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     # Update current_cursor with next_cursor and persist to Redis
     :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
-    state = %State{state | consumer: consumer, current_cursor: state.next_cursor, next_cursor: nil}
-
-    state
+    %State{state | consumer: consumer}
   end
 
   # Message handling
@@ -465,5 +482,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp preload_consumer(consumer) do
     Repo.preload(consumer, [:sequence, :active_backfill, replication_slot: :postgres_database], force: true)
+  end
+
+  defp fetch_slot_lsn(%State{} = state) do
+    # Check if we have a stale batch
+    case state.fetch_slot_lsn.(database(state), replication_slot(state).slot_name) do
+      {:ok, current_lsn} ->
+        current_lsn
+
+      {:error, %Error.NotFoundError{}} ->
+        raise "[TableReaderServer] Replication slot #{replication_slot(state).slot_name} not found"
+
+      {:error, error} ->
+        Logger.error("[TableReaderServer] Failed to fetch slot LSN: #{inspect(error)}")
+        # We'll try fetching on the next go-around
+        0
+    end
   end
 end

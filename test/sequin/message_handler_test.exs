@@ -383,7 +383,7 @@ defmodule Sequin.MessageHandlerTest do
         backfill_id: "backfill1",
         seq: 1,
         # Some existing PKs
-        primary_key_values: MapSet.new([[1], [2]])
+        primary_key_values: MapSet.new([["1"], ["2"]])
       }
 
       batch2 = %MessageHandler.BatchState{
@@ -401,7 +401,7 @@ defmodule Sequin.MessageHandlerTest do
         backfill_id: "backfill2",
         seq: 3,
         # One existing PK
-        primary_key_values: MapSet.new([[10]])
+        primary_key_values: MapSet.new([["10"]])
       }
 
       context = %MessageHandler.Context{
@@ -436,19 +436,19 @@ defmodule Sequin.MessageHandlerTest do
       # Verify batch1 has original PKs plus new ones (without duplicates)
       assert MapSet.equal?(
                updated_batch1.primary_key_values,
-               MapSet.new([[1], [2], [3], [4], [5]])
+               MapSet.new([["1"], ["2"], ["3"], ["4"], ["5"]])
              )
 
       # Verify batch2 has only the new PKs
       assert MapSet.equal?(
                updated_batch2.primary_key_values,
-               MapSet.new([[100], [101]])
+               MapSet.new([["100"], ["101"]])
              )
 
       # Verify batch3 is unchanged
       assert MapSet.equal?(
                updated_batch3.primary_key_values,
-               MapSet.new([[10]])
+               MapSet.new([["10"]])
              )
     end
   end
@@ -461,7 +461,7 @@ defmodule Sequin.MessageHandlerTest do
         table_oid: 789,
         backfill_id: "existing-backfill",
         seq: 42,
-        primary_key_values: MapSet.new([[1], [2]])
+        primary_key_values: MapSet.new([["1"], ["2"]])
       }
 
       context = %MessageHandler.Context{
@@ -546,10 +546,10 @@ defmodule Sequin.MessageHandlerTest do
         table_oid: 123,
         backfill_id: "test-backfill",
         seq: 42,
-        primary_key_values: MapSet.new([[1], [2], [3]])
+        primary_key_values: MapSet.new([["1"], ["2"], ["3"]])
       }
 
-      batch_info = %{batch_id: "matching-batch", seq: 42, drop_pks: MapSet.new([[1], [2], [3]])}
+      batch_info = %{batch_id: "matching-batch", seq: 42, drop_pks: MapSet.new([["1"], ["2"], ["3"]])}
 
       context = %MessageHandler.Context{
         table_reader_batches: [

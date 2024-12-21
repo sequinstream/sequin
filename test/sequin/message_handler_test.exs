@@ -1,11 +1,15 @@
 defmodule Sequin.MessageHandlerTest do
   use Sequin.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
+  alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Mocks.TableReaderServerMock
   alias Sequin.Replication
 
   describe "handle_messages/2" do
@@ -369,6 +373,218 @@ defmodule Sequin.MessageHandlerTest do
       {:ok, 4, _} = MessageHandler.handle_messages(context, messages)
 
       assert {:ok, 5} = Replication.last_processed_seq(replication_slot_id)
+    end
+
+    test "updates table reader batch primary key values correctly" do
+      # Create three batches with different table OIDs
+      batch1 = %MessageHandler.BatchState{
+        batch_id: "batch1",
+        table_oid: 123,
+        backfill_id: "backfill1",
+        seq: 1,
+        # Some existing PKs
+        primary_key_values: MapSet.new([[1], [2]])
+      }
+
+      batch2 = %MessageHandler.BatchState{
+        batch_id: "batch2",
+        table_oid: 456,
+        backfill_id: "backfill1",
+        seq: 2,
+        # Empty initial set
+        primary_key_values: MapSet.new()
+      }
+
+      batch3 = %MessageHandler.BatchState{
+        batch_id: "batch3",
+        table_oid: 789,
+        backfill_id: "backfill2",
+        seq: 3,
+        # One existing PK
+        primary_key_values: MapSet.new([[10]])
+      }
+
+      context = %MessageHandler.Context{
+        consumers: [],
+        replication_slot_id: UUID.uuid4(),
+        table_reader_batches: [batch1, batch2, batch3]
+      }
+
+      # Create messages that should match different batches
+      messages = [
+        # Should match batch1
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [3]),
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [4]),
+        # Should match batch1 (with overlap)
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [4]),
+        ReplicationFactory.postgres_message(table_oid: 123, ids: [5]),
+        # Should match batch2
+        ReplicationFactory.postgres_message(table_oid: 456, ids: [100]),
+        ReplicationFactory.postgres_message(table_oid: 456, ids: [101]),
+        # Should match no batch
+        ReplicationFactory.postgres_message(table_oid: 999, ids: [200]),
+        ReplicationFactory.postgres_message(table_oid: 999, ids: [201])
+      ]
+
+      {:ok, _count, new_context} = MessageHandler.handle_messages(context, messages)
+
+      # Find updated batches
+      updated_batch1 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch1"))
+      updated_batch2 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch2"))
+      updated_batch3 = Enum.find(new_context.table_reader_batches, &(&1.batch_id == "batch3"))
+
+      # Verify batch1 has original PKs plus new ones (without duplicates)
+      assert MapSet.equal?(
+               updated_batch1.primary_key_values,
+               MapSet.new([[1], [2], [3], [4], [5]])
+             )
+
+      # Verify batch2 has only the new PKs
+      assert MapSet.equal?(
+               updated_batch2.primary_key_values,
+               MapSet.new([[100], [101]])
+             )
+
+      # Verify batch3 is unchanged
+      assert MapSet.equal?(
+               updated_batch3.primary_key_values,
+               MapSet.new([[10]])
+             )
+    end
+  end
+
+  describe "handle_logical_message/3" do
+    test "handles low watermark message by adding new batch state while preserving existing batches" do
+      # Create an existing batch in the context
+      existing_batch = %MessageHandler.BatchState{
+        batch_id: "existing-batch",
+        table_oid: 789,
+        backfill_id: "existing-backfill",
+        seq: 42,
+        primary_key_values: MapSet.new([[1], [2]])
+      }
+
+      context = %MessageHandler.Context{
+        table_reader_batches: [existing_batch]
+      }
+
+      # Create a low watermark message
+      message =
+        ReplicationFactory.postgres_logical_message(%{
+          prefix: Constants.backfill_batch_low_watermark(),
+          content:
+            Jason.encode!(%{
+              "batch_id" => "new-batch",
+              "table_oid" => 123,
+              "backfill_id" => "new-backfill"
+            })
+        })
+
+      # Process the message
+      new_context = MessageHandler.handle_logical_message(context, 43, message)
+
+      # Assert we have both batches
+      assert length(new_context.table_reader_batches) == 2
+
+      # Assert the existing batch is unchanged
+      [existing_batch_updated] =
+        Enum.filter(new_context.table_reader_batches, &(&1.batch_id == "existing-batch"))
+
+      assert existing_batch_updated == existing_batch
+
+      # Assert the new batch was created correctly
+      [new_batch] =
+        Enum.filter(new_context.table_reader_batches, &(&1.batch_id == "new-batch"))
+
+      assert new_batch.batch_id == "new-batch"
+      assert new_batch.table_oid == 123
+      assert new_batch.backfill_id == "new-backfill"
+      assert new_batch.seq == 43
+      assert new_batch.primary_key_values == MapSet.new()
+    end
+
+    test "handles high watermark message by discarding batch when no matching batch exists" do
+      # Create a context with no matching batch
+      context = %MessageHandler.Context{
+        table_reader_batches: [
+          %MessageHandler.BatchState{
+            batch_id: "other-batch",
+            table_oid: 789,
+            backfill_id: "other-backfill",
+            seq: 42,
+            primary_key_values: MapSet.new()
+          }
+        ],
+        table_reader_mod: TableReaderServerMock
+      }
+
+      # Create a high watermark message for a non-existent batch
+      message =
+        ReplicationFactory.postgres_logical_message(%{
+          prefix: Constants.backfill_batch_high_watermark(),
+          content:
+            Jason.encode!(%{
+              "batch_id" => "non-existent-batch",
+              "backfill_id" => "test-backfill"
+            })
+        })
+
+      expect(TableReaderServerMock, :discard_batch, 1, fn "test-backfill", "non-existent-batch" ->
+        :ok
+      end)
+
+      # Process the message
+      capture_log(fn ->
+        MessageHandler.handle_logical_message(context, 43, message)
+      end) =~ "Batch not found"
+    end
+
+    test "handles high watermark message by flushing batch and removing it from context" do
+      # Create a context with a matching batch that has some PKs
+      existing_batch = %MessageHandler.BatchState{
+        batch_id: "matching-batch",
+        table_oid: 123,
+        backfill_id: "test-backfill",
+        seq: 42,
+        primary_key_values: MapSet.new([[1], [2], [3]])
+      }
+
+      batch_info = %{batch_id: "matching-batch", seq: 42, drop_pks: MapSet.new([[1], [2], [3]])}
+
+      context = %MessageHandler.Context{
+        table_reader_batches: [
+          existing_batch,
+          %MessageHandler.BatchState{
+            batch_id: "other-batch",
+            table_oid: 789,
+            backfill_id: "other-backfill",
+            seq: 43,
+            primary_key_values: MapSet.new()
+          }
+        ],
+        table_reader_mod: TableReaderServerMock
+      }
+
+      # Create a high watermark message matching the existing batch
+      message =
+        ReplicationFactory.postgres_logical_message(%{
+          prefix: Constants.backfill_batch_high_watermark(),
+          content:
+            Jason.encode!(%{
+              "batch_id" => "matching-batch",
+              "backfill_id" => "test-backfill"
+            })
+        })
+
+      expect(TableReaderServerMock, :flush_batch, 1, fn "test-backfill", ^batch_info ->
+        :ok
+      end)
+
+      # Process the message
+      new_context = MessageHandler.handle_logical_message(context, 44, message)
+
+      assert length(new_context.table_reader_batches) == 1
+      assert Enum.all?(new_context.table_reader_batches, &(&1.batch_id != "matching-batch"))
     end
   end
 

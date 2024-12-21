@@ -9,3 +9,7 @@ Mox.defmock(Sequin.Mocks.NatsMock,
 Mox.defmock(Sequin.Mocks.RabbitMqMock,
   for: Sequin.Sinks.RabbitMq
 )
+
+Mox.defmock(Sequin.Mocks.TableReaderServerMock,
+  for: Sequin.DatabasesRuntime.TableReaderServer
+)

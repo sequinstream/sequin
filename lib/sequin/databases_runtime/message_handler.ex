@@ -29,7 +29,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :table_oid, non_neg_integer()
       field :backfill_id, String.t()
       field :seq, non_neg_integer()
-      field :primary_key_values, [%{String.t() => any()}], default: []
+      field :primary_key_values, MapSet.t(list()), default: MapSet.new()
     end
   end
 
@@ -42,6 +42,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :wal_pipelines, [WalPipeline.t()], default: []
       field :replication_slot_id, String.t()
       field :table_reader_batches, [BatchState.t()], default: []
+      field :max_pks_per_batch, non_neg_integer(), default: 1_000_000
+      field :table_reader_mod, module(), default: TableReaderServer
     end
   end
 
@@ -58,6 +60,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
     Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
+
+    ctx = update_table_reader_batch_pks(ctx, messages)
+
     max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
 
     messages_by_consumer =
@@ -157,7 +162,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
           batch_id: batch_id,
           table_oid: table_oid,
           backfill_id: backfill_id,
-          primary_key_values: [],
+          primary_key_values: MapSet.new(),
           seq: seq
         }
         | batches
@@ -170,13 +175,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
       nil ->
-        Logger.error("[MessageHandler] Batch #{batch_id} not found in table reader batches")
-        TableReaderServer.discard_batch(TableReaderServer.via_tuple(backfill_id), batch_id)
+        Logger.error(
+          "[MessageHandler] Batch not found in table reader batches (batch_id: #{batch_id}, backfill_id: #{backfill_id})"
+        )
+
+        ctx.table_reader_mod.discard_batch(backfill_id, batch_id)
         ctx
 
       batch ->
         :ok =
-          TableReaderServer.flush_batch(backfill_id, %{
+          ctx.table_reader_mod.flush_batch(backfill_id, %{
             batch_id: batch_id,
             seq: batch.seq,
             drop_pks: batch.primary_key_values
@@ -193,6 +201,28 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   def handle_logical_message(ctx, _seq, _msg) do
     ctx
+  end
+
+  # Track primary key values that match a backfill batch (a current backfill with an open low watermark)
+  defp update_table_reader_batch_pks(%Context{} = ctx, messages) do
+    update_in(ctx.table_reader_batches, fn batches ->
+      batches
+      |> Enum.map(fn batch ->
+        matching_msgs = Enum.filter(messages, &(&1.table_oid == batch.table_oid))
+
+        # Create a MapSet of all ids from matching messages and union with existing values
+        incoming_pks = MapSet.new(matching_msgs, & &1.ids)
+        new_pks = MapSet.union(batch.primary_key_values, incoming_pks)
+
+        if MapSet.size(new_pks) > ctx.max_pks_per_batch do
+          Logger.error("[MessageHandler] Batch #{batch.batch_id} has too many primary key values. Evicting batch.")
+          nil
+        else
+          %{batch | primary_key_values: MapSet.union(batch.primary_key_values, incoming_pks)}
+        end
+      end)
+      |> Enum.reject(&is_nil/1)
+    end)
   end
 
   defp consumer_event(consumer, message) do

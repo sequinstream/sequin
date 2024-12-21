@@ -364,6 +364,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     batch_by_pk =
       Map.new(state.batch, fn row ->
         pks = Enum.map(pk_columns, &Map.fetch!(row, &1))
+        # Important - PKs are passed around as a list of strings
+        pks = Enum.map(pks, &to_string/1)
         {pks, row}
       end)
 

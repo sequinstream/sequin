@@ -156,18 +156,29 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   def handle_logical_message(ctx, seq, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
     %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
 
-    update_in(ctx.table_reader_batches, fn batches ->
-      [
-        %BatchState{
-          batch_id: batch_id,
-          table_oid: table_oid,
-          backfill_id: backfill_id,
-          primary_key_values: MapSet.new(),
-          seq: seq
-        }
-        | batches
-      ]
-    end)
+    # Split batches into those matching the backfill_id and others
+    {matching_batches, remaining_batches} = Enum.split_with(ctx.table_reader_batches, &(&1.backfill_id == backfill_id))
+
+    if length(matching_batches) > 0 do
+      Logger.warning(
+        "[MessageHandler] Got unexpected low watermark. Discarding #{length(matching_batches)} existing batch(es) for backfill_id: #{backfill_id}"
+      )
+    end
+
+    # Create new batch and prepend to remaining batches
+    %{
+      ctx
+      | table_reader_batches: [
+          %BatchState{
+            batch_id: batch_id,
+            table_oid: table_oid,
+            backfill_id: backfill_id,
+            primary_key_values: MapSet.new(),
+            seq: seq
+          }
+          | remaining_batches
+        ]
+    }
   end
 
   def handle_logical_message(ctx, _seq, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do

@@ -74,7 +74,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :id, String.t()
       field :backfill, Backfill.t()
       field :consumer, SinkConsumer.t()
-      field :cursor, map()
+      field :current_cursor, map() | nil
+      field :next_cursor, map() | nil
       field :page_size, integer()
       field :task_ref, reference()
       field :test_pid, pid()
@@ -133,7 +134,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
     cursor = TableReader.cursor(backfill.id)
     cursor = cursor || backfill.initial_min_cursor
-    state = %{state | cursor: cursor}
+    state = %{state | current_cursor: cursor, next_cursor: nil}
 
     # Add initial count if not set
     if is_nil(backfill.rows_initial_count) do
@@ -157,7 +158,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   def handle_event(:state_timeout, :fetch_batch, :fetch_batch, state) do
-    include_min = state.cursor == initial_min_cursor(state.consumer)
+    include_min = state.current_cursor == initial_min_cursor(state.consumer)
     batch_id = UUID.uuid4()
     Logger.metadata(current_batch_id: batch_id)
 
@@ -171,7 +172,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           TableReader.fetch_batch(
             t_conn,
             table(state),
-            state.cursor,
+            state.current_cursor,
             limit: state.page_size,
             include_min: include_min
           )
@@ -193,7 +194,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           send(state.test_pid, {__MODULE__, {:batch_fetched, batch_id}})
         end
 
-        state = %{state | batch: rows, batch_id: batch_id, cursor: next_cursor}
+        state = %{state | batch: rows, batch_id: batch_id, next_cursor: next_cursor}
         {:next_state, :await_flush, state}
 
       {:error, error} ->
@@ -334,9 +335,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     end
 
     {:ok, _count, consumer} = handle_records(state.consumer, table(state), seq, filtered_batch)
-    state = %State{state | consumer: consumer}
 
-    :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.cursor)
+    # Update current_cursor with next_cursor and persist to Redis
+    :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
+    state = %State{state | consumer: consumer, current_cursor: state.next_cursor, next_cursor: nil}
 
     state
   end

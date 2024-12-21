@@ -161,7 +161,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       for n <- 1..2 do
         assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: []})
+        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: MapSet.new()})
       end
 
       # Fetch ConsumerRecords from the database
@@ -206,7 +206,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       {dropped_characters, kept_characters} = characters |> Enum.shuffle() |> Enum.split(3)
 
-      dropped_pks = Enum.map(dropped_characters, fn character -> %{"id" => character.id} end)
+      dropped_pks = MapSet.new(dropped_characters, fn character -> [character.id] end)
 
       for n <- 1..3 do
         assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
@@ -442,7 +442,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
     receive do
       {TableReaderServer, {:batch_fetched, batch_id}} = msg ->
-        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: []})
+        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: MapSet.new()})
 
         flush_batches(pid, seq + 1, [msg | message_history])
 

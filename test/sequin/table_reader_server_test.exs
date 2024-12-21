@@ -206,7 +206,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       {dropped_characters, kept_characters} = characters |> Enum.shuffle() |> Enum.split(3)
 
-      dropped_pks = MapSet.new(dropped_characters, fn character -> [character.id] end)
+      dropped_pks = MapSet.new(dropped_characters, fn character -> [to_string(character.id)] end)
 
       for n <- 1..3 do
         assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000

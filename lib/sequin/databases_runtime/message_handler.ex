@@ -211,7 +211,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         matching_msgs = Enum.filter(messages, &(&1.table_oid == batch.table_oid))
 
         # Create a MapSet of all ids from matching messages and union with existing values
-        incoming_pks = MapSet.new(matching_msgs, & &1.ids)
+
+        incoming_pks = MapSet.new(matching_msgs, fn msg -> Enum.map(msg.ids, &to_string/1) end)
         new_pks = MapSet.union(batch.primary_key_values, incoming_pks)
 
         if MapSet.size(new_pks) > ctx.max_pks_per_batch do

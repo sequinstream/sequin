@@ -29,7 +29,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
-  alias SequinWeb.Components.ConsumerForm
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -140,15 +139,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       <!-- Main content area that fills the remaining space -->
       <div class="flex-1 overflow-auto">
         <%= case {@live_action, @consumer} do %>
-          <% {:edit, _consumer} -> %>
-            <!-- Edit component -->
-            <.live_component
-              module={ConsumerForm}
-              id="edit-consumer"
-              consumer={@consumer}
-              on_finish={&handle_edit_finish/1}
-              current_user={@current_user}
-            />
           <% {:show, %SinkConsumer{}} -> %>
             <!-- ShowHttpPush component -->
             <.svelte
@@ -360,10 +350,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to enable consumer"})}
     end
-  end
-
-  defp handle_edit_finish(updated_consumer) do
-    send(self(), {:updated_consumer, updated_consumer})
   end
 
   @impl Phoenix.LiveView

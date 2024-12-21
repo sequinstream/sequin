@@ -86,10 +86,10 @@ defmodule SequinWeb.Router do
 
     live_session :default, on_mount: [{SequinWeb.UserAuth, :ensure_authenticated}, {SequinWeb.LiveHooks, :global}] do
       live "/sinks", SinkConsumersLive.Index, :index
-      live "/sinks/new", SinkConsumersLive.Index, :new
+      live "/sinks/new/:kind", SinkConsumersLive.Form, :new
+      live "/sinks/:type/:id/edit", SinkConsumersLive.Form, :edit
       live "/sinks/:type/:id", SinkConsumersLive.Show, :show
       live "/sinks/:type/:id/messages", SinkConsumersLive.Show, :messages
-      live "/sinks/:type/:id/edit", SinkConsumersLive.Show, :edit
 
       live "/databases", DatabasesLive.Index, :index
       live "/databases/new", DatabasesLive.Form, :new

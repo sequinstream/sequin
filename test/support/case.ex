@@ -15,6 +15,10 @@ defmodule Sequin.Case do
 
       setup :start_supervisors
       setup :verify_stubs
+      # For Hammox
+      # Note: You may be tempted to move this to Hammox.verify_on_exit!() in
+      # verify_stubs/1, but that doesn't seem to have an effect.
+      setup :verify_on_exit!
     end
   end
 
@@ -32,7 +36,6 @@ defmodule Sequin.Case do
   end
 
   def verify_stubs(_context) do
-    Mox.verify_on_exit!()
     Req.Test.verify_on_exit!()
     :ok
   end

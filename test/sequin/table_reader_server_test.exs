@@ -2,6 +2,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   use Sequin.DataCase, async: true
   use ExUnit.Case
 
+  import Bitwise
+  import ExUnit.CaptureLog
+
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
@@ -379,7 +382,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         start_table_reader_server(backfill, table_oid,
           page_size: 2,
           max_pending_messages: max_pending_messages,
-          consumer_reload_timeout: 1
+          check_state_timeout: 1
         )
 
       Process.monitor(pid)
@@ -392,6 +395,28 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       # We can continue more, and then may get paused again
       flush_batches(pid)
+    end
+
+    test "retries batch when LSN indicates it's stale", %{
+      backfill: backfill,
+      table_oid: table_oid
+    } do
+      # Return a very high LSN to force retry
+      max_lsn = (1 <<< 64) - 1
+      fetch_slot_lsn = fn _db, _slot_name -> {:ok, max_lsn} end
+
+      start_table_reader_server(backfill, table_oid,
+        page_size: 1000,
+        check_state_timeout: 1,
+        fetch_slot_lsn: fetch_slot_lsn
+      )
+
+      # We should see multiple fetches of the same batch as it keeps getting marked stale
+      assert capture_log(fn ->
+               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
+               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
+               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
+             end) =~ "Detected stale batch"
     end
   end
 
@@ -422,7 +447,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size: 3,
       test_pid: self(),
       max_pending_messages: 100,
-      check_state_timeout: :timer.seconds(5)
+      check_state_timeout: :timer.seconds(5),
+      fetch_slot_lsn: fn _db, _slot_name -> {:ok, 0} end
     ]
 
     config = Keyword.merge(defaults, opts)

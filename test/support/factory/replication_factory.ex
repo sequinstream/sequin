@@ -2,6 +2,7 @@ defmodule Sequin.Factory.ReplicationFactory do
   @moduledoc false
   import Sequin.Factory.Support
 
+  alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory
@@ -152,6 +153,23 @@ defmodule Sequin.Factory.ReplicationFactory do
           field(column_name: "house", value: nil),
           field(column_name: "planet", value: nil)
         ]
+      },
+      attrs
+    )
+  end
+
+  def postgres_logical_message(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %LogicalMessage{
+        prefix: Factory.word(),
+        content:
+          Jason.encode!(%{
+            "batch_id" => "batch_#{Factory.sequence()}",
+            "table_oid" => Factory.unique_integer(),
+            "backfill_id" => "backfill_#{Factory.sequence()}"
+          })
       },
       attrs
     )

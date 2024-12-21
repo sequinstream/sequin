@@ -170,8 +170,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
       nil ->
-        # TODO: Reset the table reader?
         Logger.error("[MessageHandler] Batch #{batch_id} not found in table reader batches")
+        TableReaderServer.discard_batch(TableReaderServer.via_tuple(backfill_id), batch_id)
         ctx
 
       batch ->

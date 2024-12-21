@@ -429,28 +429,39 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:noreply, socket}
   end
 
+  @smoothing_window 5
+  @timeseries_window_count 60
   defp assign_metrics(socket) do
     consumer = socket.assigns.consumer
 
     {:ok, messages_processed_count} = Metrics.get_consumer_messages_processed_count(consumer)
-    {:ok, messages_processed_throughput} = Metrics.get_consumer_messages_processed_throughput(consumer)
 
+    # Get 60 + @smoothing_window seconds of throughput data
     {:ok, messages_processed_throughput_timeseries} =
-      Metrics.get_consumer_messages_processed_throughput_timeseries(consumer)
+      Metrics.get_consumer_messages_processed_throughput_timeseries(
+        consumer,
+        @timeseries_window_count + @smoothing_window
+      )
 
     {smoothed_throughput_timeseries, _} =
-      Enum.reduce(messages_processed_throughput_timeseries, {[], []}, fn throughput, {smoothed_acc, acc} ->
-        acc = Enum.take([throughput | acc], 5)
-        smoothed = Enum.sum(acc) / length(acc)
-        {[smoothed | smoothed_acc], acc}
+      Enum.reduce(messages_processed_throughput_timeseries, {[], []}, fn throughput, {smoothed_acc, rolling_acc} ->
+        rolling_acc = Enum.take([throughput | rolling_acc], @smoothing_window)
+        smoothed = Enum.sum(rolling_acc) / length(rolling_acc)
+        {[smoothed | smoothed_acc], rolling_acc}
       end)
+
+    # Use last smoothed value as instantaneous throughput
+    [messages_processed_throughput | _] = smoothed_throughput_timeseries
+    # Take the last 60 seconds of smoothed throughput
+    smoothed_throughput_timeseries =
+      smoothed_throughput_timeseries |> Enum.take(@timeseries_window_count) |> Enum.reverse()
 
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 2)
 
     metrics = %{
       messages_processed_count: messages_processed_count,
       messages_processed_throughput: Float.round(messages_processed_throughput, 1),
-      messages_processed_throughput_timeseries: Enum.reverse(smoothed_throughput_timeseries),
+      messages_processed_throughput_timeseries: smoothed_throughput_timeseries,
       messages_failing_count: messages_failing_count
     }
 

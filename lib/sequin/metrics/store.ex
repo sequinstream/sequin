@@ -56,15 +56,15 @@ defmodule Sequin.Metrics.Store do
   end
 
   # Throughput functions
-  # 60 seconds of throughput telemetry is stored; 5 seconds of read telemetry is read for "instant" throughput
-  @read_buckets 5
-  @write_buckets 60
+  # 70 seconds of throughput telemetry is stored; 5 seconds of read telemetry is read for "instant" throughput
+  # We store more than 60 seconds so we can do smoothing and then take 60 seconds of smoothed data
+  @timeseries_windows 70
   def incr_throughput(key, count \\ 1) do
     now = :os.system_time(:second)
 
     [
       ["INCRBY", "metrics:throughput:#{key}:#{now}", count],
-      ["EXPIRE", "metrics:throughput:#{key}:#{now}", @write_buckets + 1]
+      ["EXPIRE", "metrics:throughput:#{key}:#{now}", @timeseries_windows + 1]
     ]
     |> Redis.pipeline()
     |> handle_response()
@@ -74,9 +74,10 @@ defmodule Sequin.Metrics.Store do
     end
   end
 
+  @instant_throughput_window 5
   def get_throughput(key) do
     now = :os.system_time(:second)
-    buckets = Enum.to_list((now - @read_buckets + 1)..now)
+    buckets = Enum.to_list((now - @instant_throughput_window + 1)..now)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
     commands
@@ -89,16 +90,23 @@ defmodule Sequin.Metrics.Store do
           |> Stream.map(&String.to_integer(&1 || "0"))
           |> Enum.sum()
 
-        {:ok, sum / @read_buckets}
+        {:ok, sum / @instant_throughput_window}
 
       error ->
         error
     end
   end
 
-  def get_throughput_timeseries(key) do
+  def get_throughput_timeseries(key, window_count \\ @timeseries_windows)
+
+  def get_throughput_timeseries(_key, window_count) when window_count > @timeseries_windows do
+    raise "Window count #{window_count} is greater than the maximum window size of #{@timeseries_windows}"
+  end
+
+  def get_throughput_timeseries(key, window_count) do
     now = :os.system_time(:second)
-    buckets = Enum.to_list((now - @write_buckets + 1)..now)
+    most_recent_full_window = now - 1
+    buckets = Enum.to_list((most_recent_full_window - window_count + 1)..most_recent_full_window)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
     commands

@@ -137,7 +137,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp maybe_schedule_demand(%{scheduled_handle_demand: false} = state) do
-    send(self(), :handle_demand)
+    Process.send_after(self(), :handle_demand, 10)
     %{state | scheduled_handle_demand: true}
   end
 

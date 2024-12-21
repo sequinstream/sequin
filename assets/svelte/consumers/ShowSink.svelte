@@ -159,7 +159,7 @@
     const config = {
       width: element.clientWidth,
       height: element.clientHeight,
-      margin: { top: 40, right: 0, bottom: 0, left: 0 },
+      margin: { top: 50, right: 0, bottom: 0, left: 0 },
       lineColor: "#3b82f6",
       areaColor: "#3b82f6",
       areaOpacity: 0.1,

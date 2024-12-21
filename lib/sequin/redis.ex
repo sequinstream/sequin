@@ -1,61 +1,106 @@
 defmodule Sequin.Redis do
   @moduledoc false
   alias Sequin.Error
+  alias Sequin.Error.ServiceError
 
-  def child_spec do
-    url = Keyword.fetch!(config(), :url)
-    opts = Keyword.get(config(), :opts, [])
-    opts = [name: __MODULE__] ++ opts
-    {Redix, {url, opts}}
+  require Logger
+
+  @type command :: [any()]
+  @type return_value :: nil | binary() | [binary() | nonempty_list()]
+  @type pipeline_return_value :: nil | binary() | [binary() | nonempty_list()] | ServiceError.t()
+
+  @doc """
+  :eredis_cluster_sup_sup has already been started elsewhere. To start nodes underneath it,
+  we need to call the connect/3 function.
+  connect/3 calls :eredis_cluster_sup_sup.start_child
+  """
+  def connect_cluster do
+    {url, opts} = Keyword.pop!(config(), :url)
+    %{host: host, port: port, userinfo: userinfo} = URI.parse(url)
+    cluster_nodes = [{to_charlist(host), port}]
+
+    # Parse username and password from userinfo
+    opts =
+      case userinfo do
+        nil ->
+          opts
+
+        info ->
+          {username, password} =
+            case String.split(info, ":") do
+              [user, pass] -> {user, pass}
+              [pass] -> {nil, pass}
+            end
+
+          opts
+          |> Keyword.put(:username, username)
+          |> Keyword.put(:password, password)
+      end
+
+    :ok = :eredis_cluster.connect(__MODULE__, cluster_nodes, opts)
+  rescue
+    error ->
+      raise "Failed to connect to Redis: #{inspect(error)}"
   end
 
-  @spec command(Redix.command(), keyword()) :: {:ok, Redix.Protocol.redis_value()} | {:error, Error.t()}
-  def command(command, opts \\ []) do
-    case Redix.command(__MODULE__, command, opts) do
-      {:ok, value} -> {:ok, value}
-      {:error, error} -> {:error, to_sequin_error(error)}
+  @spec command(command()) :: {:ok, return_value()} | {:error, ServiceError.t()}
+  def command(command) do
+    res =
+      __MODULE__
+      |> :eredis_cluster.q(command)
+      |> parse_result()
+
+    case res do
+      {:ok, result} ->
+        {:ok, result}
+
+      {:error, :no_connection} ->
+        {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
+
+      {:error, error} when is_binary(error) ->
+        Logger.error("Redis command failed: #{error}", error: error)
+        {:error, Error.service(service: :redis, code: :command_failed, message: error)}
     end
   end
 
-  @spec command!(Redix.command(), keyword()) :: Redix.Protocol.redis_value()
-  def command!(command, opts \\ []) do
-    case command(command, opts) do
-      {:ok, value} -> value
+  @spec command!(command()) :: return_value()
+  def command!(command) do
+    res = __MODULE__ |> :eredis_cluster.q(command) |> parse_result()
+
+    case res do
+      {:ok, result} -> result
       {:error, error} -> raise error
     end
   end
 
-  @spec pipeline([Redix.command()], keyword()) :: {:ok, [Redix.Protocol.redis_value()]} | {:error, Error.t()}
-  def pipeline(commands, opts \\ []) do
-    case Redix.pipeline(__MODULE__, commands, opts) do
-      {:ok, values} -> {:ok, values}
-      {:error, error} -> {:error, to_sequin_error(error)}
+  @spec pipeline([command()]) :: {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
+  def pipeline(commands) do
+    case :eredis_cluster.q(__MODULE__, commands) do
+      results when is_list(results) ->
+        # Convert eredis results to Redix-style results
+        {:ok,
+         Enum.map(results, fn
+           {:ok, :undefined} ->
+             nil
+
+           {:ok, value} ->
+             value
+
+           {:error, error} when is_binary(error) ->
+             Error.service(service: :redis, code: :command_failed, message: error)
+         end)}
+
+      {:error, :no_connection} ->
+        {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
     end
   end
 
-  defp to_sequin_error(%Redix.ConnectionError{} = error) do
-    Error.service(
-      service: :redis,
-      message: "Redis connection error: #{Exception.message(error)}",
-      code: "connection_error"
-    )
-  end
+  defp parse_result({:ok, :undefined}), do: {:ok, nil}
+  defp parse_result(result), do: result
 
-  defp to_sequin_error(%Redix.Error{} = error) do
-    Error.service(
-      service: :redis,
-      message: "Redis error: #{Exception.message(error)}",
-      code: "command_error"
-    )
+  defp config do
+    :sequin
+    |> Application.get_env(__MODULE__, [])
+    |> Sequin.Keyword.reject_nils()
   end
-
-  defp to_sequin_error(error) when is_atom(error) do
-    Error.service(
-      service: :redis,
-      message: "Redis error: #{error}",
-      code: "command_error"
-    )
-  end
-
-  defp config, do: Application.get_env(:sequin, __MODULE__, [])
 end

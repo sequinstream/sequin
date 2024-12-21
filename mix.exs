@@ -76,7 +76,6 @@ defmodule Sequin.MixProject do
       {:hammox, "~> 0.7", only: :test},
       {:broadway, "~> 1.0"},
       {:req, "~> 0.5"},
-      {:redix, "~> 1.0"},
       {:gnat, "~> 1.9"},
       {:sentry, "~> 10.0"},
       {:observer_cli, "~> 1.7"},
@@ -89,7 +88,9 @@ defmodule Sequin.MixProject do
       {:libcluster, "~> 3.3"},
       {:amqp, "~> 4.0"},
       {:recon, "~> 2.5.6"},
-      {:aws_signature, "~> 0.3.2"}
+      {:aws_signature, "~> 0.3.2"},
+      {:eredis_cluster, "~> 0.9"},
+      {:eredis, github: "acco/eredis", override: true}
     ]
   end
 

@@ -10,11 +10,11 @@ defmodule Sequin.CheckSystemHealth do
 
   def check do
     with {:ok, %Postgrex.Result{rows: [[1]]}} <- Repo.query("SELECT 1"),
-         {:ok, "PONG"} <- Redis.command(["PING"]) do
+         {:ok, "PONG"} <- Redis.command(["PING", "PONG"]) do
       :ok
     else
       {:error, %Error.ServiceError{service: :redis, code: "connection_error"} = error} ->
-        {redis_url, _opts} = Application.get_env(:redix, :start_opts)
+        redis_url = Application.get_env(:sequin, Sequin.Redis)[:url]
         %{host: redis_host, port: redis_port} = URI.parse(redis_url)
 
         with {:ok, ipv6} <- NetworkUtils.check_ipv6(redis_host),

@@ -42,9 +42,9 @@ defmodule Sequin.Sinks.Redis.Client do
             ]
         end)
 
-      case Redix.transaction_pipeline(connection, commands) do
-        {:ok, _} -> :ok
+      case :eredis.qp(connection, commands) do
         {:error, error} -> {:error, to_sequin_error(error)}
+        _res -> :ok
       end
     end
   end
@@ -52,8 +52,8 @@ defmodule Sequin.Sinks.Redis.Client do
   @impl Redis
   def message_count(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      case Redix.command(connection, ["XLEN", sink.stream_key]) do
-        {:ok, count} -> {:ok, count}
+      case :eredis.q(connection, ["XLEN", sink.stream_key]) do
+        {:ok, count} -> {:ok, String.to_integer(count)}
         {:error, error} -> {:error, to_sequin_error(error)}
       end
     end
@@ -62,7 +62,7 @@ defmodule Sequin.Sinks.Redis.Client do
   @impl Redis
   def client_info(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      case Redix.command(connection, ["INFO"]) do
+      case :eredis.q(connection, ["INFO"]) do
         {:ok, info} -> {:ok, info}
         {:error, error} -> {:error, to_sequin_error(error)}
       end
@@ -71,32 +71,27 @@ defmodule Sequin.Sinks.Redis.Client do
 
   @impl Redis
   def test_connection(%RedisSink{} = sink) do
-    with :ok <-
-           NetworkUtils.test_tcp_reachability(sink.host, sink.port, sink.tls, :timer.seconds(10)),
+    with {:ok, ipv6} <- NetworkUtils.check_ipv6(sink.host),
+         :ok <-
+           NetworkUtils.test_tcp_reachability(sink.host, sink.port, ipv6, :timer.seconds(10)),
          {:ok, connection} <- ConnectionCache.connection(sink) do
-      case Redix.command(connection, ["PING"]) do
-        {:ok, "PONG"} -> :ok
-        {:error, error} -> {:error, to_sequin_error(error)}
+      case :eredis.q(connection, ["PING"]) do
+        {:ok, "PONG"} ->
+          :ok
+
+        {:error, error} ->
+          # Clear the cache
+          ConnectionCache.invalidate_connection(sink)
+          {:error, to_sequin_error(error)}
       end
     end
-  catch
-    :exit, {:redix_exited_during_call, error} ->
-      {:error, to_sequin_error(error)}
   end
 
-  defp to_sequin_error(error) do
-    case error do
-      %Redix.Error{} = error ->
-        Error.service(service: :redis, message: "Redis error: #{Exception.message(error)}")
+  defp to_sequin_error(:no_connection) do
+    Error.service(service: :redis, code: :no_connection, message: "No connection to Redis")
+  end
 
-      %Redix.ConnectionError{} = error ->
-        Error.service(service: :redis, message: "Redis connection error: #{Exception.message(error)}")
-
-      {%Redix.Protocol.ParseError{}, _} ->
-        Error.service(
-          service: :redis,
-          message: "Redis protocol error. Are you sure this is a Redis instance?"
-        )
-    end
+  defp to_sequin_error(error) when is_binary(error) do
+    Error.service(service: :redis, message: error, code: :command_failed)
   end
 end

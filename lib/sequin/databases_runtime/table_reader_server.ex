@@ -17,6 +17,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   require Logger
 
+  @callback flush_batch(String.t() | pid(), map()) :: :ok
+  @callback discard_batch(String.t() | pid(), String.t()) :: :ok
+
   # Client API
 
   def start_link(opts \\ []) do
@@ -32,7 +35,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     GenStateMachine.call(pid, {:flush_batch, batch_info})
   end
 
-  def discard_batch(pid, batch_id) do
+  def discard_batch(backfill_id, batch_id) when is_binary(backfill_id) do
+    GenStateMachine.call(via_tuple(backfill_id), {:discard_batch, batch_id})
+  end
+
+  def discard_batch(pid, batch_id) when is_pid(pid) do
     GenStateMachine.call(pid, {:discard_batch, batch_id})
   end
 
@@ -353,20 +360,23 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     pk_columns =
       table(state).columns
       |> Enum.filter(& &1.is_pk?)
+      # Important - the system expects the PKs to be sorted by attnum
+      |> Enum.sort_by(& &1.attnum)
       |> Enum.map(& &1.name)
 
-    # Make a map of the rows by their primary keys
+    batch_by_pk =
+      Map.new(state.batch, fn row ->
+        pks = Enum.map(pk_columns, &Map.fetch!(row, &1))
+        {pks, row}
+      end)
+
     filtered_batch =
-      state.batch
-      |> Map.new(fn row ->
-        {Map.take(row, pk_columns), row}
+      batch_by_pk
+      |> Enum.reject(fn {pks, _row} ->
+        MapSet.member?(drop_pks, pks)
       end)
-      # Then reject any rows that match the drop_pks
-      |> Enum.reject(fn {pk_map, _row} ->
-        Enum.any?(drop_pks, fn drop_pk -> Map.equal?(pk_map, drop_pk) end)
-      end)
-      # Then "unwrap" the map into a list of rows
-      |> Enum.map(fn {_pk_map, row} -> row end)
+      # Unwrap the map into a list of rows
+      |> Enum.map(fn {_pk, row} -> row end)
 
     map_size_diff = length(state.batch) - length(filtered_batch)
 

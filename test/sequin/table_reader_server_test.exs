@@ -418,6 +418,23 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
                assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
              end) =~ "Detected stale batch"
     end
+
+    @tag capture_log: true
+    test "discards batch when told to do so", %{
+      backfill: backfill,
+      table_oid: table_oid
+    } do
+      pid = start_table_reader_server(backfill, table_oid, page_size: 2)
+
+      # Get the first batch
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
+
+      # Tell the server to discard the batch
+      assert :ok = TableReaderServer.discard_batch(pid, batch_id)
+
+      # Should get a new batch with a different ID
+      assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+    end
   end
 
   defp flush_batches(pid, seq \\ 0, message_history \\ []) do

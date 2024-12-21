@@ -33,6 +33,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     GenStateMachine.call(pid, {:flush_batch, batch_info})
   end
 
+  def discard_batch(pid, batch_id) do
+    GenStateMachine.call(pid, {:discard_batch, batch_id})
+  end
+
   # Convenience function
   def via_tuple(%_{} = consumer) do
     consumer = Repo.preload(consumer, :active_backfill)
@@ -292,6 +296,23 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   def handle_event({:call, from}, {:flush_batch, batch_info}, _state_name, _state) do
     Logger.warning("[TableReaderServer] Received flush_batch call for unknown batch #{batch_info.batch_id}")
+    {:keep_state_and_data, [{:reply, from, :ok}]}
+  end
+
+  # Add call handler
+  @impl GenStateMachine
+  def handle_event({:call, from}, {:discard_batch, batch_id}, :await_flush, %State{batch_id: batch_id} = state) do
+    Logger.warning("[TableReaderServer] Discarding batch #{state.batch_id} by request")
+
+    state = %{state | batch: nil, batch_id: nil, next_cursor: nil}
+    {:next_state, :fetch_batch, state, [{:reply, from, :ok}]}
+  end
+
+  def handle_event({:call, from}, {:discard_batch, batch_id}, _state_name, %State{} = state) do
+    Logger.info(
+      "[TableReaderServer] Ignoring call to discard batch, batch not found: #{batch_id} (current batch: #{state.batch_id})"
+    )
+
     {:keep_state_and_data, [{:reply, from, :ok}]}
   end
 

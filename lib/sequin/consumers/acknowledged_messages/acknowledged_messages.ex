@@ -33,7 +33,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
 
     commands
     |> Redis.pipeline()
-    |> handle_response()
     |> case do
       {:ok, _} -> :ok
       error -> error
@@ -50,7 +49,6 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
 
     ["ZREVRANGE", key, offset, offset + count - 1]
     |> Redis.command()
-    |> handle_response()
     |> case do
       {:ok, messages} -> {:ok, Enum.map(messages, &AcknowledgedMessage.decode/1)}
       error -> error
@@ -64,20 +62,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   def count_messages(consumer_id) do
     key = "acknowledged_messages:#{consumer_id}"
 
-    ["ZCARD", key]
-    |> Redis.command()
-    |> handle_response()
-  end
-
-  @spec handle_response(any()) :: {:ok, any()} | {:error, Error.t()}
-  defp handle_response({:ok, response}), do: {:ok, response}
-
-  defp handle_response({:error, error}) when is_exception(error) do
-    {:error, Error.service(service: :redis, message: Exception.message(error))}
-  end
-
-  defp handle_response({:error, error}) do
-    {:error, Error.service(service: :redis, message: "Redis error: #{inspect(error)}")}
+    Redis.command(["ZCARD", key])
   end
 
   defp to_acknowledged_message(%ConsumerRecord{} = record) do

@@ -57,8 +57,15 @@ defmodule Sequin.Aws.SQS do
       {:ok, %{"QueueUrl" => queue_url}, _body} ->
         {:ok, queue_url}
 
-      err ->
-        {:error, Error.service(service: :aws_sqs, message: "Failed to get queue URL", details: err)}
+      {:error, {:unexpected_response, %{body: body}}} ->
+        if is_binary(body) and String.contains?(body, "The specified queue does not exist") do
+          {:error, Error.not_found(entity: :sqs_queue)}
+        else
+          {:error, Error.service(service: :aws_sqs, message: "Failed to get queue URL", details: inspect(body))}
+        end
+
+      {:error, error} ->
+        {:error, Error.service(service: :aws_sqs, message: "Failed to get queue URL", details: error)}
     end
   end
 
@@ -175,18 +182,16 @@ defmodule Sequin.Aws.SQS do
   @spec delete_queue(Client.t(), String.t(), String.t()) :: :ok | {:error, Error.t()}
   def delete_queue(%Client{} = client, account_id, queue_name) do
     case get_queue_url(client, account_id, queue_name) do
-      {:error, {:unexpected_response, %{body: body, status_code: 400}}} ->
-        if String.contains?(body, "The specified queue does not exist") do
-          {:error, Error.not_found(entity: :sqs_queue)}
-        else
-          {:error, Error.service(service: :aws_sqs, message: "Failed to delete queue", code: "400")}
-        end
-
       {:ok, queue_url} ->
-        with {:ok, _, %{status_code: 200}} <-
-               AWS.SQS.delete_queue(client, %{"QueueUrl" => queue_url}) do
+        with {:ok, _, %{status_code: 200}} <- AWS.SQS.delete_queue(client, %{"QueueUrl" => queue_url}) do
           :ok
         end
+
+      {:error, %Error.NotFoundError{} = error} ->
+        {:error, error}
+
+      {:error, error} ->
+        {:error, Error.service(service: :aws_sqs, message: "Failed to delete queue", details: error)}
     end
   end
 

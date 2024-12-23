@@ -397,7 +397,7 @@ defmodule Sequin.Health do
         {:ok, compute_derived_fields(health)}
 
       {:error, error} ->
-        {:error, to_service_error(error)}
+        {:error, error}
     end
   end
 
@@ -410,16 +410,8 @@ defmodule Sequin.Health do
     |> Redis.command()
     |> case do
       {:ok, "OK"} -> :ok
-      {:error, error} -> {:error, to_service_error(error)}
+      {:error, error} -> {:error, error}
     end
-  end
-
-  defp to_service_error(error) when is_exception(error) do
-    Error.service(service: :redis, message: Exception.message(error))
-  end
-
-  defp to_service_error(error) do
-    Error.service(service: :redis, message: "Redis error: #{inspect(error)}")
   end
 
   defp validate_status_and_error!(:healthy, nil), do: :ok

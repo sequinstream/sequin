@@ -1,13 +1,11 @@
 defmodule Sequin.Metrics.Store do
   @moduledoc false
 
-  alias Sequin.Error
   alias Sequin.Redis
   # Count functions
   def incr_count(key, amount \\ 1) do
     ["INCRBY", "metrics:count:#{key}", amount]
     |> Redis.command()
-    |> handle_response()
     |> case do
       {:ok, _} -> :ok
       error -> error
@@ -17,7 +15,6 @@ defmodule Sequin.Metrics.Store do
   def get_count(key) do
     ["GET", "metrics:count:#{key}"]
     |> Redis.command()
-    |> handle_response()
     |> case do
       {:ok, nil} -> {:ok, 0}
       {:ok, value} -> {:ok, String.to_integer(value)}
@@ -32,7 +29,6 @@ defmodule Sequin.Metrics.Store do
       ["HINCRBY", "metrics:avg:#{key}", "count", 1]
     ]
     |> Redis.pipeline()
-    |> handle_response()
     |> case do
       {:ok, _} -> :ok
       error -> error
@@ -42,7 +38,6 @@ defmodule Sequin.Metrics.Store do
   def get_avg(key) do
     ["HMGET", "metrics:avg:#{key}", "total", "count"]
     |> Redis.command()
-    |> handle_response()
     |> case do
       {:ok, [total, count]} when is_binary(total) and is_binary(count) ->
         {:ok, String.to_integer(total) / String.to_integer(count)}
@@ -67,7 +62,6 @@ defmodule Sequin.Metrics.Store do
       ["EXPIRE", "metrics:throughput:#{key}:#{now}", @timeseries_windows + 1]
     ]
     |> Redis.pipeline()
-    |> handle_response()
     |> case do
       {:ok, _} -> :ok
       error -> error
@@ -82,7 +76,6 @@ defmodule Sequin.Metrics.Store do
 
     commands
     |> Redis.pipeline()
-    |> handle_response()
     |> case do
       {:ok, results} ->
         sum =
@@ -111,7 +104,6 @@ defmodule Sequin.Metrics.Store do
 
     commands
     |> Redis.pipeline()
-    |> handle_response()
     |> case do
       {:ok, results} ->
         {:ok, Enum.map(results, &String.to_integer(&1 || "0"))}
@@ -119,16 +111,5 @@ defmodule Sequin.Metrics.Store do
       error ->
         error
     end
-  end
-
-  @spec handle_response(any()) :: {:ok, any()} | {:error, Error.t()}
-  defp handle_response({:ok, response}), do: {:ok, response}
-
-  defp handle_response({:error, error}) when is_exception(error) do
-    {:error, Error.service(service: :redis, message: Exception.message(error))}
-  end
-
-  defp handle_response({:error, error}) do
-    {:error, Error.service(service: :redis, message: "Redis error: #{inspect(error)}")}
   end
 end

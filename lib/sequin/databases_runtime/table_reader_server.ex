@@ -8,6 +8,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.TableReader
@@ -43,12 +44,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   # Convenience function
   def via_tuple_for_consumer(consumer_id) do
-    consumer =
-      consumer_id
-      |> Consumers.get_consumer!()
-      |> Repo.preload(:active_backfill)
-
-    via_tuple(consumer.active_backfill.id)
+    consumer_id
+    |> Consumers.get_consumer!()
+    |> via_tuple()
   end
 
   def child_spec(opts) do
@@ -76,7 +74,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :consumer, SinkConsumer.t()
       field :cursor, map()
       field :page_size, integer()
-      field :task_ref, reference()
       field :test_pid, pid()
       field :table_oid, integer()
       field :successive_failure_count, integer(), default: 0
@@ -199,7 +196,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:error, error} ->
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
 
-        state = %{state | task_ref: nil, successive_failure_count: state.successive_failure_count + 1}
+        state = %{state | successive_failure_count: state.successive_failure_count + 1}
         backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
 
         actions = [
@@ -233,7 +230,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         Logger.info("[TableReaderServer] Consumer #{state.consumer.id} not found, shutting down")
         {:stop, :normal}
 
-      consumer ->
+      %SinkConsumer{} = consumer ->
         message_count = Consumers.fast_count_messages_for_consumer(consumer)
         actions = [reload_consumer_timeout(state.consumer_reload_timeout)]
         state = %{state | count_pending_messages: message_count, consumer: consumer}

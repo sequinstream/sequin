@@ -37,6 +37,12 @@ defmodule Sequin.Consumers.ConsumerRecord do
 
     field :data, :map, virtual: true
 
+    # For ConsumerMessageStore
+    field :flushed_at, :utc_datetime_usec, virtual: true
+    field :dirty, :boolean, virtual: true
+    # Used to track if the record has been deleted from MessageHandler -> Store
+    field :deleted, :boolean, virtual: true
+
     timestamps(type: :utc_datetime_usec)
   end
 

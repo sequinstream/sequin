@@ -40,6 +40,10 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
     embeds_one :data, ConsumerEventData
 
+    # For ConsumerMessageStore
+    field :flushed_at, :utc_datetime_usec, virtual: true
+    field :dirty, :boolean, virtual: true
+
     timestamps(type: :utc_datetime_usec)
   end
 

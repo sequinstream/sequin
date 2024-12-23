@@ -11,7 +11,6 @@ Sequin delivers industry-leading performance for change data capture (CDC), cons
 |------|-------------------|
 | **Sequin** | **192ms** |
 | Debezium | 234ms |
-| PeerDB | 30 seconds |
 | Fivetran | 5 minutes |
 | Airbyte | 1+ hours |
 
@@ -58,7 +57,7 @@ Records delivered to Kafka are annotated with a `delivered_at` timestamp. Full e
 
 ### Throughput stability
 
-Sequin maintains consistent performance even under sustained load: 
+Sequin maintains consistent performance even under sustained load:
 
 ```bash
 Average throughput: 2,054.4 ops/sec

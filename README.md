@@ -98,7 +98,6 @@ Sequin delivers industry-leading performance for change data capture (CDC), cons
 |------|-------------------|
 | **Sequin** | **192ms** |
 | Debezium | 234ms |
-| PeerDB | 30 seconds |
 | Fivetran | 5 minutes |
 | Airbyte | 1+ hours |
 

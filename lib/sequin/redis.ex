@@ -1,5 +1,7 @@
 defmodule Sequin.Redis do
   @moduledoc false
+  alias Sequin.Error
+
   @config Application.compile_env(:sequin, __MODULE__, [])
 
   def child_spec do
@@ -11,20 +13,53 @@ defmodule Sequin.Redis do
 
   @spec command(Redix.command(), keyword()) ::
           {:ok, Redix.Protocol.redis_value()}
-          | {:error, atom() | Redix.Error.t() | Redix.ConnectionError.t()}
+          | {:error, Error.t()}
   def command(command, opts \\ []) do
-    Redix.command(__MODULE__, command, opts)
+    case Redix.command(__MODULE__, command, opts) do
+      {:ok, value} -> {:ok, value}
+      {:error, error} -> {:error, to_sequin_error(error)}
+    end
   end
 
   @spec command!(Redix.command(), keyword()) :: Redix.Protocol.redis_value()
   def command!(command, opts \\ []) do
-    Redix.command!(__MODULE__, command, opts)
+    case command(command, opts) do
+      {:ok, value} -> value
+      {:error, error} -> raise to_sequin_error(error)
+    end
   end
 
   @spec pipeline([Redix.command()], keyword()) ::
           {:ok, [Redix.Protocol.redis_value()]}
-          | {:error, atom() | Redix.Error.t() | Redix.ConnectionError.t()}
+          | {:error, Error.t()}
   def pipeline(commands, opts \\ []) do
-    Redix.pipeline(__MODULE__, commands, opts)
+    case Redix.pipeline(__MODULE__, commands, opts) do
+      {:ok, values} -> {:ok, values}
+      {:error, error} -> {:error, to_sequin_error(error)}
+    end
+  end
+
+  defp to_sequin_error(%Redix.ConnectionError{} = error) do
+    Error.service(
+      service: :redis,
+      message: "Redis connection error: #{Exception.message(error)}",
+      code: :connection_error
+    )
+  end
+
+  defp to_sequin_error(%Redix.Error{} = error) do
+    Error.service(
+      service: :redis,
+      message: "Redis error: #{Exception.message(error)}",
+      code: :command_error
+    )
+  end
+
+  defp to_sequin_error(error) when is_atom(error) do
+    Error.service(
+      service: :redis,
+      message: "Redis error: #{error}",
+      code: error
+    )
   end
 end

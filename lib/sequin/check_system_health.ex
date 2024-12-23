@@ -13,7 +13,7 @@ defmodule Sequin.CheckSystemHealth do
          {:ok, "PONG"} <- Redis.command(["PING"]) do
       :ok
     else
-      {:error, %Redix.ConnectionError{} = error} ->
+      {:error, %Error.ServiceError{service: :redis, code: :connection_error} = error} ->
         {redis_url, _opts} = Application.get_env(:redix, :start_opts)
         %{host: redis_host, port: redis_port} = URI.parse(redis_url)
 

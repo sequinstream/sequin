@@ -46,6 +46,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
       # field :flush_timer_ref, reference() | nil
       field :flush_interval, non_neg_integer()
       field :flush_batch_size, non_neg_integer()
+      field :test_pid, pid() | nil
     end
 
     def put_messages(%State{} = state, messages) when event_messages?(state) do
@@ -104,7 +105,19 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
       %{state | messages: updated_messages}
     end
 
-    def deliverable_messages(%State{} = state, count) do
+    # TODO: implement group_id for message_kind: :event
+    def deliverable_messages(%State{} = state, count) when event_messages?(state) do
+      now = DateTime.utc_now()
+
+      state.messages
+      |> Map.values()
+      |> Enum.sort_by(& &1.seq)
+      |> Sequin.Enum.take_until(count, fn msg ->
+        is_nil(msg.not_visible_until) or DateTime.before?(msg.not_visible_until, now)
+      end)
+    end
+
+    def deliverable_messages(%State{} = state, count) when record_messages?(state) do
       now = DateTime.utc_now()
 
       undeliverable_group_ids =
@@ -191,7 +204,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   """
   @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok
   def put_messages(consumer_id, messages) do
-    GenServer.call(via_tuple(consumer_id), {:messages, messages})
+    GenServer.call(via_tuple(consumer_id), {:put_messages, messages})
   end
 
   @doc """
@@ -206,9 +219,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   @doc """
   Acknowledges messages as successfully processed using their ack_ids.
   """
-  @spec ack(consumer_id(), list(ack_id())) :: :ok
-  def ack(consumer_id, ack_ids) do
-    GenServer.call(via_tuple(consumer_id), {:ack, ack_ids})
+  @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok
+  def ack(consumer, ack_ids) do
+    # Delete from database right away
+    # TODO: We need to respect pending_redelivery on consumer records
+    # TODO: We can greatly simplify this call now by just deleting events and records
+    Consumers.ack_messages(consumer, ack_ids)
+
+    GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})
   end
 
   @doc """
@@ -226,7 +244,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
       consumer_id: Keyword.fetch!(opts, :consumer_id),
       messages: %{},
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(10)),
-      flush_batch_size: Keyword.get(opts, :flush_batch_size, 10_000)
+      flush_batch_size: Keyword.get(opts, :flush_batch_size, 10_000),
+      test_pid: Keyword.get(opts, :test_pid)
     }
 
     {:ok, state, {:continue, :init}}
@@ -234,6 +253,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
 
   @impl GenServer
   def handle_continue(:init, %State{} = state) do
+    # Allow test process to access the database connection
+    if state.test_pid do
+      Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
+    end
+
     schedule_flush(state)
 
     case Consumers.get_consumer(state.consumer_id) do
@@ -248,10 +272,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:messages, messages}, _from, %State{} = state) do
+  def handle_call({:put_messages, messages}, _from, %State{} = state) do
     messages =
       messages
-      |> Enum.map(fn msg -> %{msg | dirty: true} end)
+      |> Stream.map(fn msg -> %{msg | ack_id: UUID.uuid4(), dirty: true} end)
       |> Map.new(&{&1.record_pks, &1})
 
     state = State.put_messages(state, messages)
@@ -264,18 +288,33 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     deliverable_messages = State.deliverable_messages(state, count)
     {state, messages} = State.deliver_messages(state, deliverable_messages)
 
-    {:reply, {:ok, messages}, state}
+    if state.consumer.message_kind == :record do
+      with {:ok, messages} <- Consumers.put_source_data(state.consumer, messages) do
+        # Split messages into valid and nil records
+        {valid_messages, nil_messages} = Enum.split_with(messages, &(&1.data.record != nil))
+
+        # Remove nil messages from state
+        nil_message_pks = Enum.map(nil_messages, & &1.record_pks)
+        state = %{state | messages: Map.drop(state.messages, nil_message_pks)}
+
+        if Enum.any?(nil_messages) do
+          Logger.info("Removed #{length(nil_messages)} messages with nil data.record from in-memory store")
+        end
+
+        {:reply, {:ok, valid_messages}, state}
+      end
+    else
+      {:reply, {:ok, messages}, state}
+    end
   end
 
   def handle_call({:ack, ack_ids}, _from, state) do
-    # Delete from database right away
-    # TODO: We need to respect pending_redelivery on consumer records
-    # TODO: We can greatly simplify this call now by just deleting events and records
-    Consumers.ack_messages(state.consumer, ack_ids)
-
     # Delete from in-memory store
     id_set = MapSet.new(ack_ids)
 
+    # TODO: optimize this with a secondary index on ack_id?
+    # with 100k messages, this takes 230 ms
+    # with 1M messages, this takes 3 seconds
     messages =
       state.messages
       |> Map.values()
@@ -286,10 +325,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   end
 
   def handle_call({:nack, ack_ids_with_not_visible_until}, _from, state) do
+    # TODO: optimize this with a secondary index on ack_id?
     # Update messages with matching ack_ids to set their not_visible_until and state
     updated_messages =
       Map.new(state.messages, fn {record_pks, msg} ->
-        if not_visible_until = ack_ids_with_not_visible_until[msg.ack_id] do
+        if not_visible_until = Map.get(ack_ids_with_not_visible_until, msg.ack_id) do
           msg = %{msg | not_visible_until: not_visible_until, state: :available, dirty: true}
           {record_pks, msg}
         else

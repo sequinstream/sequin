@@ -957,7 +957,7 @@ defmodule Sequin.Consumers do
                   |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
                   |> Enum.map(&to_string/1)
 
-                pk_values == record.record_pks
+                pk_values == Enum.map(record.record_pks, &to_string/1)
               end)
             end
 

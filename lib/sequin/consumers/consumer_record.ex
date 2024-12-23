@@ -32,7 +32,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :state, Ecto.Enum, values: [:available, :acked, :delivered, :pending_redelivery], default: :available
 
     field :ack_id, Ecto.UUID, read_after_writes: true
-    field :deliver_count, :integer
+    field :deliver_count, :integer, default: 0
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
     field :replication_message_trace_id, Ecto.UUID

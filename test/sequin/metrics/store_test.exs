@@ -22,10 +22,10 @@ defmodule Sequin.Metrics.StoreTest do
 
     test "incr_avg", ctx do
       assert Store.incr_avg(ctx.key, 10) == :ok
-      assert Store.get_avg(ctx.key) == {:ok, 10}
+      assert Store.get_avg(ctx.key) == {:ok, 10.0}
 
       assert Store.incr_avg(ctx.key, 20) == :ok
-      assert Store.get_avg(ctx.key) == {:ok, 15}
+      assert Store.get_avg(ctx.key) == {:ok, 15.0}
     end
   end
 

@@ -11,9 +11,7 @@ defmodule Sequin.Redis do
     {Redix, {url, opts}}
   end
 
-  @spec command(Redix.command(), keyword()) ::
-          {:ok, Redix.Protocol.redis_value()}
-          | {:error, Error.t()}
+  @spec command(Redix.command(), keyword()) :: {:ok, Redix.Protocol.redis_value()} | {:error, Error.t()}
   def command(command, opts \\ []) do
     case Redix.command(__MODULE__, command, opts) do
       {:ok, value} -> {:ok, value}
@@ -25,13 +23,11 @@ defmodule Sequin.Redis do
   def command!(command, opts \\ []) do
     case command(command, opts) do
       {:ok, value} -> value
-      {:error, error} -> raise to_sequin_error(error)
+      {:error, error} -> raise error
     end
   end
 
-  @spec pipeline([Redix.command()], keyword()) ::
-          {:ok, [Redix.Protocol.redis_value()]}
-          | {:error, Error.t()}
+  @spec pipeline([Redix.command()], keyword()) :: {:ok, [Redix.Protocol.redis_value()]} | {:error, Error.t()}
   def pipeline(commands, opts \\ []) do
     case Redix.pipeline(__MODULE__, commands, opts) do
       {:ok, values} -> {:ok, values}
@@ -43,7 +39,7 @@ defmodule Sequin.Redis do
     Error.service(
       service: :redis,
       message: "Redis connection error: #{Exception.message(error)}",
-      code: :connection_error
+      code: "connection_error"
     )
   end
 
@@ -51,7 +47,7 @@ defmodule Sequin.Redis do
     Error.service(
       service: :redis,
       message: "Redis error: #{Exception.message(error)}",
-      code: :command_error
+      code: "command_error"
     )
   end
 
@@ -59,7 +55,7 @@ defmodule Sequin.Redis do
     Error.service(
       service: :redis,
       message: "Redis error: #{error}",
-      code: error
+      code: "command_error"
     )
   end
 end

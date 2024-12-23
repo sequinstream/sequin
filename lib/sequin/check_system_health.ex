@@ -13,7 +13,7 @@ defmodule Sequin.CheckSystemHealth do
          {:ok, "PONG"} <- Redis.command(["PING"]) do
       :ok
     else
-      {:error, %Error.ServiceError{service: :redis, code: :connection_error} = error} ->
+      {:error, %Error.ServiceError{service: :redis, code: "connection_error"} = error} ->
         {redis_url, _opts} = Application.get_env(:redix, :start_opts)
         %{host: redis_host, port: redis_port} = URI.parse(redis_url)
 
@@ -29,7 +29,7 @@ defmodule Sequin.CheckSystemHealth do
            )}
         else
           {:error, %ValidationError{} = error} ->
-            {:error, Error.service(service: :redis, message: Exception.message(error), code: :tcp_reachability_error)}
+            {:error, Error.service(service: :redis, message: Exception.message(error), code: "tcp_reachability_error")}
         end
 
       {:error, %Postgrex.Error{} = error} ->
@@ -52,10 +52,9 @@ defmodule Sequin.CheckSystemHealth do
             {:error, Error.service(service: :postgres, message: Exception.message(error))}
         end
 
-      error ->
-        Logger.error("Unknown error while checking system health: #{inspect(error)}")
-        message = if is_exception(error), do: Exception.message(error), else: inspect(error)
-        {:error, Error.service(service: :sequin, message: message, details: error)}
+      {:error, error} ->
+        Logger.error("Unknown error while checking system health: #{Exception.message(error)}")
+        {:error, Error.service(service: :sequin, message: Exception.message(error), details: error)}
     end
   end
 end

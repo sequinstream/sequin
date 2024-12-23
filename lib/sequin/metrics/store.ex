@@ -2,23 +2,20 @@ defmodule Sequin.Metrics.Store do
   @moduledoc false
 
   alias Sequin.Redis
+
   # Count functions
   def incr_count(key, amount \\ 1) do
-    ["INCRBY", "metrics:count:#{key}", amount]
-    |> Redis.command()
-    |> case do
+    case Redis.command(["INCRBY", "metrics:count:#{key}", amount]) do
       {:ok, _} -> :ok
-      error -> error
+      {:error, error} -> {:error, error}
     end
   end
 
   def get_count(key) do
-    ["GET", "metrics:count:#{key}"]
-    |> Redis.command()
-    |> case do
+    case Redis.command(["GET", "metrics:count:#{key}"]) do
       {:ok, nil} -> {:ok, 0}
       {:ok, value} -> {:ok, String.to_integer(value)}
-      error -> error
+      {:error, error} -> {:error, error}
     end
   end
 
@@ -31,22 +28,20 @@ defmodule Sequin.Metrics.Store do
     |> Redis.pipeline()
     |> case do
       {:ok, _} -> :ok
-      error -> error
+      {:error, error} -> {:error, error}
     end
   end
 
   def get_avg(key) do
-    ["HMGET", "metrics:avg:#{key}", "total", "count"]
-    |> Redis.command()
-    |> case do
+    case Redis.command(["HMGET", "metrics:avg:#{key}", "total", "count"]) do
       {:ok, [total, count]} when is_binary(total) and is_binary(count) ->
         {:ok, String.to_integer(total) / String.to_integer(count)}
 
       {:ok, _} ->
         {:ok, nil}
 
-      error ->
-        error
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -64,7 +59,7 @@ defmodule Sequin.Metrics.Store do
     |> Redis.pipeline()
     |> case do
       {:ok, _} -> :ok
-      error -> error
+      {:error, error} -> {:error, error}
     end
   end
 
@@ -74,9 +69,7 @@ defmodule Sequin.Metrics.Store do
     buckets = Enum.to_list((now - @instant_throughput_window + 1)..now)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
-    commands
-    |> Redis.pipeline()
-    |> case do
+    case Redis.pipeline(commands) do
       {:ok, results} ->
         sum =
           results
@@ -85,8 +78,8 @@ defmodule Sequin.Metrics.Store do
 
         {:ok, sum / @instant_throughput_window}
 
-      error ->
-        error
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -102,14 +95,12 @@ defmodule Sequin.Metrics.Store do
     buckets = Enum.to_list((most_recent_full_window - window_count + 1)..most_recent_full_window)
     commands = Enum.map(buckets, &["GET", "metrics:throughput:#{key}:#{&1}"])
 
-    commands
-    |> Redis.pipeline()
-    |> case do
+    case Redis.pipeline(commands) do
       {:ok, results} ->
         {:ok, Enum.map(results, &String.to_integer(&1 || "0"))}
 
-      error ->
-        error
+      {:error, error} ->
+        {:error, error}
     end
   end
 end

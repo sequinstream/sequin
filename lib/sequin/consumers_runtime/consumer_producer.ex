@@ -7,6 +7,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
+  alias Sequin.ConsumersRuntime.ConsumerIdempotency
+  alias Sequin.Postgres
   alias Sequin.Time
 
   require Logger
@@ -26,6 +28,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       demand: 0,
       consumer: consumer,
       receive_timer: nil,
+      trim_timer: nil,
       batch_size: Keyword.get(opts, :batch_size, 10),
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
@@ -33,6 +36,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     }
 
     state = schedule_receive_messages(state)
+    state = schedule_trim_idempotency(state)
 
     {:producer, state}
   end
@@ -62,12 +66,39 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], new_state}
   end
 
+  @impl GenStage
+  def handle_info(:trim_idempotency, state) do
+    case Postgres.confirmed_flush_lsn(state.consumer.database) do
+      {:ok, nil} ->
+        :ok
+
+      {:ok, lsn} ->
+        ConsumerIdempotency.trim(state.consumer.id, lsn)
+
+      {:error, error} ->
+        Logger.error("Error trimming idempotency seqs", error: error)
+    end
+
+    {:noreply, [], schedule_trim_idempotency(state)}
+  end
+
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
     {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand * state.batch_size)
 
     Logger.debug(
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
     )
+
+    seqs_to_deliver = Enum.map(messages, & &1.seq)
+    {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
+    messages = Enum.reject(messages, &(&1.seq in delivered_seqs))
+
+    unless delivered_seqs == [] do
+      Logger.warning(
+        "Received #{length(delivered_seqs)} messages for consumer #{state.consumer.id} that have already been delivered",
+        seqs: delivered_seqs
+      )
+    end
 
     broadway_messages =
       messages
@@ -94,16 +125,25 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     %{state | receive_timer: receive_timer}
   end
 
+  defp schedule_trim_idempotency(state) do
+    trim_timer = Process.send_after(self(), :trim_idempotency, :timer.seconds(30))
+    %{state | trim_timer: trim_timer}
+  end
+
   @impl Broadway.Producer
-  def prepare_for_draining(%{receive_timer: receive_timer} = state) do
+  def prepare_for_draining(%{receive_timer: receive_timer, trim_timer: trim_timer} = state) do
     if receive_timer, do: Process.cancel_timer(receive_timer)
-    {:noreply, [], %{state | receive_timer: nil}}
+    if trim_timer, do: Process.cancel_timer(trim_timer)
+    {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
   @exponential_backoff_max :timer.minutes(3)
   def ack({consumer, test_pid}, successful, failed) do
-    successful_ids = successful |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-    failed_ids = failed |> Enum.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
+    successful_seqs = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.seq)
+    :ok = ConsumerIdempotency.mark_messages_delivered(consumer.id, successful_seqs)
+
+    successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
+    failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
 
     if test_pid do
       Sandbox.allow(Sequin.Repo, test_pid, self())

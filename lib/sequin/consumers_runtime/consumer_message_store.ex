@@ -357,17 +357,21 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   end
 
   defp flush_messages(%State{} = state, messages) when event_messages?(state) do
-    Consumers.upsert_consumer_events(messages)
-    messages = Enum.map(messages, fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
-    state = State.update_messages(state, messages)
-    state
+    {:ok, _count} = Consumers.upsert_consumer_events(messages)
+
+    flushed_at = DateTime.utc_now()
+    messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
+
+    State.update_messages(state, messages)
   end
 
   defp flush_messages(%State{} = state, messages) when record_messages?(state) do
-    Consumers.upsert_consumer_records(messages)
-    messages = Enum.map(messages, fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
-    state = State.update_messages(state, messages)
-    state
+    {:ok, _count} = Consumers.upsert_consumer_records(messages)
+
+    flushed_at = DateTime.utc_now()
+    messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
+
+    State.update_messages(state, messages)
   end
 
   defp schedule_flush(%State{} = state) do

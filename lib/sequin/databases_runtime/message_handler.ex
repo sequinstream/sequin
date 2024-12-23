@@ -256,6 +256,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       seq: message.seq,
+      deleted: message.action == :delete,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,

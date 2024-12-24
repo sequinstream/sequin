@@ -62,7 +62,10 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   def count_messages(consumer_id) do
     key = "acknowledged_messages:#{consumer_id}"
 
-    Redis.command(["ZCARD", key])
+    case Redis.command(["ZCARD", key]) do
+      {:ok, count} -> {:ok, String.to_integer(count)}
+      error -> error
+    end
   end
 
   defp to_acknowledged_message(%ConsumerRecord{} = record) do

@@ -51,7 +51,10 @@ config :sequin, Oban,
 # For production it's recommended to configure a different adapter
 # at the `config/runtime.exs`.
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Local
-config :sequin, Sequin.Redis, url: "redis://localhost:6379"
+
+config :sequin, Sequin.Redis,
+  url: "redis://localhost:6379",
+  reconnect_sleep: :timer.seconds(5)
 
 config :sequin, Sequin.Repo,
   config_schema_prefix: sequin_config_schema,

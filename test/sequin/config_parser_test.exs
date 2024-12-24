@@ -3,38 +3,38 @@ defmodule Sequin.ConfigParserTest do
 
   alias Sequin.ConfigParser
 
-  describe "redis_url/1" do
-    test "returns URL when REDIS_URL is set" do
+  describe "redis_config/1" do
+    test "returns basic config when only REDIS_URL is set" do
       env = valid_redis_config()
-      assert ConfigParser.redis_url(env) == "redis://localhost:6379"
+
+      assert ConfigParser.redis_config(env)[:url] == "redis://localhost:6379"
+      assert ConfigParser.redis_config(env)[:socket_options] == []
+      refute ConfigParser.redis_config(env)[:tls]
     end
 
     test "raises error when REDIS_URL is not set" do
       assert_raise RuntimeError, ~r/REDIS_URL is not set/, fn ->
-        ConfigParser.redis_url(%{})
+        ConfigParser.redis_config(%{})
       end
-    end
-  end
-
-  describe "redis_opts/1" do
-    test "returns default options when no env vars set" do
-      assert ConfigParser.redis_opts(valid_redis_config()) == [socket_opts: []]
     end
 
     test "configures SSL for valid SSL settings" do
       for ssl_value <- ["true", "1", "verify-none"] do
         env = valid_redis_config(%{"REDIS_SSL" => ssl_value})
-        opts = ConfigParser.redis_opts(env)
+        config = ConfigParser.redis_config(env)
 
-        assert opts[:ssl] == true
-        assert opts[:socket_opts] == [verify: :verify_none]
+        assert config[:url] == "redis://localhost:6379"
+        assert config[:tls] == [verify: :verify_none]
       end
     end
 
     test "does not configure SSL for disabled SSL settings" do
       for ssl_value <- ["false", "0"] do
         env = valid_redis_config(%{"REDIS_SSL" => ssl_value})
-        assert ConfigParser.redis_opts(env) == [socket_opts: []]
+        config = ConfigParser.redis_config(env)
+
+        assert config[:url] == "redis://localhost:6379"
+        refute config[:tls]
       end
     end
 
@@ -42,39 +42,16 @@ defmodule Sequin.ConfigParserTest do
       env = valid_redis_config(%{"REDIS_SSL" => "invalid"})
 
       assert_raise RuntimeError, ~r/REDIS_SSL must be true, 1, verify-none, false, or 0/, fn ->
-        ConfigParser.redis_opts(env)
+        ConfigParser.redis_config(env)
       end
     end
 
     test "enables SSL when URL starts with rediss://" do
       env = valid_redis_config(%{"REDIS_URL" => "rediss://localhost:6379"})
-      opts = ConfigParser.redis_opts(env)
+      config = ConfigParser.redis_config(env)
 
-      assert opts[:ssl] == true
-      assert opts[:socket_opts] == [verify: :verify_none]
-    end
-
-    test "configures IPv6 for valid IPv6 settings" do
-      for ipv6_value <- ["true", "1"] do
-        env = valid_redis_config(%{"REDIS_IPV6" => ipv6_value})
-        opts = ConfigParser.redis_opts(env)
-
-        assert :inet6 in opts[:socket_opts]
-      end
-    end
-
-    test "combines SSL and IPv6 options when both enabled" do
-      env =
-        valid_redis_config(%{
-          "REDIS_SSL" => "true",
-          "REDIS_IPV6" => "true"
-        })
-
-      opts = ConfigParser.redis_opts(env)
-
-      assert opts[:ssl] == true
-      assert :inet6 in opts[:socket_opts]
-      assert {:verify, :verify_none} in opts[:socket_opts]
+      assert config[:url] == "rediss://localhost:6379"
+      assert config[:tls] == [verify: :verify_none]
     end
   end
 

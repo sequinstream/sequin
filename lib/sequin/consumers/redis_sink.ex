@@ -67,6 +67,28 @@ defmodule Sequin.Consumers.RedisSink do
     "#{protocol(sink)}#{auth}#{sink.host}:#{sink.port}/#{sink.database}"
   end
 
+  def start_opts(%RedisSink{} = sink) do
+    # https://hexdocs.pm/eredis/eredis.html#start_link-1
+    [
+      host: to_charlist(sink.host),
+      port: sink.port,
+      reconnect_sleep: :timer.seconds(30),
+      database: sink.database
+    ]
+    |> maybe_put_tls(sink)
+    |> maybe_put_username(sink)
+    |> maybe_put_password(sink)
+  end
+
+  defp maybe_put_tls(opts, %RedisSink{tls: true}), do: Keyword.put(opts, :tls, verify: :verify_none)
+  defp maybe_put_tls(opts, _), do: opts
+
+  defp maybe_put_username(opts, %RedisSink{username: nil}), do: opts
+  defp maybe_put_username(opts, %RedisSink{username: username}), do: Keyword.put(opts, :username, username)
+
+  defp maybe_put_password(opts, %RedisSink{password: nil}), do: opts
+  defp maybe_put_password(opts, %RedisSink{password: password}), do: Keyword.put(opts, :password, password)
+
   defp build_auth_string(%RedisSink{username: nil, password: nil}, _obscure), do: ""
 
   defp build_auth_string(%RedisSink{username: nil, password: password}, obscure) do

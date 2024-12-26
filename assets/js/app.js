@@ -58,6 +58,9 @@ let csrfToken = document
   .getAttribute("content");
 let liveSocket = new LiveSocket("/live", Socket, {
   hooks: getHooks(Components),
+  longPollFallbackMs: parseInt(
+    document.querySelector("body").getAttribute("data-long-poll-fallback-ms"),
+  ),
   params: { _csrf_token: csrfToken },
 });
 

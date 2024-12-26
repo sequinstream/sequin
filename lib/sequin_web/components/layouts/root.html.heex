@@ -33,6 +33,9 @@
         Application.get_env(:sequin, :koala, [])[:public_key]
       end
     }
+    data-long-poll-fallback-ms={
+      Application.get_env(:sequin, SequinWeb.Endpoint)[:live_view][:long_poll_fallback_ms]
+    }
   >
     <.svelte name="components/Toaster" />
     <%= if @current_user && @current_user.impersonating_user do %>

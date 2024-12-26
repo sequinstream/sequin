@@ -76,7 +76,7 @@ config :sequin, SequinWeb.Endpoint,
     layout: false
   ],
   pubsub_server: Sequin.PubSub,
-  live_view: [signing_salt: "Sm59ovfq"]
+  live_view: [signing_salt: "Sm59ovfq", long_poll_fallback_ms: 3000]
 
 config :sequin, SequinWeb.UserSessionController,
   github: [

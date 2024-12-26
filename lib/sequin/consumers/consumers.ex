@@ -373,8 +373,8 @@ defmodule Sequin.Consumers do
     now = DateTime.utc_now()
 
     events =
-      Enum.map(consumer_events, fn event ->
-        event |> Map.merge(%{updated_at: now, inserted_at: now}) |> ConsumerEvent.from_map() |> Sequin.Map.from_ecto()
+      Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
+        Sequin.Map.from_ecto(%ConsumerEvent{event | updated_at: now, inserted_at: now})
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
@@ -383,7 +383,7 @@ defmodule Sequin.Consumers do
         ConsumerEvent,
         events,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :commit_lsn]
+        conflict_target: [:consumer_id, :id]
       )
 
     # Broadcast messages ingested to consumers for ie. push consumers
@@ -578,11 +578,8 @@ defmodule Sequin.Consumers do
 
     records =
       consumer_records
-      |> Enum.map(fn record ->
-        record
-        |> Map.put(:inserted_at, now)
-        |> Map.put(:updated_at, now)
-        |> ConsumerRecord.from_map()
+      |> Enum.map(fn %ConsumerRecord{} = record ->
+        %ConsumerRecord{record | updated_at: now, inserted_at: now}
       end)
       |> Enum.sort_by(& &1.commit_lsn, :desc)
       |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})

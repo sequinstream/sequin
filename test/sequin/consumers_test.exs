@@ -3279,4 +3279,62 @@ defmodule Sequin.ConsumersTest do
       assert db_record.state == :delivered
     end
   end
+
+  describe "upsert_consumer_events/1" do
+    test "inserts a new consumer event" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      event = ConsumersFactory.consumer_event(consumer_id: consumer.id)
+
+      assert {:ok, 1} = Consumers.upsert_consumer_events([event])
+
+      inserted_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
+      assert inserted_event
+      assert inserted_event.ack_id == event.ack_id
+    end
+
+    test "updates existing consumer event" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      existing_event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+
+      updated_attrs = %ConsumerEvent{
+        existing_event
+        | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+      }
+
+      assert {:ok, 1} = Consumers.upsert_consumer_events([updated_attrs])
+
+      updated_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
+      assert updated_event
+      refute updated_event.not_visible_until == existing_event.not_visible_until
+    end
+  end
+
+  describe "upsert_consumer_records/1" do
+    test "inserts a new consumer record" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      record = ConsumersFactory.consumer_record(consumer_id: consumer.id)
+
+      assert {:ok, 1} = Consumers.upsert_consumer_records([record])
+
+      inserted_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
+      assert inserted_record
+      assert inserted_record.ack_id == record.ack_id
+    end
+
+    test "updates existing consumer record" do
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+
+      updated_record = %ConsumerRecord{
+        existing_record
+        | state: :delivered
+      }
+
+      assert {:ok, 1} = Consumers.upsert_consumer_records([updated_record])
+
+      updated_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
+      assert updated_record
+      assert updated_record.state == :delivered
+    end
+  end
 end

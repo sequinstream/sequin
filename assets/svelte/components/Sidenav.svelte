@@ -279,6 +279,19 @@
               {/each}
             </Command.Group>
             <Command.Separator />
+            <Command.Group heading="User settings">
+              <a
+                href="/users/settings"
+                data-phx-link="redirect"
+                data-phx-link-state="push"
+              >
+                <Command.Item class="cursor-pointer">
+                  <Cog class="mr-2 h-4 w-4" />
+                  <span>Manage user</span>
+                </Command.Item>
+              </a>
+            </Command.Group>
+            <Command.Separator />
             <Command.Group heading="Account settings">
               <Command.Item
                 onSelect={() => openCreateAccount()}

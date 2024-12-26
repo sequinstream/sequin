@@ -204,8 +204,14 @@ defmodule Sequin.Accounts do
       %Ecto.Changeset{data: %User{}}
 
   """
-  def change_user_email(%User{auth_provider: :identity} = user, attrs \\ %{}) do
+  def change_user_email(user, attrs \\ %{})
+
+  def change_user_email(%User{auth_provider: :identity} = user, attrs) do
     User.email_changeset(user, attrs, validate_email: false)
+  end
+
+  def change_user_email(%User{auth_provider: :github} = user, attrs) do
+    user |> User.email_changeset(attrs) |> Ecto.Changeset.add_error(:email, "GitHub users cannot change their email")
   end
 
   @doc """
@@ -283,8 +289,16 @@ defmodule Sequin.Accounts do
       %Ecto.Changeset{data: %User{}}
 
   """
-  def change_user_password(%User{auth_provider: :identity} = user, attrs \\ %{}) do
+  def change_user_password(user, attrs \\ %{})
+
+  def change_user_password(%User{auth_provider: :identity} = user, attrs) do
     User.password_changeset(user, attrs, hash_password: false)
+  end
+
+  def change_user_password(%User{auth_provider: :github} = user, attrs) do
+    user
+    |> User.password_changeset(attrs)
+    |> Ecto.Changeset.add_error(:password, "GitHub users cannot change their password")
   end
 
   @doc """

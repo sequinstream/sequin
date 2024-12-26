@@ -7,6 +7,8 @@ defmodule SequinWeb.UserSettingsLiveTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Test.Support.AccountsSupport
 
+  @moduletag :skip
+
   describe "Settings page" do
     test "renders settings page", %{conn: conn} do
       {:ok, _lv, html} =

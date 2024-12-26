@@ -391,7 +391,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         record: record,
         changes: changes,
         action: action,
-        metadata: %{
+        metadata: %ConsumerEventData.Metadata{
           database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
@@ -408,6 +408,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.new()
     |> consumer_event_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
+    |> Map.update!(:metadata, fn metadata ->
+      Sequin.Map.from_ecto(metadata)
+    end)
   end
 
   def consumer_event_attrs(attrs \\ []) do
@@ -553,7 +556,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
     |> Map.update!(:metadata, fn metadata ->
-      Map.from_struct(metadata)
+      Sequin.Map.from_ecto(metadata)
     end)
   end
 

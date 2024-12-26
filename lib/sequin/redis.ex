@@ -96,6 +96,7 @@ defmodule Sequin.Redis do
   end
 
   defp parse_result({:ok, :undefined}), do: {:ok, nil}
+  defp parse_result({:ok, result}) when is_list(result), do: {:ok, Enum.reject(result, &(&1 == :undefined))}
   defp parse_result(result), do: result
 
   defp config do

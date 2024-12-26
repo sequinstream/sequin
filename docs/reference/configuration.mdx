@@ -85,6 +85,11 @@ See [secret generation](#secret-generation) for how to generate these values.
 - `SEQUIN_TELEMETRY_DISABLED`: Disable telemetry data collection (default: false)
   - Sequin collects telemetry data by default. While we're early, this **greatly** helps us improve the product. To opt-out, set this to `true`.
 
+### Networking configuration
+
+- `LONG_POLL_FALLBACK_MS`: Long poll fallback time in milliseconds (default: 3000)
+  - This is the duration that Sequin will wait for a healthy websocket connection before falling back to HTTP long polling. If your network configuration disallows websocket connections, you should set this to a low value (e.g. 100ms).
+
 ### Clustering configuration
 
 You can cluster Sequin nodes in an active-passive configuration for high availability. See [Active-passive architecture](#active-passive-architecture) for more information.

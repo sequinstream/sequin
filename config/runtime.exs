@@ -129,7 +129,10 @@ if config_env() == :prod and self_hosted do
       ip: {0, 0, 0, 0, 0, 0, 0, 0},
       port: server_port
     ],
-    secret_key_base: secret_key_base
+    secret_key_base: secret_key_base,
+    live_view: [
+      long_poll_fallback_ms: String.to_integer(System.get_env("LONG_POLL_FALLBACK_MS", "3000"))
+    ]
 
   config :sequin, :features,
     account_self_signup: account_self_signup,

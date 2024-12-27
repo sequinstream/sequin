@@ -2,11 +2,9 @@ defmodule Sequin.Redis do
   @moduledoc false
   alias Sequin.Error
 
-  @config Application.compile_env(:sequin, __MODULE__, [])
-
   def child_spec do
-    url = Keyword.fetch!(@config, :url)
-    opts = Keyword.get(@config, :opts, [])
+    url = Keyword.fetch!(config(), :url)
+    opts = Keyword.get(config(), :opts, [])
     opts = [name: __MODULE__] ++ opts
     {Redix, {url, opts}}
   end
@@ -58,4 +56,6 @@ defmodule Sequin.Redis do
       code: "command_error"
     )
   end
+
+  defp config, do: Application.get_env(:sequin, __MODULE__, [])
 end

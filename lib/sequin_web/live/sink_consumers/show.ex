@@ -547,6 +547,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :nats,
       host: sink.host,
       port: sink.port,
+      username: sink.username,
+      password: sink.password,
       connection_id: sink.connection_id
     }
   end

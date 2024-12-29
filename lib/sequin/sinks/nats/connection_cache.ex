@@ -78,7 +78,7 @@ defmodule Sequin.Sinks.Nats.ConnectionCache do
     end
 
     defp options_hash(sink) do
-      :erlang.phash2({sink.host, sink.port})
+      :erlang.phash2({sink.host, sink.port, sink.username})
     end
   end
 
@@ -164,10 +164,18 @@ defmodule Sequin.Sinks.Nats.ConnectionCache do
       #   optional(:no_responders) => boolean()
       # }
 
-      Gnat.start_link(%{
-        host: sink.host,
-        port: sink.port
-      })
+      %{host: sink.host, port: sink.port}
+      |> put_opt_key(:username, sink.username)
+      |> put_opt_key(:password, sink.password)
+      |> Gnat.start_link()
+    end
+
+    defp put_opt_key(opts, key, value) when is_binary(value) do
+      Map.put(opts, key, value)
+    end
+
+    defp put_opt_key(opts, _key, _value) do
+      opts
     end
   end
 

@@ -74,6 +74,8 @@ export type NatsConsumer = BaseConsumer & {
     host: string;
     port: number;
     subject: string;
+    username: string;
+    password: string;
   };
 };
 

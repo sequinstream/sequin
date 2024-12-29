@@ -7,6 +7,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
+  alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -212,6 +213,16 @@ defmodule Sequin.Transforms do
       project_id: sink.project_id,
       topic_id: sink.topic_id,
       credentials: "(credentials present) - sha256sum: #{sha256sum(sink.credentials)}"
+    })
+  end
+
+  def to_external(%NatsSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "nats",
+      host: sink.host,
+      port: sink.port,
+      username: sink.username,
+      password: maybe_obfuscate(sink.password, show_sensitive)
     })
   end
 

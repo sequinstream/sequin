@@ -5,12 +5,19 @@ defmodule Sequin.Consumers.NatsSink do
 
   import Ecto.Changeset
 
+  # TODO: rename `Sequin.Encrypted.Field` to `Sequin.Ecto.EncryptedField`
+  #  Notice the `as: EncryptedField` anti-pattern. The most siginficant bit of
+  #  information in Elixir is at the end..
+  alias Sequin.Encrypted.Field, as: EncryptedField
+
   @derive {Jason.Encoder, only: [:host, :port]}
   @primary_key false
   typed_embedded_schema do
     field :type, Ecto.Enum, values: [:nats], default: :nats
     field :host, :string
     field :port, :integer
+    field :username, :string
+    field :password, EncryptedField
     field :connection_id, :string
   end
 
@@ -18,7 +25,9 @@ defmodule Sequin.Consumers.NatsSink do
     struct
     |> cast(params, [
       :host,
-      :port
+      :port,
+      :username,
+      :password
     ])
     |> validate_required([:host, :port])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
@@ -35,7 +44,9 @@ defmodule Sequin.Consumers.NatsSink do
   def connection_opts(%__MODULE__{} = sink) do
     %{
       host: sink.host,
-      port: sink.port
+      port: sink.port,
+      username: sink.username,
+      password: sink.password
     }
   end
 

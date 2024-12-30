@@ -359,6 +359,12 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def get_major_pg_version(%PostgresDatabase{} = database) do
+    with_uncached_connection(database, fn conn ->
+      Postgres.get_major_pg_version(conn)
+    end)
+  end
+
   defp validate_slot_status(:not_found, slot_name) do
     {:error,
      Error.validation(summary: "Replication slot '#{slot_name}' does not exist", code: :replication_slot_not_found)}

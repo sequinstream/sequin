@@ -66,7 +66,7 @@
   export let showSupabasePoolerPrompt: boolean = false;
   export let api_tokens: any[];
   export let showLocalTunnelPrompt: boolean = true;
-
+  export let showPgVersionWarning: boolean = false;
   let form = { ...database, ssl: true }; // Set default SSL to true
 
   const isEdit = !!form.id;
@@ -709,6 +709,25 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
 
         {#if validating}
           <Progress class="mt-4" value={$progress} />
+        {/if}
+
+        {#if showPgVersionWarning}
+          <Alert variant="destructive">
+            <AlertCircle class="h-4 w-4" />
+            <AlertTitle>Unsupported PostgreSQL version</AlertTitle>
+            <AlertDescription>
+              Sequin requires PostgreSQL 14 or higher. If you need support for
+              an earlier version of Postgres, please
+              <a
+                href="https://github.com/sequinstream/sequin/issues/789"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center text-link hover:underline"
+              >
+                see this GitHub issue</a
+              >.
+            </AlertDescription>
+          </Alert>
         {/if}
 
         {#if testConnectionState.status === "error"}

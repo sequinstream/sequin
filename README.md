@@ -56,7 +56,7 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 - **Never miss a change:** Sequin ensures all database changes are delivered to sinks.
 - **SQL-based routing:** Filter and route messages to sinks using SQL `where` conditions.
 - **Backfills:** Backfill existing rows from your tables to sinks.
-- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 12\+.
+- **Bring your database:** Sequin is not an extension. It works with any Postgres database version 14\+.
 - **Transforms** \(coming soon\!\): Transform message payloads by writing functions in Lua, JavaScript, or Go.
 
 ## Change data capture use cases

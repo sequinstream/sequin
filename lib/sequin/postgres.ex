@@ -165,6 +165,16 @@ defmodule Sequin.Postgres do
     end
   end
 
+  def get_major_pg_version(conn) do
+    with {:ok, %{rows: [[version]]}} <- query(conn, "select version()") do
+      # Extract major version number from version string
+      case Regex.run(~r/PostgreSQL (\d+)/, version) do
+        [_, major_version] -> {:ok, String.to_integer(major_version)}
+        _ -> {:error, Error.service(message: "Could not parse PostgreSQL version", service: :postgres)}
+      end
+    end
+  end
+
   def pg_type_to_ecto_type(pg_type) do
     case pg_type do
       "integer" -> :integer

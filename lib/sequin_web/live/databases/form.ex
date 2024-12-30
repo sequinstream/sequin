@@ -39,7 +39,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             database: database,
             api_tokens: api_tokens,
             allocated_bastion_port: nil,
-            update_allocated_bastion_port_timer: nil
+            update_allocated_bastion_port_timer: nil,
+            pg_major_version: nil
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
@@ -89,6 +90,7 @@ defmodule SequinWeb.DatabasesLive.Form do
         }
       )
       |> assign(:show_local_tunnel_prompt, not Application.get_env(:sequin, :self_hosted))
+      |> assign(:show_pg_version_warning, assigns.pg_major_version && assigns.pg_major_version < 14)
 
     ~H"""
     <div id={@parent_id}>
@@ -103,7 +105,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             submitError: @submit_error,
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
             api_tokens: @api_tokens,
-            showLocalTunnelPrompt: @show_local_tunnel_prompt
+            showLocalTunnelPrompt: @show_local_tunnel_prompt,
+            showPgVersionWarning: @show_pg_version_warning
           }
         }
       />
@@ -128,10 +131,10 @@ defmodule SequinWeb.DatabasesLive.Form do
   def handle_event("test_connection", %{"form" => form}, socket) do
     params = decode_params(form)
 
-    case test_db_conn(params, socket) do
-      :ok ->
-        {:reply, %{ok: true}, socket}
-
+    with :ok <- test_db_conn(params, socket),
+         {:ok, major_version} <- Databases.get_major_pg_version(params_to_db(params, socket)) do
+      {:reply, %{ok: true}, assign(socket, :pg_major_version, major_version)}
+    else
       {:error, error} ->
         {:reply, %{ok: false, error: error_msg(error, false)}, socket}
     end
@@ -372,12 +375,7 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   defp test_db_conn(params, socket) do
-    db =
-      params["database"]
-      |> put_ipv6()
-      |> Sequin.Map.atomize_keys()
-      |> Map.put(:account_id, current_account_id(socket))
-      |> then(&struct(PostgresDatabase, &1))
+    db = params_to_db(params, socket)
 
     replication_slot =
       params["replication_slot"]
@@ -389,6 +387,14 @@ defmodule SequinWeb.DatabasesLive.Form do
          :ok <- Databases.test_permissions(db) do
       Databases.test_slot_permissions(db, replication_slot)
     end
+  end
+
+  defp params_to_db(params, socket) do
+    params["database"]
+    |> put_ipv6()
+    |> Sequin.Map.atomize_keys()
+    |> Map.put(:account_id, current_account_id(socket))
+    |> then(&struct(PostgresDatabase, &1))
   end
 
   defp put_ipv6(%{"use_local_tunnel" => true} = db_params), do: db_params

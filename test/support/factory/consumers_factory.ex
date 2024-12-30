@@ -455,6 +455,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         deliver_count: Enum.random(0..10),
         last_delivered_at: Factory.timestamp(),
         not_visible_until: not_visible_until,
+        data: consumer_record_data(),
         replication_message_trace_id: Factory.uuid()
       },
       attrs
@@ -465,6 +466,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     attrs
     |> Map.new()
     |> consumer_record()
+    |> Map.update!(:data, fn data ->
+      data |> Map.from_struct() |> consumer_record_data_attrs()
+    end)
     |> Sequin.Map.from_ecto()
   end
 
@@ -530,7 +534,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %ConsumerRecordData{
         record: %{"column" => Factory.word()},
-        metadata: %{
+        metadata: %ConsumerRecordData.Metadata{
           database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
@@ -547,6 +551,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.new()
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
+    |> Map.update!(:metadata, fn metadata ->
+      Map.from_struct(metadata)
+    end)
   end
 
   def sequence_filter(attrs \\ []) do

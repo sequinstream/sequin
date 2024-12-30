@@ -41,6 +41,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
       source_table = ConsumersFactory.source_table(oid: 456, column_filters: [])
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = Repo.preload(consumer, :postgres_database)
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -326,6 +327,7 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [1, 2])
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: nil)
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = Repo.preload(consumer, :postgres_database)
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -349,6 +351,7 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: [2])
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
+      consumer = Repo.preload(consumer, :postgres_database)
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])

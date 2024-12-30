@@ -7,6 +7,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabaseTable
@@ -424,11 +425,30 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           table_oid: table.oid,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(consumer, table, record_attnums_to_values),
-          replication_message_trace_id: UUID.uuid4()
+          replication_message_trace_id: UUID.uuid4(),
+          data: build_record_data(table, consumer, record_attnums_to_values)
         })
       end)
 
     Consumers.insert_consumer_records(consumer_records)
+  end
+
+  defp build_record_data(table, consumer, record_attnums_to_values) do
+    Sequin.Map.from_ecto(%ConsumerRecordData{
+      record: build_record_payload(table, record_attnums_to_values),
+      metadata: %{
+        database_name: consumer.replication_slot.postgres_database.name,
+        table_name: table.name,
+        table_schema: table.schema,
+        consumer: %{
+          id: consumer.id,
+          name: consumer.name,
+          inserted_at: consumer.inserted_at,
+          updated_at: consumer.updated_at
+        },
+        commit_timestamp: DateTime.utc_now()
+      }
+    })
   end
 
   defp handle_event_messages(consumer, table, seq, matching_records) do
@@ -453,7 +473,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   defp build_event_data(table, consumer, record_attnums_to_values) do
     Sequin.Map.from_ecto(%ConsumerEventData{
       action: :read,
-      record: build_event_payload(table, record_attnums_to_values),
+      record: build_record_payload(table, record_attnums_to_values),
       metadata: %{
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,
@@ -469,7 +489,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     })
   end
 
-  defp build_event_payload(table, record_attnums_to_values) do
+  defp build_record_payload(table, record_attnums_to_values) do
     Map.new(table.columns, fn column -> {column.name, Map.get(record_attnums_to_values, column.attnum)} end)
   end
 

@@ -1,15 +1,12 @@
 <script lang="ts">
   import { cn } from "$lib/utils.js";
   import { EyeIcon, EyeOffIcon } from "lucide-svelte";
-  type $$Props = {
-    class?: string;
-    isVisible: boolean;
-    label: string;
-    onToggleVisibility: () => void;
-  };
 
-  let className: $$Props["class"] = undefined;
-  export { className as class, isVisible, label, onToggleVisibility };
+  export let isVisible: boolean;
+  export let label: string;
+  export let onToggleVisibility: () => void;
+  let className: string | undefined = undefined;
+  export { className as class };
 </script>
 
 <div class={cn("flex flex-col gap-2", className)} {...$$restProps}>

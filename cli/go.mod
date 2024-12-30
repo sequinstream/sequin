@@ -19,7 +19,7 @@ require (
 	github.com/jpillora/sizestr v1.0.0
 	github.com/r3labs/diff/v3 v3.0.1
 	golang.org/x/crypto v0.31.0
-	golang.org/x/net v0.29.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	moul.io/http2curl v1.0.0
 )

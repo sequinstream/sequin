@@ -68,7 +68,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
         {:ok, []} ->
           :ok
 
-        {:ok, keys} ->
+        {:ok, keys} when is_list(keys) ->
           case Redis.command(["DEL" | keys]) do
             {:ok, _} -> :ok
             {:error, error} -> raise error

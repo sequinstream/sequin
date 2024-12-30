@@ -6,8 +6,8 @@ defmodule Sequin.Redis do
   require Logger
 
   @type command :: [any()]
-  @type return_value :: nil | binary() | [binary() | nonempty_list()]
-  @type pipeline_return_value :: nil | binary() | [binary() | nonempty_list()] | ServiceError.t()
+  @type redis_value :: binary() | integer() | nil | [redis_value()]
+  @type pipeline_return_value :: redis_value() | ServiceError.t()
 
   @doc """
   :eredis_cluster_sup_sup has already been started elsewhere. To start nodes underneath it,
@@ -43,7 +43,7 @@ defmodule Sequin.Redis do
       raise "Failed to connect to Redis: #{inspect(error)}"
   end
 
-  @spec command(command()) :: {:ok, return_value()} | {:error, ServiceError.t()}
+  @spec command(command()) :: {:ok, redis_value()} | {:error, ServiceError.t()}
   def command(command) do
     res =
       __MODULE__
@@ -63,7 +63,7 @@ defmodule Sequin.Redis do
     end
   end
 
-  @spec command!(command()) :: return_value()
+  @spec command!(command()) :: redis_value()
   def command!(command) do
     res = __MODULE__ |> :eredis_cluster.q(command) |> parse_result()
 

@@ -5,6 +5,8 @@ defmodule Sequin.Consumers.ConsumerRecord do
   import Ecto.Changeset
   import Ecto.Query
 
+  alias Sequin.Consumers.ConsumerRecordData
+
   @primary_key false
   @derive {Jason.Encoder,
            only: [
@@ -35,7 +37,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :not_visible_until, :utc_datetime_usec
     field :replication_message_trace_id, Ecto.UUID
 
-    field :data, :map, virtual: true
+    embeds_one :data, ConsumerRecordData
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -95,6 +97,16 @@ defmodule Sequin.Consumers.ConsumerRecord do
       attrs
       |> Sequin.Map.atomize_keys()
       |> Map.update!(:record_pks, &stringify_record_pks/1)
+      |> Map.update!(:data, fn
+        nil ->
+          nil
+
+        data ->
+          data = Sequin.Map.atomize_keys(data)
+          metadata = Sequin.Map.atomize_keys(data.metadata)
+          data = Map.put(data, :metadata, struct!(ConsumerRecordData.Metadata, metadata))
+          struct!(ConsumerRecordData, data)
+      end)
 
     struct!(__MODULE__, attrs)
   end

@@ -174,18 +174,18 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
 
       updated_attrs = %{
-        consumer_id: existing_record.consumer_id,
-        record_pks: existing_record.record_pks,
-        group_id: existing_record.group_id,
-        table_oid: existing_record.table_oid,
-        commit_lsn: existing_record.commit_lsn + 1,
-        state: :available,
-        replication_message_trace_id: Factory.uuid()
+        Map.from_struct(existing_record)
+        | data: ConsumersFactory.consumer_record_data_attrs(),
+          commit_lsn: existing_record.commit_lsn + 1,
+          state: :available,
+          replication_message_trace_id: Factory.uuid()
       }
 
       assert {:ok, 1} = Consumers.insert_consumer_records([updated_attrs])
 
       updated_record = Consumers.reload(existing_record)
+      assert_maps_equal(updated_record.data, updated_attrs.data, [:commit_timestamp, :record])
+      assert_maps_equal(updated_record.data.metadata, updated_attrs.data.metadata, [:commit_timestamp])
       assert updated_record.commit_lsn == updated_attrs.commit_lsn
       assert updated_record.state == :available
       assert updated_record.replication_message_trace_id == existing_record.replication_message_trace_id
@@ -197,13 +197,10 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       new_record = ConsumersFactory.consumer_record_attrs(consumer_id: consumer.id)
 
       updated_attrs = %{
-        consumer_id: existing_record.consumer_id,
-        record_pks: existing_record.record_pks,
-        group_id: existing_record.group_id,
-        table_oid: existing_record.table_oid,
-        commit_lsn: existing_record.commit_lsn + 1,
-        state: :available,
-        replication_message_trace_id: Factory.uuid()
+        Map.from_struct(existing_record)
+        | commit_lsn: existing_record.commit_lsn + 1,
+          state: :available,
+          replication_message_trace_id: Factory.uuid()
       }
 
       assert {:ok, 2} = Consumers.insert_consumer_records([updated_attrs, new_record])
@@ -227,13 +224,10 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       update_attrs =
         Enum.map(records, fn record ->
           %{
-            consumer_id: record.consumer_id,
-            record_pks: record.record_pks,
-            group_id: record.group_id,
-            table_oid: record.table_oid,
-            commit_lsn: record.commit_lsn + 1,
-            state: :available,
-            replication_message_trace_id: Factory.uuid()
+            Map.from_struct(record)
+            | commit_lsn: record.commit_lsn + 1,
+              state: :available,
+              replication_message_trace_id: Factory.uuid()
           }
         end)
 

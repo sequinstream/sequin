@@ -259,6 +259,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
       deliver_count: 0,
+      data: record_data_from_message(message, consumer),
       replication_message_trace_id: message.trace_id
     }
   end
@@ -288,6 +289,20 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       record: fields_to_map(message.old_fields),
       changes: nil,
       action: :delete,
+      metadata: metadata(message, consumer)
+    }
+  end
+
+  defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
+    %{
+      record: fields_to_map(message.fields),
+      metadata: metadata(message, consumer)
+    }
+  end
+
+  defp record_data_from_message(%Message{action: :delete} = message, consumer) do
+    %{
+      record: fields_to_map(message.old_fields),
       metadata: metadata(message, consumer)
     }
   end

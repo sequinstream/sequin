@@ -515,6 +515,7 @@ defmodule Sequin.Consumers do
                 @case_frag,
                 cr.state
               ),
+            data: fragment("EXCLUDED.data"),
             updated_at: fragment("EXCLUDED.updated_at")
           ]
         ]
@@ -686,7 +687,7 @@ defmodule Sequin.Consumers do
         records = Enum.map(records, fn record -> Ecto.embedded_load(ConsumerRecord, record, :json) end)
 
         # Fetch source data for the records
-        with {:ok, fetched_records} <- put_source_data(consumer, records),
+        with {:ok, fetched_records} <- maybe_put_source_data(consumer, records),
              {:ok, fetched_records} <- filter_and_delete_records(consumer.id, fetched_records) do
           if length(fetched_records) > 0 do
             Health.update(consumer, :receive, :healthy)
@@ -738,6 +739,27 @@ defmodule Sequin.Consumers do
       0
     else
       batch_size
+    end
+  end
+
+  def maybe_put_source_data(consumer, records) do
+    case Enum.filter(records, &is_nil(&1.data)) do
+      [] ->
+        {:ok, records}
+
+      records_without_data ->
+        with {:ok, records_with_data} <- put_source_data(consumer, records_without_data) do
+          records =
+            Enum.map(records, fn record ->
+              if record.data do
+                record
+              else
+                Enum.find(records_with_data, &(&1.id == record.id))
+              end
+            end)
+
+          {:ok, records}
+        end
     end
   end
 

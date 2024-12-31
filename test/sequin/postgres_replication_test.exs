@@ -767,6 +767,21 @@ defmodule Sequin.PostgresReplicationTest do
       assert check.status == :error
       assert check.error.message =~ "Replication slot '#{non_existent_slot}' does not exist"
     end
+
+    test "emits heartbeat messages" do
+      # Attempt to start replication with the non-existent slot
+      start_replication!(heartbeat_interval: 5)
+
+      assert_receive {SlotProcessor, :heartbeat_received}, 1000
+      assert_receive {SlotProcessor, :heartbeat_received}, 1000
+
+      # Verify that the Health status was updated
+      {:ok, health} = Sequin.Health.get(%PostgresDatabase{id: "test_db_id"})
+      assert health.status == :healthy
+
+      check = Enum.find(health.checks, &(&1.id == :replication_messages))
+      assert check.status == :healthy
+    end
   end
 
   describe "PostgresReplicationSlot end-to-end with sequences" do

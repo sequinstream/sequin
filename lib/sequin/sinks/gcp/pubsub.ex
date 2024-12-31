@@ -199,16 +199,15 @@ defmodule Sequin.Sinks.Gcp.PubSub do
   end
 
   defp authenticated_request(%Client{} = client, method, path, opts \\ []) do
-    case ensure_auth_token(client) do
-      {:ok, token} ->
-        headers = [
-          {"authorization", "Bearer #{token}"},
-          {"content-type", "application/json"}
-        ]
+    base_url = Keyword.get(client.req_opts, :base_url, @pubsub_base_url)
 
+    headers = [{"content-type", "application/json"}] |> maybe_put_auth_headers(client)
+
+    case headers do
+      {:ok, headers} ->
         [
           method: method,
-          url: "#{@pubsub_base_url}/#{path}",
+          url: "#{base_url}/#{path}",
           headers: headers
         ]
         |> Req.new()
@@ -218,6 +217,14 @@ defmodule Sequin.Sinks.Gcp.PubSub do
 
       error ->
         error
+    end
+  end
+
+  defp maybe_put_auth_headers(headers, %Client{credentials: nil}), do: {:ok, headers}
+  defp maybe_put_auth_headers(headers, %Client{} = client) do
+    case ensure_auth_token(client) do
+      {:ok, token} -> {:ok, [{"authorization", "Bearer #{token}"} | headers]}
+      error -> error
     end
   end
 

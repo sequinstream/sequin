@@ -606,7 +606,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       type: :gcp_pubsub,
       project_id: sink.project_id,
       topic_id: sink.topic_id,
-      connection_id: sink.connection_id
+      connection_id: sink.connection_id,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url
     }
   end
 

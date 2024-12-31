@@ -15,6 +15,8 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     field :project_id, :string
     field :topic_id, :string
     field :connection_id, :string
+    field :use_emulator, :boolean, default: false
+    field :emulator_base_url, :string
 
     embeds_one :credentials, Credentials, on_replace: :delete
   end
@@ -23,11 +25,14 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     struct
     |> cast(params, [
       :project_id,
-      :topic_id
+      :topic_id,
+      :use_emulator,
+      :emulator_base_url
     ])
-    |> validate_required([:project_id, :topic_id])
+    |> validate_required([:project_id, :topic_id, :use_emulator])
     |> validate_credential_param(params)
-    |> cast_embed(:credentials, required: true)
+    |> validate_emulator_base_url()
+    |> cast_credentials()
     |> validate_length(:project_id, max: 255)
     |> validate_length(:topic_id, max: 255)
     |> validate_format(:project_id, ~r/^[a-z][-a-z0-9]{4,28}[a-z0-9]$/,
@@ -40,13 +45,40 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     |> put_new_connection_id()
   end
 
+  defp validate_emulator_base_url(changeset) do
+    use_emulator? = get_field(changeset, :use_emulator)
+
+    if use_emulator? do
+      validate_required(changeset, [:emulator_base_url])
+    else
+      changeset
+    end
+  end
+
+  defp cast_credentials(changeset) do
+    use_emulator? = get_field(changeset, :use_emulator)
+
+    if use_emulator? do
+      put_change(changeset, :credentials, nil)
+    else
+      cast_embed(changeset, :credentials, required: true)
+    end
+  end
+
   @doc """
   Creates a new PubSub client for the given sink configuration.
   """
   def pubsub_client(%__MODULE__{} = sink) do
+    opts = if sink.use_emulator do
+      [base_url: sink.emulator_base_url]
+    else
+      []
+    end
+
     PubSub.new(
       sink.project_id,
-      sink.credentials
+      sink.credentials,
+      opts
     )
   end
 

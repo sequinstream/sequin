@@ -164,6 +164,8 @@ if config_env() == :prod and not self_hosted do
     dsn: System.fetch_env!("SENTRY_DSN"),
     release: System.fetch_env!("CURRENT_GIT_SHA")
 
+  config :sequin, Sequin.Pagerduty, integration_key: System.fetch_env!("PAGERDUTY_INTEGRATION_KEY")
+
   config :sequin, Sequin.Posthog,
     req_opts: [base_url: "https://us.i.posthog.com"],
     api_key: "phc_TZn6p4BG38FxUXrH8IvmG39TEHvqdO2kXGoqrSwN8IY",

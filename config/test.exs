@@ -30,6 +30,10 @@ config :phoenix_live_view,
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
+config :sequin, Sequin.Pagerduty,
+  integration_key: "test_integration_key",
+  req_opts: [plug: {Req.Test, Sequin.Pagerduty}]
+
 config :sequin, Sequin.Repo,
   username: "postgres",
   password: "postgres",

@@ -249,6 +249,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
+    # TODO: We can remove this once everyone is using Postgres 14+
+    # This is necessary because they will not receive heartbeat messages
+    Health.update(state.postgres_database, :replication_connected, :healthy)
+
     messages =
       if reply == 1 and not is_nil(state.last_committed_lsn) do
         # With our current LSN increment strategy, we'll always replay the last record on boot. It seems

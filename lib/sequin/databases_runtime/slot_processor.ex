@@ -62,6 +62,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :accumulated_messages, {non_neg_integer(), [Message.t()]}, default: {0, []}
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
+      field :heartbeat_interval, non_neg_integer()
     end
   end
 
@@ -91,7 +92,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
       connection: connection,
-      last_committed_lsn: nil
+      last_committed_lsn: nil,
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1))
     }
 
     Postgrex.ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
@@ -132,6 +134,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
+    Process.send_after(self(), :emit_heartbeat, 0)
+
     {:ok, %{state | step: :disconnected}}
   end
 
@@ -165,21 +169,24 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     )
 
     # No way to stop by returning a {:stop, reason} tuple from handle_connect
-    Task.async(fn ->
-      if env() == :test and not is_nil(state.test_pid) do
-        send(state.test_pid, {:stop_replication, state.id})
-      else
-        DatabasesRuntime.Supervisor.stop_replication(state.id)
-      end
-    end)
+    %Task{ref: ref} =
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        if env() == :test and not is_nil(state.test_pid) do
+          send(state.test_pid, {:stop_replication, state.id})
+        else
+          DatabasesRuntime.Supervisor.stop_replication(state.id)
+        end
+      end)
+
+    Process.demonitor(ref, [:flush])
 
     {:noreply, state}
   end
 
   def handle_connect(state) do
     Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
-    Health.update(state.postgres_database, :replication_connected, :initializing)
 
+    Health.update(state.postgres_database, :replication_connected, :initializing)
     {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)
 
     query =
@@ -234,19 +241,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       reraise e, __STACKTRACE__
   end
 
-  # keepalive
+  # Primary keepalive message from server:
+  # https://www.postgresql.org/docs/current/protocol-replication.html#PROTOCOL-REPLICATION-PRIMARY-KEEPALIVE-MESSAGE
+  #
+  # Byte1('k')      - Identifies message as a sender keepalive
+  # Int64           - Current end of WAL on the server
+  # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
+  # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
-    Health.update(state.postgres_database, :replication_connected, :healthy)
-
     messages =
-      case reply do
-        1 ->
-          # wal_end is already an int
-          last_lsn = state.last_committed_lsn || wal_end
-          ack_message(last_lsn)
-
-        0 ->
-          []
+      if reply == 1 and not is_nil(state.last_committed_lsn) do
+        # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+        # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
+        lsn = state.last_committed_lsn + 1
+        Logger.info("Acking LSN #{lsn} (current server LSN: #{wal_end})")
+        ack_message(lsn)
+      else
+        []
       end
 
     {:noreply, messages, state}
@@ -265,6 +276,26 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
+  @impl Postgrex.ReplicationConnection
+  def handle_info(:emit_heartbeat, %State{} = state) do
+    schedule_heartbeat(state)
+    conn = get_cached_conn(state)
+
+    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '')") do
+      {:ok, _res} ->
+        :ok
+
+      {:error, error} ->
+        Logger.error("Error emitting heartbeat: #{inspect(error)}")
+    end
+
+    {:noreply, state}
+  end
+
+  defp schedule_heartbeat(%State{} = state) do
+    Process.send_after(self(), :emit_heartbeat, state.heartbeat_interval)
+  end
+
   defp maybe_recreate_slot(%State{connection: connection} = state) do
     # Neon databases have ephemeral replication slots. At time of writing, this
     # happens after 45min of inactivity.
@@ -274,11 +305,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
+  # The receiving process can send replies back to the sender at any time, using one of the following message formats (also in the payload of a CopyData message):
+  # https://www.postgresql.org/docs/current/protocol-replication.html#PROTOCOL-REPLICATION-STANDBY-STATUS-UPDATE
+  #
+  # Byte1('r')      - Identifies message as receiver status update
+  # Int64           - Last WAL byte + 1 received and written to disk
+  # Int64           - Last WAL byte + 1 flushed to disk
+  # Int64           - Last WAL byte + 1 applied in standby
+  # Int64           - Client timestamp
+  # Byte1           - 1 if reply requested immediately, 0 otherwise
   defp ack_message(lsn) when is_integer(lsn) do
-    # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-    # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
-    lsn = lsn + 1
-    Logger.info("Acking LSN #{lsn}")
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
 
@@ -469,6 +505,19 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
+  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
+    Health.update(state.postgres_database, :reachable, :healthy)
+    Health.update(state.postgres_database, :replication_connected, :healthy)
+    Health.update(state.postgres_database, :replication_messages, :healthy)
+
+    if state.test_pid do
+      # TODO: Decouple
+      send(state.test_pid, {__MODULE__, :heartbeat_received})
+    end
+
+    state
+  end
+
   defp process_message(%LogicalMessage{prefix: "sequin." <> _} = msg, state) do
     message_handler_ctx =
       state.message_handler_module.handle_logical_message(state.message_handler_ctx, state.current_xaction_lsn, msg)
@@ -515,10 +564,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
       %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: message_handler_ctx}
     else
-      if state.test_pid do
-        send(state.test_pid, {__MODULE__, :flush_messages})
-      end
-
       %{state | accumulated_messages: {0, []}}
     end
   end

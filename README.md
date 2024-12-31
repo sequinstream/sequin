@@ -169,3 +169,39 @@ Sequin provides all this functionality out of the box:
 ## Contribute
 
 Sequin is open source (MIT license). The project is just getting started, so the best way to contribute right now is to open an issue or join the [Discord Server](https://discord.gg/BV8wFXvNtY) and let us know what you want to build.
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed instructions on how to contribute to Sequin.
+
+## Development
+
+### Prerequisites
+
+- Elixir 1.18+
+- PostgreSQL 14+
+- GitHub CLI (`gh`)
+- Node.js (for frontend assets)
+- Go (only necessary for CLI development)
+
+### Getting started
+
+1. Fork and clone the repository
+2. Install dependencies:
+   ```bash
+   # Install Elixir dependencies
+   mix deps.get
+   
+   # Install frontend dependencies
+   cd assets && npm install
+   ```
+3. Start the development server from the top-level directory:
+   ```bash
+   make dev
+   ```
+
+The app will be available at `http://localhost:4000`.
+
+Sequin uses LiveView + LiveSvelte for its frontend. As a monolith, the entire app is available at `http://localhost:4000`.
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for more detailed development instructions, including our code style guidelines and signoff process.

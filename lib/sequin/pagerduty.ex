@@ -15,6 +15,10 @@ defmodule Sequin.Pagerduty do
 
   @summary_limit 1024
 
+  def enabled? do
+    not is_nil(config()[:integration_key])
+  end
+
   @spec alert(dedup_key(), String.t()) :: :ok | {:error, String.t()}
   @spec alert(dedup_key(), String.t(), [opt]) :: :ok | {:error, String.t()}
         when opt: {:links, [link()]} | {:severity, severity()} | {:source, String.t()} | {:req_opts, keyword()}
@@ -48,7 +52,7 @@ defmodule Sequin.Pagerduty do
       "event_action" => action,
       "payload" => %{
         "summary" => String.slice(summary, 0..(@summary_limit - 1)),
-        "source" => Keyword.get(opts, :source, Application.get_env(:sequin_web, :console_url)),
+        "source" => "sequin",
         "severity" => Keyword.get(opts, :severity, :warning),
         "timestamp" => DateTime.to_iso8601(DateTime.utc_now())
       }
@@ -77,9 +81,5 @@ defmodule Sequin.Pagerduty do
 
   defp config do
     Application.get_env(:sequin, Sequin.Pagerduty, [])
-  end
-
-  defp enabled? do
-    not is_nil(config()[:integration_key])
   end
 end

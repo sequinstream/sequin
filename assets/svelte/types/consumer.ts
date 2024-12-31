@@ -122,6 +122,8 @@ export type GcpPubsubConsumer = BaseConsumer & {
     project_id: string;
     topic_id: string;
     connection_id: string;
+    use_emulator: false;
+    connection_url: string;
   };
 };
 

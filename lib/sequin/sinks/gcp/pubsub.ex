@@ -198,17 +198,39 @@ defmodule Sequin.Sinks.Gcp.PubSub do
     end
   end
 
-  defp authenticated_request(%Client{} = client, method, path, opts \\ []) do
-    case ensure_auth_token(client) do
-      {:ok, token} ->
-        headers = [
-          {"authorization", "Bearer #{token}"},
-          {"content-type", "application/json"}
-        ]
+  defp get_pubsub_base_url(%Client{} = client) do
+    Map.get(client.req_opts, :base_url, @pubsub_base_url)
+  end
 
+  defp get_pubsub_headers(%Client{} = client) do
+    base_url = Map.get(client.req_opts, :base_url)
+
+    # if there is no base url then we are using the production gcp
+    if is_nil(base_url) do
+      case ensure_auth_token(client) do
+        {:ok, token} ->
+          {:ok,
+           [
+             {"authorization", "Bearer #{token}"},
+             {"content-type", "application/json"}
+           ]}
+
+        error ->
+          error
+      end
+    else
+      {:ok, [{"content-type", "application/json"}]}
+    end
+  end
+
+  defp authenticated_request(%Client{} = client, method, path, opts \\ []) do
+    pubsub_base_url = get_pubsub_base_url(client)
+
+    case get_pubsub_headers(client) do
+      {:ok, headers} ->
         [
           method: method,
-          url: "#{@pubsub_base_url}/#{path}",
+          url: "#{pubsub_base_url}/#{path}",
           headers: headers
         ]
         |> Req.new()

@@ -112,7 +112,7 @@ config :sequin,
 # Watch static and templates for browser reloading.
 
 # Enable dev routes for dashboard and mailbox
-config :sequin, dev_routes: true, self_hosted: false
+config :sequin, dev_routes: true, self_hosted: true
 
 # Do not include metadata nor timestamps in development logs
 

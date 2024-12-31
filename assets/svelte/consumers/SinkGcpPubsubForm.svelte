@@ -12,10 +12,6 @@
 
   export let form;
   export let errors: any = {};
-
-  function toggleEmulator() {
-    // pushEvent("form_updated", { form });
-  }
 </script>
 
 <Card>
@@ -24,11 +20,7 @@
   >
     <CardTitle>GCP Pub/Sub Configuration</CardTitle>
     <div>
-      <Switch
-        id="use-emulator"
-        bind:checked={form.sink.use_emulator}
-        onCheckedChange={toggleEmulator}
-      />
+      <Switch id="use-emulator" bind:checked={form.sink.use_emulator} />
       <Label for="use-emulator" class="align-text-top">Use Emulator</Label>
     </div>
   </CardHeader>

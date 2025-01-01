@@ -15,19 +15,11 @@ Thank you for your interest in contributing to Sequin! This document outlines th
 ### Getting started
 
 1. Fork and clone the repository
-2. Install dependencies:
-   ```bash
-   # Install Elixir dependencies
-   mix deps.get
-   
-   # Install frontend dependencies
-   npm install --prefix assets
-   ```
-3. Start PostgreSQL and Redis with docker compose
+2. Start PostgreSQL and Redis with docker compose
     ```bash
     docker compose up -d
     ```
-4. Run the setup script
+3. Run the setup script
     ```bash
     mix setup
     ```

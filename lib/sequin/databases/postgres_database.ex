@@ -47,6 +47,7 @@ defmodule Sequin.Databases.PostgresDatabase do
     field :tables_refreshed_at, :utc_datetime
     field :ipv6, :boolean, default: false
     field :use_local_tunnel, :boolean, default: false
+    field :annotations, :map, default: %{}
 
     embeds_many :tables, PostgresDatabaseTable, on_replace: :delete
 
@@ -76,7 +77,8 @@ defmodule Sequin.Databases.PostgresDatabase do
       :tables_refreshed_at,
       :username,
       :ipv6,
-      :use_local_tunnel
+      :use_local_tunnel,
+      :annotations
     ])
     |> validate_required([:database, :username, :password, :name])
     |> validate_number(:port, greater_than_or_equal_to: 0, less_than_or_equal_to: 65_535)

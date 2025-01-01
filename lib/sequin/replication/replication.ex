@@ -197,6 +197,10 @@ defmodule Sequin.Replication do
     Repo.all(WalPipeline)
   end
 
+  def list_active_wal_pipelines do
+    Repo.all(WalPipeline.where_active())
+  end
+
   def list_wal_pipelines_for_account(account_id, preloads \\ []) do
     account_id
     |> WalPipeline.where_account_id()

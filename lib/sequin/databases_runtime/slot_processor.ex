@@ -510,6 +510,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
+    Logger.info("[SlotProcessor] Heartbeat received")
     Health.update(state.postgres_database, :reachable, :healthy)
     Health.update(state.postgres_database, :replication_connected, :healthy)
     Health.update(state.postgres_database, :replication_messages, :healthy)

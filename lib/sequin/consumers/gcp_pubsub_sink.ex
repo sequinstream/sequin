@@ -45,7 +45,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   end
 
   defp conditional_cast_credentials_embeds_and_require_connection_url(changeset) do
-    use_emulator? = get_change(changeset, :use_emulator)
+    use_emulator? = get_field(changeset, :use_emulator)
 
     if use_emulator? do
       validate_required(changeset, [:connection_url])

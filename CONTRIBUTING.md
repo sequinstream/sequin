@@ -21,18 +21,17 @@ Thank you for your interest in contributing to Sequin! This document outlines th
    mix deps.get
    
    # Install frontend dependencies
-   cd assets && npm install
+   npm install --prefix assets
    ```
 3. Start PostgreSQL and Redis with docker compose
     ```bash
     docker compose up -d
     ```
-
 4. Run the setup script
     ```bash
     mix setup
     ```
-5. Start the development server from the top-level directory:
+5. Start the development server:
    ```bash
    make dev
    ```

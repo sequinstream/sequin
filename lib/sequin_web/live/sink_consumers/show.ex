@@ -171,6 +171,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
+                  consumerType: @consumer.type,
                   messages: encode_messages(@consumer, @messages),
                   totalCount: @total_count,
                   pageSize: @page_size,
@@ -300,6 +301,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       {:error, reason} ->
         {:reply, %{error: reason}, socket}
     end
+  end
+
+  def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
+    consumer = socket.assigns.consumer
+    Consumers.ack_messages(consumer, [ack_id])
+    updated_socket = load_consumer_messages(socket)
+
+    updated_message = Enum.find(socket.assigns.messages, &(&1.ack_id == ack_id))
+    {:reply, %{ok: true, updated_message: encode_message(consumer, updated_message)}, updated_socket}
   end
 
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do
@@ -838,7 +848,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           data: nil,
           trace_id: message.trace_id,
           state: state,
-          state_color: "green"
+          state_color: get_message_state_color(consumer, state)
         }
     end
   end
@@ -889,6 +899,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "delivered"
   defp get_message_state(_consumer, %{deliver_count: 0}), do: "not delivered"
 
@@ -910,6 +921,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp get_message_state_color(%{type: :sequin_stream}, state) do
     case state do
+      "acknowledged" -> "green"
       "delivered" -> "blue"
       "backing off" -> "yellow"
       _ -> "gray"

@@ -40,7 +40,7 @@ config :sequin, Oban,
        {"0 * * * *", Sequin.Logs.RotateLogsWorker},
        {"*/10 * * * *", Sequin.HealthRuntime.HttpEndpointHealthWorker},
        {"* * * * *", Sequin.CheckSystemHealthWorker},
-       {"*/5 * * * *", Sequin.Health.PagerdutyAlerterWorker}
+       {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker}
      ]}
   ]
 

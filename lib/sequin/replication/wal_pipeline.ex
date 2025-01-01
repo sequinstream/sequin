@@ -69,6 +69,10 @@ defmodule Sequin.Replication.WalPipeline do
     from([wal_pipeline: wp] in query, where: wp.name == ^name)
   end
 
+  def where_active(query \\ base_query()) do
+    from([wal_pipeline: wp] in query, where: wp.status == :active)
+  end
+
   def base_query(query \\ __MODULE__) do
     from(wp in query, as: :wal_pipeline)
   end

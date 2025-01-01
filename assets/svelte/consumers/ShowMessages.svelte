@@ -255,18 +255,12 @@
 
   function resetMessageVisibility(messageId) {
     live.pushEvent(
-      "reset_message_visibility",
+      "acknowledge_message",
       { message_id: messageId },
       (reply) => {
-        resettingMessageVisibility = false;
-
         if (reply.error) {
           // Handle error (e.g., show a toast notification)
-          console.error("Failed to reset message visibility:", reply.error);
-        } else {
-          // Optionally, update the message state locally or refresh the drawer
-          selectedMessage = reply.updated_message;
-          refreshLogs();
+          console.error("Failed to acknowledge:", reply.error);
         }
       },
     );
@@ -573,6 +567,22 @@
                       </div>
                     </div>
                   {/if}
+                  <div>
+                    <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        on:click={() => {
+                          resetMessageVisibility(selectedMessage.id);
+                        }}
+                        disabled={resettingMessageVisibility}
+                        class="flex items-center space-x-2"
+                      >
+                        <RotateCw class="h-4 w-4" />
+                        <span>Acknowledge</span>
+                      </Button>
+                    </div>
+                  </div>
 
                   <!-- Timestamps Section -->
                   <div>

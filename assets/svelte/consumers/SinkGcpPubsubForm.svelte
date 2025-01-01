@@ -47,9 +47,6 @@
           bind:value={form.sink.emulator_url}
           placeholder="0.0.0.0:8432"
         />
-        <p class="text-sm text-muted-foreground">
-          Your Emulator Connection URL
-        </p>
         {#if errors.sink?.emulator_url}
           <p class="text-destructive text-sm">{errors.sink.emulator_url}</p>
         {/if}

@@ -15,6 +15,7 @@ defmodule Sequin.Accounts.Account do
   typed_schema "accounts" do
     field :name, :string
     field :features, {:array, :string}
+    field :annotations, :map, default: %{}
 
     has_many :accounts_users, AccountUser
     has_many :users, through: [:accounts_users, :user]
@@ -24,7 +25,7 @@ defmodule Sequin.Accounts.Account do
 
   def changeset(%Account{} = account, attrs) do
     account
-    |> cast(attrs, [:name, :features])
+    |> cast(attrs, [:name, :features, :annotations])
     |> maybe_put_name()
     |> validate_required([:name])
     |> validate_length(:name, max: 80)

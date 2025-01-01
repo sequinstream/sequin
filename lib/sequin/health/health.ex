@@ -8,14 +8,20 @@ defmodule Sequin.Health do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias __MODULE__
+  alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health.Check
+  alias Sequin.Health.HealthSnapshot
   alias Sequin.JSON
+  alias Sequin.Pagerduty
   alias Sequin.Redis
+  alias Sequin.Replication
   alias Sequin.Replication.WalPipeline
+  alias Sequin.Repo
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
   @type entity ::
@@ -32,7 +38,7 @@ defmodule Sequin.Health do
 
     field :entity_kind,
           :http_endpoint
-          | :http_push_consumer
+          | :sink_consumer
           | :postgres_database
           | :wal_pipeline
 
@@ -377,7 +383,7 @@ defmodule Sequin.Health do
   end
 
   defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
-  defp entity_kind(%SinkConsumer{}), do: :push_consumer
+  defp entity_kind(%SinkConsumer{}), do: :sink_consumer
   defp entity_kind(%PostgresDatabase{}), do: :postgres_database
   defp entity_kind(%WalPipeline{}), do: :wal_pipeline
 
@@ -520,6 +526,167 @@ defmodule Sequin.Health do
 
       _ ->
         {:error, Error.invariant(message: "clean_test_keys/0 can only be called in the test environment")}
+    end
+  end
+
+  def update_snapshots do
+    active_replications =
+      Replication.all_active_pg_replications()
+      |> Repo.preload([:postgres_database, :account])
+      |> Enum.filter(&(&1.postgres_database.use_local_tunnel == false))
+      |> Enum.filter(&(&1.annotations["ignore_health"] != true))
+      |> Enum.filter(&(&1.account.annotations["ignore_health"] != true))
+
+    active_replication_ids = Enum.map(active_replications, & &1.id)
+
+    # Update databases
+    Enum.each(active_replications, &snapshot_entity(&1.postgres_database))
+
+    # Update consumers
+    Consumers.list_active_sink_consumers()
+    |> Enum.filter(&(&1.replication_slot_id in active_replication_ids))
+    |> Enum.each(&snapshot_entity/1)
+
+    # Update WAL pipelines
+    Replication.list_active_wal_pipelines()
+    |> Enum.filter(&(&1.replication_slot_id in active_replication_ids))
+    |> Enum.each(&snapshot_entity/1)
+  end
+
+  defp snapshot_entity(entity) do
+    {:ok, health} = get(entity)
+
+    status =
+      case get_snapshot(entity) do
+        {:ok, current_snapshot} -> current_snapshot.status
+        {:error, %Error.NotFoundError{}} -> nil
+      end
+
+    unless status == health.status do
+      # :telemetry.execute(
+      #   [:sequin, :health, :status_changed],
+      #   %{},
+      #   %{
+      #     entity_id: entity.id,
+      #     entity_kind: entity_kind(entity),
+      #     old_status: status,
+      #     new_status: health.status
+      #   }
+      # )
+
+      if Pagerduty.enabled?() do
+        on_status_change(entity, status, health.status)
+      end
+    end
+
+    upsert_snapshot(entity)
+  end
+
+  def on_status_change(entity, _old_status, new_status) do
+    parent_pid = self()
+
+    Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+      if env() == :test do
+        Req.Test.allow(Sequin.Pagerduty, parent_pid, self())
+      end
+
+      entity = Repo.preload(entity, [:account])
+
+      unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
+        dedup_key = get_dedup_key(entity)
+
+        case new_status do
+          :healthy ->
+            Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
+
+          status when status in [:error, :warning] ->
+            summary = build_error_summary(entity)
+            severity = if status == :error, do: :critical, else: :warning
+
+            Pagerduty.alert(dedup_key, summary, severity: severity)
+
+          _ ->
+            :ok
+        end
+      end
+    end)
+  end
+
+  def resolve_and_ignore(entity) do
+    dedup_key = get_dedup_key(entity)
+    Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
+    ignore_health(entity)
+  end
+
+  def ignore_health(%PostgresDatabase{} = db) do
+    Databases.update_db(db, %{annotations: %{"ignore_health" => true}})
+  end
+
+  def ignore_health(%SinkConsumer{} = consumer) do
+    Consumers.update_consumer(consumer, %{annotations: %{"ignore_health" => true}})
+  end
+
+  def ignore_health(%WalPipeline{} = pipeline) do
+    Replication.update_wal_pipeline(pipeline, %{annotations: %{"ignore_health" => true}})
+  end
+
+  defp get_dedup_key(%PostgresDatabase{} = entity), do: "database_health_#{entity.id}"
+  defp get_dedup_key(%SinkConsumer{} = entity), do: "consumer_health_#{entity.id}"
+  defp get_dedup_key(%HttpEndpoint{} = entity), do: "endpoint_health_#{entity.id}"
+  defp get_dedup_key(%WalPipeline{} = entity), do: "pipeline_health_#{entity.id}"
+
+  defp entity_name(%PostgresDatabase{} = entity), do: "Database #{entity.name}"
+  defp entity_name(%SinkConsumer{} = entity), do: "Consumer #{entity.name}"
+  defp entity_name(%HttpEndpoint{} = entity), do: "Endpoint #{entity.name}"
+  defp entity_name(%WalPipeline{} = entity), do: "Pipeline #{entity.name}"
+
+  defp build_error_summary(entity) do
+    {:ok, health} = get(entity)
+    error_checks = Enum.filter(health.checks, &(&1.status in [:error, :warning]))
+
+    check_details =
+      Enum.map_join(error_checks, "\n", fn check ->
+        "- #{check.name}: #{check.status}"
+      end)
+
+    """
+    #{entity_name(entity)} (account "#{entity.account.name}") (id: #{entity.id}) is experiencing issues:
+    #{check_details}
+    """
+  end
+
+  @doc """
+  Gets the latest health snapshot for an entity, if one exists.
+  """
+  @spec get_snapshot(entity()) :: {:ok, HealthSnapshot.t()} | {:error, Error.t()}
+  def get_snapshot(entity) when is_entity(entity) do
+    case Repo.get_by(HealthSnapshot, entity_id: entity.id) do
+      nil -> {:error, Error.not_found(entity: :health_snapshot)}
+      snapshot -> {:ok, snapshot}
+    end
+  end
+
+  @doc """
+  Upserts a health snapshot for the given entity based on its current health state.
+  """
+  @spec upsert_snapshot(entity()) :: {:ok, HealthSnapshot.t()} | {:error, Error.t()}
+  def upsert_snapshot(entity) when is_entity(entity) do
+    with {:ok, health} <- get(entity) do
+      now = DateTime.utc_now()
+
+      %HealthSnapshot{}
+      |> HealthSnapshot.changeset(%{
+        entity_id: entity.id,
+        entity_kind: entity_kind(entity),
+        name: health.name,
+        status: health.status,
+        health_json: Map.from_struct(health),
+        sampled_at: now
+      })
+      |> Repo.insert(
+        on_conflict: {:replace, [:status, :health_json, :sampled_at, :updated_at]},
+        conflict_target: [:entity_kind, :entity_id]
+      )
     end
   end
 end

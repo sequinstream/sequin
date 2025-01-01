@@ -31,6 +31,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     field :publication_name, :string
     field :slot_name, :string
     field :status, Ecto.Enum, values: [:active, :disabled], read_after_writes: true
+    field :annotations, :map, default: %{}
 
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase

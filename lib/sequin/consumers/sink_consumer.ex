@@ -49,6 +49,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :status, Ecto.Enum, values: [:active, :disabled], default: :active
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
+    field :annotations, :map, default: %{}
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq],
@@ -117,7 +118,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_ack_pending,
       :max_deliver,
       :backfill_completed_at,
-      :status
+      :status,
+      :annotations
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)

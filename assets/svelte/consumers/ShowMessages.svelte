@@ -255,6 +255,25 @@
 
   function resetMessageVisibility(messageId) {
     live.pushEvent(
+      "reset_message_visibility",
+      { message_id: messageId },
+      (reply) => {
+        resettingMessageVisibility = false;
+
+        if (reply.error) {
+          // Handle error (e.g., show a toast notification)
+          console.error("Failed to reset message visibility:", reply.error);
+        } else {
+          // Optionally, update the message state locally or refresh the drawer
+          selectedMessage = reply.updated_message;
+          refreshLogs();
+        }
+      },
+    );
+  }
+
+  function acknowledgeMessage(messageId) {
+    live.pushEvent(
       "acknowledge_message",
       { message_id: messageId },
       (reply) => {
@@ -573,9 +592,8 @@
                         variant="outline"
                         size="sm"
                         on:click={() => {
-                          resetMessageVisibility(selectedMessage.id);
+                          acknowledgeMessage(selectedMessage.id);
                         }}
-                        disabled={resettingMessageVisibility}
                         class="flex items-center space-x-2"
                       >
                         <RotateCw class="h-4 w-4" />

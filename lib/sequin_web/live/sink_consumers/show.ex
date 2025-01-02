@@ -307,7 +307,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = socket.assigns.consumer
     Consumers.ack_messages(consumer, [ack_id])
 
-    {:noreply, put_flash(socket, :toast, %{kind: :info, title: "Message acked successfully"})}
+    {:reply, %{ok: true, updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
   end
 
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do

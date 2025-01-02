@@ -285,6 +285,9 @@
         // Handle error (e.g., show a toast notification)
         console.error("Failed to acknowledge:", reply.error);
       }
+      if (reply.ok) {
+        selectedMessage = reply.updated_message;
+      }
     });
   }
 
@@ -593,9 +596,14 @@
                     <h3 class="text-lg font-semibold mb-2">Acknowledge</h3>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4">
                       <p class="text-sm text-gray-700">
-                        Acknowledge this message to remove it from the sink's
-                        delivery queue.
+                        {#if alreadyAcked}
+                          This message has been acknowledged.
+                        {:else}
+                          Acknowledge this message to remove it from the sink's
+                          delivery queue.
+                        {/if}
                       </p>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -604,7 +612,7 @@
                           alreadyAcked = true;
                         }}
                         class="flex items-center space-x-2"
-                        disabled={alreadyAcked}
+                        hidden={alreadyAcked}
                       >
                         <RotateCw class="h-4 w-4" />
                         <span>Acknowledge</span>

@@ -1,21 +1,19 @@
 with deliverable_events as (
   select
-    ce.id,
-    ce.commit_lsn,
-    ce.record_pks,
-    ce.table_oid
+    ce.id
   from
     sequin_streams.consumer_events ce
   where
     ce.consumer_id = :consumer_id
     and (ce.not_visible_until is null or ce.not_visible_until <= :now)
+    -- Only select the first event for each group_id
     and not exists (
       select 1
-      from sequin_streams.consumer_events outstanding
-      where outstanding.consumer_id = :consumer_id
-        and outstanding.not_visible_until > :now
-        and outstanding.record_pks = ce.record_pks
-        and outstanding.table_oid = ce.table_oid
+      from sequin_streams.consumer_events earlier
+      where earlier.consumer_id = ce.consumer_id
+        and ((ce.group_id is not null and earlier.group_id = ce.group_id) or (ce.group_id is null and earlier.record_pks = ce.record_pks))
+        and earlier.table_oid = ce.table_oid
+        and earlier.seq < ce.seq
     )
   order by
     ce.id asc

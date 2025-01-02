@@ -136,6 +136,7 @@ defmodule Sequin.ConsumersTest do
           consumer_id: consumer.id,
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
           record_pks: [1],
+          group_id: nil,
           table_oid: 12_345
         )
 
@@ -145,6 +146,7 @@ defmodule Sequin.ConsumersTest do
           consumer_id: consumer.id,
           not_visible_until: nil,
           record_pks: outstanding_event.record_pks,
+          group_id: outstanding_event.group_id,
           table_oid: outstanding_event.table_oid
         )
 
@@ -201,6 +203,144 @@ defmodule Sequin.ConsumersTest do
       assert List.first(delivered).id == event.id
       assert {:ok, []} = Consumers.receive_for_consumer(consumer)
     end
+
+    test "delivers event when it does not share a group_id with outstanding events", %{consumer: consumer} do
+      # Insert an outstanding event
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "group_1"
+      )
+
+      # Insert a deliverable event with a different group_id
+      deliverable_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "group_2"
+        )
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.id == deliverable_event.id
+      assert delivered_event.group_id == "group_2"
+    end
+
+    test "delivers only the first of multiple available events with a shared group_id", %{consumer: consumer} do
+      event_attrs = [
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: "shared_group",
+        table_oid: Character.table_oid()
+      ]
+
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.group_id == "shared_group"
+    end
+
+    test "does not deliver event when it shares a group_id with an outstanding event", %{consumer: consumer} do
+      # Insert an outstanding event
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "shared_group",
+        table_oid: 12_345
+      )
+
+      # Insert a deliverable event with the same group_id
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: "shared_group",
+        table_oid: 12_345
+      )
+
+      # Insert another deliverable event with a different group_id
+      different_group_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "different_group",
+          table_oid: 12_345
+        )
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.id == different_group_event.id
+      assert delivered_event.group_id == "different_group"
+
+      # Verify that the event with the shared group_id was not delivered
+      events = ConsumerEvent |> Repo.all() |> Enum.filter(&(&1.group_id == "shared_group"))
+      assert length(events) == 2
+      assert Enum.any?(events, &is_nil(&1.not_visible_until))
+    end
+
+    test "delivers multiple events with null group_ids unless they share record_pks and table_oid", %{consumer: consumer} do
+      # Create events with null group_ids but different record_pks/table_oid
+      event1 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [1],
+          table_oid: 12_345
+        )
+
+      event2 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [2],
+          table_oid: 12_345
+        )
+
+      # Create an event with same record_pks/table_oid as event1
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: nil,
+        record_pks: event1.record_pks,
+        table_oid: event1.table_oid
+      )
+
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered_events) == 2
+
+      delivered_ids = delivered_events |> Enum.map(& &1.id) |> Enum.sort()
+      expected_ids = Enum.sort([event1.id, event2.id])
+      assert delivered_ids == expected_ids
+    end
+
+    test "delivers events with null group_ids alongside events with non-null group_ids", %{consumer: consumer} do
+      # Create an event with a group_id
+      event1 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "group_1"
+        )
+
+      # Create an event with null group_id
+      event2 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [1],
+          table_oid: 12_345
+        )
+
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered_events) == 2
+
+      delivered_ids = delivered_events |> Enum.map(& &1.id) |> Enum.sort()
+      expected_ids = Enum.sort([event1.id, event2.id])
+      assert delivered_ids == expected_ids
+    end
   end
 
   describe "receive_for_consumer/2 with message_kind: :record" do
@@ -239,7 +379,7 @@ defmodule Sequin.ConsumersTest do
           source_tables: source_tables
         )
 
-      consumer = Repo.preload(consumer, :postgres_database)
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
 
       ConnectionCache.cache_connection(consumer.postgres_database, Repo)
 
@@ -338,6 +478,22 @@ defmodule Sequin.ConsumersTest do
       assert {:ok, records} = Consumers.receive_for_consumer(consumer)
       assert length(records) == length(available ++ redeliver)
       assert_lists_equal(records, available ++ redeliver, &assert_maps_equal(&1, &2, [:consumer_id, :id]))
+    end
+
+    test "delivers only the first of multiple records with shared group_id", %{consumer: consumer} do
+      record_attrs = [
+        state: :available,
+        group_id: "shared_group",
+        table_oid: Character.table_oid(),
+        table: :default
+      ]
+
+      insert_consumer_record!(consumer, record_attrs)
+      insert_consumer_record!(consumer, record_attrs)
+      insert_consumer_record!(consumer, record_attrs)
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.group_id == "shared_group"
     end
 
     test "delivers records according to id asc", %{consumer: consumer} do

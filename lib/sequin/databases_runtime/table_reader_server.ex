@@ -460,6 +460,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           # You may need to get this from somewhere
           commit_lsn: 0,
           record_pks: record_pks(table, record_attnums_to_values),
+          group_id: generate_group_id(consumer, table, record_attnums_to_values),
           table_oid: table.oid,
           deliver_count: 0,
           replication_message_trace_id: UUID.uuid4(),

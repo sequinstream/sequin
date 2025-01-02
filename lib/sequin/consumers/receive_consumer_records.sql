@@ -1,9 +1,6 @@
 with deliverable_records as (
   select
-    cr.id,
-    cr.commit_lsn,
-    cr.group_id,
-    cr.table_oid
+    cr.id
   from
     sequin_streams.consumer_records cr
   where
@@ -11,21 +8,21 @@ with deliverable_records as (
     and (cr.not_visible_until is null
       or cr.not_visible_until <= :now)
     and state != 'acked'
+    -- Only select the first record for each group_id
     and not exists (
-      select
-        1
-      from
-        sequin_streams.consumer_records outstanding
-      where
-        outstanding.consumer_id = :consumer_id
-        and outstanding.not_visible_until > :now
-        and outstanding.group_id = cr.group_id
-        and outstanding.table_oid = cr.table_oid)
-    order by
-      cr.id asc
-    limit :batch_size
-    for update
-      skip locked)
+      select 1
+      from sequin_streams.consumer_records earlier
+      where earlier.consumer_id = cr.consumer_id
+        and earlier.group_id = cr.group_id
+        and earlier.table_oid = cr.table_oid
+        and earlier.seq < cr.seq
+        and earlier.state != 'acked'
+    )
+  order by
+    cr.id asc
+  limit :batch_size
+  for update skip locked
+)
 update
   sequin_streams.consumer_records cr
 set

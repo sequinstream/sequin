@@ -21,10 +21,12 @@
   export let live;
   export let paused: boolean = false;
   export let showAcked: boolean = true;
+  export let consumerType = null;
 
   let page: number = 0;
   let loading = false;
   let selectedMessage = null;
+  let alreadyAcked = false;
   let isDrawerOpen = false;
   let messageData = null;
   let messageDataError = null;
@@ -149,6 +151,10 @@
 
   function openDrawer(message) {
     selectedMessage = message;
+
+    alreadyAcked =
+      message.state === "acknowledged" ||
+      (message.state === "delivered" && consumerType !== "sequin_stream");
     isDrawerOpen = true;
     messageData = null;
     messageDataError = null;
@@ -266,23 +272,20 @@
         } else {
           // Optionally, update the message state locally or refresh the drawer
           selectedMessage = reply.updated_message;
+          alreadyAcked = false;
           refreshLogs();
         }
       },
     );
   }
 
-  function acknowledgeMessage(messageId) {
-    live.pushEvent(
-      "acknowledge_message",
-      { message_id: messageId },
-      (reply) => {
-        if (reply.error) {
-          // Handle error (e.g., show a toast notification)
-          console.error("Failed to acknowledge:", reply.error);
-        }
-      },
-    );
+  function acknowledgeMessage(ackId) {
+    live.pushEvent("acknowledge_message", { ack_id: ackId }, (reply) => {
+      if (reply.error) {
+        // Handle error (e.g., show a toast notification)
+        console.error("Failed to acknowledge:", reply.error);
+      }
+    });
   }
 
   $: pageCount = Math.ceil(totalCount / pageSize);
@@ -587,14 +590,21 @@
                     </div>
                   {/if}
                   <div>
+                    <h3 class="text-lg font-semibold mb-2">Acknowledge</h3>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4">
+                      <p class="text-sm text-gray-700">
+                        Acknowledge this message to remove it from the sink's
+                        delivery queue.
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"
                         on:click={() => {
-                          acknowledgeMessage(selectedMessage.id);
+                          acknowledgeMessage(selectedMessage.ack_id);
+                          alreadyAcked = true;
                         }}
                         class="flex items-center space-x-2"
+                        disabled={alreadyAcked}
                       >
                         <RotateCw class="h-4 w-4" />
                         <span>Acknowledge</span>

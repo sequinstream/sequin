@@ -4,9 +4,6 @@ defmodule Sequin.Health.HealthSnapshot do
 
   import Ecto.Changeset
 
-  @type status :: :healthy | :warning | :error | :initializing | :waiting
-  @type entity_kind :: :http_endpoint | :sink_consumer | :postgres_database | :wal_pipeline
-
   typed_schema "health_snapshots" do
     field :entity_id, :string
     field :entity_kind, Ecto.Enum, values: [:http_endpoint, :sink_consumer, :postgres_database, :wal_pipeline]

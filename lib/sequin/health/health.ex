@@ -583,33 +583,25 @@ defmodule Sequin.Health do
   end
 
   def on_status_change(entity, _old_status, new_status) do
-    parent_pid = self()
+    entity = Repo.preload(entity, [:account])
 
-    Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-      if env() == :test do
-        Req.Test.allow(Sequin.Pagerduty, parent_pid, self())
+    unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
+      dedup_key = get_dedup_key(entity)
+
+      case new_status do
+        :healthy ->
+          Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
+
+        status when status in [:error, :warning] ->
+          summary = build_error_summary(entity)
+          severity = if status == :error, do: :critical, else: :warning
+
+          Pagerduty.alert(dedup_key, summary, severity: severity)
+
+        _ ->
+          :ok
       end
-
-      entity = Repo.preload(entity, [:account])
-
-      unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
-        dedup_key = get_dedup_key(entity)
-
-        case new_status do
-          :healthy ->
-            Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
-
-          status when status in [:error, :warning] ->
-            summary = build_error_summary(entity)
-            severity = if status == :error, do: :critical, else: :warning
-
-            Pagerduty.alert(dedup_key, summary, severity: severity)
-
-          _ ->
-            :ok
-        end
-      end
-    end)
+    end
   end
 
   def resolve_and_ignore(entity) do

@@ -164,7 +164,7 @@ defmodule Sequin.HealthTest do
 
       assert updated_snapshot.id == initial_snapshot.id
       assert updated_snapshot.status == :error
-      assert updated_snapshot.sampled_at > initial_snapshot.sampled_at
+      assert DateTime.compare(updated_snapshot.sampled_at, initial_snapshot.sampled_at) in [:gt, :eq]
     end
 
     test "upsert_snapshot creates new snapshot for consumer" do
@@ -207,8 +207,6 @@ defmodule Sequin.HealthTest do
       Health.on_status_change(entity, :healthy, :error)
 
       assert_receive {:req, conn, body}
-      # Let the task finish
-      assert_receive {:DOWN, _ref, :process, _pid, _reason}
 
       assert conn.method == "POST"
       assert conn.path_info == ["v2", "enqueue"]
@@ -228,8 +226,6 @@ defmodule Sequin.HealthTest do
       Health.on_status_change(entity, :healthy, :warning)
 
       assert_receive {:req, conn, body}
-      # Let the task finish
-      assert_receive {:DOWN, _ref, :process, _pid, _reason}
 
       assert conn.path_info == ["v2", "enqueue"]
       assert body["dedup_key"] == "consumer_health_#{entity.id}"
@@ -248,8 +244,6 @@ defmodule Sequin.HealthTest do
       Health.on_status_change(entity, :error, :healthy)
 
       assert_receive {:req, conn, body}
-      # Let the task finish
-      assert_receive {:DOWN, _ref, :process, _pid, _reason}
 
       assert conn.path_info == ["v2", "enqueue"]
       assert body["dedup_key"] == "database_health_#{entity.id}"

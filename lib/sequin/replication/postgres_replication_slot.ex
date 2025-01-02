@@ -46,7 +46,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def create_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id, :status])
+    |> cast(attrs, [:publication_name, :slot_name, :postgres_database_id, :status, :annotations])
     |> cast_assoc(:postgres_database,
       with: fn _struct, attrs ->
         PostgresDatabase.changeset(%PostgresDatabase{account_id: replication.account_id}, attrs)
@@ -59,7 +59,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
 
   def update_changeset(replication, attrs) do
     replication
-    |> cast(attrs, [:publication_name, :slot_name, :status])
+    |> cast(attrs, [:publication_name, :slot_name, :status, :annotations])
     |> validate_required([:publication_name, :slot_name])
     |> unique_constraint([:slot_name, :postgres_database_id])
   end

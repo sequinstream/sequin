@@ -365,6 +365,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         commit_lsn: Enum.random(1..1_000_000),
         seq: Factory.unique_integer(),
         record_pks: record_pks,
+        group_id: Factory.unique_word(),
         table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),

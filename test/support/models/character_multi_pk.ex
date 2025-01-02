@@ -36,4 +36,21 @@ defmodule Sequin.Test.Support.Models.CharacterMultiPK do
   def changeset(character, attrs) do
     Ecto.Changeset.cast(character, attrs, [:id_integer, :id_string, :id_uuid, :name, :house])
   end
+
+  def column_attnums do
+    from(pg in "pg_attribute",
+      where: pg.attrelid == ^table_oid() and pg.attnum > 0,
+      select: {pg.attname, pg.attnum}
+    )
+    |> Sequin.Repo.all()
+    |> Map.new()
+  end
+
+  def pk_attnums do
+    Enum.map(["id_integer", "id_string", "id_uuid"], &column_attnum/1)
+  end
+
+  def column_attnum(column_name) do
+    Map.fetch!(column_attnums(), column_name)
+  end
 end

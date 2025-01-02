@@ -306,8 +306,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
     Consumers.ack_messages(consumer, [ack_id])
+    updated_socket = load_consumer_messages(socket)
 
-    {:reply, %{ok: true, updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
+    updated_message = Enum.find(socket.assigns.messages, &(&1.ack_id == ack_id))
+    {:reply, %{ok: true, updated_message: encode_message(consumer, updated_message)}, updated_socket}
   end
 
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do

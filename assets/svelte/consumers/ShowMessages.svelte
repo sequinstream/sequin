@@ -11,6 +11,7 @@
     Pause,
     RefreshCw,
     RotateCw,
+    Check,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
 
@@ -21,12 +22,12 @@
   export let live;
   export let paused: boolean = false;
   export let showAcked: boolean = true;
-  export let consumerType = null;
+  export let consumer: { type: string };
 
   let page: number = 0;
   let loading = false;
   let selectedMessage = null;
-  let alreadyAcked = false;
+  let selectedMessageAcked = false;
   let isDrawerOpen = false;
   let messageData = null;
   let messageDataError = null;
@@ -41,6 +42,9 @@
   let rowHeight = 0; // Will be calculated
   let totalAvailableHeight = 0;
   let resettingMessageVisibility = false;
+
+  // Add this new state variable near the top with other state variables
+  let isAcknowledging = false;
 
   onMount(() => {
     // Calculate row height after the component is mounted
@@ -152,9 +156,11 @@
   function openDrawer(message) {
     selectedMessage = message;
 
-    alreadyAcked =
-      message.state === "acknowledged" ||
-      (message.state === "delivered" && consumerType !== "sequin_stream");
+    selectedMessageAcked =
+      selectedMessage?.state === "acknowledged" ||
+      (selectedMessage?.state === "delivered" &&
+        consumer.type !== "sequin_stream");
+
     isDrawerOpen = true;
     messageData = null;
     messageDataError = null;
@@ -195,6 +201,7 @@
   function closeDrawer() {
     isDrawerOpen = false;
     selectedMessage = null;
+    selectedMessageAcked = false;
     messageData = null;
     messageDataError = null;
     resettingMessageVisibility = false;
@@ -272,7 +279,6 @@
         } else {
           // Optionally, update the message state locally or refresh the drawer
           selectedMessage = reply.updated_message;
-          alreadyAcked = false;
           refreshLogs();
         }
       },
@@ -280,13 +286,17 @@
   }
 
   function acknowledgeMessage(ackId) {
+    isAcknowledging = true;
     live.pushEvent("acknowledge_message", { ack_id: ackId }, (reply) => {
-      if (reply.error) {
-        // Handle error (e.g., show a toast notification)
-        console.error("Failed to acknowledge:", reply.error);
-      }
+      isAcknowledging = false;
       if (reply.ok) {
-        selectedMessage = reply.updated_message;
+        selectedMessageAcked = true;
+
+        if (reply.updated_message) {
+          selectedMessage = reply.updated_message;
+        }
+
+        refreshLogs();
       }
     });
   }
@@ -596,7 +606,7 @@
                     <h3 class="text-lg font-semibold mb-2">Acknowledge</h3>
                     <div class="bg-gray-50 p-4 rounded-lg space-y-4">
                       <p class="text-sm text-gray-700">
-                        {#if alreadyAcked}
+                        {#if selectedMessageAcked}
                           This message has been acknowledged.
                         {:else}
                           Acknowledge this message to remove it from the sink's
@@ -604,19 +614,24 @@
                         {/if}
                       </p>
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        on:click={() => {
-                          acknowledgeMessage(selectedMessage.ack_id);
-                          alreadyAcked = true;
-                        }}
-                        class="flex items-center space-x-2"
-                        hidden={alreadyAcked}
-                      >
-                        <RotateCw class="h-4 w-4" />
-                        <span>Acknowledge</span>
-                      </Button>
+                      {#if !selectedMessageAcked}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          on:click={() => {
+                            acknowledgeMessage(selectedMessage.ack_id);
+                          }}
+                          disabled={isAcknowledging}
+                          class="flex items-center space-x-2"
+                        >
+                          {#if isAcknowledging}
+                            <Loader2 class="h-4 w-4 animate-spin" />
+                          {:else}
+                            <Check class="h-4 w-4" />
+                          {/if}
+                          <span>Acknowledge</span>
+                        </Button>
+                      {/if}
                     </div>
                   </div>
 

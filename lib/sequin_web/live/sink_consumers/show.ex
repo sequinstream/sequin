@@ -171,7 +171,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
               props={
                 %{
                   consumer: encode_consumer(@consumer),
-                  consumerType: @consumer.type,
                   messages: encode_messages(@consumer, @messages),
                   totalCount: @total_count,
                   pageSize: @page_size,
@@ -306,10 +305,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
     Consumers.ack_messages(consumer, [ack_id])
-    updated_socket = load_consumer_messages(socket)
 
-    updated_message = Enum.find(socket.assigns.messages, &(&1.ack_id == ack_id))
-    {:reply, %{ok: true, updated_message: encode_message(consumer, updated_message)}, updated_socket}
+    updated_socket =
+      socket
+      |> load_consumer_messages()
+      |> put_flash(:toast, %{kind: :success, title: "Message acknowledged"})
+
+    case Enum.find(socket.assigns.messages, &(&1.ack_id == ack_id)) do
+      nil ->
+        {:reply, %{ok: true}, updated_socket}
+
+      message ->
+        message = AcknowledgedMessages.to_acknowledged_message(message)
+        {:reply, %{ok: true, updated_message: encode_message(consumer, message)}, updated_socket}
+    end
   end
 
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do
@@ -483,6 +492,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       id: consumer.id,
       name: consumer.name,
       kind: :push,
+      type: consumer.type,
       status: consumer.status,
       message_kind: consumer.message_kind,
       ack_wait_ms: consumer.ack_wait_ms,

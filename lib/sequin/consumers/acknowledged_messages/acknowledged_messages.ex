@@ -68,7 +68,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     end
   end
 
-  defp to_acknowledged_message(%ConsumerRecord{} = record) do
+  def to_acknowledged_message(%ConsumerRecord{} = record) do
     %AcknowledgedMessage{
       id: record.id,
       consumer_id: record.consumer_id,
@@ -84,7 +84,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     }
   end
 
-  defp to_acknowledged_message(%ConsumerEvent{} = event) do
+  def to_acknowledged_message(%ConsumerEvent{} = event) do
     %AcknowledgedMessage{
       id: event.id,
       consumer_id: event.consumer_id,

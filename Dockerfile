@@ -66,6 +66,9 @@ WORKDIR /app
 # compile assets
 RUN mix assets.deploy
 
+# Ensure stacktraces we send to Sentry are complete
+RUN mix sentry.package_source_code
+
 # Compile the release
 RUN mix compile
 

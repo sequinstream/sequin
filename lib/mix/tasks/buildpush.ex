@@ -51,7 +51,8 @@ defmodule Mix.Tasks.Buildpush do
             ecr_url: "{accnt-id}.dkr.ecr.us-east-1.amazonaws.com",
             image_name: "sequin",
             slack_bots_webhook_url: "someurl",
-            buddy_webhook_token_main: "secret"
+            buddy_webhook_token_main: "secret",
+            sentry_dsn: "https://sentry.io/some-dsn"
           ]
         #{@reset}
         """)
@@ -112,7 +113,9 @@ defmodule Mix.Tasks.Buildpush do
 
     build_args = [
       "MIGRATOR=Sequin.Release",
-      "RELEASE_NAME=sequin"
+      "RELEASE_NAME=sequin",
+      "RELEASE_VERSION=#{sha}",
+      "SENTRY_DSN=#{config[:sentry_dsn]}"
     ]
 
     # Login to Docker Hub

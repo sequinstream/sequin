@@ -67,6 +67,7 @@ jobs:
           build-args: |
             SELF_HOSTED=1
             RELEASE_VERSION=${{ inputs.version }}
+            SENTRY_DSN=${{ secrets.SELF_HOSTED_SENTRY_DSN }}
           tags: |
             sequin/sequin:${{ inputs.version }}-${{ steps.platform.outputs.arch }}
           cache-from: |

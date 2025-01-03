@@ -1,10 +1,10 @@
-defmodule Sequin.ConsumerMessageStoreTest do
+defmodule Sequin.SlotMessageStoreTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.ConsumersRuntime.ConsumerMessageStore
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -15,7 +15,7 @@ defmodule Sequin.ConsumerMessageStoreTest do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 
-      start_supervised!({ConsumerMessageStore, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -34,10 +34,10 @@ defmodule Sequin.ConsumerMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = ConsumerMessageStore.put_messages(consumer.id, events)
+      :ok = SlotMessageStore.put_messages(consumer.id, events)
 
       # Retrieve messages
-      {:ok, delivered} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(delivered) == 2
       assert Enum.all?(delivered, &(&1.state == :delivered))
       assert Enum.all?(delivered, &(&1.deliver_count == 1))
@@ -48,19 +48,19 @@ defmodule Sequin.ConsumerMessageStoreTest do
       ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, DateTime.utc_now()})
 
       # Nack messages
-      :ok = ConsumerMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
+      :ok = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
       # Produce messages, both are re-delivered
-      {:ok, redelivered} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, redelivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(redelivered) == 2
       assert Enum.all?(redelivered, &(&1.state == :delivered))
       assert Enum.all?(redelivered, &(&1.deliver_count == 2))
 
       # Acknowledge messages
       ack_ids = Enum.map(delivered, & &1.ack_id)
-      :ok = ConsumerMessageStore.ack(consumer, ack_ids)
+      :ok = SlotMessageStore.ack(consumer, ack_ids)
 
       # Produce messages, none should be delivered
-      {:ok, []} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, []} = SlotMessageStore.produce(consumer.id, 2)
     end
   end
 
@@ -77,7 +77,7 @@ defmodule Sequin.ConsumerMessageStoreTest do
           postgres_database_id: database.id
         )
 
-      start_supervised!({ConsumerMessageStore, consumer_id: consumer.id, test_pid: self()})
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
 
       %{consumer: consumer}
     end
@@ -102,10 +102,10 @@ defmodule Sequin.ConsumerMessageStoreTest do
       ]
 
       # Put messages in store
-      :ok = ConsumerMessageStore.put_messages(consumer.id, records)
+      :ok = SlotMessageStore.put_messages(consumer.id, records)
 
       # Retrieve messages
-      {:ok, delivered} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(delivered) == 2
       assert Enum.all?(delivered, &(&1.state == :delivered))
       assert Enum.all?(delivered, &(&1.deliver_count == 1))
@@ -116,19 +116,19 @@ defmodule Sequin.ConsumerMessageStoreTest do
       ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, DateTime.utc_now()})
 
       # Nack messages
-      :ok = ConsumerMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
+      :ok = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
       # Produce messages, both are re-delivered
-      {:ok, redelivered} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, redelivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(redelivered) == 2
       assert Enum.all?(redelivered, &(&1.state == :delivered))
       assert Enum.all?(redelivered, &(&1.deliver_count == 2))
 
       # Acknowledge messages
       ack_ids = Enum.map(delivered, & &1.ack_id)
-      :ok = ConsumerMessageStore.ack(consumer, ack_ids)
+      :ok = SlotMessageStore.ack(consumer, ack_ids)
 
       # Produce messages, none should be delivered
-      {:ok, []} = ConsumerMessageStore.produce(consumer.id, 2)
+      {:ok, []} = SlotMessageStore.produce(consumer.id, 2)
     end
   end
 end

@@ -7,6 +7,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.SqsPipeline
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -170,18 +171,15 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
         Req.Test.json(conn, %{"Successful" => [%{"Id" => "1", "MessageId" => "msg1"}], "Failed" => []})
       end)
 
-      consumer_record =
-        ConsumersFactory.insert_deliverable_consumer_record!(
-          consumer_id: consumer.id,
-          source_record: :character_detailed
-        )
+      consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({SqsPipeline, [consumer: consumer, test_pid: test_pid]})
 
-      assert_receive {:sqs_request, _conn}, 5_000
+      assert_receive {:sqs_request, _conn}, 1_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
-
-      refute Consumers.reload(consumer_record)
     end
   end
 

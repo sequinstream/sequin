@@ -5,6 +5,7 @@ defmodule Sequin.MessageHandlerTest do
 
   alias Sequin.Constants
   alias Sequin.Consumers
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.DatabasesRuntime.TableReaderServerMock
   alias Sequin.Factory
@@ -45,12 +46,14 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
-      [event] = Consumers.list_consumer_events_for_consumer(consumer.id)
+      [event] = list_messages(consumer.id)
       assert event.consumer_id == consumer.id
       assert event.table_oid == 123
       assert event.commit_lsn == message.commit_lsn
@@ -94,12 +97,14 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
-      [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+      [record] = list_messages(consumer.id)
       assert record.consumer_id == consumer.id
       assert record.table_oid == 456
       assert record.commit_lsn == message.commit_lsn
@@ -160,6 +165,9 @@ defmodule Sequin.MessageHandlerTest do
           sequence_filter: sequence_filter2,
           source_tables: []
         )
+
+      start_supervised!({SlotMessageStore, [consumer: consumer1, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer2, test_pid: self(), skip_load_from_postgres?: true]})
 
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence])
@@ -224,6 +232,9 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer1, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer2, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence])
       consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence])
 
@@ -285,6 +296,8 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
@@ -300,6 +313,9 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(table_oid: 123)
       source_table = ConsumersFactory.source_table(oid: 456)
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 0, _} = MessageHandler.handle_messages(context, [message])
@@ -343,6 +359,8 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
@@ -369,6 +387,8 @@ defmodule Sequin.MessageHandlerTest do
 
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
 
       # Ensure the message has a non-matching field for the filter
       field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
@@ -531,12 +551,14 @@ defmodule Sequin.MessageHandlerTest do
           source_tables: []
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
-      [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
+      [record] = list_messages(consumer.id)
       assert record.group_id == "A"
     end
 
@@ -564,6 +586,8 @@ defmodule Sequin.MessageHandlerTest do
           sequence_filter: sequence_filter,
           source_tables: []
         )
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       replication_slot_id = Factory.uuid()
@@ -846,6 +870,7 @@ defmodule Sequin.MessageHandlerTest do
         )
 
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
@@ -894,7 +919,7 @@ defmodule Sequin.MessageHandlerTest do
       [message] = list_messages(consumer.id)
 
       # unchanged_toast values are not loaded
-      assert message.data.record["name"] == "unchanged_toast"
+      assert message.data.record["name"] == :unchanged_toast
       assert message.data.record["house"] == "Gryffindor"
 
       # consumer has annotation
@@ -923,7 +948,7 @@ defmodule Sequin.MessageHandlerTest do
       [message] = list_messages(consumer.id)
 
       # unchanged_toast values are not loaded
-      assert message.data.record["name"] == "unchanged_toast"
+      assert message.data.record["name"] == :unchanged_toast
       assert message.data.record["house"] == "Gryffindor"
 
       # consumer has annotation
@@ -943,13 +968,8 @@ defmodule Sequin.MessageHandlerTest do
       field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
       message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
 
-      if consumer.message_kind == :event do
-        {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
-        assert [_] = list_messages(consumer.id)
-      else
-        {:ok, 0, _context} = MessageHandler.handle_messages(context, [message])
-        assert [] = list_messages(consumer.id)
-      end
+      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      assert [_] = list_messages(consumer.id)
     end
   end
 
@@ -966,9 +986,8 @@ defmodule Sequin.MessageHandlerTest do
   end
 
   defp list_messages(consumer_id) do
-    events = Consumers.list_consumer_events_for_consumer(consumer_id)
-    records = Consumers.list_consumer_records_for_consumer(consumer_id)
-    events ++ records
+    %SlotMessageStore.State{messages: messages} = SlotMessageStore.peek(consumer_id)
+    Map.values(messages)
   end
 
   defp fields_to_map(fields) do

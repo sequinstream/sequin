@@ -477,6 +477,13 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Sequin.Map.from_ecto()
   end
 
+  def deliverable_consumer_record(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.merge(%{state: :available, not_visible_until: nil})
+    |> consumer_record()
+  end
+
   def insert_deliverable_consumer_record!(attrs \\ []) do
     attrs
     |> Map.new()

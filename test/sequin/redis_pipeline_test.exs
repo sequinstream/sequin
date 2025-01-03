@@ -8,6 +8,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
@@ -156,18 +157,15 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
         :ok
       end)
 
-      consumer_record =
-        ConsumersFactory.insert_deliverable_consumer_record!(
-          consumer_id: consumer.id,
-          source_record: :character_detailed
-        )
+      consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})
 
       assert_receive {:redis_request, _sink, _redis_messages}, 5_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
-
-      refute Consumers.reload(consumer_record)
     end
   end
 

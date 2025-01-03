@@ -2,16 +2,17 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Factory.TestEventLogFactory
   alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
@@ -214,7 +215,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       }
 
       consumer_event =
-        ConsumersFactory.insert_consumer_event!(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           record_pks: [record["id"]],
           data:
@@ -227,6 +228,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
               }
             )
         )
+
+      start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -245,7 +249,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      refute Consumers.reload(consumer_event)
+      state = SlotMessageStore.peek(consumer.id)
+      assert state.messages == %{}
     end
 
     @tag capture_log: true
@@ -258,7 +263,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       # Insert consumer_events with specific deliver_counts
       event1 =
-        ConsumersFactory.insert_consumer_event!(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           action: :insert,
           deliver_count: deliver_count1,
@@ -266,7 +271,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       event2 =
-        ConsumersFactory.insert_consumer_event!(
+        ConsumersFactory.consumer_event(
           consumer_id: consumer.id,
           action: :insert,
           deliver_count: deliver_count2,
@@ -282,6 +287,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [event1, event2])
+
       # Start the pipeline with the failing adapter
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
 
@@ -296,8 +304,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {ConsumerProducer, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
-      updated_event1 = Consumers.reload(event1)
-      updated_event2 = Consumers.reload(event2)
+      %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
+      updated_event1 = Map.fetch!(state.messages, event1.ack_id)
+      updated_event2 = Map.fetch!(state.messages, event2.ack_id)
 
       assert updated_event1.not_visible_until
       assert updated_event2.not_visible_until
@@ -357,12 +366,23 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       # Insert a consumer record referencing the character
       consumer_record =
-        ConsumersFactory.insert_consumer_record!(
+        ConsumersFactory.consumer_record(
           consumer_id: consumer.id,
           record_pks: [character.id],
           table_oid: CharacterDetailed.table_oid(),
-          state: :available
+          state: :available,
+          data: %ConsumerRecordData{
+            record: %{name: "character_name"},
+            metadata: %{
+              table_schema: "public",
+              table_name: "characters_detailed",
+              commit_timestamp: DateTime.utc_now()
+            }
+          }
         )
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -375,13 +395,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       %{"data" => [json]} = Jason.decode!(req.body)
 
       # Assert the record data matches
-      assert json["record"]["id"] == character.id
-      assert json["record"]["name"] == character.name
-      assert json["record"]["age"] == character.age
-      assert json["record"]["height"] == character.height
-      assert json["record"]["is_hero"] == character.is_hero
-      assert json["record"]["biography"] == character.biography
-      assert json["record"]["avatar"] == "\\x" <> Base.encode16(character.avatar, case: :lower)
+      assert json["record"]["name"] == "character_name"
 
       # Assert metadata
       assert json["metadata"]["table_name"] == "characters_detailed"
@@ -390,7 +404,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      refute Consumers.reload(consumer_record)
+      state = SlotMessageStore.peek(consumer.id)
+      assert state.messages == %{}
     end
 
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
@@ -402,13 +417,27 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 200)}
       end
 
-      source_record = TestEventLogFactory.insert_test_event_log!(%{}, repo: Repo)
-
       consumer_event =
-        ConsumersFactory.insert_deliverable_consumer_record!(
+        ConsumersFactory.consumer_record(
           consumer_id: consumer.id,
-          source_record: source_record
+          data:
+            ConsumersFactory.consumer_record_data(
+              record: %{
+                "action" => "insert",
+                "changes" => nil,
+                "committed_at" => DateTime.utc_now(),
+                "record" => %{
+                  "id" => "123",
+                  "name" => "John Doe"
+                },
+                "source_table_name" => "characters_detailed",
+                "source_table_schema" => "public"
+              }
+            )
         )
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
@@ -429,19 +458,23 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       json = Jason.decode!(req.body)
 
       # Assert the transformed structure
-      assert json["record"] == source_record.record
+      assert json["record"] == %{
+               "id" => "123",
+               "name" => "John Doe"
+             }
 
-      assert json["metadata"]["table_name"] == source_record.source_table_name
-      assert json["metadata"]["table_schema"] == source_record.source_table_schema
+      assert json["metadata"]["table_name"] == "characters_detailed"
+      assert json["metadata"]["table_schema"] == "public"
       assert json["metadata"]["consumer"]["id"] == consumer.id
       assert json["metadata"]["consumer"]["name"] == consumer.name
-      assert json["action"] == source_record.action
-      assert json["changes"] == source_record.changes
+      assert json["action"] == "insert"
+      assert json["changes"] == nil
 
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
       # Verify that the consumer record has been processed (deleted on ack)
-      refute Consumers.reload(consumer_event)
+      state = SlotMessageStore.peek(consumer.id)
+      assert state.messages == %{}
     end
   end
 

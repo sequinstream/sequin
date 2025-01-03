@@ -39,7 +39,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
 
     embeds_one :data, ConsumerRecordData
 
-    # For ConsumerMessageStore
+    # For SlotMessageStore
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
     # Used to track if the record has been deleted from MessageHandler -> Store

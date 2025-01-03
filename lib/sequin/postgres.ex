@@ -492,7 +492,7 @@ defmodule Sequin.Postgres do
     WHERE slot_name = $1
     """
 
-    case query(db, query, [db.replication_slot]) do
+    case query(db, query, [db.replication_slot.slot_name]) do
       {:ok, %{rows: [[lsn]]}} when not is_nil(lsn) ->
         {:ok, lsn_to_int(lsn)}
 
@@ -510,8 +510,11 @@ defmodule Sequin.Postgres do
   # In Postgres, an LSN is typically represented as a 64-bit integer, but it's sometimes split
   # into two 32-bit parts for easier reading or processing. We'll receive tuples like `{401, 1032909664}`
   # and we'll need to combine them to get the 64-bit LSN.
+  @spec lsn_to_int(integer()) :: integer()
   @spec lsn_to_int(String.t()) :: integer()
   @spec lsn_to_int({integer(), integer()}) :: integer()
+  def lsn_to_int(lsn) when is_integer(lsn), do: lsn
+
   def lsn_to_int(lsn) when is_binary(lsn) do
     [high, low] = lsn |> String.split("/") |> Enum.map(&String.to_integer(&1, 16))
     lsn_to_int({high, low})

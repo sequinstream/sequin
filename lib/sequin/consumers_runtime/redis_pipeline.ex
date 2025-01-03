@@ -55,6 +55,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
         consumer: %SinkConsumer{sink: %RedisSink{} = sink} = consumer,
         test_pid: test_pid
       }) do
+    Process.sleep(4000)
     setup_allowances(test_pid)
 
     Logger.metadata(

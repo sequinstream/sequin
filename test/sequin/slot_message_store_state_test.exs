@@ -1,7 +1,7 @@
-defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
+defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.ConsumersRuntime.ConsumerMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Factory.ConsumersFactory
 
   describe "put_messages/2 with :event messages" do

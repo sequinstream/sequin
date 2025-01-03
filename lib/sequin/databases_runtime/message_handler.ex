@@ -5,8 +5,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
+  alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.ConsumerRecordData
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.DatabasesRuntime.TableReaderServer
@@ -65,7 +69,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
 
-    messages_by_consumer =
+    messages_with_consumer =
       Enum.flat_map(messages, fn message ->
         ctx.consumers
         |> Enum.map(fn consumer ->
@@ -99,28 +103,36 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
-    {messages, consumers} = Enum.unzip(messages_by_consumer)
+    messages_by_consumer =
+      Enum.group_by(
+        messages_with_consumer,
+        # key function
+        fn {{_action, _event_or_record}, consumer} -> consumer end,
+        # value function
+        fn {{_action, event_or_record}, _consumer} -> event_or_record end
+      )
 
     res =
       Repo.transact(fn ->
-        with {:ok, count} <- insert_or_delete_consumer_messages(messages),
+        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer),
              {:ok, wal_event_count} <- insert_wal_events(wal_events) do
           # Update Consumer Health
-          consumers
+          messages_by_consumer
+          |> Map.keys()
           |> Enum.uniq_by(& &1.id)
-          |> Enum.each(fn consumer ->
+          |> Enum.each(fn %SinkConsumer{} = consumer ->
             Health.update(consumer, :ingestion, :healthy)
           end)
 
           # Update WAL Pipeline Health
           ctx.wal_pipelines
-          |> Enum.filter(&(&1.id in matching_pipeline_ids))
-          |> Enum.each(fn pipeline ->
+          |> Stream.filter(&(&1.id in matching_pipeline_ids))
+          |> Enum.each(fn %WalPipeline{} = pipeline ->
             Health.update(pipeline, :ingestion, :healthy)
           end)
 
           # Trace Messages
-          messages_by_consumer
+          messages_with_consumer
           |> Enum.group_by(
             fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
             fn {{_action, event_or_record}, _consumer} -> event_or_record end
@@ -267,45 +279,45 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   defp event_data_from_message(%Message{action: :insert} = message, consumer) do
-    %{
+    %ConsumerEventData{
       record: fields_to_map(message.fields),
       changes: nil,
       action: :insert,
-      metadata: metadata(message, consumer)
+      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
     }
   end
 
   defp event_data_from_message(%Message{action: :update} = message, consumer) do
     changes = if message.old_fields, do: filter_changes(message.old_fields, message.fields), else: %{}
 
-    %{
+    %ConsumerEventData{
       record: fields_to_map(message.fields),
       changes: changes,
       action: :update,
-      metadata: metadata(message, consumer)
+      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
     }
   end
 
   defp event_data_from_message(%Message{action: :delete} = message, consumer) do
-    %{
+    %ConsumerEventData{
       record: fields_to_map(message.old_fields),
       changes: nil,
       action: :delete,
-      metadata: metadata(message, consumer)
+      metadata: struct(ConsumerEventData.Metadata, metadata(message, consumer))
     }
   end
 
   defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
-    %{
+    %ConsumerRecordData{
       record: fields_to_map(message.fields),
-      metadata: metadata(message, consumer)
+      metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
     }
   end
 
   defp record_data_from_message(%Message{action: :delete} = message, consumer) do
-    %{
+    %ConsumerRecordData{
       record: fields_to_map(message.old_fields),
-      metadata: metadata(message, consumer)
+      metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
     }
   end
 
@@ -341,36 +353,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     |> Map.new()
   end
 
-  defp insert_or_delete_consumer_messages(messages) do
-    messages
-    |> Enum.chunk_every(1000)
-    |> Enum.reduce({:ok, 0}, fn batch, {:ok, acc} ->
-      {:ok, count} = insert_or_delete_consumer_message_batch(batch)
-      {:ok, acc + count}
+  defp call_consumer_message_stores(messages_by_consumer) do
+    Enum.reduce(messages_by_consumer, {:ok, 0}, fn {consumer, messages}, {:ok, acc} ->
+      :ok = SlotMessageStore.put_messages(consumer.id, messages)
+      {:ok, acc + length(messages)}
     end)
-  end
-
-  defp insert_or_delete_consumer_message_batch(messages) do
-    groups =
-      Enum.group_by(
-        messages,
-        fn
-          {:insert, %ConsumerEvent{}} -> :events
-          {:insert, %ConsumerRecord{}} -> :record_inserts
-          {:delete, %ConsumerRecord{}} -> :record_deletes
-        end,
-        &elem(&1, 1)
-      )
-
-    events = Enum.map(Map.get(groups, :events, []), &Sequin.Map.from_ecto/1)
-    records = Enum.map(Map.get(groups, :record_inserts, []), &Sequin.Map.from_ecto/1)
-    record_deletes = Enum.map(Map.get(groups, :record_deletes, []), &Sequin.Map.from_ecto/1)
-
-    with {:ok, event_count} <- Consumers.insert_consumer_events(events),
-         {:ok, record_count} <- Consumers.insert_consumer_records(records),
-         {:ok, delete_count} <- Consumers.delete_consumer_records(record_deletes) do
-      {:ok, event_count + record_count + delete_count}
-    end
   end
 
   defp insert_wal_events(wal_events) do

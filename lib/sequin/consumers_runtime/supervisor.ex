@@ -12,6 +12,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.ConsumersRuntime.RabbitMqPipeline
   alias Sequin.ConsumersRuntime.RedisPipeline
   alias Sequin.ConsumersRuntime.SqsPipeline
+  alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.Repo
 
   require Logger
@@ -40,10 +41,6 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def start_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id, opts \\ [])
 
-  def start_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}, _opts) do
-    :ok
-  end
-
   def start_for_sink_consumer(supervisor, %SinkConsumer{} = consumer, opts) do
     consumer = Repo.preload(consumer, [:sequence, :postgres_database], force: true)
 
@@ -51,7 +48,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     # along with a new sequence. We need to wait for the transaction to commit before starting
     # the consumer.
     # TODO: remove this once lifecycle is async
-    if is_nil(consumer.sequence) or is_nil(consumer.postgres_database) do
+    if is_nil(consumer.sequence) or is_nil(consumer.postgres_database) or Repo.in_transaction?() do
       Logger.warning("Consumer #{consumer.id} has no sequence or postgres_database, re-scheduling start")
 
       Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
@@ -59,18 +56,24 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
         start_for_sink_consumer(supervisor, consumer, opts)
       end)
     else
-      default_opts = [consumer: consumer]
-      consumer_features = Consumers.consumer_features(consumer)
+      {:ok, _} = SlotSupervisor.start_child(consumer)
 
-      {features, opts} = Keyword.pop(opts, :features, [])
-      features = Keyword.merge(consumer_features, features)
+      if consumer.type == :sequin_stream do
+        :ok
+      else
+        default_opts = [consumer: consumer]
+        consumer_features = Consumers.consumer_features(consumer)
 
-      opts =
-        default_opts
-        |> Keyword.merge(opts)
-        |> Keyword.put(:features, features)
+        {features, opts} = Keyword.pop(opts, :features, [])
+        features = Keyword.merge(consumer_features, features)
 
-      Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
+        opts =
+          default_opts
+          |> Keyword.merge(opts)
+          |> Keyword.put(:features, features)
+
+        Sequin.DynamicSupervisor.start_child(supervisor, {pipeline(consumer), opts})
+      end
     end
   end
 
@@ -83,12 +86,20 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def stop_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id)
 
-  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream}) do
+  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream} = consumer) do
+    SlotSupervisor.stop_child(consumer.replication_slot_id, consumer.id)
     :ok
   end
 
-  def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id}) do
-    stop_for_sink_consumer(supervisor, id)
+  def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id, replication_slot_id: replication_slot_id}) do
+    SlotSupervisor.stop_child(replication_slot_id, id)
+
+    Enum.each(
+      Map.values(@sinks_to_pipelines),
+      &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id))
+    )
+
+    :ok
   end
 
   def stop_for_sink_consumer(supervisor, id) do

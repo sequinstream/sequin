@@ -212,7 +212,7 @@ defmodule Sequin.Consumers do
 
   def get_sink_consumer(consumer_id) do
     case Repo.get(SinkConsumer, consumer_id) do
-      nil -> {:error, Error.not_found(entity: :sink_consumer)}
+      nil -> {:error, Error.not_found(entity: :sink_consumer, params: %{id: consumer_id})}
       consumer -> {:ok, consumer}
     end
   end
@@ -292,6 +292,13 @@ defmodule Sequin.Consumers do
   end
 
   # ConsumerEvent
+
+  def get_consumer_event(consumer_id, ack_id: ack_id) do
+    consumer_id
+    |> ConsumerEvent.where_consumer_id()
+    |> ConsumerEvent.where_ack_id(ack_id)
+    |> Repo.one()
+  end
 
   def get_consumer_event(consumer_id, commit_lsn) do
     consumer_event =
@@ -374,7 +381,9 @@ defmodule Sequin.Consumers do
 
     events =
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
-        Sequin.Map.from_ecto(%ConsumerEvent{event | updated_at: now, inserted_at: now})
+        %ConsumerEvent{event | updated_at: now, inserted_at: now}
+        |> Sequin.Map.from_ecto()
+        |> Map.drop([:dirty, :flushed_at])
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
@@ -585,6 +594,7 @@ defmodule Sequin.Consumers do
       |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
       # insert_all expects a plain outer-map, but struct embeds
       |> Enum.map(&Sequin.Map.from_ecto/1)
+      |> Enum.map(&Map.drop(&1, [:deleted, :dirty, :flushed_at]))
 
     conflict_target = [:consumer_id, :record_pks, :table_oid]
 
@@ -1019,7 +1029,6 @@ defmodule Sequin.Consumers do
 
     Health.update(consumer, :acknowledge, :healthy)
     Metrics.incr_consumer_messages_processed_count(consumer, count)
-
     Metrics.incr_consumer_messages_processed_throughput(consumer, count)
 
     TracerServer.messages_acked(consumer, ack_ids)

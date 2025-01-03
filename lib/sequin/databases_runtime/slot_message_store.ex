@@ -1,8 +1,8 @@
-defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
+defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @moduledoc """
   A GenServer that manages an in-memory message store for a sink consumer.
 
-  The ConsumerMessageStore serves as a buffer between the replication slot (SlotProcessor) and SinkConsumers. It:
+  The SlotMessageStore serves as a buffer between the replication slot (SlotProcessor) and SinkConsumers. It:
 
   - Stores messages in memory to improve performance
   - Periodically flushes messages to Postgres for durability
@@ -23,6 +23,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
+  alias Sequin.Health
+  alias Sequin.Metrics
 
   require Logger
 
@@ -56,51 +58,64 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     def put_messages(%State{} = state, messages) when record_messages?(state) do
       {_deletes, upserts} = messages |> Map.values() |> Enum.split_with(& &1.deleted)
 
-      # Split messages into updates and inserts based on existing record_pks
-      {updates, inserts} =
-        Enum.split_with(upserts, fn msg ->
-          Map.has_key?(state.messages, msg.record_pks)
+      existing_record_pks_to_ack_id =
+        Map.new(state.messages, fn {ack_id, %ConsumerRecord{record_pks: record_pks}} ->
+          {record_pks, ack_id}
         end)
 
-      updates_by_pk = Map.new(updates, &{&1.record_pks, &1})
-      inserts_by_pk = Map.new(inserts, &{&1.record_pks, &1})
+      # Split messages into updates and inserts based on existing ack_ids
+      {existing_messages, new_messages} =
+        Enum.split_with(upserts, &Map.has_key?(existing_record_pks_to_ack_id, &1.record_pks))
+
+      existing_messages =
+        existing_messages
+        |> Enum.group_by(& &1.record_pks)
+        |> Enum.map(fn {_record_pks, updates} ->
+          Enum.max_by(updates, & &1.commit_lsn)
+        end)
+
+      new_messages =
+        new_messages
+        |> Enum.group_by(& &1.record_pks)
+        |> Map.new(fn {_record_pks, inserts} ->
+          last_insert = Enum.max_by(inserts, & &1.commit_lsn)
+          {last_insert.ack_id, last_insert}
+        end)
 
       # Update existing messages while preserving state for delivered/pending_redelivery
       updated_messages =
-        state.messages
-        |> Map.new(fn {pk, existing} ->
-          case Map.get(updates_by_pk, pk) do
-            nil ->
-              {pk, existing}
+        existing_messages
+        |> Enum.reduce(state.messages, fn updated, acc_msgs ->
+          ack_id = Map.fetch!(existing_record_pks_to_ack_id, updated.record_pks)
+          existing = Map.fetch!(acc_msgs, ack_id)
 
-            updated ->
-              # Preserve state if delivered/pending_redelivery, otherwise use new state
-              state =
-                case existing.state do
-                  state when state in [:delivered, :pending_redelivery] ->
-                    :pending_redelivery
+          # Preserve state if delivered/pending_redelivery, otherwise use new state
+          state =
+            case existing.state do
+              state when state in [:delivered, :pending_redelivery] ->
+                :pending_redelivery
 
-                  _ ->
-                    updated.state || :available
-                end
+              _ ->
+                updated.state || :available
+            end
 
-              {pk,
-               %{
-                 existing
-                 | # Most important bit is to update the state. That way when we ack,
-                   # if pending_redelivery, we'll redeliver it.
-                   # We update commit_lsn and seq to match the latest version of the message
-                   state: state,
-                   commit_lsn: updated.commit_lsn,
-                   seq: updated.seq,
+          updated_message = %ConsumerRecord{
+            existing
+            | # Most important bit is to update the state. That way when we ack,
+              # if pending_redelivery, we'll redeliver it.
+              # We update commit_lsn and seq to match the latest version of the message
+              state: state,
+              data: updated.data,
+              commit_lsn: updated.commit_lsn,
+              seq: updated.seq,
 
-                   # Mark as dirty for next flush
-                   dirty: true
-               }}
-          end
+              # Mark as dirty for next flush
+              dirty: true
+          }
+
+          Map.replace!(acc_msgs, ack_id, updated_message)
         end)
-        # Add new messages
-        |> Map.merge(inserts_by_pk)
+        |> Map.merge(new_messages)
 
       %{state | messages: updated_messages}
     end
@@ -171,7 +186,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     end
 
     def update_messages(%State{} = state, messages) do
-      messages = Map.new(messages, &{&1.record_pks, &1})
+      messages = Map.new(messages, &{&1.ack_id, &1})
 
       %{state | messages: Map.merge(state.messages, messages)}
     end
@@ -238,13 +253,20 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     GenServer.call(via_tuple(consumer_id), {:nack, ack_ids_with_not_visible_until})
   end
 
+  def child_spec(opts) do
+    %{
+      id: via_tuple(opts[:consumer_id]),
+      start: {__MODULE__, :start_link, [opts]}
+    }
+  end
+
   @impl GenServer
   def init(opts) do
     state = %State{
       consumer_id: Keyword.fetch!(opts, :consumer_id),
       messages: %{},
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(10)),
-      flush_batch_size: Keyword.get(opts, :flush_batch_size, 10_000),
+      flush_batch_size: Keyword.get(opts, :flush_batch_size, 1_000),
       test_pid: Keyword.get(opts, :test_pid)
     }
 
@@ -260,80 +282,106 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
 
     schedule_flush(state)
 
-    case Consumers.get_consumer(state.consumer_id) do
+    case Consumers.get_sink_consumer(state.consumer_id) do
       {:ok, consumer} ->
-        messages = load_messages(consumer)
+        Logger.info("[SlotMessageStore] Loading messages...")
+        {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
+        Logger.info("[SlotMessageStore] Loaded #{map_size(messages)} messages in #{div(time, 1000)}ms")
+
         {:noreply, %{state | messages: messages, consumer: consumer}}
 
       {:error, %Error.NotFoundError{entity: :consumer}} ->
-        Logger.error("[ConsumerMessageStore] Consumer #{state.consumer_id} not found")
+        Logger.error("[SlotMessageStore] Consumer #{state.consumer_id} not found")
         {:stop, :normal, state}
     end
   end
 
   @impl GenServer
   def handle_call({:put_messages, messages}, _from, %State{} = state) do
-    messages =
-      messages
-      |> Stream.map(fn msg -> %{msg | ack_id: UUID.uuid4(), dirty: true} end)
-      |> Map.new(&{&1.record_pks, &1})
+    {time, state} =
+      :timer.tc(fn ->
+        messages =
+          messages
+          |> Stream.map(fn msg -> %{msg | ack_id: UUID.uuid4(), dirty: true} end)
+          |> Map.new(&{&1.ack_id, &1})
 
-    state = State.put_messages(state, messages)
+        _state = State.put_messages(state, messages)
+      end)
+
+    Logger.info(
+      "[SlotMessageStore] Put #{length(messages)} messages in #{div(time, 1000)}ms (message_count=#{map_size(state.messages)})"
+    )
+
+    Health.update(state.consumer, :ingestion, :healthy)
     :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
 
     {:reply, :ok, state}
   end
 
   def handle_call({:produce, count}, _from, %State{} = state) do
-    deliverable_messages = State.deliverable_messages(state, count)
-    {state, messages} = State.deliver_messages(state, deliverable_messages)
+    {time, {state, messages}} =
+      :timer.tc(fn ->
+        deliverable_messages = State.deliverable_messages(state, count)
+        {_state, _messages} = State.deliver_messages(state, deliverable_messages)
+      end)
 
-    if state.consumer.message_kind == :record do
-      with {:ok, messages} <- Consumers.put_source_data(state.consumer, messages) do
-        # Split messages into valid and nil records
-        {valid_messages, nil_messages} = Enum.split_with(messages, &(&1.data.record != nil))
+    Logger.info(
+      "[SlotMessageStore] Produced #{length(messages)} messages in #{div(time, 1000)}ms (message_count=#{map_size(state.messages)})"
+    )
 
-        # Remove nil messages from state
-        nil_message_pks = Enum.map(nil_messages, & &1.record_pks)
-        state = %{state | messages: Map.drop(state.messages, nil_message_pks)}
+    Health.update(state.consumer, :receive, :healthy)
 
-        if Enum.any?(nil_messages) do
-          Logger.info("Removed #{length(nil_messages)} messages with nil data.record from in-memory store")
-        end
+    {:reply, {:ok, messages}, state}
+  end
 
-        {:reply, {:ok, valid_messages}, state}
-      end
-    else
-      {:reply, {:ok, messages}, state}
-    end
+  def handle_call({:ack, []}, _from, state) do
+    {:reply, :ok, state}
   end
 
   def handle_call({:ack, ack_ids}, _from, state) do
-    # Delete from in-memory store
-    id_set = MapSet.new(ack_ids)
+    {time, {messages, acked_count}} =
+      :timer.tc(fn ->
+        {messages, acked_count} =
+          Enum.reduce(ack_ids, {state.messages, 0}, fn ack_id, {acc_msgs, acked_count} ->
+            case Map.get(acc_msgs, ack_id) do
+              nil ->
+                {acc_msgs, acked_count}
 
-    # TODO: optimize this with a secondary index on ack_id?
-    # with 100k messages, this takes 230 ms
-    # with 1M messages, this takes 3 seconds
-    messages =
-      state.messages
-      |> Map.values()
-      |> Enum.filter(&(not MapSet.member?(id_set, &1.ack_id)))
-      |> Map.new(&{&1.record_pks, &1})
+              %ConsumerRecord{state: :pending_redelivery} = msg ->
+                {Map.replace!(acc_msgs, ack_id, %{
+                   msg
+                   | state: :available,
+                     not_visible_until: nil,
+                     dirty: true
+                 }), acked_count + 1}
+
+              _ ->
+                {Map.delete(acc_msgs, ack_id), acked_count + 1}
+            end
+          end)
+
+        Health.update(state.consumer, :acknowledge, :healthy)
+        Metrics.incr_consumer_messages_processed_count(state.consumer, acked_count)
+        Metrics.incr_consumer_messages_processed_throughput(state.consumer, acked_count)
+
+        {messages, acked_count}
+      end)
+
+    Logger.debug(
+      "[SlotMessageStore] Acked #{acked_count} messages in #{div(time, 1000)}ms (message_count=#{map_size(messages)})"
+    )
 
     {:reply, :ok, %{state | messages: messages}}
   end
 
   def handle_call({:nack, ack_ids_with_not_visible_until}, _from, state) do
-    # TODO: optimize this with a secondary index on ack_id?
-    # Update messages with matching ack_ids to set their not_visible_until and state
     updated_messages =
-      Map.new(state.messages, fn {record_pks, msg} ->
-        if not_visible_until = Map.get(ack_ids_with_not_visible_until, msg.ack_id) do
+      Enum.reduce(ack_ids_with_not_visible_until, state.messages, fn {ack_id, not_visible_until}, acc_msgs ->
+        if msg = Map.get(acc_msgs, ack_id) do
           msg = %{msg | not_visible_until: not_visible_until, state: :available, dirty: true}
-          {record_pks, msg}
+          Map.replace(acc_msgs, ack_id, msg)
         else
-          {record_pks, msg}
+          acc_msgs
         end
       end)
 
@@ -346,10 +394,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     more? = length(to_flush) == state.flush_batch_size
 
     state = flush_messages(state, to_flush)
+    Logger.info("[SlotMessageStore] Flushed #{length(to_flush)} messages")
 
     if more? do
       Process.send_after(self(), :flush, 0)
     else
+      Logger.info("[SlotMessageStore] No more messages to flush")
       schedule_flush(state)
     end
 
@@ -363,6 +413,29 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
     State.update_messages(state, messages)
+  rescue
+    error in [Postgrex.Error] ->
+      # unique violation
+      if error.postgres.code == :unique_violation do
+        # Extract the ack_id from the error message
+        ack_id = extract_ack_id_from_error(error)
+
+        # Get in-memory message state
+        in_memory_msg = Map.get(state.messages, ack_id)
+
+        # Query Postgres for message state
+        db_msg = Consumers.get_consumer_event(state.consumer_id, ack_id: ack_id)
+
+        Logger.error("""
+        Duplicate key violation during message flush
+        ack_id: #{ack_id}
+        in_memory_state: #{inspect(in_memory_msg)}
+        database_state: #{inspect(db_msg)}
+        error: #{inspect(error)}
+        """)
+      end
+
+      reraise error, __STACKTRACE__
   end
 
   defp flush_messages(%State{} = state, messages) when record_messages?(state) do
@@ -382,13 +455,21 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStore do
     id
     |> Consumers.list_consumer_events_for_consumer()
     |> Enum.map(fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
-    |> Map.new(&{&1.record_pks, &1})
+    |> Map.new(&{&1.ack_id, &1})
   end
 
   defp load_messages(%SinkConsumer{message_kind: :record, id: id}) do
     id
     |> Consumers.list_consumer_records_for_consumer()
     |> Enum.map(fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
-    |> Map.new(&{&1.record_pks, &1})
+    |> Map.new(&{&1.ack_id, &1})
+  end
+
+  # Helper to extract ack_id from Postgres error message
+  defp extract_ack_id_from_error(error) do
+    case Regex.run(~r/ack_id\)=\([^,]+, ([^)]+)\)/, Exception.message(error)) do
+      [_, ack_id] -> String.trim(ack_id)
+      _ -> "unknown"
+    end
   end
 end

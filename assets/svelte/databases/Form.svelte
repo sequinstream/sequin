@@ -572,7 +572,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             <AccordionContent>
               <CodeWithCopy
                 language="sql"
-                code={`create publication ${form.publication_name || "my_pub"} for all tables;`}
+                code={`create publication ${form.publication_name || "my_pub"} for all tables with (publish_via_partition_root = true);`}
               />
             </AccordionContent>
           </AccordionItem>
@@ -583,7 +583,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             <AccordionContent>
               <CodeWithCopy
                 language="sql"
-                code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3;`}
+                code={`create publication ${form.publication_name || "my_pub"} for table table1, table2, table3 with (publish_via_partition_root = true);`}
               />
             </AccordionContent>
           </AccordionItem>
@@ -594,7 +594,7 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
             <AccordionContent>
               <CodeWithCopy
                 language="sql"
-                code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema;`}
+                code={`create publication ${form.publication_name || "my_pub"} for tables in schema myschema with (publish_via_partition_root = true);`}
               />
             </AccordionContent>
           </AccordionItem>

@@ -433,7 +433,9 @@ defmodule Sequin.Databases do
       {:ok, %{num_rows: 0}} ->
         # Publication doesn't exist, create it
         table_list = Enum.map_join(tables, ", ", fn [schema, table] -> ~s{"#{schema}"."#{table}"} end)
-        create_query = "CREATE PUBLICATION #{publication_name} FOR TABLE #{table_list}"
+
+        create_query =
+          "CREATE PUBLICATION #{publication_name} FOR TABLE #{table_list} WITH (publish_via_partition_root = true)"
 
         case Postgres.query(conn, create_query, []) do
           {:ok, _} -> :ok

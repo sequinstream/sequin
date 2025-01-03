@@ -83,7 +83,7 @@ Enabling logical replication often requires a database restart.
 [Publications](https://www.postgresql.org/docs/current/sql-createpublication.html) identify which tables to track for changes.
 
 <Warning>
-As a best practice, create the [publication](#publications) before creating the replication slot. Creating the slot first can create a race condition that can lead to data loss.
+Create the [publication](#publications) **before** creating the replication slot. If you don't, the publication and slot combination may be invalid, and Sequin will fail to connect to your database.
 </Warning>
 
 ### Creating a publication
@@ -108,31 +108,24 @@ create publication sequin_publication for all tables in schema public;
 
 ### Working with partitioned tables
 
-When using partitioned tables, you have two options to ensure Sequin captures changes correctly:
+When using partitioned tables, you **must ensure [`publish_via_partition_root`](https://www.postgresql.org/docs/current/sql-createpublication.html#SQL-CREATEPUBLICATION-PARAMS-WITH-PUBLISH-VIA-PARTITION-ROOT) is set to `true`** to ensure Sequin captures changes correctly. This means changes to partition tables are associated with the root table:
 
-- Enable [`publish_via_partition_root`](https://www.postgresql.org/docs/current/sql-createpublication.html#SQL-CREATEPUBLICATION-PARAMS-WITH-PUBLISH-VIA-PARTITION-ROOT):
-    ```sql
-    -- Create publication for a partitioned table
-    create publication sequin_publication for table orders 
-    with (publish_via_partition_root = true);
+```sql
+-- Create publication for a partitioned table
+create publication sequin_publication for table orders 
+with (publish_via_partition_root = true);
 
-    -- Or modify an existing publication
-    alter publication sequin_publication set (publish_via_partition_root = true);
-    ```
-
-- Add each partition table explicitly to the publication:
-    ```sql
-    create publication sequin_publication for table
-        orders_2024_q1,
-        orders_2024_q2,
-        orders_2024_q3,
-        orders_2024_q4;
-    ```
-
-Choose the first option if you're dynamically creating partitions. The second option is fine if you have a fixed set of partitions.
+-- Or modify an existing publication
+alter publication sequin_publication set (publish_via_partition_root = true);
+```
 
 <Note>
-If you created your publication using `for all tables` or `for all tables in schema`, partitioned tables will work automatically without additional configuration.
+You can check this setting by running, for example:
+
+```sql
+SELECT pubviaroot FROM pg_publication where pubname = 'sequin_pub';
+```
+
 </Note>
 
 ### Modifying Publications
@@ -179,7 +172,7 @@ drop replication slot sequin_slot;
 ### Best practices
 
 <Warning>
-As a best practice, create the [publication](#publications) before creating the replication slot. Creating the slot first can create a race condition that can lead to data loss.
+Create the [publication](#publications) **before** creating the replication slot. If you don't, the publication and slot combination may be invalid, and Sequin will fail to connect to your database.
 </Warning>
 
 **Monitor slot lag**

@@ -30,13 +30,13 @@ This guide provides step-by-step instructions to connect your Supabase [Postgres
     In the Supabase SQL editor, execute the following SQL query to create a publication:
 
         ```sql
-    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3 WITH (publish_via_partition_root = true);
     ```
 
     If you want to publish changes from all tables, you can use:
 
     ```sql
-    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES WITH (publish_via_partition_root = true);
     ```
   </Step>
   <Step title="Create a replication slot">

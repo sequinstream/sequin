@@ -97,7 +97,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
     consumer = assigns[:consumer]
-
     component = "consumers/SinkConsumerForm"
 
     socket =
@@ -342,7 +341,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       client =
         PubSub.new(
           sink.project_id,
-          sink.credentials
+          sink.credentials,
+          base_url: sink.connection_url
         )
 
       case PubSub.topic_metadata(client, sink.topic_id) do
@@ -672,6 +672,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "gcp_pubsub",
       "project_id" => sink.project_id,
       "topic_id" => sink.topic_id,
+      "use_emulator" => sink.use_emulator,
+      "connection_url" => sink.connection_url,
       "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
     }
   end

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Input } from "$lib/components/ui/input";
+  import { Switch } from "$lib/components/ui/switch";
   import {
     Card,
     CardContent,
@@ -14,8 +15,14 @@
 </script>
 
 <Card>
-  <CardHeader>
+  <CardHeader
+    class="space-y-1.5 p-6 flex flex-row items-center justify-between"
+  >
     <CardTitle>GCP Pub/Sub Configuration</CardTitle>
+    <div>
+      <Switch id="use-emulator" bind:checked={form.sink.use_emulator} />
+      <Label for="use-emulator" class="align-text-top">Use Emulator</Label>
+    </div>
   </CardHeader>
   <CardContent class="space-y-4">
     <div class="space-y-2">
@@ -32,7 +39,19 @@
         <p class="text-destructive text-sm">{errors.sink.project_id}</p>
       {/if}
     </div>
-
+    {#if form.sink.use_emulator}
+      <div class="space-y-2">
+        <Label for="project-id">Emulator Connection URL</Label>
+        <Input
+          id="emulator-url"
+          bind:value={form.sink.emulator_url}
+          placeholder="localhost:8432"
+        />
+        {#if errors.sink?.emulator_url}
+          <p class="text-destructive text-sm">{errors.sink.emulator_url}</p>
+        {/if}
+      </div>
+    {/if}
     <div class="space-y-2">
       <Label for="topic-id">Topic ID</Label>
       <Input

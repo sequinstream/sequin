@@ -12,7 +12,7 @@ defmodule SequinWeb.HealthCheckController do
   def check_cloud(conn, _params) do
     case CheckSystemHealth.check() do
       :ok ->
-        send_resp(conn, 200, Jason.encode!(%{ok: true, rev: System.get_env("CURRENT_GIT_SHA")}))
+        send_resp(conn, 200, Jason.encode!(%{ok: true, rev: System.get_env("RELEASE_VERSION")}))
 
       {:error, error} ->
         Logger.error("Error while checking health: #{inspect(error)}")
@@ -24,7 +24,7 @@ defmodule SequinWeb.HealthCheckController do
   def check(conn, _params) do
     case CheckSystemHealth.check() do
       :ok ->
-        send_resp(conn, 200, Jason.encode!(%{ok: true, rev: System.get_env("CURRENT_GIT_SHA")}))
+        send_resp(conn, 200, Jason.encode!(%{ok: true, rev: System.get_env("RELEASE_VERSION")}))
 
       {:error, %ServiceError{} = error} ->
         error_msg = "Error with service: #{error.message}"

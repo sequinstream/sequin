@@ -194,6 +194,7 @@ build_and_push_docker() {
             --platform linux/amd64 \
             --build-arg SELF_HOSTED=1 \
             --build-arg RELEASE_VERSION="$version" \
+            --build-arg SENTRY_DSN="$sentry_dsn" \
             --cache-from "type=registry,ref=sequin/sequin:buildcache-amd64" \
             --cache-to "type=registry,ref=sequin/sequin:buildcache-amd64,mode=max" \
             --provenance=false \
@@ -212,6 +213,7 @@ build_and_push_docker() {
             --platform linux/arm64 \
             --build-arg SELF_HOSTED=1 \
             --build-arg RELEASE_VERSION="$version" \
+            --build-arg SENTRY_DSN="$sentry_dsn" \
             --cache-from "type=registry,ref=sequin/sequin:buildcache-arm64" \
             --cache-to "type=registry,ref=sequin/sequin:buildcache-arm64,mode=max" \
             --provenance=false \
@@ -269,10 +271,18 @@ if [ ! -f "$settings_file" ]; then
     exit 1
 fi
 
+# Read all required settings early
 homebrew_dir=$(jq -r '.homebrewDir // empty' "$settings_file")
+sentry_dsn=$(jq -r '.sentryDSN // empty' "$settings_file")
 
+# Validate all required settings
 if [ -z "$homebrew_dir" ]; then
     echo "Error: homebrewDir not set in top-level .settings.json. Please set it and try again."
+    exit 1
+fi
+
+if [ -z "$sentry_dsn" ]; then
+    echo "Error: sentryDSN not set in top-level .settings.json. Please set it and try again."
     exit 1
 fi
 

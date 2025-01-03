@@ -16,6 +16,10 @@ else
     default_handler: [formatter: {LoggerJSON.Formatters.Datadog, metadata: :all}]
 end
 
+config :sentry,
+  dsn: System.get_env("SENTRY_DSN"),
+  release: System.get_env("RELEASE_VERSION")
+
 config :sequin, self_hosted: self_hosted, portal_hostname: "portal.sequin.local"
 
 # Configures Swoosh API Client

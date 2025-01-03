@@ -79,6 +79,8 @@ jobs:
           build-args: |
             MIGRATOR=Sequin.Release
             RELEASE_NAME=sequin
+            RELEASE_VERSION=${{ steps.repo-info.outputs.sha }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
           tags: |
             ${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:${{ steps.repo-info.outputs.sha }}
             ${{ secrets.ECR_URL }}/${{ secrets.IMAGE_NAME }}:latest

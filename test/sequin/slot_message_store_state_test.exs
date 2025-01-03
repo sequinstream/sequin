@@ -1,7 +1,7 @@
-defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
+defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.ConsumersRuntime.ConsumerMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Factory.ConsumersFactory
 
   describe "put_messages/2 with :event messages" do
@@ -62,38 +62,33 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
       {:ok, %{state: state}}
     end
 
-    test "preserves delivery state for existing records", %{state: state} do
-      # Create initial record in delivered state
-      initial_record =
-        ConsumersFactory.consumer_record(
-          state: :delivered,
-          deliver_count: 2,
-          last_delivered_at: DateTime.utc_now(),
-          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
-        )
+    test "merges new record messages into empty state", %{state: state} do
+      record1 = ConsumersFactory.consumer_record()
+      record2 = ConsumersFactory.consumer_record()
+      messages = Map.new([record1, record2], &{&1.record_pks, &1})
 
-      state = %{state | messages: Map.new([{initial_record.record_pks, initial_record}])}
+      updated_state = State.put_messages(state, messages)
 
-      # Create updated version of same record
-      updated_record = %{
-        initial_record
-        | # This should be preserved as :pending_redelivery
-          state: :available,
-          # This should be preserved from original
-          deliver_count: 0,
-          # This should be preserved from original
-          last_delivered_at: nil
-      }
+      assert map_size(updated_state.messages) == 2
+      assert Map.has_key?(updated_state.messages, record1.record_pks)
+      assert Map.has_key?(updated_state.messages, record2.record_pks)
+    end
 
-      updated_state = State.put_messages(state, Map.new([{updated_record.record_pks, updated_record}]))
+    test "merges new event messages with existing messages", %{state: state} do
+      # Add initial message
+      record1 = ConsumersFactory.consumer_record()
+      initial_messages = Map.new([record1], &{&1.record_pks, &1})
+      state = %{state | messages: initial_messages}
 
-      result_record = updated_state.messages[initial_record.record_pks]
-      assert result_record.state == :pending_redelivery
-      assert result_record.deliver_count == initial_record.deliver_count
-      assert result_record.last_delivered_at == initial_record.last_delivered_at
-      assert result_record.not_visible_until == initial_record.not_visible_until
-      # Should be marked dirty for next flush
-      assert result_record.dirty == true
+      # Add new message
+      record2 = ConsumersFactory.consumer_record()
+      new_messages = Map.new([record2], &{&1.record_pks, &1})
+
+      updated_state = State.put_messages(state, new_messages)
+
+      assert map_size(updated_state.messages) == 2
+      assert Map.has_key?(updated_state.messages, record1.record_pks)
+      assert Map.has_key?(updated_state.messages, record2.record_pks)
     end
   end
 
@@ -189,13 +184,13 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
         )
 
       messages = [msg1, msg2]
-      state = %{state | messages: Map.new(messages, &{&1.record_pks, &1})}
+      state = %{state | messages: Map.new(messages, &{&1.ack_id, &1})}
 
       now = DateTime.utc_now()
       {updated_state, delivered_messages} = State.deliver_messages(state, messages)
 
       # Check first message
-      delivered1 = updated_state.messages[msg1.record_pks]
+      delivered1 = updated_state.messages[msg1.ack_id]
       assert delivered1.deliver_count == 1
       assert DateTime.compare(delivered1.last_delivered_at, now) in [:eq, :gt]
       assert DateTime.compare(delivered1.not_visible_until, not_visible_until) in [:eq, :gt]
@@ -203,7 +198,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
       assert delivered1.dirty == true
 
       # Check second message
-      delivered2 = updated_state.messages[msg2.record_pks]
+      delivered2 = updated_state.messages[msg2.ack_id]
       assert delivered2.deliver_count == 2
       assert DateTime.compare(delivered2.last_delivered_at, now) in [:eq, :gt]
       assert DateTime.compare(delivered2.not_visible_until, not_visible_until) in [:eq, :gt]
@@ -233,7 +228,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
       # Create initial messages
       msg1 = ConsumersFactory.consumer_record()
       msg2 = ConsumersFactory.consumer_record()
-      initial_messages = Map.new([msg1, msg2], &{&1.record_pks, &1})
+      initial_messages = Map.new([msg1, msg2], &{&1.ack_id, &1})
       state = %{state | messages: initial_messages}
 
       # Update one existing message and add one new message
@@ -244,9 +239,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerMessageStoreStateTest do
       updated_state = State.update_messages(state, updates)
 
       assert map_size(updated_state.messages) == 3
-      assert updated_state.messages[msg1.record_pks].state == :delivered
-      assert updated_state.messages[msg2.record_pks] == msg2
-      assert Map.has_key?(updated_state.messages, msg3.record_pks)
+      assert updated_state.messages[msg1.ack_id].state == :delivered
+      assert updated_state.messages[msg2.ack_id] == msg2
+      assert Map.has_key?(updated_state.messages, msg3.ack_id)
     end
   end
 

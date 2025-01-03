@@ -40,7 +40,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
     embeds_one :data, ConsumerEventData
 
-    # For ConsumerMessageStore
+    # For SlotMessageStore
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
 
@@ -125,6 +125,10 @@ defmodule Sequin.Consumers.ConsumerEvent do
 
   def where_commit_lsns(query \\ base_query(), commit_lsns) do
     from([consumer_event: ce] in query, where: ce.commit_lsn in ^commit_lsns)
+  end
+
+  def where_ack_id(query \\ base_query(), ack_id) do
+    from([consumer_event: ce] in query, where: ce.ack_id == ^ack_id)
   end
 
   def where_ack_ids(query \\ base_query(), ack_ids) do

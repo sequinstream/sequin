@@ -4,11 +4,11 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   """
   use Supervisor
 
+  alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
-  alias Sequin.DatabasesRuntime.SlotProcessorSupervisor
+  alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.DatabasesRuntime.TableReaderServerSupervisor
   alias Sequin.DatabasesRuntime.WalEventSupervisor
@@ -19,7 +19,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   require Logger
 
   defp table_reader_supervisor, do: {:via, :syn, {:replication, TableReaderServerSupervisor}}
-  defp postgres_replication_supervisor, do: {:via, :syn, {:replication, SlotProcessorSupervisor}}
+  defp slot_supervisor, do: {:via, :syn, {:replication, SlotSupervisor}}
   defp wal_event_supervisor, do: {:via, :syn, {:replication, WalEventSupervisor}}
 
   def start_link(opts) do
@@ -45,8 +45,25 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Sequin.DynamicSupervisor.start_child(supervisor, {TableReaderServer, opts})
   end
 
-  def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer_or_backfill_id) do
-    Sequin.DynamicSupervisor.stop_child(supervisor, TableReaderServer.via_tuple(consumer_or_backfill_id))
+  def stop_table_reader(supervisor \\ table_reader_supervisor(), consumer)
+
+  def stop_table_reader(_supervisor, %SinkConsumer{active_backfill: nil}) do
+    :ok
+  end
+
+  def stop_table_reader(supervisor, %SinkConsumer{active_backfill: %Backfill{id: backfill_id}}) do
+    Sequin.DynamicSupervisor.stop_child(supervisor, TableReaderServer.via_tuple(backfill_id))
+    :ok
+  end
+
+  def stop_table_reader(supervisor, %SinkConsumer{} = consumer) do
+    consumer
+    |> Repo.preload(:active_backfill)
+    |> stop_table_reader(supervisor)
+  end
+
+  def stop_table_reader(supervisor, backfill_id) when is_binary(backfill_id) do
+    Sequin.DynamicSupervisor.stop_child(supervisor, TableReaderServer.via_tuple(backfill_id))
     :ok
   end
 
@@ -55,29 +72,38 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     start_table_reader(supervisor, consumer, opts)
   end
 
-  def start_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id, opts \\ [])
+  def start_replication(supervisor \\ slot_supervisor(), pg_replication_or_id, opts \\ [])
+
+  def start_replication(_supervisor, %PostgresReplicationSlot{status: :disabled} = pg_replication, _opts) do
+    Logger.info("PostgresReplicationSlot #{pg_replication.id} is disabled, skipping start")
+    {:error, :disabled}
+  end
 
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
-    pg_replication = Repo.preload(pg_replication, :postgres_database)
+    pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
+    opts = Keyword.put(opts, :pg_replication, pg_replication)
+    test_pid = Keyword.get(opts, :test_pid)
 
-    if pg_replication.status == :disabled do
-      Logger.info("PostgresReplicationSlot #{pg_replication.id} is disabled, skipping start")
-      {:error, :disabled}
-    else
-      default_opts = [
-        id: pg_replication.id,
-        slot_name: pg_replication.slot_name,
-        publication: pg_replication.publication_name,
-        postgres_database: pg_replication.postgres_database,
-        replication_slot: pg_replication,
-        message_handler_ctx: MessageHandler.context(pg_replication),
-        message_handler_module: MessageHandler,
-        connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),
-        ipv6: pg_replication.postgres_database.ipv6
-      ]
+    opts =
+      Keyword.update(opts, :slot_message_store_opts, [test_pid: test_pid], fn opts ->
+        Keyword.put(opts, :test_pid, test_pid)
+      end)
 
-      opts = Keyword.merge(default_opts, opts)
-      Sequin.DynamicSupervisor.start_child(supervisor, {SlotProcessor, opts})
+    case Sequin.DynamicSupervisor.start_child(supervisor, {SlotSupervisor, opts}) do
+      {:ok, pid} ->
+        SlotSupervisor.start_children(pg_replication, opts)
+        {:ok, pid}
+
+      {:ok, pid, _term} ->
+        SlotSupervisor.start_children(pg_replication, opts)
+        {:ok, pid}
+
+      {:error, {:already_started, pid}} ->
+        SlotSupervisor.start_children(pg_replication, opts)
+        {:ok, pid}
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -106,7 +132,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     end
   end
 
-  def stop_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id)
+  def stop_replication(supervisor \\ slot_supervisor(), pg_replication_or_id)
 
   def stop_replication(supervisor, %PostgresReplicationSlot{id: id}) do
     stop_replication(supervisor, id)
@@ -117,7 +143,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     :ok
   end
 
-  def restart_replication(supervisor \\ postgres_replication_supervisor(), pg_replication_or_id) do
+  def restart_replication(supervisor \\ slot_supervisor(), pg_replication_or_id) do
     stop_replication(supervisor, pg_replication_or_id)
     start_replication(supervisor, pg_replication_or_id)
   end
@@ -190,7 +216,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     [
       Sequin.DatabasesRuntime.Starter,
       Sequin.DynamicSupervisor.child_spec(name: table_reader_supervisor()),
-      Sequin.DynamicSupervisor.child_spec(name: postgres_replication_supervisor()),
+      Sequin.DynamicSupervisor.child_spec(name: slot_supervisor()),
       Sequin.DynamicSupervisor.child_spec(name: wal_event_supervisor())
     ]
   end

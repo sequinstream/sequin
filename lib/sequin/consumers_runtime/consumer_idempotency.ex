@@ -14,6 +14,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
   alias Sequin.Error
   alias Sequin.Redis
 
+  require Logger
+
   @type consumer_id :: String.t()
   @type seq :: integer()
 
@@ -47,8 +49,22 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
 
   @spec trim(consumer_id(), seq()) :: :ok | {:error, Error.t()}
   def trim(consumer_id, seq) do
-    with {:ok, _} <- Redis.command(["ZREMRANGEBYSCORE", delivered_key(consumer_id), "-inf", seq]) do
+    key = delivered_key(consumer_id)
+
+    with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
+         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", seq]),
+         {:ok, final_size} <- Redis.command(["ZCARD", key]) do
+      Logger.info("[ConsumerIdempotency] Trimmed set",
+        consumer_id: consumer_id,
+        initial_size: initial_size,
+        records_removed: trimmed,
+        final_size: final_size
+      )
+
       :ok
+    else
+      {:error, error} when is_exception(error) ->
+        Logger.error("[ConsumerIdempotency] Error trimming set", error: error)
     end
   end
 

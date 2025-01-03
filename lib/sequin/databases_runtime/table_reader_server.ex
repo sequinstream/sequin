@@ -47,7 +47,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   # Convenience function
-  def via_tuple(%_{} = consumer) do
+  def via_tuple(%SinkConsumer{} = consumer) do
     consumer = Repo.preload(consumer, :active_backfill)
     via_tuple(consumer.active_backfill.id)
   end

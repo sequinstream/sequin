@@ -6,9 +6,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
-  alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime.ConsumerIdempotency
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Time
@@ -90,7 +90,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {:ok, messages} = Consumers.receive_for_consumer(state.consumer, batch_size: demand * state.batch_size)
+    {:ok, messages} = produce_messages(state.consumer.id, demand * state.batch_size)
 
     Logger.debug(
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
@@ -98,13 +98,15 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     seqs_to_deliver = Enum.map(messages, & &1.seq)
     {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
-    messages = Enum.reject(messages, &(&1.seq in delivered_seqs))
+    {delivered_messages, messages} = Enum.split_with(messages, &(&1.seq in delivered_seqs))
 
     unless delivered_seqs == [] do
       Logger.warning(
         "Received #{length(delivered_seqs)} messages for consumer #{state.consumer.id} that have already been delivered",
         seqs: delivered_seqs
       )
+
+      SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
     end
 
     broadway_messages =
@@ -125,6 +127,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   defp handle_receive_messages(state) do
     {:noreply, [], state}
+  end
+
+  defp produce_messages(consumer_id, count) do
+    SlotMessageStore.produce(consumer_id, count)
+  catch
+    :exit, error ->
+      Logger.error("Error producing messages for consumer #{consumer_id}", error: error)
+      {:ok, []}
   end
 
   defp schedule_receive_messages(state) do
@@ -157,7 +167,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     end
 
     if length(successful_ids) > 0 do
-      Consumers.ack_messages(consumer, successful_ids)
+      SlotMessageStore.ack(consumer, successful_ids)
     end
 
     failed
@@ -173,7 +183,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     |> Enum.chunk_every(1000)
     |> Enum.each(fn chunk ->
       ack_ids_with_not_visible_until = Map.new(chunk)
-      Consumers.nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until)
+      SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
     end)
 
     if test_pid do

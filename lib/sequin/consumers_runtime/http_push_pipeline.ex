@@ -76,6 +76,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       cond do
         features[:legacy_event_transform] && length(messages) == 1 ->
           [message] = messages
+
           legacy_event_transform_message(consumer, message.data)
 
         features[:legacy_event_singleton_transform] && length(messages) == 1 ->

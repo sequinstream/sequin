@@ -19,7 +19,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
-  alias Sequin.Test.Support.Models.Character
+  alias Sequin.TestSupport.Models.Character
 
   setup do
     # Set up the database and consumer

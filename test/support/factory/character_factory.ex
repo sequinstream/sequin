@@ -5,10 +5,10 @@ if Mix.env() == :test do
 
     alias Sequin.Factory
     alias Sequin.Repo
-    alias Sequin.Test.Support.Models.Character
-    alias Sequin.Test.Support.Models.CharacterDetailed
-    alias Sequin.Test.Support.Models.CharacterIdentFull
-    alias Sequin.Test.Support.Models.CharacterMultiPK
+    alias Sequin.TestSupport.Models.Character
+    alias Sequin.TestSupport.Models.CharacterDetailed
+    alias Sequin.TestSupport.Models.CharacterIdentFull
+    alias Sequin.TestSupport.Models.CharacterMultiPK
 
     def character(attrs \\ []) do
       attrs = Map.new(attrs)

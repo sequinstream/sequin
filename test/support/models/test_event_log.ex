@@ -1,4 +1,4 @@
-defmodule Sequin.Test.Support.Models.TestEventLog do
+defmodule Sequin.TestSupport.Models.TestEventLog do
   @moduledoc false
   use Ecto.Schema
 

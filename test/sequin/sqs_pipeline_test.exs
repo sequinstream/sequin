@@ -12,8 +12,8 @@ defmodule Sequin.ConsumersRuntime.SqsPipelineTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to SQS" do
     setup do

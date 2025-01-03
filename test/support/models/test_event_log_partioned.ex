@@ -1,4 +1,4 @@
-defmodule Sequin.Test.Support.Models.TestEventLogPartitioned do
+defmodule Sequin.TestSupport.Models.TestEventLogPartitioned do
   @moduledoc false
   use Ecto.Schema
 

@@ -6,7 +6,7 @@ defmodule SequinWeb.UserConfirmationLiveTest do
   alias Sequin.Accounts
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Repo
-  alias Sequin.Test.Support.AccountsSupport
+  alias Sequin.TestSupport.AccountsSupport
 
   setup do
     %{user: AccountsFactory.insert_user!()}

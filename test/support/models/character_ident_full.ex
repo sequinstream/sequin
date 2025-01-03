@@ -1,4 +1,4 @@
-defmodule Sequin.Test.Support.Models.CharacterIdentFull do
+defmodule Sequin.TestSupport.Models.CharacterIdentFull do
   @moduledoc false
   use Ecto.Schema
 

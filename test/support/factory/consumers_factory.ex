@@ -28,9 +28,9 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
-  alias Sequin.Test.Support.Models.TestEventLog
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.TestEventLog
 
   def sink_consumer(attrs \\ []) do
     attrs = Map.new(attrs)

@@ -5,7 +5,7 @@ defmodule SequinWeb.UserSettingsLiveTest do
 
   alias Sequin.Accounts
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Test.Support.AccountsSupport
+  alias Sequin.TestSupport.AccountsSupport
 
   @moduletag :skip
 

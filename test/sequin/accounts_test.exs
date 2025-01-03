@@ -14,7 +14,7 @@ defmodule Sequin.AccountsTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication.PostgresReplicationSlot
-  alias Sequin.Test.Support.AccountsSupport
+  alias Sequin.TestSupport.AccountsSupport
 
   describe "users" do
     test "list_users_for_account/1 returns all users for an account" do

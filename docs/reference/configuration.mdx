@@ -84,6 +84,8 @@ See [secret generation](#secret-generation) for how to generate these values.
   - By default, Sequin provisions a default user on startup if one doesn't exist. This is a convenience feature to get started quickly. If you're hosting Sequin at a public URL, you should consider either changing the password for this user or disabling this feature.
 - `SEQUIN_TELEMETRY_DISABLED`: Disable telemetry data collection (default: false)
   - Sequin collects telemetry data by default. While we're early, this **greatly** helps us improve the product. To opt-out, set this to `true`.
+- `CRASH_REPORTING_DISABLED`: Disable crash reporting (default: false)
+  - Sequin sends crash reports to Sentry by default. This is very useful for the Sequin team to proactively fix bugs. To opt-out, set this to `true`.
 
 ### Networking configuration
 

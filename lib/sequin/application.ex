@@ -20,9 +20,18 @@ defmodule Sequin.Application do
 
     :ets.new(Sequin.Consumers.posthog_ets_table(), [:set, :public, :named_table])
 
-    :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
-
     :syn.add_node_to_scopes([:account, :replication, :consumers])
+
+    if System.get_env("CRASH_REPORTING_DISABLED") in ~w(true 1) do
+      Sentry.put_config(:dsn, nil)
+    else
+      # Ensure Sentry DSN was set during compile
+      if is_nil(Application.get_env(:sentry, :dsn)) do
+        raise "SENTRY_DSN was not set at build time. This is a bug."
+      end
+
+      :logger.add_handler(:sentry_handler, Sentry.LoggerHandler, %{})
+    end
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

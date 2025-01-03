@@ -9,8 +9,7 @@ import Config
 self_hosted = System.get_env("SELF_HOSTED", "0") in ~w(1 true)
 
 if self_hosted do
-  config :logger,
-    level: :info
+  config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:mfa]
 else
   config :logger,
     level: :info,

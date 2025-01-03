@@ -14,10 +14,10 @@ config :esbuild, :version, "0.17.11"
 
 # Configures Elixir's Logger
 config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  level: :info,
+  format: {Sequin.ConsoleLogger, :format},
+  metadata: :all
 
-# Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
 
 config :sentry,
@@ -43,6 +43,8 @@ config :sequin, Oban,
        {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker}
      ]}
   ]
+
+config :sequin, Sequin.ConsoleLogger, drop_metadata_keys: [:file, :domain, :application]
 
 # Configures the mailer
 #

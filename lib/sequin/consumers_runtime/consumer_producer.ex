@@ -7,6 +7,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime.ConsumerIdempotency
   alias Sequin.Postgres
   alias Sequin.Time
@@ -68,7 +69,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @impl GenStage
   def handle_info(:trim_idempotency, state) do
-    case Postgres.confirmed_flush_lsn(state.consumer.database) do
+    %SinkConsumer{} = consumer = state.consumer
+
+    case Postgres.confirmed_flush_lsn(consumer.postgres_database) do
       {:ok, nil} ->
         :ok
 

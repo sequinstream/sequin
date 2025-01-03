@@ -613,13 +613,21 @@ defmodule SequinWeb.SinkConsumersLive.Show do
          %SequenceFilter{} = sequence_filter,
          %PostgresDatabase{} = postgres_database
        ) do
-    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+      nil ->
+        %{
+          table_name: nil,
+          table_schema: nil,
+          column_filters: []
+        }
 
-    %{
-      table_name: table.name,
-      table_schema: table.schema,
-      column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
-    }
+      %PostgresDatabaseTable{} = table ->
+        %{
+          table_name: table.name,
+          table_schema: table.schema,
+          column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
+        }
+    end
   end
 
   defp find_table_by_oid(oid, tables) do
@@ -865,14 +873,15 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp encode_backfill(consumer, last_completed_backfill) do
     sort_column_attnum = consumer.sequence.sort_column_attnum
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
+    table = Enum.find(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    column = if table, do: Enum.find(table.columns, &(&1.attnum == sort_column_attnum))
+    column_type = if column, do: column.type
 
     case consumer.active_backfill do
       %Backfill{state: :active} = backfill ->
         %{
           is_backfilling: true,
-          cursor_type: column.type,
+          cursor_type: column_type,
           backfill: %{
             id: backfill.id,
             state: backfill.state,
@@ -896,7 +905,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       _ ->
         %{
           is_backfilling: false,
-          cursor_type: column.type,
+          cursor_type: column_type,
           last_completed_backfill:
             last_completed_backfill &&
               %{

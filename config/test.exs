@@ -28,6 +28,7 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
+config :sequin, Sequin, datetime_mod: Sequin.TestSupport.DateTimeMock
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
 config :sequin, Sequin.Pagerduty,

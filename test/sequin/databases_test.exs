@@ -7,7 +7,7 @@ defmodule Sequin.DatabasesTest do
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Test.Support.Models.Character
+  alias Sequin.TestSupport.Models.Character
 
   describe "tables/1" do
     test "returns tables for a database with existing tables" do

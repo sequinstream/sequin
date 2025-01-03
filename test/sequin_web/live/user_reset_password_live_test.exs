@@ -5,7 +5,7 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
 
   alias Sequin.Accounts
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Test.Support.AccountsSupport
+  alias Sequin.TestSupport.AccountsSupport
 
   setup do
     user = AccountsFactory.insert_user!()

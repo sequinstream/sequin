@@ -25,11 +25,11 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.TestEventLogFactory
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
-  alias Sequin.Test.Support.Models.CharacterMultiPK
-  alias Sequin.Test.Support.Models.TestEventLogPartitioned
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.CharacterMultiPK
+  alias Sequin.TestSupport.Models.TestEventLogPartitioned
 
   describe "receive_for_consumer/2 with event message kind" do
     setup do

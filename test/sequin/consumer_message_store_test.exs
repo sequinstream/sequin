@@ -9,7 +9,7 @@ defmodule Sequin.ConsumerMessageStoreTest do
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
-  alias Sequin.Test.Support.Models.Character
+  alias Sequin.TestSupport.Models.Character
 
   describe "Event Sink Consumer - message handling" do
     setup do

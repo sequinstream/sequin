@@ -2,15 +2,15 @@ alias Sequin.Databases.PostgresDatabaseTable
 alias Sequin.Test.UnboxedRepo
 
 UnboxedRepo.start_link()
-Sequin.Test.Support.ReplicationSlots.setup_all()
+Sequin.TestSupport.ReplicationSlots.setup_all()
 ExUnit.start()
 Ecto.Adapters.SQL.Sandbox.mode(Sequin.Repo, :manual)
 
 # These can be left dirty by unboxed repo tests, namely ReplicationSlot tests
-UnboxedRepo.delete_all(Sequin.Test.Support.Models.Character)
-UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterDetailed)
-UnboxedRepo.delete_all(Sequin.Test.Support.Models.CharacterMultiPK)
-UnboxedRepo.delete_all(Sequin.Test.Support.Models.TestEventLogPartitioned)
+UnboxedRepo.delete_all(Sequin.TestSupport.Models.Character)
+UnboxedRepo.delete_all(Sequin.TestSupport.Models.CharacterDetailed)
+UnboxedRepo.delete_all(Sequin.TestSupport.Models.CharacterMultiPK)
+UnboxedRepo.delete_all(Sequin.TestSupport.Models.TestEventLogPartitioned)
 
 # Clean out health redis keys
 :ok = Sequin.Health.clean_test_keys()

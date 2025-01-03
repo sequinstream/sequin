@@ -1,4 +1,4 @@
-defmodule Sequin.Test.Support.ReplicationSlots do
+defmodule Sequin.TestSupport.ReplicationSlots do
   @moduledoc """
   The Ecto sandbox interferes with replication slots. Even running replication slot tests in
   async: false mode doesn't solve it. Neither does setting up a different logical database for

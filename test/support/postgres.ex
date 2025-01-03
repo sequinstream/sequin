@@ -1,4 +1,4 @@
-defmodule Sequin.Test.Support.Postgres do
+defmodule Sequin.TestSupport.Postgres do
   @moduledoc false
   def start_test_db_link! do
     {:ok, conn} =

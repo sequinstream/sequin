@@ -12,7 +12,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Factory.TestEventLogFactory
-  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to the HTTP endpoint" do
     setup do

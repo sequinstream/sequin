@@ -13,3 +13,7 @@ Mox.defmock(Sequin.Mocks.RabbitMqMock,
 Mox.defmock(Sequin.Mocks.TableReaderServerMock,
   for: Sequin.DatabasesRuntime.TableReaderServer
 )
+
+Mox.defmock(Sequin.TestSupport.DateTimeMock,
+  for: Sequin.TestSupport.DateTime
+)

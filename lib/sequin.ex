@@ -6,6 +6,9 @@ defmodule Sequin do
   Contexts are also responsible for managing your data, regardless
   if it comes from the database, an external API or others.
   """
+  @datetime_mod Application.compile_env(:sequin, [Sequin, :datetime_mod], DateTime)
+
+  defdelegate utc_now, to: @datetime_mod
 
   @doc """
   Returns true if the feature is enabled.

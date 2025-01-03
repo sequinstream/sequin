@@ -19,9 +19,9 @@ defmodule Sequin.YamlLoaderTest do
   alias Sequin.Error.BadRequestError
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.ReplicationSlots
   alias Sequin.YamlLoader
 
   @moduletag :unboxed

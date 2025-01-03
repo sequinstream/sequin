@@ -1,4 +1,5 @@
 {
   "homebrewDir": "/Users/acco/x/homebrew-sequin",
-  "infraDir": "/Users/acco/x/infra"
+  "infraDir": "/Users/acco/x/infra",
+  "sentryDSN": "https://todo-token@o398678.ingest.us.sentry.io/todo-id"
 }

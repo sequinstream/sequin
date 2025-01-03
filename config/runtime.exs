@@ -160,10 +160,6 @@ if config_env() == :prod and not self_hosted do
       You can generate one by calling: mix phx.gen.secret
       """
 
-  config :sentry,
-    dsn: System.fetch_env!("SENTRY_DSN"),
-    release: System.fetch_env!("CURRENT_GIT_SHA")
-
   config :sequin, Sequin.Pagerduty, integration_key: System.fetch_env!("PAGERDUTY_INTEGRATION_KEY")
 
   config :sequin, Sequin.Posthog,

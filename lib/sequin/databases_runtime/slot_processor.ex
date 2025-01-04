@@ -128,7 +128,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Logger.info("[SlotProcessor] Initialized with opts: #{inspect(state.connection, pretty: true)}")
 
     if state.test_pid do
-      Mox.allow(Sequin.Mocks.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 

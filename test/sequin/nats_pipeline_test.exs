@@ -7,7 +7,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipelineTest do
   alias Sequin.ConsumersRuntime.NatsPipeline
   alias Sequin.Error
   alias Sequin.Factory.ConsumersFactory
-  alias Sequin.Mocks.NatsMock
+  alias Sequin.Sinks.NatsMock
 
   describe "message handling" do
     setup do

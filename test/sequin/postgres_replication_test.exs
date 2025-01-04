@@ -16,6 +16,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime
+  alias Sequin.DatabasesRuntime.MessageHandlerMock
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory.AccountsFactory
@@ -23,7 +24,6 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.DatabasesRuntime.MessageHandlerMock
   alias Sequin.Replication
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character

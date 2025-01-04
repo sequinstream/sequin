@@ -6,12 +6,12 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
+  alias Sequin.DatabasesRuntime.TableReaderServerMock
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.TableReaderServerMock
   alias Sequin.Replication
 
   describe "handle_messages/2" do

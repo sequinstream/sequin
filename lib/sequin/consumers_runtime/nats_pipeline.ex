@@ -97,5 +97,5 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   end
 
   defp setup_allowances(%{test_pid: nil}), do: :ok
-  defp setup_allowances(%{test_pid: test_pid}), do: Mox.allow(Sequin.Mocks.NatsMock, test_pid, self())
+  defp setup_allowances(%{test_pid: test_pid}), do: Mox.allow(Sequin.Sinks.NatsMock, test_pid, self())
 end

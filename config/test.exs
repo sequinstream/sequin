@@ -87,7 +87,7 @@ config :sequin,
   ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
-  nats_module: Sequin.Mocks.NatsMock
+  nats_module: Sequin.Sinks.NatsMock
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

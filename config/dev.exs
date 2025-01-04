@@ -10,11 +10,6 @@ config :libcluster,
     ]
   ]
 
-config :logger, :console,
-  format: "[$level] [$time] $metadata$message\n",
-  time_format: "%H:%M:%S.%f",
-  metadata: [:pid]
-
 config :mix_test_interactive,
   clear: true
 

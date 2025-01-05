@@ -112,11 +112,11 @@ To create a replication slot and publication manually, run the following SQL com
 ```sql
 SELECT * FROM pg_create_logical_replication_slot('sequin', 'pgoutput');
 -- Create a publication for a select list of tables
-CREATE PUBLICATION sequin FOR TABLE my_table, my_other_table;
+CREATE PUBLICATION sequin FOR TABLE my_table, my_other_table WITH (publish_via_partition_root = true);
 -- Or, create a publication for all tables in a schema
-CREATE PUBLICATION sequin FOR ALL TABLES IN SCHEMA my_schema;
+CREATE PUBLICATION sequin FOR ALL TABLES IN SCHEMA my_schema WITH (publish_via_partition_root = true);
 -- Or, create a publication for all tables in the database
-CREATE PUBLICATION sequin FOR ALL TABLES;
+CREATE PUBLICATION sequin FOR ALL TABLES WITH (publish_via_partition_root = true);
 ```
 
 Learn more about publication and the available options [in the Postgres docs](https://www.postgresql.org/docs/current/logical-replication-publication.html).

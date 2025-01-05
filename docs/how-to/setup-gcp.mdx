@@ -69,13 +69,13 @@ After enabling logical replication on GCP Cloud SQL, you'll now connect to your 
     Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
 
     ```sql
-    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3;
+    CREATE PUBLICATION sequin_pub FOR TABLE table1, table2, table3 WITH (publish_via_partition_root = true);
     ```
 
     If you want to publish changes from all tables, you can use:
 
     ```sql
-    CREATE PUBLICATION sequin_pub FOR ALL TABLES;
+    CREATE PUBLICATION sequin_pub FOR ALL TABLES WITH (publish_via_partition_root = true);
     ```
   </Step>
   <Step title="Create a replication slot">

@@ -16,6 +16,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime
+  alias Sequin.DatabasesRuntime.MessageHandlerMock
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Factory.AccountsFactory
@@ -23,14 +24,13 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.DatabasesRuntime.MessageHandlerMock
   alias Sequin.Replication
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
-  alias Sequin.Test.Support.Models.CharacterIdentFull
-  alias Sequin.Test.Support.Models.CharacterMultiPK
-  alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.CharacterIdentFull
+  alias Sequin.TestSupport.Models.CharacterMultiPK
+  alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
 
@@ -61,70 +61,158 @@ defmodule Sequin.PostgresReplicationTest do
           status: :active
         )
 
-      # Create a consumer for this replication slot (event)
-      event_consumer =
+      character_sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account_id,
+          postgres_database_id: source_db.id,
+          table_oid: Character.table_oid()
+        )
+
+      character_ident_full_sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account_id,
+          postgres_database_id: source_db.id,
+          table_oid: CharacterIdentFull.table_oid()
+        )
+
+      character_multi_pk_sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account_id,
+          postgres_database_id: source_db.id,
+          table_oid: CharacterMultiPK.table_oid()
+        )
+
+      # Create consumers for each table type (event)
+      event_character_consumer =
         ConsumersFactory.insert_sink_consumer!(
+          name: "event_character_consumer",
           message_kind: :event,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: Character.table_oid(),
-              column_filters: []
-            ),
-            ConsumersFactory.source_table(
-              oid: CharacterIdentFull.table_oid(),
-              column_filters: []
-            ),
-            ConsumersFactory.source_table(
-              oid: CharacterMultiPK.table_oid(),
-              column_filters: []
+          source_tables: [],
+          sequence_id: character_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [Character.column_attnum("id")]
             )
-          ],
-          sequence_id: nil
         )
 
-      # Create a consumer for this replication slot (record)
-      record_consumer =
+      event_character_ident_consumer =
         ConsumersFactory.insert_sink_consumer!(
+          name: "event_character_ident_consumer",
+          message_kind: :event,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: character_ident_full_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [CharacterIdentFull.column_attnum("id")]
+            )
+        )
+
+      event_character_multi_pk_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "event_character_multi_pk_consumer",
+          message_kind: :event,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: character_multi_pk_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [
+                CharacterMultiPK.column_attnum("id_integer"),
+                CharacterMultiPK.column_attnum("id_string"),
+                CharacterMultiPK.column_attnum("id_uuid")
+              ]
+            )
+        )
+
+      # Create consumers for each table type (record)
+      record_character_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "record_character_consumer",
           message_kind: :record,
           replication_slot_id: pg_replication.id,
           account_id: account_id,
-          source_tables: [
-            ConsumersFactory.source_table(
-              oid: Character.table_oid(),
-              column_filters: []
-            ),
-            ConsumersFactory.source_table(
-              oid: CharacterIdentFull.table_oid(),
-              column_filters: []
-            ),
-            ConsumersFactory.source_table(
-              oid: CharacterMultiPK.table_oid(),
-              column_filters: []
+          source_tables: [],
+          sequence_id: character_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [Character.column_attnum("id")]
             )
-          ],
-          sequence_id: nil
         )
 
-      # Start replication
+      record_character_ident_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "record_character_ident_consumer",
+          message_kind: :record,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: character_ident_full_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [CharacterIdentFull.column_attnum("id")]
+            )
+        )
+
+      record_character_multi_pk_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "record_character_multi_pk_consumer",
+          message_kind: :record,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: character_multi_pk_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [
+                CharacterMultiPK.column_attnum("id_integer"),
+                CharacterMultiPK.column_attnum("id_string"),
+                CharacterMultiPK.column_attnum("id_uuid")
+              ]
+            )
+        )
+
+      event_character_consumer = Repo.preload(event_character_consumer, :postgres_database)
+      event_character_ident_consumer = Repo.preload(event_character_ident_consumer, :postgres_database)
+      event_character_multi_pk_consumer = Repo.preload(event_character_multi_pk_consumer, :postgres_database)
+
+      record_character_consumer = Repo.preload(record_character_consumer, :postgres_database)
+      record_character_ident_consumer = Repo.preload(record_character_ident_consumer, :postgres_database)
+      record_character_multi_pk_consumer = Repo.preload(record_character_multi_pk_consumer, :postgres_database)
+
       sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
-
       {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
-
-      event_consumer = Repo.preload(event_consumer, :postgres_database)
-      record_consumer = Repo.preload(record_consumer, :postgres_database)
 
       %{
         pg_replication: pg_replication,
         source_db: source_db,
-        event_consumer: event_consumer,
-        record_consumer: record_consumer
+        event_character_consumer: event_character_consumer,
+        event_character_ident_consumer: event_character_ident_consumer,
+        event_character_multi_pk_consumer: event_character_multi_pk_consumer,
+        record_character_consumer: record_character_consumer,
+        record_character_ident_consumer: record_character_ident_consumer,
+        record_character_multi_pk_consumer: record_character_multi_pk_consumer
       }
     end
 
-    test "inserts are replicated to consumer events", %{event_consumer: consumer} do
+    test "inserts are replicated to consumer events", %{event_character_consumer: consumer} do
       # Insert a character
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
@@ -156,7 +244,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "inserts are replicated to consumer records", %{record_consumer: consumer} do
+    test "inserts are replicated to consumer records", %{record_character_consumer: consumer} do
       # Insert a character
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
@@ -173,7 +261,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_record.group_id == to_string(character.id)
     end
 
-    test "updates are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
+    test "updates are replicated to consumer events when replica identity default", %{event_character_consumer: consumer} do
       # Insert a character
       character =
         CharacterFactory.insert_character!([name: "Leto Atreides", house: "Atreides", planet: "Caladan"],
@@ -225,7 +313,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "updates are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+    test "updates are replicated to consumer records when replica identity default", %{
+      record_character_consumer: consumer
+    } do
       # Insert a character
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
@@ -251,7 +341,9 @@ defmodule Sequin.PostgresReplicationTest do
       refute DateTime.compare(insert_record.updated_at, update_record.updated_at) == :eq
     end
 
-    test "updates are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
+    test "updates are replicated to consumer events when replica identity full", %{
+      event_character_ident_consumer: consumer
+    } do
       # Insert a character with full replica identity
       character =
         CharacterFactory.insert_character_ident_full!(
@@ -302,7 +394,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.action == :update
     end
 
-    test "deletes are replicated to consumer events when replica identity default", %{event_consumer: consumer} do
+    test "deletes are replicated to consumer events when replica identity default", %{event_character_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       assert_receive {SlotProcessor, :flush_messages}, 500
@@ -332,7 +424,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+    test "deletes are replicated to consumer records when replica identity default", %{
+      record_character_consumer: consumer
+    } do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       assert_receive {SlotProcessor, :flush_messages}, 500
@@ -345,7 +439,9 @@ defmodule Sequin.PostgresReplicationTest do
       [] = Consumers.list_consumer_records_for_consumer(consumer.id)
     end
 
-    test "deletes are replicated to consumer events when replica identity full", %{event_consumer: consumer} do
+    test "deletes are replicated to consumer events when replica identity full", %{
+      event_character_ident_consumer: consumer
+    } do
       character = CharacterFactory.insert_character_ident_full!([], repo: UnboxedRepo)
 
       assert_receive {SlotProcessor, :flush_messages}, 500
@@ -373,8 +469,8 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "replication with multiple primary key columns", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
+      event_character_multi_pk_consumer: event_consumer,
+      record_character_multi_pk_consumer: record_consumer
     } do
       # Randomly select a consumer
       consumer = Enum.random([event_consumer, record_consumer])
@@ -398,31 +494,26 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "consumer with column filter only receives relevant messages", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
+      event_character_consumer: event_consumer,
+      record_character_consumer: record_consumer
     } do
       # Randomly select a consumer
       consumer = Enum.random([event_consumer, record_consumer])
 
-      # Create a consumer with a column filter
-      source_tables = [
-        ConsumersFactory.source_table_attrs(
-          oid: Character.table_oid(),
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
           actions: [:insert, :update],
-          sort_column_attnum: if(consumer.message_kind == :record, do: Character.column_attnum("is_active")),
           column_filters: [
-            ConsumersFactory.column_filter_attrs(
+            ConsumersFactory.sequence_filter_column_filter_attrs(
               column_attnum: Character.column_attnum("is_active"),
-              column_name: "is_active",
               operator: :==,
               value_type: :boolean,
               value: %{__type__: :boolean, value: true}
             )
           ]
         )
-      ]
 
-      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{source_tables: source_tables})
+      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{sequence_filter: sequence_filter})
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -456,8 +547,8 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "inserts are fanned out to both events and records", %{
-      event_consumer: event_consumer,
-      record_consumer: record_consumer
+      event_character_consumer: event_consumer,
+      record_character_consumer: record_consumer
     } do
       # Insert a character
       CharacterFactory.insert_character!([], repo: UnboxedRepo)
@@ -480,7 +571,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert consumer_event.record_pks == consumer_record.record_pks
     end
 
-    test "empty array fields are replicated correctly", %{event_consumer: consumer} do
+    test "empty array fields are replicated correctly", %{event_character_consumer: consumer} do
       # Insert a character with an empty array field
       character = CharacterFactory.insert_character!([tags: []], repo: UnboxedRepo)
 
@@ -502,7 +593,7 @@ defmodule Sequin.PostgresReplicationTest do
 
     # Postgres quirk - the logical decoding process does not distinguish between an empty array and an array with an empty string.
     # https://chatgpt.com/share/6707334f-0978-8006-8358-ec2300d759a4
-    test "array fields with empty string are returned as empty list", %{event_consumer: consumer} do
+    test "array fields with empty string are returned as empty list", %{event_character_consumer: consumer} do
       # Insert a character with an array containing an empty string
       CharacterFactory.insert_character!([tags: [""]], repo: UnboxedRepo)
 
@@ -520,7 +611,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert data.record["tags"] == [], "Expected array with empty string, got: #{inspect(data.record["tags"])}"
     end
 
-    test "array fields are updated correctly from non-empty to empty", %{event_consumer: consumer} do
+    test "array fields are updated correctly from non-empty to empty", %{event_character_ident_consumer: consumer} do
       # Insert a character with a non-empty array field
       character = CharacterFactory.insert_character_ident_full!([tags: ["tag1", "tag2"]], repo: UnboxedRepo)
 
@@ -826,7 +917,11 @@ defmodule Sequin.PostgresReplicationTest do
           account_id: account_id,
           source_tables: [],
           sequence_id: sequence.id,
-          sequence_filter: ConsumersFactory.sequence_filter_attrs(column_filters: [])
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              group_column_attnums: [Character.column_attnum("id")],
+              column_filters: []
+            )
         )
 
       # Start replication

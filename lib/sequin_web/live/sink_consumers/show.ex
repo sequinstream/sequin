@@ -302,6 +302,25 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
+    consumer = socket.assigns.consumer
+    Consumers.ack_messages(consumer, [ack_id])
+
+    updated_socket =
+      socket
+      |> load_consumer_messages()
+      |> put_flash(:toast, %{kind: :success, title: "Message acknowledged"})
+
+    case Enum.find(socket.assigns.messages, &(&1.ack_id == ack_id)) do
+      nil ->
+        {:reply, %{ok: true}, updated_socket}
+
+      message ->
+        message = AcknowledgedMessages.to_acknowledged_message(message)
+        {:reply, %{ok: true, updated_message: encode_message(consumer, message)}, updated_socket}
+    end
+  end
+
   def handle_event("update_page_size", %{"page_size" => page_size}, socket) when page_size < 0 do
     {:noreply, socket}
   end
@@ -473,6 +492,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       id: consumer.id,
       name: consumer.name,
       kind: :push,
+      type: consumer.type,
       status: consumer.status,
       message_kind: consumer.message_kind,
       ack_wait_ms: consumer.ack_wait_ms,
@@ -595,13 +615,21 @@ defmodule SequinWeb.SinkConsumersLive.Show do
          %SequenceFilter{} = sequence_filter,
          %PostgresDatabase{} = postgres_database
        ) do
-    table = find_table_by_oid(sequence.table_oid, postgres_database.tables)
+    case find_table_by_oid(sequence.table_oid, postgres_database.tables) do
+      nil ->
+        %{
+          table_name: nil,
+          table_schema: nil,
+          column_filters: []
+        }
 
-    %{
-      table_name: table.name,
-      table_schema: table.schema,
-      column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
-    }
+      %PostgresDatabaseTable{} = table ->
+        %{
+          table_name: table.name,
+          table_schema: table.schema,
+          column_filters: Enum.map(sequence_filter.column_filters, &encode_column_filter(&1, table))
+        }
+    end
   end
 
   defp find_table_by_oid(oid, tables) do
@@ -840,21 +868,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           data: nil,
           trace_id: message.trace_id,
           state: state,
-          state_color: "green"
+          state_color: get_message_state_color(consumer, state)
         }
     end
   end
 
   defp encode_backfill(consumer, last_completed_backfill) do
     sort_column_attnum = consumer.sequence.sort_column_attnum
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == sort_column_attnum))
+    table = Enum.find(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
+    column = if table, do: Enum.find(table.columns, &(&1.attnum == sort_column_attnum))
+    column_type = if column, do: column.type
 
     case consumer.active_backfill do
       %Backfill{state: :active} = backfill ->
         %{
           is_backfilling: true,
-          cursor_type: column.type,
+          cursor_type: column_type,
           backfill: %{
             id: backfill.id,
             state: backfill.state,
@@ -878,7 +907,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       _ ->
         %{
           is_backfilling: false,
-          cursor_type: column.type,
+          cursor_type: column_type,
           last_completed_backfill:
             last_completed_backfill &&
               %{
@@ -891,6 +920,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  defp get_message_state(%{type: :sequin_stream}, %AcknowledgedMessage{}), do: "acknowledged"
   defp get_message_state(_consumer, %AcknowledgedMessage{}), do: "delivered"
   defp get_message_state(_consumer, %{deliver_count: 0}), do: "not delivered"
 
@@ -912,6 +942,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   defp get_message_state_color(%{type: :sequin_stream}, state) do
     case state do
+      "acknowledged" -> "green"
       "delivered" -> "blue"
       "backing off" -> "yellow"
       _ -> "gray"

@@ -47,7 +47,7 @@ Sequin is open source/MIT. To help us make this project great, tell us what you'
 | GCP Pub/Sub | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to Google Cloud Pub/Sub topics |
 | NATS | ✅ Real-time streaming<br />✅ Backfill existing rows | Stream changes to NATS subjects |
 | RabbitMQ | ✅ Real-time streaming<br />✅ Backfill existing rows | Publish messages to RabbitMQ exchanges |
-| Azure EventHubs | Coming soon | (Late Dec 2024) |
+| Azure EventHubs | Coming soon | (Jan 2025) |
 | Amazon SNS | Coming soon | (Jan 2025) |
 | AWS Kinesis | Coming soon | (Jan 2025) |
 

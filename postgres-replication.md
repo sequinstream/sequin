@@ -11,13 +11,13 @@ To prepare your Postgres database for replication with Sequin, follow these step
 2. Create a publication for the tables you want to replicate:
 
    ```sql
-   CREATE PUBLICATION your_publication_name FOR TABLE schema.table1, schema.table2;
+   CREATE PUBLICATION your_publication_name FOR TABLE schema.table1, schema.table2 WITH (publish_via_partition_root = true);
    ```
 
    You can add more tables by separating them with commas. To publish all tables in a schema:
 
    ```sql
-   CREATE PUBLICATION your_publication_name FOR ALL TABLES IN SCHEMA your_schema;
+   CREATE PUBLICATION your_publication_name FOR ALL TABLES IN SCHEMA your_schema WITH (publish_via_partition_root = true);
    ```
 
 3. Set the replica identity for each table. There are two main options:

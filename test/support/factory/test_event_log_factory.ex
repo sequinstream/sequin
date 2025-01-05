@@ -5,8 +5,8 @@ if Mix.env() == :test do
 
     alias Sequin.Factory
     alias Sequin.Repo
-    alias Sequin.Test.Support.Models.TestEventLog
-    alias Sequin.Test.Support.Models.TestEventLogPartitioned
+    alias Sequin.TestSupport.Models.TestEventLog
+    alias Sequin.TestSupport.Models.TestEventLogPartitioned
 
     def test_event_log(attrs \\ []) do
       attrs = Map.new(attrs)

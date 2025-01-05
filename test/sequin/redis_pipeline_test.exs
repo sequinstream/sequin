@@ -14,8 +14,8 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Sinks.RedisMock
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
 
   describe "events are sent to Redis" do
     setup do

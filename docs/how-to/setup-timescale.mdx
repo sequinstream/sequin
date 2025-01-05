@@ -78,7 +78,7 @@ After enabling logical replication, you'll now connect to your database in Sequi
     Connect to your database using the SQL client of your choice and execute the following SQL query to create a publication:
 
 ```sql
-create publication sequin_pub for all tables;
+create publication sequin_pub for all tables with (publish_via_partition_root = true);
 ```
 
   </Step>

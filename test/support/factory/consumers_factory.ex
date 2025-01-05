@@ -28,9 +28,9 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterDetailed
-  alias Sequin.Test.Support.Models.TestEventLog
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
+  alias Sequin.TestSupport.Models.TestEventLog
 
   def sink_consumer(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -365,6 +365,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         commit_lsn: Enum.random(1..1_000_000),
         seq: Factory.unique_integer(),
         record_pks: record_pks,
+        group_id: Factory.unique_word(),
         table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
         deliver_count: Enum.random(0..10),
@@ -390,7 +391,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         record: record,
         changes: changes,
         action: action,
-        metadata: %{
+        metadata: %ConsumerEventData.Metadata{
           database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),
           table_name: Factory.postgres_object(),
@@ -407,6 +408,9 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.new()
     |> consumer_event_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
+    |> Map.update!(:metadata, fn metadata ->
+      Sequin.Map.from_ecto(metadata)
+    end)
   end
 
   def consumer_event_attrs(attrs \\ []) do
@@ -552,7 +556,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> consumer_record_data()
     |> Sequin.Map.from_ecto(keep_nils: true)
     |> Map.update!(:metadata, fn metadata ->
-      Map.from_struct(metadata)
+      Sequin.Map.from_ecto(metadata)
     end)
   end
 

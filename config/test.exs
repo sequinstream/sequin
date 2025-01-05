@@ -28,6 +28,7 @@ config :phoenix_live_view,
   enable_expensive_runtime_checks: true
 
 config :sequin, Oban, testing: :manual, prefix: "sequin_config"
+config :sequin, Sequin, datetime_mod: Sequin.TestSupport.DateTimeMock
 config :sequin, Sequin.Mailer, adapter: Swoosh.Adapters.Test
 
 config :sequin, Sequin.Pagerduty,
@@ -86,7 +87,7 @@ config :sequin,
   ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
-  nats_module: Sequin.Mocks.NatsMock
+  nats_module: Sequin.Sinks.NatsMock
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

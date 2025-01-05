@@ -3,8 +3,8 @@ defmodule SequinWeb.YamlControllerTest do
 
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.Sequence
-  alias Sequin.Test.Support.ReplicationSlots
   alias Sequin.Test.UnboxedRepo
+  alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
 

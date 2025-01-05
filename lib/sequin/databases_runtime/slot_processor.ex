@@ -9,8 +9,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # See below, where we set restart: :temporary
   use Postgrex.ReplicationConnection
 
-  import Bitwise
-
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
@@ -130,7 +128,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Logger.info("[SlotProcessor] Initialized with opts: #{inspect(state.connection, pretty: true)}")
 
     if state.test_pid do
-      Mox.allow(Sequin.Mocks.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
@@ -322,13 +320,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     [<<?r, lsn::64, lsn::64, lsn::64, current_time()::64, 0>>]
   end
 
-  # In Postgres, an LSN is typically represented as a 64-bit integer, but it's sometimes split
-  # into two 32-bit parts for easier reading or processing. We'll receive tuples like `{401, 1032909664}`
-  # and we'll need to combine them to get the 64-bit LSN.
-  defp lsn_to_int({high, low}) do
-    high <<< 32 ||| low
-  end
-
   # Used in debugging, worth keeping around.
   # defp lsn_to_tuple(lsn) when is_integer(lsn) do
   #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
@@ -379,7 +370,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
          %State{accumulated_messages: {0, []}, last_committed_lsn: last_committed_lsn} = state
        ) do
-    begin_lsn = lsn_to_int(lsn)
+    begin_lsn = Postgres.lsn_to_int(lsn)
 
     state =
       if not is_nil(last_committed_lsn) and begin_lsn < last_committed_lsn do
@@ -400,7 +391,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
          %Commit{lsn: lsn, commit_timestamp: ts},
          %State{current_xaction_lsn: current_lsn, current_commit_ts: ts, id: id} = state
        ) do
-    lsn = lsn_to_int(lsn)
+    lsn = Postgres.lsn_to_int(lsn)
 
     unless current_lsn == lsn do
       raise "Unexpectedly received a commit LSN that does not match current LSN (#{current_lsn} != #{lsn})"
@@ -510,6 +501,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
+    Logger.info("[SlotProcessor] Heartbeat received")
     Health.update(state.postgres_database, :reachable, :healthy)
     Health.update(state.postgres_database, :replication_connected, :healthy)
     Health.update(state.postgres_database, :replication_messages, :healthy)

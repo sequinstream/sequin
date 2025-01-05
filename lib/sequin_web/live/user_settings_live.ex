@@ -40,7 +40,6 @@ defmodule SequinWeb.UserSettingsLive do
 
       {:error, changeset} ->
         errors = Sequin.Error.errors_on(changeset)
-        dbg(errors)
 
         {:reply, %{ok: false, errors: errors},
          put_flash(socket, :toast, %{kind: :error, title: "Failed to update password"})}

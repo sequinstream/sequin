@@ -12,9 +12,9 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
-  alias Sequin.Test.Support.Models.Character
-  alias Sequin.Test.Support.Models.CharacterMultiPK
-  alias Sequin.Test.Support.Models.TestEventLog
+  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterMultiPK
+  alias Sequin.TestSupport.Models.TestEventLog
 
   setup do
     account = AccountsFactory.insert_account!()

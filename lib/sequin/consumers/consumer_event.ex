@@ -14,6 +14,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
              :commit_lsn,
              :ack_id,
              :deliver_count,
+             :group_id,
              :last_delivered_at,
              :record_pks,
              :table_oid,
@@ -26,18 +27,22 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
     field :seq, :integer
+    field :group_id, :string
     field :record_pks, {:array, :string}
     field :table_oid, :integer
-
     field :state, Ecto.Enum, values: [:available, :delivered], default: :available
 
     field :ack_id, Ecto.UUID, read_after_writes: true
-    field :deliver_count, :integer
+    field :deliver_count, :integer, default: 0
     field :last_delivered_at, :utc_datetime_usec
     field :not_visible_until, :utc_datetime_usec
     field :replication_message_trace_id, Ecto.UUID
 
     embeds_one :data, ConsumerEventData
+
+    # For ConsumerMessageStore
+    field :flushed_at, :utc_datetime_usec, virtual: true
+    field :dirty, :boolean, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -52,6 +57,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
       :seq,
       :record_pks,
       :table_oid,
+      :group_id,
       :state,
       :not_visible_until,
       :deliver_count,

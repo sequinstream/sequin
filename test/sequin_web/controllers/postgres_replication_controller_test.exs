@@ -6,7 +6,7 @@ defmodule SequinWeb.PostgresReplicationControllerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
-  alias Sequin.Test.Support.ReplicationSlots
+  alias Sequin.TestSupport.ReplicationSlots
 
   setup :authenticated_conn
 

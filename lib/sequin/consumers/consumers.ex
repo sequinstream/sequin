@@ -367,6 +367,36 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
+  def upsert_consumer_events([]), do: {:ok, 0}
+
+  def upsert_consumer_events(consumer_events) do
+    now = DateTime.utc_now()
+
+    events =
+      Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
+        Sequin.Map.from_ecto(%ConsumerEvent{event | updated_at: now, inserted_at: now})
+      end)
+
+    # insert_all expects a plain outer-map, but struct embeds
+    {count, _} =
+      Repo.insert_all(
+        ConsumerEvent,
+        events,
+        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
+        conflict_target: [:consumer_id, :id]
+      )
+
+    # Broadcast messages ingested to consumers for ie. push consumers
+    consumer_events
+    |> Stream.map(& &1.consumer_id)
+    |> Enum.uniq()
+    |> Enum.each(fn consumer_id ->
+      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
+    end)
+
+    {:ok, count}
+  end
+
   # ConsumerRecord
 
   def get_consumer_record(consumer_id, id) when is_integer(id) do
@@ -502,6 +532,7 @@ defmodule Sequin.Consumers do
       |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
       # insert_all expects a plain outer-map, but struct embeds
       |> Enum.map(&Sequin.Map.from_ecto/1)
+      |> Enum.map(&Map.delete(&1, :deleted))
 
     conflict_target = [:consumer_id, :record_pks, :table_oid]
 
@@ -526,6 +557,42 @@ defmodule Sequin.Consumers do
         ConsumerRecord,
         records,
         on_conflict: on_conflict,
+        conflict_target: conflict_target
+      )
+
+    # Broadcast messages ingested to consumers for ie. push consumers
+    consumer_records
+    |> Stream.map(& &1.consumer_id)
+    |> Enum.uniq()
+    |> Enum.each(fn consumer_id ->
+      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
+    end)
+
+    {:ok, count}
+  end
+
+  def upsert_consumer_records([]), do: {:ok, 0}
+
+  def upsert_consumer_records(consumer_records) do
+    now = DateTime.utc_now()
+
+    records =
+      consumer_records
+      |> Enum.map(fn %ConsumerRecord{} = record ->
+        %ConsumerRecord{record | updated_at: now, inserted_at: now}
+      end)
+      |> Enum.sort_by(& &1.commit_lsn, :desc)
+      |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
+      # insert_all expects a plain outer-map, but struct embeds
+      |> Enum.map(&Sequin.Map.from_ecto/1)
+
+    conflict_target = [:consumer_id, :record_pks, :table_oid]
+
+    {count, _records} =
+      Repo.insert_all(
+        ConsumerRecord,
+        records,
+        on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
         conflict_target: conflict_target
       )
 
@@ -887,7 +954,7 @@ defmodule Sequin.Consumers do
                   |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
                   |> Enum.map(&to_string/1)
 
-                pk_values == record.record_pks
+                pk_values == Enum.map(record.record_pks, &to_string/1)
               end)
             end
 
@@ -1142,8 +1209,8 @@ defmodule Sequin.Consumers do
   end
 
   @doc """
-  Min active cursor: the value of the sort_key column for the sequence row that corresponds to the min value of id in the consumer records table
-  Max active cursor: the value of the sort_key column for the sequence row that corresponds to the max value of id in the consumer records table for delivered records
+  Min active cursor: the value of the sort_key column for the sequence row that corresponds to the min value of id in the consumer records table
+  Max active cursor: the value of the sort_key column for the sequence row that corresponds to the max value of id in the consumer records table for delivered records
   Min/max possible cursors: the min and max values of the sort_key column from the underlying sequences table
   """
   def cursors(consumer) do

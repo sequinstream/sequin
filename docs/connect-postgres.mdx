@@ -125,7 +125,7 @@ You'll need the [Sequin CLI](/reference/cli/overview) installed to use this meth
     The simplest publication is one that includes all tables:
 
     ```sql
-    create publication sequin_pub for all tables;
+    create publication sequin_pub for all tables with (publish_via_partition_root = true);
     ```
 
     However, you can also create a publication that includes specific tables or schemas. You'll just need to [modify the publication](#adding-tables-to-your-publication) as needed in the future.

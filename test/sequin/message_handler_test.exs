@@ -6,18 +6,46 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Constants
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
+  alias Sequin.DatabasesRuntime.TableReaderServerMock
   alias Sequin.Factory
+  alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
+  alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Mocks.TableReaderServerMock
   alias Sequin.Replication
 
   describe "handle_messages/2" do
     test "handles message_kind: event correctly" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field()
+      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: []
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :event,
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          postgres_database_id: database.id,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -38,10 +66,35 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "handles message_kind: record correctly" do
-      message = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
-      source_table = ConsumersFactory.source_table(oid: 456, column_filters: [])
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field()
+      message = ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field])
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 456,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: []
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :record,
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -51,41 +104,85 @@ defmodule Sequin.MessageHandlerTest do
       assert record.table_oid == 456
       assert record.commit_lsn == message.commit_lsn
       assert record.record_pks == Enum.map(message.ids, &to_string/1)
-      assert record.group_id == Enum.join(message.ids, ",")
+      assert record.group_id == Enum.find(message.fields, &(&1.column_attnum == field.column_attnum)).value
       assert record.state == :available
       assert record.seq == message.seq
     end
 
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
-      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      message2 = ReplicationFactory.postgres_message(table_oid: 456, action: :update)
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field()
+      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
+      message2 = ReplicationFactory.postgres_message(table_oid: 456, action: :update, fields: [field])
+
+      sequence1 =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence2 =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 456,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter1 =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: []
+        )
+
+      sequence_filter2 =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: []
+        )
+
+      consumer1 =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :event,
+          account_id: account.id,
+          sequence_id: sequence1.id,
+          sequence_filter: sequence_filter1,
+          source_tables: []
+        )
+
+      consumer2 =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :record,
+          account_id: account.id,
+          sequence_id: sequence2.id,
+          sequence_filter: sequence_filter2,
+          source_tables: []
+        )
+
+      consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence])
+      consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence])
 
       source_table1 = ConsumersFactory.source_table(oid: 123, column_filters: [])
       source_table2 = ConsumersFactory.source_table(oid: 456, column_filters: [])
 
-      consumer1 = ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table1])
-      consumer2 = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table2])
-
-      consumer3 =
-        ConsumersFactory.insert_sink_consumer!(message_kind: :event, source_tables: [source_table1, source_table2])
-
-      consumer1 = Repo.preload(consumer1, :postgres_database)
-      consumer2 = Repo.preload(consumer2, :postgres_database)
-      consumer3 = Repo.preload(consumer3, :postgres_database)
-
-      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table1, source_table2])
+      wal_pipeline =
+        ReplicationFactory.insert_wal_pipeline!(
+          account_id: account.id,
+          source_tables: [source_table1, source_table2]
+        )
 
       context = %MessageHandler.Context{
-        consumers: [consumer1, consumer2, consumer3],
+        consumers: [consumer1, consumer2],
         wal_pipelines: [wal_pipeline],
         replication_slot_id: UUID.uuid4()
       }
 
-      {:ok, 6, _} = MessageHandler.handle_messages(context, [message1, message2])
+      {:ok, 4, _} = MessageHandler.handle_messages(context, [message1, message2])
 
       consumer1_messages = list_messages(consumer1.id)
       consumer2_messages = list_messages(consumer2.id)
-      consumer3_messages = list_messages(consumer3.id)
       wal_events = Replication.list_wal_events(wal_pipeline.id)
 
       assert length(consumer1_messages) == 1
@@ -94,22 +191,44 @@ defmodule Sequin.MessageHandlerTest do
       assert length(consumer2_messages) == 1
       assert hd(consumer2_messages).table_oid == 456
 
-      assert length(consumer3_messages) == 2
-      assert Enum.any?(consumer3_messages, &(&1.table_oid == 123))
-      assert Enum.any?(consumer3_messages, &(&1.table_oid == 456))
-
       assert length(wal_events) == 2
     end
 
     test "two messages with two consumers and one wal_pipeline are fanned out to each" do
-      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      message2 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field()
+      message1 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
+      message2 = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
+
+      sequence =
+        DatabasesFactory.insert_sequence!(table_oid: 123, account_id: account.id, postgres_database_id: database.id)
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(group_column_attnums: [field.column_attnum], column_filters: [])
+
+      consumer1 =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer2 =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer1 = Repo.preload(consumer1, [:postgres_database, :sequence])
+      consumer2 = Repo.preload(consumer2, [:postgres_database, :sequence])
+
       source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer1 = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer2 = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer1 = Repo.preload(consumer1, :postgres_database)
-      consumer2 = Repo.preload(consumer2, :postgres_database)
-      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
+      wal_pipeline = ReplicationFactory.insert_wal_pipeline!(account_id: account.id, source_tables: [source_table])
 
       context = %MessageHandler.Context{
         consumers: [consumer1, consumer2],
@@ -138,11 +257,35 @@ defmodule Sequin.MessageHandlerTest do
       assert Enum.any?(all_messages, &(&1.commit_lsn == message2.commit_lsn))
     end
 
-    test "inserts message for consumer with matching source table and no filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+    test "inserts message for consumer with matching sequence and no filters" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field()
+      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: []
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -165,8 +308,12 @@ defmodule Sequin.MessageHandlerTest do
       assert Enum.empty?(messages)
     end
 
-    test "inserts message for consumer with matching source table and passing filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert)
+    test "inserts message for consumer with matching sequence and passing filters" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      field = ReplicationFactory.field(column_attnum: 1, value: "test")
+      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, fields: [field])
 
       column_filter =
         ConsumersFactory.column_filter(
@@ -175,9 +322,28 @@ defmodule Sequin.MessageHandlerTest do
           value: %{__type__: :string, value: "test"}
         )
 
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [column_filter])
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [field.column_attnum],
+          column_filters: [column_filter]
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
       message = %{message | fields: [test_field | message.fields]}
 
@@ -323,35 +489,47 @@ defmodule Sequin.MessageHandlerTest do
       assert Enum.empty?(wal_events)
     end
 
-    test "sets group_id based on PKs when group_column_attnums is nil" do
-      message = ReplicationFactory.postgres_message(table_oid: 123, action: :insert, ids: [1, 2])
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: nil)
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
-
-      {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
-
-      [record] = Consumers.list_consumer_records_for_consumer(consumer.id)
-      assert record.group_id == "1,2"
-    end
-
     test "sets group_id based on group_column_attnums when it's set" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      fields = [
+        ReplicationFactory.field(column_attnum: 1, column_name: "id", value: 1),
+        ReplicationFactory.field(column_attnum: 2, column_name: "group", value: "A"),
+        ReplicationFactory.field(column_attnum: 3, column_name: "name", value: "Test")
+      ]
+
       message =
         ReplicationFactory.postgres_message(
           table_oid: 123,
           action: :insert,
           ids: [1, 2],
-          fields: [
-            ReplicationFactory.field(column_attnum: 1, column_name: "id", value: 1),
-            ReplicationFactory.field(column_attnum: 2, column_name: "group", value: "A"),
-            ReplicationFactory.field(column_attnum: 3, column_name: "name", value: "Test")
-          ]
+          fields: fields
         )
 
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [], group_column_attnums: [2])
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record, source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [2],
+          column_filters: []
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :record,
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
@@ -361,15 +539,31 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "puts the largest sequence number into last_processed_seq" do
+      field = ReplicationFactory.field(column_attnum: 1, value: "test")
+
       # Messages should be ordered, but mess it up just in case
       messages =
-        for seq <- [1, 2, 5, 3] do
-          ReplicationFactory.postgres_message(table_oid: 123, action: :insert, seq: seq)
+        for seq <- Enum.shuffle([1, 2, 3, 5]) do
+          ReplicationFactory.postgres_message(table_oid: 123, action: :insert, seq: seq, fields: [field])
         end
 
-      source_table = ConsumersFactory.source_table(oid: 123, column_filters: [])
-      consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
-      consumer = Repo.preload(consumer, :postgres_database)
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      sequence =
+        DatabasesFactory.insert_sequence!(table_oid: 123, account_id: account.id, postgres_database_id: database.id)
+
+      sequence_filter = ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1], column_filters: [])
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       replication_slot_id = Factory.uuid()
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: replication_slot_id}
 

@@ -243,6 +243,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       commit_lsn: message.commit_lsn,
       seq: message.seq,
       record_pks: Enum.map(message.ids, &to_string/1),
+      group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
       deliver_count: 0,
       data: event_data_from_message(message, consumer),
@@ -255,6 +256,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       seq: message.seq,
+      deleted: message.action == :delete,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -410,15 +412,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp generate_group_id(consumer, message) do
     # This should be way more assertive - we should error if we don't find the source table
     # We have a lot of tests that do not line up consumer source_tables with the message table oid
-    source_table = Enum.find(consumer.source_tables, &(&1.oid == message.table_oid))
-
-    if source_table && source_table.group_column_attnums do
-      Enum.map_join(source_table.group_column_attnums, ",", fn attnum ->
-        field = Sequin.Enum.find!(message.fields, &(&1.column_attnum == attnum))
+    if consumer.sequence_filter.group_column_attnums do
+      Enum.map_join(consumer.sequence_filter.group_column_attnums, ",", fn attnum ->
+        fields = if message.action == :delete, do: message.old_fields, else: message.fields
+        field = Sequin.Enum.find!(fields, &(&1.column_attnum == attnum))
         to_string(field.value)
       end)
     else
-      Enum.join(message.ids, ",")
+      Enum.map_join(message.ids, ",", &to_string/1)
     end
   end
 end

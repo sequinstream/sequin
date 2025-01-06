@@ -1,0 +1,3 @@
+# Useful to place temporary files for testing or doing integration testing
+# that are not meant to be committed to the repo.
+*

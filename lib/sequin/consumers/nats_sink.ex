@@ -18,6 +18,9 @@ defmodule Sequin.Consumers.NatsSink do
     field :port, :integer
     field :username, :string
     field :password, EncryptedField
+    field :jwt, EncryptedField
+    field :nkey_seed, EncryptedField
+    field :tls, :boolean, default: false
     field :connection_id, :string
   end
 
@@ -27,7 +30,10 @@ defmodule Sequin.Consumers.NatsSink do
       :host,
       :port,
       :username,
-      :password
+      :password,
+      :jwt,
+      :nkey_seed,
+      :tls
     ])
     |> validate_required([:host, :port])
     |> validate_number(:port, greater_than: 0, less_than: 65_536)
@@ -46,7 +52,10 @@ defmodule Sequin.Consumers.NatsSink do
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: sink.password
+      password: sink.password,
+      jwt: sink.jwt,
+      nkey_seed: sink.nkey_seed,
+      tls: sink.tls
     }
   end
 

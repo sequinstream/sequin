@@ -78,7 +78,7 @@ defmodule Sequin.Sinks.Nats.ConnectionCache do
     end
 
     defp options_hash(sink) do
-      :erlang.phash2({sink.host, sink.port, sink.username})
+      :erlang.phash2({sink.host, sink.port, sink.username, sink.jwt, sink.nkey_seed})
     end
   end
 
@@ -153,22 +153,22 @@ defmodule Sequin.Sinks.Nats.ConnectionCache do
     end
 
     defp default_start(%NatsSink{} = sink) do
-      # connection_settings() :: %{
-      #   optional(:connection_timeout) => non_neg_integer(),
-      #   optional(:host) => binary(),
-      #   optional(:inbox_prefix) => binary(),
-      #   optional(:port) => non_neg_integer(),
-      #   optional(:ssl_opts) => list(),
-      #   optional(:tcp_opts) => list(),
-      #   optional(:tls) => boolean(),
-      #   optional(:no_responders) => boolean()
-      # }
-
       %{host: sink.host, port: sink.port}
       |> put_opt_key(:username, sink.username)
       |> put_opt_key(:password, sink.password)
+      |> put_opt_key(:jwt, sink.jwt)
+      |> put_opt_key(:nkey_seed, sink.nkey_seed)
+      |> put_tls(sink.tls)
       |> Gnat.start_link()
     end
+
+    defp put_tls(opts, true) do
+      opts
+      |> Map.put(:tls, true)
+      |> Map.put(:ssl_opts, verify: :verify_none)
+    end
+
+    defp put_tls(opts, _), do: opts
 
     defp put_opt_key(opts, key, value) when is_binary(value) do
       Map.put(opts, key, value)

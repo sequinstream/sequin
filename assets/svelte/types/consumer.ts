@@ -85,6 +85,9 @@ export type NatsConsumer = BaseConsumer & {
     subject: string;
     username: string;
     password: string;
+    jwt: string;
+    nkey_seed: string;
+    tls: boolean;
   };
 };
 

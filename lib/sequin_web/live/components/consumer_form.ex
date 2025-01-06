@@ -498,7 +498,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       "host" => sink["host"],
       "port" => sink["port"],
       "username" => sink["username"],
-      "password" => sink["password"]
+      "password" => sink["password"],
+      "jwt" => sink["jwt"],
+      "nkey_seed" => sink["nkey_seed"],
+      "tls" => sink["tls"]
     }
   end
 
@@ -639,7 +642,10 @@ defmodule SequinWeb.Components.ConsumerForm do
       "host" => sink.host,
       "port" => sink.port,
       "username" => sink.username,
-      "password" => sink.password
+      "password" => sink.password,
+      "jwt" => sink.jwt,
+      "nkey_seed" => sink.nkey_seed,
+      "tls" => sink.tls
     }
   end
 

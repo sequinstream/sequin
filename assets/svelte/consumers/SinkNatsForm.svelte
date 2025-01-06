@@ -12,6 +12,8 @@
   import FormItem from "$lib/components/ui/form-item.svelte";
   import FormErrorMessage from "$lib/components/ui/form-error-message.svelte";
   import FormToggleVisibilityButton from "$lib/components/ui/form-toggle-visibility-button.svelte";
+  import { Switch } from "$lib/components/ui/switch";
+
   export let form: NatsConsumer;
   export let errors: any = {};
 
@@ -46,6 +48,22 @@
     </FormItem>
 
     <FormItem>
+      <div class="flex items-center gap-2">
+        <Switch
+          id="tls"
+          checked={form.sink.tls}
+          onCheckedChange={(checked) => {
+            form.sink.tls = checked;
+          }}
+        />
+        <Label for="tls">TLS</Label>
+      </div>
+      {#if errors.sink?.tls}
+        <FormErrorMessage>{errors.sink.tls}</FormErrorMessage>
+      {/if}
+    </FormItem>
+
+    <FormItem>
       <Label for="username">Username</Label>
       <Input
         id="username"
@@ -76,6 +94,50 @@
       </div>
       {#if errors.sink?.password}
         <FormErrorMessage>{errors.sink.password}</FormErrorMessage>
+      {/if}
+    </FormItem>
+
+    <FormItem>
+      <Label for="jwt">JWT</Label>
+      <div class="relative">
+        <Input
+          id="jwt"
+          type={showPassword ? "text" : "password"}
+          bind:value={form.sink.jwt}
+          placeholder="(optional)"
+          data-1p-ignore
+          autocomplete="off"
+        />
+        <FormToggleVisibilityButton
+          isVisible={showPassword}
+          label="jwt"
+          onToggleVisibility={togglePasswordVisibility}
+        />
+      </div>
+      {#if errors.sink?.jwt}
+        <FormErrorMessage>{errors.sink.jwt}</FormErrorMessage>
+      {/if}
+    </FormItem>
+
+    <FormItem>
+      <Label for="nkey_seed">NKey Seed</Label>
+      <div class="relative">
+        <Input
+          id="nkey_seed"
+          type={showPassword ? "text" : "password"}
+          bind:value={form.sink.nkey_seed}
+          placeholder="(optional)"
+          data-1p-ignore
+          autocomplete="off"
+        />
+        <FormToggleVisibilityButton
+          isVisible={showPassword}
+          label="nkey_seed"
+          onToggleVisibility={togglePasswordVisibility}
+        />
+      </div>
+      {#if errors.sink?.nkey_seed}
+        <FormErrorMessage>{errors.sink.nkey_seed}</FormErrorMessage>
       {/if}
     </FormItem>
   </CardContent>

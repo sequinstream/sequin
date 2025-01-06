@@ -6,6 +6,7 @@
 
   const iconMap = {
     healthy: Check,
+    unhealthy: X,
     error: X,
     warning: AlertTriangle,
     initializing: Loader,
@@ -13,6 +14,7 @@
 
   const iconColor = {
     healthy: "text-green-600",
+    unhealthy: "text-red-600",
     error: "text-red-600",
     warning: "text-yellow-600",
     initializing: "text-blue-600",

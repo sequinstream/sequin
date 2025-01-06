@@ -3,13 +3,13 @@ defmodule SequinWeb.DatabasesLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Databases
-  alias Sequin.Health
+  alias Sequin.Health2
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     account_id = current_account_id(socket)
 
-    databases = Databases.list_dbs_for_account(account_id, [:sink_consumers, :wal_pipelines])
+    databases = Databases.list_dbs_for_account(account_id, [:sink_consumers, :wal_pipelines, :replication_slot])
 
     databases = load_database_health(databases)
 
@@ -47,7 +47,7 @@ defmodule SequinWeb.DatabasesLive.Index do
 
   defp load_database_health(databases) do
     Enum.map(databases, fn database ->
-      case Health.get(database) do
+      case Health2.health(database.replication_slot) do
         {:ok, health} -> %{database | health: health}
         {:error, _} -> database
       end
@@ -63,7 +63,7 @@ defmodule SequinWeb.DatabasesLive.Index do
       port: database.port,
       sinkConsumers: length(database.sink_consumers),
       pipelines: length(database.wal_pipelines),
-      health: Health.to_external(database.health)
+      health: Health2.to_external(database.health)
     }
   end
 end

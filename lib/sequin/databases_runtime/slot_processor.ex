@@ -24,7 +24,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Error
-  alias Sequin.Health
+  alias Sequin.Health2
+  alias Sequin.Health2.Event
   alias Sequin.Postgres
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
@@ -40,6 +41,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Replication.PostgresReplicationSlot
+
     typedstruct do
       field :current_commit_ts, nil | integer()
       field :current_commit_idx, nil | integer()
@@ -53,6 +56,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :publication, String.t()
       field :slot_name, String.t()
       field :postgres_database, PostgresDatabase.t()
+      field :replication_slot, PostgresReplicationSlot.t()
       field :step, :disconnected | :streaming
       field :test_pid, pid()
       field :connection, map()
@@ -70,6 +74,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     publication = Keyword.fetch!(opts, :publication)
     slot_name = Keyword.fetch!(opts, :slot_name)
     postgres_database = Keyword.fetch!(opts, :postgres_database)
+    replication_slot = Keyword.fetch!(opts, :replication_slot)
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
@@ -86,6 +91,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       publication: publication,
       slot_name: slot_name,
       postgres_database: postgres_database,
+      replication_slot: replication_slot,
       test_pid: test_pid,
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
@@ -159,11 +165,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           Exception.message(error)
       end
 
-    Health.update(
-      state.postgres_database,
-      :replication_connected,
-      :error,
-      Error.service(service: :replication, message: error_msg)
+    Health2.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
     )
 
     # No way to stop by returning a {:stop, reason} tuple from handle_connect
@@ -184,7 +188,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def handle_connect(state) do
     Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
 
-    Health.update(state.postgres_database, :replication_connected, :initializing)
     {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)
 
     query =
@@ -213,7 +216,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     next_state = process_message(msg, state)
     {acc_size, _acc_messages} = next_state.accumulated_messages
 
-    Health.update(state.postgres_database, :replication_messages, :healthy)
+    # TODO: Move to better spot after we vendor ReplicationConnection
+    Health2.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_connected, status: :success}
+    )
+
+    Health2.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_message_processed, status: :success}
+    )
 
     cond do
       is_struct(msg, Commit) ->
@@ -234,7 +246,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       Logger.error("Error processing message: #{inspect(e)}")
 
       error = Error.service(service: :replication, message: Exception.message(e))
-      Health.update(state.postgres_database, :replication_messages, :error, error)
+
+      Health2.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_message_processed, status: :fail, error: error}
+      )
 
       reraise e, __STACKTRACE__
   end
@@ -247,9 +263,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # Int64           - Server's system clock (microseconds since 2000-01-01 midnight)
   # Byte1           - 1 if reply requested immediately to avoid timeout, 0 otherwise
   def handle_data(<<?k, wal_end::64, _clock::64, reply>>, %State{} = state) do
-    # TODO: We can remove this once everyone is using Postgres 14+
-    # This is necessary because they will not receive heartbeat messages
-    Health.update(state.postgres_database, :replication_connected, :healthy)
+    # Because these are <14 Postgres databases, they will not receive heartbeat messages
+    # temporarily mark them as healthy if we receive a keepalive message
+    if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
+      Health2.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_heartbeat_received, status: :success}
+      )
+    end
 
     messages =
       if reply == 1 and not is_nil(state.last_committed_lsn) do
@@ -502,9 +523,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
     Logger.info("[SlotProcessor] Heartbeat received")
-    Health.update(state.postgres_database, :reachable, :healthy)
-    Health.update(state.postgres_database, :replication_connected, :healthy)
-    Health.update(state.postgres_database, :replication_messages, :healthy)
+    Health2.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
     if state.test_pid do
       # TODO: Decouple

@@ -67,6 +67,8 @@ defmodule Sequin.Health2 do
         cond do
           Enum.any?(checks, fn check -> check.status == :unhealthy end) -> :error
           Enum.any?(checks, fn check -> check.status == :stale end) -> :warning
+          Enum.any?(checks, fn check -> check.status == :initializing end) -> :initializing
+          Enum.any?(checks, fn check -> check.status == :waiting end) -> :waiting
           true -> :healthy
         end
 
@@ -93,14 +95,7 @@ defmodule Sequin.Health2 do
       status: health.status,
       name: entity_name(health.entity_kind),
       # status_message: status_message(health.status, health.checks),
-      checks:
-        Enum.map(health.checks, fn check ->
-          %{
-            name: check.name,
-            status: check.status,
-            error: if(check.error, do: %{message: Exception.message(check.error)})
-          }
-        end)
+      checks: Enum.map(health.checks, &Check.to_external/1)
     }
   end
 
@@ -203,17 +198,17 @@ defmodule Sequin.Health2 do
       reachable_check.status == :unhealthy ->
         [
           reachable_check,
-          %Check{slug: :replication_configuration, name: "Valid slot", status: :initializing},
-          %Check{slug: :replication_connected, name: "Replication connected", status: :initializing},
-          %Check{slug: :replication_messages, name: "Replication messages", status: :initializing}
+          %Check{slug: :replication_configuration, status: :initializing},
+          %Check{slug: :replication_connected, status: :initializing},
+          %Check{slug: :replication_messages, status: :initializing}
         ]
 
       config_check.status == :unhealthy ->
         [
           reachable_check,
           config_check,
-          %Check{slug: :replication_connected, name: "Replication connected", status: :initializing},
-          %Check{slug: :replication_messages, name: "Replication messages", status: :initializing}
+          %Check{slug: :replication_connected, status: :initializing},
+          %Check{slug: :replication_messages, status: :initializing}
         ]
 
       connected_check.status == :unhealthy ->
@@ -221,7 +216,7 @@ defmodule Sequin.Health2 do
           reachable_check,
           config_check,
           connected_check,
-          %Check{slug: :replication_messages, name: "Replication messages", status: :initializing}
+          %Check{slug: :replication_messages, status: :initializing}
         ]
 
       true ->
@@ -230,7 +225,7 @@ defmodule Sequin.Health2 do
   end
 
   defp check(:reachable, %PostgresReplicationSlot{} = slot, events) do
-    base_check = %Check{slug: :reachable, name: "Database reachable", status: :initializing}
+    base_check = %Check{slug: :reachable, status: :initializing}
     conn_checked_event = find_event(events, :db_connectivity_checked)
 
     cond do
@@ -254,7 +249,7 @@ defmodule Sequin.Health2 do
   end
 
   defp check(:replication_configuration, %PostgresReplicationSlot{} = slot, events) do
-    base_check = %Check{slug: :replication_configuration, name: "Valid slot", status: :initializing}
+    base_check = %Check{slug: :replication_configuration, status: :initializing}
     config_checked_event = find_event(events, :replication_slot_checked)
 
     cond do
@@ -277,7 +272,7 @@ defmodule Sequin.Health2 do
   end
 
   defp check(:replication_connected, %PostgresReplicationSlot{} = slot, events) do
-    base_check = %Check{slug: :replication_connected, name: "Replication connected", status: :initializing}
+    base_check = %Check{slug: :replication_connected, status: :initializing}
     connected_event = find_event(events, :replication_connected)
 
     cond do
@@ -290,6 +285,9 @@ defmodule Sequin.Health2 do
 
         %{base_check | status: :unhealthy, error: error}
 
+      is_nil(connected_event) ->
+        base_check
+
       connected_event.status == :fail ->
         put_check_timestamps(%{base_check | status: :unhealthy, error: connected_event.error}, [
           connected_event
@@ -301,7 +299,7 @@ defmodule Sequin.Health2 do
   end
 
   defp check(:replication_messages, %PostgresReplicationSlot{} = slot, events) do
-    base_check = %Check{slug: :replication_messages, name: "Replication messages", status: :initializing}
+    base_check = %Check{slug: :replication_messages, status: :initializing}
     messages_processed_event = find_event(events, :replication_message_processed)
     heartbeat_recv_event = find_event(events, :replication_heartbeat_received)
 
@@ -311,7 +309,7 @@ defmodule Sequin.Health2 do
         error =
           Error.invariant(
             message:
-              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the database's replication slot."
+              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason."
           )
 
         %{base_check | status: :unhealthy, error: error}
@@ -320,7 +318,7 @@ defmodule Sequin.Health2 do
         error =
           Error.service(
             message:
-              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the database's replication slot.",
+              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason.",
             service: :postgres_replication_slot
           )
 
@@ -331,8 +329,14 @@ defmodule Sequin.Health2 do
           messages_processed_event
         ])
 
-      true ->
+      not is_nil(messages_processed_event) ->
+        put_check_timestamps(%{base_check | status: :healthy}, [messages_processed_event])
+
+      not is_nil(heartbeat_recv_event) ->
         put_check_timestamps(%{base_check | status: :healthy}, [heartbeat_recv_event])
+
+      true ->
+        base_check
     end
   end
 

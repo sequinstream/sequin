@@ -39,6 +39,23 @@ defmodule Sequin.Health2.Check do
     |> JSON.struct(Check)
   end
 
+  def to_external(%Check{} = check) do
+    %{
+      name: check_name(check),
+      status: check.status,
+      error: if(check.error, do: %{message: Exception.message(check.error)})
+    }
+  end
+
+  def check_name(%Check{} = check) do
+    case check.slug do
+      :replication_configuration -> "Valid slot"
+      :replication_connected -> "Replication connected"
+      :replication_messages -> "Replication messages"
+      :reachable -> "Database reachable"
+    end
+  end
+
   defimpl Jason.Encoder do
     def encode(check, opts) do
       check

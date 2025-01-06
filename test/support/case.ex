@@ -15,6 +15,7 @@ defmodule Sequin.Case do
 
       setup :start_supervisors
       setup :verify_stubs
+      setup :default_stubs
       # For Hammox
       # Note: You may be tempted to move this to Hammox.verify_on_exit!() in
       # verify_stubs/1, but that doesn't seem to have an effect.
@@ -33,6 +34,11 @@ defmodule Sequin.Case do
       end)
 
     {:ok, supervisors: sup_tree}
+  end
+
+  def default_stubs(_context) do
+    Sequin.TestSupport.stub_utc_now(fn -> DateTime.utc_now() end)
+    :ok
   end
 
   def verify_stubs(_context) do

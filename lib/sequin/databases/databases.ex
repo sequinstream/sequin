@@ -9,6 +9,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Health2.CheckPostgresReplicationSlotWorker
   alias Sequin.HealthRuntime.PostgresDatabaseHealthWorker
   alias Sequin.NetworkUtils
   alias Sequin.ObanQuery
@@ -85,6 +86,8 @@ defmodule Sequin.Databases do
           replace: [:scheduled_at]
         )
         |> Oban.insert()
+
+        CheckPostgresReplicationSlotWorker.enqueue(db.id)
 
         {:ok, db}
       end

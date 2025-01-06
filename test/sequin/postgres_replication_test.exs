@@ -25,6 +25,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
@@ -851,11 +852,11 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:stop_replication, _id}, 2000
 
       # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health.get(%PostgresDatabase{id: "test_db_id"})
+      {:ok, health} = Sequin.Health2.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
       assert health.status == :error
 
-      check = Enum.find(health.checks, &(&1.id == :replication_connected))
-      assert check.status == :error
+      check = Enum.find(health.checks, &(&1.slug == :replication_connected))
+      assert check.status == :unhealthy
       assert check.error.message =~ "Replication slot '#{non_existent_slot}' does not exist"
     end
 
@@ -867,10 +868,9 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :heartbeat_received}, 1000
 
       # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health.get(%PostgresDatabase{id: "test_db_id"})
-      assert health.status == :healthy
+      {:ok, health} = Sequin.Health2.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
 
-      check = Enum.find(health.checks, &(&1.id == :replication_messages))
+      check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy
     end
   end
@@ -1417,7 +1417,8 @@ defmodule Sequin.PostgresReplicationTest do
           id: server_id(),
           message_handler_module: MessageHandlerMock,
           message_handler_ctx: nil,
-          postgres_database: %PostgresDatabase{id: "test_db_id"}
+          postgres_database: %PostgresDatabase{id: "test_db_id"},
+          replication_slot: %PostgresReplicationSlot{id: "test_slot_id"}
         ],
         opts
       )

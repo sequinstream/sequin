@@ -135,6 +135,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     if state.test_pid do
       Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
@@ -212,20 +213,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl Postgrex.ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
-    msg = Decoder.decode_message(msg)
-    next_state = process_message(msg, state)
-    {acc_size, _acc_messages} = next_state.accumulated_messages
-
     # TODO: Move to better spot after we vendor ReplicationConnection
     Health2.put_event(
       state.replication_slot,
       %Event{slug: :replication_connected, status: :success}
     )
 
-    Health2.put_event(
-      state.replication_slot,
-      %Event{slug: :replication_message_processed, status: :success}
-    )
+    msg = Decoder.decode_message(msg)
+    next_state = process_message(msg, state)
+    {acc_size, _acc_messages} = next_state.accumulated_messages
+
+    unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
+      # A replication message is *their* message(s), not our message.
+      Health2.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_message_processed, status: :success}
+      )
+    end
 
     cond do
       is_struct(msg, Commit) ->

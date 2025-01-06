@@ -27,6 +27,8 @@ defmodule Sequin.Sinks.Nats.Client do
     end
   end
 
+  @test_timeout 5_000
+
   @impl Nats
   def test_connection(%NatsSink{} = sink) do
     with :ok <-
@@ -42,12 +44,29 @@ defmodule Sequin.Sinks.Nats.Client do
         receive do
           {:msg, %{topic: ^subject, body: ^payload}} ->
             :ok
+
+          _ ->
+            {:error,
+             Error.service(
+               service: :nats,
+               message: ~s(Failed to verify NATS connection: did not receive "#{payload}" on "#{subject}" subject. Verify NATS permissions are properly setup)
+             )}
         after
-          5000 ->
-            {:error, Error.service(service: :nats, message: "Failed to verify NATS connection")}
+          @test_timeout ->
+            {:error,
+             Error.service(
+               service: :nats,
+               message: "Failed to verify NATS connection: did not receive test ping response after #{@test_timeout}ms. Verify NATS permissions are properly setup"
+             )}
         end
       else
-        _ -> {:error, Error.service(service: :nats, message: "Failed to verify NATS connection")}
+        _ ->
+          {:error,
+           Error.service(
+             service: :nats,
+             message:
+               ~s(Failed to verify NATS connection: failed to send "#{payload}" to "#{subject}" subject. Verify NATS permissions are properly setup)
+           )}
       end
     end
   catch

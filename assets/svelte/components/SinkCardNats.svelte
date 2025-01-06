@@ -45,6 +45,36 @@
           >
         </div>
       </div>
+
+      <div>
+        <span class="text-sm text-gray-500">TLS Enabled</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >{consumer.sink.tls ? "Yes" : "No"}</span
+          >
+        </div>
+      </div>
+
+      <div>
+        <span class="text-sm text-gray-500">JWT</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >{consumer.sink.jwt ? "********" : "-"}</span
+          >
+        </div>
+      </div>
+
+      <div>
+        <span class="text-sm text-gray-500">NKey Seed</span>
+        <div class="mt-2">
+          <span
+            class="font-mono bg-slate-50 pl-1 pr-4 py-1 border border-slate-100 rounded-md whitespace-nowrap"
+            >{consumer.sink.nkey_seed ? "********" : "-"}</span
+          >
+        </div>
+      </div>
     </div>
   </CardContent>
 </Card>

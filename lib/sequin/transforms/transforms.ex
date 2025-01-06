@@ -222,7 +222,10 @@ defmodule Sequin.Transforms do
       host: sink.host,
       port: sink.port,
       username: sink.username,
-      password: maybe_obfuscate(sink.password, show_sensitive)
+      password: maybe_obfuscate(sink.password, show_sensitive),
+      jwt: maybe_obfuscate(sink.jwt, show_sensitive),
+      nkey_seed: maybe_obfuscate(sink.nkey_seed, show_sensitive),
+      tls: sink.tls
     })
   end
 

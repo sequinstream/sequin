@@ -569,6 +569,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       port: sink.port,
       username: sink.username,
       password: sink.password,
+      tls: sink.tls,
+      nkey_seed: sink.nkey_seed,
+      jwt: sink.jwt,
       connection_id: sink.connection_id
     }
   end

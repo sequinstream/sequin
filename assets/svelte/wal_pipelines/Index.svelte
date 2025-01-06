@@ -52,7 +52,7 @@
         <p class="text-gray-600 mb-6">
           With
           <a
-            href="https://sequinstream.com/docs/capture-changes/wal-pipelines"
+            href="https://sequinstream.com/docs/reference/change-retention"
             target="_blank"
             class="text-blue-500 hover:underline">Change Retention</a
           >, Sequin captures all of a table's insert, update, and delete events

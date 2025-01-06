@@ -24,7 +24,13 @@ config :sentry,
   enable_source_code_context: true,
   environment_name: Mix.env(),
   root_source_code_paths: [File.cwd!()],
-  client: Sequin.Sentry.FinchClient
+  client: Sequin.Sentry.FinchClient,
+  integrations: [
+    oban: [
+      capture_errors: true,
+      cron: [enabled: true]
+    ]
+  ]
 
 config :sequin, Oban,
   prefix: sequin_config_schema,

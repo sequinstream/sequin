@@ -724,7 +724,7 @@ defmodule SequinWeb.Components.ConsumerForm do
               end)
           }
         end)
-        |> Enum.sort_by(&{is_nil(&1["sort_column"]), &1["name"]}, :asc)
+        |> Enum.sort_by(&{is_nil(&1["sort_column"]), &1["schema"], &1["name"]}, :asc)
     }
   end
 

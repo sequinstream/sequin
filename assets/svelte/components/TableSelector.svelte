@@ -74,17 +74,12 @@
     if (selectedDatabaseId) {
       selectedDatabase = databases.find((db) => db.id === selectedDatabaseId);
     }
-    filteredTables = (
+    filteredTables =
       selectedDatabase?.tables.filter((table) =>
         `${table.schema}.${table.name}`
           .toLowerCase()
           .includes((searchQuery || "").toLowerCase()),
-      ) || []
-    ).sort((a: any, b: any) =>
-      a.schema === b.schema
-        ? a.name.localeCompare(b.name)
-        : a.schema.localeCompare(b.schema),
-    );
+      ) || [];
 
     if (onlyEventTables) {
       filteredTables = filteredTables.filter((table) => table.isEventTable);

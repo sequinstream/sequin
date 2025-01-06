@@ -46,7 +46,8 @@ config :sequin, Oban,
        {"0 * * * *", Sequin.Logs.RotateLogsWorker},
        {"*/10 * * * *", Sequin.HealthRuntime.HttpEndpointHealthWorker},
        {"* * * * *", Sequin.CheckSystemHealthWorker},
-       {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker}
+       {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker},
+       {"*/3 * * * *", Sequin.Health2.KickoffCheckPostgresReplicationSlotWorker}
      ]}
   ]
 

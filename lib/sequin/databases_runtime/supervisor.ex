@@ -68,6 +68,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
         slot_name: pg_replication.slot_name,
         publication: pg_replication.publication_name,
         postgres_database: pg_replication.postgres_database,
+        replication_slot: pg_replication,
         message_handler_ctx: MessageHandler.context(pg_replication),
         message_handler_module: MessageHandler,
         connection: PostgresDatabase.to_postgrex_opts(pg_replication.postgres_database),

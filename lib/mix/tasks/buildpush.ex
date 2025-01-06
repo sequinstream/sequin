@@ -103,6 +103,10 @@ defmodule Mix.Tasks.Buildpush do
   defp build_and_push(start_time, owner, repo, sha, config) do
     IO.puts("#{@blue}Building and pushing Docker image...#{@reset}")
 
+    unless config[:sentry_dsn] do
+      raise "config[:sentry_dsn] was not set, please update your config/dev.secret.exs"
+    end
+
     env = [
       {"AWS_REGION", config[:aws_region]},
       {"AWS_ACCESS_KEY_ID", config[:aws_access_key_id]},

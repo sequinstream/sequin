@@ -19,6 +19,10 @@ ENV SELF_HOSTED=${SELF_HOSTED}
 ARG RELEASE_VERSION
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 
+# Pass through SENTRY_DSN to the build environment
+ARG SENTRY_DSN
+ENV SENTRY_DSN=${SENTRY_DSN}
+
 # install build dependencies
 RUN apt-get update -y && apt-get install -y build-essential git curl \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*

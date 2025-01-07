@@ -56,7 +56,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
         start_for_sink_consumer(supervisor, consumer, opts)
       end)
     else
-      {:ok, _} = SlotSupervisor.start_child(consumer)
+      SlotSupervisor.start_message_store!(consumer)
 
       if consumer.type == :sequin_stream do
         :ok

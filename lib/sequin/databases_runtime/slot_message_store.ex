@@ -185,6 +185,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
+  @spec min_unflushed_commit_lsn(consumer_id()) :: non_neg_integer()
+  def min_unflushed_commit_lsn(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :min_unflushed_commit_lsn)
+  end
+
   @doc """
   Counts the number of messages in the message store.
   """
@@ -347,6 +352,21 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:reply, {:ok, nacked_count}, %{state | messages: updated_messages}}
   end
 
+  def handle_call(:min_unflushed_commit_lsn, _from, state) do
+    min_unflushed_commit_lsn =
+      state.messages
+      |> Map.values()
+      |> Stream.filter(&is_nil(&1.flushed_at))
+      |> Enum.min_by(& &1.commit_lsn, fn -> nil end)
+      |> case do
+        nil -> nil
+        %ConsumerRecord{commit_lsn: commit_lsn} -> commit_lsn
+        %ConsumerEvent{commit_lsn: commit_lsn} -> commit_lsn
+      end
+
+    {:reply, min_unflushed_commit_lsn, state}
+  end
+
   def handle_call(:count_messages, _from, state) do
     {:reply, map_size(state.messages), state}
   end
@@ -438,14 +458,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp load_messages(%SinkConsumer{message_kind: :event, id: id}) do
     id
     |> Consumers.list_consumer_events_for_consumer()
-    |> Enum.map(fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false} end)
     |> Map.new(&{&1.ack_id, &1})
   end
 
   defp load_messages(%SinkConsumer{message_kind: :record, id: id}) do
     id
     |> Consumers.list_consumer_records_for_consumer()
-    |> Enum.map(fn msg -> %{msg | flushed_at: DateTime.utc_now(), dirty: false} end)
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false} end)
     |> Map.new(&{&1.ack_id, &1})
   end
 

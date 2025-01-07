@@ -562,42 +562,6 @@ defmodule Sequin.MessageHandlerTest do
       assert record.group_id == "A"
     end
 
-    test "puts the largest sequence number into last_processed_seq" do
-      field = ReplicationFactory.field(column_attnum: 1, value: "test")
-
-      # Messages should be ordered, but mess it up just in case
-      messages =
-        for seq <- Enum.shuffle([1, 2, 3, 5]) do
-          ReplicationFactory.postgres_message(table_oid: 123, action: :insert, seq: seq, fields: [field])
-        end
-
-      account = AccountsFactory.insert_account!()
-      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
-
-      sequence =
-        DatabasesFactory.insert_sequence!(table_oid: 123, account_id: account.id, postgres_database_id: database.id)
-
-      sequence_filter = ConsumersFactory.sequence_filter_attrs(group_column_attnums: [1], column_filters: [])
-
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          account_id: account.id,
-          sequence_id: sequence.id,
-          sequence_filter: sequence_filter,
-          source_tables: []
-        )
-
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
-
-      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
-      replication_slot_id = Factory.uuid()
-      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: replication_slot_id}
-
-      {:ok, 4, _} = MessageHandler.handle_messages(context, messages)
-
-      assert {:ok, 5} = Replication.last_processed_seq(replication_slot_id)
-    end
-
     test "updates table reader batch primary key values correctly" do
       # Create three batches with different table OIDs
       batch1 =

@@ -41,6 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     @moduledoc false
     use TypedStruct
 
+    alias Sequin.Consumers.SinkConsumer
     alias Sequin.Replication.PostgresReplicationSlot
 
     typedstruct do
@@ -55,6 +56,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :last_processed_seq, integer()
       field :publication, String.t()
       field :slot_name, String.t()
+      field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
       field :postgres_database, PostgresDatabase.t()
       field :replication_slot, PostgresReplicationSlot.t()
       field :step, :disconnected | :streaming
@@ -122,6 +124,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   catch
     :exit, _e ->
       {:error, :not_running}
+  end
+
+  def monitor_message_store(id, consumer_id, pid) do
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id, pid})
+  end
+
+  def demonitor_message_store(id, consumer_id) do
+    GenServer.call(via_tuple(id), {:demonitor_message_store, consumer_id})
   end
 
   def via_tuple(id) do
@@ -301,6 +311,43 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     # Need to manually send reply
     GenServer.reply(from, :ok)
     {:noreply, state}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_call({:monitor_message_store, consumer_id, pid}, from, state) do
+    ref = Process.monitor(pid)
+    Logger.info("Monitoring message store for consumer #{consumer_id}")
+    GenServer.reply(from, :ok)
+    {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_call({:demonitor_message_store, consumer_id}, from, state) do
+    case state.message_store_refs[consumer_id] do
+      nil ->
+        Logger.warning("No monitor found for consumer #{consumer_id}")
+        GenServer.reply(from, :ok)
+        {:noreply, state}
+
+      ref ->
+        res = Process.demonitor(ref)
+        Logger.info("Demonitored message store for consumer #{consumer_id}: (res=#{inspect(res)})")
+        GenServer.reply(from, :ok)
+        {:noreply, %{state | message_store_refs: Map.delete(state.message_store_refs, consumer_id)}}
+    end
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
+    {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
+
+    Logger.error(
+      "[SlotProcessor] SlotMessageStore died. Shutting down.",
+      consumer_id: consumer_id,
+      reason: reason
+    )
+
+    {:stop, :message_store_down, state}
   end
 
   @impl Postgrex.ReplicationConnection

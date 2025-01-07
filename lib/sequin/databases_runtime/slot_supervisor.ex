@@ -5,6 +5,7 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.SlotMessageStore
+  alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
@@ -27,25 +28,45 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
     pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
+    slot_processor_spec = slot_processor_child_spec(pg_replication, opts)
 
-    pg_replication
-    |> children(opts)
-    |> Enum.map(fn child ->
-      case Sequin.DynamicSupervisor.start_child(via_tuple(pg_replication.id), child) do
-        {:ok, pid} ->
-          {:ok, pid}
+    case Sequin.DynamicSupervisor.start_child(via_tuple(pg_replication.id), slot_processor_spec) do
+      {:ok, slot_processor_pid} ->
+        Enum.map(pg_replication.sink_consumers, &start_message_store!(&1, opts))
+        {:ok, slot_processor_pid}
 
-        {:error, {:already_started, pid}} ->
-          {:ok, pid}
+      {:error, {:already_started, slot_processor_pid}} ->
+        Enum.map(pg_replication.sink_consumers, &start_message_store!(&1, opts))
+        {:ok, slot_processor_pid}
 
-        {:error, error} ->
-          Logger.error("Failed to start child #{inspect(child)}: #{inspect(error)}")
-          raise error
-      end
-    end)
+      {:error, error} ->
+        Logger.error("Failed to start slot processor: #{inspect(error)}")
+        raise error
+    end
   end
 
-  def start_child(%SinkConsumer{} = sink_consumer, opts \\ []) do
+  def start_processor!(%PostgresReplicationSlot{} = pg_replication, opts \\ []) do
+    pg_replication = Repo.preload(pg_replication, :postgres_database)
+    slot_processor_spec = slot_processor_child_spec(pg_replication, opts)
+
+    case Sequin.DynamicSupervisor.start_child(via_tuple(pg_replication.id), slot_processor_spec) do
+      {:ok, pid} ->
+        pid
+
+      {:error, {:already_started, pid}} ->
+        pid
+
+      {:error, error} ->
+        Logger.error("Failed to start slot processor: #{inspect(error)}")
+        raise error
+    end
+  end
+
+  def start_message_store!(%SinkConsumer{} = sink_consumer, opts \\ []) do
+    # Ensure the processor is alive first
+    sink_consumer = Repo.preload(sink_consumer, :replication_slot)
+    start_processor!(sink_consumer.replication_slot)
+
     child_spec = slot_message_store_child_spec(sink_consumer, opts)
 
     sink_consumer.replication_slot_id
@@ -53,10 +74,11 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
     |> Sequin.DynamicSupervisor.start_child(child_spec)
     |> case do
       {:ok, pid} ->
-        {:ok, pid}
+        SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id, pid)
+        pid
 
       {:error, {:already_started, pid}} ->
-        {:ok, pid}
+        pid
 
       {:error, error} ->
         Logger.error("Failed to start child #{inspect(child_spec)}: #{inspect(error)}")
@@ -67,17 +89,9 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
   def stop_child(replication_slot_id, id) do
     sup_via = via_tuple(replication_slot_id)
     child_via = SlotMessageStore.via_tuple(id)
+    SlotProcessor.demonitor_message_store(replication_slot_id, id)
 
     Sequin.DynamicSupervisor.stop_child(sup_via, child_via)
-  end
-
-  defp children(%PostgresReplicationSlot{} = pg_replication, opts) do
-    slot_message_store_opts = Keyword.get(opts, :slot_message_store_opts, [])
-
-    [
-      slot_processor_child_spec(pg_replication, opts)
-      | Enum.map(pg_replication.sink_consumers, &slot_message_store_child_spec(&1, slot_message_store_opts))
-    ]
   end
 
   defp slot_processor_child_spec(%PostgresReplicationSlot{} = pg_replication, opts) do

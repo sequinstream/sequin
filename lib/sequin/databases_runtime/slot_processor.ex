@@ -22,11 +22,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Relation
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Update
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.Replication
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
 
@@ -290,8 +292,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       if reply == 1 and not is_nil(state.last_committed_lsn) do
         # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
         # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
-        lsn = state.last_committed_lsn + 1
+        lsn = safe_ack_lsn(state)
         Logger.info("Acking LSN #{lsn} (current server LSN: #{wal_end})")
+
+        Replication.put_last_processed_seq!(state.id, lsn)
         ack_message(lsn)
       else
         []
@@ -643,6 +647,18 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       | accumulated_messages: {new_size, [message | acc_messages]},
         current_commit_idx: state.current_commit_idx + 1
     }
+  end
+
+  defp safe_ack_lsn(%State{} = state) do
+    state.message_store_refs
+    |> Enum.map(fn {consumer_id, _ref} ->
+      SlotMessageStore.min_unflushed_commit_lsn(consumer_id)
+    end)
+    |> Enum.filter(& &1)
+    |> case do
+      [] -> state.last_committed_lsn + 1
+      lsns -> Enum.min(lsns)
+    end
   end
 
   def data_tuple_to_ids(columns, tuple_data) do

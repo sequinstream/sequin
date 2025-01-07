@@ -6,6 +6,7 @@ defmodule SequinWeb.ApiFallbackPlug do
 
   alias Ecto.Changeset
   alias Sequin.Error.BadRequestError
+  alias Sequin.Error.InvariantError
   alias Sequin.Error.NotFoundError
   alias Sequin.Error.ServiceError
   alias Sequin.Error.TimeoutError
@@ -34,6 +35,10 @@ defmodule SequinWeb.ApiFallbackPlug do
 
   def call(conn, {:error, %BadRequestError{} = error}) do
     render_error(conn, :bad_request, error)
+  end
+
+  def call(conn, {:error, %InvariantError{} = error}) do
+    render_error(conn, :internal_server_error, error)
   end
 
   def call(conn, {:error, %ValidationError{} = error}) do

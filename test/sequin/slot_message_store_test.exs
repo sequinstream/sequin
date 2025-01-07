@@ -48,7 +48,7 @@ defmodule Sequin.SlotMessageStoreTest do
       ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, DateTime.utc_now()})
 
       # Nack messages
-      :ok = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
+      {:ok, 2} = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
       # Produce messages, both are re-delivered
       {:ok, redelivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(redelivered) == 2
@@ -57,7 +57,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Acknowledge messages
       ack_ids = Enum.map(delivered, & &1.ack_id)
-      :ok = SlotMessageStore.ack(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.ack(consumer, ack_ids)
 
       # Produce messages, none should be delivered
       {:ok, []} = SlotMessageStore.produce(consumer.id, 2)
@@ -116,7 +116,7 @@ defmodule Sequin.SlotMessageStoreTest do
       ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, DateTime.utc_now()})
 
       # Nack messages
-      :ok = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
+      {:ok, 2} = SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
       # Produce messages, both are re-delivered
       {:ok, redelivered} = SlotMessageStore.produce(consumer.id, 2)
       assert length(redelivered) == 2
@@ -125,7 +125,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Acknowledge messages
       ack_ids = Enum.map(delivered, & &1.ack_id)
-      :ok = SlotMessageStore.ack(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.ack(consumer, ack_ids)
 
       # Produce messages, none should be delivered
       {:ok, []} = SlotMessageStore.produce(consumer.id, 2)

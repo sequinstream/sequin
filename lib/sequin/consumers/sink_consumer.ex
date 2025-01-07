@@ -23,6 +23,8 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Databases.Sequence
   alias Sequin.Replication.PostgresReplicationSlot
 
+  @type id :: String.t()
+
   @derive {Jason.Encoder,
            only: [
              :account_id,

@@ -110,7 +110,7 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   defp assign_health(socket) do
     wal_pipeline = socket.assigns.wal_pipeline
 
-    case Health.get(wal_pipeline) do
+    case Health.health(wal_pipeline) do
       {:ok, health} ->
         assign(socket, :wal_pipeline, %{wal_pipeline | health: health})
 

@@ -22,6 +22,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Sandbox.allow(Sequin.Repo, test_pid, self())
+      Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
     end
 
     consumer = Repo.lazy_preload(consumer, postgres_database: [:replication_slot])

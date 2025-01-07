@@ -32,11 +32,12 @@ defmodule Sequin.Factory.HealthFactory do
 
     merge_attributes(
       %Check{
-        id: Factory.uuid(),
-        name: Factory.word(),
+        slug: Factory.atom(),
         status: status,
         error: maybe_error(status),
-        created_at: Factory.utc_datetime_usec()
+        initial_event_at: Factory.utc_datetime(),
+        last_healthy_at: maybe_last_healthy_at(status),
+        erroring_since: maybe_erroring_since(status)
       },
       attrs
     )

@@ -8,6 +8,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Replication
   alias Sequin.Replication.WalEvent
@@ -194,7 +195,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
     state = %{state | task_ref: nil, successive_failure_count: 0}
 
     Enum.each(state.wal_pipelines, fn wal_pipeline ->
-      Health.update(wal_pipeline, :destination_insert, :healthy)
+      Health.put_event(wal_pipeline, %Event{slug: :destination_insert, status: :success})
     end)
 
     {:next_state, :deleting_wal_events, state}
@@ -205,7 +206,11 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
     Logger.error("[WalPipelineServer] Failed to write to destination: #{inspect(reason)}")
 
     Enum.each(state.wal_pipelines, fn wal_pipeline ->
-      Health.update(wal_pipeline, :destination_insert, :error, Error.ServiceError.from_postgrex(reason))
+      Health.put_event(wal_pipeline, %Event{
+        slug: :destination_insert,
+        status: :fail,
+        error: Error.ServiceError.from_postgrex(reason)
+      })
     end)
 
     if state.test_pid do
@@ -267,11 +272,13 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
     Logger.error("[WalPipelineServer] Task for #{state_name} failed with reason #{inspect(reason)}")
 
     Enum.each(state.wal_pipelines, fn wal_pipeline ->
-      Health.update(
+      Health.put_event(
         wal_pipeline,
-        :destination_insert,
-        :error,
-        Error.service(service: __MODULE__, message: "Unknown error")
+        %Event{
+          slug: :destination_insert,
+          status: :fail,
+          error: Error.service(service: __MODULE__, message: "Unknown error")
+        }
       )
     end)
 
@@ -461,6 +468,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
 
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 
   defp env do

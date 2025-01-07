@@ -9,8 +9,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.Sequence
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.Health2.CheckPostgresReplicationSlotWorker
-  alias Sequin.HealthRuntime.PostgresDatabaseHealthWorker
+  alias Sequin.Health.CheckPostgresReplicationSlotWorker
   alias Sequin.NetworkUtils
   alias Sequin.ObanQuery
   alias Sequin.Postgres
@@ -80,13 +79,6 @@ defmodule Sequin.Databases do
     Repo.transact(fn ->
       with {:ok, db} <- create_db_for_account(account_id, attrs),
            {:ok, db} <- update_tables(db) do
-        %{postgres_database_id: db.id}
-        |> PostgresDatabaseHealthWorker.new(
-          scheduled_at: DateTime.utc_now(),
-          replace: [:scheduled_at]
-        )
-        |> Oban.insert()
-
         CheckPostgresReplicationSlotWorker.enqueue(db.id)
 
         {:ok, db}
@@ -101,8 +93,12 @@ defmodule Sequin.Databases do
       |> Repo.update()
 
     case res do
-      {:ok, updated_db} -> {:ok, updated_db}
-      {:error, changeset} -> {:error, Error.validation(changeset: changeset)}
+      {:ok, updated_db} ->
+        CheckPostgresReplicationSlotWorker.enqueue(db.id, unique: false)
+        {:ok, updated_db}
+
+      {:error, changeset} ->
+        {:error, Error.validation(changeset: changeset)}
     end
   end
 
@@ -352,14 +348,22 @@ defmodule Sequin.Databases do
     end)
   end
 
-  def test_slot_permissions(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
+  def verify_slot(%PostgresDatabase{} = database, %PostgresReplicationSlot{} = slot) do
     with_uncached_connection(database, fn conn ->
-      with {:ok, status} <- Postgres.replication_slot_status(conn, slot.slot_name),
-           :ok <- validate_slot_status(status, slot.slot_name),
+      with {:ok, slot_info} <- Postgres.fetch_replication_slot(conn, slot.slot_name),
+           :ok <- validate_slot(database, slot_info),
            :ok <- Postgres.check_publication_exists(conn, slot.publication_name) do
         Postgres.check_replication_permissions(conn)
       end
     end)
+  end
+
+  defp validate_slot(%PostgresDatabase{} = db, slot_info) do
+    if Map.get(slot_info, "database") == db.database do
+      :ok
+    else
+      {:error, Error.validation(summary: "Replication slot was created in a different logical database")}
+    end
   end
 
   def get_major_pg_version(%PostgresDatabase{} = database) do
@@ -367,13 +371,6 @@ defmodule Sequin.Databases do
       Postgres.get_major_pg_version(conn)
     end)
   end
-
-  defp validate_slot_status(:not_found, slot_name) do
-    {:error,
-     Error.validation(summary: "Replication slot '#{slot_name}' does not exist", code: :replication_slot_not_found)}
-  end
-
-  defp validate_slot_status(_status, _slot_name), do: :ok
 
   def verify_table_in_publication(%PostgresDatabase{} = database, table_oid) do
     database = Repo.preload(database, :replication_slot)

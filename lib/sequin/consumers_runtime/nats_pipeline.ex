@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Sinks.Nats
 
   require Logger
@@ -55,7 +56,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
 
     case Nats.send_messages(consumer.sink, messages) do
       :ok ->
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         Enum.each(
           messages,
@@ -80,7 +81,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
 
         Logger.warning("Failed to push message to NATS: #{inspect(reason)}")
 
-        Health.update(consumer, :push, :error, reason)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
 
         Enum.each(
           messages,
@@ -97,5 +98,9 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
   end
 
   defp setup_allowances(%{test_pid: nil}), do: :ok
-  defp setup_allowances(%{test_pid: test_pid}), do: Mox.allow(Sequin.Sinks.NatsMock, test_pid, self())
+
+  defp setup_allowances(%{test_pid: test_pid}) do
+    Mox.allow(Sequin.Sinks.NatsMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+  end
 end

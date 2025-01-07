@@ -14,6 +14,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalEvent
@@ -116,14 +117,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
           consumers
           |> Enum.uniq_by(& &1.id)
           |> Enum.each(fn consumer ->
-            Health.update(consumer, :ingestion, :healthy)
+            Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
           end)
 
           # Update WAL Pipeline Health
           ctx.wal_pipelines
           |> Enum.filter(&(&1.id in matching_pipeline_ids))
           |> Enum.each(fn pipeline ->
-            Health.update(pipeline, :ingestion, :healthy)
+            Health.put_event(pipeline, %Event{slug: :messages_ingested, status: :success})
           end)
 
           # Trace Messages

@@ -406,27 +406,33 @@ defmodule Sequin.Postgres do
 
   @doc """
   Check if a replication slot (1) exists and (2) is currently busy or available.
+
+  Returns a map like this:
+
+      %{
+        "slot_name" => slot_name,
+        "slot_type" => slot_type,
+        "database" => database,
+        "active" => active
+      }
   """
-  @spec replication_slot_status(db_conn(), String.t()) :: {:ok, :busy | :available | :not_found} | {:error, Error.t()}
-  def replication_slot_status(conn, slot_name) do
+  @spec fetch_replication_slot(db_conn(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def fetch_replication_slot(conn, slot_name) do
     query = """
-    select active
+    select slot_name, active, database, slot_type
     from pg_replication_slots
     where slot_name = $1
     """
 
-    case query(conn, query, [slot_name]) do
-      {:ok, %{rows: []}} ->
-        {:ok, :not_found}
-
-      {:ok, %{rows: [[true]]}} ->
-        {:ok, :busy}
-
-      {:ok, %{rows: [[false]]}} ->
-        {:ok, :available}
-
+    with {:ok, res} <- query(conn, query, [slot_name]),
+         [res] <- result_to_maps(res) do
+      {:ok, res}
+    else
       {:error, %Postgrex.Error{} = error} ->
         {:error, ValidationError.from_postgrex("Failed to check replication slot status: ", error)}
+
+      [] ->
+        {:error, Error.not_found(entity: :replication_slot, params: %{slot_name: slot_name})}
     end
   rescue
     error in [DBConnection.ConnectionError] ->

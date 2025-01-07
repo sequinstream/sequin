@@ -1,4 +1,4 @@
-export type status = "healthy" | "error" | "warning" | "initializing";
+export type status = "healthy" | "error" | "warning" | "initializing" | "stale";
 
 export type Check = {
   name: string;

@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Repo
   alias Sequin.Sinks.Kafka
 
@@ -64,7 +65,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
     case Kafka.publish(consumer, consumer_record_or_event) do
       :ok ->
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         Sequin.Logs.log_for_consumer_message(
           :info,
@@ -78,7 +79,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       {:error, error} when is_exception(error) ->
         Logger.warning("Failed to publish message to Kafka: #{Exception.message(error)}")
 
-        Health.update(consumer, :push, :error, error)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
         Sequin.Logs.log_for_consumer_message(
           :error,
@@ -95,5 +96,6 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.Sinks.KafkaMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

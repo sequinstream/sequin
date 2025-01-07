@@ -70,11 +70,11 @@ WORKDIR /app
 # compile assets
 RUN mix assets.deploy
 
-# Ensure stacktraces we send to Sentry are complete
-RUN mix sentry.package_source_code
-
 # Compile the release
 RUN mix compile
+
+# Ensure stacktraces we send to Sentry are complete
+RUN mix sentry.package_source_code
 
 # Changes to config/runtime.exs don't require recompiling the code
 COPY config/runtime.exs config/

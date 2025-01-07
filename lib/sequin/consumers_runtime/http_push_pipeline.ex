@@ -7,6 +7,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Metrics
 
   require Logger
@@ -39,7 +40,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         features: [
           legacy_event_transform: legacy_event_transform,
           legacy_event_singleton_transform: legacy_event_singleton_transform
-        ]
+        ],
+        test_pid: test_pid
       }
     )
   end
@@ -59,8 +61,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         consumer: consumer,
         http_endpoint: http_endpoint,
         req_opts: req_opts,
-        features: features
+        features: features,
+        test_pid: test_pid
       }) do
+    setup_allowances(test_pid)
+
     Logger.metadata(
       account_id: consumer.account_id,
       consumer_id: consumer.id,
@@ -87,7 +92,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
         # Delete after webhook batch migration
         Logger.info("Pushed message successfully", message_data: message_data)
 
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         Metrics.incr_http_endpoint_throughput(http_endpoint)
 
         Enum.each(messages, fn msg ->
@@ -104,7 +109,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
       {:error, reason} ->
         Logger.warning("Failed to push message: #{inspect(reason)}")
 
-        Health.update(consumer, :push, :error, reason)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -217,5 +222,11 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
          details: %{status: response.status, body: response.body}
        )}
     end
+  end
+
+  defp setup_allowances(nil), do: :ok
+
+  defp setup_allowances(test_pid) do
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

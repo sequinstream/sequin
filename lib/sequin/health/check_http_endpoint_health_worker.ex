@@ -1,4 +1,4 @@
-defmodule Sequin.HealthRuntime.HttpEndpointHealthWorker do
+defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
   @moduledoc false
 
   use Oban.Worker,
@@ -9,13 +9,35 @@ defmodule Sequin.HealthRuntime.HttpEndpointHealthWorker do
   alias Sequin.Consumers
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Metrics
 
   require Logger
 
   @impl Oban.Worker
-  def perform(_job) do
-    Enum.each(Consumers.list_http_endpoints(), &check_endpoint/1)
+  def perform(%Oban.Job{args: %{"http_endpoint_id" => http_endpoint_id}}) do
+    case Consumers.get_http_endpoint(http_endpoint_id) do
+      {:ok, endpoint} ->
+        check_endpoint(endpoint)
+
+      {:error, %Error.NotFoundError{}} ->
+        :ok
+
+      error ->
+        error
+    end
+  end
+
+  def enqueue(http_endpoint_id) do
+    %{http_endpoint_id: http_endpoint_id}
+    |> new()
+    |> Oban.insert()
+  end
+
+  def enqueue_in(http_endpoint_id, delay_seconds) do
+    %{http_endpoint_id: http_endpoint_id}
+    |> new(schedule_in: delay_seconds)
+    |> Oban.insert()
   end
 
   defp check_endpoint(endpoint) do
@@ -23,24 +45,24 @@ defmodule Sequin.HealthRuntime.HttpEndpointHealthWorker do
          before_connect_time = System.monotonic_time(:millisecond),
          {:ok, :connected} <- Consumers.test_connect(endpoint) do
       after_connect_time = System.monotonic_time(:millisecond)
-      Health.update(endpoint, :reachable, :healthy)
+      Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :success})
       Metrics.incr_http_endpoint_avg_latency(endpoint, after_connect_time - before_connect_time)
     else
       {:error, :unreachable} ->
         error = Error.service(service: :http_endpoint, message: "Endpoint unreachable")
-        Health.update(endpoint, :reachable, :error, error)
+        Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :fail, error: error})
 
       {:error, :invalid_url} ->
         error = Error.service(service: :http_endpoint, message: "Invalid URL")
-        Health.update(endpoint, :reachable, :error, error)
+        Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :fail, error: error})
 
       {:error, reason} when is_atom(reason) ->
         error = Error.service(service: :http_endpoint, message: Atom.to_string(reason))
-        Health.update(endpoint, :reachable, :error, error)
+        Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :fail, error: error})
     end
   rescue
     error ->
       error = Error.service(service: :http_endpoint, message: Exception.message(error))
-      Health.update(endpoint, :reachable, :error, error)
+      Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :fail, error: error})
   end
 end

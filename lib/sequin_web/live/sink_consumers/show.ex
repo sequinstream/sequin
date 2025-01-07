@@ -89,7 +89,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         |> Repo.preload([:postgres_database, :sequence, :active_backfill], force: true)
         |> SinkConsumer.preload_http_endpoint()
 
-      {:ok, health} = Health.get(consumer)
+      {:ok, health} = Health.health(consumer)
       {:ok, %{consumer | health: health}}
     end
   end
@@ -461,7 +461,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
 
-    case Health.get(socket.assigns.consumer) do
+    case Health.health(socket.assigns.consumer) do
       {:ok, health} ->
         updated_consumer = Map.put(socket.assigns.consumer, :health, health)
         {:noreply, assign(socket, consumer: updated_consumer)}

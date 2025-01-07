@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Repo
   alias Sequin.Sinks.Redis
 
@@ -66,7 +67,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
     case Redis.send_messages(sink, redis_messages) do
       :ok ->
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         # Metrics.incr_sqs_throughput(consumer.sink)
 
         Enum.each(messages, fn msg ->
@@ -83,7 +84,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
       {:error, error} when is_exception(error) ->
         Logger.warning("Failed to push message to Redis: #{Exception.message(error)}")
 
-        Health.update(consumer, :push, :error, error)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -102,5 +103,6 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
   defp setup_allowances(test_pid) do
     Mox.allow(Sequin.Sinks.RedisMock, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

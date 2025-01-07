@@ -26,6 +26,8 @@ defmodule Sequin.Consumers do
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health
+  alias Sequin.Health.CheckHttpEndpointHealthWorker
+  alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.Postgres
   alias Sequin.Repo
@@ -706,7 +708,7 @@ defmodule Sequin.Consumers do
         end
 
         if length(events) > 0 do
-          Health.update(consumer, :receive, :healthy)
+          Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
           TracerServer.messages_received(consumer, events)
 
           Enum.each(
@@ -757,7 +759,7 @@ defmodule Sequin.Consumers do
         with {:ok, fetched_records} <- maybe_put_source_data(consumer, records),
              {:ok, fetched_records} <- filter_and_delete_records(consumer.id, fetched_records) do
           if length(fetched_records) > 0 do
-            Health.update(consumer, :receive, :healthy)
+            Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
             TracerServer.messages_received(consumer, fetched_records)
 
             :telemetry.execute(
@@ -1017,7 +1019,7 @@ defmodule Sequin.Consumers do
       }
     )
 
-    Health.update(consumer, :acknowledge, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
     Metrics.incr_consumer_messages_processed_count(consumer, count)
 
     Metrics.incr_consumer_messages_processed_throughput(consumer, count)
@@ -1073,7 +1075,7 @@ defmodule Sequin.Consumers do
       }
     )
 
-    Health.update(consumer, :acknowledge, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
     Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
     Metrics.incr_consumer_messages_processed_throughput(consumer, count_deleted + count_updated)
@@ -1459,20 +1461,20 @@ defmodule Sequin.Consumers do
       ) do
     matches? = matches_message?(sequence, sequence_filter, message)
 
-    Health.update(consumer, :filters, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     matches?
   rescue
     error in [ArgumentError] ->
-      Health.update(
-        consumer,
-        :filters,
-        :error,
-        Error.service(
-          code: :argument_error,
-          message: Exception.message(error)
-        )
-      )
+      Health.put_event(consumer, %Event{
+        slug: :messages_filtered,
+        status: :fail,
+        error:
+          Error.service(
+            code: :argument_error,
+            message: Exception.message(error)
+          )
+      })
 
       reraise error, __STACKTRACE__
   end
@@ -1501,19 +1503,22 @@ defmodule Sequin.Consumers do
         table_matches && action_matches && column_filters_match
       end)
 
-    Health.update(consumer_or_wal_pipeline, :filters, :healthy)
+    Health.put_event(consumer_or_wal_pipeline, %Event{slug: :messages_filtered, status: :success})
 
     matches?
   rescue
     error in [ArgumentError] ->
-      Health.update(
+      Health.put_event(
         consumer_or_wal_pipeline,
-        :filters,
-        :error,
-        Error.service(
-          code: :argument_error,
-          message: Exception.message(error)
-        )
+        %Event{
+          slug: :messages_filtered,
+          status: :fail,
+          error:
+            Error.service(
+              code: :argument_error,
+              message: Exception.message(error)
+            )
+        }
       )
 
       reraise error, __STACKTRACE__
@@ -1535,7 +1540,7 @@ defmodule Sequin.Consumers do
     table_matches? = sequence.table_oid == table_oid
     column_filters_match? = column_filters_match_record?(sequence_filter.column_filters, record)
 
-    Health.update(consumer, :filters, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     table_matches? and column_filters_match?
   end
@@ -1544,7 +1549,7 @@ defmodule Sequin.Consumers do
     source_table = Sequin.Enum.find!(consumer.source_tables, &(&1.oid == table_oid))
     matches? = column_filters_match_record?(source_table.column_filters, record_attnums_to_values)
 
-    Health.update(consumer, :filters, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
 
     matches?
   end
@@ -1656,6 +1661,10 @@ defmodule Sequin.Consumers do
   defp notify_consumer_update(%SinkConsumer{} = consumer) do
     if consumer.status == :disabled, do: maybe_disable_table_reader(consumer)
 
+    if consumer.type == :http_push do
+      CheckHttpEndpointHealthWorker.enqueue(consumer.sink.http_endpoint_id)
+    end
+
     if env() == :test do
       DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
     else
@@ -1673,7 +1682,11 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp notify_consumer_create(%SinkConsumer{}) do
+  defp notify_consumer_create(%SinkConsumer{} = consumer) do
+    if consumer.type == :http_push do
+      CheckHttpEndpointHealthWorker.enqueue(consumer.sink.http_endpoint_id)
+    end
+
     :ok
   end
 

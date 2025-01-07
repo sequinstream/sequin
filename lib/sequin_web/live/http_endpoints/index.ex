@@ -68,7 +68,7 @@ defmodule SequinWeb.HttpEndpointsLive.Index do
 
   defp load_http_endpoint_health(http_endpoints) do
     Enum.map(http_endpoints, fn http_endpoint ->
-      case Health.get(http_endpoint) do
+      case Health.health(http_endpoint) do
         {:ok, health} -> %{http_endpoint | health: health}
         {:error, _} -> http_endpoint
       end

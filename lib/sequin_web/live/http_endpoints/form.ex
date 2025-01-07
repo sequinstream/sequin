@@ -9,7 +9,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Error
-  alias Sequin.Health
+  alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Name
   alias Sequin.Repo
 
@@ -106,7 +106,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     if socket.assigns.changeset.valid? do
       case create_or_update_http_endpoint(socket, params["http_endpoint"]) do
         {:ok, http_endpoint} ->
-          Health.update(http_endpoint, :reachable, :healthy)
+          CheckHttpEndpointHealthWorker.enqueue(http_endpoint.id)
           {:reply, %{ok: true}, push_navigate(socket, to: ~p"/http-endpoints/#{http_endpoint.id}")}
 
         {:error, %Ecto.Changeset{} = changeset} ->

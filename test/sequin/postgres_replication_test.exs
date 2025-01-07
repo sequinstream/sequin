@@ -852,7 +852,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {:stop_replication, _id}, 2000
 
       # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health2.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
+      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
       assert health.status == :error
 
       check = Enum.find(health.checks, &(&1.slug == :replication_connected))
@@ -868,7 +868,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :heartbeat_received}, 1000
 
       # Verify that the Health status was updated
-      {:ok, health} = Sequin.Health2.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
+      {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
 
       check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy

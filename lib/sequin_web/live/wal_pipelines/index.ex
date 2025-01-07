@@ -50,7 +50,7 @@ defmodule SequinWeb.WalPipelinesLive.Index do
   defp assign_wal_pipelines_health(socket) do
     wal_pipelines_with_health =
       Enum.map(socket.assigns.wal_pipelines, fn pipeline ->
-        health = Health.get!(pipeline)
+        {:ok, health} = Health.health(pipeline)
         %{pipeline | health: health}
       end)
 

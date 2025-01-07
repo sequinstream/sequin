@@ -67,6 +67,7 @@ buildpush:
 
 buildpush-gh:
 	gh workflow run docker-cloud-build.yml --ref main
+	sleep 3
 	gh run watch $(gh run list --workflow=docker-cloud-build.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 
 buildpush-dirty:

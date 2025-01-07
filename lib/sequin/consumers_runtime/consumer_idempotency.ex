@@ -48,13 +48,13 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
   end
 
   @spec trim(consumer_id(), seq()) :: :ok | {:error, Error.t()}
-  def trim(consumer_id, seq) do
+  def trim(consumer_id, lsn) do
     key = delivered_key(consumer_id)
 
     with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
-         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", seq]),
+         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", lsn]),
          {:ok, final_size} <- Redis.command(["ZCARD", key]) do
-      Logger.info("[ConsumerIdempotency] Trimmed set",
+      Logger.info("[ConsumerIdempotency] Trimmed set to LSN #{lsn}",
         consumer_id: consumer_id,
         initial_size: initial_size,
         records_removed: trimmed,

@@ -152,6 +152,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec produce(consumer_id(), pos_integer()) :: {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())}
   def produce(consumer_id, count) do
     GenServer.call(via_tuple(consumer_id), {:produce, count})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
@@ -165,6 +168,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     Consumers.ack_messages(consumer, ack_ids)
 
     GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
@@ -174,6 +180,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec nack(consumer_id(), %{ack_id() => not_visible_until()}) :: :ok
   def nack(consumer_id, ack_ids_with_not_visible_until) do
     GenServer.call(via_tuple(consumer_id), {:nack, ack_ids_with_not_visible_until})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @doc """
+  Counts the number of messages in the message store.
+  """
+  @spec count_messages(consumer_id()) :: non_neg_integer()
+  def count_messages(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :count_messages)
   end
 
   @doc """
@@ -276,7 +293,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:ack, []}, _from, state) do
-    {:reply, :ok, state}
+    {:reply, {:ok, 0}, state}
   end
 
   def handle_call({:ack, ack_ids}, _from, state) do
@@ -312,21 +329,26 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       "[SlotMessageStore] Acked #{acked_count} messages in #{div(time, 1000)}ms (message_count=#{map_size(messages)})"
     )
 
-    {:reply, :ok, %{state | messages: messages}}
+    {:reply, {:ok, acked_count}, %{state | messages: messages}}
   end
 
   def handle_call({:nack, ack_ids_with_not_visible_until}, _from, state) do
-    updated_messages =
-      Enum.reduce(ack_ids_with_not_visible_until, state.messages, fn {ack_id, not_visible_until}, acc_msgs ->
+    {updated_messages, nacked_count} =
+      Enum.reduce(ack_ids_with_not_visible_until, {state.messages, 0}, fn {ack_id, not_visible_until},
+                                                                          {acc_msgs, nacked_count} ->
         if msg = Map.get(acc_msgs, ack_id) do
           msg = %{msg | not_visible_until: not_visible_until, state: :available, dirty: true}
-          Map.replace(acc_msgs, ack_id, msg)
+          {Map.replace(acc_msgs, ack_id, msg), nacked_count + 1}
         else
-          acc_msgs
+          {acc_msgs, nacked_count}
         end
       end)
 
-    {:reply, :ok, %{state | messages: updated_messages}}
+    {:reply, {:ok, nacked_count}, %{state | messages: updated_messages}}
+  end
+
+  def handle_call(:count_messages, _from, state) do
+    {:reply, map_size(state.messages), state}
   end
 
   def handle_call(:peek, _from, state) do
@@ -433,5 +455,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       [_, ack_id] -> String.trim(ack_id)
       _ -> "unknown"
     end
+  end
+
+  defp exit_to_sequin_error({:noproc, _}) do
+    Error.invariant(message: "[SlotMessageStore] exited with :noproc")
+  end
+
+  defp exit_to_sequin_error(e) when is_exception(e) do
+    Error.invariant(message: "[SlotMessageStore] exited with #{Exception.message(e)}")
+  end
+
+  defp exit_to_sequin_error(e) do
+    Error.invariant(message: "[SlotMessageStore] exited with #{inspect(e)}")
   end
 end

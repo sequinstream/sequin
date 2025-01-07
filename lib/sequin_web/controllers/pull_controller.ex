@@ -2,6 +2,7 @@ defmodule SequinWeb.PullController do
   use SequinWeb, :controller
 
   alias Sequin.Consumers
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Error
   alias Sequin.String, as: SequinString
   alias Sequin.Time
@@ -17,7 +18,7 @@ defmodule SequinWeb.PullController do
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, batch_size} <- parse_batch_size(params),
          :ok <- maybe_wait(params, consumer),
-         {:ok, messages} <- Consumers.receive_for_consumer(consumer, batch_size: batch_size) do
+         {:ok, messages} <- SlotMessageStore.produce(consumer.id, batch_size) do
       Logger.metadata(batch_size: batch_size)
       render(conn, "receive.json", messages: messages)
     end
@@ -29,7 +30,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, message_ids} <- parse_ack_ids(params),
-         {:ok, _count} <- Consumers.ack_messages(consumer, message_ids) do
+         {:ok, _count} <- SlotMessageStore.ack(consumer, message_ids) do
       json(conn, %{success: true})
     end
   end
@@ -37,10 +38,12 @@ defmodule SequinWeb.PullController do
   def nack(conn, %{"id_or_name" => id_or_name} = params) do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
+    now = DateTime.utc_now()
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
-         {:ok, message_ids} <- parse_ack_ids(params),
-         {:ok, _count} <- Consumers.nack_messages(consumer, message_ids) do
+         {:ok, ack_ids} <- parse_ack_ids(params),
+         ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, now}),
+         {:ok, _count} <- SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until) do
       json(conn, %{success: true})
     end
   end
@@ -110,8 +113,7 @@ defmodule SequinWeb.PullController do
   defp maybe_wait(_params, _consumer), do: :ok
 
   defp wait(consumer, wait_for) do
-    {duration_us, count} =
-      :timer.tc(fn -> Consumers.count_messages_for_consumer(consumer, is_deliverable: true, limit: 1) end)
+    {duration_us, count} = :timer.tc(fn -> SlotMessageStore.count_messages(consumer.id) end)
 
     duration = round(duration_us / 1000)
     wait_for = Enum.max([wait_for - duration, 0])

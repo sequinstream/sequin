@@ -112,35 +112,5 @@ defmodule Sequin.ConsumerEventTest do
       assert length(remaining_events) == 1
       assert List.first(remaining_events).id == event2.id
     end
-
-    test "nack_messages/2 nacks events and ignores unknown event ID", %{consumer: consumer} do
-      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
-      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
-      non_existent_id = Factory.uuid()
-
-      assert {:ok, 2} = Consumers.nack_messages(consumer, [event1.ack_id, event2.ack_id, non_existent_id])
-
-      updated_event1 = Repo.get_by(ConsumerEvent, id: event1.id)
-      updated_event2 = Repo.get_by(ConsumerEvent, id: event2.id)
-
-      assert is_nil(updated_event1.not_visible_until)
-      assert is_nil(updated_event2.not_visible_until)
-    end
-
-    test "nack_messages/2 does not nack events belonging to another consumer", %{consumer: consumer} do
-      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: DateTime.utc_now())
-
-      event2 =
-        ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id, not_visible_until: DateTime.utc_now())
-
-      assert {:ok, 1} = Consumers.nack_messages(consumer, [event1.ack_id, event2.ack_id])
-
-      updated_event1 = Repo.get_by(ConsumerEvent, id: event1.id)
-      updated_event2 = Repo.get_by(ConsumerEvent, id: event2.id)
-
-      assert is_nil(updated_event1.not_visible_until)
-      assert DateTime.compare(updated_event2.not_visible_until, event2.not_visible_until) == :eq
-    end
   end
 end

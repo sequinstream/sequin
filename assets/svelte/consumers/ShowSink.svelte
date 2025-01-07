@@ -1,11 +1,6 @@
 <script lang="ts">
-  import {
-    CheckCircle2,
-    ArrowUpRight,
-    HelpCircle,
-    XCircle,
-    RefreshCw,
-  } from "lucide-svelte";
+  import { CheckCircle2, HelpCircle, XCircle, RefreshCw } from "lucide-svelte";
+  import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
   import { formatNumberWithCommas } from "../utils";
@@ -35,7 +30,6 @@
   import { onMount } from "svelte";
   import * as Alert from "$lib/components/ui/alert";
   import CodeWithCopy from "$lib/components/CodeWithCopy.svelte";
-  import { Button } from "$lib/components/ui/button";
 
   export let live;
   export let parent;
@@ -108,6 +102,7 @@
   let updateChart;
   let resizeObserver;
   let refreshReplicaWarningLoading = false;
+  let dismissToastWarningLoading = false;
 
   onMount(() => {
     if (metrics.messages_processed_throughput_timeseries.length > 0) {
@@ -236,6 +231,13 @@
         .attr("d", line);
     };
   }
+
+  function handleDismissToastWarning() {
+    dismissToastWarningLoading = true;
+    live.pushEventTo(`#${parent}`, "dismiss_toast_warning", {}, () => {
+      dismissToastWarningLoading = false;
+    });
+  }
 </script>
 
 <div class="flex flex-col flex-1">
@@ -295,6 +297,39 @@
         </CardContent>
       </Card>
     </div>
+    {#if consumer.annotations && consumer.annotations.unchanged_toast_replica_identity_dismissed === false}
+      <Alert.Root variant="warning" class="mb-8">
+        <Alert.Title class="flex items-center justify-between">
+          <span>Warning: Large column values delivered as unchanged_toast</span>
+          <div class="space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              on:click={handleDismissToastWarning}
+              loading={dismissToastWarningLoading}
+            >
+              <XCircle class="h-4 w-4 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+        </Alert.Title>
+        <Alert.Description>
+          <p class="mb-2">
+            Sequin is delivering some record values as the string
+            "unchanged_toast" due to their large size.
+          </p>
+          <p class="mb-2">
+            To receive the full values for these records, alter the table's
+            replica identity to "full":
+          </p>
+          <CodeWithCopy
+            maxWidth="750px"
+            language="sql"
+            code={`alter table "${consumer.sequence.table_schema}"."${consumer.sequence.table_name}" replica identity full;`}
+          />
+        </Alert.Description>
+      </Alert.Root>
+    {/if}
 
     <div class="space-y-6">
       {#if showReplicaWarning}

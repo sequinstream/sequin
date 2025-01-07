@@ -371,7 +371,8 @@ defmodule Sequin.MessageHandlerTest do
       consumer = ConsumersFactory.insert_sink_consumer!(source_tables: [source_table])
 
       # Ensure the message has a non-matching field for the filter
-      message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
+      field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
+      message = %{message | fields: [field | message.fields]}
 
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
@@ -441,7 +442,7 @@ defmodule Sequin.MessageHandlerTest do
     end
 
     test "inserts wal_event for pipeline with matching source table and passing filters" do
-      message = ReplicationFactory.postgres_message(table_oid: 123)
+      message = ReplicationFactory.postgres_message(action: :insert, table_oid: 123)
 
       column_filter =
         ConsumersFactory.column_filter(
@@ -454,7 +455,7 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       test_field = ReplicationFactory.field(column_attnum: 1, value: "test")
-      message = %{message | fields: [test_field | message.fields], old_fields: [test_field | message.old_fields]}
+      message = %{message | fields: [test_field | message.fields]}
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
@@ -479,7 +480,8 @@ defmodule Sequin.MessageHandlerTest do
       wal_pipeline = ReplicationFactory.insert_wal_pipeline!(source_tables: [source_table])
 
       # Ensure the message has a non-matching field for the filter
-      message = %{message | fields: [%{column_attnum: 1, value: "not_test"} | message.fields]}
+      field = ReplicationFactory.field(column_attnum: 1, value: "not_test")
+      message = %{message | fields: [field | message.fields]}
 
       context = %MessageHandler.Context{wal_pipelines: [wal_pipeline], replication_slot_id: UUID.uuid4()}
 
@@ -813,6 +815,136 @@ defmodule Sequin.MessageHandlerTest do
 
       # Verify the warning was logged
       assert log =~ "Discarding"
+    end
+  end
+
+  describe "handle_messages/2 with unchanged_toast" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+
+      sequence =
+        DatabasesFactory.insert_sequence!(
+          table_oid: 123,
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      sequence_filter =
+        ConsumersFactory.sequence_filter_attrs(
+          group_column_attnums: [1],
+          column_filters: []
+        )
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          sequence_id: sequence.id,
+          sequence_filter: sequence_filter,
+          postgres_database_id: database.id,
+          source_tables: []
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
+
+      context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
+
+      %{context: context, consumer: consumer}
+    end
+
+    test "with replica identity full, loads unchanged toast values from old fields", %{
+      context: context,
+      consumer: consumer
+    } do
+      fields = [
+        ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1),
+        ReplicationFactory.field(column_name: "name", value: :unchanged_toast, column_attnum: 2),
+        ReplicationFactory.field(column_name: "house", value: "Gryffindor", column_attnum: 3)
+      ]
+
+      old_fields = [
+        ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1),
+        ReplicationFactory.field(column_name: "name", value: "Harry", column_attnum: 2),
+        ReplicationFactory.field(column_name: "house", value: nil, column_attnum: 3)
+      ]
+
+      message =
+        ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: old_fields)
+
+      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      [message] = list_messages(consumer.id)
+
+      assert message.data.record["name"] == "Harry"
+      assert message.data.record["house"] == "Gryffindor"
+    end
+
+    test "without replica identity full, marks consumer with dismissable annotation", %{
+      context: context,
+      consumer: consumer
+    } do
+      fields = [
+        ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1),
+        ReplicationFactory.field(column_name: "name", value: :unchanged_toast, column_attnum: 2),
+        ReplicationFactory.field(column_name: "house", value: "Gryffindor", column_attnum: 3)
+      ]
+
+      message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
+
+      {:ok, 1, context} = MessageHandler.handle_messages(context, [message])
+      [message] = list_messages(consumer.id)
+
+      # unchanged_toast values are not loaded
+      assert message.data.record["name"] == "unchanged_toast"
+      assert message.data.record["house"] == "Gryffindor"
+
+      # consumer has annotation
+      [consumer] = context.consumers
+      refute Map.fetch!(consumer.annotations, "unchanged_toast_replica_identity_dismissed")
+    end
+
+    test "without replica identity, does not set dismissed from true to false", %{
+      context: context,
+      consumer: consumer
+    } do
+      {:ok, consumer} =
+        Consumers.update_consumer(consumer, %{annotations: %{"unchanged_toast_replica_identity_dismissed" => true}})
+
+      context = %{context | consumers: [consumer]}
+
+      fields = [
+        ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1),
+        ReplicationFactory.field(column_name: "name", value: :unchanged_toast, column_attnum: 2),
+        ReplicationFactory.field(column_name: "house", value: "Gryffindor", column_attnum: 3)
+      ]
+
+      message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
+
+      {:ok, 1, context} = MessageHandler.handle_messages(context, [message])
+      [message] = list_messages(consumer.id)
+
+      # unchanged_toast values are not loaded
+      assert message.data.record["name"] == "unchanged_toast"
+      assert message.data.record["house"] == "Gryffindor"
+
+      # consumer has annotation
+      [consumer] = context.consumers
+      assert Map.fetch!(consumer.annotations, "unchanged_toast_replica_identity_dismissed")
+    end
+
+    test "inserts are ignored", %{context: context, consumer: consumer} do
+      field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
+      message = ReplicationFactory.postgres_message(action: :insert, table_oid: 123, fields: [field])
+
+      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      assert [_] = list_messages(consumer.id)
+    end
+
+    test "deletes are ignored", %{context: context, consumer: consumer} do
+      field = ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1)
+      message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
+
+      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
+      assert [_] = list_messages(consumer.id)
     end
   end
 

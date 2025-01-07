@@ -1,8 +1,17 @@
 // Base consumer type with shared properties
 export type BaseConsumer = {
   id: string;
-  type: "http_push" | "sqs";
+  type:
+    | "http_push"
+    | "sqs"
+    | "redis"
+    | "kafka"
+    | "sequin_stream"
+    | "gcp_pubsub"
+    | "nats"
+    | "rabbitmq";
   name: string;
+  annotations: Record<string, boolean>;
   status: string;
   message_kind: string;
   ack_wait_ms: number;

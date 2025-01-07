@@ -411,6 +411,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     end
   end
 
+  @impl Phoenix.LiveView
+  def handle_event("dismiss_toast_warning", _params, socket) do
+    {:ok, _} =
+      Consumers.update_consumer(socket.assigns.consumer, %{
+        annotations: %{unchanged_toast_replica_identity_dismissed: true}
+      })
+
+    {:ok, consumer} = load_consumer(socket.assigns.consumer.id, socket)
+
+    {:noreply, assign(socket, consumer: consumer)}
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end
@@ -521,6 +533,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     %{
       id: consumer.id,
       name: consumer.name,
+      annotations: consumer.annotations,
       kind: :push,
       type: consumer.type,
       status: consumer.status,

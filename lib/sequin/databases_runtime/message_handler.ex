@@ -446,30 +446,33 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   defp load_unchanged_toasts_from_old(%Context{} = ctx, messages) do
-    Enum.reduce(messages, {ctx, []}, fn
-      %SlotProcessor.Message{action: :update, old_fields: nil} = message, {ctx, messages_acc} ->
-        if has_unchanged_toast?(message) do
-          {annotate_consumers(ctx, message), [message | messages_acc]}
-        else
+    {ctx, messages} =
+      Enum.reduce(messages, {ctx, []}, fn
+        %SlotProcessor.Message{action: :update, old_fields: nil} = message, {ctx, messages_acc} ->
+          if has_unchanged_toast?(message) do
+            {annotate_consumers(ctx, message), [message | messages_acc]}
+          else
+            {ctx, [message | messages_acc]}
+          end
+
+        %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, {ctx, messages_acc} ->
+          updated_fields =
+            Enum.map(fields, fn
+              %SlotProcessor.Message.Field{value: :unchanged_toast} = field ->
+                old_field = Sequin.Enum.find!(old_fields, &(&1.column_attnum == field.column_attnum))
+                %{field | value: old_field.value}
+
+              field ->
+                field
+            end)
+
+          {ctx, [%{message | fields: updated_fields} | messages_acc]}
+
+        %SlotProcessor.Message{} = message, {ctx, messages_acc} ->
           {ctx, [message | messages_acc]}
-        end
+      end)
 
-      %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, {ctx, messages_acc} ->
-        updated_fields =
-          Enum.map(fields, fn
-            %SlotProcessor.Message.Field{value: :unchanged_toast} = field ->
-              old_field = Sequin.Enum.find!(old_fields, &(&1.column_attnum == field.column_attnum))
-              %{field | value: old_field.value}
-
-            field ->
-              field
-          end)
-
-        {ctx, [%{message | fields: updated_fields} | messages_acc]}
-
-      %SlotProcessor.Message{} = message, {ctx, messages_acc} ->
-        {ctx, [message | messages_acc]}
-    end)
+    {ctx, Enum.reverse(messages)}
   end
 
   @annotations_key "unchanged_toast_replica_identity_dismissed"

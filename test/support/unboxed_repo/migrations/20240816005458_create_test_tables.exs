@@ -60,6 +60,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :email, :citext
       add :binary_data, :bytea
       add :related_houses, {:array, :uuid}
+      add :active_period, :daterange
 
       timestamps()
     end

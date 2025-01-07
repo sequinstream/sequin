@@ -1270,10 +1270,13 @@ defmodule Sequin.PostgresReplicationTest do
     end
 
     test "columns flow through properly", %{consumer: consumer} do
-      # Insert a character with specific enum value
+      # Insert a character with specific enum value and daterange
       character =
         CharacterFactory.insert_character_detailed!(
-          [status: :retired],
+          [
+            status: :retired,
+            active_period: [~D[2010-01-01], ~D[2020-12-31]]
+          ],
           repo: UnboxedRepo
         )
 
@@ -1288,6 +1291,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert message.table_oid == CharacterDetailed.table_oid()
       assert message.record_pks == [to_string(character.id)]
       assert message.data.record["status"] == "retired"
+      assert message.data.record["active_period"] == "[2010-01-01,2020-12-31)"
     end
 
     test "consumer with JSONB column filter only receives relevant messages", %{

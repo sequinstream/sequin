@@ -747,6 +747,7 @@ defmodule Sequin.Postgres do
     "circle",
     "citext",
     "date",
+    "daterange",
     "double precision",
     "float4",
     "float8",

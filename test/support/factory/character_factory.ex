@@ -128,7 +128,8 @@ if Mix.env() == :test do
           house_id: UUID.uuid4(),
           email: Faker.Internet.email(),
           binary_data: :crypto.strong_rand_bytes(32),
-          related_houses: Enum.map(1..3, fn _ -> UUID.uuid4() end)
+          related_houses: Enum.map(1..3, fn _ -> UUID.uuid4() end),
+          active_period: [~D[2020-01-01], ~D[2023-12-31]]
         },
         attrs
       )

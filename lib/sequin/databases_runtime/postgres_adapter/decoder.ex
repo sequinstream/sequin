@@ -410,19 +410,23 @@ defmodule Sequin.DatabasesRuntime.PostgresAdapter.Decoder do
   defp decode_tuple_data(remaining_binary, 0, accumulator) when is_binary(remaining_binary),
     do: {remaining_binary, accumulator |> Enum.reverse() |> List.to_tuple()}
 
-  defp decode_tuple_data(<<"n", rest::binary>>, columns_remaining, accumulator),
-    do: decode_tuple_data(rest, columns_remaining - 1, [nil | accumulator])
+  defp decode_tuple_data(<<"n", rest::binary>>, columns_remaining, accumulator) do
+    decode_tuple_data(rest, columns_remaining - 1, [nil | accumulator])
+  end
 
-  defp decode_tuple_data(<<"u", rest::binary>>, columns_remaining, accumulator),
-    do: decode_tuple_data(rest, columns_remaining - 1, [:unchanged_toast | accumulator])
+  defp decode_tuple_data(<<"u", rest::binary>>, columns_remaining, accumulator) do
+    decode_tuple_data(rest, columns_remaining - 1, [:unchanged_toast | accumulator])
+  end
 
-  defp decode_tuple_data(<<"t", column_length::integer-32, rest::binary>>, columns_remaining, accumulator),
-    do:
-      decode_tuple_data(
-        :erlang.binary_part(rest, {byte_size(rest), -(byte_size(rest) - column_length)}),
-        columns_remaining - 1,
-        [:erlang.binary_part(rest, {0, column_length}) | accumulator]
-      )
+  defp decode_tuple_data(<<"t", column_length::integer-32, rest::binary>>, columns_remaining, accumulator) do
+    value = :erlang.binary_part(rest, {0, column_length})
+
+    decode_tuple_data(
+      :erlang.binary_part(rest, {byte_size(rest), -(byte_size(rest) - column_length)}),
+      columns_remaining - 1,
+      [value | accumulator]
+    )
+  end
 
   defp decode_columns(binary, accumulator \\ [])
   defp decode_columns(<<>>, accumulator), do: Enum.reverse(accumulator)

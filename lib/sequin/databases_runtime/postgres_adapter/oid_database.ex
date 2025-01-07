@@ -175,6 +175,7 @@ defmodule Sequin.DatabasesRuntime.PostgresAdapter.OidDatabase do
       4090 -> "_regnamespace"
       4096 -> "regrole"
       4097 -> "_regrole"
+      3912 -> "daterange"
       _ -> type_id
     end
   end

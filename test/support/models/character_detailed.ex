@@ -5,6 +5,7 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
   import Ecto.Query
 
   alias Sequin.Postgres
+  alias Sequin.TestSupport.Types.Daterange
 
   schema "characters_detailed" do
     field :name, :string
@@ -23,6 +24,7 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
     field :email, :string
     field :binary_data, :binary
     field :related_houses, {:array, Ecto.UUID}
+    field :active_period, Daterange
 
     timestamps()
   end
@@ -74,7 +76,8 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
       :powers,
       :rating,
       :related_houses,
-      :status
+      :status,
+      :active_period
     ])
   end
 end

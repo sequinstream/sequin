@@ -72,8 +72,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     ctx = update_table_reader_batch_pks(ctx, messages)
 
-    max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
-
     {ctx, messages} = load_unchanged_toasts(ctx, messages)
 
     messages_with_consumer =
@@ -148,8 +146,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
             {{:delete, _consumer}, _messages} -> :ok
           end)
-
-          Replication.put_last_processed_seq!(ctx.replication_slot_id, max_seq)
 
           {:ok, count + wal_event_count}
         end

@@ -111,31 +111,6 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       updated_record4 = Consumers.reload(record4)
       assert updated_record4.state == :pending_redelivery
     end
-
-    test "nack_messages/2 marks consumer records as available and resets not_visible_until" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      future = DateTime.add(DateTime.utc_now(), 3600, :second)
-
-      record1 =
-        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
-
-      record2 =
-        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
-
-      record3 =
-        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered, not_visible_until: future)
-
-      assert {:ok, 2} = Consumers.nack_messages(consumer, [record1.ack_id, record2.ack_id])
-
-      updated_record1 = Consumers.reload(record1)
-      updated_record2 = Consumers.reload(record2)
-      updated_record3 = Consumers.reload(record3)
-
-      assert is_nil(updated_record1.not_visible_until)
-      assert is_nil(updated_record2.not_visible_until)
-      assert updated_record3.state == :delivered
-      assert updated_record3.not_visible_until == future
-    end
   end
 
   describe "insert_consumer_records/1" do

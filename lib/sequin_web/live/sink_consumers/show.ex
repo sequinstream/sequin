@@ -27,6 +27,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
@@ -315,7 +316,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
-    Consumers.ack_messages(consumer, [ack_id])
+    SlotMessageStore.ack(consumer, [ack_id])
 
     updated_socket =
       socket

@@ -22,6 +22,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
+  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
@@ -68,6 +69,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
+          |> assign_replica_identity()
           |> load_consumer_messages()
 
         {:ok, socket}
@@ -121,6 +123,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def render(assigns) do
     assigns = assign(assigns, :kind, Consumers.kind(assigns.consumer))
 
+    replica_warning_dismissed = assigns.consumer.annotations["replica_warning_dismissed"] || false
+
+    show_replica_warning =
+      assigns.replica_identity.ok? and assigns.replica_identity.result != :full and not replica_warning_dismissed and
+        assigns.consumer.message_kind == :event
+
+    assigns = assign(assigns, :show_replica_warning, show_replica_warning)
+
     ~H"""
     <!-- Use Flexbox to arrange header and content vertically -->
     <div id="consumer-show" class="flex flex-col">
@@ -160,7 +170,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   metrics: @metrics,
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
-                  apiTokens: encode_api_tokens(@api_tokens)
+                  apiTokens: encode_api_tokens(@api_tokens),
+                  showReplicaWarning: @show_replica_warning
                 }
               }
             />
@@ -378,6 +389,25 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       {:error, error} ->
         Logger.error("Failed to enable consumer: #{inspect(error)}", error: error)
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to enable consumer"})}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("refresh_replica_warning", _params, socket) do
+    {:reply, %{ok: true}, assign_replica_identity(socket)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("dismiss_replica_warning", _params, socket) do
+    consumer = socket.assigns.consumer
+    new_annotations = Map.put(consumer.annotations || %{}, "replica_warning_dismissed", true)
+
+    case Consumers.update_consumer(consumer, %{annotations: new_annotations}) do
+      {:ok, updated_consumer} ->
+        {:noreply, assign(socket, :consumer, updated_consumer)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to dismiss warning. Please try again.")}
     end
   end
 
@@ -963,4 +993,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
+
+  defp assign_replica_identity(socket) do
+    consumer = socket.assigns.consumer
+    source_table = Consumers.source_table(consumer)
+
+    assign_async(socket, :replica_identity, fn ->
+      case Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
+        {:ok, replica_identity} ->
+          {:ok, %{replica_identity: replica_identity}}
+
+        {:error, _} ->
+          {:ok, %{replica_identity: nil}}
+      end
+    end)
+  end
 end

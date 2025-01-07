@@ -15,6 +15,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Repo
 
   require Logger
@@ -412,7 +413,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
       })
 
-    Health.update(consumer, :ingestion, :healthy)
+    Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
     {:ok, count, %{consumer | active_backfill: backfill}}
   end
 
@@ -529,6 +530,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp maybe_setup_allowances(test_pid) do
     Sandbox.allow(Sequin.Repo, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 
   defp preload_consumer(consumer) do

@@ -1,13 +1,46 @@
 defmodule Sequin.Health do
   @moduledoc """
-  This module tracks the health of various entities in the system.
-  """
+  Provides the **core health subsystem** for Sequin, managing the overall status of
+  various entities (e.g., Postgres replication slots, HTTP endpoints, etc.). This
+  module orchestrates how **health events** are recorded and aggregated to form a consolidated
+  `:healthy`, `:warning`, or `:error` state.
 
+  ## Key Concepts
+
+  - **Entity**: A resource whose health we track, such as a `PostgresReplicationSlot` or
+    `HttpEndpoint`.
+
+  - **Event**: A single occurrence (e.g., `:replication_slot_checked`, `:db_connectivity_checked`)
+    reported via  `put_event/3`. Each event has a `status` (`:success`, `:fail`, etc.)
+    and timestamp fields that indicate how long it has been in that status.
+
+  - **Check**: An **aggregated, higher-level** view of an entity's health condition, given events.
+    (e.g., "reachable", "replication_connected"). Checks are constructed to be readily displayed
+    to users in the frontend.
+
+  ## Data Flow
+
+  1. **Events emitted**:
+     Parts of the system emit health events, calling `put_event/3` to store an `Event`.
+     A debouncing mechanism is used to avoid excessive writes for repeated status updates.
+
+     On write, we first read the existing event in Redis. We then use the existing event + the incoming
+     `Event` to calculate the timestamps on the newly-persisted `Event`. (`Event.set_timestamps/2`).
+
+  2. **Check computation**:
+     When `health/1` is called, the system retrieves the relevant `Event` structs from Redis. It builds
+     a list of `Check` structs, each representing a different aspect of the entity’s health.
+
+  3. **Health computation**:
+     Finally, overall health is derived from checks. `health/1` returns a `%Sequin.Health{}` struct
+     with the entity’s checks, aggregated status, and extra fields like `:last_healthy_at` or
+     `:erroring_since`.
+
+     This structured data can be exposed to other parts of the system or serialized
+     for a frontend to display.
+  """
   use TypedStruct
 
-  import Sequin.Error.Guards, only: [is_error: 1]
-
-  alias __MODULE__
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.SinkConsumer
@@ -15,493 +48,137 @@ defmodule Sequin.Health do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health.Check
+  alias Sequin.Health.Event
   alias Sequin.Health.HealthSnapshot
-  alias Sequin.JSON
   alias Sequin.Pagerduty
   alias Sequin.Redis
   alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
+  alias Sequin.Time
 
   @type status :: :healthy | :warning | :error | :initializing | :waiting
-  @type entity ::
-          HttpEndpoint.t()
-          | SinkConsumer.t()
-          | PostgresDatabase.t()
-          | WalPipeline.t()
+  @type entity_kind :: :http_endpoint | :sink_consumer | :postgres_replication_slot | :wal_pipeline
+  @type redis_error :: {:error, Error.ServiceError.t()}
+  @type entity :: PostgresReplicationSlot.t() | HttpEndpoint.t() | SinkConsumer.t() | WalPipeline.t()
 
-  @derive Jason.Encoder
+  defguardp is_entity(entity)
+            when is_struct(entity, PostgresReplicationSlot) or is_struct(entity, HttpEndpoint) or
+                   is_struct(entity, SinkConsumer) or is_struct(entity, WalPipeline)
+
   typedstruct do
-    field :org_id, String.t()
+    field :entity_kind, entity_kind()
     field :entity_id, String.t()
-    field :name, String.t()
-
-    field :entity_kind,
-          :http_endpoint
-          | :sink_consumer
-          | :postgres_database
-          | :wal_pipeline
-
-    field :status, status()
     field :checks, [Check.t()]
+    field :status, status()
+
     field :last_healthy_at, DateTime.t() | nil
     field :erroring_since, DateTime.t() | nil
-    field :consecutive_errors, non_neg_integer()
   end
 
-  @spec from_json!(String.t()) :: t()
-  def from_json!(json) when is_binary(json) do
-    json
-    |> Jason.decode!()
-    |> JSON.decode_atom("status")
-    |> JSON.decode_atom("entity_kind")
-    |> JSON.decode_timestamp("last_healthy_at")
-    |> JSON.decode_timestamp("erroring_since")
-    |> JSON.decode_list_of_structs("checks", Check)
-    |> JSON.struct(Health)
-  end
-
-  defguard is_entity(entity)
-           when is_struct(entity, HttpEndpoint) or
-                  is_struct(entity, SinkConsumer) or
-                  is_struct(entity, PostgresDatabase) or
-                  is_struct(entity, WalPipeline)
-
-  @subject_prefix "sequin-health"
-  @debounce_window :timer.seconds(10)
-
-  def subject_prefix, do: @subject_prefix
-  def debounce_ets_table, do: :sequin_health_debounce
+  @debounce_window :timer.seconds(5)
 
   @doc """
-  Updates the `Health` of the given entity using the given `Check`.
+  Stores an event for an entity.
 
-  Generates one or more `:nats` messages to notify subscribers of the new status and any status changes.
+  Example:
+
+      Sequin.Health.put_event(%PostgresReplicationSlot{} = slot, %Event{
+        slug: :db_connectivity_checked,
+        status: :success
+      })
   """
-  @spec update(entity(), atom(), status(), Error.t() | nil) :: :ok | {:error, Error.t()}
-  def update(entity, check_id, status, error \\ nil)
+  @spec put_event(entity(), Event.t()) :: :ok | {:error, Error.t()}
+  def put_event(%_{} = entity, %Event{} = event) do
+    case entity do
+      %PostgresReplicationSlot{} = slot ->
+        put_event(:postgres_replication_slot, slot.id, event)
 
-  def update(entity, check_id, status, error) when is_entity(entity) do
-    validate_status_and_error!(status, error)
+      %SinkConsumer{} = consumer ->
+        put_event(:sink_consumer, consumer.id, event)
 
-    key = "#{entity.id}:#{check_id}"
+      %HttpEndpoint{} = endpoint ->
+        put_event(:http_endpoint, endpoint.id, event)
+
+      %WalPipeline{} = pipeline ->
+        put_event(:wal_pipeline, pipeline.id, event)
+    end
+  end
+
+  # TODO: Allow for skipping debounce with an opt. We'll want to skip debounce inside of health
+  # workers, as users may trigger a health check from the UI. (Certain put_event callsites are
+  # safe to not debounce, as they will only be called so many times per min.)
+  def put_event(entity_kind, entity_id, %Event{} = event) do
+    validate_event!(entity_kind, event)
+
+    event_hash = Event.debounce_hash(event)
+    debounce_key = "#{entity_kind}:#{entity_id}:#{event.slug}"
     now = :os.system_time(:millisecond)
 
-    case :ets.lookup(:sequin_health_debounce, key) do
-      [{^key, ^status, last_update}] when now - last_update < @debounce_window ->
+    case :ets.lookup(:sequin_health_debounce, debounce_key) do
+      [{^debounce_key, ^event_hash, last_update}] when now - last_update < @debounce_window ->
         :ok
 
       _ ->
-        :ets.insert(:sequin_health_debounce, {key, status, now})
-        do_update(entity, check_id, status, error)
-    end
-  end
+        :ets.insert(:sequin_health_debounce, {debounce_key, event_hash, now})
 
-  defp do_update(entity, check_id, status, error) do
-    resource_id = "#{entity.id}:#{check_id}"
-    lock_requester_id = self()
+        resource_id = "#{entity_id}:#{event.slug}"
+        lock_requester_id = self()
 
-    :global.trans({resource_id, lock_requester_id}, fn ->
-      with {:ok, old_health} <- get_health(entity) do
-        %Check{} = expected_check = expected_check(entity, check_id, status, error)
-        new_health = update_health_with_check(old_health, expected_check)
-        set_health(entity.id, new_health)
-      end
-    end)
-  end
-
-  @doc """
-  Retrieves the `Health` of the given entity.
-  """
-  @spec get(entity() | String.t()) :: {:ok, Health.t()} | {:error, Error.t()}
-  def get(entity) when is_entity(entity) do
-    get_health(entity)
-  end
-
-  @spec get!(entity() | String.t()) :: Health.t() | no_return()
-  def get!(entity) when is_entity(entity) do
-    case get(entity) do
-      {:ok, health} -> health
-      {:error, error} -> raise error
-    end
-  end
-
-  #####################
-  ## Expected Checks ##
-  #####################
-
-  defp expected_check(entity, check_id, status, error \\ nil)
-
-  @postgres_checks [:reachable, :replication_connected, :replication_messages]
-  defp expected_check(%PostgresDatabase{}, check_id, status, error) when check_id in @postgres_checks do
-    case check_id do
-      :reachable ->
-        %Check{id: :reachable, name: "Database Reachable", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :replication_connected ->
-        %Check{
-          id: :replication_connected,
-          name: "Replication Connected",
-          status: status,
-          error: error,
-          created_at: DateTime.utc_now()
-        }
-
-      :replication_messages ->
-        %Check{
-          id: :replication_messages,
-          name: "Replication Messages",
-          status: status,
-          error: error,
-          created_at: DateTime.utc_now()
-        }
-    end
-  end
-
-  @http_endpoint_checks [:reachable]
-  defp expected_check(%HttpEndpoint{}, check_id, status, error) when check_id in @http_endpoint_checks do
-    case check_id do
-      :reachable ->
-        %Check{id: :reachable, name: "Endpoint Reachable", status: status, error: error, created_at: DateTime.utc_now()}
-    end
-  end
-
-  @stream_consumer_checks [:filters, :ingestion, :receive, :acknowledge]
-  defp expected_check(%SinkConsumer{type: :sequin_stream}, check_id, status, error)
-       when check_id in @stream_consumer_checks do
-    case check_id do
-      :filters ->
-        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :ingestion ->
-        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :receive ->
-        %Check{id: :receive, name: "Stream", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :acknowledge ->
-        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
-    end
-  end
-
-  @sink_consumer_checks [:filters, :ingestion, :receive, :push, :acknowledge]
-  defp expected_check(%SinkConsumer{}, check_id, status, error) when check_id in @sink_consumer_checks do
-    case check_id do
-      :filters ->
-        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :ingestion ->
-        %Check{id: :ingestion, name: "Ingest", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :receive ->
-        %Check{id: :receive, name: "Produce", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :push ->
-        %Check{id: :push, name: "Push", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :acknowledge ->
-        %Check{id: :acknowledge, name: "Acknowledge", status: status, error: error, created_at: DateTime.utc_now()}
-    end
-  end
-
-  @wal_pipeline_checks [:filters, :ingestion, :destination_insert]
-  defp expected_check(%WalPipeline{}, check_id, status, error) when check_id in @wal_pipeline_checks do
-    case check_id do
-      :filters ->
-        %Check{id: :filters, name: "Filters", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :ingestion ->
-        %Check{id: :ingestion, name: "Ingestion", status: status, error: error, created_at: DateTime.utc_now()}
-
-      :destination_insert ->
-        %Check{
-          id: :destination_insert,
-          name: "Sink insert",
-          status: status,
-          error: error,
-          created_at: DateTime.utc_now()
-        }
-    end
-  end
-
-  #####################
-  ## Initial Health ##
-  #####################
-
-  defp initial_health(%SinkConsumer{type: :sequin_stream} = entity) do
-    checks =
-      @stream_consumer_checks
-      |> Enum.map(&expected_check(entity, &1, :initializing))
-      |> Enum.map(fn
-        %Check{id: :receive} = check ->
-          %{check | message: "Stream messages from the consumer."}
-
-        %Check{id: :acknowledge} = check ->
-          %{check | message: "Acknowledge messages via stream."}
-
-        %Check{} = check ->
-          check
-      end)
-
-    %Health{
-      name: "Consumer health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(%SinkConsumer{} = entity) do
-    checks =
-      @sink_consumer_checks
-      |> Enum.map(&expected_check(entity, &1, :initializing))
-      |> Enum.map(fn
-        %Check{id: :receive} = check ->
-          %{check | message: "Whether the consumer is producing messages."}
-
-        %Check{id: :push} = check ->
-          %{check | message: "Pushing messages to your endpoint via HTTP."}
-
-        %Check{} = check ->
-          check
-      end)
-
-    %Health{
-      name: "Consumer health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(%PostgresDatabase{} = entity) do
-    checks =
-      @postgres_checks
-      |> Enum.map(&expected_check(entity, &1, :initializing))
-      |> Enum.map(fn
-        %Check{id: :replication_messages} = check ->
-          %{check | status: :waiting, message: "Messages will replicate when there is a change in your database."}
-
-        %Check{} = check ->
-          check
-      end)
-
-    %Health{
-      name: "Database health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(%HttpEndpoint{} = entity) do
-    checks = Enum.map(@http_endpoint_checks, &expected_check(entity, &1, :initializing))
-
-    %Health{
-      name: "Endpoint health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(%WalPipeline{} = entity) do
-    checks =
-      @wal_pipeline_checks
-      |> Enum.map(&expected_check(entity, &1, :initializing))
-      |> Enum.map(fn
-        %Check{id: :ingestion} = check ->
-          %{check | message: "Ingesting changes from the source table."}
-
-        %Check{id: :destination_insert} = check ->
-          %{check | message: "Inserting changes to the destination table."}
-
-        %Check{} = check ->
-          check
-      end)
-
-    %Health{
-      name: "WAL Pipeline health",
-      entity_id: entity.id,
-      entity_kind: entity_kind(entity),
-      status: :initializing,
-      checks: checks,
-      consecutive_errors: 0
-    }
-  end
-
-  defp initial_health(entity) when is_entity(entity) do
-    raise "Not implemented for #{entity_kind(entity)}"
-  end
-
-  ##############
-  ## Internal ##
-  ##############
-
-  defp update_health_with_check(%Health{} = health, %Check{} = check) do
-    new_checks = replace_check_in_list(health.checks, check)
-    new_status = calculate_overall_status(new_checks)
-
-    %Health{
-      health
-      | status: new_status,
-        checks: new_checks,
-        last_healthy_at: if(new_status == :healthy, do: DateTime.utc_now(), else: health.last_healthy_at),
-        erroring_since: if(new_status == :error, do: DateTime.utc_now(), else: health.erroring_since),
-        consecutive_errors: if(new_status == :error, do: health.consecutive_errors + 1, else: 0)
-    }
-  end
-
-  defp calculate_overall_status(checks) do
-    checks
-    |> Enum.map(& &1.status)
-    |> Enum.min_by(&status_priority/1)
-  end
-
-  defp status_priority(status) do
-    case status do
-      :error -> 0
-      :warning -> 1
-      :initializing -> 2
-      :healthy -> 3
-      :waiting -> 4
-    end
-  end
-
-  defp replace_check_in_list(checks, new_check) do
-    Enum.map(checks, fn check ->
-      if check.id == new_check.id, do: new_check, else: check
-    end)
-  end
-
-  defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
-  defp entity_kind(%SinkConsumer{}), do: :sink_consumer
-  defp entity_kind(%PostgresDatabase{}), do: :postgres_database
-  defp entity_kind(%WalPipeline{}), do: :wal_pipeline
-
-  defp get_health(%{id: nil} = entity) when is_entity(entity) do
-    raise ArgumentError, "entity_id cannot be nil"
-  end
-
-  defp get_health(entity) when is_entity(entity) do
-    ["GET", key(entity.id)]
-    |> Redis.command()
-    |> case do
-      {:ok, nil} ->
-        {:ok, initial_health(entity)}
-
-      {:ok, json} ->
-        health = Health.from_json!(json)
-        {:ok, compute_derived_fields(health)}
-
-      {:error, error} ->
-        {:error, error}
+        :global.trans({resource_id, lock_requester_id}, fn ->
+          with {:ok, existing_event} <- get_event(entity_id, event.slug),
+               event = Event.set_timestamps(existing_event, event),
+               {:ok, _} <- store_event(entity_id, event) do
+            :ok
+          end
+        end)
     end
   end
 
   @doc """
-  Public for testing
+  Computes the health of an entity.
   """
-  @spec set_health(String.t(), Health.t()) :: :ok | {:error, Error.t()}
-  def set_health(entity_id, %Health{} = health) do
-    ["SET", key(entity_id), Jason.encode!(health)]
-    |> Redis.command()
-    |> case do
-      {:ok, "OK"} -> :ok
-      {:error, error} -> {:error, error}
+  @spec health(entity()) :: {:ok, t()} | {:error, Error.t()}
+  def health(entity) do
+    with {:ok, checks} <- checks(entity) do
+      entity_kind = entity_kind(entity)
+
+      status =
+        cond do
+          Enum.any?(checks, fn check -> check.status == :unhealthy end) -> :error
+          Enum.any?(checks, fn check -> check.status == :stale end) -> :warning
+          Enum.any?(checks, fn check -> check.status == :warning end) -> :warning
+          Enum.any?(checks, fn check -> check.status == :initializing end) -> :initializing
+          Enum.any?(checks, fn check -> check.status == :waiting end) -> :waiting
+          true -> :healthy
+        end
+
+      {:ok,
+       %__MODULE__{
+         entity_kind: entity_kind,
+         entity_id: entity.id,
+         checks: checks,
+         status: status,
+         last_healthy_at: last_healthy_at(checks),
+         erroring_since: erroring_since(checks)
+       }}
     end
   end
-
-  defp validate_status_and_error!(:healthy, nil), do: :ok
-  defp validate_status_and_error!(:initializing, nil), do: :ok
-  defp validate_status_and_error!(:warning, nil), do: :ok
-  defp validate_status_and_error!(:warning, error) when is_error(error), do: :ok
-  defp validate_status_and_error!(:error, error) when is_error(error), do: :ok
-
-  defp validate_status_and_error!(:error, _), do: raise(ArgumentError, "error must be an Error struct for :error status")
-  defp validate_status_and_error!(status, _), do: raise(ArgumentError, "Unexpected status: #{status}")
 
   @doc """
   Converts a Health struct to a map with only the necessary fields for the frontend.
   """
   @spec to_external(t()) :: map()
-  def to_external(%Health{} = health) do
-    checks = Enum.reject(health.checks, &(&1.status == :waiting))
-
+  def to_external(%__MODULE__{} = health) do
     %{
       entity_kind: health.entity_kind,
       entity_id: health.entity_id,
-      status: health.status,
-      name: health.name,
-      checks:
-        Enum.map(checks, fn check ->
-          %{
-            name: check.name,
-            status: check.status,
-            error: if(check.error, do: %{message: Exception.message(check.error)}),
-            message: check.message
-          }
-        end)
+      status: if(health.status == :waiting, do: :initializing, else: health.status),
+      name: entity_name(health.entity_kind),
+      # status_message: status_message(health.status, health.checks),
+      checks: Enum.map(health.checks, &Check.to_external/1)
     }
-  end
-
-  defp compute_derived_fields(%Health{} = health) do
-    {_checks, health} = Enum.map_reduce(health.checks, health, &compute_derived_fields/2)
-
-    health
-  end
-
-  defp compute_derived_fields(
-         %Check{id: :replication_connected, status: :initializing} = check,
-         %Health{entity_kind: :postgres_database} = health
-       ) do
-    thirty_seconds_ago = DateTime.add(DateTime.utc_now(), -30 * 1000, :millisecond)
-
-    if DateTime.before?(check.created_at, thirty_seconds_ago) do
-      updated_check = %{check | status: :error, message: "Replication took too long to connect."}
-      updated_health = update_health_status(health, updated_check)
-      {updated_check, updated_health}
-    else
-      {check, health}
-    end
-  end
-
-  defp compute_derived_fields(check, health), do: {check, health}
-
-  defp update_health_status(health, updated_check) do
-    updated_checks =
-      Enum.map(health.checks, fn check ->
-        if check.id == updated_check.id, do: updated_check, else: check
-      end)
-
-    new_status = calculate_overall_status(updated_checks)
-    %{health | status: new_status, checks: updated_checks}
-  end
-
-  @doc """
-  Resets the health for the given entity to initializing.
-  """
-  @spec reset(entity()) :: :ok | {:error, Error.t()}
-  def reset(entity) when is_entity(entity) do
-    new_health = initial_health(entity)
-    set_health(entity.id, new_health)
-  end
-
-  defp key(entity_id) do
-    env = if env() in [:dev, :test], do: "#{env()}:", else: ""
-    "ix:#{env}health:v0:#{entity_id}"
-  end
-
-  defp env do
-    Application.get_env(:sequin, :env)
   end
 
   @doc """
@@ -511,7 +188,7 @@ defmodule Sequin.Health do
   def clean_test_keys do
     case env() do
       :test ->
-        pattern = "ix:test:health:*"
+        pattern = "sequin:test:health:v1:*"
 
         case Redis.command(["KEYS", pattern]) do
           {:ok, []} ->
@@ -529,6 +206,320 @@ defmodule Sequin.Health do
     end
   end
 
+  def debounce_ets_table, do: :sequin_health_debounce
+
+  #############
+  ## Helpers ##
+  #############
+
+  defp validate_event!(entity_kind, %Event{} = event) do
+    valid = Event.valid_slug?(entity_kind, event.slug) and Event.valid_status?(event.status)
+
+    unless valid do
+      raise ArgumentError, "Invalid event: #{event.slug} with status #{event.status}"
+    end
+  end
+
+  @spec get_event(String.t(), String.t()) :: {:ok, Event.t() | nil} | redis_error()
+  defp get_event(entity_id, event_slug) do
+    with {:ok, event_json} when is_binary(event_json) <- Redis.command(["HGET", events_key(entity_id), event_slug]) do
+      {:ok, Event.from_json!(event_json)}
+    end
+  end
+
+  defp last_healthy_at(checks) do
+    not_healthy_checks = Enum.filter(checks, fn check -> check.status != :healthy end)
+
+    if Enum.any?(not_healthy_checks) do
+      not_healthy_checks
+      |> Enum.min_by(fn %Check{} = check -> check.last_healthy_at end, &compare_datetimes/2)
+      |> Map.get(:last_healthy_at)
+    else
+      Sequin.utc_now()
+    end
+  end
+
+  defp erroring_since(checks) do
+    unhealthy_checks = Enum.filter(checks, fn check -> check.status == :unhealthy end)
+
+    if Enum.any?(unhealthy_checks) do
+      unhealthy_checks
+      |> Enum.min_by(fn %Check{} = check -> check.erroring_since end, &compare_datetimes/2)
+      |> Map.get(:erroring_since)
+    end
+  end
+
+  defp compare_datetimes(nil, _b), do: true
+  defp compare_datetimes(_a, nil), do: false
+  defp compare_datetimes(a, b), do: DateTime.before?(a, b)
+
+  defp store_event(entity_id, %Event{} = event) do
+    Redis.command(["HSET", events_key(entity_id), event.slug, Jason.encode!(event)])
+  end
+
+  defp events_key(entity_id) do
+    "sequin:#{env()}:health:v1:#{entity_id}"
+  end
+
+  defp env do
+    Application.get_env(:sequin, :env)
+  end
+
+  defp entity_name(:postgres_database), do: "Database health"
+  defp entity_name(:postgres_replication_slot), do: "Database health"
+  defp entity_name(:http_endpoint), do: "Endpoint health"
+  defp entity_name(:sink_consumer), do: "Consumer health"
+  defp entity_name(:wal_pipeline), do: "WAL Pipeline health"
+
+  defp entity_kind(%PostgresReplicationSlot{}), do: :postgres_replication_slot
+  defp entity_kind(%SinkConsumer{}), do: :sink_consumer
+  defp entity_kind(%HttpEndpoint{}), do: :http_endpoint
+  defp entity_kind(%WalPipeline{}), do: :wal_pipeline
+
+  ############
+  ## Checks ##
+  ############
+
+  @spec checks(entity :: entity()) :: {:ok, [Check.t()]} | redis_error()
+  defp checks(entity) do
+    with {:ok, events} <- Redis.command(["HVALS", events_key(entity.id)]) do
+      events = Enum.map(events, &Event.from_json!/1)
+      {:ok, checks(entity, events)}
+    end
+  end
+
+  defp checks(%PostgresReplicationSlot{} = slot, events) do
+    reachable_check = check(:reachable, slot, events)
+    config_check = check(:replication_configuration, slot, events)
+    connected_check = check(:replication_connected, slot, events)
+    messages_check = check(:replication_messages, slot, events)
+
+    cond do
+      reachable_check.status == :unhealthy ->
+        [
+          reachable_check,
+          %Check{slug: :replication_configuration, status: :initializing},
+          %Check{slug: :replication_connected, status: :initializing},
+          %Check{slug: :replication_messages, status: :initializing}
+        ]
+
+      config_check.status == :unhealthy ->
+        [
+          reachable_check,
+          config_check,
+          %Check{slug: :replication_connected, status: :initializing},
+          %Check{slug: :replication_messages, status: :initializing}
+        ]
+
+      connected_check.status == :unhealthy ->
+        [
+          reachable_check,
+          config_check,
+          connected_check,
+          %Check{slug: :replication_messages, status: :initializing}
+        ]
+
+      true ->
+        [reachable_check, config_check, connected_check, messages_check]
+    end
+  end
+
+  defp checks(%SinkConsumer{}, events) do
+    # config_check = check(:sink_configuration, consumer, events)
+    filter_check = basic_check(:messages_filtered, events, :waiting)
+    ingestion_check = basic_check(:messages_ingested, events, :waiting)
+    delivery_check = basic_check(:messages_pending_delivery, events, :waiting)
+    acknowledge_check = basic_check(:messages_delivered, events, :waiting)
+
+    # if config_check.status == :unhealthy do
+    #   [
+    #     config_check,
+    #     %Check{slug: :messages_filtered, status: :initializing},
+    #     %Check{slug: :messages_ingested, status: :initializing},
+    #     %Check{slug: :messages_pending_delivery, status: :initializing},
+    #     %Check{slug: :messages_delivered, status: :initializing}
+    #   ]
+    # else
+    [filter_check, ingestion_check, delivery_check, acknowledge_check]
+  end
+
+  defp checks(%HttpEndpoint{}, events) do
+    [basic_check(:endpoint_reachable, events)]
+  end
+
+  defp checks(%WalPipeline{}, events) do
+    [
+      basic_check(:messages_filtered, events),
+      basic_check(:messages_ingested, events),
+      basic_check(:destination_insert, events)
+    ]
+  end
+
+  # Helper for the simple "event exists -> healthy/unhealthy" case
+  defp basic_check(event_slug, events, base_status \\ :initializing) do
+    base_check = %Check{slug: event_slug, status: base_status}
+    event = find_event(events, event_slug)
+
+    cond do
+      is_nil(event) ->
+        base_check
+
+      event.status == :fail ->
+        put_check_timestamps(
+          %{base_check | status: :unhealthy, error: event.error},
+          [event]
+        )
+
+      true ->
+        status = if event.status == :success, do: :healthy, else: :warning
+        put_check_timestamps(%{base_check | status: status}, [event])
+    end
+  end
+
+  defp check(:reachable, %PostgresReplicationSlot{} = slot, events) do
+    base_check = %Check{slug: :reachable, status: :initializing}
+    conn_checked_event = find_event(events, :db_connectivity_checked)
+
+    cond do
+      is_nil(conn_checked_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
+        error = expected_event_error(slot.id, :db_connectivity_checked)
+        %{base_check | status: :unhealthy, error: error}
+
+      is_nil(conn_checked_event) ->
+        base_check
+
+      Time.before_min_ago?(conn_checked_event.last_event_at, 15) ->
+        put_check_timestamps(%{base_check | status: :stale}, [conn_checked_event])
+
+      conn_checked_event.status == :fail ->
+        put_check_timestamps(%{base_check | status: :unhealthy, error: conn_checked_event.error}, [conn_checked_event])
+
+      true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [conn_checked_event])
+    end
+  end
+
+  defp check(:replication_configuration, %PostgresReplicationSlot{} = slot, events) do
+    base_check = %Check{slug: :replication_configuration, status: :initializing}
+    config_checked_event = find_event(events, :replication_slot_checked)
+
+    cond do
+      is_nil(config_checked_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
+        error = expected_event_error(slot.id, :replication_slot_checked)
+        %{base_check | status: :unhealthy, error: error}
+
+      is_nil(config_checked_event) ->
+        base_check
+
+      config_checked_event.status != :success ->
+        put_check_timestamps(%{base_check | status: :unhealthy, error: config_checked_event.error}, [config_checked_event])
+
+      Time.before_min_ago?(config_checked_event.last_event_at, 15) ->
+        put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
+
+      true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
+    end
+  end
+
+  defp check(:replication_connected, %PostgresReplicationSlot{} = slot, events) do
+    base_check = %Check{slug: :replication_connected, status: :initializing}
+    connected_event = find_event(events, :replication_connected)
+
+    cond do
+      is_nil(connected_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
+        error =
+          Error.invariant(
+            message:
+              "Sequin seems to be having trouble connecting to the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the database's replication slot."
+          )
+
+        %{base_check | status: :unhealthy, error: error}
+
+      is_nil(connected_event) ->
+        base_check
+
+      connected_event.status == :fail ->
+        put_check_timestamps(%{base_check | status: :unhealthy, error: connected_event.error}, [
+          connected_event
+        ])
+
+      true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [connected_event])
+    end
+  end
+
+  defp check(:replication_messages, %PostgresReplicationSlot{} = slot, events) do
+    base_check = %Check{slug: :replication_messages, status: :initializing}
+    messages_processed_event = find_event(events, :replication_message_processed)
+    heartbeat_recv_event = find_event(events, :replication_heartbeat_received)
+
+    cond do
+      (is_nil(heartbeat_recv_event) or is_nil(messages_processed_event)) and
+          Time.before_min_ago?(slot.inserted_at, 5) ->
+        error =
+          Error.invariant(
+            message:
+              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason."
+          )
+
+        %{base_check | status: :unhealthy, error: error}
+
+      heartbeat_recv_event && Time.before_min_ago?(heartbeat_recv_event.last_event_at, 5) ->
+        error =
+          Error.service(
+            message:
+              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason.",
+            service: :postgres_replication_slot
+          )
+
+        put_check_timestamps(%{base_check | status: :unhealthy, error: error}, [heartbeat_recv_event])
+
+      messages_processed_event && messages_processed_event.status == :fail ->
+        put_check_timestamps(%{base_check | status: :unhealthy, error: messages_processed_event.error}, [
+          messages_processed_event
+        ])
+
+      not is_nil(messages_processed_event) ->
+        put_check_timestamps(%{base_check | status: :healthy}, [messages_processed_event])
+
+      not is_nil(heartbeat_recv_event) ->
+        put_check_timestamps(%{base_check | status: :healthy}, [heartbeat_recv_event])
+
+      true ->
+        base_check
+    end
+  end
+
+  defp expected_event_error(entity_id, event_slug) do
+    Error.invariant(
+      message: "Sequin internal error: Expected a `#{event_slug}` event for #{entity_id} but none was found"
+    )
+  end
+
+  defp put_check_timestamps(%Check{} = check, events) do
+    fail_events = Enum.filter(events, fn event -> event.status == :fail end)
+    last_success_at = events |> Enum.map(& &1.last_success_at) |> Enum.min(&compare_datetimes/2)
+    initial_event_at = events |> Enum.map(& &1.initial_event_at) |> Enum.min(&compare_datetimes/2)
+
+    erroring_since =
+      if Enum.any?(fail_events) do
+        fail_events
+        |> Enum.map(& &1.in_status_since)
+        |> Enum.min(&compare_datetimes/2)
+      end
+
+    %{check | last_healthy_at: last_success_at, initial_event_at: initial_event_at, erroring_since: erroring_since}
+  end
+
+  defp find_event(events, slug) do
+    Enum.find(events, fn event -> event.slug == slug end)
+  end
+
+  ###############
+  ## Snapshots ##
+  ###############
+
   def update_snapshots do
     active_replications =
       Replication.all_active_pg_replications()
@@ -540,7 +531,7 @@ defmodule Sequin.Health do
     active_replication_ids = Enum.map(active_replications, & &1.id)
 
     # Update databases
-    Enum.each(active_replications, &snapshot_entity(&1.postgres_database))
+    Enum.each(active_replications, &snapshot_entity/1)
 
     # Update consumers
     Consumers.list_active_sink_consumers()
@@ -554,7 +545,7 @@ defmodule Sequin.Health do
   end
 
   defp snapshot_entity(entity) do
-    {:ok, health} = get(entity)
+    {:ok, health} = health(entity)
 
     status =
       case get_snapshot(entity) do
@@ -588,12 +579,31 @@ defmodule Sequin.Health do
     unless entity.annotations["ignore_health"] || entity.account.annotations["ignore_health"] do
       dedup_key = get_dedup_key(entity)
 
+      name =
+        case entity do
+          %PostgresDatabase{} ->
+            "Database #{entity.name}"
+
+          %PostgresReplicationSlot{} ->
+            entity = Repo.preload(entity, [:postgres_database])
+            "Replication slot #{entity.postgres_database.name}"
+
+          %SinkConsumer{} ->
+            "Consumer #{entity.name}"
+
+          %HttpEndpoint{} ->
+            "Endpoint #{entity.name}"
+
+          %WalPipeline{} ->
+            "Pipeline #{entity.name}"
+        end
+
       case new_status do
         :healthy ->
-          Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
+          Pagerduty.resolve(dedup_key, "#{name} is healthy")
 
         status when status in [:error, :warning] ->
-          summary = build_error_summary(entity)
+          summary = build_error_summary(name, entity)
           severity = if status == :error, do: :critical, else: :warning
 
           Pagerduty.alert(dedup_key, summary, severity: severity)
@@ -606,8 +616,13 @@ defmodule Sequin.Health do
 
   def resolve_and_ignore(entity) do
     dedup_key = get_dedup_key(entity)
-    Pagerduty.resolve(dedup_key, "#{entity_name(entity)} is healthy")
+    Pagerduty.resolve(dedup_key, "entity is healthy")
     ignore_health(entity)
+  end
+
+  def ignore_health(%PostgresReplicationSlot{} = slot) do
+    slot = Repo.preload(slot, [:postgres_database])
+    Databases.update_db(slot.postgres_database, %{annotations: %{"ignore_health" => true}})
   end
 
   def ignore_health(%PostgresDatabase{} = db) do
@@ -623,26 +638,22 @@ defmodule Sequin.Health do
   end
 
   defp get_dedup_key(%PostgresDatabase{} = entity), do: "database_health_#{entity.id}"
+  defp get_dedup_key(%PostgresReplicationSlot{} = entity), do: "replication_slot_health_#{entity.id}"
   defp get_dedup_key(%SinkConsumer{} = entity), do: "consumer_health_#{entity.id}"
   defp get_dedup_key(%HttpEndpoint{} = entity), do: "endpoint_health_#{entity.id}"
   defp get_dedup_key(%WalPipeline{} = entity), do: "pipeline_health_#{entity.id}"
 
-  defp entity_name(%PostgresDatabase{} = entity), do: "Database #{entity.name}"
-  defp entity_name(%SinkConsumer{} = entity), do: "Consumer #{entity.name}"
-  defp entity_name(%HttpEndpoint{} = entity), do: "Endpoint #{entity.name}"
-  defp entity_name(%WalPipeline{} = entity), do: "Pipeline #{entity.name}"
-
-  defp build_error_summary(entity) do
-    {:ok, health} = get(entity)
+  defp build_error_summary(name, entity) do
+    {:ok, health} = health(entity)
     error_checks = Enum.filter(health.checks, &(&1.status in [:error, :warning]))
 
     check_details =
       Enum.map_join(error_checks, "\n", fn check ->
-        "- #{check.name}: #{check.status}"
+        "- #{check.slug}: #{check.status}"
       end)
 
     """
-    #{entity_name(entity)} (account "#{entity.account.name}") (id: #{entity.id}) is experiencing issues:
+    #{name} (account "#{entity.account.name}") (id: #{entity.id}) is experiencing issues:
     #{check_details}
     """
   end
@@ -663,14 +674,13 @@ defmodule Sequin.Health do
   """
   @spec upsert_snapshot(entity()) :: {:ok, HealthSnapshot.t()} | {:error, Error.t()}
   def upsert_snapshot(entity) when is_entity(entity) do
-    with {:ok, health} <- get(entity) do
+    with {:ok, health} <- health(entity) do
       now = DateTime.utc_now()
 
       %HealthSnapshot{}
       |> HealthSnapshot.changeset(%{
         entity_id: entity.id,
         entity_kind: entity_kind(entity),
-        name: health.name,
         status: health.status,
         health_json: Map.from_struct(health),
         sampled_at: now

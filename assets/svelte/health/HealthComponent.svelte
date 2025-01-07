@@ -96,6 +96,14 @@
                   Error: {check.error.message}
                 </p>
               {/if}
+              {#if check.status === "stale"}
+                <p
+                  class="text-xs text-yellow-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"
+                >
+                  No update received from this check in the expected time
+                  interval. This is usually a bug - contact the Sequin team.
+                </p>
+              {/if}
             </div>
           {/each}
         </div>

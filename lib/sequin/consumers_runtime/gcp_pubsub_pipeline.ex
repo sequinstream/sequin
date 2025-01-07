@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Repo
   alias Sequin.Sinks.Gcp.PubSub
 
@@ -68,7 +69,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
 
     case PubSub.publish_messages(pubsub_client, consumer.sink.topic_id, pubsub_messages) do
       :ok ->
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -84,7 +85,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       {:error, error} ->
         Logger.warning("Failed to publish message to Pub/Sub: #{inspect(error)}")
 
-        Health.update(consumer, :push, :error, error)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -152,5 +153,6 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
 
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Sinks.Gcp.HttpClient, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

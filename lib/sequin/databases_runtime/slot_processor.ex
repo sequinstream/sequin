@@ -24,8 +24,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.Error
-  alias Sequin.Health2
-  alias Sequin.Health2.Event
+  alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
@@ -151,14 +151,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     conn = get_cached_conn(state)
 
     error_msg =
-      case Postgres.replication_slot_status(conn, state.slot_name) do
-        {:ok, :available} ->
+      case Postgres.fetch_replication_slot(conn, state.slot_name) do
+        {:ok, %{"active" => false}} ->
           "Failed to connect to replication slot after 5 attempts"
 
-        {:ok, :busy} ->
+        {:ok, %{"active" => true}} ->
           "Replication slot '#{state.slot_name}' is currently in use by another connection"
 
-        {:ok, :not_found} ->
+        {:error, %Error.NotFoundError{}} ->
           maybe_recreate_slot(state)
           "Replication slot '#{state.slot_name}' does not exist"
 
@@ -166,7 +166,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           Exception.message(error)
       end
 
-    Health2.put_event(
+    Health.put_event(
       state.replication_slot,
       %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
     )
@@ -214,7 +214,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @impl Postgrex.ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     # TODO: Move to better spot after we vendor ReplicationConnection
-    Health2.put_event(
+    Health.put_event(
       state.replication_slot,
       %Event{slug: :replication_connected, status: :success}
     )
@@ -225,7 +225,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
       # A replication message is *their* message(s), not our message.
-      Health2.put_event(
+      Health.put_event(
         state.replication_slot,
         %Event{slug: :replication_message_processed, status: :success}
       )
@@ -251,7 +251,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
       error = Error.service(service: :replication, message: Exception.message(e))
 
-      Health2.put_event(
+      Health.put_event(
         state.replication_slot,
         %Event{slug: :replication_message_processed, status: :fail, error: error}
       )
@@ -270,7 +270,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     # Because these are <14 Postgres databases, they will not receive heartbeat messages
     # temporarily mark them as healthy if we receive a keepalive message
     if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
-      Health2.put_event(
+      Health.put_event(
         state.replication_slot,
         %Event{slug: :replication_heartbeat_received, status: :success}
       )
@@ -527,7 +527,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
     Logger.info("[SlotProcessor] Heartbeat received")
-    Health2.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
+    Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
     if state.test_pid do
       # TODO: Decouple

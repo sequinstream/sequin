@@ -10,6 +10,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
   alias Sequin.Consumers.SqsSink
   alias Sequin.Error
   alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Repo
 
   require Logger
@@ -72,7 +73,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
 
     case SQS.send_messages(sqs_client, consumer.sink.queue_url, sqs_messages) do
       :ok ->
-        Health.update(consumer, :push, :healthy)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         # Metrics.incr_sqs_throughput(consumer.sink)
 
         Enum.each(messages, fn msg ->
@@ -90,7 +91,7 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
         reason = format_error(error)
         Logger.warning("Failed to push message to SQS: #{inspect(reason)}")
 
-        Health.update(consumer, :push, :error, reason)
+        Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: reason})
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -139,5 +140,6 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
 
   defp setup_allowances(test_pid) do
     Req.Test.allow(Sequin.Aws.HttpClient, test_pid, self())
+    Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
   end
 end

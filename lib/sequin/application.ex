@@ -5,6 +5,7 @@ defmodule Sequin.Application do
   use Application
 
   alias Sequin.CheckSystemHealthWorker
+  alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
   alias Sequin.MutexedSupervisor
 
   require Logger
@@ -71,7 +72,7 @@ defmodule Sequin.Application do
       SequinWeb.Presence,
       Sequin.Tracer.DynamicSupervisor,
       {Cluster.Supervisor, [topologies]},
-      {Task, fn -> CheckSystemHealthWorker.enqueue() end},
+      {Task, fn -> enqueue_workers() end},
       # Start to serve requests, typically the last entry
       SequinWeb.Endpoint
     ]
@@ -83,5 +84,11 @@ defmodule Sequin.Application do
   def config_change(changed, _new, removed) do
     SequinWeb.Endpoint.config_change(changed, removed)
     :ok
+  end
+
+  defp enqueue_workers do
+    CheckSystemHealthWorker.enqueue()
+    # Run this right away, in case this is the first time the app is started in a while
+    KickoffCheckPostgresReplicationSlotWorker.enqueue()
   end
 end

@@ -185,7 +185,8 @@ defmodule Sequin.Error do
     def from_postgrex(summary_prefix \\ "Postgres error: ", %Postgrex.Error{} = error) do
       pg_code = error.postgres && error.postgres.code
       message = error.message || (error.postgres && error.postgres.message)
-      code = if pg_code, do: {:postgrex_error, pg_code}, else: :postgrex_error
+      # Use a list so it's JSON-encodeable
+      code = if pg_code, do: [:postgrex_error, pg_code], else: :postgrex_error
 
       %__MODULE__{
         errors: %{},

@@ -2,6 +2,7 @@ defmodule Sequin.HealthTest do
   use Sequin.DataCase, async: true
 
   alias Sequin.Error
+  alias Sequin.ErrorFactory
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.ConsumersFactory
@@ -9,155 +10,143 @@ defmodule Sequin.HealthTest do
   alias Sequin.Factory.ErrorFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
-  alias Sequin.Health.Check
+  alias Sequin.Health.Event
 
   describe "initializes a new health" do
     test "initializes a new health" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :initializing
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :waiting
       assert is_list(health.checks) and length(health.checks) > 0
     end
   end
 
-  describe "update/4" do
-    test "updates the health of an entity with an expected check" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+  describe "put_event/2" do
+    test "updates the health of an entity with a health event" do
+      entity = ConsumersFactory.http_endpoint(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
-      assert :ok = Health.update(entity, :receive, :healthy)
-      assert {:ok, %Health{} = health} = Health.get(entity)
+      assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :initializing
-      assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
 
-      assert :ok = Health.update(entity, :push, :warning)
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :warning
-      assert Enum.find(health.checks, &(&1.id == :push)).status == :warning
-      assert Enum.find(health.checks, &(&1.id == :receive)).status == :healthy
-
-      Enum.each(health.checks, fn check ->
-        Health.update(entity, check.id, :healthy)
-      end)
-
-      assert {:ok, %Health{} = health} = Health.get(entity)
+      assert :ok = Health.put_event(entity, %Event{slug: :endpoint_reachable, status: :success})
+      assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :healthy
     end
 
-    test "raises an error for unexpected checks" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+    test "updates the health of a SinkConsumer with health events" do
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
-      assert_raise FunctionClauseError, fn ->
-        Health.update(entity, :unexpected_check, :healthy)
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :waiting
+
+      assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :waiting
+
+      assert Enum.find(health.checks, &(&1.slug == :messages_filtered)).status == :healthy
+
+      for slug <- [:messages_ingested, :messages_pending_delivery] do
+        assert :ok = Health.put_event(entity, %Event{slug: slug, status: :success})
       end
+
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      # If one remaining check is waiting, the health status should be waiting
+      assert health.status == :waiting
+
+      assert :ok = Health.put_event(entity, %Event{slug: :messages_delivered, status: :success})
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :healthy
     end
 
-    test "sets status to the worst status of any incoming check" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+    test "health is in error if something is erroring" do
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
-      assert :ok = Health.update(entity, :receive, :healthy)
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :initializing
+      assert :ok = Health.put_event(entity, %Event{slug: :sink_config_checked, status: :success})
 
-      assert :ok = Health.update(entity, :push, :warning)
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :warning
+      assert :ok =
+               Health.put_event(entity, %Event{
+                 slug: :messages_ingested,
+                 status: :fail,
+                 error: ErrorFactory.random_error()
+               })
+    end
 
-      assert :ok = Health.update(entity, :filters, :error, ErrorFactory.random_error())
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :error
+    test "raises an error for unexpected events" do
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
-      assert :ok = Health.update(entity, :receive, :healthy)
-      # Still error because other checks are in error state
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :error
+      assert_raise ArgumentError, fn ->
+        Health.put_event(entity, %Event{slug: :unexpected_event, status: :success})
+      end
     end
   end
 
-  describe "get/1" do
-    test "finds the health of an entity" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+  describe "health/1" do
+    test ":postgres_database :reachable goes into error if not present after 5 minutes of creation" do
+      entity =
+        ReplicationFactory.postgres_replication(
+          id: Factory.uuid(),
+          inserted_at: DateTime.add(DateTime.utc_now(), -6, :minute)
+        )
 
-      assert :ok = Health.update(entity, :receive, :healthy)
+      assert {:ok, health} = Health.health(entity)
 
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert health.status == :initializing
+      assert health.status == :error
     end
   end
 
   describe "to_external/1" do
     test "converts the health to an external format" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
-      assert {:ok, %Health{} = health} = Health.get(entity)
+      assert {:ok, %Health{} = health} = Health.health(entity)
       assert external = Health.to_external(health)
       assert external.status == :initializing
 
-      assert :ok = Health.update(entity, :receive, :error, ErrorFactory.random_error())
+      assert :ok =
+               Health.put_event(entity, %Event{
+                 slug: :messages_ingested,
+                 status: :fail,
+                 error: ErrorFactory.random_error()
+               })
 
-      assert {:ok, %Health{} = health} = Health.get(entity)
+      assert {:ok, %Health{} = health} = Health.health(entity)
       assert external = Health.to_external(health)
       assert external.status == :error
       assert Enum.find(external.checks, &(not is_nil(&1.error)))
-    end
-
-    test ":postgres_database :replication_connected check is marked as erroring if it waiting for > 5 minutes" do
-      entity = DatabasesFactory.postgres_database(id: Factory.uuid())
-      assert {:ok, %Health{} = health} = Health.get(entity)
-
-      ten_minutes_ago = DateTime.add(DateTime.utc_now(), -300, :second)
-
-      health =
-        update_in(health.checks, fn checks ->
-          Enum.map(checks, fn
-            %Check{id: :replication_connected} = check ->
-              %{check | created_at: ten_minutes_ago}
-
-            %Check{} = check ->
-              check
-          end)
-        end)
-
-      Health.set_health(health.entity_id, health)
-
-      assert {:ok, %Health{} = health} = Health.get(entity)
-      assert external = Health.to_external(health)
-      assert external.status == :error
     end
   end
 
   describe "snapshots" do
     test "get_snapshot returns not found for non-existent snapshot" do
-      entity = DatabasesFactory.postgres_database(id: Factory.uuid())
+      entity = ReplicationFactory.postgres_replication(id: Factory.uuid())
       assert {:error, %Error.NotFoundError{}} = Health.get_snapshot(entity)
     end
 
-    test "upsert_snapshot creates new snapshot for database" do
-      entity = DatabasesFactory.postgres_database(id: Factory.uuid())
+    test "upsert_snapshot creates new snapshot for replication slot" do
+      entity = ReplicationFactory.postgres_replication(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
       # Set initial health
-      :ok = Health.update(entity, :replication_connected, :healthy)
+      :ok = Health.put_event(entity, %Event{slug: :replication_connected, status: :success})
 
       assert {:ok, snapshot} = Health.upsert_snapshot(entity)
       assert snapshot.entity_id == entity.id
-      assert snapshot.entity_kind == :postgres_database
+      assert snapshot.entity_kind == :postgres_replication_slot
       assert snapshot.status == :initializing
       assert is_map(snapshot.health_json)
     end
 
     test "upsert_snapshot updates existing snapshot" do
-      entity = DatabasesFactory.postgres_database(id: Factory.uuid())
+      entity = ReplicationFactory.postgres_replication(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
       # Set initial health and create snapshot
-      :ok = Health.update(entity, :replication_connected, :healthy)
+      :ok = Health.put_event(entity, %Event{slug: :replication_connected, status: :success})
       {:ok, initial_snapshot} = Health.upsert_snapshot(entity)
 
       # Update health and snapshot
       :ok =
-        Health.update(
+        Health.put_event(
           entity,
-          :replication_connected,
-          :error,
-          Error.service(message: "test service error", service: :postgres)
+          %Event{slug: :replication_connected, status: :fail, error: ErrorFactory.service_error()}
         )
 
       {:ok, updated_snapshot} = Health.upsert_snapshot(entity)
@@ -168,15 +157,15 @@ defmodule Sequin.HealthTest do
     end
 
     test "upsert_snapshot creates new snapshot for consumer" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid())
+      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
 
       # Set initial health
-      :ok = Health.update(entity, :receive, :healthy)
+      :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
 
       assert {:ok, snapshot} = Health.upsert_snapshot(entity)
       assert snapshot.entity_id == entity.id
       assert snapshot.entity_kind == :sink_consumer
-      assert snapshot.status == :initializing
+      assert snapshot.status == :waiting
       assert is_map(snapshot.health_json)
     end
   end
@@ -197,11 +186,12 @@ defmodule Sequin.HealthTest do
 
     test "alerts PagerDuty when database status changes to error" do
       entity =
-        DatabasesFactory.postgres_database(
+        ReplicationFactory.postgres_replication(
           id: Factory.uuid(),
-          name: "test-db",
           account: AccountsFactory.account(),
-          account_id: Factory.uuid()
+          account_id: Factory.uuid(),
+          postgres_database: DatabasesFactory.postgres_database(),
+          inserted_at: DateTime.utc_now()
         )
 
       Health.on_status_change(entity, :healthy, :error)
@@ -211,7 +201,7 @@ defmodule Sequin.HealthTest do
       assert conn.method == "POST"
       assert conn.path_info == ["v2", "enqueue"]
 
-      assert body["dedup_key"] == "database_health_#{entity.id}"
+      assert body["dedup_key"] == "replication_slot_health_#{entity.id}"
       assert body["event_action"] == "trigger"
     end
 
@@ -220,7 +210,8 @@ defmodule Sequin.HealthTest do
         ConsumersFactory.sink_consumer(
           id: Factory.uuid(),
           name: "test-consumer",
-          account: AccountsFactory.account()
+          account: AccountsFactory.account(),
+          inserted_at: DateTime.utc_now()
         )
 
       Health.on_status_change(entity, :healthy, :warning)
@@ -234,11 +225,12 @@ defmodule Sequin.HealthTest do
 
     test "resolves PagerDuty alert when status changes to healthy" do
       entity =
-        DatabasesFactory.postgres_database(
+        ReplicationFactory.postgres_replication(
           id: Factory.uuid(),
-          name: "test-db",
           account: AccountsFactory.account(),
-          account_id: Factory.uuid()
+          account_id: Factory.uuid(),
+          inserted_at: DateTime.utc_now(),
+          postgres_database: DatabasesFactory.postgres_database()
         )
 
       Health.on_status_change(entity, :error, :healthy)
@@ -246,14 +238,16 @@ defmodule Sequin.HealthTest do
       assert_receive {:req, conn, body}
 
       assert conn.path_info == ["v2", "enqueue"]
-      assert body["dedup_key"] == "database_health_#{entity.id}"
+      assert body["dedup_key"] == "replication_slot_health_#{entity.id}"
       assert body["event_action"] == "resolve"
     end
 
     test "skips PagerDuty when entity has ignore_health annotation" do
       entity =
-        DatabasesFactory.postgres_database(
+        ReplicationFactory.postgres_replication(
           id: Factory.uuid(),
+          inserted_at: DateTime.utc_now(),
+          postgres_database: DatabasesFactory.postgres_database(),
           annotations: %{"ignore_health" => true}
         )
 
@@ -266,10 +260,12 @@ defmodule Sequin.HealthTest do
 
     test "skips PagerDuty when account has ignore_health annotation" do
       entity =
-        DatabasesFactory.postgres_database(
+        ReplicationFactory.postgres_replication(
           id: Factory.uuid(),
+          inserted_at: DateTime.utc_now(),
           account_id: Factory.uuid(),
-          account: AccountsFactory.account(annotations: %{"ignore_health" => true})
+          account: AccountsFactory.account(annotations: %{"ignore_health" => true}),
+          postgres_database: DatabasesFactory.postgres_database()
         )
 
       Req.Test.stub(Sequin.Pagerduty, fn _req ->
@@ -322,17 +318,17 @@ defmodule Sequin.HealthTest do
         )
 
       # Set some health states
-      Health.update(db, :replication_connected, :healthy)
-      Health.update(consumer, :receive, :warning)
-      Health.update(pipeline, :ingestion, :error, ErrorFactory.service_error())
+      Health.put_event(slot, %Event{slug: :replication_connected, status: :success})
+      Health.put_event(consumer, %Event{slug: :messages_filtered, status: :warning})
+      Health.put_event(pipeline, %Event{slug: :messages_ingested, status: :fail, error: ErrorFactory.service_error()})
 
       # Run snapshot update
       :ok = Health.update_snapshots()
 
       # Verify snapshots were created with correct status
-      assert {:ok, db_snapshot} = Health.get_snapshot(db)
-      assert db_snapshot.status == :initializing
-      assert db_snapshot.entity_kind == :postgres_database
+      assert {:ok, slot_snapshot} = Health.get_snapshot(slot)
+      assert slot_snapshot.status == :initializing
+      assert slot_snapshot.entity_kind == :postgres_replication_slot
 
       assert {:ok, consumer_snapshot} = Health.get_snapshot(consumer)
       assert consumer_snapshot.status == :warning
@@ -364,15 +360,20 @@ defmodule Sequin.HealthTest do
         )
 
       # Set some health states
-      Health.update(db, :replication_connected, :error, ErrorFactory.service_error())
-      Health.update(deleted_consumer, :receive, :error, ErrorFactory.service_error())
+      Health.put_event(slot, %Event{slug: :replication_connected, status: :fail, error: ErrorFactory.service_error()})
+
+      Health.put_event(deleted_consumer, %Event{
+        slug: :messages_filtered,
+        status: :fail,
+        error: ErrorFactory.service_error()
+      })
 
       # Run snapshot update
       :ok = Health.update_snapshots()
 
       # Verify no snapshots were created for inactive entities
       # No snapshot because slot is disabled
-      assert {:error, _} = Health.get_snapshot(db)
+      assert {:error, _} = Health.get_snapshot(slot)
       # No snapshot because consumer is disabled
       assert {:error, _} = Health.get_snapshot(deleted_consumer)
     end
@@ -398,11 +399,11 @@ defmodule Sequin.HealthTest do
         )
 
       # Set initial health and create snapshot
-      Health.update(consumer, :receive, :healthy)
+      Health.put_event(consumer, %Event{slug: :messages_filtered, status: :success})
       {:ok, initial_snapshot} = Health.upsert_snapshot(consumer)
 
       # Change health status
-      Health.update(consumer, :receive, :error, ErrorFactory.service_error())
+      Health.put_event(consumer, %Event{slug: :messages_filtered, status: :fail, error: ErrorFactory.service_error()})
 
       # Run snapshot update
       :ok = Health.update_snapshots()

@@ -1,5 +1,17 @@
-defmodule Sequin.Health2.Event do
-  @moduledoc false
+defmodule Sequin.Health.Event do
+  @moduledoc """
+  Struct for health-related events. Events are unique by `slug` for a given entity ({entity_kind, entity_id}).
+
+  We only store the latest event for a given slug in Redis, and so fold certain fields
+  from the previous event into the new event.
+
+  Events in Sequin’s health subsystem capture when a particular event (including a check/probe) last occurred,
+  what its outcome was (`:success`, `:fail`, `:warning`, or `:info`), and how long it has remained
+  in that outcome.
+
+  Rather than storing a full history of every event occurrence, this module
+  provides a snapshot of the **current** status, along with relevant timestamps.
+  """
 
   use TypedStruct
 
@@ -21,12 +33,30 @@ defmodule Sequin.Health2.Event do
     :replication_heartbeat_received
   ]
 
+  @sink_consumer_event_slugs [
+    :sink_config_checked,
+    :messages_filtered,
+    :messages_ingested,
+    :messages_pending_delivery,
+    :messages_delivered
+  ]
+
+  @http_endpoint_event_slugs [
+    :endpoint_reachable
+  ]
+
+  @wal_pipeline_event_slugs [
+    :messages_filtered,
+    :messages_ingested,
+    :destination_insert
+  ]
+
   typedstruct do
     # Short identifier or category for this event. e.g., :user_permission_probe
     field :slug, atom(), enforce: true
 
     # The status/kind of this particular event
-    field :status, status(), enforce: true
+    field :status, status(), default: :success
 
     # Optional: error details if status = :fail
     field :error, Error.t() | nil
@@ -52,6 +82,9 @@ defmodule Sequin.Health2.Event do
 
   def valid_status?(status), do: status in @statuses
   def valid_slug?(:postgres_replication_slot, slug), do: slug in @postgres_replication_slot_event_slugs
+  def valid_slug?(:sink_consumer, slug), do: slug in @sink_consumer_event_slugs
+  def valid_slug?(:http_endpoint, slug), do: slug in @http_endpoint_event_slugs
+  def valid_slug?(:wal_pipeline, slug), do: slug in @wal_pipeline_event_slugs
 
   @doc """
   We debounce event persistence to avoid excessive writes when health events are not changing.

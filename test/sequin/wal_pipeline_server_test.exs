@@ -52,8 +52,8 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
       wal_pipeline: wal_pipeline
     } do
       # Simulate initial health
-      Health.update(wal_pipeline, :filters, :healthy)
-      Health.update(wal_pipeline, :ingestion, :healthy)
+      Health.put_event(wal_pipeline, %Health.Event{slug: :messages_filtered})
+      Health.put_event(wal_pipeline, %Health.Event{slug: :messages_ingested})
 
       commit_lsn = ReplicationFactory.commit_lsn()
 
@@ -116,7 +116,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
       end)
 
       # Verify that the health status is updated to healthy
-      {:ok, health} = Health.get(wal_pipeline)
+      {:ok, health} = Health.health(wal_pipeline)
       assert health.status == :healthy
       assert Enum.all?(health.checks, &(&1.status == :healthy))
     end
@@ -146,9 +146,9 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
       assert_receive {WalPipelineServer, :write_failed, _reason}, 1000
 
       # Verify that the health status is updated to error
-      {:ok, health} = Health.get(wal_pipeline)
+      {:ok, health} = Health.health(wal_pipeline)
       assert health.status == :error
-      assert Enum.any?(health.checks, &(&1.status == :error))
+      assert Enum.any?(health.checks, &(&1.status == :unhealthy))
     end
 
     test "processes WAL events on PubSub notification", %{

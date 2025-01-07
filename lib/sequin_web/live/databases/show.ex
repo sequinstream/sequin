@@ -4,7 +4,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   alias Sequin.Consumers
   alias Sequin.Databases
-  alias Sequin.Health2
+  alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Repo
   alias Sequin.Tracer
@@ -23,7 +23,7 @@ defmodule SequinWeb.DatabasesLive.Show do
         database = Repo.preload(database, replication_slot: [:sink_consumers])
 
         # Fetch initial health
-        {:ok, health} = Health2.health(database.replication_slot)
+        {:ok, health} = Health.health(database.replication_slot)
         database = Map.put(database, :health, health)
 
         socket = assign(socket, database: database, refreshing_tables: false)
@@ -117,7 +117,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 10_000)
 
-    case Health2.health(socket.assigns.database.replication_slot) do
+    case Health.health(socket.assigns.database.replication_slot) do
       {:ok, health} ->
         updated_database = Map.put(socket.assigns.database, :health, health)
         {:noreply, assign(socket, database: updated_database)}
@@ -256,7 +256,7 @@ defmodule SequinWeb.DatabasesLive.Show do
       inserted_at: database.inserted_at,
       updated_at: database.updated_at,
       consumers: encode_consumers(database.replication_slot.sink_consumers, database),
-      health: Health2.to_external(database.health)
+      health: Health.to_external(database.health)
     }
   end
 

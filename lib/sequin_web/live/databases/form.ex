@@ -12,7 +12,6 @@ defmodule SequinWeb.DatabasesLive.Form do
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
-  alias Sequin.HealthRuntime.PostgresDatabaseHealthWorker
   alias Sequin.Name
   alias Sequin.Posthog
   alias Sequin.Replication
@@ -360,13 +359,6 @@ defmodule SequinWeb.DatabasesLive.Form do
           # It's now safe to start the replication slot
           DatabasesRuntimeSupervisor.start_replication(db.replication_slot)
 
-          %{postgres_database_id: db.id}
-          |> PostgresDatabaseHealthWorker.new(
-            scheduled_at: DateTime.utc_now(),
-            replace: [:scheduled_at]
-          )
-          |> Oban.insert()
-
           {:ok, db}
         end
       end,
@@ -385,7 +377,7 @@ defmodule SequinWeb.DatabasesLive.Form do
     with :ok <- Databases.test_tcp_reachability(db),
          :ok <- Databases.test_connect(db, 10_000),
          :ok <- Databases.test_permissions(db) do
-      Databases.test_slot_permissions(db, replication_slot)
+      Databases.verify_slot(db, replication_slot)
     end
   end
 

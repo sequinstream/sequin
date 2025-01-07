@@ -16,7 +16,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
           Process.send_after(self(), :update_metrics, 1000)
         end
 
-        {:ok, health} = Health.get(http_endpoint)
+        {:ok, health} = Health.health(http_endpoint)
         socket = assign(socket, http_endpoint: %{http_endpoint | health: health})
         {:ok, assign_metrics(socket)}
 
@@ -28,7 +28,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
-    {:ok, health} = Health.get(socket.assigns.http_endpoint)
+    {:ok, health} = Health.health(socket.assigns.http_endpoint)
     {:noreply, assign(socket, :http_endpoint, %{socket.assigns.http_endpoint | health: health})}
   end
 

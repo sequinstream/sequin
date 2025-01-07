@@ -7,32 +7,63 @@ defmodule Sequin.Health.Check do
   alias Sequin.Error
   alias Sequin.JSON
 
+  @type status :: :healthy | :unhealthy | :waiting | :initializing | :stale
+
   typedstruct do
-    field :id, String.t(), enforce: true
-    field :name, String.t(), enforce: true
-    field :status, Sequin.Health.status(), enforce: true
+    field :slug, atom(), enforce: true
+    field :status, status(), enforce: true
     field :error, Error.t() | nil
-    field :message, String.t() | nil
-    field :created_at, DateTime.t(), enforce: true
+    field :initial_event_at, DateTime.t() | nil
+    field :last_healthy_at, DateTime.t() | nil
+    field :erroring_since, DateTime.t() | nil
   end
 
   @spec from_json!(String.t()) :: t()
   def from_json!(json) when is_binary(json) do
     json
     |> Jason.decode!()
-    |> from_json()
+    |> from_json!()
   end
 
-  @spec from_json(map()) :: t()
-  def from_json(json) when is_map(json) do
+  @spec from_json!(map()) :: t()
+  def from_json!(json) when is_map(json) do
     json
-    |> JSON.decode_atom("id")
+    |> JSON.decode_atom("slug")
     |> JSON.decode_atom("status")
     |> JSON.decode_polymorphic("error")
-    # Backwards compatibility for old health check JSON which lacked a created_at field
-    |> JSON.decode_timestamp("created_at")
+    |> JSON.decode_timestamp("last_healthy_at")
+    |> JSON.decode_timestamp("initial_event_at")
+    |> JSON.decode_timestamp("erroring_since")
     |> Map.put_new("created_at", DateTime.utc_now())
     |> JSON.struct(Check)
+  end
+
+  def to_external(%Check{} = check) do
+    %{
+      name: check_name(check),
+      status: if(check.status == :waiting, do: :initializing, else: check.status),
+      error: if(check.error, do: %{message: Exception.message(check.error)})
+    }
+  end
+
+  def check_name(%Check{} = check) do
+    case check.slug do
+      # Postgres replication slot checks
+      :reachable -> "Database reachable"
+      :replication_configuration -> "Valid slot"
+      :replication_connected -> "Replication connected"
+      :replication_messages -> "Replication messages"
+      # Sink consumer checks
+      :sink_configuration -> "Configuration"
+      :messages_filtered -> "Messages filtered"
+      :messages_ingested -> "Messages ingested"
+      :messages_pending_delivery -> "Messages pending delivery"
+      :messages_delivered -> "Messages delivered"
+      # HTTP endpoint checks
+      :endpoint_reachable -> "Endpoint reachable"
+      # WAL pipeline checks
+      :destination_insert -> "Destination insert"
+    end
   end
 
   defimpl Jason.Encoder do

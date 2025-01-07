@@ -231,7 +231,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   defp load_consumer_health(consumers) do
     Enum.map(consumers, fn consumer ->
-      case Health.get(consumer) do
+      case Health.health(consumer) do
         {:ok, health} -> %{consumer | health: health}
         {:error, _} -> consumer
       end

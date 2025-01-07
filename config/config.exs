@@ -47,13 +47,13 @@ config :sequin, Oban,
        # Runs at the start of every hour
        {"0 * * * *", Sequin.Logs.RotateLogsWorker},
        # Runs every 10 minutes
-       {"*/10 * * * *", Sequin.HealthRuntime.HttpEndpointHealthWorker},
+       {"*/10 * * * *", Sequin.Health.KickoffCheckHttpEndpointHealthWorker},
        # Runs every minute
        {"* * * * *", Sequin.CheckSystemHealthWorker},
        # Runs every 2 minutes
        {"*/2 * * * *", Sequin.Health.SnapshotHealthWorker},
        # Runs every 3 minutes
-       {"*/3 * * * *", Sequin.Health2.KickoffCheckPostgresReplicationSlotWorker}
+       {"*/3 * * * *", Sequin.Health.KickoffCheckPostgresReplicationSlotWorker}
      ]}
   ]
 

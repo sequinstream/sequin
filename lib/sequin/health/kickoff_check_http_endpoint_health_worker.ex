@@ -1,21 +1,21 @@
-defmodule Sequin.Health2.KickoffCheckPostgresReplicationSlotWorker do
+defmodule Sequin.Health.KickoffCheckHttpEndpointHealthWorker do
   @moduledoc false
 
   use Oban.Worker,
     queue: :default,
     max_attempts: 1
 
-  alias Sequin.Databases
-  alias Sequin.Health2.CheckPostgresReplicationSlotWorker
+  alias Sequin.Consumers
+  alias Sequin.Health.CheckHttpEndpointHealthWorker
 
   @impl Oban.Worker
   def perform(_) do
-    Databases.list_dbs()
+    Consumers.list_http_endpoints()
     |> Enum.with_index()
-    |> Enum.map(fn {db, index} ->
+    |> Enum.map(fn {endpoint, index} ->
       # Integer division to get the delay in seconds (10 per second)
       delay_seconds = div(index, 10)
-      CheckPostgresReplicationSlotWorker.enqueue_in(db.id, delay_seconds)
+      CheckHttpEndpointHealthWorker.enqueue_in(endpoint.id, delay_seconds)
     end)
 
     :ok

@@ -6,7 +6,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
+  alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
+  alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.DatabasesRuntime.TableReaderServer
@@ -41,6 +44,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :consumers, [Sequin.Consumers.consumer()], default: []
       field :wal_pipelines, [WalPipeline.t()], default: []
       field :replication_slot_id, String.t()
+      field :postgres_database, PostgresDatabase.t()
       field :table_reader_batches, [BatchState.t()], default: []
       field :max_pks_per_batch, non_neg_integer(), default: 1_000_000
       field :table_reader_mod, module(), default: TableReaderServer
@@ -48,11 +52,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   def context(%PostgresReplicationSlot{} = pr) do
-    pr = Repo.preload(pr, [:wal_pipelines, sink_consumers: [:sequence, :postgres_database]])
+    pr = Repo.preload(pr, [:wal_pipelines, :postgres_database, sink_consumers: [:sequence, :postgres_database]])
 
     %Context{
       consumers: pr.sink_consumers,
       wal_pipelines: pr.wal_pipelines,
+      postgres_database: pr.postgres_database,
       replication_slot_id: pr.id
     }
   end
@@ -64,6 +69,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     ctx = update_table_reader_batch_pks(ctx, messages)
 
     max_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+
+    {ctx, messages} = load_unchanged_toasts(ctx, messages)
 
     messages_by_consumer =
       Enum.flat_map(messages, fn message ->
@@ -421,5 +428,64 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     else
       Enum.map_join(message.ids, ",", &to_string/1)
     end
+  end
+
+  defp load_unchanged_toasts(%Context{} = ctx, messages) do
+    # Skip if no messages have unchanged TOASTs
+    if Enum.any?(messages, &has_unchanged_toast?/1) do
+      load_unchanged_toasts_from_old(ctx, messages)
+    else
+      {ctx, messages}
+    end
+  end
+
+  defp has_unchanged_toast?(%Message{fields: nil}), do: false
+
+  defp has_unchanged_toast?(%Message{fields: fields}) do
+    Enum.any?(fields, fn %Message.Field{value: value} -> value == :unchanged_toast end)
+  end
+
+  defp load_unchanged_toasts_from_old(%Context{} = ctx, messages) do
+    Enum.reduce(messages, {ctx, []}, fn
+      %SlotProcessor.Message{action: :update, old_fields: nil} = message, {ctx, messages_acc} ->
+        if has_unchanged_toast?(message) do
+          {annotate_consumers(ctx, message), [message | messages_acc]}
+        else
+          {ctx, [message | messages_acc]}
+        end
+
+      %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, {ctx, messages_acc} ->
+        updated_fields =
+          Enum.map(fields, fn
+            %SlotProcessor.Message.Field{value: :unchanged_toast} = field ->
+              old_field = Sequin.Enum.find!(old_fields, &(&1.column_attnum == field.column_attnum))
+              %{field | value: old_field.value}
+
+            field ->
+              field
+          end)
+
+        {ctx, [%{message | fields: updated_fields} | messages_acc]}
+
+      %SlotProcessor.Message{} = message, {ctx, messages_acc} ->
+        {ctx, [message | messages_acc]}
+    end)
+  end
+
+  @annotations_key "unchanged_toast_replica_identity_dismissed"
+  defp annotate_consumers(%Context{} = ctx, message) do
+    Enum.reduce(ctx.consumers, ctx, fn %SinkConsumer{annotations: annotations} = consumer, ctx ->
+      if Consumers.matches_message?(consumer, message) and not Map.has_key?(annotations, @annotations_key) do
+        annotations = Map.put_new(annotations, @annotations_key, false)
+        {:ok, consumer} = Consumers.update_consumer(consumer, %{annotations: annotations})
+        %{ctx | consumers: replace_consumer(ctx.consumers, consumer)}
+      else
+        ctx
+      end
+    end)
+  end
+
+  defp replace_consumer(consumers, consumer) do
+    Enum.map(consumers, fn c -> if c.id == consumer.id, do: consumer, else: c end)
   end
 end

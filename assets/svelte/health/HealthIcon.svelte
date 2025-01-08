@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { status } from "./Types";
-  import { Check, AlertTriangle, X, Loader } from "lucide-svelte";
+  import { Check, AlertTriangle, X, Loader, Pause } from "lucide-svelte";
 
   export let status: status;
 
@@ -10,6 +10,7 @@
     error: X,
     warning: AlertTriangle,
     initializing: Loader,
+    paused: Pause,
   };
 
   const iconColor = {
@@ -18,6 +19,7 @@
     error: "text-red-600",
     warning: "text-yellow-600",
     initializing: "text-blue-600",
+    paused: "text-gray-500",
   };
 
   $: Icon = iconMap[status] || AlertTriangle;

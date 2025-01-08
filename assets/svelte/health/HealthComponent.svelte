@@ -1,12 +1,11 @@
 <script lang="ts">
   import HealthIcon from "./HealthIcon.svelte";
-  import { MoreHorizontal, Pause } from "lucide-svelte";
+  import { MoreHorizontal } from "lucide-svelte";
   import type { Health, Check } from "./Types";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
 
   export let health: Health;
-  export let paused: boolean = false;
 
   const statusColor = {
     healthy: "border-green-500",
@@ -36,7 +35,7 @@
   );
 
   $: statusMessage = (() => {
-    if (paused) return "Paused";
+    if (health.status === "paused") return "Paused";
 
     const count = checkCounts[health.status];
     if (count === 0) return "";
@@ -61,15 +60,11 @@
 </script>
 
 <div
-  class={`inline-block p-4 rounded-lg border-2 ${paused ? statusColor.paused : statusColor[health.status]} relative`}
+  class={`inline-block p-4 rounded-lg border-2 ${statusColor[health.status]} relative`}
 >
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center">
-      {#if paused}
-        <Pause class="h-5 w-5 text-gray-500" />
-      {:else}
-        <HealthIcon status={health.status} />
-      {/if}
+      <HealthIcon status={health.status} />
       <h2 class="text-lg font-medium ml-2">Health</h2>
     </div>
     <Popover.Root>
@@ -110,11 +105,7 @@
       </Popover.Content>
     </Popover.Root>
   </div>
-  <p
-    class="text-xs {paused
-      ? checkStatusColor.paused
-      : checkStatusColor[health.status]}"
-  >
+  <p class="text-xs {checkStatusColor[health.status]}">
     {statusMessage}
   </p>
 </div>

@@ -147,14 +147,13 @@
         <Table.Row>
           <Table.Head></Table.Head>
           <Table.Head>Name</Table.Head>
-          <Table.Head>Health</Table.Head>
+          <Table.Head>Status</Table.Head>
           <Table.Head>
             <div class="flex items-center">
               <Database class="h-4 w-4 mr-2" />
               <span>Database</span>
             </div>
           </Table.Head>
-          <Table.Head>Status</Table.Head>
           <Table.Head>Created</Table.Head>
         </Table.Row>
       </Table.Header>
@@ -174,17 +173,6 @@
               <HealthPill status={consumer.health.status} />
             </Table.Cell>
             <Table.Cell>{consumer.database_name}</Table.Cell>
-            <Table.Cell>
-              {#if consumer.status === "active"}
-                <Badge variant="default"
-                  ><CirclePlay class="h-4 w-4 mr-1" />Active</Badge
-                >
-              {:else}
-                <Badge variant="disabled"
-                  ><CircleStop class="h-4 w-4 mr-1" />Disabled</Badge
-                >
-              {/if}
-            </Table.Cell>
             <Table.Cell
               >{formatRelativeTimestamp(consumer.insertedAt)}</Table.Cell
             >

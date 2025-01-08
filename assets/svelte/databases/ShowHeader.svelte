@@ -5,6 +5,8 @@
     RefreshCw,
     Database,
     Loader2,
+    CirclePlay,
+    Pause,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { formatRelativeTimestamp } from "$lib/utils";
@@ -48,6 +50,46 @@
   function handleDelete() {
     showDeleteConfirmDialog = true;
   }
+
+  let statusTransitioning = false;
+  let statusTransitionTimeout: NodeJS.Timeout | null = null;
+  let displayPaused = database.paused;
+
+  $: {
+    if (!statusTransitioning) {
+      displayPaused = database.paused;
+    }
+  }
+
+  function handleStatusTransition() {
+    if (statusTransitionTimeout) {
+      clearTimeout(statusTransitionTimeout);
+    }
+
+    statusTransitionTimeout = setTimeout(() => {
+      statusTransitioning = false;
+      statusTransitionTimeout = null;
+    }, 2000);
+  }
+
+  function enableDatabase() {
+    displayPaused = false;
+    statusTransitioning = true;
+    live.pushEventTo("#" + parent, "enable", {}, () => {
+      handleStatusTransition();
+    });
+  }
+
+  let showPauseConfirmDialog = false;
+
+  function confirmPause() {
+    displayPaused = true;
+    statusTransitioning = true;
+    live.pushEventTo("#" + parent, "disable", {}, () => {
+      showPauseConfirmDialog = false;
+      handleStatusTransition();
+    });
+  }
 </script>
 
 <div class="bg-white border-b sticky top-0 z-10">
@@ -77,6 +119,33 @@
             <span>Updated {formatRelativeTimestamp(database.updated_at)}</span>
           </div>
         </div>
+        {#if statusTransitioning}
+          {#if !displayPaused}
+            <Button variant="outline" size="sm" disabled>
+              <CirclePlay class="h-4 w-4 mr-1" />
+              Resuming...
+            </Button>
+          {:else}
+            <Button variant="outline" size="sm" disabled>
+              <Pause class="h-4 w-4 mr-1" />
+              Pausing...
+            </Button>
+          {/if}
+        {:else if !displayPaused}
+          <Button
+            variant="outline"
+            size="sm"
+            on:click={() => (showPauseConfirmDialog = true)}
+          >
+            <Pause class="h-4 w-4 mr-1" />
+            Pause
+          </Button>
+        {:else}
+          <Button variant="outline" size="sm" on:click={enableDatabase}>
+            <CirclePlay class="h-4 w-4 mr-1" />
+            Resume
+          </Button>
+        {/if}
         <Button variant="outline" size="sm" on:click={handleEdit}>Edit</Button>
         <Button
           variant="outline"
@@ -141,6 +210,34 @@
           Deleting...
         {:else}
           Delete
+        {/if}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<Dialog.Root bind:open={showPauseConfirmDialog}>
+  <Dialog.Content>
+    <Dialog.Header>
+      <Dialog.Title class="leading-6">Pause database?</Dialog.Title>
+      <Dialog.Description class="mb-6">
+        Sequin will stop receiving changes from the database until resumed.
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer class="mt-4">
+      <Button
+        variant="outline"
+        on:click={() => (showPauseConfirmDialog = false)}>Cancel</Button
+      >
+      <Button
+        variant="secondary"
+        on:click={confirmPause}
+        disabled={statusTransitioning}
+      >
+        {#if statusTransitioning}
+          Pausing...
+        {:else}
+          Pause
         {/if}
       </Button>
     </Dialog.Footer>

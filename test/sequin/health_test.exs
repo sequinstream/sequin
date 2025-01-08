@@ -14,7 +14,7 @@ defmodule Sequin.HealthTest do
 
   describe "initializes a new health" do
     test "initializes a new health" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = sink_consumer()
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :waiting
       assert is_list(health.checks) and length(health.checks) > 0
@@ -23,7 +23,7 @@ defmodule Sequin.HealthTest do
 
   describe "put_event/2" do
     test "updates the health of an entity with a health event" do
-      entity = ConsumersFactory.http_endpoint(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = http_endpoint()
 
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :initializing
@@ -34,7 +34,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "updates the health of a SinkConsumer with health events" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = sink_consumer()
 
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :waiting
@@ -59,7 +59,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "health is in error if something is erroring" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = sink_consumer()
 
       assert :ok = Health.put_event(entity, %Event{slug: :sink_config_checked, status: :success})
 
@@ -72,7 +72,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "raises an error for unexpected events" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = sink_consumer()
 
       assert_raise ArgumentError, fn ->
         Health.put_event(entity, %Event{slug: :unexpected_event, status: :success})
@@ -82,11 +82,7 @@ defmodule Sequin.HealthTest do
 
   describe "health/1" do
     test ":postgres_database :reachable goes into error if not present after 5 minutes of creation" do
-      entity =
-        ReplicationFactory.postgres_replication(
-          id: Factory.uuid(),
-          inserted_at: DateTime.add(DateTime.utc_now(), -6, :minute)
-        )
+      entity = postgres_replication(inserted_at: DateTime.add(DateTime.utc_now(), -6, :minute))
 
       assert {:ok, health} = Health.health(entity)
 
@@ -118,12 +114,12 @@ defmodule Sequin.HealthTest do
 
   describe "snapshots" do
     test "get_snapshot returns not found for non-existent snapshot" do
-      entity = ReplicationFactory.postgres_replication(id: Factory.uuid())
+      entity = postgres_replication()
       assert {:error, %Error.NotFoundError{}} = Health.get_snapshot(entity)
     end
 
     test "upsert_snapshot creates new snapshot for replication slot" do
-      entity = ReplicationFactory.postgres_replication(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = postgres_replication()
 
       # Set initial health
       :ok = Health.put_event(entity, %Event{slug: :replication_connected, status: :success})
@@ -136,7 +132,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "upsert_snapshot updates existing snapshot" do
-      entity = ReplicationFactory.postgres_replication(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = postgres_replication(status: :enabled)
 
       # Set initial health and create snapshot
       :ok = Health.put_event(entity, %Event{slug: :replication_connected, status: :success})
@@ -157,7 +153,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "upsert_snapshot creates new snapshot for consumer" do
-      entity = ConsumersFactory.sink_consumer(id: Factory.uuid(), inserted_at: DateTime.utc_now())
+      entity = sink_consumer()
 
       # Set initial health
       :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
@@ -186,12 +182,10 @@ defmodule Sequin.HealthTest do
 
     test "alerts PagerDuty when database status changes to error" do
       entity =
-        ReplicationFactory.postgres_replication(
-          id: Factory.uuid(),
+        postgres_replication(
           account: AccountsFactory.account(),
           account_id: Factory.uuid(),
-          postgres_database: DatabasesFactory.postgres_database(),
-          inserted_at: DateTime.utc_now()
+          postgres_database: DatabasesFactory.postgres_database()
         )
 
       Health.on_status_change(entity, :healthy, :error)
@@ -207,11 +201,9 @@ defmodule Sequin.HealthTest do
 
     test "alerts PagerDuty when consumer status changes to warning" do
       entity =
-        ConsumersFactory.sink_consumer(
-          id: Factory.uuid(),
+        sink_consumer(
           name: "test-consumer",
-          account: AccountsFactory.account(),
-          inserted_at: DateTime.utc_now()
+          account: AccountsFactory.account()
         )
 
       Health.on_status_change(entity, :healthy, :warning)
@@ -225,11 +217,9 @@ defmodule Sequin.HealthTest do
 
     test "resolves PagerDuty alert when status changes to healthy" do
       entity =
-        ReplicationFactory.postgres_replication(
-          id: Factory.uuid(),
+        postgres_replication(
           account: AccountsFactory.account(),
           account_id: Factory.uuid(),
-          inserted_at: DateTime.utc_now(),
           postgres_database: DatabasesFactory.postgres_database()
         )
 
@@ -244,9 +234,7 @@ defmodule Sequin.HealthTest do
 
     test "skips PagerDuty when entity has ignore_health annotation" do
       entity =
-        ReplicationFactory.postgres_replication(
-          id: Factory.uuid(),
-          inserted_at: DateTime.utc_now(),
+        postgres_replication(
           postgres_database: DatabasesFactory.postgres_database(),
           annotations: %{"ignore_health" => true}
         )
@@ -260,9 +248,7 @@ defmodule Sequin.HealthTest do
 
     test "skips PagerDuty when account has ignore_health annotation" do
       entity =
-        ReplicationFactory.postgres_replication(
-          id: Factory.uuid(),
-          inserted_at: DateTime.utc_now(),
+        postgres_replication(
           account_id: Factory.uuid(),
           account: AccountsFactory.account(annotations: %{"ignore_health" => true}),
           postgres_database: DatabasesFactory.postgres_database()
@@ -291,7 +277,6 @@ defmodule Sequin.HealthTest do
     end
 
     test "snapshots health for active entities" do
-      # Create active entities with proper relationships
       db = DatabasesFactory.insert_postgres_database!(name: "test-db")
 
       slot =
@@ -340,12 +325,10 @@ defmodule Sequin.HealthTest do
     end
 
     test "skips inactive entities" do
-      # Create database with inactive replication slot
       db = DatabasesFactory.insert_postgres_database!(name: "test-db")
 
       slot =
         ReplicationFactory.insert_postgres_replication!(
-          # Disabled slot means no active replication
           status: :disabled,
           postgres_database_id: db.id,
           account_id: db.account_id
@@ -379,9 +362,7 @@ defmodule Sequin.HealthTest do
     end
 
     test "updates existing snapshots" do
-      # Create entity and initial snapshot with proper relationships
-      db =
-        DatabasesFactory.insert_postgres_database!(name: "test-db")
+      db = DatabasesFactory.insert_postgres_database!(name: "test-db")
 
       slot =
         ReplicationFactory.insert_postgres_replication!(
@@ -417,5 +398,48 @@ defmodule Sequin.HealthTest do
       # Assert that PagerDuty was called
       assert_receive {:req, _conn, _body}
     end
+  end
+
+  describe "health status when disabled" do
+    test "health is paused when entity is disabled regardless of health events" do
+      entity = sink_consumer(status: :disabled)
+
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :paused
+
+      # Even successful health events don't change the paused status
+      assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
+      assert :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :success})
+
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :paused
+
+      # Error events also don't change the paused status
+      assert :ok =
+               Health.put_event(entity, %Event{
+                 slug: :messages_delivered,
+                 status: :fail,
+                 error: ErrorFactory.random_error()
+               })
+
+      assert {:ok, %Health{} = health} = Health.health(entity)
+      assert health.status == :paused
+    end
+  end
+
+  defp sink_consumer(opts \\ []) do
+    ConsumersFactory.sink_consumer(
+      Keyword.merge([id: Factory.uuid(), inserted_at: DateTime.utc_now(), status: :enabled], opts)
+    )
+  end
+
+  defp postgres_replication(opts \\ []) do
+    ReplicationFactory.postgres_replication(
+      Keyword.merge([id: Factory.uuid(), inserted_at: DateTime.utc_now(), status: :enabled], opts)
+    )
+  end
+
+  defp http_endpoint(opts \\ []) do
+    ConsumersFactory.http_endpoint(Keyword.merge([id: Factory.uuid(), inserted_at: DateTime.utc_now()], opts))
   end
 end

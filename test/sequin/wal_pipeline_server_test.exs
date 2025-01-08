@@ -32,6 +32,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
 
     wal_pipeline =
       ReplicationFactory.insert_wal_pipeline!(
+        status: :active,
         account_id: account.id,
         replication_slot_id: replication_slot.id,
         destination_database_id: destination_database.id,

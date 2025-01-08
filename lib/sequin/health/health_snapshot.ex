@@ -7,7 +7,7 @@ defmodule Sequin.Health.HealthSnapshot do
   typed_schema "health_snapshots" do
     field :entity_id, :string
     field :entity_kind, Ecto.Enum, values: [:http_endpoint, :sink_consumer, :postgres_replication_slot, :wal_pipeline]
-    field :status, Ecto.Enum, values: [:healthy, :warning, :error, :initializing, :waiting]
+    field :status, Ecto.Enum, values: [:healthy, :warning, :error, :initializing, :waiting, :paused]
     field :health_json, :map
     field :sampled_at, :utc_datetime_usec
 

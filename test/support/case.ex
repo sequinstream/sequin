@@ -38,6 +38,7 @@ defmodule Sequin.Case do
 
   def default_stubs(_context) do
     Sequin.TestSupport.stub_utc_now(fn -> DateTime.utc_now() end)
+    Sequin.TestSupport.stub_uuid4(fn -> UUID.uuid4() end)
     :ok
   end
 

@@ -17,3 +17,7 @@ Mox.defmock(Sequin.DatabasesRuntime.TableReaderServerMock,
 Mox.defmock(Sequin.TestSupport.DateTimeMock,
   for: Sequin.TestSupport.DateTime
 )
+
+Mox.defmock(Sequin.TestSupport.UUIDMock,
+  for: Sequin.TestSupport.UUID
+)

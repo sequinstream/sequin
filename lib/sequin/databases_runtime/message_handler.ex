@@ -313,6 +313,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp record_data_from_message(%Message{action: action} = message, consumer) when action in [:insert, :update] do
     %ConsumerRecordData{
       record: fields_to_map(message.fields),
+      action: action,
       metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
     }
   end
@@ -320,6 +321,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp record_data_from_message(%Message{action: :delete} = message, consumer) do
     %ConsumerRecordData{
       record: fields_to_map(message.old_fields),
+      action: :delete,
       metadata: struct(ConsumerRecordData.Metadata, metadata(message, consumer))
     }
   end

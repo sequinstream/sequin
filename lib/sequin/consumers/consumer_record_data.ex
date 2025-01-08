@@ -13,6 +13,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
   @derive Jason.Encoder
   embedded_schema do
     field :record, :map
+    field :action, Ecto.Enum, values: [:insert, :update, :delete, :read]
 
     embeds_one :metadata, Metadata, primary_key: false do
       @derive Jason.Encoder

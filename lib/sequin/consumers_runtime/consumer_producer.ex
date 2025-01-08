@@ -96,7 +96,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
     )
 
-    seqs_to_deliver = Enum.map(messages, & &1.seq)
+    seqs_to_deliver = messages |> Stream.reject(&(&1.data.action == :read)) |> Enum.map(& &1.seq)
     {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
     {delivered_messages, messages} = Enum.split_with(messages, &(&1.seq in delivered_seqs))
 

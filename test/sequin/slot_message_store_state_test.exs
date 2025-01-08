@@ -21,30 +21,25 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     test "merges new event messages into empty state", %{state: state} do
       event1 = ConsumersFactory.consumer_event()
       event2 = ConsumersFactory.consumer_event()
-      messages = Map.new([event1, event2], &{&1.record_pks, &1})
+      state = State.put_messages(state, [event1, event2])
 
-      updated_state = State.put_messages(state, messages)
-
-      assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, event1.record_pks)
-      assert Map.has_key?(updated_state.messages, event2.record_pks)
+      assert map_size(state.messages) == 2
+      assert Map.has_key?(state.messages, event1.ack_id)
+      assert Map.has_key?(state.messages, event2.ack_id)
     end
 
     test "merges new event messages with existing messages", %{state: state} do
       # Add initial message
       event1 = ConsumersFactory.consumer_event()
-      initial_messages = Map.new([event1], &{&1.record_pks, &1})
-      state = %{state | messages: initial_messages}
+      state = State.put_messages(state, [event1])
 
       # Add new message
       event2 = ConsumersFactory.consumer_event()
-      new_messages = Map.new([event2], &{&1.record_pks, &1})
-
-      updated_state = State.put_messages(state, new_messages)
+      updated_state = State.put_messages(state, [event2])
 
       assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, event1.record_pks)
-      assert Map.has_key?(updated_state.messages, event2.record_pks)
+      assert Map.has_key?(updated_state.messages, event1.ack_id)
+      assert Map.has_key?(updated_state.messages, event2.ack_id)
     end
   end
 
@@ -65,30 +60,26 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     test "merges new record messages into empty state", %{state: state} do
       record1 = ConsumersFactory.consumer_record()
       record2 = ConsumersFactory.consumer_record()
-      messages = Map.new([record1, record2], &{&1.record_pks, &1})
 
-      updated_state = State.put_messages(state, messages)
+      state = State.put_messages(state, [record1, record2])
 
-      assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, record1.record_pks)
-      assert Map.has_key?(updated_state.messages, record2.record_pks)
+      assert map_size(state.messages) == 2
+      assert Map.has_key?(state.messages, record1.ack_id)
+      assert Map.has_key?(state.messages, record2.ack_id)
     end
 
     test "merges new event messages with existing messages", %{state: state} do
       # Add initial message
       record1 = ConsumersFactory.consumer_record()
-      initial_messages = Map.new([record1], &{&1.record_pks, &1})
-      state = %{state | messages: initial_messages}
+      state = State.put_messages(state, [record1])
 
       # Add new message
       record2 = ConsumersFactory.consumer_record()
-      new_messages = Map.new([record2], &{&1.record_pks, &1})
-
-      updated_state = State.put_messages(state, new_messages)
+      updated_state = State.put_messages(state, [record2])
 
       assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, record1.record_pks)
-      assert Map.has_key?(updated_state.messages, record2.record_pks)
+      assert Map.has_key?(updated_state.messages, record1.ack_id)
+      assert Map.has_key?(updated_state.messages, record2.ack_id)
     end
   end
 
@@ -228,19 +219,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       # Create initial messages
       msg1 = ConsumersFactory.consumer_record()
       msg2 = ConsumersFactory.consumer_record()
-      initial_messages = Map.new([msg1, msg2], &{&1.ack_id, &1})
-      state = %{state | messages: initial_messages}
+      state = State.put_messages(state, [msg1, msg2])
 
       # Update one existing message and add one new message
-      updated_msg1 = %{msg1 | state: :delivered}
+      updated_msg1 = %{msg1 | data: "updated data"}
       msg3 = ConsumersFactory.consumer_record()
       updates = [updated_msg1, msg3]
 
-      updated_state = State.update_messages(state, updates)
+      updated_state = State.put_messages(state, updates)
 
       assert map_size(updated_state.messages) == 3
-      assert updated_state.messages[msg1.ack_id].state == :delivered
-      assert updated_state.messages[msg2.ack_id] == msg2
+      assert updated_state.messages[msg1.ack_id].data == "updated data"
+      assert updated_state.messages[msg2.ack_id] == %{msg2 | dirty: true}
       assert Map.has_key?(updated_state.messages, msg3.ack_id)
     end
   end

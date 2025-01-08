@@ -24,6 +24,8 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Replication.PostgresReplicationSlot
 
   @type id :: String.t()
+  @type ack_id :: String.t()
+  @type not_visible_until :: DateTime.t()
 
   @derive {Jason.Encoder,
            only: [

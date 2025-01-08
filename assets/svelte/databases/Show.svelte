@@ -35,6 +35,7 @@
   interface PostgresDatabase {
     id: string;
     name: string;
+    paused: boolean;
     hostname: string;
     port: number;
     database: string;

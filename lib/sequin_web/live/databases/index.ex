@@ -63,7 +63,8 @@ defmodule SequinWeb.DatabasesLive.Index do
       port: database.port,
       sinkConsumers: length(database.sink_consumers),
       pipelines: length(database.wal_pipelines),
-      health: Health.to_external(database.health)
+      health: Health.to_external(database.health),
+      paused: database.replication_slot.status == :disabled
     }
   end
 end

@@ -58,7 +58,7 @@
       <Table.Header>
         <Table.Row>
           <Table.Head>Name</Table.Head>
-          <Table.Head>Health</Table.Head>
+          <Table.Head>Status</Table.Head>
           <Table.Head>Hostname</Table.Head>
           <Table.Head>Created at</Table.Head>
           <Table.Head>

@@ -58,7 +58,7 @@ defmodule Sequin.Health do
   alias Sequin.Repo
   alias Sequin.Time
 
-  @type status :: :healthy | :warning | :error | :initializing | :waiting
+  @type status :: :healthy | :warning | :error | :initializing | :waiting | :paused
   @type entity_kind :: :http_endpoint | :sink_consumer | :postgres_replication_slot | :wal_pipeline
   @type redis_error :: {:error, Error.ServiceError.t()}
   @type entity :: PostgresReplicationSlot.t() | HttpEndpoint.t() | SinkConsumer.t() | WalPipeline.t()
@@ -146,6 +146,7 @@ defmodule Sequin.Health do
 
       status =
         cond do
+          paused?(entity) -> :paused
           Enum.any?(checks, fn check -> check.status == :unhealthy end) -> :error
           Enum.any?(checks, fn check -> check.status == :stale end) -> :warning
           Enum.any?(checks, fn check -> check.status == :warning end) -> :warning
@@ -165,6 +166,20 @@ defmodule Sequin.Health do
        }}
     end
   end
+
+  defp paused?(%PostgresReplicationSlot{status: status}) do
+    status == :disabled
+  end
+
+  defp paused?(%SinkConsumer{status: status}) do
+    status == :disabled
+  end
+
+  defp paused?(%WalPipeline{status: status}) do
+    status == :disabled
+  end
+
+  defp paused?(_), do: false
 
   @doc """
   Converts a Health struct to a map with only the necessary fields for the frontend.
@@ -599,7 +614,7 @@ defmodule Sequin.Health do
         end
 
       case new_status do
-        :healthy ->
+        status when status in [:healthy, :paused] ->
           Pagerduty.resolve(dedup_key, "#{name} is healthy")
 
         status when status in [:error, :warning] ->

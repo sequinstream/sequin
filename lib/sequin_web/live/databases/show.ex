@@ -5,7 +5,9 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Consumers
   alias Sequin.Databases
   alias Sequin.Health
+  alias Sequin.Health.CheckPostgresReplicationSlotWorker
   alias Sequin.Metrics
+  alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Tracer
   alias Sequin.Tracer.Server
@@ -20,7 +22,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
     case Databases.get_db_for_account(account_id, id) do
       {:ok, database} ->
-        database = Repo.preload(database, replication_slot: [:sink_consumers])
+        database = preload_database(database)
 
         # Fetch initial health
         {:ok, health} = Health.health(database.replication_slot)
@@ -113,18 +115,49 @@ defmodule SequinWeb.DatabasesLive.Show do
     {:noreply, push_navigate(socket, to: ~p"/databases/#{socket.assigns.database.id}/edit")}
   end
 
+  def handle_event("enable", _params, socket) do
+    database = socket.assigns.database
+
+    case Replication.update_pg_replication(database.replication_slot, %{status: :active}) do
+      {:ok, updated_slot} ->
+        updated_db = %{database | replication_slot: updated_slot}
+        CheckPostgresReplicationSlotWorker.enqueue(database.id)
+
+        socket =
+          socket
+          |> assign(:database, updated_db)
+          |> assign_health()
+
+        {:reply, %{ok: true}, socket}
+
+      {:error, _changeset} ->
+        {:reply, %{ok: false}, put_flash(socket, :error, "Failed to enable database. Please try again.")}
+    end
+  end
+
+  def handle_event("disable", _params, socket) do
+    database = socket.assigns.database
+
+    case Replication.update_pg_replication(database.replication_slot, %{status: :disabled}) do
+      {:ok, updated_slot} ->
+        updated_db = %{database | replication_slot: updated_slot}
+
+        socket =
+          socket
+          |> assign(:database, updated_db)
+          |> assign_health()
+
+        {:reply, %{ok: true}, socket}
+
+      {:error, _changeset} ->
+        {:reply, %{ok: false}, put_flash(socket, :error, "Failed to disable database. Please try again.")}
+    end
+  end
+
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 10_000)
-
-    case Health.health(socket.assigns.database.replication_slot) do
-      {:ok, health} ->
-        updated_database = Map.put(socket.assigns.database, :health, health)
-        {:noreply, assign(socket, database: updated_database)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    {:noreply, assign_health(socket)}
   end
 
   def handle_info(:update_messages, %{assigns: %{paused: true}} = socket) do
@@ -151,10 +184,13 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   def handle_info({ref, {:ok, updated_db}}, socket) do
     Process.demonitor(ref, [:flush])
+    updated_db = preload_database(updated_db)
     {:noreply, assign(socket, database: updated_db, refreshing_tables: false)}
   end
 
   def handle_info({:updated_database, updated_database}, socket) do
+    updated_database = preload_database(updated_database)
+
     {:noreply,
      socket
      |> assign(database: updated_database)
@@ -235,6 +271,16 @@ defmodule SequinWeb.DatabasesLive.Show do
     assign(socket, :metrics, metrics)
   end
 
+  defp assign_health(socket) do
+    case Health.health(socket.assigns.database.replication_slot) do
+      {:ok, health} ->
+        assign(socket, database: Map.put(socket.assigns.database, :health, health))
+
+      {:error, _} ->
+        socket
+    end
+  end
+
   defp handle_edit_finish(updated_database) do
     send(self(), {:updated_database, updated_database})
   end
@@ -243,6 +289,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     %{
       id: database.id,
       name: database.name,
+      paused: database.replication_slot.status == :disabled,
       hostname: database.hostname,
       port: database.port,
       database: database.database,
@@ -417,4 +464,8 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   defp table_match?(_trace, nil), do: true
   defp table_match?(trace, table), do: trace.table == table
+
+  defp preload_database(database) do
+    Repo.preload(database, replication_slot: [:sink_consumers])
+  end
 end

@@ -23,7 +23,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid]}
+        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 1]}
       ],
       processors: [
         default: [

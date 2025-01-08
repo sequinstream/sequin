@@ -11,6 +11,8 @@ defmodule Sequin.DatabasesRuntime.TableReader do
 
   require Logger
 
+  @type batch_id :: String.t()
+
   # Cursor
   # Note: We previously had min and max cursors. We're switching to just use min cursors.
   # We are keeping around the HSET data structure for now to allow for backwards compatibility.

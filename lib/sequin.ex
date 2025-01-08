@@ -7,8 +7,9 @@ defmodule Sequin do
   if it comes from the database, an external API or others.
   """
   @datetime_mod Application.compile_env(:sequin, [Sequin, :datetime_mod], DateTime)
-
+  @uuid_mod Application.compile_env(:sequin, [Sequin, :uuid_mod], UUID)
   defdelegate utc_now, to: @datetime_mod
+  defdelegate uuid4, to: @uuid_mod
 
   @doc """
   Returns true if the feature is enabled.

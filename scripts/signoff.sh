@@ -12,9 +12,11 @@ RESET='\033[0m'
 
 # Parse command line arguments
 DIRTY=false
+FAILED=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --dirty) DIRTY=true ;;
+        --failed) FAILED=true ;;
         *) echo "Unknown parameter: $1"; exit 1 ;;
     esac
     shift
@@ -73,7 +75,11 @@ echo -e "${BLUE}Attempting to sign off on ${SHA} in ${OWNER}/${REPO} as ${USER}$
 # Run steps
 run_step "mix format --check-formatted"
 run_step "MIX_ENV=prod mix compile --warnings-as-errors"
-run_step "mix test --max-failures 1"
+if [[ "$FAILED" = true ]]; then
+    run_step "mix test --max-failures 1 --failed"
+else
+    run_step "mix test --max-failures 1"
+fi
 
 # Run CLI tests
 cd cli

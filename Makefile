@@ -18,6 +18,9 @@ signoff:
 signoff-dirty:
 	@./scripts/signoff.sh --dirty
 
+signoff-failed:
+	@./scripts/signoff.sh --failed
+
 signoff_stack:
 	@./scripts/signoff_stack.sh
 

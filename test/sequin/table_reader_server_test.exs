@@ -6,12 +6,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Consumers
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Databases
-  # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.Databases.ConnectionCache
+  alias Sequin.DatabasesRuntime.SlotMessageStore
+  # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Factory.CharacterFactory
@@ -154,31 +153,30 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
       |> Repo.update!()
 
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
 
-      for n <- 1..2 do
-        assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
+      messages =
+        Enum.reduce(1..2, [], fn n, messages ->
+          assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: MapSet.new()})
-      end
+          assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: MapSet.new()})
 
-      # Fetch ConsumerRecords from the database
-      consumer_records =
-        consumer.id
-        |> ConsumerRecord.where_consumer_id()
-        |> Repo.all()
-        |> Enum.sort_by(& &1.id)
+          produce_and_ack_messages(consumer, page_size) ++ messages
+        end)
 
       # We expect only 5 records (the last 5 characters)
-      assert length(consumer_records) == 5
-      assert Enum.frequencies_by(consumer_records, & &1.seq) == %{1 => 3, 2 => 2}
+      assert length(messages) == 5
+      assert Enum.frequencies_by(messages, & &1.seq) == %{1 => 3, 2 => 2}
 
       # Verify that the records match the last 5 inserted characters
-      for {consumer_record, character} <- Enum.zip(consumer_records, Enum.drop(characters, 3)) do
-        assert consumer_record.table_oid == table_oid
-        assert consumer_record.record_pks == [to_string(character.id)]
+      messages = Enum.sort_by(messages, & &1.record_pks)
+
+      for {message, character} <- Enum.zip(messages, Enum.drop(characters, 3)) do
+        assert message.table_oid == table_oid
+        assert message.record_pks == [to_string(character.id)]
       end
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
@@ -200,6 +198,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
@@ -208,24 +207,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       dropped_pks = MapSet.new(dropped_characters, fn character -> [to_string(character.id)] end)
 
-      for n <- 1..3 do
-        assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
+      messages =
+        Enum.reduce(1..3, [], fn n, messages ->
+          assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
-      end
+          assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
+
+          produce_and_ack_messages(consumer, page_size) ++ messages
+        end)
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
 
       # Verify records
-      consumer_records =
-        consumer.id
-        |> ConsumerRecord.where_consumer_id()
-        |> Repo.all()
-        |> Enum.sort_by(& &1.id)
+      assert length(messages) == length(kept_characters)
 
-      assert length(consumer_records) == length(kept_characters)
-
-      processed_ids = Enum.map(consumer_records, fn r -> List.first(r.record_pks) end)
+      processed_ids = Enum.map(messages, fn r -> List.first(r.record_pks) end)
       assert Enum.all?(kept_characters, fn character -> to_string(character.id) in processed_ids end)
       refute Enum.any?(dropped_characters, fn character -> to_string(character.id) in processed_ids end)
     end
@@ -238,18 +234,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
-      flush_batches(pid)
+      {:ok, messages} = flush_batches(consumer, pid)
 
-      consumer_records =
-        consumer.id
-        |> ConsumerRecord.where_consumer_id()
-        |> Repo.all()
+      assert length(messages) == length(characters)
 
-      assert length(consumer_records) == length(characters)
-
-      assert Enum.all?(consumer_records, &(&1.group_id == Enum.join(&1.record_pks, ",")))
+      assert Enum.all?(messages, &(&1.group_id == Enum.join(&1.record_pks, ",")))
     end
 
     test "sets group_id based on group_column_attnums when it's set", %{
@@ -264,17 +256,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
-      flush_batches(pid)
+      {:ok, messages} = flush_batches(consumer, pid)
 
-      consumer_records =
-        consumer.id
-        |> ConsumerRecord.where_consumer_id()
-        |> Repo.all()
-
-      assert_lists_equal(consumer_records, characters, fn record, character ->
-        [to_string(character.id)] == record.record_pks and character.name == record.group_id
+      assert_lists_equal(messages, characters, fn message, character ->
+        [to_string(character.id)] == message.record_pks and character.name == message.group_id
       end)
     end
 
@@ -296,29 +284,25 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       page_size = 10
 
+      start_supervised({SlotMessageStore, consumer: filtered_consumer, test_pid: self()})
       pid = start_table_reader_server(filtered_consumer_backfill, table_oid, page_size: page_size)
 
-      flush_batches(pid)
-
-      # Fetch ConsumerRecords from the database
-      consumer_records =
-        filtered_consumer.id
-        |> ConsumerRecord.where_consumer_id()
-        |> Repo.all()
-        |> Enum.sort_by(& &1.id)
+      {:ok, messages} = flush_batches(filtered_consumer, pid)
 
       # We expect only 2 records (the matching characters)
-      assert length(consumer_records) == 2
+      assert length(messages) == 2
 
       # Verify that the records match only the characters with house "Stark"
-      for {consumer_record, character} <- Enum.zip(consumer_records, matching_characters) do
-        assert consumer_record.table_oid == table_oid
-        assert consumer_record.record_pks == [to_string(character.id)]
+      messages = Enum.sort_by(messages, & &1.record_pks)
+
+      for {message, character} <- Enum.zip(messages, matching_characters) do
+        assert message.table_oid == table_oid
+        assert message.record_pks == [to_string(character.id)]
       end
 
       # Verify that non-matching characters were not processed
       non_matching_ids = Enum.map(non_matching_characters, & &1.id)
-      processed_ids = Enum.flat_map(consumer_records, & &1.record_pks)
+      processed_ids = Enum.flat_map(messages, & &1.record_pks)
       assert Enum.all?(non_matching_ids, &(to_string(&1) not in processed_ids))
 
       cursor = TableReader.fetch_cursors(filtered_consumer.id)
@@ -339,26 +323,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
+      start_supervised({SlotMessageStore, consumer: event_consumer, test_pid: self()})
       pid = start_table_reader_server(event_consumer_backfill, table_oid, page_size: page_size)
 
-      flush_batches(pid)
-
-      consumer_events =
-        event_consumer.id
-        |> ConsumerEvent.where_consumer_id()
-        |> Repo.all()
-        |> Enum.sort_by(& &1.id)
+      {:ok, messages} = flush_batches(event_consumer, pid)
 
       # Verify all characters were processed
-      assert length(consumer_events) == length(characters)
+      assert length(messages) == length(characters)
 
       # Verify each record has the correct event fields
-      for consumer_event <- consumer_events do
-        assert consumer_event.table_oid == table_oid
-        assert consumer_event.data.action == :read
-        assert consumer_event.data.metadata.commit_timestamp
-        assert consumer_event.data.metadata.database_name == database.name
-        assert is_map(consumer_event.data)
+      for message <- messages do
+        assert message.table_oid == table_oid
+        assert message.data.action == :read
+        assert message.data.metadata.commit_timestamp
+        assert message.data.metadata.database_name == database.name
+        assert is_map(message.data)
       end
 
       cursor = TableReader.fetch_cursors(event_consumer.id)
@@ -378,6 +357,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       # Set below 8 characters in table
       max_pending_messages = 1
 
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 1})
+
       pid =
         start_table_reader_server(backfill, table_oid,
           page_size: 2,
@@ -386,24 +367,28 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         )
 
       Process.monitor(pid)
-      assert :paused = flush_batches(pid)
+      assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
+      assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: MapSet.new()})
+      assert_receive {TableReaderServer, :paused}, 1000
 
       # Now clear the messages
-      consumer.id
-      |> ConsumerRecord.where_consumer_id()
-      |> Repo.delete_all()
+      {:ok, messages} = SlotMessageStore.produce(consumer.id, 100)
+      SlotMessageStore.ack(consumer, Enum.map(messages, & &1.ack_id))
 
       # We can continue more, and then may get paused again
-      flush_batches(pid)
+      flush_batches(consumer, pid)
     end
 
     test "retries batch when LSN indicates it's stale", %{
       backfill: backfill,
-      table_oid: table_oid
+      table_oid: table_oid,
+      consumer: consumer
     } do
       # Return a very high LSN to force retry
       max_lsn = (1 <<< 64) - 1
       fetch_slot_lsn = fn _db, _slot_name -> {:ok, max_lsn} end
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
 
       start_table_reader_server(backfill, table_oid,
         page_size: 1000,
@@ -413,9 +398,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       # We should see multiple fetches of the same batch as it keeps getting marked stale
       assert capture_log(fn ->
-               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
-               assert_receive {TableReaderServer, {:batch_fetched, _batch}}, 1000
+               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+               assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
              end) =~ "Detected stale batch"
     end
 
@@ -437,20 +422,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     end
   end
 
-  defp flush_batches(pid, seq \\ 0, message_history \\ []) do
+  defp flush_batches(consumer, pid, seq \\ 0, message_history \\ [], messages \\ []) do
     Process.monitor(pid)
 
     receive do
       {TableReaderServer, {:batch_fetched, batch_id}} = msg ->
         assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: MapSet.new()})
+        new_messages = produce_and_ack_messages(consumer, 100)
 
-        flush_batches(pid, seq + 1, [msg | message_history])
+        flush_batches(consumer, pid, seq + 1, [msg | message_history], messages ++ new_messages)
 
       {TableReaderServer, :paused} ->
         :paused
 
       {:DOWN, _ref, :process, ^pid, :normal} ->
-        :ok
+        {:ok, messages}
     after
       1000 ->
         raise "Timeout waiting for batch_fetched. Message history: #{inspect(Enum.reverse(message_history))}"
@@ -470,5 +456,11 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
     config = Keyword.merge(defaults, opts)
     start_supervised!({TableReaderServer, config})
+  end
+
+  defp produce_and_ack_messages(consumer, page_size) do
+    {:ok, messages} = SlotMessageStore.produce(consumer.id, page_size)
+    SlotMessageStore.ack(consumer, Enum.map(messages, & &1.ack_id))
+    messages
   end
 end

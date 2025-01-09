@@ -286,4 +286,47 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert hd(to_flush).record_pks == dirty_msg.record_pks
     end
   end
+
+  describe "min_unflushed_commit_lsn/1" do
+    setup do
+      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
+
+      state = %State{
+        consumer: consumer,
+        messages: %{},
+        flush_interval: 1000,
+        flush_batch_size: 100
+      }
+
+      {:ok, %{state: state, message_kind: Enum.random([:record, :event])}}
+    end
+
+    test "returns nil when there are no records or events", %{state: state} do
+      assert State.min_unflushed_commit_lsn(state) == nil
+    end
+
+    test "returns nil when all messages are flushed", %{state: state, message_kind: message_kind} do
+      messages = [
+        ConsumersFactory.consumer_message(message_kind: message_kind, commit_lsn: 100, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(message_kind: message_kind, commit_lsn: 200, flushed_at: DateTime.utc_now())
+      ]
+
+      state = State.put_messages(state, messages)
+
+      assert State.min_unflushed_commit_lsn(state) == nil
+    end
+
+    test "returns lowest commit_lsn from unflushed messages", %{state: state, message_kind: message_kind} do
+      messages =
+        Enum.shuffle([
+          ConsumersFactory.consumer_message(message_kind: message_kind, commit_lsn: 300, flushed_at: DateTime.utc_now()),
+          ConsumersFactory.consumer_message(message_kind: message_kind, commit_lsn: 100, flushed_at: nil),
+          ConsumersFactory.consumer_message(message_kind: message_kind, commit_lsn: 200, flushed_at: nil)
+        ])
+
+      state = State.put_messages(state, messages)
+
+      assert State.min_unflushed_commit_lsn(state) == 100
+    end
+  end
 end

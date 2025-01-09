@@ -11,6 +11,7 @@ defmodule Sequin.Case do
     quote do
       import Hammox
       import Sequin.Test.Assertions
+      import Sequin.TestSupport
       import unquote(__MODULE__)
 
       setup :start_supervisors

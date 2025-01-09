@@ -384,7 +384,7 @@ defmodule Sequin.Consumers do
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
         %ConsumerEvent{event | updated_at: now, inserted_at: now}
         |> Sequin.Map.from_ecto()
-        |> Map.drop([:dirty, :flushed_at])
+        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id])
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
@@ -593,7 +593,7 @@ defmodule Sequin.Consumers do
       end)
       # insert_all expects a plain outer-map, but struct embeds
       |> Stream.map(&Sequin.Map.from_ecto/1)
-      |> Enum.map(&Map.drop(&1, [:deleted, :dirty, :flushed_at]))
+      |> Enum.map(&Map.drop(&1, [:deleted, :dirty, :flushed_at, :table_reader_batch_id]))
 
     conflict_target = [:consumer_id, :ack_id]
 

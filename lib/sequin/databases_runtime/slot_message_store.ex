@@ -228,14 +228,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
 
     defp intake_messages(messages) do
-      Enum.map(
-        messages,
-        fn
-          # This could be dangerous in prod but is useful in test 🤔
-          %{ack_id: ack_id} = msg when is_binary(ack_id) -> %{msg | dirty: true}
-          msg -> %{msg | ack_id: UUID.uuid4(), dirty: true}
-        end
-      )
+      Enum.map(messages, fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true} end)
     end
 
     # Helper function to compare flushed_at values where nil is "smaller" than any DateTime
@@ -379,6 +372,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     if state.test_pid do
       Ecto.Adapters.SQL.Sandbox.allow(Sequin.Repo, state.test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, state.test_pid, self())
+      Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
     end
 
     schedule_flush(state)

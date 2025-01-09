@@ -57,7 +57,6 @@ defmodule SequinWeb.PullControllerTest do
 
     test "returns available messages if mix of available and delivered", %{conn: conn, consumer: consumer} do
       record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
-      SlotMessageStore.put_messages(consumer.id, [record])
 
       delivered_record =
         ConsumersFactory.consumer_record(
@@ -65,7 +64,9 @@ defmodule SequinWeb.PullControllerTest do
           not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
         )
 
-      SlotMessageStore.put_messages(consumer.id, [delivered_record])
+      expect_uuid4(fn -> record.ack_id end)
+      expect_uuid4(fn -> delivered_record.ack_id end)
+      SlotMessageStore.put_messages(consumer.id, [record, delivered_record])
 
       conn = get(conn, ~p"/api/sequin_streams/#{consumer.id}/receive")
       assert %{"data" => [message]} = json_response(conn, 200)
@@ -74,6 +75,7 @@ defmodule SequinWeb.PullControllerTest do
 
     test "returns an available message by consumer name", %{conn: conn, consumer: consumer} do
       record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
+      expect_uuid4(fn -> record.ack_id end)
       SlotMessageStore.put_messages(consumer.id, [record])
 
       conn = get(conn, ~p"/api/sequin_streams/#{consumer.name}/receive")
@@ -248,6 +250,7 @@ defmodule SequinWeb.PullControllerTest do
   describe "nack" do
     test "successfully nacks a message", %{conn: conn, consumer: consumer} do
       record = ConsumersFactory.consumer_record(consumer_id: consumer.id)
+      expect_uuid4(fn -> record.ack_id end)
       SlotMessageStore.put_messages(consumer.id, [record])
 
       res_conn = post(conn, ~p"/api/sequin_streams/#{consumer.id}/nack", ack_ids: [record.ack_id])

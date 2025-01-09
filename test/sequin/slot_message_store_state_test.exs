@@ -21,6 +21,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     test "merges new event messages into empty state", %{state: state} do
       event1 = ConsumersFactory.consumer_event()
       event2 = ConsumersFactory.consumer_event()
+      expect_uuid4(fn -> event1.ack_id end)
+      expect_uuid4(fn -> event2.ack_id end)
       state = State.put_messages(state, [event1, event2])
 
       assert map_size(state.messages) == 2
@@ -31,10 +33,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     test "merges new event messages with existing messages", %{state: state} do
       # Add initial message
       event1 = ConsumersFactory.consumer_event()
+      expect_uuid4(fn -> event1.ack_id end)
       state = State.put_messages(state, [event1])
 
       # Add new message
       event2 = ConsumersFactory.consumer_event()
+      expect_uuid4(fn -> event2.ack_id end)
       updated_state = State.put_messages(state, [event2])
 
       assert map_size(updated_state.messages) == 2
@@ -60,6 +64,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     test "merges new record messages into empty state", %{state: state} do
       record1 = ConsumersFactory.consumer_record()
       record2 = ConsumersFactory.consumer_record()
+      expect_uuid4(fn -> record1.ack_id end)
+      expect_uuid4(fn -> record2.ack_id end)
 
       state = State.put_messages(state, [record1, record2])
 
@@ -68,13 +74,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert Map.has_key?(state.messages, record2.ack_id)
     end
 
-    test "merges new event messages with existing messages", %{state: state} do
+    test "merges new record messages with existing messages", %{state: state} do
       # Add initial message
       record1 = ConsumersFactory.consumer_record()
+      expect_uuid4(fn -> record1.ack_id end)
       state = State.put_messages(state, [record1])
 
       # Add new message
       record2 = ConsumersFactory.consumer_record()
+      expect_uuid4(fn -> record2.ack_id end)
       updated_state = State.put_messages(state, [record2])
 
       assert map_size(updated_state.messages) == 2
@@ -198,40 +206,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       # Verify returned messages match state
       assert delivered_messages == [delivered1, delivered2]
-    end
-  end
-
-  describe "update_messages/2" do
-    setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
-
-      state = %State{
-        consumer: consumer,
-        messages: %{},
-        flush_interval: 1000,
-        flush_batch_size: 100
-      }
-
-      {:ok, %{state: state}}
-    end
-
-    test "merges updated messages into state", %{state: state} do
-      # Create initial messages
-      msg1 = ConsumersFactory.consumer_record()
-      msg2 = ConsumersFactory.consumer_record()
-      state = State.put_messages(state, [msg1, msg2])
-
-      # Update one existing message and add one new message
-      updated_msg1 = %{msg1 | data: "updated data"}
-      msg3 = ConsumersFactory.consumer_record()
-      updates = [updated_msg1, msg3]
-
-      updated_state = State.put_messages(state, updates)
-
-      assert map_size(updated_state.messages) == 3
-      assert updated_state.messages[msg1.ack_id].data == "updated data"
-      assert updated_state.messages[msg2.ack_id] == %{msg2 | dirty: true}
-      assert Map.has_key?(updated_state.messages, msg3.ack_id)
     end
   end
 

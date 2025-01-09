@@ -568,6 +568,16 @@ defmodule Sequin.Factory.ConsumersFactory do
     end)
   end
 
+  def consumer_message(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
+
+    case message_kind do
+      :record -> consumer_record(attrs)
+      :event -> consumer_event(attrs)
+    end
+  end
+
   def sequence_filter(attrs \\ []) do
     attrs = Map.new(attrs)
 

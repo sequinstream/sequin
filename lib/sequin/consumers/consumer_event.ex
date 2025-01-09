@@ -43,6 +43,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     # For SlotMessageStore
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
+    field :table_reader_batch_id, :string, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end

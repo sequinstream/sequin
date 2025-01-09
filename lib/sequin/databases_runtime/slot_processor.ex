@@ -54,7 +54,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :message_handler_ctx, any()
       field :message_handler_module, atom()
       field :id, String.t()
-      field :last_committed_lsn, integer()
+      field :last_commit_lsn, integer()
       field :last_processed_seq, integer()
       field :publication, String.t()
       field :slot_name, String.t()
@@ -100,7 +100,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       message_handler_ctx: message_handler_ctx,
       message_handler_module: message_handler_module,
       connection: connection,
-      last_committed_lsn: nil,
+      last_commit_lsn: nil,
       heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1))
     }
 
@@ -289,9 +289,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
 
     messages =
-      if reply == 1 and not is_nil(state.last_committed_lsn) do
+      if reply == 1 and not is_nil(state.last_commit_lsn) do
         # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-        # safe to increment the last_committed_lsn by 1 (Commit also contains the next LSN)
+        # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
         lsn = safe_ack_lsn(state)
         Logger.info("Acking LSN #{lsn} (current server LSN: #{wal_end})")
 
@@ -444,14 +444,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(
          %Begin{commit_timestamp: ts, final_lsn: lsn, xid: xid},
-         %State{accumulated_messages: {0, []}, last_committed_lsn: last_committed_lsn} = state
+         %State{accumulated_messages: {0, []}, last_commit_lsn: last_commit_lsn} = state
        ) do
     begin_lsn = Postgres.lsn_to_int(lsn)
 
     state =
-      if not is_nil(last_committed_lsn) and begin_lsn < last_committed_lsn do
+      if not is_nil(last_commit_lsn) and begin_lsn < last_commit_lsn do
         Logger.error(
-          "Received a Begin message with an LSN that is less than the last committed LSN (#{begin_lsn} < #{last_committed_lsn})"
+          "Received a Begin message with an LSN that is less than the last commit LSN (#{begin_lsn} < #{last_commit_lsn})"
         )
 
         %{state | dirty: true}
@@ -477,7 +477,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     %{
       state
-      | last_committed_lsn: lsn,
+      | last_commit_lsn: lsn,
         current_xaction_lsn: nil,
         current_xid: nil,
         current_commit_ts: nil,
@@ -649,6 +649,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     }
   end
 
+  defp safe_ack_lsn(%State{last_commit_lsn: nil}), do: raise("Unsafe to call safe_ack_lsn when last_commit_lsn is nil")
+
   defp safe_ack_lsn(%State{} = state) do
     state.message_store_refs
     |> Enum.map(fn {consumer_id, _ref} ->
@@ -656,7 +658,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end)
     |> Enum.filter(& &1)
     |> case do
-      [] -> state.last_committed_lsn + 1
+      [] -> state.last_commit_lsn + 1
       lsns -> Enum.min(lsns)
     end
   end

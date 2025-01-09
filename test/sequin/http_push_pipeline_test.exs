@@ -288,6 +288,10 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       end
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+
+      expect_uuid4(fn -> event1.ack_id end)
+      expect_uuid4(fn -> event2.ack_id end)
+
       SlotMessageStore.put_messages(consumer.id, [event1, event2])
 
       # Start the pipeline with the failing adapter

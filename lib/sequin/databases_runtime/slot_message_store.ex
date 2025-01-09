@@ -47,7 +47,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       field :flush_batch_size, non_neg_integer()
       field :flush_interval, non_neg_integer()
       field :messages, %{[String.t()] => ConsumerRecord.t() | ConsumerEvent.t()}
-      field :skip_load_from_postgres?, boolean(), default: false
+      # Set to false in tests to disable Postgres reads/writes (ie. load messages on boot and flush messages on interval)
+      field :persisted_mode?, boolean(), default: true
       field :test_pid, pid() | nil
       field :unflushed_batch_ack_ids, [SinkConsumer.ack_id()], default: []
     end
@@ -177,7 +178,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       |> Enum.take(flush_batch_size)
     end
 
-    def flush_messages(%State{} = state, messages) do
+    def flush_messages(%State{persisted_mode?: true} = state, messages) do
       flushed_at = DateTime.utc_now()
       messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
@@ -359,7 +360,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       flush_batch_size: Keyword.get(opts, :flush_batch_size, 1_000),
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(10)),
       messages: %{},
-      skip_load_from_postgres?: Keyword.get(opts, :skip_load_from_postgres?, false),
+      persisted_mode?: Keyword.get(opts, :persisted_mode?, true),
       test_pid: Keyword.get(opts, :test_pid)
     }
 
@@ -501,9 +502,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
-  defp load_from_postgres(%State{skip_load_from_postgres?: true} = state), do: {:ok, state}
+  defp load_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
 
-  defp load_from_postgres(%State{} = state) do
+  defp load_from_postgres(%State{persisted_mode?: true} = state) do
     case Consumers.get_sink_consumer(state.consumer_id) do
       {:ok, consumer} ->
         Logger.debug("[SlotMessageStore] Loading messages...")
@@ -518,17 +519,19 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
   end
 
-  defp flush_messages(%State{} = state, messages) when event_messages?(state) do
+  defp flush_messages(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
     {:ok, _count} = Consumers.upsert_consumer_events(messages)
     State.flush_messages(state, messages)
   end
 
-  defp flush_messages(%State{} = state, messages) when record_messages?(state) do
+  defp flush_messages(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
     {:ok, _count} = Consumers.upsert_consumer_records(messages)
     State.flush_messages(state, messages)
   end
 
-  defp schedule_flush(%State{} = state) do
+  defp schedule_flush(%State{persisted_mode?: false}), do: :ok
+
+  defp schedule_flush(%State{persisted_mode?: true} = state) do
     Process.send_after(self(), :flush, state.flush_interval)
   end
 

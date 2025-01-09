@@ -492,7 +492,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         }
       end)
 
-    :ok = SlotMessageStore.put_batch(state.consumer.id, consumer_records, state.batch_id)
+    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_records, state.batch_id)
   end
 
   defp build_record_data(table, consumer, record_attnums_to_values) do
@@ -531,7 +531,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         }
       end)
 
-    :ok = SlotMessageStore.put_batch(state.consumer.id, consumer_events, state.batch_id)
+    :ok = SlotMessageStore.put_table_reader_batch(state.consumer.id, consumer_events, state.batch_id)
   end
 
   defp build_event_data(table, consumer, record_attnums_to_values) do

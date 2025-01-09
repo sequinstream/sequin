@@ -41,7 +41,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     alias Sequin.Consumers.ConsumerRecord
 
     typedstruct do
-      field :batch_id, String.t() | nil
       field :consumer, SinkConsumer.t()
       field :consumer_id, String.t()
       field :flush_batch_size, non_neg_integer()
@@ -49,8 +48,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       field :messages, %{[String.t()] => ConsumerRecord.t() | ConsumerEvent.t()}
       # Set to false in tests to disable Postgres reads/writes (ie. load messages on boot and flush messages on interval)
       field :persisted_mode?, boolean(), default: true
+      field :table_reader_batch_id, String.t() | nil
       field :test_pid, pid() | nil
-      field :unflushed_batch_ack_ids, [SinkConsumer.ack_id()], default: []
     end
 
     def put_messages(%State{} = state, messages) do
@@ -62,22 +61,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       %{state | messages: Map.merge(state.messages, messages)}
     end
 
-    def put_batch(%State{} = state, messages, batch_id) do
-      initial_ack_ids = Map.keys(state.messages)
+    def put_table_reader_batch(%State{} = state, messages, batch_id) do
+      messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
       state = put_messages(state, messages)
-      final_ack_ids = Map.keys(state.messages)
-      unflushed_batch_ack_ids = final_ack_ids -- initial_ack_ids
 
-      %{state | batch_id: batch_id, unflushed_batch_ack_ids: unflushed_batch_ack_ids}
+      %{state | table_reader_batch_id: batch_id}
     end
 
     @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
     def ack(%State{} = state, ack_ids) do
-      {messages, acked_count, deleted_ack_ids} =
-        Enum.reduce(ack_ids, {state.messages, 0, []}, fn ack_id, {acc_msgs, acked_count, deleted_ack_ids} ->
+      {messages, acked_count} =
+        Enum.reduce(ack_ids, {state.messages, 0}, fn ack_id, {acc_msgs, acked_count} ->
           case Map.get(acc_msgs, ack_id) do
             nil ->
-              {acc_msgs, acked_count, deleted_ack_ids}
+              {acc_msgs, acked_count}
 
             %ConsumerRecord{state: :pending_redelivery} = msg ->
               {Map.replace!(acc_msgs, ack_id, %{
@@ -85,15 +82,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
                  | state: :available,
                    not_visible_until: nil,
                    dirty: true
-               }), acked_count + 1, deleted_ack_ids}
+               }), acked_count + 1}
 
             _ ->
-              {Map.delete(acc_msgs, ack_id), acked_count + 1, [ack_id | deleted_ack_ids]}
+              {Map.delete(acc_msgs, ack_id), acked_count + 1}
           end
         end)
 
-      unflushed_batch_ack_ids = state.unflushed_batch_ack_ids -- deleted_ack_ids
-      {%{state | messages: messages, unflushed_batch_ack_ids: unflushed_batch_ack_ids}, acked_count}
+      {%{state | messages: messages}, acked_count}
     end
 
     @spec nack(%State{}, %{SinkConsumer.ack_id() => SinkConsumer.not_visible_until()}) :: {%State{}, non_neg_integer()}
@@ -182,43 +178,36 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       flushed_at = DateTime.utc_now()
       messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
-      case update_messages(state, messages) do
-        %State{unflushed_batch_ack_ids: []} = state ->
-          state
-
-        %State{unflushed_batch_ack_ids: unflushed_batch_ack_ids} = state ->
-          flushed_ack_ids = Enum.map(messages, & &1.ack_id)
-          %{state | unflushed_batch_ack_ids: unflushed_batch_ack_ids -- flushed_ack_ids}
-      end
+      update_messages(state, messages)
     end
 
     def batch_progress(%State{} = state, batch_id) do
       cond do
-        state.batch_id == nil ->
+        state.table_reader_batch_id == nil ->
           Logger.warning("[SlotMessageStore] No batch in progress")
           {:error, Error.invariant(message: "No batch in progress")}
 
-        state.batch_id != batch_id ->
+        state.table_reader_batch_id != batch_id ->
           Logger.warning(
             "[SlotMessageStore] Batch mismatch",
             expected_batch_id: batch_id,
-            actual_batch_id: state.batch_id
+            actual_batch_id: state.table_reader_batch_id
           )
 
-          {:error, Error.invariant(message: "Batch mismatch. Expected #{batch_id} but got #{state.batch_id}")}
+          {:error,
+           Error.invariant(message: "Batch mismatch. Expected #{batch_id} but got #{state.table_reader_batch_id}")}
 
-        state.unflushed_batch_ack_ids == [] ->
-          Logger.debug("[SlotMessageStore] Batch is completed", batch_id: state.batch_id)
-          {:ok, :completed}
-
-        true ->
+        state.messages |> Map.values() |> Enum.any?(&(is_nil(&1.flushed_at) and &1.table_reader_batch_id == batch_id)) ->
           Logger.debug(
             "[SlotMessageStore] Batch is in progress",
-            batch_id: state.batch_id,
-            count: length(state.unflushed_batch_ack_ids)
+            batch_id: state.table_reader_batch_id
           )
 
           {:ok, :in_progress}
+
+        true ->
+          Logger.debug("[SlotMessageStore] Batch is completed", batch_id: state.table_reader_batch_id)
+          {:ok, :completed}
       end
     end
 
@@ -268,9 +257,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Similar to `put_messages/2` but for a batch of messages that state will track
   as a single unit. Used for TableReaderServer.
   """
-  @spec put_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) :: :ok
-  def put_batch(consumer_id, messages, batch_id) do
-    GenServer.call(via_tuple(consumer_id), {:put_batch, messages, batch_id})
+  @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) :: :ok
+  def put_table_reader_batch(consumer_id, messages, batch_id) do
+    GenServer.call(via_tuple(consumer_id), {:put_table_reader_batch, messages, batch_id})
   end
 
   @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress} | {:error, Error.t()}
@@ -401,8 +390,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:put_batch, messages, batch_id}, _from, %State{} = state) do
-    {time, state} = :timer.tc(fn -> State.put_batch(state, messages, batch_id) end)
+  def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
+    {time, state} = :timer.tc(fn -> State.put_table_reader_batch(state, messages, batch_id) end)
 
     Logger.debug(
       "[SlotMessageStore] Put table reader batch",

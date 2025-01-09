@@ -159,7 +159,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipelineTest do
 
       consumer_record = ConsumersFactory.deliverable_consumer_record(consumer_id: consumer.id)
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: test_pid, persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       start_supervised!({RedisPipeline, [consumer: consumer, test_pid: test_pid]})

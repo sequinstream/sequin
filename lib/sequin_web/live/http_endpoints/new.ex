@@ -61,7 +61,7 @@ defmodule SequinWeb.HttpEndpointsLive.New do
   def handle_event("save", %{"http_endpoint" => params}, socket) do
     account_id = current_account_id(socket)
 
-    case Consumers.create_http_endpoint_for_account(account_id, params) do
+    case Consumers.create_http_endpoint(account_id, params) do
       {:ok, http_endpoint} ->
         {:noreply,
          socket

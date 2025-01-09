@@ -745,7 +745,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp update_consumer(socket, params) do
     consumer = socket.assigns.consumer
 
-    case Consumers.update_consumer_with_lifecycle(consumer, params) do
+    case Consumers.update_sink_consumer(consumer, params) do
       {:ok, updated_consumer} ->
         socket =
           socket
@@ -768,7 +768,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       Repo.transact(fn ->
         with {:ok, sequence} <- find_or_create_sequence(account_id, params),
              params = Map.put(params, "sequence_id", sequence.id),
-             {:ok, consumer} <- Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
+             {:ok, consumer} <- Consumers.create_sink_consumer(account_id, params) do
           case maybe_create_backfill(socket, consumer, params, initial_backfill) do
             :ok -> {:ok, Repo.preload(consumer, :active_backfill)}
             {:ok, %Backfill{}} -> {:ok, Repo.preload(consumer, :active_backfill)}
@@ -935,7 +935,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   defp generate_webhook_site_endpoint(socket) do
     case Consumers.WebhookSiteGenerator.generate() do
       {:ok, uuid} ->
-        Consumers.create_http_endpoint_for_account(current_account_id(socket), %{
+        Consumers.create_http_endpoint(current_account_id(socket), %{
           name: "webhook-site-#{String.slice(uuid, 0, 8)}",
           scheme: :https,
           host: "webhook.site",

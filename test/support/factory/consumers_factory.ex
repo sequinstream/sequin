@@ -122,8 +122,9 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Map.put(:account_id, account_id)
       |> sink_consumer_attrs()
 
-    case Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
+    case Consumers.create_sink_consumer(account_id, attrs, skip_lifecycle: true) do
       {:ok, consumer} ->
+        Consumers.create_consumer_partition(consumer)
         consumer
 
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
@@ -655,7 +656,7 @@ defmodule Sequin.Factory.ConsumersFactory do
       |> Map.put(:account_id, account_id)
       |> backfill_attrs()
 
-    case Consumers.create_backfill_with_lifecycle(attrs) do
+    case Consumers.create_backfill(attrs, skip_lifecycle: true) do
       {:ok, backfill} ->
         backfill
 

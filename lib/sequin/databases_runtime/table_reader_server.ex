@@ -155,7 +155,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     if is_nil(backfill.rows_initial_count) do
       case TableReader.fast_count_estimate(database(state), table(state), cursor) do
         {:ok, count} ->
-          Consumers.update_backfill(backfill, %{rows_initial_count: count})
+          Consumers.update_backfill(backfill, %{rows_initial_count: count}, skip_lifecycle: true)
 
         {:error, error} ->
           Logger.error("[TableReaderServer] Failed to get initial count: #{inspect(error)}")
@@ -408,10 +408,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       end
 
     {:ok, backfill} =
-      Consumers.update_backfill(consumer.active_backfill, %{
-        rows_processed_count: consumer.active_backfill.rows_processed_count + total_processed,
-        rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
-      })
+      Consumers.update_backfill(
+        consumer.active_backfill,
+        %{
+          rows_processed_count: consumer.active_backfill.rows_processed_count + total_processed,
+          rows_ingested_count: consumer.active_backfill.rows_ingested_count + length(matching_records)
+        },
+        skip_lifecycle: true
+      )
 
     Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
     {:ok, count, %{consumer | active_backfill: backfill}}

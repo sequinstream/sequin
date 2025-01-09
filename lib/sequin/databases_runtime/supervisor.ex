@@ -4,6 +4,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   """
   use Supervisor
 
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
@@ -31,7 +32,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     Supervisor.init(children(), strategy: :one_for_one)
   end
 
-  def start_table_reader(supervisor \\ table_reader_supervisor(), consumer, opts \\ []) do
+  def start_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
     consumer = Repo.preload(consumer, [:active_backfill, :sequence])
 
     default_opts = [
@@ -49,7 +50,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     :ok
   end
 
-  def restart_table_reader(supervisor \\ table_reader_supervisor(), consumer, opts \\ []) do
+  def restart_table_reader(supervisor \\ table_reader_supervisor(), %SinkConsumer{} = consumer, opts \\ []) do
     stop_table_reader(supervisor, consumer)
     start_table_reader(supervisor, consumer, opts)
   end

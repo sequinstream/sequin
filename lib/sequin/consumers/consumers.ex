@@ -9,6 +9,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.Consumers.LifecycleEventWorker
   alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
@@ -17,16 +18,13 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
-  alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
-  alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health
-  alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.Postgres
@@ -163,43 +161,70 @@ defmodule Sequin.Consumers do
 
     case Repo.preload(consumer, :active_backfill) do
       %{active_backfill: %Backfill{} = backfill} ->
-        update_backfill_with_lifecycle(backfill, %{state: :completed})
+        update_backfill(backfill, %{state: :completed})
 
       _ ->
         :ok
     end
   end
 
-  def update_consumer(%SinkConsumer{} = consumer, attrs) do
-    consumer
-    |> SinkConsumer.update_changeset(attrs)
-    |> Repo.update()
-  end
+  def create_sink_consumer(account_id, attrs, opts \\ [])
 
-  def update_consumer_with_lifecycle(consumer, attrs) do
-    with {:ok, updated_consumer} <- update_consumer(consumer, attrs) do
-      :ok = notify_consumer_update(updated_consumer)
+  def create_sink_consumer(account_id, attrs, skip_lifecycle: true) do
+    res =
+      %SinkConsumer{account_id: account_id}
+      |> SinkConsumer.create_changeset(attrs)
+      |> Repo.insert()
 
-      {:ok, updated_consumer}
+    with {:ok, consumer} <- res do
+      # TODO: Confirm why this is called
+      consumer = Repo.reload!(consumer)
+      {:ok, consumer}
     end
   end
 
-  def delete_consumer_with_lifecycle(consumer) do
+  def create_sink_consumer(account_id, attrs, _opts) do
     Repo.transact(fn ->
-      case delete_consumer(consumer) do
-        {:ok, _} ->
-          notify_consumer_delete(consumer)
-          :ok = delete_consumer_partition(consumer)
-          {:ok, consumer}
+      res =
+        %SinkConsumer{account_id: account_id}
+        |> SinkConsumer.create_changeset(attrs)
+        |> Repo.insert()
 
-        {:error, error} ->
-          {:error, error}
+      with {:ok, consumer} <- res,
+           consumer = Repo.reload!(consumer),
+           :ok <- create_consumer_partition(consumer),
+           {:ok, _} <- LifecycleEventWorker.enqueue(:create, :sink_consumer, consumer.id) do
+        {:ok, consumer}
       end
     end)
   end
 
-  def delete_consumer(consumer) do
-    Repo.delete(consumer)
+  def update_sink_consumer(%SinkConsumer{} = consumer, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        consumer
+        |> SinkConsumer.update_changeset(attrs)
+        |> Repo.update()
+
+      with {:ok, consumer} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:update, :sink_consumer, consumer.id)
+        end
+
+        {:ok, consumer}
+      end
+    end)
+  end
+
+  def delete_sink_consumer(consumer) do
+    Repo.transact(fn ->
+      with {:ok, _} <- Repo.delete(consumer),
+           :ok <- delete_consumer_partition(consumer) do
+        LifecycleEventWorker.enqueue(:delete, :sink_consumer, consumer.id, %{
+          "replication_slot_id" => consumer.replication_slot_id
+        })
+      end
+    end)
   end
 
   def partition_name(%{message_kind: :event} = consumer) do
@@ -250,31 +275,6 @@ defmodule Sequin.Consumers do
     |> SinkConsumer.where_status()
     |> preload(^preloads)
     |> Repo.all()
-  end
-
-  def create_sink_consumer_for_account_with_lifecycle(account_id, attrs) do
-    Repo.transact(fn ->
-      with {:ok, consumer} <- create_sink_consumer(account_id, attrs),
-           :ok <- create_consumer_partition(consumer) do
-        :ok = notify_consumer_update(consumer)
-        notify_consumer_create(consumer)
-
-        consumer = Repo.reload!(consumer)
-
-        {:ok, consumer}
-      end
-    end)
-  end
-
-  def create_sink_consumer_with_lifecycle(attrs) do
-    account_id = Map.fetch!(attrs, :account_id)
-    create_sink_consumer_for_account_with_lifecycle(account_id, attrs)
-  end
-
-  def create_sink_consumer(account_id, attrs) do
-    %SinkConsumer{account_id: account_id}
-    |> SinkConsumer.create_changeset(attrs)
-    |> Repo.insert()
   end
 
   @legacy_event_singleton_transform_cutoff_date ~D[2024-11-06]
@@ -647,7 +647,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  defp delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
+  def delete_consumer_partition(%{message_kind: kind} = consumer) when kind in [:event, :record] do
     with {:ok, _} <- Repo.query("SELECT pg_advisory_xact_lock($1)", [@partition_lock_key]),
          {:ok, %Postgrex.Result{command: :drop_table}} <-
            Repo.query("""
@@ -1394,30 +1394,55 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def create_http_endpoint_for_account(account_id, attrs) do
-    %HttpEndpoint{account_id: account_id}
-    |> HttpEndpoint.create_changeset(attrs)
-    |> Repo.insert()
+  def create_http_endpoint(account_id, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        %HttpEndpoint{account_id: account_id}
+        |> HttpEndpoint.create_changeset(attrs)
+        |> Repo.insert()
+
+      with {:ok, http_endpoint} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:create, :http_endpoint, http_endpoint.id)
+        end
+
+        {:ok, http_endpoint}
+      end
+    end)
   end
 
-  def update_http_endpoint(%HttpEndpoint{} = http_endpoint, attrs) do
-    http_endpoint
-    |> HttpEndpoint.update_changeset(attrs)
-    |> Repo.update()
+  def update_http_endpoint(%HttpEndpoint{} = http_endpoint, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        http_endpoint
+        |> HttpEndpoint.update_changeset(attrs)
+        |> Repo.update()
+
+      with {:ok, http_endpoint} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:update, :http_endpoint, http_endpoint.id)
+        end
+
+        {:ok, http_endpoint}
+      end
+    end)
   end
 
-  def update_http_endpoint_with_lifecycle(%HttpEndpoint{} = http_endpoint, attrs) do
-    with {:ok, http_endpoint} <- update_http_endpoint(http_endpoint, attrs),
-         :ok <- notify_http_endpoint_update(http_endpoint) do
-      {:ok, http_endpoint}
-    end
-  end
+  def delete_http_endpoint(%HttpEndpoint{} = http_endpoint, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        http_endpoint
+        |> Ecto.Changeset.change()
+        |> Repo.delete()
 
-  def delete_http_endpoint(%HttpEndpoint{} = http_endpoint) do
-    http_endpoint
-    |> Ecto.Changeset.change()
-    # |> Ecto.Changeset.foreign_key_constraint(:sink_consumers, name: "http_push_consumers_http_endpoint_id_fkey")
-    |> Repo.delete()
+      with {:ok, http_endpoint} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:delete, :http_endpoint, http_endpoint.id)
+        end
+
+        {:ok, http_endpoint}
+      end
+    end)
   end
 
   def test_reachability(%HttpEndpoint{} = http_endpoint) do
@@ -1658,78 +1683,6 @@ defmodule Sequin.Consumers do
       to_string(field_value) not in Enum.map(filter_value, &to_string/1)
   end
 
-  defp notify_consumer_update(%SinkConsumer{} = consumer) do
-    if consumer.status == :disabled, do: maybe_disable_table_reader(consumer)
-
-    if consumer.type == :http_push do
-      CheckHttpEndpointHealthWorker.enqueue(consumer.sink.http_endpoint_id)
-    end
-
-    if env() == :test do
-      DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-    else
-      with :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
-        case consumer.status do
-          :active ->
-            ConsumersSupervisor.restart_for_sink_consumer(consumer)
-            :ok
-
-          :disabled ->
-            ConsumersSupervisor.stop_for_sink_consumer(consumer)
-            :ok
-        end
-      end
-    end
-  end
-
-  defp notify_consumer_create(%SinkConsumer{} = consumer) do
-    if consumer.type == :http_push do
-      CheckHttpEndpointHealthWorker.enqueue(consumer.sink.http_endpoint_id)
-    end
-
-    :ok
-  end
-
-  defp notify_consumer_delete(%SinkConsumer{} = consumer) do
-    maybe_disable_table_reader(consumer)
-
-    if env() == :test do
-      DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
-    else
-      with %Task{} <- async_refresh_message_handler_ctx(consumer.replication_slot_id) do
-        ConsumersSupervisor.stop_for_sink_consumer(consumer)
-      end
-    end
-  end
-
-  defp maybe_disable_table_reader(%{message_kind: :record} = consumer) do
-    unless env() == :test do
-      DatabasesRuntimeSupervisor.stop_table_reader(consumer)
-    end
-  end
-
-  defp maybe_disable_table_reader(_consumer), do: :ok
-
-  defp async_refresh_message_handler_ctx(replication_slot_id) do
-    Task.Supervisor.async_nolink(
-      Sequin.TaskSupervisor,
-      fn ->
-        DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
-      end,
-      # Until we make SlotProcessor more responsive, this can take a while
-      timeout: :timer.minutes(2)
-    )
-  end
-
-  defp notify_http_endpoint_update(%HttpEndpoint{} = http_endpoint) do
-    sink_consumers = list_sink_consumers_for_http_endpoint(http_endpoint.id)
-    Enum.each(sink_consumers, &ConsumersSupervisor.restart_for_sink_consumer(&1))
-  end
-
-  defp env do
-    Application.get_env(:sequin, :env)
-  end
-
   def enrich_source_tables(source_tables, %PostgresDatabase{} = postgres_database) do
     Enum.map(source_tables, fn source_table ->
       table = Sequin.Enum.find!(postgres_database.tables, &(&1.oid == source_table.oid))
@@ -1769,34 +1722,52 @@ defmodule Sequin.Consumers do
     end)
   end
 
+  def get_backfill(id) do
+    case Repo.get(Backfill, id) do
+      nil -> {:error, Error.not_found(entity: :backfill, params: %{id: id})}
+      backfill -> {:ok, backfill}
+    end
+  end
+
   def get_backfill!(id) do
-    Repo.get!(Backfill, id)
-  end
-
-  def create_backfill_with_lifecycle(attrs) do
-    with {:ok, backfill} <- create_backfill(attrs),
-         :ok <- notify_backfill_create(backfill) do
-      {:ok, backfill}
+    case get_backfill(id) do
+      {:ok, backfill} -> backfill
+      {:error, error} -> raise error
     end
   end
 
-  def update_backfill_with_lifecycle(backfill, attrs) do
-    with {:ok, backfill} <- update_backfill(backfill, attrs),
-         :ok <- notify_backfill_update(backfill) do
-      {:ok, backfill}
-    end
+  def update_backfill(backfill, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        backfill
+        |> Backfill.update_changeset(attrs)
+        |> Repo.update()
+
+      with {:ok, backfill} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:update, :backfill, backfill.id)
+        end
+
+        {:ok, backfill}
+      end
+    end)
   end
 
-  def create_backfill(attrs) do
-    %Backfill{}
-    |> Backfill.create_changeset(attrs)
-    |> Repo.insert()
-  end
+  def create_backfill(attrs, opts \\ []) do
+    Repo.transact(fn ->
+      res =
+        %Backfill{}
+        |> Backfill.create_changeset(attrs)
+        |> Repo.insert()
 
-  def update_backfill(backfill, attrs) do
-    backfill
-    |> Backfill.update_changeset(attrs)
-    |> Repo.update()
+      with {:ok, backfill} <- res do
+        unless opts[:skip_lifecycle] do
+          LifecycleEventWorker.enqueue(:create, :backfill, backfill.id)
+        end
+
+        {:ok, backfill}
+      end
+    end)
   end
 
   def find_backfill(sink_consumer_id, params \\ []) do
@@ -1820,36 +1791,4 @@ defmodule Sequin.Consumers do
     |> Backfill.where_state(:active)
     |> Repo.one()
   end
-
-  defp notify_backfill_create(%Backfill{state: :active} = backfill) do
-    unless env() == :test do
-      backfill.sink_consumer_id
-      |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.start_table_reader()
-    end
-
-    :ok
-  end
-
-  defp notify_backfill_create(_backfill), do: :ok
-
-  defp notify_backfill_update(%Backfill{state: :active} = backfill) do
-    unless env() == :test do
-      backfill.sink_consumer_id
-      |> get_consumer!()
-      |> DatabasesRuntimeSupervisor.restart_table_reader()
-    end
-
-    :ok
-  end
-
-  defp notify_backfill_update(%Backfill{state: state} = backfill) when state in [:completed, :cancelled] do
-    unless env() == :test do
-      DatabasesRuntimeSupervisor.stop_table_reader(backfill.id)
-    end
-
-    :ok
-  end
-
-  defp notify_backfill_update(_backfill), do: :ok
 end

@@ -262,7 +262,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       page_size = 3
 
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
-      {:ok, _} = Consumers.update_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
+      {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 

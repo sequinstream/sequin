@@ -157,7 +157,7 @@ defmodule SequinWeb.HttpEndpointsLive.Form do
     if socket.assigns.is_edit? do
       Consumers.update_http_endpoint(socket.assigns.http_endpoint, http_endpoint_params)
     else
-      Consumers.create_http_endpoint_for_account(current_account_id(socket), http_endpoint_params)
+      Consumers.create_http_endpoint(current_account_id(socket), http_endpoint_params)
     end
   end
 

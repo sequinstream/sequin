@@ -51,7 +51,7 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
     case consumer.source_tables do
       [source_table | _] ->
         sequence = fetch_sequence(consumer, source_table) || create_sequence(consumer, source_table)
-        if sequence, do: update_consumer(consumer, consumer_module, sequence)
+        if sequence, do: update_sink_consumer(consumer, consumer_module, sequence)
 
       _ ->
         Logger.info("Skipping consumer #{consumer.id} - no source table found")
@@ -95,7 +95,7 @@ defmodule Mix.Tasks.Sequin.MigrateToSequences do
     end
   end
 
-  defp update_consumer(consumer, consumer_module, sequence) do
+  defp update_sink_consumer(consumer, consumer_module, sequence) do
     [source_table | _] = consumer.source_tables
 
     column_filters =

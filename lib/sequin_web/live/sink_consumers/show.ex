@@ -206,7 +206,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("delete", _params, socket) do
-    case Consumers.delete_consumer_with_lifecycle(socket.assigns.consumer) do
+    case Consumers.delete_sink_consumer(socket.assigns.consumer) do
       {:ok, _deleted_consumer} ->
         {:noreply,
          socket
@@ -257,7 +257,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       state: :active
     }
 
-    case Consumers.create_backfill_with_lifecycle(backfill_attrs) do
+    case Consumers.create_backfill(backfill_attrs) do
       {:ok, _backfill} ->
         {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill started successfully"})}
 
@@ -279,7 +279,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "No active backfill to cancel"})}
 
       backfill ->
-        case Consumers.update_backfill_with_lifecycle(backfill, %{state: :cancelled}) do
+        case Consumers.update_backfill(backfill, %{state: :cancelled}) do
           {:ok, _updated_backfill} ->
             {:reply, %{ok: true}, put_flash(socket, :toast, %{kind: :success, title: "Backfill cancelled successfully"})}
 
@@ -365,7 +365,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("disable", _params, socket) do
-    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :disabled}) do
+    case Consumers.update_sink_consumer(socket.assigns.consumer, %{status: :disabled}) do
       {:ok, updated_consumer} ->
         {:reply, %{ok: true},
          socket
@@ -379,7 +379,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("enable", _params, socket) do
-    case Consumers.update_consumer_with_lifecycle(socket.assigns.consumer, %{status: :active}) do
+    case Consumers.update_sink_consumer(socket.assigns.consumer, %{status: :active}) do
       {:ok, updated_consumer} ->
         {:reply, %{ok: true},
          socket
@@ -402,7 +402,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = socket.assigns.consumer
     new_annotations = Map.put(consumer.annotations || %{}, "replica_warning_dismissed", true)
 
-    case Consumers.update_consumer(consumer, %{annotations: new_annotations}) do
+    case Consumers.update_sink_consumer(consumer, %{annotations: new_annotations}, skip_lifecycle: true) do
       {:ok, updated_consumer} ->
         {:noreply, assign(socket, :consumer, updated_consumer)}
 
@@ -414,9 +414,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   @impl Phoenix.LiveView
   def handle_event("dismiss_toast_warning", _params, socket) do
     {:ok, _} =
-      Consumers.update_consumer(socket.assigns.consumer, %{
-        annotations: %{unchanged_toast_replica_identity_dismissed: true}
-      })
+      Consumers.update_sink_consumer(
+        socket.assigns.consumer,
+        %{
+          annotations: %{unchanged_toast_replica_identity_dismissed: true}
+        },
+        skip_lifecycle: true
+      )
 
     {:ok, consumer} = load_consumer(socket.assigns.consumer.id, socket)
 

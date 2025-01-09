@@ -907,7 +907,7 @@ defmodule Sequin.MessageHandlerTest do
       consumer: consumer
     } do
       {:ok, consumer} =
-        Consumers.update_consumer(consumer, %{annotations: %{"unchanged_toast_replica_identity_dismissed" => true}})
+        Consumers.update_sink_consumer(consumer, %{annotations: %{"unchanged_toast_replica_identity_dismissed" => true}})
 
       context = %{context | consumers: [consumer]}
 

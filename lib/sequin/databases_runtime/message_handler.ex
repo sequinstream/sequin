@@ -481,7 +481,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     Enum.reduce(ctx.consumers, ctx, fn %SinkConsumer{annotations: annotations} = consumer, ctx ->
       if Consumers.matches_message?(consumer, message) and not Map.has_key?(annotations, @annotations_key) do
         annotations = Map.put_new(annotations, @annotations_key, false)
-        {:ok, consumer} = Consumers.update_consumer(consumer, %{annotations: annotations})
+        {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{annotations: annotations}, skip_lifecycle: true)
         %{ctx | consumers: replace_consumer(ctx.consumers, consumer)}
       else
         ctx

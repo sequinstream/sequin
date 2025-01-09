@@ -1134,7 +1134,7 @@ defmodule Sequin.ConsumersTest do
         use_local_tunnel: false
       }
 
-      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
+      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint(account.id, valid_attrs)
       assert http_endpoint.name == "TestEndpoint"
       assert http_endpoint.scheme == :https
       assert http_endpoint.host == "example.com"
@@ -1152,7 +1152,7 @@ defmodule Sequin.ConsumersTest do
         use_local_tunnel: true
       }
 
-      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint_for_account(account.id, valid_attrs)
+      assert {:ok, %HttpEndpoint{} = http_endpoint} = Consumers.create_http_endpoint(account.id, valid_attrs)
       assert http_endpoint.name == "my-endpoint"
       assert http_endpoint.use_local_tunnel
       assert http_endpoint.port
@@ -1170,7 +1170,7 @@ defmodule Sequin.ConsumersTest do
         headers: "invalid"
       }
 
-      assert {:error, %Ecto.Changeset{}} = Consumers.create_http_endpoint_for_account(account.id, invalid_attrs)
+      assert {:error, %Ecto.Changeset{}} = Consumers.create_http_endpoint(account.id, invalid_attrs)
     end
   end
 

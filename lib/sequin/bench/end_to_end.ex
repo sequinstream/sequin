@@ -34,7 +34,7 @@ defmodule Sequin.Bench.EndToEnd do
   #   consumers =
   #     Enum.map(1..10, fn _ ->
   #       {:ok, consumer} =
-  #         Consumers.create_sink_consumer_for_account_with_lifecycle(account.id, %{
+  #         Consumers.create_sink_consumer(account.id, %{
   #           stream_id: stream.id
   #         })
 
@@ -107,7 +107,7 @@ defmodule Sequin.Bench.EndToEnd do
   #   consumers =
   #     Enum.map(1..10, fn _ ->
   #       {:ok, consumer} =
-  #         Consumers.create_sink_consumer_for_account_with_lifecycle(account.id, %{
+  #         Consumers.create_sink_consumer(account.id, %{
   #           stream_id: stream.id
   #         })
 

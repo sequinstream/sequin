@@ -514,7 +514,8 @@ defmodule Sequin.PostgresReplicationTest do
           ]
         )
 
-      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{sequence_filter: sequence_filter})
+      {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: sequence_filter})
+      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -1124,7 +1125,8 @@ defmodule Sequin.PostgresReplicationTest do
       |> Repo.update!()
 
       # Restart the consumer to apply the changes
-      Consumers.update_consumer_with_lifecycle(consumer, %{})
+      Consumers.update_sink_consumer(consumer, %{})
+      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       # Insert a character that doesn't match the filter
       CharacterFactory.insert_character!([is_active: false], repo: UnboxedRepo)
@@ -1323,7 +1325,8 @@ defmodule Sequin.PostgresReplicationTest do
       )
 
       # Restart the consumer to apply the changes
-      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{})
+      {:ok, _} = Consumers.update_sink_consumer(consumer, %{})
+      DatabasesRuntime.Supervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
 
       {:ok, matching_character} =
         UnboxedRepo.transaction(fn ->
@@ -1388,7 +1391,7 @@ defmodule Sequin.PostgresReplicationTest do
       )
 
       # Restart the consumer to apply changes
-      {:ok, _} = Consumers.update_consumer_with_lifecycle(consumer, %{})
+      {:ok, _} = Consumers.update_sink_consumer(consumer, %{})
 
       {:ok, matching_character} =
         UnboxedRepo.transaction(fn ->

@@ -652,7 +652,7 @@ defmodule Sequin.YamlLoader do
 
   defp create_http_endpoint(account_id, attrs) do
     with {:ok, endpoint_params} <- parse_http_endpoint_attrs(attrs),
-         {:ok, endpoint} <- Sequin.Consumers.create_http_endpoint_for_account(account_id, endpoint_params) do
+         {:ok, endpoint} <- Sequin.Consumers.create_http_endpoint(account_id, endpoint_params) do
       Logger.info("Created HTTP endpoint: #{inspect(endpoint, pretty: true)}")
       {:ok, endpoint}
     else
@@ -777,7 +777,7 @@ defmodule Sequin.YamlLoader do
     case Sequin.Consumers.find_sink_consumer(account_id, name: name) do
       {:ok, existing_consumer} ->
         with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
-             {:ok, consumer} <- Sequin.Consumers.update_consumer_with_lifecycle(existing_consumer, params) do
+             {:ok, consumer} <- Sequin.Consumers.update_sink_consumer(existing_consumer, params) do
           Logger.info("Updated HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end
@@ -785,7 +785,7 @@ defmodule Sequin.YamlLoader do
       {:error, %NotFoundError{}} ->
         with {:ok, params} <- parse_sink_consumer_params(consumer_attrs, databases, http_endpoints),
              {:ok, consumer} <-
-               Sequin.Consumers.create_sink_consumer_for_account_with_lifecycle(account_id, params) do
+               Sequin.Consumers.create_sink_consumer(account_id, params) do
           Logger.info("Created HTTP push consumer: #{inspect(consumer, pretty: true)}")
           {:ok, consumer}
         end

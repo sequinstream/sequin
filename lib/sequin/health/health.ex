@@ -645,7 +645,7 @@ defmodule Sequin.Health do
   end
 
   def ignore_health(%SinkConsumer{} = consumer) do
-    Consumers.update_consumer(consumer, %{annotations: %{"ignore_health" => true}})
+    Consumers.update_sink_consumer(consumer, %{annotations: %{"ignore_health" => true}}, skip_lifecycle: true)
   end
 
   def ignore_health(%WalPipeline{} = pipeline) do

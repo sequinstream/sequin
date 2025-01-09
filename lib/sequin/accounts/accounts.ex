@@ -609,7 +609,7 @@ defmodule Sequin.Accounts do
       # Delete associated HTTP push and pull consumers
       account.id
       |> Consumers.list_consumers_for_account()
-      |> Enum.each(&Consumers.delete_consumer_with_lifecycle/1)
+      |> Enum.each(&Consumers.delete_sink_consumer/1)
 
       # Delete associated HTTP endpoints
       account.id

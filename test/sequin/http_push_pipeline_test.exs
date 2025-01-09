@@ -27,6 +27,8 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
           message_kind: :event
         )
 
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+
       {:ok, %{consumer: consumer, http_endpoint: http_endpoint}}
     end
 
@@ -229,7 +231,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline
@@ -287,7 +289,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         {req, Req.Response.new(status: 500)}
       end
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
 
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
@@ -385,7 +387,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
           }
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_record])
 
       # Start the pipeline
@@ -440,7 +442,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
             )
         )
 
-      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), skip_load_from_postgres?: true]})
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [consumer_event])
 
       # Start the pipeline with legacy_event_transform feature enabled

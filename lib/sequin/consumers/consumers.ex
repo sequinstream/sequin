@@ -393,7 +393,7 @@ defmodule Sequin.Consumers do
         ConsumerEvent,
         events,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: [:consumer_id, :id]
+        conflict_target: [:consumer_id, :ack_id]
       )
 
     # Broadcast messages ingested to consumers for ie. push consumers
@@ -588,16 +588,14 @@ defmodule Sequin.Consumers do
 
     records =
       consumer_records
-      |> Enum.map(fn %ConsumerRecord{} = record ->
+      |> Stream.map(fn %ConsumerRecord{} = record ->
         %ConsumerRecord{record | updated_at: now, inserted_at: now}
       end)
-      |> Enum.sort_by(& &1.commit_lsn, :desc)
-      |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
       # insert_all expects a plain outer-map, but struct embeds
-      |> Enum.map(&Sequin.Map.from_ecto/1)
+      |> Stream.map(&Sequin.Map.from_ecto/1)
       |> Enum.map(&Map.drop(&1, [:deleted, :dirty, :flushed_at]))
 
-    conflict_target = [:consumer_id, :record_pks, :table_oid]
+    conflict_target = [:consumer_id, :ack_id]
 
     {count, _records} =
       Repo.insert_all(

@@ -35,8 +35,8 @@ defmodule SequinWeb.PullControllerTest do
         sink: %{type: :sequin_stream}
       )
 
-    start_supervised!({SlotMessageStore, consumer: consumer, test_pid: self(), skip_backfill?: true})
-    start_supervised!({SlotMessageStore, consumer: other_consumer, test_pid: self(), skip_backfill?: true})
+    start_supervised!({SlotMessageStore, consumer: consumer, test_pid: self()})
+    start_supervised!({SlotMessageStore, consumer: other_consumer, test_pid: self()})
 
     %{consumer: consumer, other_consumer: other_consumer}
   end

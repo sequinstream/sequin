@@ -10,7 +10,6 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.SlotMessageStore
-  # Needs to be false until we figure out how to work with Ecto sandbox + characters
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.DatabasesRuntime.TableReaderServer
   alias Sequin.Factory.CharacterFactory

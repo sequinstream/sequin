@@ -24,6 +24,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.Update
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
+  alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
@@ -128,8 +129,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       {:error, :not_running}
   end
 
-  def monitor_message_store(id, consumer_id, pid) do
-    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id, pid})
+  def monitor_message_store(id, consumer_id) do
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id})
   end
 
   def demonitor_message_store(id, consumer_id) do
@@ -318,8 +319,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   @impl Postgrex.ReplicationConnection
-  def handle_call({:monitor_message_store, consumer_id, pid}, from, state) do
+  def handle_call({:monitor_message_store, consumer_id}, from, state) do
+    pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
     ref = Process.monitor(pid)
+    :ok = SlotMessageStore.set_monitor_ref(pid, ref)
     Logger.info("Monitoring message store for consumer #{consumer_id}")
     GenServer.reply(from, :ok)
     {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
@@ -652,14 +655,60 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp safe_ack_lsn(%State{last_commit_lsn: nil}), do: raise("Unsafe to call safe_ack_lsn when last_commit_lsn is nil")
 
   defp safe_ack_lsn(%State{} = state) do
-    state.message_store_refs
-    |> Enum.map(fn {consumer_id, _ref} ->
-      SlotMessageStore.min_unflushed_commit_lsn(consumer_id)
-    end)
-    |> Enum.filter(& &1)
-    |> case do
-      [] -> state.last_commit_lsn + 1
-      lsns -> Enum.min(lsns)
+    case verify_monitor_refs(state) do
+      :ok ->
+        state.message_store_refs
+        |> Enum.map(fn {consumer_id, ref} ->
+          SlotMessageStore.min_unflushed_commit_lsn(consumer_id, ref)
+        end)
+        |> Enum.filter(& &1)
+        |> case do
+          [] -> state.last_commit_lsn + 1
+          lsns -> Enum.min(lsns)
+        end
+
+      {:error, error} ->
+        raise error
+    end
+  end
+
+  defp verify_monitor_refs(%State{} = state) do
+    active_sink_consumer_ids =
+      state.replication_slot
+      |> Sequin.Repo.preload(:sink_consumers, force: true)
+      |> Map.fetch!(:sink_consumers)
+      |> Enum.filter(&(&1.status == :active))
+      |> Enum.map(& &1.id)
+      |> Enum.sort()
+
+    monitored_sink_consumer_ids = Enum.sort(Map.keys(state.message_store_refs))
+
+    %MessageHandler.Context{consumers: message_handler_consumers} = state.message_handler_ctx
+    message_handler_sink_consumer_ids = Enum.sort(Enum.map(message_handler_consumers, & &1.id))
+
+    cond do
+      active_sink_consumer_ids != message_handler_sink_consumer_ids ->
+        {:error,
+         Error.invariant(
+           message: """
+           Active sink consumer IDs do not match message handler sink consumer IDs.
+           Active: #{inspect(active_sink_consumer_ids)}.
+           Message handler: #{inspect(message_handler_sink_consumer_ids)}
+           """
+         )}
+
+      active_sink_consumer_ids != monitored_sink_consumer_ids ->
+        {:error,
+         Error.invariant(
+           message: """
+           Active sink consumer IDs do not match monitored sink consumer IDs.
+           Active: #{inspect(active_sink_consumer_ids)}.
+           Monitored: #{inspect(monitored_sink_consumer_ids)}
+           """
+         )}
+
+      true ->
+        :ok
     end
   end
 

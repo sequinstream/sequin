@@ -48,6 +48,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       field :messages, %{[String.t()] => ConsumerRecord.t() | ConsumerEvent.t()}
       # Set to false in tests to disable Postgres reads/writes (ie. load messages on boot and flush messages on interval)
       field :persisted_mode?, boolean(), default: true
+      field :slot_processor_monitor_ref, reference() | nil
       field :table_reader_batch_id, String.t() | nil
       field :test_pid, pid() | nil
     end
@@ -108,16 +109,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {%{state | messages: updated_messages}, nacked_count}
     end
 
-    @spec min_unflushed_commit_lsn(%State{}) :: non_neg_integer() | nil
-    def min_unflushed_commit_lsn(%State{} = state) do
-      state.messages
-      |> Map.values()
-      |> Stream.filter(&is_nil(&1.flushed_at))
-      |> Enum.min_by(& &1.commit_lsn, fn -> nil end)
-      |> case do
-        nil -> nil
-        %ConsumerRecord{commit_lsn: commit_lsn} -> commit_lsn
-        %ConsumerEvent{commit_lsn: commit_lsn} -> commit_lsn
+    @spec min_unflushed_commit_lsn(%State{}, reference()) :: non_neg_integer() | nil
+    def min_unflushed_commit_lsn(%State{slot_processor_monitor_ref: ref1} = state, ref2) do
+      if ref1 == ref2 do
+        state.messages
+        |> Map.values()
+        |> Stream.filter(&is_nil(&1.flushed_at))
+        |> Enum.min_by(& &1.commit_lsn, fn -> nil end)
+        |> case do
+          nil -> nil
+          %ConsumerRecord{commit_lsn: commit_lsn} -> commit_lsn
+          %ConsumerEvent{commit_lsn: commit_lsn} -> commit_lsn
+        end
+      else
+        raise "Monitor ref mismatch. Expected #{inspect(ref1)} but got #{inspect(ref2)}"
       end
     end
 
@@ -307,9 +312,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
-  @spec min_unflushed_commit_lsn(consumer_id()) :: non_neg_integer()
-  def min_unflushed_commit_lsn(consumer_id) do
-    GenServer.call(via_tuple(consumer_id), :min_unflushed_commit_lsn)
+  @spec min_unflushed_commit_lsn(consumer_id(), reference()) :: non_neg_integer()
+  def min_unflushed_commit_lsn(consumer_id, monitor_ref) do
+    GenServer.call(via_tuple(consumer_id), {:min_unflushed_commit_lsn, monitor_ref})
   end
 
   @doc """
@@ -326,6 +331,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec peek(consumer_id()) :: State.t()
   def peek(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :peek)
+  end
+
+  @doc """
+  Set the monitor reference for the SlotMessageStore into State
+
+  We use `pid` to call here because we want to confirm the `ref` is generated
+  from Process.monitor/1 and we want to double ack that the `pid` is the correct one.
+  """
+  @spec set_monitor_ref(pid(), reference()) :: :ok
+  def set_monitor_ref(pid, ref) do
+    GenServer.call(pid, {:set_monitor_ref, ref})
   end
 
   def child_spec(opts) do
@@ -461,8 +477,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:reply, {:ok, nacked_count}, state}
   end
 
-  def handle_call(:min_unflushed_commit_lsn, _from, state) do
-    {:reply, State.min_unflushed_commit_lsn(state), state}
+  def handle_call({:min_unflushed_commit_lsn, monitor_ref}, _from, state) do
+    {:reply, State.min_unflushed_commit_lsn(state, monitor_ref), state}
   end
 
   def handle_call(:count_messages, _from, state) do
@@ -471,6 +487,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call(:peek, _from, state) do
     {:reply, state, state}
+  end
+
+  def handle_call({:set_monitor_ref, ref}, _from, state) do
+    {:reply, :ok, %{state | slot_processor_monitor_ref: ref}}
   end
 
   @impl GenServer

@@ -149,7 +149,7 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
       # Verify that the health status is updated to error
       {:ok, health} = Health.health(wal_pipeline)
       assert health.status == :error
-      assert Enum.any?(health.checks, &(&1.status == :unhealthy))
+      assert Enum.any?(health.checks, &(&1.status == :error))
     end
 
     test "processes WAL events on PubSub notification", %{

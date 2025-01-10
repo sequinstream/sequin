@@ -22,7 +22,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   def mount(_params, _session, socket) do
     user = current_user(socket)
     account = current_account(socket)
-    consumers = Consumers.list_consumers_for_account(account.id, :postgres_database)
+    consumers = Consumers.list_consumers_for_account(account.id, [:postgres_database, :replication_slot])
     has_databases? = account.id |> Databases.list_dbs_for_account() |> Enum.any?()
     has_sequences? = account.id |> Databases.list_sequences_for_account() |> Enum.any?()
     consumers = load_consumer_health(consumers)
@@ -231,8 +231,11 @@ defmodule SequinWeb.SinkConsumersLive.Index do
 
   defp load_consumer_health(consumers) do
     Enum.map(consumers, fn consumer ->
-      case Health.health(consumer) do
-        {:ok, health} -> %{consumer | health: health}
+      with {:ok, health} <- Health.health(consumer),
+           {:ok, slot_health} <- Health.health(consumer.replication_slot) do
+        health = Health.add_slot_health_to_consumer_health(health, slot_health)
+        %{consumer | health: health}
+      else
         {:error, _} -> consumer
       end
     end)

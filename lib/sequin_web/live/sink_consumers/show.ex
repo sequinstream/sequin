@@ -87,11 +87,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     with {:ok, consumer} <- Consumers.get_sink_consumer_for_account(current_account_id(socket), id) do
       consumer =
         consumer
-        |> Repo.preload([:postgres_database, :sequence, :active_backfill], force: true)
+        |> Repo.preload([:postgres_database, :sequence, :active_backfill, :replication_slot], force: true)
         |> SinkConsumer.preload_http_endpoint()
+        |> put_health()
 
-      {:ok, health} = Health.health(consumer)
-      {:ok, %{consumer | health: health}}
+      {:ok, consumer}
     end
   end
 
@@ -465,15 +465,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
-
-    case Health.health(socket.assigns.consumer) do
-      {:ok, health} ->
-        updated_consumer = Map.put(socket.assigns.consumer, :health, health)
-        {:noreply, assign(socket, consumer: updated_consumer)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
+    consumer = put_health(socket.assigns.consumer)
+    {:noreply, assign(socket, :consumer, consumer)}
   end
 
   @impl Phoenix.LiveView
@@ -1028,5 +1021,17 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           {:ok, %{replica_identity: nil}}
       end
     end)
+  end
+
+  defp put_health(%SinkConsumer{} = consumer) do
+    with {:ok, health} <- Health.health(consumer),
+         {:ok, slot_health} <- Health.health(consumer.replication_slot) do
+      health = Health.add_slot_health_to_consumer_health(health, slot_health)
+      %{consumer | health: health}
+    else
+      {:error, error} ->
+        Logger.error("Failed to load health for consumer: #{inspect(error)}")
+        consumer
+    end
   end
 end

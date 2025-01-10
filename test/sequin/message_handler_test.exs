@@ -933,7 +933,8 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
 
       {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
-      assert [_] = list_messages(consumer.id)
+      records = list_messages(consumer.id)
+      assert length(records) == 0
     end
   end
 

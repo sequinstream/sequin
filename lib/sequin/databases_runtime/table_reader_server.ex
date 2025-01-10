@@ -497,8 +497,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp build_record_data(table, consumer, record_attnums_to_values) do
     %ConsumerRecordData{
-      record: build_record_payload(table, record_attnums_to_values),
       action: :read,
+      record: build_record_payload(table, record_attnums_to_values),
       metadata: %ConsumerRecordData.Metadata{
         database_name: consumer.replication_slot.postgres_database.name,
         table_name: table.name,

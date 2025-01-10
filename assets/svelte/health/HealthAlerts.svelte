@@ -42,7 +42,7 @@
   {#if check.alertMessage || check.error}
     <Alert.Root variant={getAlertVariant(check.status)} class="mb-6">
       <Alert.Title class="flex items-center justify-between">
-        <span>{check.alertTitle || check.name}</span>
+        <span>{check.alertTitle || `Error: ${check.name}`}</span>
         <div class="space-x-2">
           {#if check.refreshable}
             <Button

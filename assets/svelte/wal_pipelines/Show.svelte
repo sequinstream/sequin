@@ -14,7 +14,7 @@
   } from "lucide-svelte";
   import { formatRelativeTimestamp, getColorFromName } from "$lib/utils";
   import * as Dialog from "$lib/components/ui/dialog";
-  import HealthComponent from "$lib/health/HealthComponent.svelte";
+  import HealthSummary from "$lib/health/HealthSummary.svelte";
   import {
     Table,
     TableBody,
@@ -133,7 +133,7 @@
 
   <main class="container mx-auto px-4 py-8 grid gap-6">
     <div class="grid gap-6 md:grid-cols-2">
-      <HealthComponent health={walPipeline.health} {pushEvent} />
+      <HealthSummary health={walPipeline.health} {pushEvent} />
 
       <Card>
         <CardContent class="p-6">

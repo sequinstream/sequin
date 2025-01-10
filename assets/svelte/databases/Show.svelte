@@ -12,7 +12,7 @@
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { getColorFromName } from "$lib/utils";
-  import HealthComponent from "$lib/health/HealthComponent.svelte";
+  import HealthSummary from "$lib/health/HealthSummary.svelte";
   import type { Health } from "$lib/health/Types";
   import { Badge } from "$lib/components/ui/badge";
   import { writable } from "svelte/store";
@@ -77,7 +77,7 @@
   <main class="container mx-auto px-4 py-8">
     <!-- Existing overview content -->
     <div class="grid gap-6 md:grid-cols-3 mb-6">
-      <HealthComponent health={database.health} {pushEvent} />
+      <HealthSummary health={database.health} {pushEvent} />
 
       <Card>
         <CardContent class="p-6">

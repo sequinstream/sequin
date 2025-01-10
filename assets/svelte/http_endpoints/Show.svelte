@@ -23,7 +23,7 @@
     TableRow,
   } from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
-  import HealthComponent from "../health/HealthComponent.svelte";
+  import HealthSummary from "../health/HealthSummary.svelte";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
   export let http_endpoint;
   export let metrics;
@@ -153,7 +153,7 @@
 
   <div class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
-      <HealthComponent health={http_endpoint.health} {pushEvent} />
+      <HealthSummary health={http_endpoint.health} {pushEvent} />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">

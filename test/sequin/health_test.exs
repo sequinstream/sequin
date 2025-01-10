@@ -16,7 +16,7 @@ defmodule Sequin.HealthTest do
     test "initializes a new health" do
       entity = sink_consumer()
       assert {:ok, %Health{} = health} = Health.health(entity)
-      assert health.status == :waiting
+      assert health.status == :initializing
       assert is_list(health.checks) and length(health.checks) > 0
     end
   end
@@ -37,8 +37,9 @@ defmodule Sequin.HealthTest do
       entity = sink_consumer()
 
       assert {:ok, %Health{} = health} = Health.health(entity)
-      assert health.status == :waiting
+      assert health.status == :initializing
 
+      assert :ok = Health.put_event(entity, %Event{slug: :sink_config_checked, data: %{replica_identity: "full"}})
       assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :waiting
@@ -161,7 +162,7 @@ defmodule Sequin.HealthTest do
       assert {:ok, snapshot} = Health.upsert_snapshot(entity)
       assert snapshot.entity_id == entity.id
       assert snapshot.entity_kind == :sink_consumer
-      assert snapshot.status == :waiting
+      assert snapshot.status == :initializing
       assert is_map(snapshot.health_json)
     end
   end
@@ -424,6 +425,84 @@ defmodule Sequin.HealthTest do
 
       assert {:ok, %Health{} = health} = Health.health(entity)
       assert health.status == :paused
+    end
+  end
+
+  describe "sink configuration check" do
+    test "shows appropriate warnings for TOAST columns and replica identity when replica identity is not full" do
+      entity = sink_consumer(message_kind: :event)
+
+      # Set up base configuration check
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :sink_config_checked,
+          status: :success,
+          data: %{"replica_identity" => "default"}
+        })
+
+      # Initial state - should show replica identity warning
+      {:ok, health} = Health.health(entity)
+      config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
+      assert config_check.status == :warning
+      assert config_check.error_slug == :replica_identity_not_full
+
+      # Dismiss replica identity warning
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :alert_replica_identity_not_full_dismissed,
+          status: :success
+        })
+
+      # Add TOAST columns detection
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :toast_columns_detected,
+          status: :success
+        })
+
+      # Should now show TOAST columns warning
+      {:ok, health} = Health.health(entity)
+      config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
+      assert config_check.status == :warning
+      assert config_check.error_slug == :toast_columns_detected
+
+      # Dismiss TOAST columns warning
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :alert_toast_columns_detected_dismissed,
+          status: :success
+        })
+
+      # Should now be healthy
+      {:ok, health} = Health.health(entity)
+      config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
+      assert config_check.status == :healthy
+      assert is_nil(config_check.error_slug)
+    end
+
+    test "is healthy when replica identity is full regardless of TOAST columns" do
+      entity = sink_consumer(message_kind: :event)
+
+      # Set replica identity to full
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :sink_config_checked,
+          status: :success,
+          data: %{"replica_identity" => "full"}
+        })
+
+      # Add TOAST columns detection
+      :ok =
+        Health.put_event(entity, %Event{
+          slug: :toast_columns_detected,
+          status: :success
+        })
+
+      # Should be healthy since replica identity is full
+      {:ok, health} = Health.health(entity)
+      config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
+      assert config_check.status == :healthy
+      assert is_nil(config_check.error_slug)
     end
   end
 

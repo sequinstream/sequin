@@ -7,12 +7,13 @@ defmodule Sequin.Health.Check do
   alias Sequin.Error
   alias Sequin.JSON
 
-  @type status :: :healthy | :error | :waiting | :initializing | :stale
+  @type status :: :healthy | :error | :warning | :waiting | :initializing | :stale
 
   typedstruct do
     field :slug, atom(), enforce: true
     field :status, status(), enforce: true
     field :error, Error.t() | nil
+    field :error_slug, atom() | nil
     field :initial_event_at, DateTime.t() | nil
     field :last_healthy_at, DateTime.t() | nil
     field :erroring_since, DateTime.t() | nil
@@ -40,9 +41,11 @@ defmodule Sequin.Health.Check do
 
   def to_external(%Check{} = check) do
     %{
+      slug: check.slug,
       name: check_name(check),
       status: if(check.status == :waiting, do: :initializing, else: check.status),
-      error: if(check.error, do: %{message: Exception.message(check.error)})
+      error: if(check.error, do: %{message: Exception.message(check.error)}),
+      error_slug: check.error_slug
     }
   end
 

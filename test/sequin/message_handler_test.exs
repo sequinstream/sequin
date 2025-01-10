@@ -4,7 +4,6 @@ defmodule Sequin.MessageHandlerTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Constants
-  alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.DatabasesRuntime.TableReaderServerMock
@@ -13,6 +12,7 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Health
   alias Sequin.Replication
 
   describe "handle_messages/2" do
@@ -867,7 +867,7 @@ defmodule Sequin.MessageHandlerTest do
       assert message.data.record["house"] == "Gryffindor"
     end
 
-    test "without replica identity full, marks consumer with dismissable annotation", %{
+    test "without replica identity full, emits health event", %{
       context: context,
       consumer: consumer
     } do
@@ -879,45 +879,16 @@ defmodule Sequin.MessageHandlerTest do
 
       message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
 
-      {:ok, 1, context} = MessageHandler.handle_messages(context, [message])
+      {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
       [message] = list_messages(consumer.id)
 
       # unchanged_toast values are not loaded
       assert message.data.record["name"] == :unchanged_toast
       assert message.data.record["house"] == "Gryffindor"
 
-      # consumer has annotation
-      [consumer] = context.consumers
-      refute Map.fetch!(consumer.annotations, "unchanged_toast_replica_identity_dismissed")
-    end
-
-    test "without replica identity, does not set dismissed from true to false", %{
-      context: context,
-      consumer: consumer
-    } do
-      {:ok, consumer} =
-        Consumers.update_sink_consumer(consumer, %{annotations: %{"unchanged_toast_replica_identity_dismissed" => true}})
-
-      context = %{context | consumers: [consumer]}
-
-      fields = [
-        ReplicationFactory.field(column_name: "id", column_attnum: 1, value: 1),
-        ReplicationFactory.field(column_name: "name", value: :unchanged_toast, column_attnum: 2),
-        ReplicationFactory.field(column_name: "house", value: "Gryffindor", column_attnum: 3)
-      ]
-
-      message = ReplicationFactory.postgres_message(action: :update, table_oid: 123, fields: fields, old_fields: nil)
-
-      {:ok, 1, context} = MessageHandler.handle_messages(context, [message])
-      [message] = list_messages(consumer.id)
-
-      # unchanged_toast values are not loaded
-      assert message.data.record["name"] == :unchanged_toast
-      assert message.data.record["house"] == "Gryffindor"
-
-      # consumer has annotation
-      [consumer] = context.consumers
-      assert Map.fetch!(consumer.annotations, "unchanged_toast_replica_identity_dismissed")
+      # consumer health was updated
+      assert {:ok, event} = Health.get_event(consumer.id, :toast_columns_detected)
+      assert event.status == :warning
     end
 
     test "inserts are ignored", %{context: context, consumer: consumer} do

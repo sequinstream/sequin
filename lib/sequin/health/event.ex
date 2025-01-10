@@ -38,7 +38,10 @@ defmodule Sequin.Health.Event do
     :messages_filtered,
     :messages_ingested,
     :messages_pending_delivery,
-    :messages_delivered
+    :messages_delivered,
+    :alert_replica_identity_not_full_dismissed,
+    :alert_toast_columns_detected_dismissed,
+    :toast_columns_detected
   ]
 
   @http_endpoint_event_slugs [
@@ -93,7 +96,7 @@ defmodule Sequin.Health.Event do
   """
   def debounce_hash(%__MODULE__{} = event) do
     event
-    |> Map.take([:status])
+    |> Map.take([:status, :data])
     |> :erlang.phash2()
   end
 

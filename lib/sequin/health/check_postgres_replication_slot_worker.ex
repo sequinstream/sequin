@@ -43,7 +43,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   def enqueue(postgres_database_id, unique: false) do
     %{postgres_database_id: postgres_database_id}
     # Effectively disable unique constraint for this job
-    |> new(unique: [states: [:available, :scheduled]])
+    |> new(unique: [states: [:available], period: 1])
     |> Oban.insert()
   end
 

@@ -115,9 +115,6 @@
                   <HealthIcon status={check.status} />
                   <span class="font-medium ml-2 text-sm">{check.name}</span>
                 </div>
-                {#if check.message}
-                  <p class="text-xs text-gray-400 mt-1 ml-7">{check.message}</p>
-                {/if}
                 {#if check.error}
                   <p
                     class="text-xs text-red-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"

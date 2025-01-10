@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
@@ -136,8 +137,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     seqs_to_deliver =
       messages
       |> Stream.reject(fn
-        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
+        # We don't enforce idempotency for read actions
+        %ConsumerEvent{data: %ConsumerEventData{action: :read}} -> true
         %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
+        # We only recently added :action to ConsumerRecordData, so we need to ignore
+        # any messages that don't have it for backwards compatibility
+        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
         _ -> false
       end)
       |> Enum.map(& &1.seq)
@@ -155,6 +160,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
       SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
 
+      # If we filtered out any messages due to idempotency, we will have additional
+      # demand that we need to handle. So we schedule an immediate :receive_messages
       if state.receive_timer, do: Process.cancel_timer(state.receive_timer)
       send(self(), :receive_messages)
 

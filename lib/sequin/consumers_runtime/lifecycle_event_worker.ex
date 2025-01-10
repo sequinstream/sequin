@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.LifecycleEventWorker do
+defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   @moduledoc """
   Worker that runs after a lifecycle event (create/update/delete) in the consumer context.
   """

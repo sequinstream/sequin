@@ -10,7 +10,7 @@ defmodule Sequin.Consumers.ConsumerRecordData do
         }
 
   @primary_key false
-  @derive Jason.Encoder
+  @derive {Jason.Encoder, except: [:action]}
   embedded_schema do
     field :record, :map
     field :action, Ecto.Enum, values: [:insert, :update, :delete, :read]

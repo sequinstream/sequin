@@ -933,8 +933,16 @@ defmodule Sequin.MessageHandlerTest do
       message = ReplicationFactory.postgres_message(action: :delete, table_oid: 123, old_fields: [field])
 
       {:ok, 1, _context} = MessageHandler.handle_messages(context, [message])
-      records = list_messages(consumer.id)
-      assert length(records) == 0
+
+      case consumer.message_kind do
+        :record ->
+          records = list_messages(consumer.id)
+          assert length(records) == 0
+
+        :event ->
+          events = list_messages(consumer.id)
+          assert length(events) == 1
+      end
     end
   end
 

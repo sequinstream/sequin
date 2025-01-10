@@ -73,13 +73,13 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
     |> via_tuple()
     |> Sequin.DynamicSupervisor.start_child(child_spec)
     |> case do
-      {:ok, pid} ->
+      {:ok, _} ->
         SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id)
-        pid
+        :ok
 
-      {:error, {:already_started, pid}} ->
+      {:error, {:already_started, _}} ->
         SlotProcessor.monitor_message_store(sink_consumer.replication_slot_id, sink_consumer.id)
-        pid
+        :ok
 
       {:error, error} ->
         Logger.error("Failed to start child #{inspect(child_spec)}: #{inspect(error)}")

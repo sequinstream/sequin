@@ -55,12 +55,10 @@ defmodule Sequin.Consumers.LifecycleEventWorker do
              :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
           case consumer.status do
             :active ->
-              SlotSupervisor.start_message_store!(consumer)
               ConsumersSupervisor.restart_for_sink_consumer(consumer)
               :ok
 
             :disabled ->
-              SlotSupervisor.stop_message_store(consumer.replication_slot_id, consumer.id)
               ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok
           end

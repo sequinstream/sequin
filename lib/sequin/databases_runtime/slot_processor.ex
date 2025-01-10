@@ -678,11 +678,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp verify_monitor_refs(%State{} = state) do
-    active_sink_consumer_ids =
+    sink_consumer_ids =
       state.replication_slot
       |> Sequin.Repo.preload(:sink_consumers, force: true)
       |> Map.fetch!(:sink_consumers)
-      |> Enum.filter(&(&1.status == :active))
       |> Enum.map(& &1.id)
       |> Enum.sort()
 
@@ -692,22 +691,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     message_handler_sink_consumer_ids = Enum.sort(Enum.map(message_handler_consumers, & &1.id))
 
     cond do
-      active_sink_consumer_ids != message_handler_sink_consumer_ids ->
+      sink_consumer_ids != message_handler_sink_consumer_ids ->
         {:error,
          Error.invariant(
            message: """
-           Active sink consumer IDs do not match message handler sink consumer IDs.
-           Active: #{inspect(active_sink_consumer_ids)}.
+           Sink consumer IDs do not match message handler sink consumer IDs.
+           Sink consumers: #{inspect(sink_consumer_ids)}.
            Message handler: #{inspect(message_handler_sink_consumer_ids)}
            """
          )}
 
-      active_sink_consumer_ids != monitored_sink_consumer_ids ->
+      sink_consumer_ids != monitored_sink_consumer_ids ->
         {:error,
          Error.invariant(
            message: """
-           Active sink consumer IDs do not match monitored sink consumer IDs.
-           Active: #{inspect(active_sink_consumer_ids)}.
+           Sink consumer IDs do not match monitored sink consumer IDs.
+           Sink consumers: #{inspect(sink_consumer_ids)}.
            Monitored: #{inspect(monitored_sink_consumer_ids)}
            """
          )}

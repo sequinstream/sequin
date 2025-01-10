@@ -108,7 +108,7 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert show={!hasDatabases} entityName="Sinks" />
+  <DatabaseConnectionAlert show={!hasDatabases} entityName="Sink" />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">

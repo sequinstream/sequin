@@ -34,7 +34,6 @@ defmodule Sequin.Consumers do
 
   @stream_schema Application.compile_env!(:sequin, [Sequin.Repo, :stream_schema_prefix])
   @config_schema Application.compile_env!(:sequin, [Sequin.Repo, :config_schema_prefix])
-  @consumer_record_state_enum Postgres.quote_name(@stream_schema, "consumer_record_state")
 
   @type consumer :: SinkConsumer.t()
 
@@ -515,70 +514,6 @@ defmodule Sequin.Consumers do
     consumer
     |> consumer_messages_query(params)
     |> Repo.aggregate(:count, :id)
-  end
-
-  # Only way to get this fragment to compile with the dynamic enum name.
-  # Part of Ecto's SQL injection protection.
-  @case_frag """
-    CASE
-      WHEN ? IN ('delivered', 'pending_redelivery') THEN 'pending_redelivery'
-      ELSE 'available'
-    END::#{@consumer_record_state_enum}
-  """
-  def insert_consumer_records([]), do: {:ok, 0}
-
-  def insert_consumer_records(consumer_records) do
-    now = DateTime.utc_now()
-
-    records =
-      consumer_records
-      |> Enum.map(fn record ->
-        record
-        |> Map.put(:inserted_at, now)
-        |> Map.put(:updated_at, now)
-        |> ConsumerRecord.from_map()
-      end)
-      |> Enum.sort_by(& &1.commit_lsn, :desc)
-      |> Enum.uniq_by(&{&1.consumer_id, &1.record_pks, &1.table_oid})
-      # insert_all expects a plain outer-map, but struct embeds
-      |> Enum.map(&Sequin.Map.from_ecto/1)
-      |> Enum.map(&Map.delete(&1, :deleted))
-
-    conflict_target = [:consumer_id, :record_pks, :table_oid]
-
-    on_conflict =
-      from(cr in ConsumerRecord,
-        update: [
-          set: [
-            commit_lsn: fragment("EXCLUDED.commit_lsn"),
-            state:
-              fragment(
-                @case_frag,
-                cr.state
-              ),
-            data: fragment("EXCLUDED.data"),
-            updated_at: fragment("EXCLUDED.updated_at")
-          ]
-        ]
-      )
-
-    {count, _records} =
-      Repo.insert_all(
-        ConsumerRecord,
-        records,
-        on_conflict: on_conflict,
-        conflict_target: conflict_target
-      )
-
-    # Broadcast messages ingested to consumers for ie. push consumers
-    consumer_records
-    |> Stream.map(& &1.consumer_id)
-    |> Enum.uniq()
-    |> Enum.each(fn consumer_id ->
-      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
-    end)
-
-    {:ok, count}
   end
 
   def upsert_consumer_records([]), do: {:ok, 0}

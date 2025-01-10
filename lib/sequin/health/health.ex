@@ -565,6 +565,12 @@ defmodule Sequin.Health do
       Time.before_min_ago?(config_checked_event.last_event_at, 30) ->
         put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
 
+      config_checked_event.status == :fail and
+          match?(%Error.NotFoundError{entity: :publication_membership}, config_checked_event.error) ->
+        put_check_timestamps(%{base_check | status: :error, error_slug: :table_not_in_publication}, [
+          config_checked_event
+        ])
+
       config_checked_event.status == :fail ->
         put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [
           config_checked_event

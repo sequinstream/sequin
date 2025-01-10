@@ -1076,5 +1076,26 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     })
   end
 
+  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :table_not_in_publication} = check, consumer) do
+    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+
+    Map.merge(check, %{
+      alertTitle: "Error: Table not in publication",
+      alertMessage: """
+      The table #{table_name} is not in the publication #{consumer.replication_slot.publication_name}. That means changes to this table will not be propagated to Sequin.
+
+      To fix this, you can add the table to the publication with the following SQL command:
+
+      ```sql
+      alter publication #{consumer.replication_slot.publication_name} add table #{table_name};
+      ```
+
+      For more information on publications, <a href="https://sequinstream.com/docs/reference/databases#publications" target="_blank">see the docs</a>.
+      """,
+      refreshable: true,
+      dismissable: false
+    })
+  end
+
   defp maybe_augment_alert(check, _consumer), do: check
 end

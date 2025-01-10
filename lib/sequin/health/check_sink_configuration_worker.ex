@@ -9,22 +9,21 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
+  alias Sequin.Postgres
+  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"sink_consumer_id" => sink_consumer_id}}) do
     with {:ok, consumer} <- Consumers.get_sink_consumer(sink_consumer_id),
-         consumer = Repo.preload(consumer, [:postgres_database, :sequence]),
-         {:ok, replica_identity} <- check_replica_identity(consumer),
-         :ok <- check_publication(consumer) do
-      Health.put_event(consumer, %Event{
-        slug: :sink_config_checked,
-        status: :success,
-        data: %{replica_identity: replica_identity}
-      })
+         consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot]),
+         {:ok, event} <- check_replica_identity(consumer),
+         {:ok, event} <- check_publication(consumer, event) do
+      Health.put_event(consumer, event)
 
       :syn.publish(:consumers, {:sink_config_checked, consumer.id}, :sink_config_checked)
 
@@ -73,10 +72,26 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
 
   defp check_replica_identity(%SinkConsumer{message_kind: :event} = consumer) do
     source_table = Consumers.source_table(consumer)
-    Databases.check_replica_identity(consumer.postgres_database, source_table.oid)
+
+    with {:ok, replica_identity} <- Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
+      {:ok, %Event{slug: :sink_config_checked, status: :success, data: %{replica_identity: replica_identity}}}
+    end
   end
 
-  defp check_publication(%SinkConsumer{} = _consumer) do
-    :ok
+  defp check_publication(%SinkConsumer{} = consumer, %Event{} = event) do
+    %PostgresDatabase{} = postgres_database = consumer.postgres_database
+    %PostgresReplicationSlot{} = slot = consumer.replication_slot
+    source_table = Consumers.source_table(consumer)
+
+    case Postgres.verify_table_in_publication(postgres_database, slot.publication_name, source_table.oid) do
+      :ok ->
+        {:ok, event}
+
+      {:error, %Error.NotFoundError{entity: :publication_membership} = error} ->
+        {:ok, %{event | status: :fail, error: error}}
+
+      error ->
+        error
+    end
   end
 end

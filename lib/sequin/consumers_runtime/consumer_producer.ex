@@ -12,6 +12,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Time
+  alias Sequin.Tracer
 
   require Logger
 
@@ -90,7 +91,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    messages = produce_messages(state.consumer.id, demand * state.batch_size)
+    messages = produce_messages(state.consumer, demand * state.batch_size)
 
     Logger.debug(
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
@@ -129,13 +130,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], state}
   end
 
-  defp produce_messages(consumer_id, count) do
-    case SlotMessageStore.produce(consumer_id, count) do
+  defp produce_messages(%SinkConsumer{} = consumer, count) do
+    case SlotMessageStore.produce(consumer.id, count) do
       {:ok, messages} ->
+        Tracer.Server.messages_received(consumer, messages)
         messages
 
       {:error, error} ->
-        Logger.error("Error producing messages for consumer #{consumer_id}", error: error)
+        Logger.error("Error producing messages for consumer #{consumer.id}", error: error)
         []
     end
   end
@@ -171,6 +173,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     if length(successful_ids) > 0 do
       SlotMessageStore.ack(consumer, successful_ids)
+      Tracer.Server.messages_acked(consumer, successful_ids)
     end
 
     failed

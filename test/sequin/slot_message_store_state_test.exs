@@ -295,14 +295,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
         consumer: consumer,
         messages: %{},
         flush_interval: 1000,
-        flush_batch_size: 100
+        flush_batch_size: 100,
+        slot_processor_monitor_ref: make_ref()
       }
 
       {:ok, %{state: state, message_kind: Enum.random([:record, :event])}}
     end
 
     test "returns nil when there are no records or events", %{state: state} do
-      assert State.min_unflushed_commit_lsn(state) == nil
+      assert State.min_unflushed_commit_lsn(state, state.slot_processor_monitor_ref) == nil
     end
 
     test "returns nil when all messages are flushed", %{state: state, message_kind: message_kind} do
@@ -313,7 +314,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       state = State.put_messages(state, messages)
 
-      assert State.min_unflushed_commit_lsn(state) == nil
+      assert State.min_unflushed_commit_lsn(state, state.slot_processor_monitor_ref) == nil
     end
 
     test "returns lowest commit_lsn from unflushed messages", %{state: state, message_kind: message_kind} do
@@ -326,7 +327,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       state = State.put_messages(state, messages)
 
-      assert State.min_unflushed_commit_lsn(state) == 100
+      assert State.min_unflushed_commit_lsn(state, state.slot_processor_monitor_ref) == 100
+    end
+
+    test "raises when monitor ref mismatch", %{state: state} do
+      assert_raise RuntimeError, fn ->
+        State.min_unflushed_commit_lsn(state, make_ref())
+      end
     end
   end
 end

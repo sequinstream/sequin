@@ -90,7 +90,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {:ok, messages} = produce_messages(state.consumer.id, demand * state.batch_size)
+    messages = produce_messages(state.consumer.id, demand * state.batch_size)
 
     Logger.debug(
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
@@ -130,11 +130,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp produce_messages(consumer_id, count) do
-    SlotMessageStore.produce(consumer_id, count)
-  catch
-    :exit, error ->
-      Logger.error("Error producing messages for consumer #{consumer_id}", error: error)
-      {:ok, []}
+    case SlotMessageStore.produce(consumer_id, count) do
+      {:ok, messages} ->
+        messages
+
+      {:error, error} ->
+        Logger.error("Error producing messages for consumer #{consumer_id}", error: error)
+        []
+    end
   end
 
   defp schedule_receive_messages(state) do

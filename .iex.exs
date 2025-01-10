@@ -1,3 +1,5 @@
+import Sequin.IexHelpers
+
 alias Sequin.Consumers
 alias Sequin.Consumers.SinkConsumer
 alias Sequin.Databases

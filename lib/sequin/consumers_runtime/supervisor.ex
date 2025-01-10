@@ -27,6 +27,8 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     rabbitmq: RabbitMqPipeline
   }
 
+  def sinks_to_pipelines, do: @sinks_to_pipelines
+
   defp dynamic_supervisor, do: {:via, :syn, {:consumers, ConsumersRuntime.DynamicSupervisor}}
 
   def start_link(opts) do

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, HelpCircle, XCircle, RefreshCw } from "lucide-svelte";
+  import { CheckCircle2, HelpCircle, XCircle, RotateCw } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
   import * as Tooltip from "$lib/components/ui/tooltip";
@@ -35,6 +35,10 @@
   export let parent;
   export let consumer: Consumer;
   export let showReplicaWarning: boolean;
+
+  function pushEvent(event: string, data: any, cb: (val: any) => void) {
+    live.pushEventTo(`#${parent}`, event, data, cb);
+  }
 
   export let metrics = {
     messages_processed_count: 0,
@@ -234,7 +238,7 @@
 
   function handleDismissToastWarning() {
     dismissToastWarningLoading = true;
-    live.pushEventTo(`#${parent}`, "dismiss_toast_warning", {}, () => {
+    pushEvent("dismiss_toast_warning", {}, () => {
       dismissToastWarningLoading = false;
     });
   }
@@ -244,7 +248,7 @@
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <div class="grid gap-6 lg:grid-cols-3 mb-8">
-      <HealthComponent health={consumer.health} />
+      <HealthComponent health={consumer.health} {pushEvent} />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
@@ -350,7 +354,7 @@
                   );
                 }}
               >
-                <RefreshCw class="h-4 w-4 mr-1" />
+                <RotateCw class="h-4 w-4 mr-1" />
                 Refresh
                 <span slot="loading">Refreshing...</span>
               </Button>

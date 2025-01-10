@@ -3,7 +3,7 @@
   import {
     ArrowLeft,
     Clock,
-    RefreshCw,
+    RotateCw,
     CirclePlay,
     Webhook,
     AlertCircle,
@@ -144,7 +144,7 @@
             <span>Created {formatRelativeTimestamp(consumer.inserted_at)}</span>
           </div>
           <div class="flex items-center gap-2">
-            <RefreshCw class="h-4 w-4" />
+            <RotateCw class="h-4 w-4" />
             <span>Updated {formatRelativeTimestamp(consumer.updated_at)}</span>
           </div>
         </div>

@@ -155,8 +155,14 @@ defmodule SequinWeb.DatabasesLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("refresh_health", _params, socket) do
+    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id)
+    {:noreply, assign_health(socket)}
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
-    Process.send_after(self(), :update_health, 10_000)
+    Process.send_after(self(), :update_health, 5_000)
     {:noreply, assign_health(socket)}
   end
 

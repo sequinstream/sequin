@@ -18,7 +18,7 @@
   import {
     TableIcon,
     SearchIcon,
-    RefreshCwIcon,
+    RotateCwIcon,
     CheckIcon,
     DatabaseIcon,
     Logs,
@@ -272,11 +272,11 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
       disabled={databaseRefreshState === "refreshing"}
     >
       {#if databaseRefreshState === "refreshing"}
-        <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
+        <RotateCwIcon class="h-4 w-4 mr-2 animate-spin" />
       {:else if databaseRefreshState === "done"}
         <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
       {:else}
-        <RefreshCwIcon class="h-4 w-4 mr-2" />
+        <RotateCwIcon class="h-4 w-4 mr-2" />
       {/if}
       Refresh
     </Button>
@@ -310,11 +310,11 @@ where parent_table = '${destinationSchemaName}.${destinationTableName}';
             disabled={tableRefreshState === "refreshing"}
           >
             {#if tableRefreshState === "refreshing"}
-              <RefreshCwIcon class="h-4 w-4 mr-2 animate-spin" />
+              <RotateCwIcon class="h-4 w-4 mr-2 animate-spin" />
             {:else if tableRefreshState === "done"}
               <CheckIcon class="h-4 w-4 mr-2 text-green-500" />
             {:else}
-              <RefreshCwIcon class="h-4 w-4 mr-2" />
+              <RotateCwIcon class="h-4 w-4 mr-2" />
             {/if}
             Refresh
           </Button>

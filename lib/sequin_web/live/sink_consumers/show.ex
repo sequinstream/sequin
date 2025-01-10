@@ -428,6 +428,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:noreply, assign(socket, consumer: consumer)}
   end
 
+  @impl Phoenix.LiveView
+  def handle_event("refresh_health", _params, socket) do
+    consumer = put_health(socket.assigns.consumer)
+    {:noreply, assign(socket, :consumer, consumer)}
+  end
+
   defp handle_edit_finish(updated_consumer) do
     send(self(), {:updated_consumer, updated_consumer})
   end

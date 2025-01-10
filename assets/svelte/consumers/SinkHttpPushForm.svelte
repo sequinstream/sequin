@@ -26,7 +26,7 @@
   import {
     Loader2,
     ExternalLink,
-    RefreshCwIcon,
+    RotateCwIcon,
     CheckIcon,
     ChevronDown,
     Plus,
@@ -236,11 +236,11 @@
           aria-label="Refresh HTTP Endpoints"
         >
           {#if httpEndpointsRefreshState === "refreshing"}
-            <RefreshCwIcon class="h-5 w-5 animate-spin" />
+            <RotateCwIcon class="h-5 w-5 animate-spin" />
           {:else if httpEndpointsRefreshState === "done"}
             <CheckIcon class="h-5 w-5 text-green-500" />
           {:else}
-            <RefreshCwIcon class="h-5 w-5" />
+            <RotateCwIcon class="h-5 w-5" />
           {/if}
         </Button>
         <DropdownMenu>

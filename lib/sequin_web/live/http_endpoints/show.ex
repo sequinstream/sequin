@@ -28,8 +28,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 1000)
-    {:ok, health} = Health.health(socket.assigns.http_endpoint)
-    {:noreply, assign(socket, :http_endpoint, %{socket.assigns.http_endpoint | health: health})}
+    {:noreply, assign_health(socket)}
   end
 
   def handle_info(:update_metrics, socket) do
@@ -77,6 +76,21 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
       {:reply, %{ok: true}, push_navigate(socket, to: ~p"/http-endpoints")}
     else
       {:reply, %{error: "Cannot delete HTTP endpoint with consumers."}, socket}
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("refresh_health", _params, socket) do
+    {:noreply, assign_health(socket)}
+  end
+
+  defp assign_health(socket) do
+    case Health.health(socket.assigns.http_endpoint) do
+      {:ok, health} ->
+        assign(socket, http_endpoint: %{socket.assigns.http_endpoint | health: health})
+
+      {:error, _} ->
+        socket
     end
   end
 

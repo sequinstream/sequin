@@ -6,7 +6,7 @@
     Database,
     ExternalLink,
     Clock,
-    RefreshCw,
+    RotateCw,
     Loader2,
     MoreHorizontal,
     Logs,
@@ -37,6 +37,10 @@
   let deleteConfirmDialogLoading = false;
   let deleteErrorMessage: string | null = null;
 
+  function pushEvent(event: string, data: any, cb?: (val: any) => void) {
+    live.pushEventTo(`#${parent}`, event, data, cb);
+  }
+
   function handleDelete() {
     showDeleteConfirmDialog = true;
   }
@@ -63,13 +67,13 @@
 
   function handleRefreshReplicaWarning() {
     refreshReplicaWarningLoading = true;
-    live.pushEventTo(`#${parent}`, "refresh_replica_warning", {}, () => {
+    pushEvent("refresh_replica_warning", {}, () => {
       refreshReplicaWarningLoading = false;
     });
   }
 
   function handleDismissReplicaWarning() {
-    live.pushEventTo(`#${parent}`, "dismiss_replica_warning", {});
+    pushEvent("dismiss_replica_warning", {});
   }
 </script>
 
@@ -101,7 +105,7 @@
               >
             </div>
             <div class="flex items-center gap-2">
-              <RefreshCw class="h-4 w-4" />
+              <RotateCw class="h-4 w-4" />
               <span
                 >Updated {formatRelativeTimestamp(walPipeline.updated_at)}</span
               >
@@ -129,7 +133,7 @@
 
   <main class="container mx-auto px-4 py-8 grid gap-6">
     <div class="grid gap-6 md:grid-cols-2">
-      <HealthComponent health={walPipeline.health} />
+      <HealthComponent health={walPipeline.health} {pushEvent} />
 
       <Card>
         <CardContent class="p-6">
@@ -187,7 +191,7 @@
               size="sm"
               on:click={handleRefreshReplicaWarning}
             >
-              <RefreshCw class="h-4 w-4 mr-1" />
+              <RotateCw class="h-4 w-4 mr-1" />
               Refresh
               <span slot="loading">Refreshing...</span>
             </Button>

@@ -99,25 +99,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
     )
 
-    seqs_to_deliver =
-      messages
-      |> Stream.reject(fn
-        %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
-        _ -> false
-      end)
-      |> Enum.map(& &1.seq)
-
-    {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
-    {delivered_messages, messages} = Enum.split_with(messages, &(&1.seq in delivered_seqs))
-
-    unless delivered_seqs == [] do
-      Logger.warning(
-        "Received #{length(delivered_seqs)} messages for consumer #{state.consumer.id} that have already been delivered",
-        seqs: delivered_seqs
-      )
-
-      SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
-    end
+    {state, messages} = handle_idempotency(state, messages)
 
     broadway_messages =
       messages
@@ -145,9 +127,38 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         Tracer.Server.messages_received(consumer, messages)
         messages
 
-      {:error, error} ->
-        Logger.error("Error producing messages for consumer #{consumer.id}", error: error)
+      {:error, _error} ->
         []
+    end
+  end
+
+  defp handle_idempotency(state, messages) do
+    seqs_to_deliver =
+      messages
+      |> Stream.reject(fn
+        %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
+        %ConsumerRecord{data: %ConsumerRecordData{action: :read}} -> true
+        _ -> false
+      end)
+      |> Enum.map(& &1.seq)
+
+    {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
+    {delivered_messages, filtered_messages} = Enum.split_with(messages, &(&1.seq in delivered_seqs))
+
+    if delivered_messages == [] do
+      {state, messages}
+    else
+      Logger.warning(
+        "Received #{length(delivered_seqs)} messages for consumer #{state.consumer.id} that have already been delivered",
+        seqs: delivered_seqs
+      )
+
+      SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
+
+      if state.receive_timer, do: Process.cancel_timer(state.receive_timer)
+      send(self(), :receive_messages)
+
+      {%{state | receive_timer: nil}, filtered_messages}
     end
   end
 

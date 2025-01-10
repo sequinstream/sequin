@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.LifecycleEventWorker do
 
   alias Sequin.Consumers
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
+  alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Health.CheckHttpEndpointHealthWorker
 
@@ -44,6 +45,7 @@ defmodule Sequin.Consumers.LifecycleEventWorker do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id),
              :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+          SlotSupervisor.start_message_store!(consumer)
           ConsumersSupervisor.start_for_sink_consumer(consumer)
           :ok
         end
@@ -53,10 +55,12 @@ defmodule Sequin.Consumers.LifecycleEventWorker do
              :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
           case consumer.status do
             :active ->
+              SlotSupervisor.start_message_store!(consumer)
               ConsumersSupervisor.restart_for_sink_consumer(consumer)
               :ok
 
             :disabled ->
+              SlotSupervisor.stop_message_store(consumer.replication_slot_id, consumer.id)
               ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok
           end
@@ -65,7 +69,8 @@ defmodule Sequin.Consumers.LifecycleEventWorker do
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
-        with :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id) do
+        with :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id),
+             :ok <- SlotSupervisor.stop_message_store(replication_slot_id, id) do
           ConsumersSupervisor.stop_for_sink_consumer(id)
         end
     end

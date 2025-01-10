@@ -86,14 +86,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
 
   def stop_for_sink_consumer(supervisor \\ dynamic_supervisor(), consumer_or_id)
 
-  def stop_for_sink_consumer(_supervisor, %SinkConsumer{type: :sequin_stream} = consumer) do
-    SlotSupervisor.stop_child(consumer.replication_slot_id, consumer.id)
-    :ok
-  end
-
-  def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id, replication_slot_id: replication_slot_id}) do
-    SlotSupervisor.stop_child(replication_slot_id, id)
-
+  def stop_for_sink_consumer(supervisor, %SinkConsumer{id: id}) do
     Enum.each(
       Map.values(@sinks_to_pipelines),
       &Sequin.DynamicSupervisor.stop_child(supervisor, &1.via_tuple(id))

@@ -320,12 +320,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl Postgrex.ReplicationConnection
   def handle_call({:monitor_message_store, consumer_id}, from, state) do
-    pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
-    ref = Process.monitor(pid)
-    :ok = SlotMessageStore.set_monitor_ref(pid, ref)
-    Logger.info("Monitoring message store for consumer #{consumer_id}")
-    GenServer.reply(from, :ok)
-    {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
+    if Map.has_key?(state.message_store_refs, consumer_id) do
+      GenServer.reply(from, :ok)
+      {:noreply, state}
+    else
+      pid = GenServer.whereis(SlotMessageStore.via_tuple(consumer_id))
+      ref = Process.monitor(pid)
+      :ok = SlotMessageStore.set_monitor_ref(pid, ref)
+      Logger.info("Monitoring message store for consumer #{consumer_id}")
+      GenServer.reply(from, :ok)
+      {:noreply, %{state | message_store_refs: Map.put(state.message_store_refs, consumer_id, ref)}}
+    end
   end
 
   @impl Postgrex.ReplicationConnection

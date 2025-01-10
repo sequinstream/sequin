@@ -289,7 +289,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
   describe "min_unflushed_commit_lsn/1" do
     setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
+      consumer = ConsumersFactory.sink_consumer()
 
       state = %State{
         consumer: consumer,
@@ -299,7 +299,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
         slot_processor_monitor_ref: make_ref()
       }
 
-      {:ok, %{state: state, message_kind: Enum.random([:record, :event])}}
+      {:ok, %{state: state, message_kind: consumer.message_kind}}
     end
 
     test "returns nil when there are no records or events", %{state: state} do

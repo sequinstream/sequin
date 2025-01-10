@@ -441,11 +441,8 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       records = list_messages(consumer.id)
-      assert length(records) == 2
-      assert Enum.count(records, & &1.deleted) == 1
-
-      [record1, record2] = records
-      assert record1.group_id == record2.group_id
+      assert length(records) == 1
+      refute Enum.any?(records, & &1.deleted)
     end
 
     test "deletes are replicated to consumer events when replica identity full", %{
@@ -1094,7 +1091,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_struct(data.metadata.commit_timestamp, DateTime)
     end
 
-    test "deletes are replicated to consumer records when replica identity default", %{record_consumer: consumer} do
+    test "deletes are rejected from consumer records when replica identity default", %{record_consumer: consumer} do
       character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
 
       assert_receive {SlotProcessor, :flush_messages}, 500
@@ -1105,10 +1102,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert_receive {SlotProcessor, :flush_messages}, 500
 
       records = list_messages(consumer.id)
-      assert Enum.count(records, & &1.deleted) == 1
-
-      [record1, record2] = records
-      assert record1.group_id == record2.group_id
+      refute Enum.any?(records, & &1.deleted)
     end
 
     test "consumer with column filter only receives relevant messages", %{

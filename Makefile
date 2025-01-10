@@ -1,4 +1,4 @@
-.PHONY: dev deviex signoff signoff-dirty signoff_stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs redis-console-consumer
+.PHONY: dev deviex signoff signoff-dirty signoff-stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs redis-console-consumer
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -18,7 +18,7 @@ signoff:
 signoff-dirty:
 	@./scripts/signoff.sh --dirty
 
-signoff_stack:
+signoff-stack:
 	@./scripts/signoff_stack.sh
 
 merge:
@@ -79,7 +79,7 @@ help:
 	@echo "  make deviex    - Open an IEx session on the running local app"
 	@echo "  make signoff   - Run the signoff script"
 	@echo "  make signoff-dirty - Run the signoff script with --dirty flag"
-	@echo "  make signoff_stack - Run the signoff_stack script"
+	@echo "  make signoff-stack - Run the signoff-stack script"
 	@echo "  make merge     - Run the merge script"
 	@echo "  make merge-force - Run the merge script, bypassing signoff check"
 	@echo "  make init      - Create .settings.json from .settings.json.example"

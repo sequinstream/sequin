@@ -9,7 +9,6 @@
     X,
     Play,
     Pause,
-    RefreshCw,
     RotateCw,
     Check,
   } from "lucide-svelte";
@@ -710,7 +709,7 @@
                         {#if isRefreshingLogs}
                           <Loader2 class="h-4 w-4 mr-2 animate-spin" />
                         {:else}
-                          <RefreshCw class="h-4 w-4 mr-2" />
+                          <RotateCw class="h-4 w-4 mr-2" />
                         {/if}
                         Refresh
                       </Button>

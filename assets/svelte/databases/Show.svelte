@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     Clock,
-    RefreshCw,
+    RotateCw,
     Radio,
     ExternalLink,
     SquareStack,
@@ -77,7 +77,7 @@
   <main class="container mx-auto px-4 py-8">
     <!-- Existing overview content -->
     <div class="grid gap-6 md:grid-cols-3 mb-6">
-      <HealthComponent health={database.health} />
+      <HealthComponent health={database.health} {pushEvent} />
 
       <Card>
         <CardContent class="p-6">
@@ -92,9 +92,9 @@
               {#if $refreshingTables}
                 <Loader2 class="h-4 w-4 mr-2 animate-spin" />
               {:else}
-                <RefreshCw class="h-4 w-4 mr-2" />
+                <RotateCw class="h-4 w-4 mr-2" />
               {/if}
-              Refresh
+              Update
             </Button>
           </div>
           <div class="text-4xl font-bold mb-1">{database.tables.length}</div>
@@ -102,9 +102,7 @@
             class="text-sm text-gray-500"
             class:hidden={!database.tables_refreshed_at}
           >
-            Last refreshed {formatRelativeTimestamp(
-              database.tables_refreshed_at,
-            )}
+            Last updated {formatRelativeTimestamp(database.tables_refreshed_at)}
           </div>
         </CardContent>
       </Card>

@@ -4,7 +4,7 @@
     ChevronsLeftRightEllipsis,
     Braces,
     Clock,
-    RefreshCw,
+    RotateCw,
     Activity,
     Eye,
     EyeOff,
@@ -36,8 +36,12 @@
   let deleteErrorMessage: string | null = null;
   let showEncryptedValues = {};
 
+  function pushEvent(event: string, data: any, cb?: (val: any) => void) {
+    live.pushEventTo(`#${parent_id}`, event, data, cb);
+  }
+
   function handleEdit() {
-    live.pushEventTo(`#${parent_id}`, "edit", {});
+    pushEvent("edit", {});
   }
 
   function confirmDelete() {
@@ -124,7 +128,7 @@
               >
             </div>
             <div class="flex items-center gap-2">
-              <RefreshCw class="h-4 w-4" />
+              <RotateCw class="h-4 w-4" />
               <span
                 >Updated {formatRelativeTimestamp(
                   http_endpoint.updated_at,
@@ -149,7 +153,7 @@
 
   <div class="container mx-auto px-4 py-8">
     <div class="grid gap-6 md:grid-cols-3 mb-8">
-      <HealthComponent health={http_endpoint.health} />
+      <HealthComponent health={http_endpoint.health} {pushEvent} />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">

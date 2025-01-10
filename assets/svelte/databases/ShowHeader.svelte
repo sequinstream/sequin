@@ -2,7 +2,7 @@
   import {
     ArrowLeft,
     Clock,
-    RefreshCw,
+    RotateCw,
     Database,
     Loader2,
     CirclePlay,
@@ -115,7 +115,7 @@
             <span>Created {formatRelativeTimestamp(database.inserted_at)}</span>
           </div>
           <div class="flex items-center gap-2">
-            <RefreshCw class="h-4 w-4" />
+            <RotateCw class="h-4 w-4" />
             <span>Updated {formatRelativeTimestamp(database.updated_at)}</span>
           </div>
         </div>

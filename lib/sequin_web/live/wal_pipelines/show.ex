@@ -70,6 +70,11 @@ defmodule SequinWeb.WalPipelinesLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("refresh_health", _params, socket) do
+    {:noreply, assign_health(socket)}
+  end
+
+  @impl Phoenix.LiveView
   def handle_info(:update_health, socket) do
     Process.send_after(self(), :update_health, 10_000)
     {:noreply, assign_health(socket)}

@@ -1,11 +1,18 @@
 <script lang="ts">
   import HealthIcon from "./HealthIcon.svelte";
-  import { MoreHorizontal } from "lucide-svelte";
+  import { MoreHorizontal, RotateCw } from "lucide-svelte";
   import type { Health, Check } from "./Types";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
 
   export let health: Health;
+  export let pushEvent: (
+    event: string,
+    data: any,
+    cb: (val: any) => void,
+  ) => void;
+
+  let healthRefreshing = false;
 
   const statusColor = {
     healthy: "border-green-500",
@@ -22,6 +29,24 @@
     initializing: "text-blue-600",
     paused: "text-gray-500",
   };
+
+  function handleRefreshClicked() {
+    if (healthRefreshing) return;
+
+    healthRefreshing = true;
+    const minLoadingTime = Math.random() * 250 + 250; // Random time between 250-500ms
+    const startTime = Date.now();
+
+    pushEvent("refresh_health", {}, () => {
+      // Add a debounce, so we don't show the loading state too fast
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+
+      setTimeout(() => {
+        healthRefreshing = false;
+      }, remainingTime);
+    });
+  }
 
   $: checkCounts = Object.values(health.checks).reduce(
     (acc, check: Check) => {
@@ -67,43 +92,53 @@
       <HealthIcon status={health.status} />
       <h2 class="text-lg font-medium ml-2">Health</h2>
     </div>
-    <Popover.Root>
-      <Popover.Trigger asChild let:builder>
-        <Button builders={[builder]} variant="ghost" size="icon">
-          <MoreHorizontal class="h-4 w-4" />
-        </Button>
-      </Popover.Trigger>
-      <Popover.Content class="w-64">
-        <div class="space-y-2">
-          {#each Object.entries(health.checks) as [checkId, check]}
-            <div class="py-2 border-b last:border-b-0">
-              <div class="flex items-center">
-                <HealthIcon status={check.status} />
-                <span class="font-medium ml-2 text-sm">{check.name}</span>
+    <div class="flex items-center gap-2">
+      <Button
+        disabled={healthRefreshing}
+        variant="outline"
+        size="icon"
+        on:click={handleRefreshClicked}
+      >
+        <RotateCw class="h-4 w-4" />
+      </Button>
+      <Popover.Root>
+        <Popover.Trigger asChild let:builder>
+          <Button builders={[builder]} variant="outline" size="icon">
+            <MoreHorizontal class="h-4 w-4" />
+          </Button>
+        </Popover.Trigger>
+        <Popover.Content class="w-64">
+          <div class="space-y-2">
+            {#each Object.entries(health.checks) as [checkId, check]}
+              <div class="py-2 border-b last:border-b-0">
+                <div class="flex items-center">
+                  <HealthIcon status={check.status} />
+                  <span class="font-medium ml-2 text-sm">{check.name}</span>
+                </div>
+                {#if check.message}
+                  <p class="text-xs text-gray-400 mt-1 ml-7">{check.message}</p>
+                {/if}
+                {#if check.error}
+                  <p
+                    class="text-xs text-red-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"
+                  >
+                    Error: {check.error.message}
+                  </p>
+                {/if}
+                {#if check.status === "stale"}
+                  <p
+                    class="text-xs text-yellow-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"
+                  >
+                    No update received from this check in the expected time
+                    interval. This is usually a bug - contact the Sequin team.
+                  </p>
+                {/if}
               </div>
-              {#if check.message}
-                <p class="text-xs text-gray-400 mt-1 ml-7">{check.message}</p>
-              {/if}
-              {#if check.error}
-                <p
-                  class="text-xs text-red-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"
-                >
-                  Error: {check.error.message}
-                </p>
-              {/if}
-              {#if check.status === "stale"}
-                <p
-                  class="text-xs text-yellow-600 mt-2 ml-1 bg-gray-100 font-mono p-2 rounded"
-                >
-                  No update received from this check in the expected time
-                  interval. This is usually a bug - contact the Sequin team.
-                </p>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      </Popover.Content>
-    </Popover.Root>
+            {/each}
+          </div>
+        </Popover.Content>
+      </Popover.Root>
+    </div>
   </div>
   <p class="text-xs {checkStatusColor[health.status]}">
     {statusMessage}

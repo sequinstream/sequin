@@ -21,6 +21,9 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
          database = Repo.preload(database, :replication_slot),
          :ok <- check_database(database) do
       check_replication_slot(database)
+
+      :syn.publish(:replication, {:postgres_replication_slot_checked, database.id}, :postgres_replication_slot_checked)
+
       :ok
     else
       {:error, %Error.NotFoundError{}} ->

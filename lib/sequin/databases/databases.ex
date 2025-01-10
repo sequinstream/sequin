@@ -7,6 +7,7 @@ defmodule Sequin.Databases do
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
+  alias Sequin.DatabasesRuntime.LifecycleEventWorker
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
   alias Sequin.Health.CheckPostgresReplicationSlotWorker
@@ -63,43 +64,45 @@ defmodule Sequin.Databases do
     end
   end
 
-  def create_db_for_account(account_id, attrs) do
-    res =
-      %PostgresDatabase{account_id: account_id}
-      |> PostgresDatabase.changeset(attrs)
-      |> Repo.insert()
-
-    case res do
-      {:ok, db} -> {:ok, db}
-      {:error, changeset} -> {:error, Error.validation(changeset: changeset)}
-    end
-  end
-
-  def create_db_for_account_with_lifecycle(account_id, attrs) do
+  def create_db(account_id, attrs) do
     Repo.transact(fn ->
-      with {:ok, db} <- create_db_for_account(account_id, attrs),
+      res =
+        %PostgresDatabase{account_id: account_id}
+        |> PostgresDatabase.changeset(attrs)
+        |> Repo.insert()
+
+      with {:ok, db} <- res,
            {:ok, db} <- update_tables(db) do
         CheckPostgresReplicationSlotWorker.enqueue(db.id)
 
         {:ok, db}
+      else
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:error, Error.validation(changeset: changeset)}
+
+        error ->
+          error
       end
     end)
   end
 
   def update_db(%PostgresDatabase{} = db, attrs) do
-    res =
-      db
-      |> PostgresDatabase.changeset(attrs)
-      |> Repo.update()
+    Repo.transact(fn ->
+      res =
+        db
+        |> PostgresDatabase.changeset(attrs)
+        |> Repo.update()
 
-    case res do
-      {:ok, updated_db} ->
-        CheckPostgresReplicationSlotWorker.enqueue(db.id, unique: false)
-        {:ok, updated_db}
+      case res do
+        {:ok, updated_db} ->
+          CheckPostgresReplicationSlotWorker.enqueue(updated_db.id, unique: false)
+          LifecycleEventWorker.enqueue(:update, :postgres_database, updated_db.id)
+          {:ok, updated_db}
 
-      {:error, changeset} ->
-        {:error, Error.validation(changeset: changeset)}
-    end
+        {:error, changeset} ->
+          {:error, Error.validation(changeset: changeset)}
+      end
+    end)
   end
 
   def delete_db(%PostgresDatabase{} = db) do
@@ -113,14 +116,15 @@ defmodule Sequin.Databases do
       health_checker_query =
         Oban.Job
         |> ObanQuery.where_args(%{postgres_database_id: db.id})
-        |> ObanQuery.where_worker(Sequin.HealthRuntime.PostgresDatabaseHealthWorker)
+        |> ObanQuery.where_worker(Sequin.Health.CheckPostgresReplicationSlotWorker)
 
       # Check for related entities that need to be removed first
       with :ok <- check_related_entities(db),
-           {:ok, _} <- Replication.delete_pg_replication_with_lifecycle(db.replication_slot),
+           {:ok, _} <- Replication.delete_pg_replication(db.replication_slot),
            {:ok, _} <- delete_sequences(db),
            {:ok, _} <- Repo.delete(db),
            {:ok, _} <- Oban.cancel_all_jobs(health_checker_query) do
+        LifecycleEventWorker.enqueue(:delete, :postgres_database, db.id, %{replication_slot_id: db.replication_slot.id})
         :ok
       end
     end)

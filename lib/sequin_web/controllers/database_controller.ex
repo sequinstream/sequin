@@ -28,7 +28,7 @@ defmodule SequinWeb.DatabaseController do
 
     with {:ok, cleaned_params} <- parse_params(params),
          :ok <- test_database_connection(cleaned_params),
-         {:ok, database} <- Databases.create_db_for_account(account_id, cleaned_params) do
+         {:ok, database} <- Databases.create_db(account_id, cleaned_params) do
       render(conn, "show.json", database: database)
     end
   end

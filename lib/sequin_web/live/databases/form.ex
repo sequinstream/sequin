@@ -418,10 +418,10 @@ defmodule SequinWeb.DatabasesLive.Form do
 
   defp create_database(account_id, db_params, replication_params) do
     account_id
-    |> Databases.create_db_for_account_with_lifecycle(db_params)
+    |> Databases.create_db(db_params)
     |> case do
       {:ok, db} ->
-        case Replication.create_pg_replication_for_account_with_lifecycle(
+        case Replication.create_pg_replication(
                account_id,
                Map.put(replication_params, "postgres_database_id", db.id)
              ) do

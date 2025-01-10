@@ -10,7 +10,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.LifecycleEventWorker
-  alias Sequin.Consumers.Query
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.CiStringValue
   alias Sequin.Consumers.SequenceFilter.ColumnFilter

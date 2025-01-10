@@ -624,7 +624,7 @@ defmodule Sequin.Accounts do
       # Delete associated PostgresReplicationSlots
       account.id
       |> Replication.list_pg_replications_for_account()
-      |> Enum.each(&Replication.delete_pg_replication_with_lifecycle/1)
+      |> Enum.each(&Replication.delete_pg_replication/1)
 
       # Finally, delete the account
       delete_account(account)

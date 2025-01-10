@@ -271,12 +271,12 @@ defmodule Sequin.YamlLoader do
     database = Map.merge(@database_defaults, database)
 
     account_id
-    |> Databases.create_db_for_account_with_lifecycle(database)
+    |> Databases.create_db(database)
     |> case do
       {:ok, db} ->
         replication_params = Map.put(database, "postgres_database_id", db.id)
 
-        case Replication.create_pg_replication_for_account_with_lifecycle(account_id, replication_params) do
+        case Replication.create_pg_replication(account_id, replication_params) do
           {:ok, replication} ->
             Logger.info("Created database: #{inspect(db, pretty: true)}")
             {:ok, %PostgresDatabase{db | replication_slot: replication}}

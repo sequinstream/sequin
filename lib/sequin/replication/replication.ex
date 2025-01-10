@@ -4,6 +4,7 @@ defmodule Sequin.Replication do
 
   alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.DatabasesRuntime.LifecycleEventWorker
   alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
@@ -54,53 +55,53 @@ defmodule Sequin.Replication do
     end
   end
 
-  def create_pg_replication_for_account_with_lifecycle(account_id, attrs) do
+  def create_pg_replication(account_id, attrs) do
     attrs = Sequin.Map.atomize_keys(attrs)
     attrs = Map.put(attrs, :status, :active)
 
-    with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
-         :ok <- validate_replication_config(postgres_database, attrs) do
-      pg_replication =
-        %PostgresReplicationSlot{account_id: account_id}
-        |> PostgresReplicationSlot.create_changeset(attrs)
-        |> Repo.insert()
+    Repo.transact(fn ->
+      with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
+           :ok <- validate_replication_config(postgres_database, attrs) do
+        pg_replication =
+          %PostgresReplicationSlot{account_id: account_id}
+          |> PostgresReplicationSlot.create_changeset(attrs)
+          |> Repo.insert()
 
-      case pg_replication do
-        {:ok, pg_replication} ->
-          # We skip the start when creating the replication slot inside a transaction, because
-          # the transaction might be rolled back, leaving a zombie process.
-          unless Application.get_env(:sequin, :env) == :test or Repo.in_transaction?() do
-            DatabasesRuntimeSupervisor.start_replication(pg_replication)
-          end
-
+        with {:ok, pg_replication} <- pg_replication do
+          LifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
           {:ok, pg_replication}
+        end
+      else
+        {:error, %NotFoundError{}} ->
+          {:error, Error.validation(summary: "Database with id #{attrs[:postgres_database_id]} not found")}
 
         error ->
           error
       end
-    else
-      {:error, %NotFoundError{}} ->
-        {:error, Error.validation(summary: "Database with id #{attrs[:postgres_database_id]} not found")}
-
-      error ->
-        error
-    end
+    end)
   end
 
   def update_pg_replication(%PostgresReplicationSlot{} = pg_replication, attrs) do
-    pg_replication
-    |> PostgresReplicationSlot.update_changeset(attrs)
-    |> Repo.update()
+    Repo.transact(fn ->
+      res =
+        pg_replication
+        |> PostgresReplicationSlot.update_changeset(attrs)
+        |> Repo.update()
+
+      with {:ok, pg_replication} <- res do
+        LifecycleEventWorker.enqueue(:update, :postgres_replication_slot, pg_replication.id)
+        {:ok, pg_replication}
+      end
+    end)
   end
 
   def delete_pg_replication(%PostgresReplicationSlot{} = pg_replication) do
-    Repo.delete(pg_replication)
-  end
-
-  def delete_pg_replication_with_lifecycle(%PostgresReplicationSlot{} = pg_replication) do
-    res = Repo.delete(pg_replication)
-    DatabasesRuntimeSupervisor.stop_replication(pg_replication)
-    res
+    Repo.transact(fn ->
+      with {:ok, deleted_pg_replication} <- Repo.delete(pg_replication) do
+        LifecycleEventWorker.enqueue(:delete, :postgres_replication_slot, pg_replication.id)
+        {:ok, deleted_pg_replication}
+      end
+    end)
   end
 
   def add_info(%PostgresReplicationSlot{} = pg_replication) do

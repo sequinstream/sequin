@@ -24,7 +24,7 @@ defmodule SequinWeb.PostgresReplicationController do
   def create(conn, params) do
     account_id = conn.assigns.account_id
 
-    with {:ok, postgres_replication} <- Replication.create_pg_replication_for_account_with_lifecycle(account_id, params) do
+    with {:ok, postgres_replication} <- Replication.create_pg_replication(account_id, params) do
       render(conn, "show.json", postgres_replication: postgres_replication)
     end
   end
@@ -43,7 +43,7 @@ defmodule SequinWeb.PostgresReplicationController do
     account_id = conn.assigns.account_id
 
     with {:ok, postgres_replication} <- Replication.get_pg_replication_for_account(account_id, id),
-         {:ok, _postgres_replication} <- Replication.delete_pg_replication_with_lifecycle(postgres_replication) do
+         {:ok, _postgres_replication} <- Replication.delete_pg_replication(postgres_replication) do
       render(conn, "delete.json", postgres_replication: postgres_replication)
     end
   end

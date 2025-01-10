@@ -863,7 +863,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert health.status == :error
 
       check = Enum.find(health.checks, &(&1.slug == :replication_connected))
-      assert check.status == :unhealthy
+      assert check.status == :error
       assert check.error.message =~ "Replication slot '#{non_existent_slot}' does not exist"
     end
 

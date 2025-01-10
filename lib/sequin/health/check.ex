@@ -7,7 +7,7 @@ defmodule Sequin.Health.Check do
   alias Sequin.Error
   alias Sequin.JSON
 
-  @type status :: :healthy | :unhealthy | :waiting | :initializing | :stale
+  @type status :: :healthy | :error | :waiting | :initializing | :stale
 
   typedstruct do
     field :slug, atom(), enforce: true
@@ -63,6 +63,7 @@ defmodule Sequin.Health.Check do
       :endpoint_reachable -> "Endpoint reachable"
       # WAL pipeline checks
       :destination_insert -> "Destination insert"
+      :slot_health -> "Database"
     end
   end
 

@@ -147,7 +147,7 @@ defmodule Sequin.Health do
       status =
         cond do
           paused?(entity) -> :paused
-          Enum.any?(checks, fn check -> check.status == :unhealthy end) -> :error
+          Enum.any?(checks, fn check -> check.status == :error end) -> :error
           Enum.any?(checks, fn check -> check.status == :stale end) -> :warning
           Enum.any?(checks, fn check -> check.status == :warning end) -> :warning
           Enum.any?(checks, fn check -> check.status == :initializing end) -> :initializing
@@ -165,6 +165,37 @@ defmodule Sequin.Health do
          erroring_since: erroring_since(checks)
        }}
     end
+  end
+
+  @spec add_slot_health_to_consumer_health(consumer_health :: t(), slot_health :: t()) :: t()
+  def add_slot_health_to_consumer_health(%__MODULE__{} = consumer_health, %__MODULE__{} = slot_health) do
+    check =
+      if(slot_health.status in [:error, :warning]) do
+        %Check{
+          slug: :slot_health,
+          status: :warning,
+          error: Error.invariant(message: "Database or replication slot is unhealthy, see database health for details"),
+          erroring_since: slot_health.erroring_since,
+          last_healthy_at: slot_health.last_healthy_at
+        }
+      else
+        %Check{
+          slug: :slot_health,
+          status: :healthy,
+          error: nil,
+          erroring_since: nil,
+          last_healthy_at: slot_health.last_healthy_at
+        }
+      end
+
+    status =
+      if check.status == :warning and consumer_health.status not in [:paused, :error] do
+        :warning
+      else
+        consumer_health.status
+      end
+
+    %{consumer_health | checks: [check | consumer_health.checks], status: status}
   end
 
   defp paused?(%PostgresReplicationSlot{status: status}) do
@@ -255,7 +286,7 @@ defmodule Sequin.Health do
   end
 
   defp erroring_since(checks) do
-    unhealthy_checks = Enum.filter(checks, fn check -> check.status == :unhealthy end)
+    unhealthy_checks = Enum.filter(checks, fn check -> check.status == :error end)
 
     if Enum.any?(unhealthy_checks) do
       unhealthy_checks
@@ -310,7 +341,7 @@ defmodule Sequin.Health do
     messages_check = check(:replication_messages, slot, events)
 
     cond do
-      reachable_check.status == :unhealthy ->
+      reachable_check.status == :error ->
         [
           reachable_check,
           %Check{slug: :replication_configuration, status: :initializing},
@@ -318,7 +349,7 @@ defmodule Sequin.Health do
           %Check{slug: :replication_messages, status: :initializing}
         ]
 
-      config_check.status == :unhealthy ->
+      config_check.status == :error ->
         [
           reachable_check,
           config_check,
@@ -326,7 +357,7 @@ defmodule Sequin.Health do
           %Check{slug: :replication_messages, status: :initializing}
         ]
 
-      connected_check.status == :unhealthy ->
+      connected_check.status == :error ->
         [
           reachable_check,
           config_check,
@@ -346,7 +377,7 @@ defmodule Sequin.Health do
     delivery_check = basic_check(:messages_pending_delivery, events, :waiting)
     acknowledge_check = basic_check(:messages_delivered, events, :waiting)
 
-    # if config_check.status == :unhealthy do
+    # if config_check.status == :error do
     #   [
     #     config_check,
     #     %Check{slug: :messages_filtered, status: :initializing},
@@ -381,7 +412,7 @@ defmodule Sequin.Health do
 
       event.status == :fail ->
         put_check_timestamps(
-          %{base_check | status: :unhealthy, error: event.error},
+          %{base_check | status: :error, error: event.error},
           [event]
         )
 
@@ -398,7 +429,7 @@ defmodule Sequin.Health do
     cond do
       is_nil(conn_checked_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
         error = expected_event_error(slot.id, :db_connectivity_checked)
-        %{base_check | status: :unhealthy, error: error}
+        %{base_check | status: :error, error: error}
 
       is_nil(conn_checked_event) ->
         base_check
@@ -407,7 +438,7 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :stale}, [conn_checked_event])
 
       conn_checked_event.status == :fail ->
-        put_check_timestamps(%{base_check | status: :unhealthy, error: conn_checked_event.error}, [conn_checked_event])
+        put_check_timestamps(%{base_check | status: :error, error: conn_checked_event.error}, [conn_checked_event])
 
       true ->
         put_check_timestamps(%{base_check | status: :healthy}, [conn_checked_event])
@@ -421,13 +452,13 @@ defmodule Sequin.Health do
     cond do
       is_nil(config_checked_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
         error = expected_event_error(slot.id, :replication_slot_checked)
-        %{base_check | status: :unhealthy, error: error}
+        %{base_check | status: :error, error: error}
 
       is_nil(config_checked_event) ->
         base_check
 
       config_checked_event.status != :success ->
-        put_check_timestamps(%{base_check | status: :unhealthy, error: config_checked_event.error}, [config_checked_event])
+        put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [config_checked_event])
 
       Time.before_min_ago?(config_checked_event.last_event_at, 15) ->
         put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
@@ -449,13 +480,13 @@ defmodule Sequin.Health do
               "Sequin seems to be having trouble connecting to the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the database's replication slot."
           )
 
-        %{base_check | status: :unhealthy, error: error}
+        %{base_check | status: :error, error: error}
 
       is_nil(connected_event) ->
         base_check
 
       connected_event.status == :fail ->
-        put_check_timestamps(%{base_check | status: :unhealthy, error: connected_event.error}, [
+        put_check_timestamps(%{base_check | status: :error, error: connected_event.error}, [
           connected_event
         ])
 
@@ -478,7 +509,7 @@ defmodule Sequin.Health do
               "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason."
           )
 
-        %{base_check | status: :unhealthy, error: error}
+        %{base_check | status: :error, error: error}
 
       heartbeat_recv_event && Time.before_min_ago?(heartbeat_recv_event.last_event_at, 5) ->
         error =
@@ -488,10 +519,10 @@ defmodule Sequin.Health do
             service: :postgres_replication_slot
           )
 
-        put_check_timestamps(%{base_check | status: :unhealthy, error: error}, [heartbeat_recv_event])
+        put_check_timestamps(%{base_check | status: :error, error: error}, [heartbeat_recv_event])
 
       messages_processed_event && messages_processed_event.status == :fail ->
-        put_check_timestamps(%{base_check | status: :unhealthy, error: messages_processed_event.error}, [
+        put_check_timestamps(%{base_check | status: :error, error: messages_processed_event.error}, [
           messages_processed_event
         ])
 

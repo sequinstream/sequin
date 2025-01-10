@@ -56,6 +56,8 @@ defmodule SequinWeb.DatabasesLive.Show do
           Process.send_after(self(), :update_messages, 1000)
         end
 
+        :syn.join(:replication, {:postgres_replication_slot_checked, database.id}, self())
+
         {:ok, socket}
 
       {:error, _} ->
@@ -156,7 +158,8 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
-    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id)
+    # Will receive a :postgres_replication_slot_checked message when the worker finishes
+    CheckPostgresReplicationSlotWorker.enqueue(socket.assigns.database.id, unique: false)
     {:noreply, assign_health(socket)}
   end
 
@@ -206,6 +209,10 @@ defmodule SequinWeb.DatabasesLive.Show do
   def handle_info({ref, {:error, _reason}}, socket) do
     Process.demonitor(ref, [:flush])
     {:noreply, assign(socket, refreshing_tables: false)}
+  end
+
+  def handle_info({:postgres_replication_slot_checked, _}, socket) do
+    {:noreply, assign_health(socket)}
   end
 
   @impl Phoenix.LiveView

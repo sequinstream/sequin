@@ -57,6 +57,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       messages =
         messages
         |> intake_messages()
+        |> reject_record_deletes(state.consumer.message_kind)
         |> Map.new(&{&1.ack_id, &1})
 
       %{state | messages: Map.merge(state.messages, messages)}
@@ -224,6 +225,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     defp intake_messages(messages) do
       Enum.map(messages, fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true} end)
+    end
+
+    defp reject_record_deletes(messages, :record) do
+      Enum.reject(messages, fn %ConsumerRecord{deleted: deleted} -> deleted end)
+    end
+
+    defp reject_record_deletes(messages, :event) do
+      messages
     end
 
     # Helper function to compare flushed_at values where nil is "smaller" than any DateTime

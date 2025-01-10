@@ -6,6 +6,7 @@ defmodule SequinWeb.PullController do
   alias Sequin.Error
   alias Sequin.String, as: SequinString
   alias Sequin.Time
+  alias Sequin.Tracer
   alias SequinWeb.ApiFallbackPlug
 
   action_fallback ApiFallbackPlug
@@ -20,6 +21,7 @@ defmodule SequinWeb.PullController do
          :ok <- maybe_wait(params, consumer),
          {:ok, messages} <- SlotMessageStore.produce(consumer.id, batch_size) do
       Logger.metadata(batch_size: batch_size)
+      Tracer.Server.messages_received(consumer, messages)
       render(conn, "receive.json", messages: messages)
     end
   end

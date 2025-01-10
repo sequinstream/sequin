@@ -173,7 +173,6 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     if length(successful_ids) > 0 do
       SlotMessageStore.ack(consumer, successful_ids)
-      Tracer.Server.messages_acked(consumer, successful_ids)
     end
 
     failed

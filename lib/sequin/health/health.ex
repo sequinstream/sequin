@@ -137,6 +137,14 @@ defmodule Sequin.Health do
   end
 
   @doc """
+  Deletes an event for an entity. For use in iex/dev.
+  """
+  @spec delete_event(entity_id :: String.t(), event_slug :: String.t()) :: :ok | {:error, Error.t()}
+  def delete_event(entity_id, event_slug) do
+    Redis.command(["HDEL", events_key(entity_id), event_slug])
+  end
+
+  @doc """
   Computes the health of an entity.
   """
   @spec health(entity()) :: {:ok, t()} | {:error, Error.t()}
@@ -254,6 +262,13 @@ defmodule Sequin.Health do
 
   def debounce_ets_table, do: :sequin_health_debounce
 
+  @spec get_event(String.t(), String.t()) :: {:ok, Event.t() | nil} | redis_error()
+  def get_event(entity_id, event_slug) do
+    with {:ok, event_json} when is_binary(event_json) <- Redis.command(["HGET", events_key(entity_id), event_slug]) do
+      {:ok, Event.from_json!(event_json)}
+    end
+  end
+
   #############
   ## Helpers ##
   #############
@@ -263,13 +278,6 @@ defmodule Sequin.Health do
 
     unless valid do
       raise ArgumentError, "Invalid event: #{event.slug} with status #{event.status}"
-    end
-  end
-
-  @spec get_event(String.t(), String.t()) :: {:ok, Event.t() | nil} | redis_error()
-  defp get_event(entity_id, event_slug) do
-    with {:ok, event_json} when is_binary(event_json) <- Redis.command(["HGET", events_key(entity_id), event_slug]) do
-      {:ok, Event.from_json!(event_json)}
     end
   end
 
@@ -370,23 +378,24 @@ defmodule Sequin.Health do
     end
   end
 
-  defp checks(%SinkConsumer{}, events) do
-    # config_check = check(:sink_configuration, consumer, events)
+  defp checks(%SinkConsumer{} = consumer, events) do
+    config_check = check(:sink_configuration, consumer, events)
     filter_check = basic_check(:messages_filtered, events, :waiting)
     ingestion_check = basic_check(:messages_ingested, events, :waiting)
     delivery_check = basic_check(:messages_pending_delivery, events, :waiting)
     acknowledge_check = basic_check(:messages_delivered, events, :waiting)
 
-    # if config_check.status == :error do
-    #   [
-    #     config_check,
-    #     %Check{slug: :messages_filtered, status: :initializing},
-    #     %Check{slug: :messages_ingested, status: :initializing},
-    #     %Check{slug: :messages_pending_delivery, status: :initializing},
-    #     %Check{slug: :messages_delivered, status: :initializing}
-    #   ]
-    # else
-    [filter_check, ingestion_check, delivery_check, acknowledge_check]
+    if config_check.status == :error do
+      [
+        config_check,
+        %Check{slug: :messages_filtered, status: :initializing},
+        %Check{slug: :messages_ingested, status: :initializing},
+        %Check{slug: :messages_pending_delivery, status: :initializing},
+        %Check{slug: :messages_delivered, status: :initializing}
+      ]
+    else
+      [config_check, filter_check, ingestion_check, delivery_check, acknowledge_check]
+    end
   end
 
   defp checks(%HttpEndpoint{}, events) do
@@ -534,6 +543,46 @@ defmodule Sequin.Health do
 
       true ->
         base_check
+    end
+  end
+
+  defp check(:sink_configuration, %SinkConsumer{} = consumer, events) do
+    base_check = %Check{slug: :sink_configuration, status: :initializing}
+    config_checked_event = find_event(events, :sink_config_checked)
+
+    toast_columns_detected = find_event(events, :toast_columns_detected)
+    alert_replica_identity_not_full_dismissed = find_event(events, :alert_replica_identity_not_full_dismissed)
+    alert_toast_columns_detected_dismissed = find_event(events, :alert_toast_columns_detected_dismissed)
+
+    cond do
+      is_nil(config_checked_event) and Time.before_min_ago?(consumer.inserted_at, 5) ->
+        error = expected_event_error(consumer.id, :sink_config_checked)
+        %{base_check | status: :error, error: error}
+
+      is_nil(config_checked_event) ->
+        base_check
+
+      Time.before_min_ago?(config_checked_event.last_event_at, 30) ->
+        put_check_timestamps(%{base_check | status: :stale}, [config_checked_event])
+
+      config_checked_event.status == :fail ->
+        put_check_timestamps(%{base_check | status: :error, error: config_checked_event.error}, [
+          config_checked_event
+        ])
+
+      config_checked_event.data["replica_identity"] == "full" ->
+        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
+
+      consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) ->
+        put_check_timestamps(%{base_check | status: :warning, error_slug: :replica_identity_not_full}, [
+          config_checked_event
+        ])
+
+      not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) ->
+        put_check_timestamps(%{base_check | status: :warning, error_slug: :toast_columns_detected}, [config_checked_event])
+
+      true ->
+        put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
     end
   end
 

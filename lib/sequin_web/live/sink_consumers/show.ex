@@ -22,13 +22,13 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SqsSink
-  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.DatabasesRuntime.KeysetCursor
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Health
+  alias Sequin.Health.CheckSinkConfigurationWorker
   alias Sequin.Metrics
   alias Sequin.Repo
   alias SequinWeb.Components.ConsumerForm
@@ -70,8 +70,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           |> assign(:total_count, 0)
           |> assign(:cursor_position, nil)
           |> assign(:cursor_task_ref, nil)
-          |> assign_replica_identity()
           |> load_consumer_messages()
+
+        :syn.join(:consumers, {:sink_config_checked, consumer.id}, self())
 
         {:ok, socket}
 
@@ -124,14 +125,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   def render(assigns) do
     assigns = assign(assigns, :kind, Consumers.kind(assigns.consumer))
 
-    replica_warning_dismissed = assigns.consumer.annotations["replica_warning_dismissed"] || false
-
-    show_replica_warning =
-      assigns.replica_identity.ok? and assigns.replica_identity.result != :full and not replica_warning_dismissed and
-        assigns.consumer.message_kind == :event
-
-    assigns = assign(assigns, :show_replica_warning, show_replica_warning)
-
     ~H"""
     <!-- Use Flexbox to arrange header and content vertically -->
     <div id="consumer-show" class="flex flex-col">
@@ -171,8 +164,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   metrics: @metrics,
                   cursor_position: encode_backfill(@consumer, @last_completed_backfill),
                   apiBaseUrl: @api_base_url,
-                  apiTokens: encode_api_tokens(@api_tokens),
-                  showReplicaWarning: @show_replica_warning
+                  apiTokens: encode_api_tokens(@api_tokens)
                 }
               }
             />
@@ -394,25 +386,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("refresh_replica_warning", _params, socket) do
-    {:reply, %{ok: true}, assign_replica_identity(socket)}
-  end
-
-  @impl Phoenix.LiveView
-  def handle_event("dismiss_replica_warning", _params, socket) do
-    consumer = socket.assigns.consumer
-    new_annotations = Map.put(consumer.annotations || %{}, "replica_warning_dismissed", true)
-
-    case Consumers.update_sink_consumer(consumer, %{annotations: new_annotations}, skip_lifecycle: true) do
-      {:ok, updated_consumer} ->
-        {:noreply, assign(socket, :consumer, updated_consumer)}
-
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to dismiss warning. Please try again.")}
-    end
-  end
-
-  @impl Phoenix.LiveView
   def handle_event("dismiss_toast_warning", _params, socket) do
     {:ok, _} =
       Consumers.update_sink_consumer(
@@ -430,7 +403,28 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
+    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
     consumer = put_health(socket.assigns.consumer)
+    {:noreply, assign(socket, :consumer, consumer)}
+  end
+
+  def handle_event("refresh_check", %{"slug" => "sink_configuration"}, socket) do
+    CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
+    {:noreply, socket}
+  end
+
+  def handle_event("dismiss_check", %{"slug" => "sink_configuration", "error_slug" => error_slug}, socket) do
+    consumer = socket.assigns.consumer
+
+    event_slug =
+      case error_slug do
+        "replica_identity_not_full" -> :alert_replica_identity_not_full_dismissed
+        "toast_columns_detected" -> :alert_toast_columns_detected_dismissed
+      end
+
+    Health.put_event(consumer, %Health.Event{slug: event_slug})
+    consumer = put_health(consumer)
+
     {:noreply, assign(socket, :consumer, consumer)}
   end
 
@@ -494,6 +488,11 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     {:noreply, socket}
   end
 
+  def handle_info(:sink_config_checked, socket) do
+    consumer = put_health(socket.assigns.consumer)
+    {:noreply, assign(socket, :consumer, consumer)}
+  end
+
   @smoothing_window 5
   @timeseries_window_count 60
   defp assign_metrics(socket) do
@@ -551,7 +550,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       sink: encode_sink(consumer),
       sequence: encode_sequence(consumer.sequence, consumer.sequence_filter, consumer.postgres_database),
       postgres_database: encode_postgres_database(consumer.postgres_database),
-      health: Health.to_external(consumer.health),
+      health: encode_health(consumer),
       href: RouteHelpers.consumer_path(consumer),
       group_column_names: encode_group_column_names(consumer),
       batch_size: consumer.batch_size
@@ -1014,21 +1013,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
 
-  defp assign_replica_identity(socket) do
-    consumer = socket.assigns.consumer
-    source_table = Consumers.source_table(consumer)
-
-    assign_async(socket, :replica_identity, fn ->
-      case Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
-        {:ok, replica_identity} ->
-          {:ok, %{replica_identity: replica_identity}}
-
-        {:error, _} ->
-          {:ok, %{replica_identity: nil}}
-      end
-    end)
-  end
-
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),
          {:ok, slot_health} <- Health.health(consumer.replication_slot) do
@@ -1040,4 +1024,57 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         consumer
     end
   end
+
+  defp encode_health(%SinkConsumer{} = consumer) do
+    consumer.health
+    |> Health.to_external()
+    |> Map.update!(:checks, fn checks ->
+      Enum.map(checks, fn check ->
+        maybe_augment_alert(check, consumer)
+      end)
+    end)
+  end
+
+  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :replica_identity_not_full} = check, consumer) do
+    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Warning: Replica identity not set to full",
+        alertMessage: """
+        The replica identity for your table is not set to `full`. This means the `changes` field in message payloads will be empty.
+
+        If you want the `changes` field to appear in message payloads, run the following SQL command:
+
+        ```sql
+        alter table #{table_name} replica identity full;
+        ```
+        """,
+        refreshable: true,
+        dismissable: true
+      }
+    )
+  end
+
+  defp maybe_augment_alert(%{slug: :sink_configuration, error_slug: :toast_columns_detected} = check, consumer) do
+    table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
+
+    Map.merge(check, %{
+      alertTitle: "Warning: TOAST columns detected",
+      alertMessage: """
+      Some columns in your table use TOAST storage (their values are very large). As currently configured, Sequin will propagate these values as "unchanged_toast" if the column is unchanged.
+
+      To have Sequin always propagate the values of these columns, set replica identity of your table to `full` with the following SQL command:
+
+      ```sql
+      alter table #{table_name} replica identity full;
+      ```
+      """,
+      refreshable: true,
+      dismissable: true
+    })
+  end
+
+  defp maybe_augment_alert(check, _consumer), do: check
 end

@@ -211,7 +211,7 @@ defmodule SequinWeb.DatabasesLive.Show do
     {:noreply, assign(socket, refreshing_tables: false)}
   end
 
-  def handle_info({:postgres_replication_slot_checked, _}, socket) do
+  def handle_info(:postgres_replication_slot_checked, socket) do
     {:noreply, assign_health(socket)}
   end
 

@@ -436,10 +436,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       Enum.reduce(messages, {ctx, []}, fn
         %SlotProcessor.Message{action: :update, old_fields: nil} = message, {ctx, messages_acc} ->
           if has_unchanged_toast?(message) do
-            {annotate_consumers(ctx, message), [message | messages_acc]}
-          else
-            {ctx, [message | messages_acc]}
+            put_unchanged_toast_health_event(ctx, message)
           end
+
+          {ctx, [message | messages_acc]}
 
         %SlotProcessor.Message{action: :update, fields: fields, old_fields: old_fields} = message, {ctx, messages_acc} ->
           updated_fields =
@@ -461,20 +461,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     {ctx, Enum.reverse(messages)}
   end
 
-  @annotations_key "unchanged_toast_replica_identity_dismissed"
-  defp annotate_consumers(%Context{} = ctx, message) do
-    Enum.reduce(ctx.consumers, ctx, fn %SinkConsumer{annotations: annotations} = consumer, ctx ->
-      if Consumers.matches_message?(consumer, message) and not Map.has_key?(annotations, @annotations_key) do
-        annotations = Map.put_new(annotations, @annotations_key, false)
-        {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{annotations: annotations}, skip_lifecycle: true)
-        %{ctx | consumers: replace_consumer(ctx.consumers, consumer)}
-      else
+  defp put_unchanged_toast_health_event(%Context{} = ctx, message) do
+    Enum.each(ctx.consumers, fn %SinkConsumer{} = consumer ->
+      if Consumers.matches_message?(consumer, message) do
+        Health.put_event(consumer, %Event{slug: :toast_columns_detected, status: :warning})
         ctx
       end
     end)
-  end
-
-  defp replace_consumer(consumers, consumer) do
-    Enum.map(consumers, fn c -> if c.id == consumer.id, do: consumer, else: c end)
   end
 end

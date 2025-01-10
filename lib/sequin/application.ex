@@ -6,6 +6,7 @@ defmodule Sequin.Application do
 
   alias Sequin.CheckSystemHealthWorker
   alias Sequin.Health.KickoffCheckPostgresReplicationSlotWorker
+  alias Sequin.Health.KickoffCheckSinkConfigurationWorker
   alias Sequin.MutexedSupervisor
 
   require Logger
@@ -88,7 +89,8 @@ defmodule Sequin.Application do
 
   defp enqueue_workers do
     CheckSystemHealthWorker.enqueue()
-    # Run this right away, in case this is the first time the app is started in a while
+    # Run these right away, in case this is the first time the app is started in a while
     KickoffCheckPostgresReplicationSlotWorker.enqueue()
+    KickoffCheckSinkConfigurationWorker.enqueue()
   end
 end

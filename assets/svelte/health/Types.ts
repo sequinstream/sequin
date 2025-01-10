@@ -8,11 +8,16 @@ export type status =
 
 export type Check = {
   name: string;
+  slug: string;
   status: status;
   error?: {
     message: string;
   };
-  message?: string;
+  error_slug?: string;
+  alertTitle?: string;
+  alertMessage?: string;
+  refreshable?: boolean;
+  dismissable?: boolean;
 };
 
 export type Health = {

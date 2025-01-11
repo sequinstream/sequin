@@ -200,22 +200,6 @@ defmodule Sequin.HealthTest do
       assert body["event_action"] == "trigger"
     end
 
-    test "alerts PagerDuty when consumer status changes to warning" do
-      entity =
-        sink_consumer(
-          name: "test-consumer",
-          account: AccountsFactory.account()
-        )
-
-      Health.on_status_change(entity, :healthy, :warning)
-
-      assert_receive {:req, conn, body}
-
-      assert conn.path_info == ["v2", "enqueue"]
-      assert body["dedup_key"] == "consumer_health_#{entity.id}"
-      assert body["event_action"] == "trigger"
-    end
-
     test "resolves PagerDuty alert when status changes to healthy" do
       entity =
         postgres_replication(

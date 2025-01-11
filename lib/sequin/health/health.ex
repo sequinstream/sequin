@@ -700,17 +700,14 @@ defmodule Sequin.Health do
         end
 
       case new_status do
-        status when status in [:healthy, :paused] ->
-          Pagerduty.resolve(dedup_key, "#{name} is healthy")
-
-        status when status in [:error, :warning] ->
+        status when status in [:error] ->
           summary = build_error_summary(name, entity)
           severity = if status == :error, do: :critical, else: :warning
 
           Pagerduty.alert(dedup_key, summary, severity: severity)
 
         _ ->
-          :ok
+          Pagerduty.resolve(dedup_key, "#{name} is healthy")
       end
     end
   end

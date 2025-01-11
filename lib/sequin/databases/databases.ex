@@ -356,7 +356,7 @@ defmodule Sequin.Databases do
     with_uncached_connection(database, fn conn ->
       with {:ok, slot_info} <- Postgres.fetch_replication_slot(conn, slot.slot_name),
            :ok <- validate_slot(database, slot_info),
-           :ok <- Postgres.check_publication_exists(conn, slot.publication_name) do
+           {:ok, _} <- Postgres.get_publication(conn, slot.publication_name) do
         Postgres.check_replication_permissions(conn)
       end
     end)

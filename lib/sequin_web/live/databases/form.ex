@@ -314,6 +314,12 @@ defmodule SequinWeb.DatabasesLive.Form do
       %ArgumentError{message: message} ->
         message
 
+      %Error.NotFoundError{entity: :replication_slot, params: %{name: name}} ->
+        "Replication slot `#{name}` does not exist. Please check the slot name and ensure it exists."
+
+      %Error.NotFoundError{entity: :publication, params: %{name: name}} ->
+        "Publication `#{name}` does not exist. Please check the publication name and ensure it exists."
+
       %Sequin.Error.ValidationError{summary: summary} ->
         summary
 

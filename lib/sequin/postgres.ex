@@ -432,7 +432,7 @@ defmodule Sequin.Postgres do
         {:error, ValidationError.from_postgrex("Failed to check replication slot status: ", error)}
 
       [] ->
-        {:error, Error.not_found(entity: :replication_slot, params: %{slot_name: slot_name})}
+        {:error, Error.not_found(entity: :replication_slot, params: %{name: slot_name})}
     end
   rescue
     error in [DBConnection.ConnectionError] ->
@@ -491,7 +491,7 @@ defmodule Sequin.Postgres do
         {:ok, nil}
 
       {:ok, %{rows: []}} ->
-        {:error, Error.not_found(entity: :replication_slot, params: %{slot_name: db.replication_slot})}
+        {:error, Error.not_found(entity: :replication_slot, params: %{name: db.replication_slot})}
 
       {:error, _} = error ->
         error

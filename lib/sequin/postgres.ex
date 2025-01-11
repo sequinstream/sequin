@@ -439,21 +439,6 @@ defmodule Sequin.Postgres do
       {:error, Error.validation(summary: "Failed to check replication slot status: #{error.message}")}
   end
 
-  def check_publication_exists(conn, publication_name) do
-    query = "select 1 from pg_publication where pubname = $1"
-
-    case query(conn, query, [publication_name]) do
-      {:ok, %{num_rows: 1}} ->
-        :ok
-
-      {:ok, %{num_rows: 0}} ->
-        {:error, Error.validation(summary: "Publication '#{publication_name}' does not exist")}
-
-      {:error, %Postgrex.Error{} = error} ->
-        {:error, ValidationError.from_postgrex("Failed to check publication: ", error)}
-    end
-  end
-
   def check_replication_permissions(conn) do
     query = """
     select pg_is_in_recovery(),
@@ -853,6 +838,74 @@ defmodule Sequin.Postgres do
          Error.service(
            service: :postgres,
            message: "Failed to check if table is in publication",
+           details: error
+         )}
+    end
+  end
+
+  @doc """
+  Gets publication information by name.
+  Returns nil if publication doesn't exist.
+
+  ## Example
+    {:ok, %{
+      "oid" => 4835544,
+      "pubname" => "sequin_pub",
+      "pubinsert" => true,
+      "pubupdate" => true,
+      "pubdelete" => true,
+      "pubtruncate" => true,
+      "pubviaroot" => false
+    }}
+  """
+  @spec get_publication(db_conn(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def get_publication(conn, publication_name) do
+    query = """
+    select *
+    from pg_publication
+    where pubname = $1
+    """
+
+    case query(conn, query, [publication_name]) do
+      {:ok, %{rows: []}} ->
+        {:error, Error.not_found(entity: :publication, params: %{name: publication_name})}
+
+      {:ok, res} ->
+        {:ok, res |> result_to_maps() |> List.first()}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to get publication information",
+           details: error
+         )}
+    end
+  end
+
+  @doc """
+  Gets the relation kind ('r' for regular table, 'p' for partitioned table, etc) for a given table OID.
+  See: https://www.postgresql.org/docs/current/catalog-pg-class.html#CATALOG-PG-CLASS-TABLE
+  """
+  @spec get_relation_kind(db_conn(), integer()) ::
+          {:ok, String.t()} | {:error, Error.t()}
+  def get_relation_kind(conn, table_oid) do
+    query = """
+    select relkind
+    from pg_class
+    where oid = $1
+    """
+
+    case query(conn, query, [table_oid]) do
+      {:ok, %{rows: [[relkind]]}} ->
+        {:ok, relkind}
+
+      {:error, error} ->
+        {:error,
+         Error.service(
+           service: :postgres,
+           message: "Failed to get relation kind",
            details: error
          )}
     end

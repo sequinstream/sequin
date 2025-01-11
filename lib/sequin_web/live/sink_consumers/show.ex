@@ -386,22 +386,6 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("dismiss_toast_warning", _params, socket) do
-    {:ok, _} =
-      Consumers.update_sink_consumer(
-        socket.assigns.consumer,
-        %{
-          annotations: %{unchanged_toast_replica_identity_dismissed: true}
-        },
-        skip_lifecycle: true
-      )
-
-    {:ok, consumer} = load_consumer(socket.assigns.consumer.id, socket)
-
-    {:noreply, assign(socket, consumer: consumer)}
-  end
-
-  @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
     CheckSinkConfigurationWorker.enqueue(socket.assigns.consumer.id, unique: false)
     consumer = put_health(socket.assigns.consumer)
@@ -417,9 +401,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = socket.assigns.consumer
 
     event_slug =
-      case error_slug do
-        "replica_identity_not_full" -> :alert_replica_identity_not_full_dismissed
-        "toast_columns_detected" -> :alert_toast_columns_detected_dismissed
+      case String.to_existing_atom(error_slug) do
+        :replica_identity_not_full -> :alert_replica_identity_not_full_dismissed
+        :toast_columns_detected -> :alert_toast_columns_detected_dismissed
       end
 
     Health.put_event(consumer, %Health.Event{slug: event_slug})

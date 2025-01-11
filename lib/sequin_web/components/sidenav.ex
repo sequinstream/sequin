@@ -5,12 +5,19 @@ defmodule SequinWeb.Components.Sidenav do
   import LiveSvelte
 
   alias Sequin.Accounts
+  alias Sequin.Consumers
   alias Sequin.Error
 
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
     socket = assign(socket, assigns)
-    {:ok, assign(socket, current_account: current_account(socket), accounts: accounts(socket))}
+    account = current_account(socket)
+    count = Consumers.count_sink_consumers_for_account(account.id)
+
+    socket =
+      assign(socket, current_account: current_account(socket), accounts: accounts(socket), has_sinks?: count > 0)
+
+    {:ok, socket}
   end
 
   @impl Phoenix.LiveComponent
@@ -64,7 +71,10 @@ defmodule SequinWeb.Components.Sidenav do
     assigns =
       assigns
       |> assign(:parent_id, "sidenav")
-      |> assign(:settings_has_notifications, Accounts.Account.show_contact_email_alert?(assigns.current_account))
+      |> assign(
+        :settings_has_notifications,
+        assigns.has_sinks? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
+      )
 
     ~H"""
     <div id={@parent_id}>

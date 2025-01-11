@@ -328,7 +328,7 @@
               <Alert.Description class="text-sm text-breeze-1000">
                 Optionally, enter a contact email address for the account. The
                 Sequin team will contact this address regarding errors with your
-                Sequin instance, or about critical product updates.
+                Sequin instance or about critical product updates.
               </Alert.Description>
               <Button
                 variant="ghost"

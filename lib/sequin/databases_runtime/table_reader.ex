@@ -230,7 +230,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
          {:ok, %{rows: [[lsn]]}} <- Postgres.query(conn, sql, [slot_name]) do
       {:ok, lsn}
     else
-      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot)}
+      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot, params: %{name: slot_name})}
       error -> error
     end
   end

@@ -17,31 +17,43 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"sink_consumer_id" => sink_consumer_id}}) do
-    with {:ok, consumer} <- Consumers.get_sink_consumer(sink_consumer_id),
-         consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot]),
-         {:ok, event} <- check_replica_identity(consumer),
-         {:ok, event} <- check_publication(consumer, event) do
-      Health.put_event(consumer, event)
+    case Consumers.get_sink_consumer(sink_consumer_id) do
+      {:ok, consumer} ->
+        consumer = Repo.preload(consumer, [:postgres_database, :sequence, :replication_slot])
 
-      :syn.publish(:consumers, {:sink_config_checked, consumer.id}, :sink_config_checked)
+        with {:ok, tables} <- Databases.tables(consumer.postgres_database),
+             :ok <- check_table_exists(tables, consumer.sequence.table_oid),
+             {:ok, event} <- check_replica_identity(consumer),
+             {:ok, event} <- check_publication(consumer, event) do
+          Health.put_event(consumer, event)
 
-      :ok
-    else
+          :syn.publish(:consumers, {:sink_config_checked, consumer.id}, :sink_config_checked)
+
+          :ok
+        else
+          {:error, %Error.NotFoundError{entity: :table}} ->
+            Health.put_event(consumer, %Event{
+              slug: :sink_config_checked,
+              error: Error.invariant(message: "Source table does not exist in database"),
+              status: :fail
+            })
+
+            :ok
+
+          {:error, error} ->
+            Health.put_event(consumer, %Event{
+              slug: :sink_config_checked,
+              error:
+                Error.service(
+                  service: :postgres_database,
+                  message: "Failed to run check against database: #{Exception.message(error)}"
+                ),
+              status: :fail
+            })
+        end
+
       {:error, %Error.NotFoundError{}} ->
         :ok
-
-      {:error, error} ->
-        {:ok, consumer} = Consumers.get_sink_consumer(sink_consumer_id)
-
-        Health.put_event(consumer, %Event{
-          slug: :sink_config_checked,
-          error:
-            Error.service(
-              service: :postgres_database,
-              message: "Failed to run check against database: #{Exception.message(error)}"
-            ),
-          status: :fail
-        })
     end
   end
 
@@ -62,6 +74,13 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     %{sink_consumer_id: sink_consumer_id}
     |> new(schedule_in: delay_seconds)
     |> Oban.insert()
+  end
+
+  defp check_table_exists(tables, table_oid) do
+    case Enum.find(tables, fn t -> t.oid == table_oid end) do
+      nil -> {:error, Error.not_found(entity: :table, params: %{oid: table_oid})}
+      _ -> :ok
+    end
   end
 
   defp check_replica_identity(%SinkConsumer{} = consumer) do

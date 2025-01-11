@@ -89,8 +89,15 @@ window.addEventListener("phx:toast", (event) => {
 });
 
 window.addEventListener("phx:ph-identify", (event) => {
-  const { userId, userEmail, userName, accountId, accountName, createdAt } =
-    event.detail;
+  const {
+    userId,
+    userEmail,
+    userName,
+    accountId,
+    accountName,
+    createdAt,
+    contactEmail,
+  } = event.detail;
 
   posthog.identify(userId, {
     email: userEmail,
@@ -100,6 +107,7 @@ window.addEventListener("phx:ph-identify", (event) => {
 
   posthog.group("account", accountId, {
     name: accountName,
+    email: contactEmail,
   });
 
   ko.identify(userEmail, {

@@ -4,7 +4,15 @@
   import * as Select from "$lib/components/ui/select";
   import { Input } from "$lib/components/ui/input";
   import * as Dialog from "$lib/components/ui/dialog";
-  import { Trash, Cog, Plus, Ellipsis, UserMinus, Link } from "lucide-svelte";
+  import {
+    Trash,
+    Cog,
+    Plus,
+    Ellipsis,
+    UserMinus,
+    Link,
+    X,
+  } from "lucide-svelte";
   import * as Table from "$lib/components/ui/table";
   import { formatRelativeTimestamp } from "$lib/utils";
   import {
@@ -16,10 +24,12 @@
   import { Label } from "$lib/components/ui/label";
   import CopyIcon from "$lib/components/CopyIcon.svelte";
   import * as Tooltip from "$lib/components/ui/tooltip";
+  import * as Alert from "$lib/components/ui/alert";
 
   interface Account {
     id: string;
     name: string;
+    contact_email: string;
   }
 
   interface User {
@@ -50,6 +60,8 @@
   export let parent: string;
   export let live;
   export let teamInviteLink: string;
+  export let showContactEmailAlert: boolean;
+
   let form = { ...selectedAccount };
   let renameLoading = false;
   let renameErrorMessage: string | null = null;
@@ -72,6 +84,11 @@
   let userToRemove: User | null = null;
 
   let showInviteLinkDialog = false;
+
+  let updateContactEmailLoading = false;
+  let updateContactEmailErrorMessage: string | null = null;
+  $: updateContactEmailDisabled =
+    selectedAccount.contact_email === form.contact_email;
 
   $: renameDisabled = selectedAccount.name === form.name;
 
@@ -232,6 +249,34 @@
       },
     );
   }
+
+  function handleUpdateContactEmail(event: Event) {
+    event.preventDefault();
+    updateContactEmailLoading = true;
+    updateContactEmailErrorMessage = null;
+
+    live.pushEventTo(
+      `#${parent}`,
+      "update_contact_email",
+      {
+        accountId: selectedAccount.id,
+        contactEmail: form.contact_email,
+      },
+      (res: any) => {
+        updateContactEmailLoading = false;
+        if (res.error) {
+          updateContactEmailErrorMessage = res.error;
+        }
+      },
+    );
+  }
+
+  function handleDismissContactEmailAlert() {
+    showContactEmailAlert = false;
+    live.pushEventTo(`#${parent}`, "dismiss_contact_email_alert", {
+      accountId: selectedAccount.id,
+    });
+  }
 </script>
 
 <div>
@@ -257,10 +302,8 @@
 
   <div class="flex flex-col gap-6 container w-auto">
     <Card.Root>
-      <Card.Header>
-        <Card.Title>Rename account</Card.Title>
-      </Card.Header>
-      <Card.Content>
+      <Card.Content class="flex flex-col gap-4">
+        <h3 class="text-lg font-semibold mt-4">Rename account</h3>
         {#if renameErrorMessage}
           <p class="text-destructive text-sm mt-2 mb-4">{renameErrorMessage}</p>
         {/if}
@@ -275,6 +318,46 @@
             Rename
           </Button>
         </form>
+        <h3 class="text-lg font-semibold mt-4">Contact email</h3>
+        {#if showContactEmailAlert}
+          <Alert.Root
+            class="mb-4 bg-breeze-100 border-breeze-500 border relative"
+          >
+            <div class="grid grid-cols-[16px_1fr] gap-2 pr-8">
+              <div class="h-2 w-2 rounded-full bg-breeze-500 mt-[0.4rem]" />
+              <Alert.Description class="text-sm text-breeze-1000">
+                Optionally, enter a contact email address for the account. The
+                Sequin team will contact this address regarding errors with your
+                Sequin instance, or about critical product updates.
+              </Alert.Description>
+              <Button
+                variant="ghost"
+                size="icon"
+                class="h-4 w-4 p-0 text-breeze-1000 hover:text-breeze-1000 hover:bg-breeze-200 absolute right-2 top-[10px]"
+                on:click={handleDismissContactEmailAlert}
+              >
+                <X class="h-4 w-4" />
+                <span class="sr-only">Dismiss</span>
+              </Button>
+            </div>
+          </Alert.Root>
+        {/if}
+        <form on:submit={handleUpdateContactEmail} class="flex space-x-4">
+          <Input type="email" bind:value={form.contact_email} />
+          <Button
+            variant="default"
+            type="submit"
+            disabled={updateContactEmailDisabled}
+            loading={updateContactEmailLoading}
+          >
+            Update
+          </Button>
+        </form>
+        {#if updateContactEmailErrorMessage}
+          <p class="text-destructive text-sm mt-2 mb-4">
+            {updateContactEmailErrorMessage}
+          </p>
+        {/if}
       </Card.Content>
     </Card.Root>
 

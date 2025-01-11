@@ -98,11 +98,14 @@ const config = {
         breeze: {
           0: "rgb(var(--color-breeze-0))",
           100: "rgb(var(--color-breeze-100))",
+          200: "rgb(var(--color-breeze-200))",
+          500: "rgb(var(--color-breeze-500))",
           1000: "rgb(var(--color-breeze-1000))",
         },
         ruby: {
           0: "rgb(var(--color-ruby-0))",
           100: "rgb(var(--color-ruby-100))",
+          500: "rgb(var(--color-ruby-500))",
           900: "rgb(var(--color-ruby-900))",
         },
         honey: {

@@ -153,6 +153,41 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
     end
   end
 
+  def handle_event("update_contact_email", %{"accountId" => account_id, "contactEmail" => contact_email}, socket) do
+    user = current_user(socket)
+    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+
+    case Accounts.update_account(account, %{contact_email: contact_email}) do
+      {:ok, _updated_account} ->
+        {:noreply,
+         socket
+         |> assign(current_user: Accounts.get_user_with_preloads!(user.id))
+         |> push_navigate(to: socket.assigns.current_path)}
+
+      {:error, changeset} ->
+        error = Error.validation(changeset: changeset)
+        {:reply, %{error: Exception.message(error)}, socket}
+    end
+  end
+
+  def handle_event("dismiss_contact_email_alert", %{"accountId" => account_id}, socket) do
+    user = current_user(socket)
+    account = Sequin.Enum.find!(user.accounts, &(&1.id == account_id))
+
+    annotations = Map.put(account.annotations, "show_contact_email_alert_dismissed", true)
+
+    case Accounts.update_account(account, %{annotations: annotations}) do
+      {:ok, _updated_account} ->
+        {:noreply,
+         socket
+         |> assign(current_user: Accounts.get_user_with_preloads!(user.id))
+         |> push_navigate(to: socket.assigns.current_path)}
+
+      {:error, _changeset} ->
+        {:noreply, socket}
+    end
+  end
+
   def render(assigns) do
     current_account = User.current_account(assigns.current_user)
 
@@ -165,6 +200,7 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
       assigns
       |> assign(:parent_id, "account_settings")
       |> assign(:current_account, current_account)
+      |> assign(:show_contact_email_alert, Accounts.Account.show_contact_email_alert?(current_account))
       |> assign(:current_account_users, Accounts.list_users_for_account(current_account.id))
       |> assign(:pending_invites, Accounts.list_pending_invites_for_account(current_account))
       |> assign(:api_tokens, encode_api_tokens(ApiTokens.list_tokens_for_account(current_account.id)))
@@ -184,7 +220,8 @@ defmodule SequinWeb.Settings.AccountSettingsLive do
             parent: @parent_id,
             pendingInvites: @pending_invites,
             emailEnabled: @email_enabled?,
-            teamInviteLink: @team_invite_link
+            teamInviteLink: @team_invite_link,
+            showContactEmailAlert: @show_contact_email_alert
           }
         }
         socket={@socket}

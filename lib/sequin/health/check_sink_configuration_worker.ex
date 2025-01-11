@@ -9,12 +9,10 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases
-  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
-  alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Repo
 
   @impl Oban.Worker
@@ -66,11 +64,7 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
     |> Oban.insert()
   end
 
-  defp check_replica_identity(%SinkConsumer{message_kind: :record}) do
-    :ok
-  end
-
-  defp check_replica_identity(%SinkConsumer{message_kind: :event} = consumer) do
+  defp check_replica_identity(%SinkConsumer{} = consumer) do
     source_table = Consumers.source_table(consumer)
 
     with {:ok, replica_identity} <- Databases.check_replica_identity(consumer.postgres_database, source_table.oid) do
@@ -79,19 +73,38 @@ defmodule Sequin.Health.CheckSinkConfigurationWorker do
   end
 
   defp check_publication(%SinkConsumer{} = consumer, %Event{} = event) do
-    %PostgresDatabase{} = postgres_database = consumer.postgres_database
-    %PostgresReplicationSlot{} = slot = consumer.replication_slot
-    source_table = Consumers.source_table(consumer)
+    postgres_database = consumer.postgres_database
+    slot = consumer.replication_slot
 
-    case Postgres.verify_table_in_publication(postgres_database, slot.publication_name, source_table.oid) do
-      :ok ->
-        {:ok, event}
+    with {:ok, relation_kind} <- Postgres.get_relation_kind(postgres_database, consumer.sequence.table_oid),
+         {:ok, publication} <- Postgres.get_publication(postgres_database, slot.publication_name),
+         :ok <- validate_partition_publication(relation_kind, publication),
+         :ok <-
+           Postgres.verify_table_in_publication(postgres_database, slot.publication_name, consumer.sequence.table_oid) do
+      {:ok, event}
+    else
+      {:error, :partition_misconfigured} ->
+        error =
+          Error.invariant(
+            message: "Partitioned table detected but publication is not configured with publish_via_partition_root=true"
+          )
+
+        {:ok, %{event | status: :fail, error: error}}
 
       {:error, %Error.NotFoundError{entity: :publication_membership} = error} ->
+        {:ok, %{event | status: :fail, error: error}}
+
+      {:error, %Error.NotFoundError{entity: :publication} = error} ->
         {:ok, %{event | status: :fail, error: error}}
 
       error ->
         error
     end
   end
+
+  defp validate_partition_publication("p", %{"pubviaroot" => false}) do
+    {:error, :partition_misconfigured}
+  end
+
+  defp validate_partition_publication(_, _), do: :ok
 end

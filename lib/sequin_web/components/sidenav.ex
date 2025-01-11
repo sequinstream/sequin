@@ -62,7 +62,9 @@ defmodule SequinWeb.Components.Sidenav do
 
   def render(assigns) do
     assigns =
-      assign(assigns, :parent_id, "sidenav")
+      assigns
+      |> assign(:parent_id, "sidenav")
+      |> assign(:settings_has_notifications, Accounts.Account.show_contact_email_alert?(assigns.current_account))
 
     ~H"""
     <div id={@parent_id}>
@@ -74,7 +76,8 @@ defmodule SequinWeb.Components.Sidenav do
             currentAccountId: @current_account.id,
             accountList: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
             currentUser: @current_user,
-            parent: @parent_id
+            parent: @parent_id,
+            accountSettingsHasNotification: @settings_has_notifications
           }
         }
         socket={@socket}

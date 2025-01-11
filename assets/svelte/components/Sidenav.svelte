@@ -8,7 +8,6 @@
   import { Input } from "$lib/components/ui/input";
   import { cn } from "$lib/utils";
   import {
-    Radio,
     Database,
     FileText,
     LifeBuoy,
@@ -20,7 +19,6 @@
     Cog,
     Plug,
     Logs,
-    ListOrdered,
     ChevronsLeftRightEllipsis,
   } from "lucide-svelte";
 
@@ -30,6 +28,7 @@
   export let currentAccountId: string;
   export let accountList: { id: string; name: string }[];
   export let parent: string;
+  export let accountSettingsHasNotification = false;
 
   let settingsCommandOpen = false;
   let form = { name: "" };
@@ -247,6 +246,9 @@
               <span class="text-sm leading-tight truncate"
                 >{selected_account_name}</span
               >
+              {#if accountSettingsHasNotification}
+                <div class="ml-2 h-2 w-2 rounded-full bg-breeze-500" />
+              {/if}
             </Button>
           {:else}
             <Button
@@ -308,6 +310,9 @@
                 <Command.Item class="cursor-pointer">
                   <Cog class="mr-2 h-4 w-4" />
                   <span>Manage account</span>
+                  {#if accountSettingsHasNotification}
+                    <div class="ml-2 h-2 w-2 rounded-full bg-breeze-500" />
+                  {/if}
                 </Command.Item>
               </a>
             </Command.Group>

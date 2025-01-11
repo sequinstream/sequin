@@ -8,7 +8,7 @@ defmodule Sequin.Accounts.Account do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.AccountUser
 
-  @derive {Jason.Encoder, only: [:id, :name, :inserted_at, :updated_at]}
+  @derive {Jason.Encoder, only: [:id, :name, :inserted_at, :updated_at, :contact_email]}
 
   @type id :: String.t()
 
@@ -16,6 +16,7 @@ defmodule Sequin.Accounts.Account do
     field :name, :string
     field :features, {:array, :string}
     field :annotations, :map, default: %{}
+    field :contact_email, :string
 
     has_many :accounts_users, AccountUser
     has_many :users, through: [:accounts_users, :user]
@@ -25,10 +26,11 @@ defmodule Sequin.Accounts.Account do
 
   def changeset(%Account{} = account, attrs) do
     account
-    |> cast(attrs, [:name, :features, :annotations])
+    |> cast(attrs, [:name, :features, :annotations, :contact_email])
     |> maybe_put_name()
     |> validate_required([:name])
     |> validate_length(:name, max: 80)
+    |> validate_format(:contact_email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/)
   end
 
   defp maybe_put_name(changeset) do
@@ -49,6 +51,10 @@ defmodule Sequin.Accounts.Account do
       on: au.account_id == a.id,
       where: au.user_id == ^user_id
     )
+  end
+
+  def show_contact_email_alert?(%__MODULE__{} = account) do
+    is_nil(account.contact_email) and not Map.get(account.annotations, "show_contact_email_alert_dismissed", false)
   end
 
   defp base_query(query \\ __MODULE__) do

@@ -1,4 +1,19 @@
-.PHONY: dev deviex signoff signoff-dirty signoff-stack merge help init spellcheck addword check-links deploy buildpush buildpush-dirty remiex connectdb connect docs redis-console-consumer
+# Running `make` will trigger `make help`
+.DEFAULT_GOAL := help
+
+# for formatting
+BOLD="\033[1m"
+NORMAL="\033[0m"
+
+# Any target invoked by make target does not correspond to a file, so
+# it should always be executed. This avoids: 1. Having to remember to
+# add newly created targets as PHONY.  2. Using a catch-all target
+# (%:) with a no-op (@:) to prevent failures for non-existing targets.
+.PHONY: $(MAKECMDGOALS)
+
+help: ## Prints target: [dep1 dep1 ...]  and what it does
+	@echo -e ${BOLD}
+	@grep -E '^[a-zA-Z_-]+.*## .*$$' $(MAKEFILE_LIST) |  sed 's/^Makefile://' | column -t -s"##"
 
 dev: ## Run the app locally
 	elixir --sname sequin-stream-dev --cookie sequin-stream-dev -S mix phx.server
@@ -9,25 +24,25 @@ dev2: ## Run a second node locally
 deviex: ## Open an IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
 
-deviex2: ## Open an IEx session on the running local app
+deviex2: ## Open a second IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev2 --cookie sequin-stream-dev
 
-signoff:
+signoff: ## Run the signoff script
 	@./scripts/signoff.sh
 
-signoff-dirty:
+signoff-dirty: ## Run the signoff script with --dirty flag
 	@./scripts/signoff.sh --dirty
 
-signoff-stack:
+signoff-stack: ## Run the signoff-stack script
 	@./scripts/signoff_stack.sh
 
-merge:
+merge: ## Run the merge script
 	@./scripts/merge.sh
 
-merge-force:
+merge-force: ## Run the merge script, bypassing signoff check
 	@./scripts/merge.sh --force
 
-init:
+init: ## Create .settings.json from .settings.json.example
 	@if [ ! -f .settings.json ]; then \
 		cp .settings.example.json .settings.json; \
 		echo ".settings.json created. Please edit it to configure your settings."; \
@@ -35,22 +50,22 @@ init:
 		echo ".settings.json already exists. No changes made."; \
 	fi
 
-release:
+release: ## Run the release script
 	@./scripts/release.sh
 
-release-dirty:
+release-dirty: ## Run the release script with --dirty flag
 	@./scripts/release.sh --dirty
 
-release-gh:
+release-gh: ## Run the release script using GitHub Actions for Docker builds
 	@./scripts/release.sh --github-actions
 
-release-dirty-gh:
+release-dirty-gh: ## Run the release script with --dirty flag using GitHub Actions
 	@./scripts/release.sh --dirty --github-actions
 
-spellcheck:
+spellcheck: ## Run cspell to check spelling in .md and .mdx files
 	@npx -y cspell "**/*.{md,mdx}" --config spellcheck/.cspell.json
 
-addword:
+addword: ## Add a word to project-words.txt
 	@if [ -z "$(word)" ]; then \
 		echo "Usage: make addword word=<word>"; \
 	else \
@@ -59,63 +74,37 @@ addword:
 		echo "Added '$(word)' to project-words.txt"; \
 	fi
 
-check-links:
+check-links: ## Run mintlify broken-links in the docs directory
 	@cd docs && mintlify broken-links
 
-buildpush:
+buildpush: ## Run mix buildpush (build and push docker image)
 	mix buildpush
 
-buildpush-gh:
+buildpush-gh: ## Run GitHub workflow in watch mode
 	gh workflow run docker-cloud-build.yml --ref main
 	sleep 3
 	gh run watch $(gh run list --workflow=docker-cloud-build.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 
-buildpush-dirty:
+buildpush-dirty: ## Run mix buildpush with --dirty flag
 	mix buildpush --dirty
 
-help:
-	@echo "Available commands:"
-	@echo "  make dev       - Run the app locally"
-	@echo "  make deviex    - Open an IEx session on the running local app"
-	@echo "  make signoff   - Run the signoff script"
-	@echo "  make signoff-dirty - Run the signoff script with --dirty flag"
-	@echo "  make signoff-stack - Run the signoff-stack script"
-	@echo "  make merge     - Run the merge script"
-	@echo "  make merge-force - Run the merge script, bypassing signoff check"
-	@echo "  make init      - Create .settings.json from .settings.json.example"
-	@echo "  make help      - Show this help message"
-	@echo "  make spellcheck - Run cspell to check spelling in .md and .mdx files"
-	@echo "  make addword word=<word> - Add a word to project-words.txt"
-	@echo "  make check-links - Run mintlify broken-links in the docs directory"
-	@echo "  make deploy [sha=<commit-sha>] - Deploy the specified or latest commit"
-	@echo "  make buildpush - Run mix buildpush (build and push docker image)"
-	@echo "  make buildpush-dirty - Run mix buildpush with --dirty flag"
-	@echo "  make connectdb [id=<id>] [open=<open>] - Connect to the production database"
-	@echo "  make connect - Connect to the production database"
-	@echo "  make release     - Run the release script"
-	@echo "  make release-dirty - Run the release script with --dirty flag"
-	@echo "  make release-gh  - Run the release script using GitHub Actions for Docker builds"
-	@echo "  make release-dirty-gh - Run the release script with --dirty flag using GitHub Actions"
-	@echo "  make docs      - Run mintlify dev server for documentation"
-	@echo "  make redis-console-consumer <stream-key> [from-beginning] - Read from Redis stream"
-
-impersonate:
+impersonate: ## Generate impersonate link for impersonated user from .settings.json
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_rpc.sh "Sequin.Accounts.Impersonate.generate_link\(~s{$(impersonating_user_id)}\,~s{$(impersonated_user_id)}\)"
 
-deploy:
+deploy: ## Deploy the specified [sha=<commit-sha>] or latest commit
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/deploy.sh $(sha)
 
-remiex:
+remiex: ## Drop into remote iex session
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_sequin.sh remote
 
-connectdb:
+connectdb: ## Connect to the production database [id=<id>] [open=<open>]
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_db.sh $(id) $(open)
 
-connect:
+connect: ## Connect to the production database
 	@INFRA_DIR=$$(jq -r '.infraDir // "../infra"' .settings.json); \
 	cd "$$INFRA_DIR" && ./scripts/prod_ssh.sh
 
@@ -125,5 +114,3 @@ docs: ## Run mintlify dev server for documentation
 redis-console-consumer: ## Read from a Redis stream like a Kafka consumer
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 
-%:
-	@:

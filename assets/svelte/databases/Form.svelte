@@ -67,6 +67,8 @@
   export let api_tokens: any[];
   export let showLocalTunnelPrompt: boolean = true;
   export let showPgVersionWarning: boolean = false;
+  export let selfHosted: boolean = false;
+
   let form = { ...database, ssl: true }; // Set default SSL to true
 
   const isEdit = !!form.id;
@@ -617,25 +619,31 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
       </CardContent>
     </Card>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>IP addresses</CardTitle>
-        <p class="text-sm text-muted-foreground">
-          Ensure your database and/or firewall allows connections from the
-          following IPs:
-        </p>
-      </CardHeader>
-      <CardContent>
-        <div class="pl-6 flex flex-row space-x-2">
-          <CodeWithCopy maxWidth="200px" language="bash" code={`3.221.69.77`} />
-          <CodeWithCopy
-            maxWidth="200px"
-            language="bash"
-            code={`54.210.150.114`}
-          />
-        </div>
-      </CardContent>
-    </Card>
+    {#if !selfHosted}
+      <Card>
+        <CardHeader>
+          <CardTitle>IP addresses</CardTitle>
+          <p class="text-sm text-muted-foreground">
+            Ensure your database and/or firewall allows connections from the
+            following IPs:
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div class="pl-6 flex flex-row space-x-2">
+            <CodeWithCopy
+              maxWidth="200px"
+              language="bash"
+              code={`3.221.69.77`}
+            />
+            <CodeWithCopy
+              maxWidth="200px"
+              language="bash"
+              code={`54.210.150.114`}
+            />
+          </div>
+        </CardContent>
+      </Card>
+    {/if}
 
     <Card>
       <CardHeader>

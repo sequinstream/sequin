@@ -39,10 +39,10 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
 
       result =
         lv
-        |> form("#reset_password_form", user: %{"password" => "secret12", "password_confirmation" => "secret123456"})
+        |> form("#reset_password_form", user: %{"password" => "secret1", "password_confirmation" => "secret123456"})
         |> render_submit()
 
-      assert result =~ "should be at least 12 character"
+      assert result =~ "should be at least 8 character"
       assert result =~ "does not match password"
     end
   end
@@ -74,14 +74,14 @@ defmodule SequinWeb.UserResetPasswordLiveTest do
         lv
         |> form("#reset_password_form",
           user: %{
-            "password" => "too short",
+            "password" => "2short",
             "password_confirmation" => "does not match"
           }
         )
         |> render_submit()
 
       assert result =~ "Reset Password"
-      assert result =~ "should be at least 12 character(s)"
+      assert result =~ "should be at least 8 character(s)"
       assert result =~ "does not match password"
     end
   end

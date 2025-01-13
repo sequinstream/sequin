@@ -26,12 +26,12 @@ defmodule SequinWeb.UserRegistrationLiveTest do
     test "renders errors for invalid data", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/register")
 
-      form = form(lv, "#registration_form", user: %{"email" => "with spaces", "password" => "too short"})
+      form = form(lv, "#registration_form", user: %{"email" => "with spaces", "password" => "2short"})
       result = render_submit(form)
 
       assert result =~ "Welcome! Create your account"
       assert result =~ "must have the @ sign and no spaces"
-      assert result =~ "should be at least 12 character"
+      assert result =~ "should be at least 8 character"
     end
   end
 

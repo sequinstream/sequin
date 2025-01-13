@@ -70,6 +70,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
         Sequin.Logs.log_for_consumer_message(
           :info,
           consumer.account_id,
+          consumer.id,
           consumer_record_or_event.replication_message_trace_id,
           "Published message to Kafka successfully"
         )
@@ -84,6 +85,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
         Sequin.Logs.log_for_consumer_message(
           :error,
           consumer.account_id,
+          consumer.id,
           consumer_record_or_event.replication_message_trace_id,
           "Failed to publish message to Kafka: #{Exception.message(error)}"
         )

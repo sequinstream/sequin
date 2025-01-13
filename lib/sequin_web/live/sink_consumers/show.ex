@@ -296,8 +296,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("fetch_message_logs", %{"trace_id" => trace_id}, socket) do
     account_id = current_account_id(socket)
+    consumer_id = socket.assigns.consumer.id
 
-    case Sequin.Logs.get_logs_for_consumer_message(account_id, trace_id) do
+    case Sequin.Logs.get_logs_for_consumer_message(account_id, consumer_id, trace_id) do
       {:ok, logs} ->
         {:reply, %{logs: logs}, socket}
 

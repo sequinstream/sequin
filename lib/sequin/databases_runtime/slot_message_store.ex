@@ -443,14 +443,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         {_state, _messages} = State.deliver_messages(state, deliverable_messages)
       end)
 
-    Logger.debug(
-      "[SlotMessageStore] Produced messages",
-      count: length(messages),
-      time_ms: div(time, 1000),
-      message_count: map_size(state.messages)
-    )
+    if length(messages) > 0 do
+      Logger.debug(
+        "[SlotMessageStore] Produced messages",
+        count: length(messages),
+        time_ms: div(time, 1000),
+        message_count: map_size(state.messages)
+      )
 
-    Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
+      Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
+    end
 
     {:reply, {:ok, messages}, state}
   end

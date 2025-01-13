@@ -217,7 +217,7 @@
           form.sink.httpEndpointId = event.value;
         }}
       >
-        <SelectTrigger class="w-full">
+        <SelectTrigger class="w-full" disabled={httpEndpoints.length === 0}>
           <SelectValue placeholder="Select an endpoint" />
         </SelectTrigger>
         <SelectContent>

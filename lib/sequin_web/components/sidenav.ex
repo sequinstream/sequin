@@ -15,7 +15,12 @@ defmodule SequinWeb.Components.Sidenav do
     count = Consumers.count_sink_consumers_for_account(account.id)
 
     socket =
-      assign(socket, current_account: current_account(socket), accounts: accounts(socket), has_sinks?: count > 0)
+      assign(socket,
+        current_account: current_account(socket),
+        accounts: accounts(socket),
+        has_sinks?: count > 0,
+        release_version: Application.get_env(:sequin, :release_version)
+      )
 
     {:ok, socket}
   end
@@ -87,7 +92,8 @@ defmodule SequinWeb.Components.Sidenav do
             accountList: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
             currentUser: @current_user,
             parent: @parent_id,
-            accountSettingsHasNotification: @settings_has_notifications
+            accountSettingsHasNotification: @settings_has_notifications,
+            sequinVersion: @release_version
           }
         }
         socket={@socket}

@@ -362,19 +362,20 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     merge_attributes(
       %ConsumerEvent{
-        consumer_id: Factory.uuid(),
-        commit_lsn: Enum.random(1..1_000_000),
-        seq: Factory.unique_integer(),
-        record_pks: record_pks,
-        group_id: Factory.unique_word(),
-        table_oid: Enum.random(1..100_000),
         ack_id: Factory.uuid(),
+        commit_lsn: Enum.random(1..1_000_000),
+        consumer_id: Factory.uuid(),
+        data: consumer_event_data(action: action),
         deliver_count: Enum.random(0..10),
+        group_id: Factory.unique_word(),
         last_delivered_at: Factory.timestamp(),
         not_visible_until: not_visible_until,
+        record_pks: record_pks,
+        replication_message_trace_id: Factory.uuid(),
+        seq: Factory.unique_integer(),
         state: state,
-        data: consumer_event_data(action: action),
-        replication_message_trace_id: Factory.uuid()
+        ingested_at: Factory.timestamp(),
+        table_oid: Enum.random(1..100_000)
       },
       attrs
     )
@@ -449,19 +450,20 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     merge_attributes(
       %ConsumerRecord{
-        consumer_id: Factory.uuid(),
-        commit_lsn: Enum.random(1..1_000_000),
-        seq: Factory.unique_integer(),
-        record_pks: record_pks,
-        group_id: Enum.join(record_pks, ","),
-        table_oid: Enum.random(1..100_000),
-        state: state,
         ack_id: Factory.uuid(),
+        commit_lsn: Enum.random(1..1_000_000),
+        consumer_id: Factory.uuid(),
+        data: consumer_record_data(),
         deliver_count: Enum.random(0..10),
+        group_id: Enum.join(record_pks, ","),
         last_delivered_at: Factory.timestamp(),
         not_visible_until: not_visible_until,
-        data: consumer_record_data(),
-        replication_message_trace_id: Factory.uuid()
+        record_pks: record_pks,
+        replication_message_trace_id: Factory.uuid(),
+        seq: Factory.unique_integer(),
+        state: state,
+        ingested_at: Factory.timestamp(),
+        table_oid: Enum.random(1..100_000)
       },
       attrs
     )

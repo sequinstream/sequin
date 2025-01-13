@@ -30,6 +30,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   require Logger
 
+  @min_log_time_ms 200
+
   defguardp event_messages?(state) when state.consumer.message_kind == :event
   defguardp record_messages?(state) when state.consumer.message_kind == :record
 
@@ -45,6 +47,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       field :consumer_id, String.t()
       field :flush_batch_size, non_neg_integer()
       field :flush_interval, non_neg_integer()
+      field :flush_wait_ms, non_neg_integer()
       field :messages, %{[String.t()] => ConsumerRecord.t() | ConsumerEvent.t()}
       # Set to false in tests to disable Postgres reads/writes (ie. load messages on boot and flush messages on interval)
       field :persisted_mode?, boolean(), default: true
@@ -54,10 +57,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
 
     def put_messages(%State{} = state, messages) do
+      now = DateTime.utc_now()
+
       messages =
         messages
-        |> intake_messages()
-        |> reject_record_deletes(state.consumer.message_kind)
+        |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true, ingested_at: now} end)
+        |> Stream.reject(fn
+          %ConsumerRecord{deleted: true} -> true
+          _ -> false
+        end)
         |> Map.new(&{&1.ack_id, &1})
 
       %{state | messages: Map.merge(state.messages, messages)}
@@ -72,26 +80,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
     def ack(%State{} = state, ack_ids) do
-      {messages, acked_count} =
-        Enum.reduce(ack_ids, {state.messages, 0}, fn ack_id, {acc_msgs, acked_count} ->
-          case Map.get(acc_msgs, ack_id) do
-            nil ->
-              {acc_msgs, acked_count}
+      initial_count = map_size(state.messages)
+      messages = Map.drop(state.messages, ack_ids)
+      final_count = map_size(messages)
 
-            %ConsumerRecord{state: :pending_redelivery} = msg ->
-              {Map.replace!(acc_msgs, ack_id, %{
-                 msg
-                 | state: :available,
-                   not_visible_until: nil,
-                   dirty: true
-               }), acked_count + 1}
-
-            _ ->
-              {Map.delete(acc_msgs, ack_id), acked_count + 1}
-          end
-        end)
-
-      {%{state | messages: messages}, acked_count}
+      {%{state | messages: messages}, initial_count - final_count}
     end
 
     @spec nack(%State{}, %{SinkConsumer.ack_id() => SinkConsumer.not_visible_until()}) :: {%State{}, non_neg_integer()}
@@ -197,10 +190,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {state, messages}
     end
 
-    def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size}) do
+    def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size, flush_wait_ms: flush_wait_ms}) do
       messages
       |> Map.values()
-      |> Enum.filter(& &1.dirty)
+      |> Stream.filter(& &1.dirty)
+      |> Stream.filter(fn msg ->
+        # Only flush messages that were ingested before the flush wait time
+        # This gives the ConsumerProducer time to pull, deliver, and ack messages
+        # before we flush them to Postgres
+        Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
+      end)
       |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
       |> Enum.take(flush_batch_size)
     end
@@ -229,7 +228,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
            Error.invariant(message: "Batch mismatch. Expected #{batch_id} but got #{state.table_reader_batch_id}")}
 
         state.messages |> Map.values() |> Enum.any?(&(is_nil(&1.flushed_at) and &1.table_reader_batch_id == batch_id)) ->
-          Logger.debug(
+          Logger.info(
             "[SlotMessageStore] Batch is in progress",
             batch_id: state.table_reader_batch_id
           )
@@ -237,7 +236,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
           {:ok, :in_progress}
 
         true ->
-          Logger.debug("[SlotMessageStore] Batch is completed", batch_id: state.table_reader_batch_id)
+          Logger.info("[SlotMessageStore] Batch is completed", batch_id: state.table_reader_batch_id)
           {:ok, :completed}
       end
     end
@@ -246,18 +245,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       messages = Map.new(messages, &{&1.ack_id, &1})
 
       %{state | messages: Map.merge(state.messages, messages)}
-    end
-
-    defp intake_messages(messages) do
-      Enum.map(messages, fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true} end)
-    end
-
-    defp reject_record_deletes(messages, :record) do
-      Enum.reject(messages, fn %ConsumerRecord{deleted: deleted} -> deleted end)
-    end
-
-    defp reject_record_deletes(messages, :event) do
-      messages
     end
 
     # Helper function to compare flushed_at values where nil is "smaller" than any DateTime
@@ -347,8 +334,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok | {:error, Exception.t()}
   def ack(consumer, ack_ids) do
     # Delete from database right away
-    # TODO: We need to respect pending_redelivery on consumer records
-    # TODO: We can greatly simplify this call now by just deleting events and records
     Consumers.ack_messages(consumer, ack_ids)
 
     GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})
@@ -455,6 +440,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       consumer_id: consumer_id,
       flush_batch_size: Keyword.get(opts, :flush_batch_size, 1_000),
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(10)),
+      flush_wait_ms: Keyword.get(opts, :flush_wait_ms, :timer.seconds(60)),
       messages: %{},
       persisted_mode?: Keyword.get(opts, :persisted_mode?, true),
       test_pid: Keyword.get(opts, :test_pid)
@@ -483,13 +469,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_messages, messages}, _from, %State{} = state) do
+    initial_count = map_size(state.messages)
     {time, state} = :timer.tc(fn -> State.put_messages(state, messages) end)
+    new_count = map_size(state.messages)
 
-    Logger.debug(
-      "[SlotMessageStore] Put messages",
-      count: map_size(state.messages),
-      time_ms: div(time, 1000)
-    )
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning(
+        "[SlotMessageStore] Put messages took longer than expected",
+        count: new_count - initial_count,
+        message_count: new_count,
+        time_ms: div(time, 1000)
+      )
+    end
 
     Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
     :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
@@ -501,12 +492,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
     {time, state} = :timer.tc(fn -> State.put_table_reader_batch(state, messages, batch_id) end)
 
-    Logger.debug(
-      "[SlotMessageStore] Put table reader batch",
-      count: length(messages),
-      time_ms: div(time, 1000),
-      message_count: map_size(state.messages)
-    )
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.info(
+        "[SlotMessageStore] Put table reader batch",
+        count: length(messages),
+        time_ms: div(time, 1000),
+        message_count: map_size(state.messages)
+      )
+    end
 
     Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
     :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
@@ -526,14 +519,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         {_state, _messages} = State.deliver_messages(state, deliverable_messages)
       end)
 
-    if length(messages) > 0 do
-      Logger.debug(
-        "[SlotMessageStore] Produced messages",
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning(
+        "[SlotMessageStore] Produce messages took longer than expected",
         count: length(messages),
         time_ms: div(time, 1000),
         message_count: map_size(state.messages)
       )
+    end
 
+    if length(messages) > 0 do
       Health.put_event(state.consumer, %Event{slug: :messages_pending_delivery, status: :success})
     end
 
@@ -602,8 +597,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     to_flush = State.messages_to_flush(state)
     more? = length(to_flush) == state.flush_batch_size
 
-    state = flush_messages(state, to_flush)
-    Logger.debug("[SlotMessageStore] Flushed messages", count: length(to_flush))
+    {time, state} = :timer.tc(fn -> flush_messages(state, to_flush) end)
+
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning("[SlotMessageStore] Flushed messages took longer than expected",
+        count: length(to_flush),
+        message_count: map_size(state.messages),
+        time_ms: div(time, 1000)
+      )
+    end
 
     if more? do
       Process.send_after(self(), :flush, 0)
@@ -638,9 +640,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp load_from_postgres(%State{persisted_mode?: true} = state) do
     case Consumers.get_sink_consumer(state.consumer_id) do
       {:ok, consumer} ->
-        Logger.debug("[SlotMessageStore] Loading messages...")
+        Logger.info("[SlotMessageStore] Loading messages...")
         {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
-        Logger.debug("[SlotMessageStore] Loaded messages", count: map_size(messages), time_ms: div(time, 1000))
+        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), time_ms: div(time, 1000))
 
         {:ok, %{state | messages: messages, consumer: consumer}}
 
@@ -671,16 +673,20 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   defp load_messages(%SinkConsumer{message_kind: :event, id: id}) do
+    now = DateTime.utc_now()
+
     id
     |> Consumers.list_consumer_events_for_consumer()
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false} end)
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
     |> Map.new(&{&1.ack_id, &1})
   end
 
   defp load_messages(%SinkConsumer{message_kind: :record, id: id}) do
+    now = DateTime.utc_now()
+
     id
     |> Consumers.list_consumer_records_for_consumer()
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false} end)
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
     |> Map.new(&{&1.ack_id, &1})
   end
 

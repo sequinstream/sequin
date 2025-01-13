@@ -57,6 +57,14 @@ defmodule Sequin.Time do
     end
   end
 
+  def before_ms_ago?(timestamp, ms) do
+    DateTime.before?(timestamp, DateTime.add(Sequin.utc_now(), -ms, :millisecond))
+  end
+
+  def before_sec_ago?(timestamp, seconds) do
+    DateTime.before?(timestamp, DateTime.add(Sequin.utc_now(), -seconds, :second))
+  end
+
   def before_min_ago?(timestamp, minutes) do
     DateTime.before?(timestamp, DateTime.add(Sequin.utc_now(), -minutes, :minute))
   end

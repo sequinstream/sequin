@@ -63,6 +63,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
           &Sequin.Logs.log_for_consumer_message(
             :info,
             consumer.account_id,
+            consumer.id,
             &1.replication_message_trace_id,
             "Pushed message to NATS successfully"
           )
@@ -88,6 +89,7 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
           &Sequin.Logs.log_for_consumer_message(
             :error,
             consumer.account_id,
+            consumer.id,
             &1.replication_message_trace_id,
             "Failed to push message to NATS: #{inspect(reason)}"
           )

@@ -39,7 +39,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             api_tokens: api_tokens,
             allocated_bastion_port: nil,
             update_allocated_bastion_port_timer: nil,
-            pg_major_version: nil
+            pg_major_version: nil,
+            self_hosted: Application.get_env(:sequin, :self_hosted)
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
           |> assign(:show_supabase_pooler_prompt, false)
@@ -105,7 +106,8 @@ defmodule SequinWeb.DatabasesLive.Form do
             showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
             api_tokens: @api_tokens,
             showLocalTunnelPrompt: @show_local_tunnel_prompt,
-            showPgVersionWarning: @show_pg_version_warning
+            showPgVersionWarning: @show_pg_version_warning,
+            selfHosted: @self_hosted
           }
         }
       />

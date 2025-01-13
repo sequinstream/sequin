@@ -346,10 +346,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
   end
 
-  def handle_event("reset_message_visibility", %{"message_id" => message_id}, socket) do
+  def handle_event("reset_message_visibility", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
 
-    case Consumers.reset_message_visibility(consumer, message_id) do
+    case SlotMessageStore.reset_message_visibility(consumer.id, ack_id) do
       {:ok, updated_message} ->
         {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
 
@@ -755,7 +755,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages(consumer, limit, offset, show_acked) do
-    db_messages = load_consumer_messages_from_db(consumer, offset + limit)
+    store_messages = load_consumer_messages_from_store(consumer, offset + limit)
 
     redis_messages =
       if show_acked do
@@ -764,23 +764,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         []
       end
 
-    (db_messages ++ redis_messages)
-    |> Enum.sort_by(& &1.id, :asc)
-    |> Enum.uniq_by(& &1.id)
+    (store_messages ++ redis_messages)
+    |> Enum.sort_by(& &1.seq, :asc)
+    |> Enum.uniq_by(& &1.seq)
     |> Enum.drop(offset)
     |> Enum.take(limit)
   end
 
-  defp load_consumer_messages_from_db(consumer, limit) do
-    params = [order_by: {:asc, :id}, limit: limit]
+  defp load_consumer_messages_from_store(consumer, limit) do
+    %SlotMessageStore.State{messages: messages} = SlotMessageStore.peek(consumer.id)
 
-    case consumer do
-      %{message_kind: :record} ->
-        Consumers.list_consumer_records_for_consumer(consumer.id, params)
-
-      %{message_kind: :event} ->
-        Consumers.list_consumer_events_for_consumer(consumer.id, params)
-    end
+    messages
+    |> Map.values()
+    |> Enum.sort_by(& &1.seq, :asc)
+    |> Enum.take(limit)
   end
 
   defp load_consumer_messages_from_redis(consumer, limit) do
@@ -851,6 +848,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "record",
           consumer_id: message.consumer_id,
+          seq: message.seq,
           commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
           deliver_count: message.deliver_count,
@@ -870,6 +868,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "event",
           consumer_id: message.consumer_id,
+          seq: message.seq,
           commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
           deliver_count: message.deliver_count,
@@ -889,6 +888,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "acknowledged_message",
           consumer_id: message.consumer_id,
+          seq: message.seq,
           commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
           deliver_count: message.deliver_count,
@@ -963,6 +963,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
       state == :delivered ->
         "delivering"
+
+      not_visible_until == nil ->
+        "available"
 
       DateTime.after?(not_visible_until, DateTime.utc_now()) ->
         "backing off"

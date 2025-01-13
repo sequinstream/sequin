@@ -68,7 +68,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   @impl MessageHandlerBehaviour
   def handle_messages(%Context{} = ctx, messages) do
-    Logger.info("[MessageHandler] Handling #{length(messages)} message(s)")
+    Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
     ctx = update_table_reader_batch_pks(ctx, messages)
 

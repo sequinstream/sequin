@@ -20,6 +20,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   require Logger
 
+  @min_log_time_ms 200
+
   @impl GenStage
   def init(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
@@ -95,13 +97,27 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    messages = produce_messages(state.consumer, demand * state.batch_size)
+    {time, messages} = :timer.tc(fn -> produce_messages(state.consumer, demand * state.batch_size * 10) end)
 
-    Logger.debug(
-      "Received #{length(messages)} messages for consumer #{state.consumer.id} (demand: #{demand}, batch_size: #{state.batch_size})"
-    )
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning(
+        "[ConsumerProducer] Produced messages",
+        count: length(messages),
+        demand: demand,
+        batch_size: state.batch_size,
+        time_ms: div(time, 1000)
+      )
+    end
 
-    {state, messages} = handle_idempotency(state, messages)
+    {time, {state, messages}} = :timer.tc(fn -> handle_idempotency(state, messages) end)
+
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning(
+        "[ConsumerProducer] Handled idempotency",
+        time_ms: div(time, 1000),
+        message_count: length(messages)
+      )
+    end
 
     broadway_messages =
       messages
@@ -154,9 +170,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     if delivered_messages == [] do
       {state, messages}
     else
-      Logger.warning(
-        "Received #{length(delivered_seqs)} messages for consumer #{state.consumer.id} that have already been delivered",
-        seqs: delivered_seqs
+      Logger.info(
+        "[ConsumerProducer] Rejected messages for idempotency",
+        rejected_message_count: length(delivered_messages),
+        seqs: delivered_seqs,
+        message_count: length(filtered_messages)
       )
 
       SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
@@ -164,9 +182,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       # If we filtered out any messages due to idempotency, we will have additional
       # demand that we need to handle. So we schedule an immediate :receive_messages
       if state.receive_timer, do: Process.cancel_timer(state.receive_timer)
-      send(self(), :receive_messages)
+      receive_timer = Process.send_after(self(), :receive_messages, 10)
 
-      {%{state | receive_timer: nil}, filtered_messages}
+      {%{state | receive_timer: receive_timer}, filtered_messages}
     end
   end
 

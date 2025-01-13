@@ -41,6 +41,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     embeds_one :data, ConsumerEventData
 
     # For SlotMessageStore
+    field :ingested_at, :utc_datetime_usec, virtual: true
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
     field :table_reader_batch_id, :string, virtual: true

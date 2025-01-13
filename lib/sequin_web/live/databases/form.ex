@@ -325,6 +325,9 @@ defmodule SequinWeb.DatabasesLive.Form do
       %Sequin.Error.ValidationError{summary: summary} ->
         summary
 
+      error when is_exception(error) ->
+        Exception.message(error)
+
       unexpected ->
         Logger.error("Unexpected error in databases/form.ex:error_msg/1: #{inspect(unexpected)}")
         "An unexpected error occurred. Please try again or contact us."

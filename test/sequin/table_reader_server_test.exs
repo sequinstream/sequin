@@ -356,7 +356,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       # Set below 8 characters in table
       max_pending_messages = 1
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 1})
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 1, flush_wait_ms: 1})
 
       pid =
         start_table_reader_server(backfill, table_oid,

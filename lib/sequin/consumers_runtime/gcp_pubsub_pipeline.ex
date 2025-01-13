@@ -75,6 +75,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
           Sequin.Logs.log_for_consumer_message(
             :info,
             consumer.account_id,
+            consumer.id,
             msg.replication_message_trace_id,
             "Published message to Pub/Sub successfully"
           )
@@ -91,6 +92,7 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
           Sequin.Logs.log_for_consumer_message(
             :error,
             consumer.account_id,
+            consumer.id,
             msg.replication_message_trace_id,
             "Failed to publish message to Pub/Sub: #{inspect(error)}"
           )

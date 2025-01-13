@@ -100,6 +100,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
           Sequin.Logs.log_for_consumer_message(
             :info,
             consumer.account_id,
+            consumer.id,
             msg.replication_message_trace_id,
             "Pushed message successfully"
           )
@@ -116,6 +117,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
           Sequin.Logs.log_for_consumer_message(
             :error,
             consumer.account_id,
+            consumer.id,
             msg.replication_message_trace_id,
             "Failed to push message: #{Exception.message(reason)}"
           )

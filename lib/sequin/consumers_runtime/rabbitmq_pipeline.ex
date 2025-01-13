@@ -60,6 +60,7 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
           &Sequin.Logs.log_for_consumer_message(
             :info,
             consumer.account_id,
+            consumer.id,
             &1.replication_message_trace_id,
             "Pushed message to RabbitMQ successfully"
           )
@@ -85,6 +86,7 @@ defmodule Sequin.ConsumersRuntime.RabbitMqPipeline do
           &Sequin.Logs.log_for_consumer_message(
             :error,
             consumer.account_id,
+            consumer.id,
             &1.replication_message_trace_id,
             "Failed to push message to RabbitMQ: #{inspect(reason)}"
           )

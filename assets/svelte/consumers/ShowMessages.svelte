@@ -265,23 +265,19 @@
     changePage(0);
   }
 
-  function resetMessageVisibility(messageId) {
-    live.pushEvent(
-      "reset_message_visibility",
-      { message_id: messageId },
-      (reply) => {
-        resettingMessageVisibility = false;
+  function resetMessageVisibility(ackId) {
+    live.pushEvent("reset_message_visibility", { ack_id: ackId }, (reply) => {
+      resettingMessageVisibility = false;
 
-        if (reply.error) {
-          // Handle error (e.g., show a toast notification)
-          console.error("Failed to reset message visibility:", reply.error);
-        } else {
-          // Optionally, update the message state locally or refresh the drawer
-          selectedMessage = reply.updated_message;
-          refreshLogs();
-        }
-      },
-    );
+      if (reply.error) {
+        // Handle error (e.g., show a toast notification)
+        console.error("Failed to reset message visibility:", reply.error);
+      } else {
+        // Optionally, update the message state locally or refresh the drawer
+        selectedMessage = reply.updated_message;
+        refreshLogs();
+      }
+    });
   }
 
   function acknowledgeMessage(ackId) {
@@ -362,7 +358,7 @@
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              ID
+              Seq
             </th>
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]"
@@ -419,7 +415,7 @@
               on:click={() => openDrawer(message)}
             >
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{message.id}</td
+                >{message.seq}</td
               >
               <td class="px-2 py-1 whitespace-nowrap text-2xs min-w-[150px]">
                 <span
@@ -590,7 +586,7 @@
                           size="sm"
                           on:click={() => {
                             resettingMessageVisibility = true;
-                            resetMessageVisibility(selectedMessage.id);
+                            resetMessageVisibility(selectedMessage.ack_id);
                           }}
                           disabled={resettingMessageVisibility}
                           class="flex items-center space-x-2"

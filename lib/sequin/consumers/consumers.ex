@@ -905,39 +905,6 @@ defmodule Sequin.Consumers do
   end
 
   @doc """
-  Resets the not_visible_until field to the current time for a given consumer and record/event ID.
-  """
-  @spec reset_message_visibility(consumer(), String.t()) :: {:ok, %ConsumerEvent{} | %ConsumerRecord{}} | {:error, term()}
-  def reset_message_visibility(consumer, id) do
-    now = DateTime.utc_now()
-
-    query =
-      case consumer.message_kind do
-        :event ->
-          from(ce in ConsumerEvent,
-            where: ce.consumer_id == ^consumer.id and ce.id == ^id,
-            update: [set: [not_visible_until: ^now]],
-            select: ce
-          )
-
-        :record ->
-          from(cr in ConsumerRecord,
-            where: cr.consumer_id == ^consumer.id and cr.id == ^id,
-            update: [set: [not_visible_until: ^now, state: :available]],
-            select: cr
-          )
-      end
-
-    case Repo.update_all(query, []) do
-      {1, [updated_message]} ->
-        {:ok, updated_message}
-
-      {0, _} ->
-        {:error, Error.not_found(entity: consumer.message_kind)}
-    end
-  end
-
-  @doc """
   Min active cursor: the value of the sort_key column for the sequence row that corresponds to the min value of id in the consumer records table
   Max active cursor: the value of the sort_key column for the sequence row that corresponds to the max value of id in the consumer records table for delivered records
   Min/max possible cursors: the min and max values of the sort_key column from the underlying sequences table

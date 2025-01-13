@@ -10,6 +10,7 @@
 
   export let show: boolean = false;
   export let entityName: string;
+  export let showTryWithLocalDatabaseCTA: boolean = true;
 </script>
 
 {#if show}
@@ -39,11 +40,13 @@
           </Button>
         </a>
 
-        <LinkPushNavigate href="/databases/new?localhost=true">
-          <Button variant="outline">
-            <Zap class="inline-block h-4 w-4 mr-2" /> Try with local database
-          </Button>
-        </LinkPushNavigate>
+        {#if showTryWithLocalDatabaseCTA}
+          <LinkPushNavigate href="/databases/new?localhost=true">
+            <Button variant="outline">
+              <Zap class="inline-block h-4 w-4 mr-2" /> Try with local database
+            </Button>
+          </LinkPushNavigate>
+        {/if}
       </div>
     </div>
   </Alert>

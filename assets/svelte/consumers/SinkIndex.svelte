@@ -12,16 +12,9 @@
   import { Label } from "$lib/components/ui/label";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import { ChevronRight } from "lucide-svelte";
-  import {
-    CirclePlay,
-    CircleStop,
-    Database,
-    Plug,
-    Webhook,
-  } from "lucide-svelte";
+  import { Database, Plug, Webhook } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthPill from "../health/HealthPill.svelte";
-  import { Badge } from "$lib/components/ui/badge";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
@@ -53,7 +46,7 @@
   }>;
   export let live: any;
   export let hasDatabases: boolean;
-
+  export let selfHosted: boolean;
   let selectedDestination: string;
   let dialogOpen = false;
 
@@ -108,7 +101,11 @@
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert show={!hasDatabases} entityName="Sink" />
+  <DatabaseConnectionAlert
+    show={!hasDatabases}
+    entityName="Sink"
+    showTryWithLocalDatabaseCTA={!selfHosted}
+  />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">

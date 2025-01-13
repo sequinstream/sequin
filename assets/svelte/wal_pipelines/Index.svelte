@@ -24,10 +24,15 @@
   }>;
 
   export let hasDatabases: boolean;
+  export let selfHosted: boolean;
 </script>
 
 <div class="container mx-auto py-10">
-  <DatabaseConnectionAlert show={!hasDatabases} entityName="Change Retention" />
+  <DatabaseConnectionAlert
+    show={!hasDatabases}
+    entityName="Change Retention"
+    showTryWithLocalDatabaseCTA={!selfHosted}
+  />
 
   <div class="flex justify-between items-center mb-4">
     <div class="flex items-center">

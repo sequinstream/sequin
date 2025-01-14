@@ -12,7 +12,7 @@ NORMAL="\033[0m"
 .PHONY: $(MAKECMDGOALS)
 
 help: ## Prints target: [dep1 dep1 ...]  and what it does
-	@echo -e ${BOLD}
+	@echo -e ${BOLD}Available targets:${NORMAL}
 	@grep -E '^[a-zA-Z_-]+.*## .*$$' $(MAKEFILE_LIST) |  sed 's/^Makefile://' | column -t -s"##"
 
 dev: ## Run the app locally
@@ -111,6 +111,6 @@ connect: ## Connect to the production database
 docs: ## Run mintlify dev server for documentation
 	@cd docs && mintlify dev
 
-redis-console-consumer: ## Read from a Redis stream like a Kafka consumer
+redis-console-consumer: ## Read from redis stream <stream-key> [from-beginning]
 	@./scripts/redis-console-consumer.sh $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
 

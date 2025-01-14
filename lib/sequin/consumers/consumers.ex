@@ -139,6 +139,12 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
+  def earliest_sink_consumer_inserted_at_for_account(account_id) do
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> Repo.aggregate(:min, :inserted_at)
+  end
+
   def list_consumers_for_replication_slot(replication_slot_id) do
     replication_slot_id
     |> SinkConsumer.where_replication_slot_id()

@@ -12,14 +12,14 @@ defmodule SequinWeb.Components.Sidenav do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
     account = current_account(socket)
-    count = Consumers.count_sink_consumers_for_account(account.id)
+    earliest_sink_inserted_at = Consumers.earliest_sink_consumer_inserted_at_for_account(account.id)
 
     socket =
       socket
       |> assign(
         current_account: current_account(socket),
         accounts: accounts(socket),
-        has_sinks?: count > 0,
+        earliest_sink_inserted_at: earliest_sink_inserted_at,
         release_version: Application.get_env(:sequin, :release_version)
       )
       |> assign_async(:latest_version, fn ->
@@ -89,12 +89,16 @@ defmodule SequinWeb.Components.Sidenav do
           nil
       end
 
+    sink_inserted_over_5_min_ago? =
+      not is_nil(assigns.earliest_sink_inserted_at) and
+        DateTime.diff(DateTime.utc_now(), assigns.earliest_sink_inserted_at, :minute) > 5
+
     assigns =
       assigns
       |> assign(:parent_id, "sidenav")
       |> assign(
         :settings_has_notifications,
-        assigns.has_sinks? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
+        sink_inserted_over_5_min_ago? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
       )
       |> assign(:latest_version, latest_version)
 

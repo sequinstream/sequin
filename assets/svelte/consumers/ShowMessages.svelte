@@ -14,6 +14,7 @@
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
   import * as Popover from "$lib/components/ui/popover";
+  import { toast } from "svelte-sonner";
 
   // Receive necessary props
   export let messages: any[];
@@ -275,7 +276,7 @@
 
       if (reply.error) {
         // Handle error (e.g., show a toast notification)
-        console.error("Failed to reset message visibility:", reply.error);
+        toast.error("Failed to reset message visibility:", reply.error);
       } else {
         // Optionally, update the message state locally or refresh the drawer
         selectedMessage = reply.updated_message;

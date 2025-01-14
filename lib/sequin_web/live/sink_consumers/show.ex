@@ -1049,7 +1049,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     Map.merge(
       check,
       %{
-        alertTitle: "Warning: Replica identity not set to full",
+        alertTitle: "Notice: Replica identity not set to full",
         alertMessage: """
         The replica identity for your table is not set to `full`. This means the `changes` field in message payloads will be empty.
 
@@ -1069,7 +1069,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
 
     Map.merge(check, %{
-      alertTitle: "Warning: TOAST columns detected",
+      alertTitle: "Notice: TOAST columns detected",
       alertMessage: """
       Some columns in your table use TOAST storage (their values are very large). As currently configured, Sequin will propagate these values as "unchanged_toast" if the column is unchanged.
 

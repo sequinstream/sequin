@@ -32,6 +32,8 @@
         return "destructive";
       case "warning":
         return "warning";
+      case "notice":
+        return "info";
       default:
         return "default";
     }

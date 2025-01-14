@@ -20,6 +20,7 @@
     warning: "border-yellow-500",
     initializing: "border-blue-500",
     paused: "border-gray-400",
+    notice: "border-blue-400",
   };
 
   const checkStatusColor = {
@@ -28,6 +29,7 @@
     warning: "text-yellow-600",
     initializing: "text-blue-600",
     paused: "text-gray-500",
+    notice: "text-blue-500",
   };
 
   function handleRefreshClicked() {
@@ -53,7 +55,7 @@
       acc[check.status]++;
       return acc;
     },
-    { healthy: 0, error: 0, warning: 0, initializing: 0 } as Record<
+    { healthy: 0, error: 0, warning: 0, initializing: 0, notice: 0 } as Record<
       Health["status"],
       number
     >,

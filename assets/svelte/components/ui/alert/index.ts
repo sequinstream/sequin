@@ -14,6 +14,7 @@ export const alertVariants = tv({
         "border-red-500 text-red-600 dark:border-red-500 [&>svg]:text-red-600 bg-red-50",
       warning:
         "border-yellow-500 text-yellow-600 dark:border-yellow-500 [&>svg]:text-yellow-600 bg-yellow-50",
+      info: "border-blue-500 text-blue-600 dark:border-blue-500 [&>svg]:text-blue-600 bg-blue-50",
     },
   },
   defaultVariants: {

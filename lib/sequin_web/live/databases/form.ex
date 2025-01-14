@@ -43,7 +43,7 @@ defmodule SequinWeb.DatabasesLive.Form do
             self_hosted: Application.get_env(:sequin, :self_hosted)
           )
           |> put_changesets(%{"database" => %{}, "replication_slot" => %{}})
-          |> assign(:show_supabase_pooler_prompt, false)
+          |> assign(:pooler_type, nil)
 
         {:ok, socket}
 
@@ -103,11 +103,11 @@ defmodule SequinWeb.DatabasesLive.Form do
             errors: if(@show_errors?, do: @form_errors, else: %{}),
             parent: @parent_id,
             submitError: @submit_error,
-            showSupabasePoolerPrompt: @show_supabase_pooler_prompt,
             api_tokens: @api_tokens,
             showLocalTunnelPrompt: @show_local_tunnel_prompt,
             showPgVersionWarning: @show_pg_version_warning,
-            selfHosted: @self_hosted
+            selfHosted: @self_hosted,
+            poolerType: @pooler_type
           }
         }
       />
@@ -120,8 +120,8 @@ defmodule SequinWeb.DatabasesLive.Form do
     params = decode_params(form)
     socket = put_changesets(socket, params)
 
-    show_supabase_pooler_prompt = detect_supabase_pooled(params["database"])
-    socket = assign(socket, :show_supabase_pooler_prompt, show_supabase_pooler_prompt)
+    pooler_type = detect_pooled_connection(params["database"])
+    socket = assign(socket, :pooler_type, pooler_type)
 
     socket = maybe_allocate_bastion_port(socket)
 
@@ -142,11 +142,11 @@ defmodule SequinWeb.DatabasesLive.Form do
   end
 
   @impl Phoenix.LiveView
-  def handle_event("convert_supabase_connection", %{"form" => form}, socket) do
+  def handle_event("convert_pooled_connection", %{"form" => form}, socket) do
     params = decode_params(form)
-    converted_params = convert_supabase_connection(params["database"])
+    converted_params = convert_pooled_connection(params["database"])
 
-    socket = assign(socket, :show_supabase_pooler_prompt, false)
+    socket = assign(socket, :pooler_type, nil)
 
     {:reply, %{converted: converted_params}, socket}
   end
@@ -502,19 +502,50 @@ defmodule SequinWeb.DatabasesLive.Form do
   defp maybe_trim(nil), do: nil
   defp maybe_trim(value), do: String.trim(value)
 
-  defp detect_supabase_pooled(%{"username" => username, "hostname" => hostname}) do
-    username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase")
+  defp detect_pooled_connection(%{"username" => username, "hostname" => hostname}) do
+    cond do
+      username && hostname && String.contains?(username, ".") && String.contains?(hostname, "pooler.supabase") ->
+        "supabase"
+
+      hostname && String.contains?(hostname, "-pooler.") && String.contains?(hostname, ".neon.tech") ->
+        "neon"
+
+      true ->
+        nil
+    end
   end
 
-  defp detect_supabase_pooled(_), do: false
+  defp detect_pooled_connection(_), do: nil
 
-  defp convert_supabase_connection(%{"username" => username} = params) do
+  defp convert_pooled_connection(%{"hostname" => hostname} = params) when is_binary(hostname) do
+    cond do
+      String.contains?(hostname, "pooler.supabase") ->
+        convert_supabase_pooled_connection(params)
+
+      String.contains?(hostname, "-pooler.") && String.contains?(hostname, ".neon.tech") ->
+        convert_neon_pooled_connection(params)
+
+      true ->
+        params
+    end
+  end
+
+  defp convert_pooled_connection(params), do: params
+
+  defp convert_supabase_pooled_connection(%{"username" => username} = params) do
     [_, project_name] = String.split(username, ".")
 
     params
     |> Map.put("username", "postgres")
     |> Map.put("hostname", "db.#{project_name}.supabase.co")
     |> Map.put("port", 5432)
+  end
+
+  defp convert_neon_pooled_connection(%{"hostname" => hostname} = params) do
+    # Replace -pooler. with . to get direct connection
+    direct_hostname = String.replace(hostname, "-pooler.", ".")
+
+    Map.put(params, "hostname", direct_hostname)
   end
 
   defp maybe_allocate_bastion_port(socket) do

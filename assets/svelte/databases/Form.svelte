@@ -63,7 +63,7 @@
   export let submitError: string | null = null;
   export let parent: string;
   export let live;
-  export let showSupabasePoolerPrompt: boolean = false;
+  export let poolerType: "supabase" | "neon" | null = null;
   export let api_tokens: any[];
   export let showLocalTunnelPrompt: boolean = true;
   export let showPgVersionWarning: boolean = false;
@@ -193,11 +193,11 @@
     pushEvent("form_closed");
   }
 
-  function handleConvertSupabase() {
-    pushEvent("convert_supabase_connection", { form }, (reply) => {
+  function handleConvertPool() {
+    pushEvent("convert_pooled_connection", { form }, (reply) => {
       if (reply && reply.converted) {
         form = { ...form, ...reply.converted, ssl: true };
-        showSupabasePoolerPrompt = false;
+        poolerType = null;
       }
     });
   }
@@ -241,15 +241,11 @@
   }
 
   let urlInput = "";
-  let isValidURL = false;
+  let urlInputError;
   let popoverOpen = false;
 
-  function handleURLInput() {
-    isValidURL = isValidPostgresURL(urlInput);
-  }
-
   function autofillFromURL() {
-    if (isValidURL) {
+    if (isValidPostgresURL(urlInput)) {
       const { database, hostname, port, username, password, ssl } =
         parsePostgresURL(urlInput);
       form.database = database;
@@ -262,6 +258,8 @@
 
       // Close the popover
       popoverOpen = false;
+    } else {
+      urlInputError = "Invalid Postgres URL";
     }
   }
 
@@ -300,6 +298,15 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
     clearFormStorage();
     pushEvent("form_updated", { form });
   }
+
+  function getPoolerName(type: string): string {
+    switch (type) {
+      case "supabase":
+        return "Supabase";
+      case "neon":
+        return "Neon";
+    }
+  }
 </script>
 
 <FullPageModal
@@ -329,12 +336,15 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
                   id="url-input"
                   type="text"
                   bind:value={urlInput}
-                  on:input={handleURLInput}
+                  on:input={() => (urlInputError = null)}
                   placeholder="postgres://user:pass@host:port/db"
                 />
-                <Button on:click={autofillFromURL} disabled={!isValidURL}>
+                <Button on:click={autofillFromURL} disabled={!urlInput}>
                   Autofill
                 </Button>
+                {#if urlInputError}
+                  <p class="text-destructive text-sm">{urlInputError}</p>
+                {/if}
               </div>
             </PopoverContent>
           </Popover>
@@ -480,17 +490,17 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
         {#if databaseErrors.ssl}
           <p class="text-destructive text-sm">{databaseErrors.ssl}</p>
         {/if}
-        {#if showSupabasePoolerPrompt}
+        {#if poolerType}
           <div transition:slide>
             <Alert variant="default">
               <AlertCircle class="h-4 w-4" />
-              <AlertTitle>Supabase pooled connection detected</AlertTitle>
+              <AlertTitle>Pooled connection detected</AlertTitle>
               <AlertDescription>
-                We've detected a Supabase pooled connection. Sequin requires a
-                direct connection. Click the button below to convert to a direct
-                connection.
+                We've detected a {getPoolerName(poolerType)} pooled connection. Sequin
+                requires a direct connection. Click the button below to convert to
+                a direct connection.
               </AlertDescription>
-              <Button class="mt-2" on:click={handleConvertSupabase}>
+              <Button class="mt-2" on:click={handleConvertPool}>
                 Convert to direct connection
               </Button>
             </Alert>

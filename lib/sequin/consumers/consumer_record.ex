@@ -77,6 +77,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
       :deliver_count,
       :replication_message_trace_id
     ])
+    |> cast_embed(:data, required: true)
   end
 
   def update_changeset(consumer_record, attrs) do

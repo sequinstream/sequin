@@ -144,7 +144,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @impl Postgrex.ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
-    Logger.info("[SlotProcessor] Initialized with opts: #{inspect(state.connection, pretty: true)}")
+
+    Logger.info(
+      "[SlotProcessor] Initialized with opts: #{inspect(Keyword.delete(state.connection, :password), pretty: true)}"
+    )
 
     if state.test_pid do
       Mox.allow(Sequin.DatabasesRuntime.MessageHandlerMock, state.test_pid, self())

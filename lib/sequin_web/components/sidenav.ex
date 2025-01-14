@@ -15,12 +15,19 @@ defmodule SequinWeb.Components.Sidenav do
     count = Consumers.count_sink_consumers_for_account(account.id)
 
     socket =
-      assign(socket,
+      socket
+      |> assign(
         current_account: current_account(socket),
         accounts: accounts(socket),
         has_sinks?: count > 0,
         release_version: Application.get_env(:sequin, :release_version)
       )
+      |> assign_async(:latest_version, fn ->
+        case Req.get("https://sequinstream.com/gh/releases/latest/sequinstream/sequin") do
+          {:ok, %{body: %{"tag_name" => tag_name}}} -> {:ok, %{latest_version: tag_name}}
+          _ -> {:ok, %{latest_version: nil}}
+        end
+      end)
 
     {:ok, socket}
   end
@@ -73,6 +80,15 @@ defmodule SequinWeb.Components.Sidenav do
   attr :current_user, :map, required: true
 
   def render(assigns) do
+    latest_version =
+      case assigns.latest_version do
+        %{ok?: true, result: version} when not is_nil(version) and version != assigns.release_version ->
+          version
+
+        _ ->
+          nil
+      end
+
     assigns =
       assigns
       |> assign(:parent_id, "sidenav")
@@ -80,6 +96,7 @@ defmodule SequinWeb.Components.Sidenav do
         :settings_has_notifications,
         assigns.has_sinks? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
       )
+      |> assign(:latest_version, latest_version)
 
     ~H"""
     <div id={@parent_id}>
@@ -93,7 +110,8 @@ defmodule SequinWeb.Components.Sidenav do
             currentUser: @current_user,
             parent: @parent_id,
             accountSettingsHasNotification: @settings_has_notifications,
-            sequinVersion: @release_version
+            sequinVersion: @release_version,
+            latestVersion: @latest_version
           }
         }
         socket={@socket}

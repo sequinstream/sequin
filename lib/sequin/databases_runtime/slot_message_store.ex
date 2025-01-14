@@ -352,16 +352,25 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec reset_message_visibility(consumer_id(), String.t()) :: {:ok, ConsumerRecord.t() | ConsumerEvent.t()}
   def reset_message_visibility(consumer_id, message_id) do
     GenServer.call(via_tuple(consumer_id), {:reset_message_visibility, message_id})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @spec reset_all_visibility(consumer_id()) :: :ok
   def reset_all_visibility(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :reset_all_visibility)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @spec min_unflushed_commit_lsn(consumer_id(), reference()) :: non_neg_integer()
   def min_unflushed_commit_lsn(consumer_id, monitor_ref) do
     GenServer.call(via_tuple(consumer_id), {:min_unflushed_commit_lsn, monitor_ref})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
@@ -370,6 +379,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec count_messages(consumer_id()) :: non_neg_integer()
   def count_messages(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :count_messages)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
@@ -378,6 +390,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec peek(consumer_id()) :: State.t()
   def peek(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :peek)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """

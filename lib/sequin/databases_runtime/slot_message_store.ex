@@ -292,6 +292,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok
   def put_messages(consumer_id, messages) do
     GenServer.call(via_tuple(consumer_id), {:put_messages, messages})
+  catch
+    :exit, e ->
+      error = exit_to_sequin_error(e)
+      Logger.error("[SlotMessageStore] Failed to put messages", error: error)
+      raise error
   end
 
   @doc """
@@ -303,6 +308,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) :: :ok
   def put_table_reader_batch(consumer_id, messages, batch_id) do
     GenServer.call(via_tuple(consumer_id), {:put_table_reader_batch, messages, batch_id})
+  catch
+    :exit, e ->
+      error = exit_to_sequin_error(e)
+      Logger.error("[SlotMessageStore] Failed to put table reader batch", error: error)
+      raise error
   end
 
   @doc """
@@ -311,6 +321,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress}
   def batch_progress(consumer_id, batch_id) do
     GenServer.call(via_tuple(consumer_id), {:batch_progress, batch_id})
+  catch
+    :exit, e ->
+      error = exit_to_sequin_error(e)
+      Logger.error("[SlotMessageStore] Failed to get batch progress", error: error)
+      raise error
   end
 
   @doc """
@@ -380,6 +395,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec min_unflushed_commit_lsn(consumer_id(), reference()) :: non_neg_integer()
   def min_unflushed_commit_lsn(consumer_id, monitor_ref) do
     GenServer.call(via_tuple(consumer_id), {:min_unflushed_commit_lsn, monitor_ref})
+  catch
+    :exit, e ->
+      error = exit_to_sequin_error(e)
+      Logger.error("[SlotMessageStore] Failed to get min unflushed commit lsn", error: error)
+      raise error
   end
 
   @doc """

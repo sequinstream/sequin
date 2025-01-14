@@ -20,14 +20,10 @@ defmodule SequinWeb.Components.Sidenav do
         current_account: current_account(socket),
         accounts: accounts(socket),
         earliest_sink_inserted_at: earliest_sink_inserted_at,
-        release_version: Application.get_env(:sequin, :release_version)
+        release_version: nil,
+        latest_version: nil
       )
-      |> assign_async(:latest_version, fn ->
-        case Req.get("https://sequinstream.com/gh/releases/latest/sequinstream/sequin") do
-          {:ok, %{body: %{"tag_name" => tag_name}}} -> {:ok, %{latest_version: tag_name}}
-          _ -> {:ok, %{latest_version: nil}}
-        end
-      end)
+      |> maybe_assign_release_version()
 
     {:ok, socket}
   end
@@ -123,5 +119,20 @@ defmodule SequinWeb.Components.Sidenav do
       />
     </div>
     """
+  end
+
+  defp maybe_assign_release_version(socket) do
+    if Application.get_env(:sequin, :self_hosted) do
+      socket
+      |> assign(release_version: Application.get_env(:sequin, :release_version))
+      |> assign_async(:latest_version, fn ->
+        case Req.get("https://sequinstream.com/gh/releases/latest/sequinstream/sequin") do
+          {:ok, %{body: %{"tag_name" => tag_name}}} -> {:ok, %{latest_version: tag_name}}
+          _ -> {:ok, %{latest_version: nil}}
+        end
+      end)
+    else
+      socket
+    end
   end
 end

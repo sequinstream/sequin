@@ -13,6 +13,7 @@
     Check,
   } from "lucide-svelte";
   import { slide, fade } from "svelte/transition";
+  import * as Popover from "$lib/components/ui/popover";
 
   // Receive necessary props
   export let messages: any[];
@@ -22,6 +23,7 @@
   export let paused: boolean = false;
   export let showAcked: boolean = true;
   export let consumer: { type: string };
+  export let metrics: { messages_failing_count: number };
 
   let page: number = 0;
   let loading = false;
@@ -44,6 +46,8 @@
 
   // Add this new state variable near the top with other state variables
   let isAcknowledging = false;
+  let isResettingAll = false;
+  let isPopoverOpen = false;
 
   onMount(() => {
     // Calculate row height after the component is mounted
@@ -296,6 +300,14 @@
     });
   }
 
+  function handleResetAll() {
+    isPopoverOpen = false;
+    isResettingAll = true;
+    live.pushEvent("reset_all_visibility", {}, (reply) => {
+      isResettingAll = false;
+    });
+  }
+
   $: pageCount = Math.ceil(totalCount / pageSize);
 </script>
 
@@ -315,6 +327,50 @@
           <Switch checked={showAcked} />
           <span>Show Acked</span>
         </Button>
+
+        <Popover.Root bind:open={isPopoverOpen}>
+          <Popover.Trigger asChild let:builder>
+            <Button
+              builders={[builder]}
+              variant="outline"
+              size="sm"
+              disabled={metrics.messages_failing_count === 0 || isResettingAll}
+              class="flex items-center space-x-2"
+            >
+              {#if isResettingAll}
+                <Loader2 class="h-4 w-4 mr-1 animate-spin" />
+              {:else}
+                <RotateCw class="h-4 w-4 mr-1" />
+              {/if}
+              <span>Redeliver All</span>
+            </Button>
+          </Popover.Trigger>
+          <Popover.Content class="w-80 p-4">
+            <div class="grid gap-4">
+              <div class="space-y-2">
+                <h4 class="font-medium leading-none">Confirm Redeliver All</h4>
+                <p class="text-sm text-muted-foreground">
+                  This will reset the visibility window for all messages,
+                  causing them to be redelivered. Are you sure you want to
+                  continue?
+                </p>
+              </div>
+              <div class="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  on:click={() => (isPopoverOpen = false)}
+                >
+                  Cancel
+                </Button>
+                <Button variant="default" size="sm" on:click={handleResetAll}>
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </Popover.Content>
+        </Popover.Root>
+
         <Button
           variant={paused ? "default" : "outline"}
           size="sm"
@@ -389,7 +445,7 @@
             <th
               class="px-2 py-1 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider"
             >
-              Inserted At
+              Committed At
             </th>
           </tr>
         </thead>
@@ -446,7 +502,7 @@
                   : "N/A"}
               </td>
               <td class="px-2 py-1 whitespace-nowrap text-2xs text-gray-500"
-                >{formatDate(message.inserted_at)}</td
+                >{formatDate(message.commit_timestamp)}</td
               >
             </tr>
           {/each}

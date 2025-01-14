@@ -97,6 +97,7 @@ window.addEventListener("phx:ph-identify", (event) => {
     accountName,
     createdAt,
     contactEmail,
+    sequinVersion,
   } = event.detail;
 
   posthog.identify(userId, {
@@ -108,6 +109,7 @@ window.addEventListener("phx:ph-identify", (event) => {
   posthog.group("account", accountId, {
     name: accountName,
     email: contactEmail,
+    sequinVersion: sequinVersion,
   });
 
   ko.identify(userEmail, {

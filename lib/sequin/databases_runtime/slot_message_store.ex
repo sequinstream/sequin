@@ -110,6 +110,31 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {%{state | messages: updated_messages}, nacked_count}
     end
 
+    @spec reset_message_visibility(%State{}, SinkConsumer.ack_id()) :: {%State{}, ConsumerRecord.t() | ConsumerEvent.t()}
+    def reset_message_visibility(%State{} = state, ack_id) do
+      case Map.get(state.messages, ack_id) do
+        nil ->
+          {state, nil}
+
+        msg ->
+          updated_msg = %{msg | not_visible_until: nil, state: :available, dirty: true}
+          {update_messages(state, [updated_msg]), updated_msg}
+      end
+    end
+
+    @spec reset_all_visibility(%State{}) :: {%State{}, list(ConsumerRecord.t() | ConsumerEvent.t())}
+    def reset_all_visibility(%State{} = state) do
+      updated_messages =
+        state.messages
+        |> Stream.map(fn
+          {_ack_id, %{not_visible_until: nil, state: :available}} -> nil
+          {_ack_id, msg} -> %{msg | not_visible_until: nil, state: :available, dirty: true}
+        end)
+        |> Enum.filter(& &1)
+
+      {update_messages(state, updated_messages), updated_messages}
+    end
+
     @spec min_unflushed_commit_lsn(%State{}, reference()) :: non_neg_integer() | nil
     def min_unflushed_commit_lsn(%State{slot_processor_monitor_ref: ref1} = state, ref2) do
       if ref1 == ref2 do
@@ -261,6 +286,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @doc """
   Stores new messages in the message store.
+
+  Should raise so SlotProcessor cannot continue if this fails.
   """
   @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok
   def put_messages(consumer_id, messages) do
@@ -270,13 +297,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Similar to `put_messages/2` but for a batch of messages that state will track
   as a single unit. Used for TableReaderServer.
+
+  Should raise so TableReaderServer cannot continue if this fails.
   """
   @spec put_table_reader_batch(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), TableReader.batch_id()) :: :ok
   def put_table_reader_batch(consumer_id, messages, batch_id) do
     GenServer.call(via_tuple(consumer_id), {:put_table_reader_batch, messages, batch_id})
   end
 
-  @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress} | {:error, Error.t()}
+  @doc """
+  Should raise so TableReaderServer cannot continue if this fails.
+  """
+  @spec batch_progress(consumer_id(), TableReader.batch_id()) :: {:ok, :completed | :in_progress}
   def batch_progress(consumer_id, batch_id) do
     GenServer.call(via_tuple(consumer_id), {:batch_progress, batch_id})
   end
@@ -285,7 +317,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Produces the next batch of deliverable messages, up to the specified count.
   Returns `{:ok, messages}` where messages is a list of deliverable messages.
   """
-  @spec produce(consumer_id(), pos_integer()) :: {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())}
+  @spec produce(consumer_id(), pos_integer()) ::
+          {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
   def produce(consumer_id, count) do
     GenServer.call(via_tuple(consumer_id), {:produce, count})
   catch
@@ -296,7 +329,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Acknowledges messages as successfully processed using their ack_ids.
   """
-  @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok
+  @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok | {:error, Exception.t()}
   def ack(consumer, ack_ids) do
     # Delete from database right away
     # TODO: We need to respect pending_redelivery on consumer records
@@ -313,7 +346,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Negative acknowledges messages, making them available for redelivery after
   the specified not_visible_until timestamps.
   """
-  @spec nack(consumer_id(), %{ack_id() => not_visible_until()}) :: :ok
+  @spec nack(consumer_id(), %{ack_id() => not_visible_until()}) :: :ok | {:error, Exception.t()}
   def nack(consumer_id, ack_ids_with_not_visible_until) do
     GenServer.call(via_tuple(consumer_id), {:nack, ack_ids_with_not_visible_until})
   catch
@@ -321,6 +354,29 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
+  @doc """
+  Resets the visibility of a message by its ack_id.
+  """
+  @spec reset_message_visibility(consumer_id(), String.t()) ::
+          {:ok, ConsumerRecord.t() | ConsumerEvent.t()} | {:error, Exception.t()}
+  def reset_message_visibility(consumer_id, message_id) do
+    GenServer.call(via_tuple(consumer_id), {:reset_message_visibility, message_id})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @spec reset_all_visibility(consumer_id()) :: :ok | {:error, Exception.t()}
+  def reset_all_visibility(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :reset_all_visibility)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @doc """
+  Should raise so SlotProcessor cannot continue if this fails.
+  """
   @spec min_unflushed_commit_lsn(consumer_id(), reference()) :: non_neg_integer()
   def min_unflushed_commit_lsn(consumer_id, monitor_ref) do
     GenServer.call(via_tuple(consumer_id), {:min_unflushed_commit_lsn, monitor_ref})
@@ -329,17 +385,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Counts the number of messages in the message store.
   """
-  @spec count_messages(consumer_id()) :: non_neg_integer()
+  @spec count_messages(consumer_id()) :: non_neg_integer() | {:error, Exception.t()}
   def count_messages(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :count_messages)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
   Peek at SlotMessageStore state. For use in dev/test only.
   """
-  @spec peek(consumer_id()) :: State.t()
+  @spec peek(consumer_id()) :: State.t() | {:error, Exception.t()}
   def peek(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :peek)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
   end
 
   @doc """
@@ -486,6 +548,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   def handle_call({:nack, ack_ids_with_not_visible_until}, _from, state) do
     {state, nacked_count} = State.nack(state, ack_ids_with_not_visible_until)
     {:reply, {:ok, nacked_count}, state}
+  end
+
+  def handle_call({:reset_message_visibility, ack_id}, _from, state) do
+    {state, updated_message} = State.reset_message_visibility(state, ack_id)
+    {:reply, {:ok, updated_message}, state}
+  end
+
+  def handle_call(:reset_all_visibility, _from, state) do
+    {state, _} = State.reset_all_visibility(state)
+    {:reply, :ok, state}
   end
 
   def handle_call({:min_unflushed_commit_lsn, monitor_ref}, _from, state) do

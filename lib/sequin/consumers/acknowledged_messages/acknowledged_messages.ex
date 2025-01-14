@@ -15,21 +15,18 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
   @spec store_messages(String.t(), list(ConsumerEvent.t() | ConsumerRecord.t()), non_neg_integer()) ::
           :ok | {:error, Error.t()}
   def store_messages(consumer_id, messages, max_messages \\ @max_messages) do
-    messages =
-      messages
-      |> Enum.map(&to_acknowledged_message/1)
-      |> Enum.map(&AcknowledgedMessage.encode/1)
-
-    now = :os.system_time(:nanosecond)
     key = "acknowledged_messages:#{consumer_id}"
+    now = :os.system_time(:nanosecond)
 
+    # Add messages to the sorted set
     commands =
-      Enum.map(messages, fn message ->
-        ["ZADD", key, now, message]
-      end) ++
-        [
-          ["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]
-        ]
+      messages
+      |> Stream.map(&to_acknowledged_message/1)
+      |> Stream.map(&AcknowledgedMessage.encode/1)
+      |> Enum.map(fn message -> ["ZADD", key, now, message] end)
+
+    # Trim sorted set to the latest @max_messages
+    commands = commands ++ [["ZREMRANGEBYRANK", key, 0, -(max_messages + 1)]]
 
     commands
     |> Redis.pipeline()
@@ -72,7 +69,9 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     %AcknowledgedMessage{
       id: record.id,
       consumer_id: record.consumer_id,
+      seq: record.seq,
       commit_lsn: record.commit_lsn,
+      commit_timestamp: record.data.metadata.commit_timestamp,
       ack_id: record.ack_id,
       deliver_count: record.deliver_count,
       last_delivered_at: record.last_delivered_at,
@@ -88,7 +87,9 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     %AcknowledgedMessage{
       id: event.id,
       consumer_id: event.consumer_id,
+      seq: event.seq,
       commit_lsn: event.commit_lsn,
+      commit_timestamp: event.data.metadata.commit_timestamp,
       ack_id: event.ack_id,
       deliver_count: event.deliver_count,
       last_delivered_at: event.last_delivered_at,

@@ -14,6 +14,7 @@
     metadata: {
       table_schema: "public",
       table_name: "employees",
+      database_name: "myapp-prod",
       consumer: {
         id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
         name: "employee_updates_consumer",
@@ -35,6 +36,7 @@
       metadata: {
         table_schema: "public",
         table_name: "employees",
+        database_name: "myapp-prod",
         commit_timestamp: "2023-10-15T14:30:00Z",
         consumer: {
           id: "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",
@@ -59,6 +61,7 @@
       metadata: {
         table_schema: "public",
         table_name: "employees",
+        database_name: "myapp-prod",
         commit_timestamp: "2023-10-16T09:45:00Z",
         consumer: {
           id: "f47ac10b-58cc-4372-a567-0e02b2c3d479",
@@ -79,6 +82,7 @@
       metadata: {
         table_schema: "public",
         table_name: "employees",
+        database_name: "myapp-prod",
         commit_timestamp: "2023-10-17T18:20:00Z",
         consumer: {
           id: "a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d",
@@ -99,6 +103,7 @@
       metadata: {
         table_schema: "public",
         table_name: "employees",
+        database_name: "myapp-prod",
         commit_timestamp: "2023-10-15T14:30:00Z",
         consumer: {
           id: "e2f9a3b1-7c6d-4b5a-9f8e-1d2c3b4a5e6f",

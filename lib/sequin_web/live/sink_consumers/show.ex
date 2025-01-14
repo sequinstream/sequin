@@ -181,7 +181,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   paused: @paused,
                   showAcked: @show_acked,
                   apiBaseUrl: @api_base_url,
-                  apiTokens: encode_api_tokens(@api_tokens)
+                  apiTokens: encode_api_tokens(@api_tokens),
+                  metrics: @metrics
                 }
               }
             />
@@ -346,10 +347,10 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
   end
 
-  def handle_event("reset_message_visibility", %{"message_id" => message_id}, socket) do
+  def handle_event("reset_message_visibility", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
 
-    case Consumers.reset_message_visibility(consumer, message_id) do
+    case SlotMessageStore.reset_message_visibility(consumer.id, ack_id) do
       {:ok, updated_message} ->
         {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
 
@@ -411,6 +412,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = put_health(consumer)
 
     {:noreply, assign(socket, :consumer, consumer)}
+  end
+
+  def handle_event("reset_all_visibility", _params, socket) do
+    consumer = socket.assigns.consumer
+
+    case SlotMessageStore.reset_all_visibility(consumer.id) do
+      :ok ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_messages()
+         |> put_flash(:toast, %{kind: :success, title: "All messages redelivery scheduled"})}
+
+      {:error, reason} ->
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
+    end
   end
 
   defp handle_edit_finish(updated_consumer) do
@@ -755,7 +772,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages(consumer, limit, offset, show_acked) do
-    db_messages = load_consumer_messages_from_db(consumer, offset + limit)
+    store_messages = load_consumer_messages_from_store(consumer, offset + limit)
 
     redis_messages =
       if show_acked do
@@ -764,22 +781,24 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         []
       end
 
-    (db_messages ++ redis_messages)
-    |> Enum.sort_by(& &1.id, :asc)
-    |> Enum.uniq_by(& &1.id)
+    (store_messages ++ redis_messages)
+    |> Enum.sort_by(& &1.seq, :asc)
+    |> Enum.uniq_by(& &1.seq)
     |> Enum.drop(offset)
     |> Enum.take(limit)
   end
 
-  defp load_consumer_messages_from_db(consumer, limit) do
-    params = [order_by: {:asc, :id}, limit: limit]
+  defp load_consumer_messages_from_store(consumer, limit) do
+    case SlotMessageStore.peek(consumer.id) do
+      %SlotMessageStore.State{messages: messages} ->
+        messages
+        |> Map.values()
+        |> Enum.sort_by(& &1.seq, :asc)
+        |> Enum.take(limit)
 
-    case consumer do
-      %{message_kind: :record} ->
-        Consumers.list_consumer_records_for_consumer(consumer.id, params)
-
-      %{message_kind: :event} ->
-        Consumers.list_consumer_events_for_consumer(consumer.id, params)
+      {:error, error} ->
+        Logger.error("Failed to load messages from store for consumer #{consumer.id}: #{Exception.message(error)}")
+        []
     end
   end
 
@@ -851,18 +870,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "record",
           consumer_id: message.consumer_id,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.data.metadata.commit_timestamp,
           data: message.data,
-          trace_id: message.replication_message_trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.replication_message_trace_id
         }
 
       %ConsumerEvent{} = message ->
@@ -870,18 +891,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "event",
           consumer_id: message.consumer_id,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.data.metadata.commit_timestamp,
           data: message.data,
-          trace_id: message.replication_message_trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.replication_message_trace_id
         }
 
       %AcknowledgedMessage{} = message ->
@@ -889,18 +912,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "acknowledged_message",
           consumer_id: message.consumer_id,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.commit_timestamp,
           data: nil,
-          trace_id: message.trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.trace_id
         }
     end
   end
@@ -964,6 +989,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       state == :delivered ->
         "delivering"
 
+      not_visible_until == nil ->
+        "available"
+
       DateTime.after?(not_visible_until, DateTime.utc_now()) ->
         "backing off"
 
@@ -1026,7 +1054,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     Map.merge(
       check,
       %{
-        alertTitle: "Warning: Replica identity not set to full",
+        alertTitle: "Notice: Replica identity not set to full",
         alertMessage: """
         The replica identity for your table is not set to `full`. This means the `changes` field in message payloads will be empty.
 
@@ -1046,7 +1074,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     table_name = "#{consumer.sequence.table_schema}.#{consumer.sequence.table_name}"
 
     Map.merge(check, %{
-      alertTitle: "Warning: TOAST columns detected",
+      alertTitle: "Notice: TOAST columns detected",
       alertMessage: """
       Some columns in your table use TOAST storage (their values are very large). As currently configured, Sequin will propagate these values as "unchanged_toast" if the column is unchanged.
 

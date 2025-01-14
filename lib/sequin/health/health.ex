@@ -580,12 +580,14 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
 
       consumer.message_kind == :event and is_nil(alert_replica_identity_not_full_dismissed) ->
-        put_check_timestamps(%{base_check | status: :warning, error_slug: :replica_identity_not_full}, [
+        put_check_timestamps(%{base_check | status: :notice, error_slug: :replica_identity_not_full}, [
           config_checked_event
         ])
 
       not is_nil(toast_columns_detected) and is_nil(alert_toast_columns_detected_dismissed) ->
-        put_check_timestamps(%{base_check | status: :warning, error_slug: :toast_columns_detected}, [config_checked_event])
+        put_check_timestamps(%{base_check | status: :notice, error_slug: :toast_columns_detected}, [
+          config_checked_event
+        ])
 
       true ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])

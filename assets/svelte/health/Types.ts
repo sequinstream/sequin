@@ -4,7 +4,8 @@ export type status =
   | "warning"
   | "initializing"
   | "stale"
-  | "paused";
+  | "paused"
+  | "notice";
 
 export type Check = {
   name: string;

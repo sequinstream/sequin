@@ -38,7 +38,8 @@ defmodule SequinWeb.SinkConsumersLive.Index do
           accountId: account.id,
           accountName: account.name,
           createdAt: user.inserted_at,
-          contactEmail: account.contact_email
+          contactEmail: account.contact_email,
+          sequinVersion: Application.get_env(:sequin, :release_version)
         })
       else
         socket

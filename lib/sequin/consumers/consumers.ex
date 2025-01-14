@@ -139,6 +139,12 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
+  def earliest_sink_consumer_inserted_at_for_account(account_id) do
+    account_id
+    |> SinkConsumer.where_account_id()
+    |> Repo.aggregate(:min, :inserted_at)
+  end
+
   def list_consumers_for_replication_slot(replication_slot_id) do
     replication_slot_id
     |> SinkConsumer.where_replication_slot_id()
@@ -902,39 +908,6 @@ defmodule Sequin.Consumers do
     AcknowledgedMessages.store_messages(consumer.id, deleted_records ++ updated_records)
 
     {:ok, count_deleted + count_updated}
-  end
-
-  @doc """
-  Resets the not_visible_until field to the current time for a given consumer and record/event ID.
-  """
-  @spec reset_message_visibility(consumer(), String.t()) :: {:ok, %ConsumerEvent{} | %ConsumerRecord{}} | {:error, term()}
-  def reset_message_visibility(consumer, id) do
-    now = DateTime.utc_now()
-
-    query =
-      case consumer.message_kind do
-        :event ->
-          from(ce in ConsumerEvent,
-            where: ce.consumer_id == ^consumer.id and ce.id == ^id,
-            update: [set: [not_visible_until: ^now]],
-            select: ce
-          )
-
-        :record ->
-          from(cr in ConsumerRecord,
-            where: cr.consumer_id == ^consumer.id and cr.id == ^id,
-            update: [set: [not_visible_until: ^now, state: :available]],
-            select: cr
-          )
-      end
-
-    case Repo.update_all(query, []) do
-      {1, [updated_message]} ->
-        {:ok, updated_message}
-
-      {0, _} ->
-        {:error, Error.not_found(entity: consumer.message_kind)}
-    end
   end
 
   @doc """

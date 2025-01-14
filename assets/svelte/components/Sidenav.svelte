@@ -20,7 +20,9 @@
     Plug,
     Logs,
     ChevronsLeftRightEllipsis,
+    ArrowUpCircle,
   } from "lucide-svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let live;
   export let currentPath: string;
@@ -29,6 +31,8 @@
   export let accountList: { id: string; name: string }[];
   export let parent: string;
   export let accountSettingsHasNotification = false;
+  export let sequinVersion: string;
+  export let latestVersion: string;
 
   let settingsCommandOpen = false;
   let form = { name: "" };
@@ -113,19 +117,40 @@
     ? 'w-[64px]'
     : 'w-[224px]'}shrink-0 overflow-visible border-r border-solid transition-all duration-300"
 >
-  <div class="mx-2 mt-4 flex h-[28px] flex-row items-center justify-between">
-    <a
-      href="/"
-      class="flex items-center {$isNavCollapsed ? 'ml-2' : 'ml-2'}"
-      data-phx-link="redirect"
-      data-phx-link-state="push"
-    >
-      {#if $isNavCollapsed}
-        <span class="text-xl font-semibold text-primary">S</span>
-      {:else}
-        <span class="text-xl font-semibold text-primary">Sequin</span>
-      {/if}
-    </a>
+  <div class="mx-2 mt-4 flex flex-row items-center justify-between">
+    <div class="flex flex-col {$isNavCollapsed ? 'ml-2' : 'ml-2'}">
+      <a
+        href="/"
+        class="flex items-center"
+        data-phx-link="redirect"
+        data-phx-link-state="push"
+      >
+        {#if $isNavCollapsed}
+          <span class="text-xl font-semibold text-primary">S</span>
+        {:else}
+          <span class="text-xl font-semibold text-primary">Sequin</span>
+        {/if}
+      </a>
+      <div class="flex items-center gap-1">
+        {#if !$isNavCollapsed && latestVersion && latestVersion !== sequinVersion}
+          <Tooltip.Root>
+            <Tooltip.Trigger class="flex items-center gap-1">
+              <span class="text-xs text-muted">{sequinVersion}</span>
+              <ArrowUpCircle class="h-3 w-3 text-blue-500" />
+            </Tooltip.Trigger>
+            <Tooltip.Content side="bottom" class="max-w-[200px]">
+              <p class="text-sm">
+                A new version is available: <span class="font-semibold"
+                  >{latestVersion}</span
+                >
+              </p>
+            </Tooltip.Content>
+          </Tooltip.Root>
+        {:else if !$isNavCollapsed && sequinVersion}
+          <span class="text-xs text-muted">{sequinVersion}</span>
+        {/if}
+      </div>
+    </div>
     <Button
       variant="ghost"
       size="sm"

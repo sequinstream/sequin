@@ -13,10 +13,12 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
     field :ack_id, String.t()
     field :deliver_count, non_neg_integer()
     field :last_delivered_at, DateTime.t()
+    field :seq, non_neg_integer()
     field :record_pks, list(String.t())
     field :table_oid, String.t()
     field :not_visible_until, DateTime.t()
     field :inserted_at, DateTime.t()
+    field :commit_timestamp, DateTime.t()
     field :trace_id, String.t()
   end
 

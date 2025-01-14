@@ -12,10 +12,22 @@ defmodule SequinWeb.Components.Sidenav do
   def update(assigns, socket) do
     socket = assign(socket, assigns)
     account = current_account(socket)
-    count = Consumers.count_sink_consumers_for_account(account.id)
+    earliest_sink_inserted_at = Consumers.earliest_sink_consumer_inserted_at_for_account(account.id)
 
     socket =
-      assign(socket, current_account: current_account(socket), accounts: accounts(socket), has_sinks?: count > 0)
+      socket
+      |> assign(
+        current_account: current_account(socket),
+        accounts: accounts(socket),
+        earliest_sink_inserted_at: earliest_sink_inserted_at,
+        release_version: Application.get_env(:sequin, :release_version)
+      )
+      |> assign_async(:latest_version, fn ->
+        case Req.get("https://sequinstream.com/gh/releases/latest/sequinstream/sequin") do
+          {:ok, %{body: %{"tag_name" => tag_name}}} -> {:ok, %{latest_version: tag_name}}
+          _ -> {:ok, %{latest_version: nil}}
+        end
+      end)
 
     {:ok, socket}
   end
@@ -68,13 +80,27 @@ defmodule SequinWeb.Components.Sidenav do
   attr :current_user, :map, required: true
 
   def render(assigns) do
+    latest_version =
+      case assigns.latest_version do
+        %{ok?: true, result: version} when not is_nil(version) and version != assigns.release_version ->
+          version
+
+        _ ->
+          nil
+      end
+
+    sink_inserted_over_5_min_ago? =
+      not is_nil(assigns.earliest_sink_inserted_at) and
+        DateTime.diff(DateTime.utc_now(), assigns.earliest_sink_inserted_at, :minute) > 5
+
     assigns =
       assigns
       |> assign(:parent_id, "sidenav")
       |> assign(
         :settings_has_notifications,
-        assigns.has_sinks? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
+        sink_inserted_over_5_min_ago? and Accounts.Account.show_contact_email_alert?(assigns.current_account)
       )
+      |> assign(:latest_version, latest_version)
 
     ~H"""
     <div id={@parent_id}>
@@ -87,7 +113,9 @@ defmodule SequinWeb.Components.Sidenav do
             accountList: Enum.sort_by(@accounts, & &1.inserted_at, DateTime),
             currentUser: @current_user,
             parent: @parent_id,
-            accountSettingsHasNotification: @settings_has_notifications
+            accountSettingsHasNotification: @settings_has_notifications,
+            sequinVersion: @release_version,
+            latestVersion: @latest_version
           }
         }
         socket={@socket}

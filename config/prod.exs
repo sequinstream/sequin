@@ -20,7 +20,10 @@ config :sentry,
   dsn: System.get_env("SENTRY_DSN"),
   release: System.get_env("RELEASE_VERSION")
 
-config :sequin, self_hosted: self_hosted, portal_hostname: "portal.sequin.local"
+config :sequin,
+  self_hosted: self_hosted,
+  portal_hostname: "portal.sequin.local",
+  release_version: System.get_env("RELEASE_VERSION")
 
 # Configures Swoosh API Client
 config :swoosh, Sequin.Mailer, adapter: Swoosh.Adapters.Sendgrid

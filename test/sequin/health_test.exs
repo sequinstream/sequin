@@ -427,7 +427,7 @@ defmodule Sequin.HealthTest do
       # Initial state - should show replica identity warning
       {:ok, health} = Health.health(entity)
       config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
-      assert config_check.status == :warning
+      assert config_check.status == :notice
       assert config_check.error_slug == :replica_identity_not_full
 
       # Dismiss replica identity warning
@@ -447,7 +447,7 @@ defmodule Sequin.HealthTest do
       # Should now show TOAST columns warning
       {:ok, health} = Health.health(entity)
       config_check = Enum.find(health.checks, &(&1.slug == :sink_configuration))
-      assert config_check.status == :warning
+      assert config_check.status == :notice
       assert config_check.error_slug == :toast_columns_detected
 
       # Dismiss TOAST columns warning

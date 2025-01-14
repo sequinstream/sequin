@@ -7,7 +7,7 @@ defmodule Sequin.Health.Check do
   alias Sequin.Error
   alias Sequin.JSON
 
-  @type status :: :healthy | :error | :warning | :waiting | :initializing | :stale
+  @type status :: :healthy | :error | :warning | :waiting | :initializing | :stale | :notice
 
   typedstruct do
     field :slug, atom(), enforce: true

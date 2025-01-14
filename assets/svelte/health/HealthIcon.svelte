@@ -11,6 +11,7 @@
     warning: AlertTriangle,
     initializing: Loader,
     paused: Pause,
+    notice: AlertTriangle,
   };
 
   const iconColor = {
@@ -20,6 +21,7 @@
     warning: "text-yellow-600",
     initializing: "text-blue-600",
     paused: "text-gray-500",
+    notice: "text-blue-500",
   };
 
   $: Icon = iconMap[status] || AlertTriangle;

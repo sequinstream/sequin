@@ -96,13 +96,9 @@
   // Declare the httpEndpointsRefreshState variable
   let httpEndpointsRefreshState: "idle" | "refreshing" | "done" = "idle";
 
-  $: fullUrl =
-    selectedHttpEndpoint?.baseUrl && form.sink.httpEndpointPath
-      ? concatenateUrl(
-          selectedHttpEndpoint?.baseUrl,
-          form.sink.httpEndpointPath,
-        )
-      : "";
+  $: fullUrl = selectedHttpEndpoint?.baseUrl
+    ? concatenateUrl(selectedHttpEndpoint?.baseUrl, form.sink.httpEndpointPath)
+    : "";
 </script>
 
 <Card>
@@ -291,7 +287,7 @@
           <Input
             id="http-endpoint-path"
             bind:value={form.sink.httpEndpointPath}
-            placeholder="/webhook"
+            placeholder="/some-path"
             class="rounded-l-none focus-visible:ring-0 focus-visible:ring-offset-0"
             style="border-left: none;"
           />

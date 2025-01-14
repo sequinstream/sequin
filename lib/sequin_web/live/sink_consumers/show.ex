@@ -181,7 +181,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
                   paused: @paused,
                   showAcked: @show_acked,
                   apiBaseUrl: @api_base_url,
-                  apiTokens: encode_api_tokens(@api_tokens)
+                  apiTokens: encode_api_tokens(@api_tokens),
+                  metrics: @metrics
                 }
               }
             />
@@ -411,6 +412,22 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     consumer = put_health(consumer)
 
     {:noreply, assign(socket, :consumer, consumer)}
+  end
+
+  def handle_event("reset_all_visibility", _params, socket) do
+    consumer = socket.assigns.consumer
+
+    case SlotMessageStore.reset_all_visibility(consumer.id) do
+      :ok ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_messages()
+         |> put_flash(:toast, %{kind: :success, title: "All messages redelivery scheduled"})}
+
+      {:error, reason} ->
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
+    end
   end
 
   defp handle_edit_finish(updated_consumer) do
@@ -848,19 +865,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "record",
           consumer_id: message.consumer_id,
-          seq: message.seq,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.data.metadata.commit_timestamp,
           data: message.data,
-          trace_id: message.replication_message_trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.replication_message_trace_id
         }
 
       %ConsumerEvent{} = message ->
@@ -868,19 +886,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "event",
           consumer_id: message.consumer_id,
-          seq: message.seq,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.data.metadata.commit_timestamp,
           data: message.data,
-          trace_id: message.replication_message_trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.replication_message_trace_id
         }
 
       %AcknowledgedMessage{} = message ->
@@ -888,19 +907,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           id: message.id,
           type: "acknowledged_message",
           consumer_id: message.consumer_id,
-          seq: message.seq,
-          commit_lsn: message.commit_lsn,
           ack_id: message.ack_id,
-          deliver_count: message.deliver_count,
-          last_delivered_at: message.last_delivered_at,
-          record_pks: message.record_pks,
-          table_oid: message.table_oid,
-          not_visible_until: message.not_visible_until,
-          inserted_at: message.inserted_at,
+          commit_lsn: message.commit_lsn,
+          commit_timestamp: message.commit_timestamp,
           data: nil,
-          trace_id: message.trace_id,
+          deliver_count: message.deliver_count,
+          inserted_at: message.inserted_at,
+          last_delivered_at: message.last_delivered_at,
+          not_visible_until: message.not_visible_until,
+          record_pks: message.record_pks,
+          seq: message.seq,
           state: state,
-          state_color: get_message_state_color(consumer, state)
+          state_color: get_message_state_color(consumer, state),
+          table_oid: message.table_oid,
+          trace_id: message.trace_id
         }
     end
   end

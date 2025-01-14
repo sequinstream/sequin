@@ -18,6 +18,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
     field :table_oid, String.t()
     field :not_visible_until, DateTime.t()
     field :inserted_at, DateTime.t()
+    field :commit_timestamp, DateTime.t()
     field :trace_id, String.t()
   end
 

@@ -304,41 +304,24 @@ defmodule Sequin.AccountsTest do
       user = AccountsFactory.insert_user!()
       email = "newemail@example.com"
 
-      token =
-        AccountsSupport.extract_user_token(fn url ->
-          Accounts.deliver_user_update_email_instructions(%{user | email: email}, user.email, url)
-        end)
-
-      %{user: user, token: token, email: email}
+      %{user: user, email: email}
     end
 
-    test "updates the email with a valid token", %{user: user, token: token, email: email} do
-      assert Accounts.update_user_email(user, token) == :ok
-      changed_user = Repo.get!(User, user.id)
+    test "updates the email with a valid new email", %{user: user, email: email} do
+      assert {:ok, changed_user} = Accounts.update_user_email(user, email)
       assert changed_user.email != user.email
       assert changed_user.email == email
-      assert changed_user.confirmed_at
-      assert changed_user.confirmed_at != user.confirmed_at
-      refute Repo.get_by(UserToken, user_id: user.id)
     end
 
-    test "does not update email with invalid token", %{user: user} do
-      assert Accounts.update_user_email(user, "oops") == :error
-      assert Repo.get!(User, user.id).email == user.email
-      assert Repo.get_by(UserToken, user_id: user.id)
+    test "does not update email with invalid new email", %{user: user} do
+      assert {:error, changeset} = Accounts.update_user_email(user, "oops")
+      assert "must have the @ sign and no spaces" in errors_on(changeset).email
     end
 
-    test "does not update email if user email changed", %{user: user, token: token} do
-      assert Accounts.update_user_email(%{user | email: "current@example.com"}, token) == :error
-      assert Repo.get!(User, user.id).email == user.email
-      assert Repo.get_by(UserToken, user_id: user.id)
-    end
-
-    test "does not update email if token expired", %{user: user, token: token} do
-      {1, nil} = Repo.update_all(UserToken, set: [inserted_at: ~N[2020-01-01 00:00:00]])
-      assert Accounts.update_user_email(user, token) == :error
-      assert Repo.get!(User, user.id).email == user.email
-      assert Repo.get_by(UserToken, user_id: user.id)
+    test "does not update email to a new email that is already taken", %{user: user} do
+      %{email: email} = AccountsFactory.insert_user!()
+      assert {:error, changeset} = Accounts.update_user_email(user, email)
+      assert "has already been taken" in errors_on(changeset).email
     end
   end
 

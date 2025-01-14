@@ -15,6 +15,8 @@
     auth_provider: string;
   };
 
+  export let selfHosted: boolean;
+
   let showDeleteConfirmDialog = false;
   let deleteConfirmDialogLoading = false;
   let passwordChangeEnabled = currentUser.auth_provider === "identity";
@@ -23,6 +25,9 @@
   let newPassword = "";
   let newPasswordConfirmation = "";
   let changePasswordErrors: any = {};
+  let newEmail = currentUser.email;
+  let changeEmailLoading = false;
+  let changeEmailErrors: any = {};
 
   function handleChangePassword(event: SubmitEvent) {
     event.preventDefault();
@@ -59,6 +64,25 @@
       }
     });
   }
+
+  function handleUpdateEmail() {
+    changeEmailLoading = true;
+    changeEmailErrors = {};
+
+    live.pushEventTo(
+      `#${parent}`,
+      "update_email",
+      { email: newEmail },
+      (res: any) => {
+        changeEmailLoading = false;
+        if (res.ok) {
+          newEmail = res.email;
+        } else {
+          changeEmailErrors = res.errors;
+        }
+      },
+    );
+  }
 </script>
 
 <div>
@@ -73,7 +97,51 @@
         <Card.Title>Email address</Card.Title>
       </Card.Header>
       <Card.Content>
-        <p class="text-gray-600">{currentUser.email}</p>
+        {#if selfHosted}
+          {#if currentUser.auth_provider === "github"}
+            <Alert.Root variant="warning">
+              <Alert.Description>
+                <div class="flex items-center gap-2">
+                  <Info class="h-4 w-4" />
+                  <p>
+                    You cannot change your email when using GitHub
+                    authentication.
+                  </p>
+                </div>
+              </Alert.Description>
+            </Alert.Root>
+          {:else}
+            <form
+              on:submit|preventDefault={handleUpdateEmail}
+              class="space-y-4"
+            >
+              <div class="grid w-full items-center gap-1.5">
+                <Label for="email">Email</Label>
+                <Input
+                  type="email"
+                  id="email"
+                  bind:value={newEmail}
+                  disabled={currentUser.auth_provider === "github"}
+                />
+                {#if changeEmailErrors.email}
+                  <p class="text-sm text-destructive">
+                    {changeEmailErrors.email[0]}
+                  </p>
+                {/if}
+              </div>
+              <Button
+                type="submit"
+                disabled={changeEmailLoading ||
+                  currentUser.auth_provider === "github"}
+                loading={changeEmailLoading}
+              >
+                Change email
+              </Button>
+            </form>
+          {/if}
+        {:else}
+          <p class="text-gray-600">{currentUser.email}</p>
+        {/if}
       </Card.Content>
     </Card.Root>
 

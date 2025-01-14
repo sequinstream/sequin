@@ -16,7 +16,8 @@ defmodule SequinWeb.UserSettingsLive do
     {:ok,
      socket
      |> assign(:current_user, user)
-     |> assign(:password_changeset, to_form(password_changeset))}
+     |> assign(:password_changeset, to_form(password_changeset))
+     |> assign(:self_hosted, Application.get_env(:sequin, :self_hosted))}
   end
 
   def handle_event(
@@ -46,6 +47,24 @@ defmodule SequinWeb.UserSettingsLive do
     end
   end
 
+  def handle_event("update_email", %{"email" => email}, socket) do
+    unless socket.assigns.self_hosted, do: raise("update_email is only supported on self-hosted instances")
+
+    case Accounts.update_user_email(socket.assigns.current_user, email) do
+      {:ok, user} ->
+        {:reply, %{ok: true, email: user.email},
+         socket
+         |> assign(:current_user, user)
+         |> put_flash(:toast, %{kind: :info, title: "Email updated successfully"})}
+
+      {:error, changeset} ->
+        errors = Sequin.Error.errors_on(changeset)
+
+        {:reply, %{ok: false, errors: errors},
+         put_flash(socket, :toast, %{kind: :error, title: "Failed to update email"})}
+    end
+  end
+
   def handle_event("delete_user", _params, socket) do
     Logger.info("Would delete user: #{socket.assigns.current_user.id}")
     {:reply, %{ok: true}, socket}
@@ -65,7 +84,8 @@ defmodule SequinWeb.UserSettingsLive do
         props={
           %{
             currentUser: encode(@current_user),
-            parent: @parent_id
+            parent: @parent_id,
+            selfHosted: @self_hosted
           }
         }
         socket={@socket}

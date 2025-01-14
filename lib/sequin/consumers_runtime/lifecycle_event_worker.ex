@@ -12,6 +12,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Health.CheckHttpEndpointHealthWorker
+  alias Sequin.Health.CheckSinkConfigurationWorker
 
   require Logger
 
@@ -45,6 +46,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id),
              :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
           SlotSupervisor.start_message_store!(consumer)
           ConsumersSupervisor.start_for_sink_consumer(consumer)
           :ok
@@ -53,6 +55,8 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id),
              :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+          CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+
           case consumer.status do
             :active ->
               ConsumersSupervisor.restart_for_sink_consumer(consumer)

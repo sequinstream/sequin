@@ -9,6 +9,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias __MODULE__
   alias Sequin.Accounts.Account
   alias Sequin.Consumers
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpPushSink
@@ -56,7 +57,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :annotations, :map, default: %{}
 
     field :type, Ecto.Enum,
-      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq],
+      values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
       read_after_writes: true
 
     field :health, :map, virtual: true
@@ -81,7 +82,8 @@ defmodule Sequin.Consumers.SinkConsumer do
         sequin_stream: SequinStreamSink,
         gcp_pubsub: GcpPubsubSink,
         nats: NatsSink,
-        rabbitmq: RabbitMqSink
+        rabbitmq: RabbitMqSink,
+        azure_event_hub: AzureEventHubSink
       ],
       on_replace: :update,
       type_field_name: :type

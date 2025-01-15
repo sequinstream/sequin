@@ -27,6 +27,7 @@
   import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
+  import AzureEventHubSinkForm from "$lib/sinks/azure_event_hub/AzureEventHubSinkForm.svelte";
   import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
   import TableSelector from "../components/TableSelector.svelte";
@@ -691,6 +692,8 @@
       <NatsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "rabbitmq"}
       <RabbitMqSinkForm errors={errors.consumer} bind:form />
+    {:else if consumer.type === "azure_event_hub"}
+      <AzureEventHubSinkForm errors={errors.consumer} bind:form />
     {/if}
 
     <Card>

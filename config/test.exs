@@ -47,6 +47,8 @@ config :sequin, Sequin.Repo,
   queue_interval: 1000,
   ssl: false
 
+config :sequin, Sequin.Sinks.AzureEventHub.Client, req_opts: [plug: {Req.Test, Sequin.Sinks.Azure.EventHub}]
+
 config :sequin, Sequin.Vault,
   ciphers: [
     default: {

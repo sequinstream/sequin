@@ -3,6 +3,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   use SequinWeb, :live_component
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
@@ -28,6 +29,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Postgres
   alias Sequin.Posthog
   alias Sequin.Repo
+  alias Sequin.Sinks.Azure.EventHub
   alias Sequin.Sinks.Gcp.Credentials
   alias Sequin.Sinks.Gcp.PubSub
   alias Sequin.Sinks.Kafka
@@ -259,6 +261,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :azure_event_hub ->
+        case test_azure_event_hub_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -383,6 +391,30 @@ defmodule SequinWeb.Components.ConsumerForm do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
 
       case Nats.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
+  defp test_azure_event_hub_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %AzureEventHubSink{} = sink -> AzureEventHubSink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      client =
+        sink_changeset
+        |> Ecto.Changeset.apply_changes()
+        |> AzureEventHubSink.event_hub_client()
+
+      case EventHub.test_connection(client) do
         :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
@@ -522,6 +554,16 @@ defmodule SequinWeb.Components.ConsumerForm do
       "credentials" => creds,
       "use_emulator" => sink["use_emulator"],
       "emulator_base_url" => sink["emulator_base_url"]
+    }
+  end
+
+  defp decode_sink(:azure_event_hub, sink) do
+    %{
+      "type" => "azure_event_hub",
+      "namespace" => sink["namespace"],
+      "event_hub_name" => sink["event_hub_name"],
+      "shared_access_key_name" => sink["shared_access_key_name"],
+      "shared_access_key" => sink["shared_access_key"]
     }
   end
 
@@ -678,6 +720,16 @@ defmodule SequinWeb.Components.ConsumerForm do
       "use_emulator" => sink.use_emulator,
       "emulator_base_url" => sink.emulator_base_url,
       "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
+    }
+  end
+
+  defp encode_sink(%AzureEventHubSink{} = sink) do
+    %{
+      "type" => "azure_event_hub",
+      "namespace" => sink.namespace,
+      "event_hub_name" => sink.event_hub_name,
+      "shared_access_key_name" => sink.shared_access_key_name,
+      "shared_access_key" => sink.shared_access_key
     }
   end
 
@@ -961,6 +1013,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :gcp_pubsub -> "GCP Pub/Sub Sink"
       :nats -> "NATS Sink"
       :rabbitmq -> "RabbitMQ Sink"
+      :azure_event_hub -> "Azure Event Hub Sink"
     end
   end
 

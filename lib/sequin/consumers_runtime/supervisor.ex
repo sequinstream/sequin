@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
   alias Sequin.Consumers
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime
+  alias Sequin.ConsumersRuntime.AzureEventHubPipeline
   alias Sequin.ConsumersRuntime.GcpPubsubPipeline
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.ConsumersRuntime.KafkaPipeline
@@ -24,7 +25,8 @@ defmodule Sequin.ConsumersRuntime.Supervisor do
     kafka: KafkaPipeline,
     gcp_pubsub: GcpPubsubPipeline,
     nats: NatsPipeline,
-    rabbitmq: RabbitMqPipeline
+    rabbitmq: RabbitMqPipeline,
+    azure_event_hub: AzureEventHubPipeline
   }
 
   def sinks_to_pipelines, do: @sinks_to_pipelines

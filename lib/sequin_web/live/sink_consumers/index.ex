@@ -3,6 +3,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
   use SequinWeb, :live_view
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpPushSink
   alias Sequin.Consumers.KafkaSink
@@ -216,6 +217,18 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       id="new-consumer"
       action={:new}
       consumer={%SinkConsumer{type: :rabbitmq, sink: %RabbitMqSink{virtual_host: "/"}}}
+    />
+    """
+  end
+
+  defp render_consumer_form(%{form_kind: "azure_event_hub"} = assigns) do
+    ~H"""
+    <.live_component
+      current_user={@current_user}
+      module={ConsumerForm}
+      id="new-consumer"
+      action={:new}
+      consumer={%SinkConsumer{type: :azure_event_hub, sink: %AzureEventHubSink{}}}
     />
     """
   end

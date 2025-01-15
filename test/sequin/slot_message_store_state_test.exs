@@ -285,6 +285,21 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert length(to_flush) == 1
       assert hd(to_flush).record_pks == dirty_msg.record_pks
     end
+
+    test "excludes messages that are delivered within ack_wait_ms", %{state: state} do
+      recently_delivered =
+        ConsumersFactory.consumer_record(last_delivered_at: DateTime.utc_now(), dirty: true)
+
+      old_delivered =
+        ConsumersFactory.consumer_record(last_delivered_at: DateTime.add(DateTime.utc_now(), -60, :second), dirty: true)
+
+      state = State.put_messages(state, [recently_delivered, old_delivered])
+
+      to_flush = State.messages_to_flush(state)
+
+      assert length(to_flush) == 1
+      assert hd(to_flush).record_pks == old_delivered.record_pks
+    end
   end
 
   describe "min_unflushed_commit_lsn/1" do

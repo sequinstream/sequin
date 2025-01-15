@@ -72,26 +72,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
     def ack(%State{} = state, ack_ids) do
-      {messages, acked_count} =
-        Enum.reduce(ack_ids, {state.messages, 0}, fn ack_id, {acc_msgs, acked_count} ->
-          case Map.get(acc_msgs, ack_id) do
-            nil ->
-              {acc_msgs, acked_count}
+      initial_count = map_size(state.messages)
+      messages = Map.drop(state.messages, ack_ids)
+      final_count = map_size(messages)
 
-            %ConsumerRecord{state: :pending_redelivery} = msg ->
-              {Map.replace!(acc_msgs, ack_id, %{
-                 msg
-                 | state: :available,
-                   not_visible_until: nil,
-                   dirty: true
-               }), acked_count + 1}
-
-            _ ->
-              {Map.delete(acc_msgs, ack_id), acked_count + 1}
-          end
-        end)
-
-      {%{state | messages: messages}, acked_count}
+      {%{state | messages: messages}, initial_count - final_count}
     end
 
     @spec nack(%State{}, %{SinkConsumer.ack_id() => SinkConsumer.not_visible_until()}) :: {%State{}, non_neg_integer()}
@@ -197,10 +182,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {state, messages}
     end
 
-    def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size}) do
+    def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size} = state) do
+      %SinkConsumer{ack_wait_ms: ack_wait_ms} = state.consumer
+
       messages
       |> Map.values()
-      |> Enum.filter(& &1.dirty)
+      |> Stream.filter(& &1.dirty)
+      |> Stream.reject(fn
+        %{last_delivered_at: nil} ->
+          false
+
+        # Reject messages that were recently delivered
+        # When the acks come back they will delete the messages from state, obviating the need to flush
+        # Also, a simultaneous flush + ack query may result in a Postgres deadlock
+        %{last_delivered_at: last_delivered_at} ->
+          ack_wait_until = DateTime.add(last_delivered_at, ack_wait_ms, :millisecond)
+          DateTime.after?(ack_wait_until, DateTime.utc_now())
+      end)
       |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
       |> Enum.take(flush_batch_size)
     end
@@ -347,8 +345,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok | {:error, Exception.t()}
   def ack(consumer, ack_ids) do
     # Delete from database right away
-    # TODO: We need to respect pending_redelivery on consumer records
-    # TODO: We can greatly simplify this call now by just deleting events and records
     Consumers.ack_messages(consumer, ack_ids)
 
     GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})

@@ -97,7 +97,6 @@ defmodule SequinWeb.Components.ConsumerForm do
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
     consumer = assigns[:consumer]
-
     component = "consumers/SinkConsumerForm"
 
     socket =
@@ -339,14 +338,10 @@ defmodule SequinWeb.Components.ConsumerForm do
     if sink_changeset.valid? do
       sink = Ecto.Changeset.apply_changes(sink_changeset)
 
-      client =
-        PubSub.new(
-          sink.project_id,
-          sink.credentials
-        )
+      client = GcpPubsubSink.pubsub_client(sink)
 
-      case PubSub.topic_metadata(client, sink.topic_id) do
-        {:ok, _} -> :ok
+      case PubSub.test_connection(client, sink.topic_id) do
+        :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -524,7 +519,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "gcp_pubsub",
       "project_id" => sink["project_id"],
       "topic_id" => sink["topic_id"],
-      "credentials" => creds
+      "credentials" => creds,
+      "use_emulator" => sink["use_emulator"],
+      "emulator_base_url" => sink["emulator_base_url"]
     }
   end
 
@@ -678,6 +675,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "gcp_pubsub",
       "project_id" => sink.project_id,
       "topic_id" => sink.topic_id,
+      "use_emulator" => sink.use_emulator,
+      "emulator_base_url" => sink.emulator_base_url,
       "credentials" => Jason.encode!(Sequin.Map.reject_nil_values(creds), pretty: true)
     }
   end

@@ -212,6 +212,8 @@ defmodule Sequin.Transforms do
       type: "gcp_pubsub",
       project_id: sink.project_id,
       topic_id: sink.topic_id,
+      use_emulator: sink.use_emulator,
+      emulator_base_url: sink.emulator_base_url,
       credentials: "(credentials present) - sha256sum: #{sha256sum(sink.credentials)}"
     })
   end

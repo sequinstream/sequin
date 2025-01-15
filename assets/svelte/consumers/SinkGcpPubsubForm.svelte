@@ -21,16 +21,16 @@
     class="space-y-1.5 p-6 flex flex-row items-center justify-between"
   >
     <CardTitle>GCP Pub/Sub Configuration</CardTitle>
-    <div>
+    <div class="flex flex-row items-center gap-2">
       <Switch id="use-emulator" bind:checked={form.sink.use_emulator} />
-      <Label for="use-emulator" class="align-text-top flex items-center gap-2">
-        Use Emulator
+      <Label for="use-emulator" class="align-text-top flex items-center gap-1">
+        Use emulator
         <Tooltip.Root>
           <Tooltip.Trigger>
             <Info class="h-4 w-4 text-muted-foreground" />
           </Tooltip.Trigger>
-          <Tooltip.Content>
-            <p class="text-sm">
+          <Tooltip.Content class="max-w-xs">
+            <p class="text-sm font-normal">
               The GCP Pub/Sub emulator lets you run Pub/Sub locally for dev and
               testing purposes.
               <a
@@ -65,11 +65,11 @@
     </div>
     {#if form.sink.use_emulator}
       <div class="space-y-2">
-        <Label for="project-id">Emulator Connection URL</Label>
+        <Label for="emulator-url">Emulator connection URL</Label>
         <Input
           id="emulator-url"
           bind:value={form.sink.emulator_base_url}
-          placeholder="localhost:8432"
+          placeholder="localhost:8085"
         />
         {#if errors.sink?.emulator_base_url}
           <p class="text-destructive text-sm">

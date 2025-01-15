@@ -49,7 +49,9 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     use_emulator? = get_field(changeset, :use_emulator)
 
     if use_emulator? do
-      validate_required(changeset, [:emulator_base_url])
+      changeset
+      |> validate_required([:emulator_base_url])
+      |> validate_format(:emulator_base_url, ~r/^https?:\/\//i, message: "must start with http:// or https://")
     else
       changeset
     end
@@ -59,7 +61,7 @@ defmodule Sequin.Consumers.GcpPubsubSink do
     use_emulator? = get_field(changeset, :use_emulator)
 
     if use_emulator? do
-      put_change(changeset, :credentials, nil)
+      put_change(changeset, :credentials, %{})
     else
       cast_embed(changeset, :credentials, required: true)
     end
@@ -69,11 +71,12 @@ defmodule Sequin.Consumers.GcpPubsubSink do
   Creates a new PubSub client for the given sink configuration.
   """
   def pubsub_client(%__MODULE__{} = sink) do
-    opts = if sink.use_emulator do
-      [base_url: sink.emulator_base_url]
-    else
-      []
-    end
+    opts =
+      if sink.use_emulator do
+        [req_opts: [base_url: sink.emulator_base_url], use_emulator: true]
+      else
+        []
+      end
 
     PubSub.new(
       sink.project_id,

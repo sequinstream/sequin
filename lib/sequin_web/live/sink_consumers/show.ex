@@ -7,6 +7,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
@@ -650,6 +651,16 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     }
   end
 
+  defp encode_sink(%SinkConsumer{sink: %AzureEventHubSink{} = sink}) do
+    %{
+      type: :azure_event_hub,
+      namespace: sink.namespace,
+      event_hub_name: sink.event_hub_name,
+      shared_access_key_name: sink.shared_access_key_name,
+      shared_access_key: sink.shared_access_key
+    }
+  end
+
   defp encode_sink(%SinkConsumer{sink: %SequinStreamSink{}}) do
     %{type: :sequin_stream}
   end
@@ -1024,6 +1035,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   defp consumer_title(%{sink: %{type: :gcp_pubsub}}), do: "GCP Pub/Sub Sink"
   defp consumer_title(%{sink: %{type: :nats}}), do: "NATS Sink"
   defp consumer_title(%{sink: %{type: :rabbitmq}}), do: "RabbitMQ Sink"
+  defp consumer_title(%{sink: %{type: :azure_event_hub}}), do: "Azure Event Hub Sink"
 
   defp put_health(%SinkConsumer{} = consumer) do
     with {:ok, health} <- Health.health(consumer),

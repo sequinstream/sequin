@@ -91,6 +91,17 @@ export type NatsConsumer = BaseConsumer & {
   };
 };
 
+// Azure Event Hub specific sink
+export type AzureEventHubConsumer = BaseConsumer & {
+  sink: {
+    type: "azure_event_hub";
+    namespace: string;
+    event_hub_name: string;
+    shared_access_key_name: string;
+    shared_access_key: string;
+  };
+};
+
 // RabbitMQ specific sink
 export type RabbitMqConsumer = BaseConsumer & {
   sink: {
@@ -148,4 +159,5 @@ export type Consumer =
   | SequinStreamConsumer
   | GcpPubsubConsumer
   | NatsConsumer
+  | AzureEventHubConsumer
   | RabbitMqConsumer;

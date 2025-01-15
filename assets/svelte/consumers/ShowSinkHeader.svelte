@@ -20,6 +20,7 @@
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
+  import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -129,6 +130,8 @@
             <NatsIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "rabbitmq"}
             <RabbitMqIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "azure_event_hub"}
+            <AzureEventHubIcon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

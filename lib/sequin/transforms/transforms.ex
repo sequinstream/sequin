@@ -3,6 +3,7 @@ defmodule Sequin.Transforms do
   alias Sequin.Accounts.Account
   alias Sequin.Accounts.User
   alias Sequin.Consumers
+  alias Sequin.Consumers.AzureEventHubSink
   alias Sequin.Consumers.GcpPubsubSink
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.HttpPushSink
@@ -228,6 +229,16 @@ defmodule Sequin.Transforms do
       jwt: maybe_obfuscate(sink.jwt, show_sensitive),
       nkey_seed: maybe_obfuscate(sink.nkey_seed, show_sensitive),
       tls: sink.tls
+    })
+  end
+
+  def to_external(%AzureEventHubSink{} = sink, show_sensitive) do
+    Sequin.Map.reject_nil_values(%{
+      type: "azure_event_hub",
+      namespace: sink.namespace,
+      event_hub_name: sink.event_hub_name,
+      shared_access_key_name: sink.shared_access_key_name,
+      shared_access_key: maybe_obfuscate(sink.shared_access_key, show_sensitive)
     })
   end
 

@@ -15,6 +15,7 @@
   import { Database, Plug, Webhook } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthPill from "../health/HealthPill.svelte";
+  import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
@@ -92,6 +93,11 @@
       id: "rabbitmq",
       name: "RabbitMQ",
       icon: RabbitMqIcon,
+    },
+    {
+      id: "azure_event_hub",
+      name: "Azure EventHub",
+      icon: AzureEventHubIcon,
     },
   ];
 

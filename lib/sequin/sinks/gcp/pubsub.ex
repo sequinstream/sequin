@@ -8,7 +8,7 @@ defmodule Sequin.Sinks.Gcp.PubSub do
 
   require Logger
 
-  @pubsub_base_url "https://pubsub.googleapis.com/v1"
+  @pubsub_base_url "https://pubsub.googleapis.com"
 
   # 55 minutes, tokens are valid for 1 hour
   @token_expiry_seconds 3300
@@ -27,6 +27,7 @@ defmodule Sequin.Sinks.Gcp.PubSub do
       field :credentials, Credentials.t(), enforce: true
       field :auth_token, String.t()
       field :req_opts, keyword(), enforce: true
+      field :use_emulator, boolean(), default: false
     end
   end
 
@@ -37,11 +38,12 @@ defmodule Sequin.Sinks.Gcp.PubSub do
   Credentials should be a decoded Google service account JSON.
   """
   @spec new(String.t(), map(), keyword()) :: Client.t()
-  def new(project_id, credentials, req_opts \\ []) do
+  def new(project_id, credentials, opts \\ []) do
     # Ensure the Credentials module is loaded, as it contains necessary atom keys
     Code.ensure_loaded(Sequin.Sinks.Gcp.Credentials)
 
-    req_opts = Keyword.merge(default_req_opts(), req_opts)
+    use_emulator = Keyword.get(opts, :use_emulator, false)
+    req_opts = Keyword.merge(default_req_opts(), Keyword.get(opts, :req_opts, []))
 
     credentials =
       case credentials do
@@ -57,7 +59,8 @@ defmodule Sequin.Sinks.Gcp.PubSub do
       project_id: project_id,
       credentials: credentials,
       auth_token: nil,
-      req_opts: req_opts
+      req_opts: req_opts,
+      use_emulator: use_emulator
     }
   end
 
@@ -167,6 +170,37 @@ defmodule Sequin.Sinks.Gcp.PubSub do
     end
   end
 
+  @doc """
+  Tests the connection to GCP PubSub by attempting to delete a non-existent subscription.
+  Returns :ok if the connection is working (based on receiving the expected 404 response),
+  or an error if the connection fails.
+
+  This request is supported on both GCP Cloud and the emulator.
+  """
+  @spec test_connection(Client.t(), String.t()) :: :ok | {:error, Error.t()}
+  def test_connection(%Client{} = client, topic_id) do
+    test_sub_id = "sequin-test-#{UUID.uuid4()}"
+    path = "projects/#{client.project_id}/subscriptions/#{test_sub_id}"
+
+    with {:ok, %{status: 404, body: %{"error" => %{"status" => "NOT_FOUND"}}}} <-
+           authenticated_request(client, :delete, path),
+         :ok <- maybe_test_topic(client, topic_id) do
+      :ok
+    else
+      error ->
+        handle_error(error, "test connection")
+    end
+  end
+
+  # Emulator does not support topic metadata. Does not seem like a clean way to check topic existence.
+  defp maybe_test_topic(%Client{use_emulator: true}, _topic_id), do: :ok
+
+  defp maybe_test_topic(%Client{} = client, topic_id) do
+    with {:ok, _} <- topic_metadata(client, topic_id) do
+      :ok
+    end
+  end
+
   # Private helpers
 
   defp handle_error(error, req_desc) do
@@ -201,13 +235,13 @@ defmodule Sequin.Sinks.Gcp.PubSub do
   defp authenticated_request(%Client{} = client, method, path, opts \\ []) do
     base_url = Keyword.get(client.req_opts, :base_url, @pubsub_base_url)
 
-    headers = [{"content-type", "application/json"}] |> maybe_put_auth_headers(client)
+    headers = maybe_put_auth_headers([{"content-type", "application/json"}], client)
 
     case headers do
       {:ok, headers} ->
         [
           method: method,
-          url: "#{base_url}/#{path}",
+          url: "#{base_url}/v1/#{path}",
           headers: headers
         ]
         |> Req.new()
@@ -220,7 +254,9 @@ defmodule Sequin.Sinks.Gcp.PubSub do
     end
   end
 
-  defp maybe_put_auth_headers(headers, %Client{credentials: nil}), do: {:ok, headers}
+  # Blank credentials means we are using the emulator
+  defp maybe_put_auth_headers(headers, %Client{use_emulator: true}), do: {:ok, headers}
+
   defp maybe_put_auth_headers(headers, %Client{} = client) do
     case ensure_auth_token(client) do
       {:ok, token} -> {:ok, [{"authorization", "Bearer #{token}"} | headers]}

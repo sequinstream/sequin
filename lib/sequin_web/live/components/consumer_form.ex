@@ -340,8 +340,8 @@ defmodule SequinWeb.Components.ConsumerForm do
 
       client = GcpPubsubSink.pubsub_client(sink)
 
-      case PubSub.topic_metadata(client, sink.topic_id) do
-        {:ok, _} -> :ok
+      case PubSub.test_connection(client, sink.topic_id) do
+        :ok -> :ok
         {:error, error} -> {:error, Exception.message(error)}
       end
     else
@@ -519,7 +519,9 @@ defmodule SequinWeb.Components.ConsumerForm do
       "type" => "gcp_pubsub",
       "project_id" => sink["project_id"],
       "topic_id" => sink["topic_id"],
-      "credentials" => creds
+      "credentials" => creds,
+      "use_emulator" => sink["use_emulator"],
+      "emulator_base_url" => sink["emulator_base_url"]
     }
   end
 

@@ -68,3 +68,25 @@ Common issues to check when debugging:
 - Service account has the required Pub/Sub roles
 - Project ID and Topic ID match exactly
 - Topic exists in the specified project
+
+## Local development with the emulator
+
+Sequin supports using the [GCP Pub/Sub emulator](https://cloud.google.com/pubsub/docs/emulator) for local development. The emulator provides a local Pub/Sub environment that mimics the behavior of the real service.
+
+To use the emulator, first consult GCP's [installation instructions](https://cloud.google.com/pubsub/docs/emulator).
+
+With the emulator installed, you can start it like this:
+
+```bash
+gcloud beta emulators pubsub start --project=my-project
+```
+
+You can create new topics using `curl`:
+
+```bash
+curl -X PUT \
+     -H "Content-Type: application/json" \
+     http://localhost:8085/v1/projects/my-project/topics/my-topic
+```
+
+When setting up the sink in the Sequin console, toggle on "Use emulator" to use the emulator. For the host, use the fully-qualified URL of the emulator, e.g. `http://localhost:8085`.

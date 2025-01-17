@@ -23,7 +23,7 @@
   import SinkCardKafka from "../components/SinkCardKafka.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
-  import SinkCardNats from "../components/SinkCardNats.svelte";
+  import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import SinkCardRabbitMq from "../components/SinkCardRabbitMq.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
@@ -409,7 +409,7 @@
       {:else if isSequinStreamConsumer(consumer)}
         <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
       {:else if isNatsConsumer(consumer)}
-        <SinkCardNats {consumer} />
+        <NatsSinkCard {consumer} />
       {:else if isRabbitMqConsumer(consumer)}
         <SinkCardRabbitMq {consumer} />
       {/if}

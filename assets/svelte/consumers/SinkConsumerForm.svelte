@@ -25,7 +25,7 @@
   import SinkKafkaForm from "$lib/consumers/SinkKafkaForm.svelte";
   import SinkGcpPubsubForm from "./SinkGcpPubsubForm.svelte";
   import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
-  import SinkNatsForm from "$lib/consumers/SinkNatsForm.svelte";
+  import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import SinkRabbitMqForm from "$lib/consumers/SinkRabbitMqForm.svelte";
   import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
   import * as Alert from "$lib/components/ui/alert/index.js";
@@ -688,7 +688,7 @@
     {:else if consumer.type === "sequin_stream"}
       <SinkSequinStreamForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}
-      <SinkNatsForm errors={errors.consumer} bind:form />
+      <NatsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "rabbitmq"}
       <SinkRabbitMqForm errors={errors.consumer} bind:form />
     {/if}

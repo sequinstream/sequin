@@ -5,41 +5,46 @@ icon: "gauge-high"
 iconType: "solid"
 ---
 
-Sequin delivers industry-leading performance for change data capture (CDC), consistently achieving sub-200ms latency at 2,000 sustained operations per second. Here's how Sequin compares to other solutions:
+Sequin delivers industry-leading performance for change data capture (CDC), sustaining **10k operations per second** with **33.9ms** 99th percentile latency. 
 
-| Tool | Latency at 2k ops/s |
-|------|-------------------|
-| **Sequin** | **192ms** |
-| Debezium | 234ms |
-| Fivetran | 5 minutes |
-| Airbyte | 1+ hours |
+<Frame>
+  <img src="/images/performance/sequin-latency.png" alt="Sequin latency" />
+</Frame>
 
-## Test setup
+This consistently beats Debezium, Fivetran, and Airbyte. In a [head-to-head comparison](https://github.com/sequinstream/sequin-vs-debezium-benchmark), Sequin sustains **67%** more throughput than Debezium at [**14.7x** lower 99th percentile latency](#comparison).
 
-Our benchmarks are conducted in a production-like environment. Sequin and Debezium are compared head-to-head capturing changes from [AWS RDS](https://aws.amazon.com/rds/) and delivering to [AWS MSK Kafka](https://aws.amazon.com/msk/):
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
+</Frame>
 
-- AWS RDS Postgres `db.r6g.xlarge` instance (4 vCPUs, 16GB RAM)
-- AWS MSK Kafka provisioned with 3 brokers
-- Sequin running via ECS on an `m8g.xlarge` instance (4 vCPUs, 16GB RAM)
-- Debezium deployed on MSK Connect with 8 [MCUs](https://docs.aws.amazon.com/msk/latest/developerguide/msk-connect-capacity.html).
-- Continuous load of 2,000 operations per second applied to a single Postgres table
-- 30-minute test duration
-- Latency determined end-to-end from the time a change occurs in Postgres until it's available in AWS MSK Kafka
+<Note>
+  We initially aimed to bench Sequin and Debezium at the same throughput. However, Debezium was unable to sustain 10k operations per second so we instead tested Sequin at 10k ops/sec and Debezium at 6k ops/sec. Sequin latency at 6k ops is less than or equal to Sequin latency at 10k ops.
+</Note>
 
-## Methodology
+## Benchmark methodology
 
-We measure end-to-end latency from the time a change occurs in Postgres until it's available in Kafka. This includes:
+<Info>
+  All of our benchmarks are open source and available on [GitHub](https://github.com/sequinstream/sequin-vs-debezium-benchmark).
+</Info>
 
-1. WAL read time
-2. Processing time (filters, transformations, etc.)
-3. Network transit time
-4. Destination write time
+Our benchmarks are conducted in a production-like environment. Sequin and Debezium are compared head-to-head capturing changes from [AWS RDS](https://aws.amazon.com/rds/) and delivering to [AWS MSK Kafka](https://aws.amazon.com/msk/).
 
-The test is conducted with dedicated EC2 instances that simultaneously write to the RDS instance and read from AWS MSK Kafka.
+Load is applied to a single Postgres table using [`workload_generator.py`](https://github.com/sequinstream/sequin-vs-debezium-benchmark/blob/main/workload_generator.py) deployed to a dedicated EC2 instance.
 
-The load generation script applies a mixed workload of `INSERT`, `UPDATE`, and `DELETE` operations to the `benchmark_records` table at a total throughput of >= 2,000 operations per second.
+Throughput and end-to-end latency are measured with a [Kafka consumer](https://github.com/sequinstream/sequin-vs-debezium-benchmark/blob/main/cdc_stats.py) deployed to a separate EC2 instance. The stats are calculated as:
+* **Throughput**: the number of records delivered to Kafka per second.
+* **Latency**: the time between a change occuring in Postgres (`updated_at` timestamp) and it's delivery to AWS MSK Kafka (Kafka `creation` timestamp).
 
-The Posgres schema includes a single table with this schema:
+### Workload
+
+`workload_generator.py` applies a mixed workload of `INSERT`, `UPDATE`, and `DELETE` operations to the `benchmark_records` table.
+
+<Frame>
+  <img src="/images/performance/workload-generation.png" alt="Workload generation" />
+</Frame>
+
+The `benchmark_records` Postgres table has the following schema:
+
 ```
                                            Table "public.benchmark_records"
      Column      |            Type             | Collation | Nullable |                    Default
@@ -53,29 +58,68 @@ The Posgres schema includes a single table with this schema:
  updated_at      | timestamp without time zone |           |          | now()
 ```
 
-Records delivered to Kafka are annotated with a `delivered_at` timestamp. Full end-to-end latency is calculated by subtracting the `delivered_at` timestamp from the `updated_at` timestamp.
+### Stats collection
 
-### Throughput stability
+Similarly, the `cdc_stats.py` script is deployed to a separate EC2 instance and reads from AWS MSK Kafka. Stats are bucketed and saved to a CSV file for analysis.
 
-Sequin maintains consistent performance even under sustained load:
+<Frame>
+  <img src="/images/performance/cdc-stats.png" alt="Stats collection" />
+</Frame>
 
-```bash
-Average throughput: 2,054.4 ops/sec
-Average latency: 192ms
-99th percentile latency: 245ms
-```
+### Infrastructure
 
-By comparison, Debezium achieves a slightly higher latency of 234ms at similar throughput:
+Sequin, Debezium, and the rest of the infrastructure are deployed to AWS in the following configuration:
 
-```bash
-Average throughput: 2000.6 ops/sec
-Average latency: 234ms
-99th percentile latency: 286ms
-```
+- AWS RDS Postgres `db.r6g.xlarge` instance (4 vCPUs, 16GB RAM)
+- AWS MSK Kafka provisioned with 3 brokers
+- Sequin running via ECS on an `m8g.xlarge` instance (4 vCPUs, 16GB RAM)
+- Debezium deployed on MSK Connect with 8 [MCUs](https://docs.aws.amazon.com/msk/latest/developerguide/msk-connect-capacity.html) (equivalent to 16 vCPUs and 32 GB of memory).
 
-### Resource utilization
+## Results
 
-Sequin was deployed to EC2 via Elastic Container Service (ECS). During the test, the Sequin ECS task averaged 34% CPU utilization and 10% memory utilization.
+The primary benchmark test for Sequin is 10,000 operations per second for 60 minutes. This was the throughput value for which Sequin had stable latency figures, though we observed Sequin burst above 28k ops/sec during our testing.
+
+At this throughput, Sequin achieved **22.3 ms average latency** and **33.9 ms 99th percentile latency**.
+
+<Frame>
+  <img src="/images/performance/sequin-latency.png" alt="Sequin latency" />
+</Frame>
+
+We then tested Debezium at the same throughput but unfortunately observed latency grow unbounded as Debezium fell behind:
+
+<Frame>
+  <img src="/images/performance/debezium-falls-behind.png" alt="Debezium falls behind" />
+</Frame>
+
+With 10k ops/sec applied to the `benchmark_records` table, Debezium is unable to keep up and latency grows as Debezium allows messages to accumulate in the Postgres replication slot.
+
+<Note>
+  Debezium was deployed with 8 MCUs which is equivalent to 16 vCPUs and 32 GB of memory. Sequin was provisioned with half of each of these resources. Additionally, Debezium was deployed with all configurations recommended in the AWS Debezium deployment guide. However, additional tuning was not performed by the Sequin team, so let us know if you have suggestions for improving Debezium's performance.
+</Note>
+
+Therefore we retested Debezium at 6k ops/sec. At this throughput, Debezium had incredibly stable latency figures of **258.4 ms average latency** and **498.7 ms 99th percentile latency**. 
+
+<Frame>
+  <img src="/images/performance/debezium-latency.png" alt="Debezium latency" />
+</Frame>
+
+
+### Comparison
+
+Head-to-head, Sequin is **14.7x** faster than Debezium while maintaing **67%** more throughput.
+
+<Frame>
+  <img src="/images/performance/sequin-vs-debezium-latency.png" alt="Sequin vs Debezium latency" />
+</Frame>
+
+The table below summarizes these results and also includes figures for Airbyte and Fivetran. Those two services offer batch syncs only, so their latency figures are only roughly comparable.
+
+| Tool | Avg Latency | 99%ile Latency |
+|------|-------------|----------------|
+| **Sequin** | **22.3ms** | **33.9ms** |
+| Debezium | 258.4ms (11.6x slower) | 498.7ms (14.7x slower) |
+| Fivetran | 5+ minutes | - |
+| Airbyte | 1+ hours | - |
 
 ## Next Steps
 

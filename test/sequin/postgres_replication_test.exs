@@ -880,6 +880,55 @@ defmodule Sequin.PostgresReplicationTest do
       check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy
     end
+
+    @tag capture_log: true
+    test "handles memory limits by toggling socket active state" do
+      test_pid = self()
+      # Create an atomic counter starting at 0
+      memory_counter = :atomics.new(1, signed: false)
+
+      check_memory_fn = fn _ ->
+        :atomics.get(memory_counter, 1)
+      end
+
+      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+        send(test_pid, {:changes, msgs})
+        {:ok, length(msgs), ctx}
+      end)
+
+      # Start with very low limits to trigger checks frequently
+      start_replication!(
+        message_handler_module: MessageHandlerMock,
+        max_slot_bytes: 1000,
+        bytes_between_limit_checks: 100,
+        test_pid: test_pid,
+        check_memory_fn: check_memory_fn
+      )
+
+      # Set memory above limit
+      :atomics.put(memory_counter, 1, 2000)
+
+      # Insert record, hit the limit
+      CharacterFactory.insert_character!([], repo: UnboxedRepo)
+      assert_receive {:changes, [_change]}, 1000
+
+      # Should receive toggle_socket_off as memory exceeds limit
+      assert_receive {SlotProcessor, :socket_toggled_off}, 1000
+
+      # Set memory back below limit
+      :atomics.put(memory_counter, 1, 500)
+
+      # Wait for limit check and socket to be turned back on
+      assert_receive {SlotProcessor, :socket_toggled_on}, 1000
+
+      # Verify messages can flow again by inserting another record
+      character = CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+      # Should receive the message since socket is active again
+      assert_receive {:changes, [change]}, 1000
+      assert is_action(change, :insert)
+      assert get_field_value(change.fields, "id") == character.id
+    end
   end
 
   describe "PostgresReplicationSlot end-to-end with sequences" do

@@ -42,6 +42,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   # 200MB
   @max_accumulated_bytes 200 * 1024 * 1024
+  # 500MB
+  @max_slot_bytes 500 * 1024 * 1024
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -78,6 +80,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
       field :heartbeat_interval, non_neg_integer()
+
+      # Socket back-pressure
+      field :sock, nil | :gen_tcp.socket() | :ssl.sslsocket()
+      field :sock_active, boolean(), default: true
+      field :max_slot_bytes, non_neg_integer()
+      field :bytes_between_limit_checks, non_neg_integer()
+      field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
+      field :check_memory_fn, nil | (-> non_neg_integer())
     end
   end
 
@@ -91,6 +101,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
+    max_slot_bytes = Keyword.get(opts, :max_slot_bytes, @max_slot_bytes)
+    bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_slot_bytes, 100))
 
     rep_conn_opts =
       [auto_reconnect: true, name: via_tuple(id)]
@@ -110,7 +122,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       message_handler_module: message_handler_module,
       connection: connection,
       last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1))
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1)),
+      max_slot_bytes: max_slot_bytes,
+      bytes_between_limit_checks: bytes_between_limit_checks,
+      sock: nil,
+      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/1)
     }
 
     ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
@@ -166,6 +182,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     Process.send_after(self(), :emit_heartbeat, 0)
     schedule_process_logging()
+    fetch_sock()
 
     {:ok, %{state | step: :disconnected}}
   end
@@ -256,7 +273,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         |> process_message(state)
       end
 
+    {prev_acc_size, _} = state.accumulated_messages
     {acc_size, _acc_messages} = next_state.accumulated_messages
+
+    # Calculate bytes processed in this message
+    bytes_processed = acc_size - prev_acc_size
+
+    # Update bytes processed and check limits
+    next_state = handle_limit_check(next_state, bytes_processed)
+
+    unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
+      # A replication message is *their* message(s), not our message.
+      Health.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_message_processed, status: :success}
+      )
+    end
 
     cond do
       is_struct(msg, Commit) ->
@@ -364,6 +396,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   @impl ReplicationConnection
+  def handle_info({ref, {:ok, {:sock, sock}}}, %State{} = state) do
+    Process.demonitor(ref, [:flush])
+    {:noreply, %{state | sock: sock}}
+  end
+
+  @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
     if env() == :test and reason == :shutdown do
       {:noreply, state}
@@ -413,6 +451,24 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     schedule_process_logging()
     {:noreply, state}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_info(:limit_check, %State{sock_active: false} = state) do
+    current_memory = state.check_memory_fn.(state)
+
+    if current_memory < state.max_slot_bytes + state.bytes_between_limit_checks do
+      state = toggle_socket_on(state, current_memory)
+      {:noreply, state}
+    else
+      schedule_limit_check()
+      {:noreply, state}
+    end
+  end
+
+  defp schedule_limit_check do
+    time = if env() == :test, do: 10, else: :timer.seconds(30)
+    Process.send_after(self(), :limit_check, time)
   end
 
   defp schedule_process_logging do
@@ -968,5 +1024,98 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp env do
     Application.get_env(:sequin, :env)
+  end
+
+  # TODO: This is a hack to get the TCP handler into state. We'll not need to do this after
+  # vendoring ReplicationConnection.
+  defp fetch_sock do
+    pid = self()
+
+    Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+      {:no_state, %Postgrex.ReplicationConnection{protocol: %Postgrex.Protocol{sock: sock}}} = :sys.get_state(pid)
+      {:ok, {:sock, sock}}
+    end)
+  end
+
+  # Check if we've exceeded the max slot bytes and handle accordingly
+  defp handle_limit_check(%State{sock_active: true} = state, bytes_processed) do
+    # Check if it's been a while since we last checked the limit
+    if state.bytes_processed_since_last_limit_check + bytes_processed >= state.bytes_between_limit_checks do
+      current_memory = state.check_memory_fn.(state)
+
+      if current_memory >= state.max_slot_bytes do
+        state = toggle_socket_off(state, current_memory)
+        schedule_limit_check()
+        %{state | bytes_processed_since_last_limit_check: 0}
+      else
+        %{state | bytes_processed_since_last_limit_check: 0}
+      end
+    else
+      %{state | bytes_processed_since_last_limit_check: state.bytes_processed_since_last_limit_check + bytes_processed}
+    end
+  end
+
+  defp handle_limit_check(%State{sock_active: false} = state, bytes_processed) do
+    # We're in passive mode, so we don't need to check the limit. Messages must still be flowing
+    # through the TCP connection.
+    %{state | bytes_processed_since_last_limit_check: state.bytes_processed_since_last_limit_check + bytes_processed}
+  end
+
+  defp toggle_socket_off(%State{sock_active: true} = state, current_memory) do
+    Logger.warning("[SlotProcessor] Slot memory limit exceeded, switching to passive mode",
+      limit: state.max_slot_bytes,
+      current_memory: current_memory
+    )
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :socket_toggled_off})
+    end
+
+    case state.sock do
+      {:gen_tcp, port} ->
+        :inet.setopts(port, active: false)
+
+      {:ssl, socket} ->
+        :ssl.setopts(socket, active: false)
+    end
+
+    %{state | sock_active: false}
+  end
+
+  defp toggle_socket_on(%State{sock_active: false} = state, current_memory) do
+    Logger.info("[SlotProcessor] No longer at memory limit, switching to active mode",
+      current_memory: current_memory,
+      limit: state.max_slot_bytes
+    )
+
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :socket_toggled_on})
+    end
+
+    case state.sock do
+      {:gen_tcp, port} ->
+        :inet.setopts(port, active: true)
+
+      {:ssl, socket} ->
+        :ssl.setopts(socket, active: true)
+    end
+
+    %{state | sock_active: true}
+  end
+
+  defp default_check_memory_fn(%State{} = state) do
+    slot_store_memory =
+      state.message_store_refs
+      |> Enum.map(fn {consumer_id, _ref} ->
+        consumer_id
+        |> SlotMessageStore.via_tuple()
+        |> GenServer.whereis()
+        |> Process.info(:memory)
+        |> elem(1)
+      end)
+      |> Enum.sum()
+
+    self_memory = self() |> Process.info(:memory) |> elem(1)
+    slot_store_memory + self_memory
   end
 end

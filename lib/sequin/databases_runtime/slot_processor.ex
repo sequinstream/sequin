@@ -156,6 +156,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
 
     Process.send_after(self(), :emit_heartbeat, 0)
+    schedule_process_logging()
 
     {:ok, %{state | step: :disconnected}}
   end
@@ -379,6 +380,29 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
 
     {:noreply, state}
+  end
+
+  @impl Postgrex.ReplicationConnection
+  def handle_info(:process_logging, state) do
+    info =
+      Process.info(self(), [
+        # Total memory used by process in bytes
+        :memory,
+        # Number of messages in queue
+        :message_queue_len
+      ])
+
+    Logger.info("[SlotProcessor] Process metrics",
+      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+      message_queue_len: info[:message_queue_len]
+    )
+
+    schedule_process_logging()
+    {:noreply, state}
+  end
+
+  defp schedule_process_logging do
+    Process.send_after(self(), :process_logging, :timer.seconds(30))
   end
 
   defp schedule_heartbeat(%State{} = state) do

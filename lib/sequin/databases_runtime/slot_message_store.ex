@@ -472,6 +472,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       Mox.allow(Sequin.TestSupport.UUIDMock, state.test_pid, self())
     end
 
+    schedule_process_logging()
     schedule_flush(state)
 
     case load_from_postgres(state) do
@@ -614,6 +615,24 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
+  def handle_info(:process_logging, state) do
+    info =
+      Process.info(self(), [
+        # Total memory used by process in bytes
+        :memory,
+        # Number of messages in queue
+        :message_queue_len
+      ])
+
+    Logger.info("[SlotMessageStore] Process metrics",
+      memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
+      message_queue_len: info[:message_queue_len]
+    )
+
+    schedule_process_logging()
+    {:noreply, state}
+  end
+
   defp load_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
 
   defp load_from_postgres(%State{persisted_mode?: true} = state) do
@@ -639,6 +658,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp flush_messages(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
     {:ok, _count} = Consumers.upsert_consumer_records(messages)
     State.flush_messages(state, messages)
+  end
+
+  defp schedule_process_logging do
+    Process.send_after(self(), :process_logging, :timer.seconds(30))
   end
 
   defp schedule_flush(%State{persisted_mode?: false}), do: :ok

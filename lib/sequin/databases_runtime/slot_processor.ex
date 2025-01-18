@@ -531,7 +531,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp process_message(%Insert{} = msg, state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
 
-    record = %Message{
+    message = %Message{
       action: :insert,
       commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
@@ -546,9 +546,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    TracerServer.message_replicated(state.postgres_database, message)
 
-    put_message(state, record)
+    maybe_put_message(state, message)
   end
 
   defp process_message(%Update{} = msg, %State{} = state) do
@@ -559,7 +559,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         data_tuple_to_fields(columns, msg.old_tuple_data)
       end
 
-    record = %Message{
+    message = %Message{
       action: :update,
       commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
@@ -575,9 +575,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    TracerServer.message_replicated(state.postgres_database, message)
 
-    put_message(state, record)
+    maybe_put_message(state, message)
   end
 
   defp process_message(%Delete{} = msg, %State{} = state) do
@@ -590,7 +590,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         msg.changed_key_tuple_data
       end
 
-    record = %Message{
+    message = %Message{
       action: :delete,
       commit_lsn: state.current_xaction_lsn,
       commit_timestamp: state.current_commit_ts,
@@ -605,9 +605,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       trace_id: UUID.uuid4()
     }
 
-    TracerServer.message_replicated(state.postgres_database, record)
+    TracerServer.message_replicated(state.postgres_database, message)
 
-    put_message(state, record)
+    maybe_put_message(state, message)
   end
 
   # Ignore type messages, we receive them before type columns:
@@ -647,48 +647,37 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
+  defp flush_messages(%State{accumulated_messages: {_, []}} = state), do: state
+
   defp flush_messages(%State{} = state) do
     {_, messages} = state.accumulated_messages
+    messages = Enum.reverse(messages)
 
-    # Reverse the messages because we accumulate them with list prepending
-    {rejected_messages, messages} =
-      messages
-      |> Enum.reverse()
-      |> Enum.split_with(fn message -> message.seq <= state.last_processed_seq end)
+    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+    # Flush accumulated messages
+    {:ok, _count, message_handler_ctx} =
+      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
-    unless rejected_messages == [] do
-      max_rejected_seq = rejected_messages |> Enum.map(& &1.seq) |> Enum.max()
-
-      Logger.info(
-        "Skipping #{length(rejected_messages)} already-processed messages (last_processed_seq=#{state.last_processed_seq}, max_rejected_seq=#{max_rejected_seq})"
-      )
+    if state.test_pid do
+      send(state.test_pid, {__MODULE__, :flush_messages})
     end
 
-    if Enum.any?(messages) do
-      next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
-      # Flush accumulated messages
-      {:ok, _count, message_handler_ctx} =
-        state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
-
-      if state.test_pid do
-        send(state.test_pid, {__MODULE__, :flush_messages})
-      end
-
-      %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: message_handler_ctx}
-    else
-      %{state | accumulated_messages: {0, []}}
-    end
+    %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: message_handler_ctx}
   end
 
-  defp put_message(%State{} = state, message) do
-    {acc_size, acc_messages} = state.accumulated_messages
-    new_size = acc_size + :erlang.external_size(message)
+  defp maybe_put_message(%State{} = state, %Message{} = message) do
+    if message.seq > state.last_processed_seq do
+      {acc_size, acc_messages} = state.accumulated_messages
+      new_size = acc_size + :erlang.external_size(message)
 
-    %{
-      state
-      | accumulated_messages: {new_size, [message | acc_messages]},
-        current_commit_idx: state.current_commit_idx + 1
-    }
+      %{
+        state
+        | accumulated_messages: {new_size, [message | acc_messages]},
+          current_commit_idx: state.current_commit_idx + 1
+      }
+    else
+      %{state | current_commit_idx: state.current_commit_idx + 1}
+    end
   end
 
   defp safe_ack_lsn(%State{last_commit_lsn: nil}), do: raise("Unsafe to call safe_ack_lsn when last_commit_lsn is nil")

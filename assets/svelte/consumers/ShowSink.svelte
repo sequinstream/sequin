@@ -20,7 +20,7 @@
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SinkCardSqs from "../components/SinkCardSqs.svelte";
   import SinkCardRedis from "../components/SinkCardRedis.svelte";
-  import SinkCardKafka from "../components/SinkCardKafka.svelte";
+  import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
@@ -403,7 +403,7 @@
       {:else if isRedisConsumer(consumer)}
         <SinkCardRedis {consumer} />
       {:else if isKafkaConsumer(consumer)}
-        <SinkCardKafka {consumer} />
+        <KafkaSinkCard {consumer} />
       {:else if isGcpPubsubConsumer(consumer)}
         <SinkCardGcpPubSub {consumer} />
       {:else if isSequinStreamConsumer(consumer)}

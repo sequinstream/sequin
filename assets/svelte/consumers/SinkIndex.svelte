@@ -18,7 +18,7 @@
   import DatabaseConnectionAlert from "../components/DatabaseConnectionAlert.svelte";
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
-  import RedisIcon from "../../icons/redis.svelte";
+  import RedisIcon from "../sinks/redis/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";

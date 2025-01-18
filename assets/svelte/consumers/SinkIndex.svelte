@@ -19,7 +19,7 @@
   import LinkPatchNavigate from "$lib/components/LinkPatchNavigate.svelte";
   import SQSIcon from "../../icons/sqs.svelte";
   import RedisIcon from "../../icons/redis.svelte";
-  import KafkaIcon from "../../icons/kafka.svelte";
+  import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";

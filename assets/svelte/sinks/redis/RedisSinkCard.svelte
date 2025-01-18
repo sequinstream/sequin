@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import type { RedisConsumer } from "../types/consumer";
+  import type { RedisConsumer } from "../../types/consumer";
 
   export let consumer: RedisConsumer;
 </script>

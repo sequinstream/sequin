@@ -19,7 +19,7 @@
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
-  import SinkCardRedis from "../components/SinkCardRedis.svelte";
+  import RedisSinkCard from "../sinks/redis/RedisSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
@@ -401,7 +401,7 @@
       {:else if isSqsConsumer(consumer)}
         <SqsSinkCard {consumer} />
       {:else if isRedisConsumer(consumer)}
-        <SinkCardRedis {consumer} />
+        <RedisSinkCard {consumer} />
       {:else if isKafkaConsumer(consumer)}
         <KafkaSinkCard {consumer} />
       {:else if isGcpPubsubConsumer(consumer)}

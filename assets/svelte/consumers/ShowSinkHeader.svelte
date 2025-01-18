@@ -13,7 +13,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { formatRelativeTimestamp } from "../utils";
   import LinkPushNavigate from "$lib/components/LinkPushNavigate.svelte";
-  import SQSIcon from "../../icons/sqs.svelte";
+  import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import RedisIcon from "../../icons/redis.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
@@ -116,7 +116,7 @@
           {#if consumer.sink.type === "http_push"}
             <Webhook class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "sqs"}
-            <SQSIcon class="h-6 w-6 mr-2" />
+            <SqsIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "redis"}
             <RedisIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "kafka"}

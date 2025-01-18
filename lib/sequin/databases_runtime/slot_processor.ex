@@ -3,11 +3,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   Subscribes to the Postgres replication slot, decodes write ahead log binary messages
   and publishes them to a stream.
 
-  Borrowed heavily from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
+  Forked from https://github.com/supabase/realtime/blob/main/lib/extensions/postgres_cdc_stream/replication.ex
+  with many modifications.
   """
 
   # See below, where we set restart: :temporary
-  use Postgrex.ReplicationConnection
+  use Sequin.Postgres.ReplicationConnection
 
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
@@ -29,6 +30,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
+  alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
@@ -105,7 +107,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1))
     }
 
-    Postgrex.ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
+    ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
   end
 
   def child_spec(opts) do
@@ -141,7 +143,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:via, :syn, {:replication, {__MODULE__, id}}}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def init(%State{} = state) do
     Logger.metadata(account_id: state.postgres_database.account_id, replication_id: state.id)
 
@@ -161,7 +163,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:ok, %{state | step: :disconnected}}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_connect(%State{connect_attempts: attempts} = state) when attempts >= 5 do
     Logger.error("[SlotProcessor] Failed to connect to replication slot after 5 attempts")
 
@@ -219,7 +221,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
      %{state | step: :streaming, connect_attempts: state.connect_attempts + 1, last_processed_seq: last_processed_seq}}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_result(result, state) do
     Logger.warning("Unknown result: #{inspect(result)}")
     {:noreply, state}
@@ -228,7 +230,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   @spec stop(pid) :: :ok
   def stop(pid), do: GenServer.stop(pid)
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_data(<<?w, _header::192, msg::binary>>, %State{} = state) do
     # TODO: Move to better spot after we vendor ReplicationConnection
     Health.put_event(
@@ -314,7 +316,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_call({:update_message_handler_ctx, ctx}, from, state) do
     state = %{state | message_handler_ctx: ctx}
     # Need to manually send reply
@@ -322,7 +324,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_call({:monitor_message_store, consumer_id}, from, state) do
     if Map.has_key?(state.message_store_refs, consumer_id) do
       GenServer.reply(from, :ok)
@@ -337,7 +339,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_call({:demonitor_message_store, consumer_id}, from, state) do
     case state.message_store_refs[consumer_id] do
       nil ->
@@ -353,7 +355,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
     {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
 
@@ -366,7 +368,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:stop, :message_store_down, state}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_info(:emit_heartbeat, %State{} = state) do
     schedule_heartbeat(state)
     conn = get_cached_conn(state)
@@ -382,7 +384,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {:noreply, state}
   end
 
-  @impl Postgrex.ReplicationConnection
+  @impl ReplicationConnection
   def handle_info(:process_logging, state) do
     info =
       Process.info(self(), [

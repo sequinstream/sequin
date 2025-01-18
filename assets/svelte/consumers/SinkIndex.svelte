@@ -23,7 +23,7 @@
   import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
-  import RabbitMqIcon from "../../icons/rabbitmq.svelte";
+  import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
 
   export let consumers: Array<{
     id: string;

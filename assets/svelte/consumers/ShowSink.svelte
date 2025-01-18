@@ -24,7 +24,7 @@
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
   import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
-  import SinkCardRabbitMq from "../components/SinkCardRabbitMq.svelte";
+  import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -411,7 +411,7 @@
       {:else if isNatsConsumer(consumer)}
         <NatsSinkCard {consumer} />
       {:else if isRabbitMqConsumer(consumer)}
-        <SinkCardRabbitMq {consumer} />
+        <RabbitMqSinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

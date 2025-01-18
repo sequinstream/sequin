@@ -77,6 +77,8 @@ Sequin, Debezium, and the rest of the infrastructure are deployed to AWS in the 
 
 ## Results
 
+### Sequin
+
 The primary benchmark test for Sequin is 10,000 operations per second for 60 minutes. This was the throughput value for which Sequin had stable latency figures, though we observed Sequin burst above 28k ops/sec during our testing.
 
 At this throughput, Sequin achieved **22.3 ms average latency** and **33.9 ms 99th percentile latency**.
@@ -84,6 +86,8 @@ At this throughput, Sequin achieved **22.3 ms average latency** and **33.9 ms 99
 <Frame>
   <img src="/images/performance/sequin-latency.png" alt="Sequin latency" />
 </Frame>
+
+### Debezium
 
 We then tested Debezium at the same throughput but unfortunately observed latency grow unbounded as Debezium fell behind:
 
@@ -102,7 +106,6 @@ Therefore we retested Debezium at 6k ops/sec. At this throughput, Debezium had i
 <Frame>
   <img src="/images/performance/debezium-latency.png" alt="Debezium latency" />
 </Frame>
-
 
 ### Comparison
 

@@ -18,7 +18,7 @@
     RabbitMqConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
-  import SinkCardSqs from "../components/SinkCardSqs.svelte";
+  import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
   import SinkCardRedis from "../components/SinkCardRedis.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
@@ -399,7 +399,7 @@
       {#if isHttpPushConsumer(consumer)}
         <SinkCardHttpPush {consumer} />
       {:else if isSqsConsumer(consumer)}
-        <SinkCardSqs {consumer} />
+        <SqsSinkCard {consumer} />
       {:else if isRedisConsumer(consumer)}
         <SinkCardRedis {consumer} />
       {:else if isKafkaConsumer(consumer)}

@@ -20,7 +20,7 @@
   import FilterForm from "../components/FilterForm.svelte";
   import GroupColumnsForm from "./GroupColumnsForm.svelte";
   import SinkHttpPushForm from "$lib/consumers/SinkHttpPushForm.svelte";
-  import SinkSqsForm from "$lib/consumers/SinkSqsForm.svelte";
+  import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import SinkRedisForm from "$lib/consumers/SinkRedisForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
   import SinkGcpPubsubForm from "./SinkGcpPubsubForm.svelte";
@@ -678,7 +678,7 @@
         {parent}
       />
     {:else if consumer.type === "sqs"}
-      <SinkSqsForm errors={errors.consumer} bind:form />
+      <SqsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "redis"}
       <SinkRedisForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "kafka"}

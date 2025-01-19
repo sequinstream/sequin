@@ -5,8 +5,10 @@ defmodule Sequin.DatabasesRuntime.Starter do
   use GenServer
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.DatabasesRuntime.Supervisor
   alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
 
   require Logger
 
@@ -37,15 +39,33 @@ defmodule Sequin.DatabasesRuntime.Starter do
     Process.send_after(self(), :start, timeout)
   end
 
-  defp start do
-    Enum.each(Replication.all_active_pg_replications(), fn pg_replication ->
-      Supervisor.start_replication(pg_replication)
-      Supervisor.start_wal_pipeline_servers(pg_replication)
-    end)
+  def start do
+    Logger.info("[DatabasesRuntimeStarter] Starting")
+    Enum.each(Replication.all_active_pg_replications(), &start/1)
+    Enum.each(Consumers.list_sink_consumers_with_active_backfill(), &start/1)
+    Logger.info("[DatabasesRuntimeStarter] Finished starting")
+  end
 
-    Enum.each(Consumers.list_sink_consumers_with_active_backfill(), fn consumer ->
-      Supervisor.start_table_reader(consumer)
-    end)
+  defp start(%PostgresReplicationSlot{} = pg_replication) do
+    Logger.info("[DatabasesRuntimeStarter] Starting replication", replication_id: pg_replication.id)
+    Supervisor.start_replication(pg_replication)
+    Logger.info("[DatabasesRuntimeStarter] Started replication", replication_id: pg_replication.id)
+    Supervisor.start_wal_pipeline_servers(pg_replication)
+  catch
+    :exit, error ->
+      Logger.error("[DatabasesRuntimeStarter] Failed to start replication",
+        error: error,
+        replication_id: pg_replication.id
+      )
+  end
+
+  defp start(%SinkConsumer{} = consumer) do
+    Logger.info("[DatabasesRuntimeStarter] Starting table reader", consumer_id: consumer.id)
+    Supervisor.start_table_reader(consumer)
+    Logger.info("[DatabasesRuntimeStarter] Started table reader", consumer_id: consumer.id)
+  catch
+    :exit, error ->
+      Logger.error("[DatabasesRuntimeStarter] Failed to start table reader", error: error, consumer_id: consumer.id)
   end
 
   defp logger_info(msg) do

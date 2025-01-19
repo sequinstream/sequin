@@ -435,6 +435,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     consumer = opts[:consumer]
     consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
 
+    Logger.metadata(consumer_id: consumer_id)
+
     state = %State{
       consumer: consumer,
       consumer_id: consumer_id,

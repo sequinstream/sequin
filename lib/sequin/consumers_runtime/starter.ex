@@ -5,6 +5,7 @@ defmodule Sequin.ConsumersRuntime.Starter do
   use GenServer
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.ConsumersRuntime.Supervisor
 
   require Logger
@@ -36,11 +37,17 @@ defmodule Sequin.ConsumersRuntime.Starter do
     Process.send_after(self(), :start, timeout)
   end
 
-  defp start do
-    Enum.each(
-      Consumers.list_active_sink_consumers([:sequence, :account]),
-      &Supervisor.start_for_sink_consumer(&1)
-    )
+  def start do
+    Enum.each(Consumers.list_active_sink_consumers([:sequence, :account]), &start(&1))
+  end
+
+  def start(%SinkConsumer{} = consumer) do
+    Supervisor.start_for_sink_consumer(consumer)
+    Logger.info("[ConsumersRuntimeStarter] Started consumer", consumer_id: consumer.id)
+  catch
+    :exit, e ->
+      Logger.error("[ConsumersRuntimeStarter] Failed to start consumer", error: e, consumer_id: consumer.id)
+      :ok
   end
 
   defp logger_info(msg) do

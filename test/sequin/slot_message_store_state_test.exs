@@ -383,4 +383,25 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       end
     end
   end
+
+  describe "peek_messages/2" do
+    test "returns messages in seq order" do
+      state = %State{
+        consumer: ConsumersFactory.sink_consumer(),
+        messages: %{}
+      }
+
+      messages =
+        Enum.shuffle([
+          ConsumersFactory.consumer_message(seq: 1),
+          ConsumersFactory.consumer_message(seq: 2),
+          ConsumersFactory.consumer_message(seq: 3)
+        ])
+
+      state = State.put_messages(state, messages)
+
+      assert peeked_messages = State.peek_messages(state, 3)
+      assert Enum.map(peeked_messages, & &1.seq) == [1, 2, 3]
+    end
+  end
 end

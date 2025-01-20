@@ -791,12 +791,9 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp load_consumer_messages_from_store(consumer, limit) do
-    case SlotMessageStore.peek(consumer.id) do
-      %SlotMessageStore.State{messages: messages} ->
+    case SlotMessageStore.peek_messages(consumer.id, limit) do
+      messages when is_list(messages) ->
         messages
-        |> Map.values()
-        |> Enum.sort_by(& &1.seq, :asc)
-        |> Enum.take(limit)
 
       {:error, error} ->
         Logger.error("Failed to load messages from store for consumer #{consumer.id}: #{Exception.message(error)}")

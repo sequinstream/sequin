@@ -241,6 +241,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       end
     end
 
+    def peek_messages(%State{} = state, count) do
+      state.messages
+      |> Map.values()
+      |> Enum.sort_by(& &1.seq)
+      |> Enum.take(count)
+    end
+
     defp update_messages(%State{} = state, messages) do
       messages = Map.new(messages, &{&1.ack_id, &1})
 
@@ -404,6 +411,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @spec peek(consumer_id()) :: State.t() | {:error, Exception.t()}
   def peek(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :peek)
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  @spec peek_messages(consumer_id(), pos_integer()) ::
+          {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
+  def peek_messages(consumer_id, count) do
+    GenServer.call(via_tuple(consumer_id), {:peek_messages, count})
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -588,6 +604,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call(:peek, _from, state) do
     {:reply, state, state}
+  end
+
+  def handle_call({:peek_messages, count}, _from, state) do
+    {:reply, State.peek_messages(state, count), state}
   end
 
   def handle_call({:set_monitor_ref, ref}, _from, state) do

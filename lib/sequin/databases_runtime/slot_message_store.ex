@@ -642,6 +642,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp load_from_postgres(%State{persisted_mode?: true} = state) do
     case Consumers.get_sink_consumer(state.consumer_id) do
       {:ok, consumer} ->
+        Logger.metadata(account_id: consumer.account_id)
+
         Logger.info("[SlotMessageStore] Loading messages...")
         {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
         Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), time_ms: div(time, 1000))

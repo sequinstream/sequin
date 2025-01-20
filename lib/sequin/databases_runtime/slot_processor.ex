@@ -124,10 +124,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Supervisor.child_spec(spec, restart: :temporary)
   end
 
+  @spec update_message_handler_ctx(id :: String.t(), ctx :: any()) :: :ok | {:error, :not_running}
   def update_message_handler_ctx(id, ctx) do
     GenServer.call(via_tuple(id), {:update_message_handler_ctx, ctx})
   catch
-    :exit, _e ->
+    :exit, {:noproc, {GenServer, :call, _}} ->
       {:error, :not_running}
   end
 

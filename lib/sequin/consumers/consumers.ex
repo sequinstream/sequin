@@ -333,7 +333,7 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_consumer_events_for_consumer(consumer_id, params \\ []) do
+  def list_consumer_events_for_consumer(consumer_id, params \\ [], opts \\ []) do
     base_query = ConsumerEvent.where_consumer_id(consumer_id)
 
     query =
@@ -354,7 +354,7 @@ defmodule Sequin.Consumers do
           order_by(query, ^order_by)
       end)
 
-    Repo.all(query)
+    Repo.all(query, opts)
   end
 
   def insert_consumer_events([]), do: {:ok, 0}

@@ -107,6 +107,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
     end
   end
 
+  @spec refresh_message_handler_ctx(id :: String.t()) :: :ok | {:error, term()}
   def refresh_message_handler_ctx(id) do
     case Sequin.Replication.get_pg_replication(id) do
       {:ok, pg_replication} ->
@@ -119,7 +120,6 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
             case SlotProcessor.update_message_handler_ctx(id, new_ctx) do
               :ok -> :ok
               {:error, :not_running} -> :ok
-              error -> error
             end
           end,
           [node() | Node.list()],

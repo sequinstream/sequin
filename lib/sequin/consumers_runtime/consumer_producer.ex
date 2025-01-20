@@ -89,8 +89,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       {:ok, lsn} ->
         ConsumerIdempotency.trim(state.consumer.id, lsn)
 
+      {:error, error} when is_exception(error) ->
+        Logger.error("Error trimming idempotency seqs", error: Exception.message(error))
+
       {:error, error} ->
-        Logger.error("Error trimming idempotency seqs", error: error)
+        Logger.error("Error trimming idempotency seqs", error: inspect(error))
     end
 
     {:noreply, [], schedule_trim_idempotency(state)}

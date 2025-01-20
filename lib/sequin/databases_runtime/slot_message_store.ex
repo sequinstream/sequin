@@ -417,7 +417,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   """
   @spec set_monitor_ref(pid(), reference()) :: :ok
   def set_monitor_ref(pid, ref) do
-    GenServer.call(pid, {:set_monitor_ref, ref})
+    GenServer.call(pid, {:set_monitor_ref, ref}, :timer.seconds(60))
   end
 
   def child_spec(opts) do
@@ -680,7 +680,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     now = DateTime.utc_now()
 
     id
-    |> Consumers.list_consumer_events_for_consumer()
+    |> Consumers.list_consumer_events_for_consumer([], timeout: :timer.seconds(45))
     |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
     |> Map.new(&{&1.ack_id, &1})
   end

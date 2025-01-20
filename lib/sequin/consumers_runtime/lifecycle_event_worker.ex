@@ -44,26 +44,27 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   defp handle_consumer_event(event, id, data) do
     case event do
       "create" ->
-        with {:ok, consumer} <- Consumers.get_consumer(id),
-             :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+        with {:ok, consumer} <- Consumers.get_consumer(id) do
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
-          SlotSupervisor.start_message_store!(consumer)
           ConsumersSupervisor.start_for_sink_consumer(consumer)
+          :ok = SlotSupervisor.start_message_store!(consumer)
+          :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
           :ok
         end
 
       "update" ->
-        with {:ok, consumer} <- Consumers.get_consumer(id),
-             :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id) do
+        with {:ok, consumer} <- Consumers.get_consumer(id) do
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
 
           case consumer.status do
             :active ->
               ConsumersSupervisor.restart_for_sink_consumer(consumer)
+              :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
               :ok
 
             :disabled ->
               ConsumersSupervisor.stop_for_sink_consumer(consumer)
+              :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
               :ok
           end
         end
@@ -71,10 +72,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
-        with :ok <- DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id),
-             :ok <- SlotSupervisor.stop_message_store(replication_slot_id, id) do
-          ConsumersSupervisor.stop_for_sink_consumer(id)
-        end
+        :ok = ConsumersSupervisor.stop_for_sink_consumer(id)
+        :ok = SlotSupervisor.stop_message_store(replication_slot_id, id)
+        :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
     end
   end
 

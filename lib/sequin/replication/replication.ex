@@ -369,7 +369,7 @@ defmodule Sequin.Replication do
         |> Sequin.Map.from_ecto()
       end)
 
-    {count, _} = Repo.insert_all(WalEvent, events)
+    {count, _} = Repo.insert_all(WalEvent, events, conflict_target: [:wal_pipeline_id, :seq], on_conflict: :nothing)
 
     unless Repo.in_transaction?() do
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)

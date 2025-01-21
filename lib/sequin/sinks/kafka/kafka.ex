@@ -20,6 +20,8 @@ defmodule Sequin.Sinks.Kafka do
     impl().publish(consumer, event)
   end
 
+  def publish(_consumer, _messages), do: :ok
+
   @spec test_connection(KafkaSink.t()) :: :ok | {:error, Error.t()}
   def test_connection(%KafkaSink{} = sink) do
     impl().test_connection(sink)

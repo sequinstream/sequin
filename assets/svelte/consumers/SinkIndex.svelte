@@ -20,7 +20,7 @@
   import SqsIcon from "../sinks/sqs/SqsIcon.svelte";
   import RedisIcon from "../sinks/redis/RedisIcon.svelte";
   import KafkaIcon from "../sinks/kafka/KafkaIcon.svelte";
-  import GcpPubsubIcon from "../../icons/gcp_pubsub.svelte";
+  import GcpPubsubIcon from "../sinks/gcp_pubsub/GcpPubsubIcon.svelte";
   import SequinStreamIcon from "../../icons/sequin_stream.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";

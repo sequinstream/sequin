@@ -22,7 +22,7 @@
   import RedisSinkCard from "../sinks/redis/RedisSinkCard.svelte";
   import KafkaSinkCard from "../sinks/kafka/KafkaSinkCard.svelte";
   import SinkCardSequinStream from "../components/SinkCardSequinStream.svelte";
-  import SinkCardGcpPubSub from "../components/SinkCardGcpPubSub.svelte";
+  import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
   import * as d3 from "d3";
@@ -405,7 +405,7 @@
       {:else if isKafkaConsumer(consumer)}
         <KafkaSinkCard {consumer} />
       {:else if isGcpPubsubConsumer(consumer)}
-        <SinkCardGcpPubSub {consumer} />
+        <GcpPubsubSinkCard {consumer} />
       {:else if isSequinStreamConsumer(consumer)}
         <SinkCardSequinStream {consumer} {apiBaseUrl} {apiTokens} />
       {:else if isNatsConsumer(consumer)}

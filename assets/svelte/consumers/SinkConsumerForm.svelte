@@ -23,7 +23,7 @@
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import RedisSinkForm from "$lib/sinks/redis/RedisSinkForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
-  import SinkGcpPubsubForm from "./SinkGcpPubsubForm.svelte";
+  import GcpPubsubSinkForm from "../sinks/gcp_pubsub/GcpPubsubSinkForm.svelte";
   import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
@@ -684,7 +684,7 @@
     {:else if consumer.type === "kafka"}
       <KafkaSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "gcp_pubsub"}
-      <SinkGcpPubsubForm errors={errors.consumer} bind:form />
+      <GcpPubsubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}
       <SinkSequinStreamForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}

@@ -63,8 +63,8 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
               :ok
 
             :disabled ->
-              ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+              ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok
           end
         end
@@ -72,9 +72,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "delete" ->
         replication_slot_id = Map.fetch!(data, "replication_slot_id")
 
-        :ok = ConsumersSupervisor.stop_for_sink_consumer(id)
-        :ok = SlotSupervisor.stop_message_store(replication_slot_id, id)
         :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
+        :ok = SlotSupervisor.stop_message_store(replication_slot_id, id)
+        :ok = ConsumersSupervisor.stop_for_sink_consumer(id)
     end
   end
 

@@ -10,6 +10,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # See below, where we set restart: :temporary
   use Sequin.Postgres.ReplicationConnection
 
+  import Sequin.Error.Guards, only: [is_error: 1]
+
   alias __MODULE__
   alias Ecto.Adapters.SQL.Sandbox
   alias Sequin.Databases.ConnectionCache
@@ -27,6 +29,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.Error
+  alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Postgres
@@ -269,7 +272,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     e ->
       Logger.error("Error processing message: #{inspect(e)}")
 
-      error = Error.service(service: :replication, message: Exception.message(e))
+      error = if is_error(e), do: e, else: Error.service(service: :replication, message: Exception.message(e))
 
       Health.put_event(
         state.replication_slot,
@@ -443,6 +446,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
   # end
 
+  @spec process_message(map(), State.t()) :: State.t()
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     conn = get_cached_conn(state)
 
@@ -530,6 +534,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(%Insert{} = msg, state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     message = %Message{
       action: :insert,
@@ -538,11 +543,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       commit_idx: state.current_commit_idx,
       seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
-      ids: data_tuple_to_ids(columns, msg.tuple_data),
+      ids: ids,
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      fields: data_tuple_to_fields(columns, msg.tuple_data),
+      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
       trace_id: UUID.uuid4()
     }
 
@@ -553,10 +558,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(%Update{} = msg, %State{} = state) do
     {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     old_fields =
       if msg.old_tuple_data do
-        data_tuple_to_fields(columns, msg.old_tuple_data)
+        data_tuple_to_fields(ids, columns, msg.old_tuple_data)
       end
 
     message = %Message{
@@ -566,12 +572,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       commit_idx: state.current_commit_idx,
       seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
-      ids: data_tuple_to_ids(columns, msg.tuple_data),
+      ids: ids,
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
       old_fields: old_fields,
-      fields: data_tuple_to_fields(columns, msg.tuple_data),
+      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
       trace_id: UUID.uuid4()
     }
 
@@ -590,6 +596,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         msg.changed_key_tuple_data
       end
 
+    ids = data_tuple_to_ids(columns, prev_tuple_data)
+
     message = %Message{
       action: :delete,
       commit_lsn: state.current_xaction_lsn,
@@ -597,11 +605,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       commit_idx: state.current_commit_idx,
       seq: state.current_xaction_lsn + state.current_commit_idx,
       errors: nil,
-      ids: data_tuple_to_ids(columns, prev_tuple_data),
+      ids: ids,
       table_schema: schema,
       table_name: table,
       table_oid: msg.relation_id,
-      old_fields: data_tuple_to_fields(columns, prev_tuple_data),
+      old_fields: data_tuple_to_fields(ids, columns, prev_tuple_data),
       trace_id: UUID.uuid4()
     }
 
@@ -748,42 +756,78 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     |> Enum.map(fn {_, value} -> value end)
   end
 
-  def data_tuple_to_fields(columns, tuple_data) do
+  @spec data_tuple_to_fields(list(), [map()], tuple()) :: [Message.Field.t()]
+  def data_tuple_to_fields(id_list, columns, tuple_data) do
     columns
     |> Enum.zip(Tuple.to_list(tuple_data))
     |> Enum.map(fn {%{name: name, attnum: attnum, type: type}, value} ->
-      %Message.Field{
-        column_name: name,
-        column_attnum: attnum,
-        value: cast_value(type, value)
-      }
+      case cast_value(type, value) do
+        {:ok, casted_value} ->
+          %Message.Field{
+            column_name: name,
+            column_attnum: attnum,
+            value: casted_value
+          }
+
+        {:error, %ServiceError{code: :invalid_json} = error} ->
+          details = Map.put(error.details, :ids, id_list)
+
+          raise %{
+            error
+            | details: details,
+              message: error.message <> " for column `#{name}` in row with ids: #{inspect(id_list)}"
+          }
+      end
     end)
   end
 
-  defp cast_value("bool", "t"), do: true
-  defp cast_value("bool", "f"), do: false
+  defp cast_value("bool", "t"), do: {:ok, true}
+  defp cast_value("bool", "f"), do: {:ok, false}
 
-  defp cast_value("_" <> _type, "{}") do
-    []
-  end
+  defp cast_value("_" <> _type, "{}"), do: {:ok, []}
 
   defp cast_value("_" <> type, array_string) when is_binary(array_string) do
     array_string
     |> String.trim("{")
     |> String.trim("}")
     |> parse_pg_array()
-    |> Enum.map(&cast_value(type, &1))
+    |> Enum.reduce_while({:ok, []}, fn value, {:ok, acc} ->
+      case cast_value(type, value) do
+        {:ok, casted_value} -> {:cont, {:ok, [casted_value | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, array} -> {:ok, Enum.reverse(array)}
+      error -> error
+    end
   end
 
   defp cast_value(type, value) when type in ["json", "jsonb"] and is_binary(value) do
-    Jason.decode!(value)
+    case Jason.decode(value) do
+      {:ok, json} ->
+        {:ok, json}
+
+      {:error, %Jason.DecodeError{} = error} ->
+        Logger.error("Failed to decode JSON value: #{inspect(error, limit: 10_000)}")
+
+        wrapped_error =
+          Error.service(
+            service: :postgres_replication_slot,
+            message: "Failed to decode JSON value: #{inspect(error)}",
+            details: %{error: Exception.message(error)},
+            code: :invalid_json
+          )
+
+        {:error, wrapped_error}
+    end
   end
 
   defp cast_value(type, value) do
     case Ecto.Type.cast(string_to_ecto_type(type), value) do
-      {:ok, casted_value} -> casted_value
+      {:ok, casted_value} -> {:ok, casted_value}
       # Fallback to original value if casting fails
-      :error -> value
+      :error -> {:ok, value}
     end
   end
 

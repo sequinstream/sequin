@@ -25,7 +25,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   @callback discard_batch(String.t() | pid(), String.t()) :: :ok
 
   @initial_batch_progress_timeout 50
-  @max_batch_progress_timeout 10_000
+  @max_batch_progress_timeout 1000
 
   # Client API
 
@@ -122,7 +122,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    page_size = Keyword.get(opts, :page_size, 1000)
+    page_size = Keyword.get(opts, :page_size, 100_000)
 
     state = %State{
       id: backfill.id,

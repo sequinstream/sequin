@@ -32,6 +32,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @min_log_time_ms 200
 
+  @trim_allow_consumer_id_allow_list ~w(
+    c4192100-f55e-4203-9836-3a00398d2876
+    b4558a5c-ef60-4d4e-8950-237ac53efbee
+  )
+
   defguardp event_messages?(state) when state.consumer.message_kind == :event
   defguardp record_messages?(state) when state.consumer.message_kind == :record
 
@@ -41,6 +46,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     alias Sequin.Consumers.ConsumerEvent
     alias Sequin.Consumers.ConsumerRecord
+
+    def max_messages_in_memory, do: 10_000
 
     typedstruct do
       field :consumer, SinkConsumer.t()
@@ -191,6 +198,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end
 
     def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size, flush_wait_ms: flush_wait_ms}) do
+      flush_all? = map_size(messages) > max_messages_in_memory()
+
       messages
       |> Map.values()
       |> Stream.filter(& &1.dirty)
@@ -198,7 +207,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         # Only flush messages that were ingested before the flush wait time
         # This gives the ConsumerProducer time to pull, deliver, and ack messages
         # before we flush them to Postgres
-        Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
+        flush_all? or Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
       end)
       |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
       |> Enum.take(flush_batch_size)
@@ -631,12 +640,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     if more? do
       Process.send_after(self(), :flush, 0)
+      {:noreply, state}
     else
       Logger.info("[SlotMessageStore] Finished flushing messages")
       schedule_flush(state)
+      {:noreply, trim_or_load_messages(state)}
     end
-
-    {:noreply, state}
   end
 
   def handle_info(:process_logging, state) do
@@ -686,6 +695,39 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     State.flush_messages(state, messages)
   end
 
+  defp trim_or_load_messages(%State{consumer_id: consumer_id} = state)
+       when consumer_id not in @trim_allow_consumer_id_allow_list,
+       do: state
+
+  defp trim_or_load_messages(%State{persisted_mode?: false} = state), do: state
+
+  defp trim_or_load_messages(%State{persisted_mode?: true} = state) do
+    cond do
+      map_size(state.messages) > State.max_messages_in_memory() ->
+        Logger.info("[SlotMessageStore] Trimming messages")
+
+        messages =
+          state.messages
+          |> Map.values()
+          |> Enum.sort_by(& &1.seq)
+          |> Enum.take(State.max_messages_in_memory())
+          |> Map.new(&{&1.ack_id, &1})
+
+        %{state | messages: messages}
+
+      map_size(state.messages) == State.max_messages_in_memory() ->
+        Logger.info("[SlotMessageStore] Already at max messages in memory")
+        state
+
+      true ->
+        limit = State.max_messages_in_memory() - map_size(state.messages)
+        Logger.info("[SlotMessageStore] Loading messages", count: limit)
+
+        messages = load_messages(state.consumer, limit)
+        %{state | messages: Map.merge(state.messages, messages)}
+    end
+  end
+
   defp schedule_process_logging do
     Process.send_after(self(), :process_logging, :timer.seconds(30))
   end
@@ -696,23 +738,32 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     Process.send_after(self(), :flush, state.flush_interval)
   end
 
-  defp load_messages(%SinkConsumer{message_kind: :event, id: id}) do
+  defp load_messages(consumer, limit \\ State.max_messages_in_memory())
+
+  defp load_messages(%SinkConsumer{message_kind: :event, id: id} = consumer, limit) do
     now = DateTime.utc_now()
+    params = load_params(consumer, limit)
 
     id
-    |> Consumers.list_consumer_events_for_consumer([], timeout: :timer.seconds(45))
+    |> Consumers.list_consumer_events_for_consumer(params, timeout: :timer.seconds(45))
     |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
     |> Map.new(&{&1.ack_id, &1})
   end
 
-  defp load_messages(%SinkConsumer{message_kind: :record, id: id}) do
+  defp load_messages(%SinkConsumer{message_kind: :record, id: id} = consumer, limit) do
     now = DateTime.utc_now()
+    params = load_params(consumer, limit)
 
     id
-    |> Consumers.list_consumer_records_for_consumer()
+    |> Consumers.list_consumer_records_for_consumer(params, timeout: :timer.seconds(45))
     |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
     |> Map.new(&{&1.ack_id, &1})
   end
+
+  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list,
+    do: [limit: limit, order_by: {:asc, :seq}]
+
+  defp load_params(%SinkConsumer{}, _limit), do: []
 
   defp exit_to_sequin_error({:noproc, _}) do
     Error.invariant(message: "[SlotMessageStore] exited with :noproc")

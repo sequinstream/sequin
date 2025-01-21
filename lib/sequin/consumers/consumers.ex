@@ -452,10 +452,10 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def list_consumer_records_for_consumer(consumer_id, params \\ []) do
+  def list_consumer_records_for_consumer(consumer_id, params \\ [], opts \\ []) do
     consumer_id
     |> consumer_record_query(params)
-    |> Repo.all()
+    |> Repo.all(opts)
   end
 
   defp consumer_record_query(consumer_id, params) do

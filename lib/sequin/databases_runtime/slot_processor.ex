@@ -358,15 +358,19 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
-    {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
+    if env() == :test and reason == :shutdown do
+      {:noreply, state}
+    else
+      {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
 
-    Logger.error(
-      "[SlotProcessor] SlotMessageStore died. Shutting down.",
-      consumer_id: consumer_id,
-      reason: reason
-    )
+      Logger.error(
+        "[SlotProcessor] SlotMessageStore died. Shutting down.",
+        consumer_id: consumer_id,
+        reason: reason
+      )
 
-    {:stop, :message_store_down, state}
+      raise "SlotMessageStore died (consumer_id=#{consumer_id}, reason=#{inspect(reason)})"
+    end
   end
 
   @impl ReplicationConnection

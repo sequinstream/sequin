@@ -122,7 +122,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    page_size = Keyword.get(opts, :page_size, 100_000)
+    page_size = Keyword.get(opts, :page_size, 10_000)
 
     state = %State{
       id: backfill.id,

@@ -510,8 +510,7 @@ defmodule Sequin.Health do
     heartbeat_recv_event = find_event(events, :replication_heartbeat_received)
 
     cond do
-      (is_nil(heartbeat_recv_event) or is_nil(messages_processed_event)) and
-          Time.before_min_ago?(slot.inserted_at, 5) ->
+      is_nil(heartbeat_recv_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
         error =
           Error.invariant(
             message:

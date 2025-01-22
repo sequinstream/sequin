@@ -166,7 +166,7 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
+            <span class="text-sm font-medium text-gray-500">Avg latency</span>
             <Clock class="h-5 w-5 text-green-500" />
           </div>
           {#if metrics.avg_latency}

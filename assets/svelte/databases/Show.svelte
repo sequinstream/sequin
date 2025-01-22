@@ -57,6 +57,7 @@
   export let parent: string;
   export let metrics: {
     avg_latency: number;
+    avg_replication_lag: number;
   };
 
   let refreshingTables = writable(false);
@@ -109,18 +110,41 @@
 
       <Card>
         <CardContent class="p-6">
-          <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
+          <div class="flex justify-between items-start mb-4">
+            <h3 class="text-lg font-semibold">Metrics</h3>
             <Clock class="h-5 w-5 text-blue-500" />
           </div>
-          {#if metrics.avg_latency}
-            <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
-          {:else}
-            <div class="flex items-center">
-              <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
-              <span class="text-4xl font-bold text-gray-500">ms</span>
+          <div class="flex gap-12">
+            <div>
+              <span class="text-sm font-medium text-gray-500 mb-2 block"
+                >Avg latency</span
+              >
+              {#if metrics.avg_latency}
+                <div class="text-3xl font-bold">{metrics.avg_latency} ms</div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-6 w-6 text-gray-400 animate-spin mr-2" />
+                  <span class="text-3xl font-bold text-gray-500">ms</span>
+                </div>
+              {/if}
             </div>
-          {/if}
+
+            <div>
+              <span class="text-sm font-medium text-gray-500 mb-2 block"
+                >Avg replication lag</span
+              >
+              {#if metrics.avg_replication_lag}
+                <div class="text-3xl font-bold">
+                  {metrics.avg_replication_lag} ms
+                </div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-6 w-6 text-gray-400 animate-spin mr-2" />
+                  <span class="text-3xl font-bold text-gray-500">ms</span>
+                </div>
+              {/if}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

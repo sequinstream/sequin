@@ -277,8 +277,16 @@ defmodule SequinWeb.DatabasesLive.Show do
         {:error, _} -> nil
       end
 
+    avg_replication_lag =
+      case Metrics.get_replication_lag(database.replication_slot.id) do
+        {:ok, nil} -> nil
+        {:ok, avg_replication_lag} -> round(avg_replication_lag)
+        {:error, _} -> nil
+      end
+
     metrics = %{
-      avg_latency: avg_latency
+      avg_latency: avg_latency,
+      avg_replication_lag: avg_replication_lag
     }
 
     assign(socket, :metrics, metrics)

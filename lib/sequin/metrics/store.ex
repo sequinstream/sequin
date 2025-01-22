@@ -79,11 +79,11 @@ defmodule Sequin.Metrics.Store do
   end
 
   # Latency functions
-  @latency_windows 5
-  def incr_latency(key, value) do
+  @default_latency_windows 5
+  def measure_latency(key, value, window_count \\ @default_latency_windows) do
     [
       ["RPUSH", "metrics:latency:#{key}", value],
-      ["LTRIM", "metrics:latency:#{key}", -@latency_windows, -1]
+      ["LTRIM", "metrics:latency:#{key}", -window_count, -1]
     ]
     |> Redis.pipeline()
     |> case do

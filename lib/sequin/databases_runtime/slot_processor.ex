@@ -32,6 +32,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
+  alias Sequin.Metrics
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
@@ -385,7 +386,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     schedule_heartbeat(state)
     conn = get_cached_conn(state)
 
-    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '')") do
+    payload = Jason.encode!(%{emitted_at: Sequin.utc_now()})
+
+    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.1', '#{payload}')") do
       {:ok, _res} ->
         :ok
 
@@ -562,9 +565,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
+  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat." <> version} = msg, state) do
+    version = String.to_integer(version)
     Logger.info("[SlotProcessor] Heartbeat received")
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
+
+    if version > 0 do
+      %{"emitted_at" => emitted_at} = Jason.decode!(msg.content)
+      emitted_at = Sequin.Time.parse_timestamp!(emitted_at)
+      latency = DateTime.diff(DateTime.utc_now(), emitted_at, :millisecond)
+      Metrics.measure_replication_lag(state.replication_slot.id, latency)
+    end
 
     if state.test_pid do
       # TODO: Decouple

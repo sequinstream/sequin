@@ -32,11 +32,19 @@ defmodule Sequin.Metrics do
 
   # Database Average Latency
   def measure_database_avg_latency(%PostgresDatabase{id: id}, latency) do
-    Store.incr_latency("database_avg_latency:#{id}", latency)
+    Store.measure_latency("database_avg_latency:#{id}", latency)
   end
 
   def get_database_avg_latency(%PostgresDatabase{id: id}) do
     Store.get_latency("database_avg_latency:#{id}")
+  end
+
+  def measure_replication_lag(id, latency) do
+    Store.measure_latency("replication_lag:#{id}", latency, 3)
+  end
+
+  def get_replication_lag(id) do
+    Store.get_latency("replication_lag:#{id}")
   end
 
   # HTTP Endpoint Throughput
@@ -50,7 +58,7 @@ defmodule Sequin.Metrics do
 
   # HTTP Endpoint Average Latency
   def measure_http_endpoint_avg_latency(%HttpEndpoint{id: id}, latency) do
-    Store.incr_latency("http_endpoint_avg_latency:#{id}", latency)
+    Store.measure_latency("http_endpoint_avg_latency:#{id}", latency)
   end
 
   def get_http_endpoint_avg_latency(%HttpEndpoint{id: id}) do

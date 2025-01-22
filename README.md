@@ -92,20 +92,20 @@ You can also configure Sequin as code using YAML config files.
 
 ## Benchmarks
 
-Sequin delivers industry-leading performance for change data capture (CDC), consistently achieving sub-200ms latency at 2,000 sustained operations per second. Here's how Sequin compares to other solutions:
+Sequin delivers industry-leading performance for change data capture (CDC), sustaining **10k operations per second** with **33.9ms 99th percentile latency**.
 
-| Tool | Latency at 2k ops/s |
+| Tool | Latency at 10k ops/s |
 |------|-------------------|
-| **Sequin** | **192ms** |
-| Debezium | 234ms |
+| **Sequin** | **34ms** |
+| AWS MSK Debezium | 499ms |
 | Fivetran | 5 minutes |
 | Airbyte | 1+ hours |
 
 In our production benchmarks with AWS RDS Postgres and MSK Kafka, Sequin maintains consistent performance under sustained load:
 
-- Average throughput: 2,054.4 ops/sec
-- Average latency: 192ms
-- 99th percentile latency: 245ms
+- Average throughput: 10,000 ops/sec
+- Average latency: 22.3ms
+- 99th percentile latency: 33.9ms
 
 [Learn more](https://sequinstream.com/docs/performance) about Sequin's current performance in our docs.
 

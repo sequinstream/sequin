@@ -266,6 +266,7 @@
   function handleTableSelect(event: { databaseId: string; tableOid: number }) {
     if (form.tableOid !== event.tableOid) {
       form.sortColumnAttnum = null;
+      form.groupColumnAttnums = [];
       form.messageKind = "event";
     }
 

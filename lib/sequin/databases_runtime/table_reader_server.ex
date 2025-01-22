@@ -122,7 +122,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     max_pending_messages =
       Keyword.get(opts, :max_pending_messages, Application.get_env(:sequin, :backfill_max_pending_messages, 1_000_000))
 
-    page_size = Keyword.get(opts, :page_size, 10_000)
+    page_size = Keyword.get(opts, :page_size, 20_000)
 
     state = %State{
       id: backfill.id,
@@ -339,7 +339,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   def handle_event(:state_timeout, :check_batch_progress, :commit_batch, %State{} = state) do
-    Logger.info("[TableReaderServer] Checking batch progress for #{state.batch_id}")
+    Logger.debug("[TableReaderServer] Checking batch progress for #{state.batch_id}")
 
     case SlotMessageStore.batch_progress(state.consumer.id, state.batch_id) do
       {:ok, :completed} ->
@@ -363,7 +363,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         end
 
       {:ok, :in_progress} ->
-        Logger.info("[TableReaderServer] Batch #{state.batch_id} is in progress")
+        Logger.debug("[TableReaderServer] Batch #{state.batch_id} is in progress")
         # Increment check count and calculate next timeout
         state = %{state | batch_check_count: state.batch_check_count + 1}
 

@@ -62,12 +62,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     cond do
       state.disk_overflow_mode? ->
-        count = flush_messages_in_batches!(state, messages)
+        count = upsert_messages_in_batches!(state, messages)
         Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
         state
 
       map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
-        count = flush_messages_in_batches!(state, messages)
+        count = upsert_messages_in_batches!(state, messages)
         Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
         Logger.info("[SlotMessageStore] Entering disk overflow mode")
         %{state | disk_overflow_mode?: true}
@@ -83,13 +83,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     %{put_messages(state, messages) | table_reader_batch_id: batch_id}
   end
 
+  @doc """
+  Acknowledges messages and returns the updated state and the number of messages that were acknowledged.
+
+  If messages have been flushed to disk, we have to mark them as acknowledged and dirty- a flush will eventually delete
+  them from disk.
+
+  For unflushed messages we can simply delete them from the state.
+  """
   @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
   def ack(%State{} = state, ack_ids) do
-    initial_count = map_size(state.messages)
-    messages = Map.drop(state.messages, ack_ids)
-    final_count = map_size(messages)
+    acked_messages =
+      state.messages
+      |> Map.take(ack_ids)
+      |> Map.values()
+      |> Enum.map(fn msg -> %{msg | state: :acknowledged, dirty: true} end)
 
-    {%{state | messages: messages}, initial_count - final_count}
+    {update_messages(state, acked_messages), length(acked_messages)}
   end
 
   @spec nack(%State{}, %{SinkConsumer.ack_id() => SinkConsumer.not_visible_until()}) :: {%State{}, non_neg_integer()}
@@ -154,17 +164,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   def deliver_messages(%State{} = state, count) do
     state =
-      if state.disk_overflow_mode? and map_size(state.messages) < state.max_messages_in_memory / 2 do
+      if state.disk_overflow_mode? do
         Logger.debug("[SlotMessageStore] Re-loading messages from disk for delivery")
 
         # First we flush any dirty messages to disk
-        state.messages
-        |> Map.values()
-        |> Stream.filter(& &1.dirty)
-        |> then(&flush_messages_in_batches!(state, &1))
+        state = flush_all_messages(state)
 
         # Then we re-load messages from disk
-        load_messages(state)
+        state = load_messages(state)
+        state
       else
         state
       end
@@ -186,9 +194,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         }
       end)
 
-    state = update_messages(state, messages)
-
-    {state, messages}
+    {update_messages(state, messages), messages}
   end
 
   defp deliverable_messages(%State{} = state, count) do
@@ -197,6 +203,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     undeliverable_group_ids =
       state.messages
       |> Map.values()
+      |> Stream.reject(&(&1.state == :acknowledged))
       |> Enum.reduce(MapSet.new(), fn msg, acc ->
         if not is_nil(msg.not_visible_until) and DateTime.after?(msg.not_visible_until, now) do
           MapSet.put(acc, msg.group_id)
@@ -207,19 +214,38 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     state.messages
     |> Map.values()
+    |> Stream.reject(&(&1.state == :acknowledged))
     |> Enum.sort_by(& &1.seq)
     |> Sequin.Enum.take_until(count, fn msg ->
       not MapSet.member?(undeliverable_group_ids, msg.group_id)
     end)
   end
 
-  def flush_messages(%State{persisted_mode?: true} = state) do
+  def flush_message_batch(%State{persisted_mode?: true} = state) do
     flushed_at = DateTime.utc_now()
     {messages, more?} = messages_to_flush(state)
-    _count = flush_messages_to_postgres!(state, messages)
-    messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
-    {update_messages(state, messages), more?}
+    {to_ack, to_flush} = Enum.split_with(messages, &(&1.state == :acknowledged))
+
+    to_ack_ids = Enum.map(to_ack, & &1.ack_id)
+    Consumers.ack_messages(state.consumer, to_ack_ids)
+    state = %{state | messages: Map.drop(state.messages, to_ack_ids)}
+
+    _count = upsert_messages!(state, to_flush)
+
+    flushed = Enum.map(to_flush, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
+
+    {update_messages(state, flushed), more?}
+  end
+
+  defp flush_all_messages(%State{} = state) do
+    case flush_message_batch(state) do
+      {state, false} ->
+        state
+
+      {state, true} ->
+        flush_all_messages(state)
+    end
   end
 
   def batch_progress(%State{} = state, batch_id) do
@@ -238,7 +264,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         {:error, Error.invariant(message: "Batch mismatch. Expected #{batch_id} but got #{state.table_reader_batch_id}")}
 
       state.messages |> Map.values() |> Enum.any?(&(is_nil(&1.flushed_at) and &1.table_reader_batch_id == batch_id)) ->
-        Logger.info(
+        Logger.debug(
           "[SlotMessageStore] Batch is in progress",
           batch_id: state.table_reader_batch_id
         )
@@ -319,7 +345,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         # Only flush messages that were ingested before the flush wait time
         # This gives the ConsumerProducer time to pull, deliver, and ack messages
         # before we flush them to Postgres
-        flush_all? or Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
+        ready_for_flush? = msg.state == :acknowledged or Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
+        flush_all? or ready_for_flush?
       end)
       |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
       |> Enum.take(flush_batch_size)
@@ -327,21 +354,21 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     {to_flush, length(to_flush) == flush_batch_size}
   end
 
-  defp flush_messages_in_batches!(%State{} = state, messages) do
+  defp upsert_messages_in_batches!(%State{} = state, messages) do
     messages
     |> Stream.chunk_every(state.flush_batch_size)
     |> Enum.reduce(0, fn batch, acc ->
-      count = flush_messages_to_postgres!(state, batch)
+      count = upsert_messages!(state, batch)
       acc + count
     end)
   end
 
-  defp flush_messages_to_postgres!(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
+  defp upsert_messages!(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
     {:ok, count} = Consumers.upsert_consumer_events(messages)
     count
   end
 
-  defp flush_messages_to_postgres!(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
+  defp upsert_messages!(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
     {:ok, count} = Consumers.upsert_consumer_records(messages)
     count
   end

@@ -18,7 +18,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   """
   use GenServer
 
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
@@ -111,9 +110,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   """
   @spec ack(SinkConsumer.t(), list(ack_id())) :: :ok | {:error, Exception.t()}
   def ack(consumer, ack_ids) do
-    # Delete from database right away
-    Consumers.ack_messages(consumer, ack_ids)
-
     GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})
   catch
     :exit, e ->
@@ -189,7 +185,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @spec peek_messages(consumer_id(), pos_integer()) ::
           {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
-  def peek_messages(consumer_id, count) do
+  def peek_messages(consumer_id, count \\ 10) do
     GenServer.call(via_tuple(consumer_id), {:peek_messages, count})
   catch
     :exit, e ->
@@ -383,7 +379,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_info(:flush, state) do
-    {time, {state, more?}} = :timer.tc(fn -> State.flush_messages(state) end)
+    {time, {state, more?}} = :timer.tc(fn -> State.flush_message_batch(state) end)
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning("[SlotMessageStore] Flushed messages took longer than expected",

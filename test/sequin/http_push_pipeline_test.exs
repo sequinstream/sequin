@@ -250,9 +250,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
-      # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      # Verify that the consumer record has been acked
+      messages = SlotMessageStore.peek_messages(consumer.id)
+      assert Enum.all?(messages, &(&1.state == :acknowledged))
     end
 
     @tag capture_log: true
@@ -310,9 +310,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {ConsumerProducer, :ack_finished, [], [_failed2]}, 2_000
 
       # Reload the events from the database to check not_visible_until
-      %SlotMessageStore.State{} = state = SlotMessageStore.peek(consumer.id)
-      updated_event1 = Map.fetch!(state.messages, event1.ack_id)
-      updated_event2 = Map.fetch!(state.messages, event2.ack_id)
+      messages = SlotMessageStore.peek_messages(consumer.id)
+      updated_event1 = Enum.find(messages, &(&1.ack_id == event1.ack_id))
+      updated_event2 = Enum.find(messages, &(&1.ack_id == event2.ack_id))
 
       assert updated_event1.not_visible_until
       assert updated_event2.not_visible_until
@@ -409,9 +409,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
-      # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      # Verify that the consumer record has been acked
+      messages = SlotMessageStore.peek_messages(consumer.id)
+      assert Enum.all?(messages, &(&1.state == :acknowledged))
     end
 
     test "legacy event transform is applied when feature flag is enabled", %{consumer: consumer} do
@@ -478,9 +478,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 5_000
 
-      # Verify that the consumer record has been processed (deleted on ack)
-      state = SlotMessageStore.peek(consumer.id)
-      assert state.messages == %{}
+      # Verify that the consumer record has been acked
+      messages = SlotMessageStore.peek_messages(consumer.id)
+      assert Enum.all?(messages, &(&1.state == :acknowledged))
     end
   end
 

@@ -152,7 +152,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       |> Ecto.Changeset.change(%{initial_min_cursor: initial_min_cursor})
       |> Repo.update!()
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
@@ -197,7 +197,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       Process.monitor(pid)
@@ -233,7 +233,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
@@ -255,7 +255,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
-      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10})
       pid = start_table_reader_server(backfill, table_oid, page_size: page_size)
 
       {:ok, messages} = flush_batches(consumer, pid)
@@ -283,7 +283,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       page_size = 10
 
-      start_supervised({SlotMessageStore, consumer: filtered_consumer, test_pid: self()})
+      start_supervised(
+        {SlotMessageStore, consumer: filtered_consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10}
+      )
+
       pid = start_table_reader_server(filtered_consumer_backfill, table_oid, page_size: page_size)
 
       {:ok, messages} = flush_batches(filtered_consumer, pid)
@@ -322,7 +325,10 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      start_supervised({SlotMessageStore, consumer: event_consumer, test_pid: self()})
+      start_supervised(
+        {SlotMessageStore, consumer: event_consumer, test_pid: self(), flush_interval: 10, flush_wait_ms: 10}
+      )
+
       pid = start_table_reader_server(event_consumer_backfill, table_oid, page_size: page_size)
 
       {:ok, messages} = flush_batches(event_consumer, pid)

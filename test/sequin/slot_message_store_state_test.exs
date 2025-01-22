@@ -146,7 +146,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "flush_messages/1" do
+  describe "flush_message_batch/1" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
@@ -203,7 +203,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       state = %{state | messages: messages}
 
       pre_flush_datetime = DateTime.utc_now()
-      {state, more?} = State.flush_messages(state)
+      {state, more?} = State.flush_message_batch(state)
       assert more?, "Should be more messages to flush"
       messages = Map.values(state.messages)
 
@@ -224,7 +224,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       state = %{state | messages: Map.new(messages, &{&1.ack_id, &1})}
 
-      {state, more?} = State.flush_messages(state)
+      {state, more?} = State.flush_message_batch(state)
       assert more?, "Should be more messages to flush"
       messages = Map.values(state.messages)
 
@@ -255,7 +255,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       state = %{state | messages: messages}
 
       pre_flush_datetime = DateTime.utc_now()
-      {state, more?} = State.flush_messages(state)
+      {state, more?} = State.flush_message_batch(state)
       refute more?, "Should not be more messages to flush"
       messages = Map.values(state.messages)
 
@@ -281,7 +281,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       state = %{state | messages: Map.new([recent_message, old_message], &{&1.ack_id, &1})}
 
-      {state, more?} = State.flush_messages(state)
+      {state, more?} = State.flush_message_batch(state)
       refute more?, "Should not be more messages to flush"
       messages = Map.values(state.messages)
 

@@ -9,10 +9,12 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
 
   alias Sequin.Consumers
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
+  alias Sequin.Databases
   alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Health.CheckSinkConfigurationWorker
+  alias Sequin.Repo
 
   require Logger
 
@@ -45,6 +47,9 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
     case event do
       "create" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
+          consumer = Repo.preload(consumer, :postgres_database)
+          # Lazy, just do this on every sink create. Eventually, we'll retire Sequence
+          Databases.update_sequences_from_db(consumer.postgres_database)
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
           ConsumersSupervisor.start_for_sink_consumer(consumer)
           :ok = SlotSupervisor.start_message_store!(consumer)

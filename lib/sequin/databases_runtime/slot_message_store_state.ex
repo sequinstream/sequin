@@ -2,6 +2,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   @moduledoc false
   use TypedStruct
 
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
@@ -9,6 +10,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   alias Sequin.Error
 
   require Logger
+
+  @trim_allow_consumer_id_allow_list ~w(
+    c4192100-f55e-4203-9836-3a00398d2876
+    b4558a5c-ef60-4d4e-8950-237ac53efbee
+  )
+
+  defguardp event_messages?(state) when state.consumer.message_kind == :event
+  defguardp record_messages?(state) when state.consumer.message_kind == :record
 
   typedstruct do
     field :consumer, SinkConsumer.t()
@@ -26,16 +35,35 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   def max_messages_in_memory, do: 10_000
 
+  def init_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
+
+  def init_from_postgres(%State{persisted_mode?: true} = state) do
+    case Consumers.get_sink_consumer(state.consumer_id) do
+      {:ok, consumer} ->
+        Logger.metadata(account_id: consumer.account_id)
+
+        Logger.info("[SlotMessageStore] Loading messages...")
+        {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
+        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), duration_ms: div(time, 1000))
+
+        {:ok, %{state | consumer: consumer, messages: messages}}
+
+      {:error, %Error.NotFoundError{entity: :consumer} = error} ->
+        Logger.error("[SlotMessageStore] Consumer not found", consumer_id: state.consumer_id)
+        {:error, error}
+    end
+  end
+
   def put_messages(%State{} = state, messages) do
     now = DateTime.utc_now()
 
     messages =
       messages
-      |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true, ingested_at: now} end)
       |> Stream.reject(fn
         %ConsumerRecord{deleted: true} -> true
         _ -> false
       end)
+      |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true, ingested_at: now} end)
       |> Map.new(&{&1.ack_id, &1})
 
     %{state | messages: Map.merge(state.messages, messages)}
@@ -155,33 +183,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         }
       end)
 
-    # Replace old messages with updated ones in state
     state = update_messages(state, messages)
 
     {state, messages}
   end
 
-  def messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size, flush_wait_ms: flush_wait_ms}) do
-    flush_all? = map_size(messages) > max_messages_in_memory()
-
-    messages
-    |> Map.values()
-    |> Stream.filter(& &1.dirty)
-    |> Stream.filter(fn msg ->
-      # Only flush messages that were ingested before the flush wait time
-      # This gives the ConsumerProducer time to pull, deliver, and ack messages
-      # before we flush them to Postgres
-      flush_all? or Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
-    end)
-    |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
-    |> Enum.take(flush_batch_size)
-  end
-
-  def flush_messages(%State{persisted_mode?: true} = state, messages) do
+  def flush_messages(%State{persisted_mode?: true} = state) do
     flushed_at = DateTime.utc_now()
+    {messages, more?} = messages_to_flush(state)
+    {:ok, _} = flush_messages_to_postgres(state, messages)
     messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
-    update_messages(state, messages)
+    {update_messages(state, messages), more?}
   end
 
   def batch_progress(%State{} = state, batch_id) do
@@ -232,10 +245,68 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     end)
   end
 
+  @spec count_messages(%State{}) :: non_neg_integer()
+  def count_messages(%State{messages: messages}), do: map_size(messages)
+
   defp update_messages(%State{} = state, messages) do
     messages = Map.new(messages, &{&1.ack_id, &1})
 
     %{state | messages: Map.merge(state.messages, messages)}
+  end
+
+  defp load_messages(consumer, limit \\ max_messages_in_memory())
+
+  defp load_messages(%SinkConsumer{message_kind: :event, id: id} = consumer, limit) do
+    now = DateTime.utc_now()
+    params = load_params(consumer, limit)
+
+    id
+    |> Consumers.list_consumer_events_for_consumer(params, timeout: :timer.seconds(45))
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
+    |> Map.new(&{&1.ack_id, &1})
+  end
+
+  defp load_messages(%SinkConsumer{message_kind: :record, id: id} = consumer, limit) do
+    now = DateTime.utc_now()
+    params = load_params(consumer, limit)
+
+    id
+    |> Consumers.list_consumer_records_for_consumer(params, timeout: :timer.seconds(45))
+    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
+    |> Map.new(&{&1.ack_id, &1})
+  end
+
+  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list do
+    [limit: limit, order_by: {:asc, :seq}]
+  end
+
+  defp load_params(%SinkConsumer{}, _limit), do: []
+
+  defp messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size, flush_wait_ms: flush_wait_ms}) do
+    flush_all? = map_size(messages) > max_messages_in_memory()
+
+    to_flush =
+      messages
+      |> Map.values()
+      |> Stream.filter(& &1.dirty)
+      |> Stream.filter(fn msg ->
+        # Only flush messages that were ingested before the flush wait time
+        # This gives the ConsumerProducer time to pull, deliver, and ack messages
+        # before we flush them to Postgres
+        flush_all? or Sequin.Time.before_ms_ago?(msg.ingested_at, flush_wait_ms)
+      end)
+      |> Enum.sort_by(& &1.flushed_at, &compare_flushed_at/2)
+      |> Enum.take(flush_batch_size)
+
+    {to_flush, length(to_flush) == flush_batch_size}
+  end
+
+  defp flush_messages_to_postgres(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
+    {:ok, _count} = Consumers.upsert_consumer_events(messages)
+  end
+
+  defp flush_messages_to_postgres(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
+    {:ok, _count} = Consumers.upsert_consumer_records(messages)
   end
 
   # Helper function to compare flushed_at values where nil is "smaller" than any DateTime

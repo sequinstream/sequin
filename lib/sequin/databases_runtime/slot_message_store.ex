@@ -35,14 +35,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @min_log_time_ms 200
 
-  @trim_allow_consumer_id_allow_list ~w(
-    c4192100-f55e-4203-9836-3a00398d2876
-    b4558a5c-ef60-4d4e-8950-237ac53efbee
-  )
-
-  defguardp event_messages?(state) when state.consumer.message_kind == :event
-  defguardp record_messages?(state) when state.consumer.message_kind == :record
-
   @type consumer_id :: String.t()
   @type ack_id :: String.t()
   @type not_visible_until :: DateTime.t()
@@ -51,7 +43,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   def start_link(opts \\ []) do
     consumer = opts[:consumer]
     consumer_id = if consumer, do: consumer.id, else: Keyword.fetch!(opts, :consumer_id)
-    GenServer.start_link(__MODULE__, opts, id: via_tuple(consumer_id), name: via_tuple(consumer_id))
+    GenServer.start_link(__MODULE__, opts, name: via_tuple(consumer_id))
   end
 
   @spec via_tuple(consumer_id()) :: {:via, :syn, {:replication, {module(), consumer_id()}}}
@@ -259,7 +251,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     schedule_process_logging()
     schedule_flush(state)
 
-    case load_from_postgres(state) do
+    case State.init_from_postgres(state) do
       {:ok, state} -> {:noreply, state}
       {:error, _} -> {:stop, :normal, state}
     end
@@ -267,9 +259,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_messages, messages}, _from, %State{} = state) do
-    initial_count = map_size(state.messages)
+    initial_count = State.count_messages(state)
     {time, state} = :timer.tc(fn -> State.put_messages(state, messages) end)
-    new_count = map_size(state.messages)
+    new_count = State.count_messages(state)
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
@@ -295,7 +287,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         "[SlotMessageStore] Put table reader batch",
         count: length(messages),
         duration_ms: div(time, 1000),
-        message_count: map_size(state.messages)
+        message_count: State.count_messages(state)
       )
     end
 
@@ -322,7 +314,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         "[SlotMessageStore] Produce messages took longer than expected",
         count: length(messages),
         duration_ms: div(time, 1000),
-        message_count: map_size(state.messages)
+        message_count: State.count_messages(state)
       )
     end
 
@@ -349,7 +341,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       "[SlotMessageStore] Acked messages",
       count: acked_count,
       duration_ms: div(time, 1000),
-      message_count: map_size(state.messages)
+      message_count: State.count_messages(state)
     )
 
     Health.put_event(state.consumer, %Event{slug: :messages_delivered, status: :success})
@@ -409,7 +401,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call(:count_messages, _from, state) do
-    {:reply, map_size(state.messages), state}
+    {:reply, State.count_messages(state), state}
   end
 
   def handle_call(:peek, _from, state) do
@@ -426,27 +418,25 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_info(:flush, state) do
-    to_flush = State.messages_to_flush(state)
-    more? = length(to_flush) == state.flush_batch_size
-
-    {time, state} = :timer.tc(fn -> flush_messages(state, to_flush) end)
+    {time, {state, more?}} = :timer.tc(fn -> State.flush_messages(state) end)
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning("[SlotMessageStore] Flushed messages took longer than expected",
-        count: length(to_flush),
-        message_count: map_size(state.messages),
-        duration_ms: div(time, 1000)
+        more?: more?,
+        duration_ms: div(time, 1000),
+        message_count: State.count_messages(state),
+        flush_batch_size: state.flush_batch_size
       )
     end
 
     if more? do
       Process.send_after(self(), :flush, 0)
-      {:noreply, state}
     else
       Logger.info("[SlotMessageStore] Finished flushing messages")
       schedule_flush(state)
-      {:noreply, trim_or_load_messages(state)}
     end
+
+    {:noreply, state}
   end
 
   def handle_info(:process_logging, state) do
@@ -467,68 +457,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
-  defp load_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
-
-  defp load_from_postgres(%State{persisted_mode?: true} = state) do
-    case Consumers.get_sink_consumer(state.consumer_id) do
-      {:ok, consumer} ->
-        Logger.metadata(account_id: consumer.account_id)
-
-        Logger.info("[SlotMessageStore] Loading messages...")
-        {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
-        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), duration_ms: div(time, 1000))
-
-        {:ok, %{state | messages: messages, consumer: consumer}}
-
-      {:error, %Error.NotFoundError{entity: :consumer} = error} ->
-        Logger.error("[SlotMessageStore] Consumer not found", consumer_id: state.consumer_id)
-        {:error, error}
-    end
-  end
-
-  defp flush_messages(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
-    {:ok, _count} = Consumers.upsert_consumer_events(messages)
-    State.flush_messages(state, messages)
-  end
-
-  defp flush_messages(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
-    {:ok, _count} = Consumers.upsert_consumer_records(messages)
-    State.flush_messages(state, messages)
-  end
-
-  defp trim_or_load_messages(%State{consumer_id: consumer_id} = state)
-       when consumer_id not in @trim_allow_consumer_id_allow_list,
-       do: state
-
-  defp trim_or_load_messages(%State{persisted_mode?: false} = state), do: state
-
-  defp trim_or_load_messages(%State{persisted_mode?: true} = state) do
-    cond do
-      map_size(state.messages) > State.max_messages_in_memory() ->
-        Logger.info("[SlotMessageStore] Trimming messages")
-
-        messages =
-          state.messages
-          |> Map.values()
-          |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
-          |> Enum.take(State.max_messages_in_memory())
-          |> Map.new(&{&1.ack_id, &1})
-
-        %{state | messages: messages}
-
-      map_size(state.messages) == State.max_messages_in_memory() ->
-        Logger.info("[SlotMessageStore] Already at max messages in memory")
-        state
-
-      true ->
-        limit = State.max_messages_in_memory() - map_size(state.messages)
-        Logger.info("[SlotMessageStore] Loading messages", count: limit)
-
-        messages = load_messages(state.consumer, limit)
-        %{state | messages: Map.merge(state.messages, messages)}
-    end
-  end
-
   defp schedule_process_logging do
     Process.send_after(self(), :process_logging, :timer.seconds(30))
   end
@@ -538,34 +466,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp schedule_flush(%State{persisted_mode?: true} = state) do
     Process.send_after(self(), :flush, state.flush_interval)
   end
-
-  defp load_messages(consumer, limit \\ State.max_messages_in_memory())
-
-  defp load_messages(%SinkConsumer{message_kind: :event, id: id} = consumer, limit) do
-    now = DateTime.utc_now()
-    params = load_params(consumer, limit)
-
-    id
-    |> Consumers.list_consumer_events_for_consumer(params, timeout: :timer.seconds(120))
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
-    |> Map.new(&{&1.ack_id, &1})
-  end
-
-  defp load_messages(%SinkConsumer{message_kind: :record, id: id} = consumer, limit) do
-    now = DateTime.utc_now()
-    params = load_params(consumer, limit)
-
-    id
-    |> Consumers.list_consumer_records_for_consumer(params, timeout: :timer.seconds(120))
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
-    |> Map.new(&{&1.ack_id, &1})
-  end
-
-  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list do
-    [limit: limit, order_by: [asc: :commit_lsn, asc: :commit_idx]]
-  end
-
-  defp load_params(%SinkConsumer{}, _limit), do: []
 
   defp exit_to_sequin_error({:noproc, _}) do
     Error.invariant(message: "[SlotMessageStore] exited with :noproc")

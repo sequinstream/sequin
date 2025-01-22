@@ -570,6 +570,20 @@ defmodule Sequin.Factory.ConsumersFactory do
     end)
   end
 
+  def insert_consumer_message!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {consumer_id, attrs} =
+      Map.pop_lazy(attrs, :consumer_id, fn ->
+        ConsumersFactory.insert_sink_consumer!(message_kind: attrs[:message_kind]).id
+      end)
+
+    attrs
+    |> Map.put(:consumer_id, consumer_id)
+    |> consumer_message()
+    |> Repo.insert!()
+  end
+
   def consumer_message(attrs \\ []) do
     attrs = Map.new(attrs)
     {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)

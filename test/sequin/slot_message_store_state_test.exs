@@ -1,16 +1,17 @@
 defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Consumers
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Factory.ConsumersFactory
 
-  describe "put_messages/2 with :event messages" do
+  describe "put_messages/2" do
     setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :event)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
       state = %State{
         consumer: consumer,
-        messages: %{},
         flush_interval: 1000,
         flush_batch_size: 100,
         flush_wait_ms: 1
@@ -19,91 +20,38 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       {:ok, %{state: state}}
     end
 
-    test "merges new event messages into empty state", %{state: state} do
-      event1 = ConsumersFactory.consumer_event()
-      event2 = ConsumersFactory.consumer_event()
-      expect_uuid4(fn -> event1.ack_id end)
-      expect_uuid4(fn -> event2.ack_id end)
-      state = State.put_messages(state, [event1, event2])
+    test "merges new messages into empty state", %{state: state} do
+      message1 = ConsumersFactory.consumer_message(message_kind: state.consumer.message_kind)
+      message2 = ConsumersFactory.consumer_message(message_kind: state.consumer.message_kind)
 
-      assert map_size(state.messages) == 2
-      assert Map.has_key?(state.messages, event1.ack_id)
-      assert Map.has_key?(state.messages, event2.ack_id)
+      state = State.put_messages(state, [message1, message2])
+
+      messages = State.peek_messages(state, 1000)
+      assert_same_messages(messages, [message1, message2])
     end
 
-    test "merges new event messages with existing messages", %{state: state} do
+    test "merges new messages with existing messages", %{state: state} do
       # Add initial message
-      event1 = ConsumersFactory.consumer_event()
-      expect_uuid4(fn -> event1.ack_id end)
-      state = State.put_messages(state, [event1])
+      message1 = ConsumersFactory.consumer_message(message_kind: state.consumer.message_kind)
+      state = State.put_messages(state, [message1])
 
       # Add new message
-      event2 = ConsumersFactory.consumer_event()
-      expect_uuid4(fn -> event2.ack_id end)
-      updated_state = State.put_messages(state, [event2])
+      message2 = ConsumersFactory.consumer_message(message_kind: state.consumer.message_kind)
+      updated_state = State.put_messages(state, [message2])
 
-      assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, event1.ack_id)
-      assert Map.has_key?(updated_state.messages, event2.ack_id)
-    end
-  end
-
-  describe "put_messages/2 with :record messages" do
-    setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
-
-      state = %State{
-        consumer: consumer,
-        messages: %{},
-        flush_interval: 1000,
-        flush_batch_size: 100,
-        flush_wait_ms: 1
-      }
-
-      {:ok, %{state: state}}
-    end
-
-    test "merges new record messages into empty state", %{state: state} do
-      record1 = ConsumersFactory.consumer_record()
-      record2 = ConsumersFactory.consumer_record()
-      expect_uuid4(fn -> record1.ack_id end)
-      expect_uuid4(fn -> record2.ack_id end)
-
-      state = State.put_messages(state, [record1, record2])
-
-      assert map_size(state.messages) == 2
-      assert Map.has_key?(state.messages, record1.ack_id)
-      assert Map.has_key?(state.messages, record2.ack_id)
-    end
-
-    test "merges new record messages with existing messages", %{state: state} do
-      # Add initial message
-      record1 = ConsumersFactory.consumer_record()
-      expect_uuid4(fn -> record1.ack_id end)
-      state = State.put_messages(state, [record1])
-
-      # Add new message
-      record2 = ConsumersFactory.consumer_record()
-      expect_uuid4(fn -> record2.ack_id end)
-      updated_state = State.put_messages(state, [record2])
-
-      assert map_size(updated_state.messages) == 2
-      assert Map.has_key?(updated_state.messages, record1.ack_id)
-      assert Map.has_key?(updated_state.messages, record2.ack_id)
+      assert_same_messages(State.peek_messages(updated_state, 1000), [message1, message2])
     end
   end
 
   describe "deliver_messages/2" do
     setup do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
       state = %State{
         consumer: consumer,
-        messages: %{},
         flush_interval: 1000,
         flush_batch_size: 100,
-        flush_wait_ms: 1,
-        max_messages_in_memory: 5
+        flush_wait_ms: 1
       }
 
       {:ok, %{state: state}}
@@ -113,13 +61,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       future_time = DateTime.add(DateTime.utc_now(), 30, :second)
 
       visible_msg =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_message(
           seq: 1,
           not_visible_until: nil
         )
 
       invisible_msg =
-        ConsumersFactory.consumer_record(
+        ConsumersFactory.consumer_message(
           seq: 2,
           not_visible_until: future_time
         )
@@ -138,9 +86,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       future_time = DateTime.add(DateTime.utc_now(), 30, :second)
 
       # Create three messages in same group, one pending
-      msg1 = ConsumersFactory.consumer_record(seq: 1, group_id: group_id)
-      msg2 = ConsumersFactory.consumer_record(seq: 2, group_id: group_id, not_visible_until: future_time)
-      msg3 = ConsumersFactory.consumer_record(seq: 3, group_id: group_id)
+      msg1 = ConsumersFactory.consumer_message(seq: 1, group_id: group_id)
+      msg2 = ConsumersFactory.consumer_message(seq: 2, group_id: group_id, not_visible_until: future_time)
+      msg3 = ConsumersFactory.consumer_message(seq: 3, group_id: group_id)
 
       messages = Map.new([msg1, msg2, msg3], &{&1.ack_id, &1})
       state = %{state | messages: messages}
@@ -391,6 +339,131 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
+  describe "disk_overflow_mode?" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      state = %State{
+        consumer: consumer,
+        consumer_id: consumer.id,
+        flush_batch_size: 2,
+        disk_overflow_mode?: false,
+        max_messages_in_memory: 3
+      }
+
+      {:ok, %{state: state}}
+    end
+
+    test "init_from_postgres/1 enters disk_overflow_mode? when messages on disk exceeds max_messages_in_memory", %{
+      state: state
+    } do
+      message_count = state.max_messages_in_memory + 10
+
+      messages =
+        for i <- 1..message_count do
+          ConsumersFactory.insert_consumer_message!(
+            seq: i,
+            consumer_id: state.consumer.id,
+            message_kind: state.consumer.message_kind
+          )
+        end
+
+      messages = Enum.sort_by(messages, & &1.seq)
+
+      assert {:ok, state} = State.init_from_postgres(state)
+      assert state.disk_overflow_mode?
+
+      # Loads the lowest seq messages into memory
+      expected_loaded = Enum.take(messages, state.max_messages_in_memory)
+      assert_same_messages(State.peek_messages(state, 1000), expected_loaded)
+    end
+
+    test "put_messages/2 flushes incoming message to disk when disk_overflow_mode? is true", %{state: state} do
+      state = %{state | disk_overflow_mode?: true}
+
+      message =
+        ConsumersFactory.consumer_message(consumer_id: state.consumer.id, message_kind: state.consumer.message_kind)
+
+      state = State.put_messages(state, [message])
+
+      assert State.peek_messages(state, 1000) == []
+      assert_same_messages(list_db_messages(state.consumer), [message])
+    end
+
+    test "put_messages/2 enters disk_overflow_mode? when max_messages_in_memory is reached", %{state: state} do
+      message_count = state.max_messages_in_memory + 10
+
+      messages =
+        for _ <- 1..message_count do
+          ConsumersFactory.consumer_message(consumer_id: state.consumer.id, message_kind: state.consumer.message_kind)
+        end
+
+      state = State.put_messages(state, messages)
+      assert state.disk_overflow_mode?
+
+      assert State.peek_messages(state, 1000) == []
+      assert_same_messages(list_db_messages(state.consumer), messages)
+    end
+
+    test "put_table_reader_batch/3 flushes incoming message to disk when disk_overflow_mode? is true", %{state: state} do
+      state = %{state | disk_overflow_mode?: true}
+
+      message =
+        ConsumersFactory.consumer_message(consumer_id: state.consumer.id, message_kind: state.consumer.message_kind)
+
+      state = State.put_table_reader_batch(state, [message], "batch-1")
+      assert state.table_reader_batch_id == "batch-1"
+
+      assert State.peek_messages(state, 1000) == []
+      assert_same_messages(list_db_messages(state.consumer), [message])
+
+      assert State.batch_progress(state, "batch-1") == {:ok, :completed}
+    end
+
+    test "put_table_reader_batch/3 enters disk_overflow_mode? when max_messages_in_memory is reached", %{state: state} do
+      message_count = state.max_messages_in_memory + 10
+
+      messages =
+        for _ <- 1..message_count do
+          ConsumersFactory.consumer_message(consumer_id: state.consumer.id, message_kind: state.consumer.message_kind)
+        end
+
+      state = State.put_table_reader_batch(state, messages, "batch-1")
+      assert state.disk_overflow_mode?
+      assert state.table_reader_batch_id == "batch-1"
+
+      assert State.peek_messages(state, 1000) == []
+      assert_same_messages(list_db_messages(state.consumer), messages)
+
+      assert State.batch_progress(state, "batch-1") == {:ok, :completed}
+    end
+
+    test "deliver_messages/2 loads messages with lowest seqs from db when messages in memory is low", %{state: state} do
+      state = %{state | disk_overflow_mode?: true}
+      message_count = state.max_messages_in_memory * 3
+
+      messages =
+        for i <- 1..message_count do
+          ConsumersFactory.insert_consumer_message!(
+            seq: i,
+            consumer_id: state.consumer.id,
+            message_kind: state.consumer.message_kind
+          )
+        end
+
+      messages = Enum.sort_by(messages, & &1.seq)
+      assert State.peek_messages(state, 1000) == []
+
+      {state, delivered} = State.deliver_messages(state, 2)
+      expected_delivered = Enum.take(messages, 2)
+      assert_same_messages(delivered, expected_delivered)
+
+      # Messages were loaded into memory
+      expected_loaded = Enum.take(messages, state.max_messages_in_memory)
+      assert_same_messages(State.peek_messages(state, 1000), expected_loaded)
+    end
+  end
+
   describe "peek_messages/2" do
     test "returns messages in seq order" do
       state = %State{
@@ -410,5 +483,29 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert peeked_messages = State.peek_messages(state, 3)
       assert Enum.map(peeked_messages, & &1.seq) == [1, 2, 3]
     end
+  end
+
+  defp assert_same_messages(messages1, messages2) do
+    assert_lists_equal(
+      messages1,
+      messages2,
+      &assert_maps_equal(&1, &2, [
+        :consumer_id,
+        :commit_lsn,
+        :seq,
+        :record_pks,
+        :group_id,
+        :table_oid,
+        :data
+      ])
+    )
+  end
+
+  defp list_db_messages(%SinkConsumer{id: consumer_id, message_kind: :event}) do
+    Consumers.list_consumer_events_for_consumer(consumer_id)
+  end
+
+  defp list_db_messages(%SinkConsumer{id: consumer_id, message_kind: :record}) do
+    Consumers.list_consumer_records_for_consumer(consumer_id)
   end
 end

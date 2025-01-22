@@ -131,4 +131,48 @@ defmodule Sequin.SlotMessageStoreTest do
       {:ok, []} = SlotMessageStore.produce(consumer.id, 2)
     end
   end
+
+  describe "disk_overflow_mode?" do
+    setup do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_configured_postgres_database!(account_id: account.id, tables: :character_tables)
+      ConnectionCache.cache_connection(database, Sequin.Repo)
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          account_id: account.id,
+          postgres_database_id: database.id
+        )
+
+      start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self(), max_messages_in_memory: 3})
+
+      %{consumer: consumer}
+    end
+
+    test "deliver_messages/2 and ack/2 will eventually exit disk_overflow_mode?", %{consumer: consumer} do
+      message_count = 20
+
+      messages =
+        for i <- 1..message_count do
+          ConsumersFactory.consumer_message(
+            seq: i,
+            consumer_id: consumer.id,
+            message_kind: consumer.message_kind
+          )
+        end
+
+      # putting large number of messages in store should enter disk_overflow_mode?
+      assert :ok = SlotMessageStore.put_messages(consumer.id, messages)
+      assert SlotMessageStore.peek(consumer.id).disk_overflow_mode?
+
+      # 10 iterations with batch size of 2 -> 20 messages delivered / acked
+      Enum.each(0..10, fn _ ->
+        {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2)
+        ack_ids = Enum.map(delivered, & &1.ack_id)
+        {:ok, _} = SlotMessageStore.ack(consumer, ack_ids)
+      end)
+
+      refute SlotMessageStore.peek(consumer.id).disk_overflow_mode?
+    end
+  end
 end

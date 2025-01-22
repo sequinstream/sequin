@@ -11,11 +11,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   require Logger
 
-  @disk_overflow_allow_list ~w(
-    c4192100-f55e-4203-9836-3a00398d2876
-    b4558a5c-ef60-4d4e-8950-237ac53efbee
-  )
-
   defguardp event_messages?(state) when state.consumer.message_kind == :event
   defguardp record_messages?(state) when state.consumer.message_kind == :record
 
@@ -71,8 +66,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
         state
 
-      not state.disk_overflow_mode? and state.consumer_id in @disk_overflow_allow_list and
-          map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
+      map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
         count = flush_messages_in_batches!(state, messages)
         Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
         Logger.info("[SlotMessageStore] Entering disk overflow mode")
@@ -85,23 +79,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   end
 
   def put_table_reader_batch(%State{} = state, messages, batch_id) do
-    cond do
-      state.disk_overflow_mode? ->
-        count = flush_messages_in_batches!(state, messages)
-        Logger.debug("[SlotMessageStore] Flushed incoming table reader batch to disk", count: count)
-        %{state | table_reader_batch_id: batch_id}
-
-      not state.disk_overflow_mode? and state.consumer_id in @disk_overflow_allow_list and
-          map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
-        count = flush_messages_in_batches!(state, messages)
-        Logger.debug("[SlotMessageStore] Flushed incoming table reader batch to disk", count: count)
-        Logger.info("[SlotMessageStore] Entering disk overflow mode")
-        %{state | table_reader_batch_id: batch_id, disk_overflow_mode?: true}
-
-      true ->
-        messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
-        %{put_messages(state, messages) | table_reader_batch_id: batch_id}
-    end
+    messages = Stream.map(messages, &%{&1 | table_reader_batch_id: batch_id})
+    %{put_messages(state, messages) | table_reader_batch_id: batch_id}
   end
 
   @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
@@ -175,7 +154,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   def deliver_messages(%State{} = state, count) do
     state =
-      if state.disk_overflow_mode? and map_size(state.messages) < div(state.max_messages_in_memory, 2) do
+      if state.disk_overflow_mode? and map_size(state.messages) < state.max_messages_in_memory / 2 do
         Logger.debug("[SlotMessageStore] Re-loading messages from disk for delivery")
 
         # First we flush any dirty messages to disk
@@ -291,16 +270,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     {:ok, messages} =
       Sequin.Repo.transaction(fn ->
         now = DateTime.utc_now()
-        params = load_params(state)
+        params = [limit: state.max_messages_in_memory, order_by: {:asc, :seq}]
+        opts = [timeout: :timer.seconds(45)]
 
         state
-        |> list_events_or_records(params, timeout: :timer.seconds(45))
+        |> list_events_or_records(params, opts)
         |> Stream.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
         |> Map.new(&{&1.ack_id, &1})
       end)
 
-    disk_overflow_mode? =
-      state.consumer_id in @disk_overflow_allow_list and map_size(messages) == state.max_messages_in_memory
+    disk_overflow_mode? = map_size(messages) == state.max_messages_in_memory
 
     case {state.disk_overflow_mode?, disk_overflow_mode?} do
       {true, false} ->
@@ -323,12 +302,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   defp list_events_or_records(%State{} = state, params, opts) when event_messages?(state) do
     Consumers.stream_consumer_events_for_consumer(state.consumer.id, params, opts)
   end
-
-  defp load_params(%State{consumer: %SinkConsumer{id: id}} = state) when id in @disk_overflow_allow_list do
-    [limit: state.max_messages_in_memory, order_by: {:asc, :seq}]
-  end
-
-  defp load_params(%State{consumer: %SinkConsumer{}}), do: []
 
   defp messages_to_flush(%State{
          messages: messages,

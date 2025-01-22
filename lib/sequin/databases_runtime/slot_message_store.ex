@@ -230,6 +230,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       flush_batch_size: Keyword.get(opts, :flush_batch_size, 1_000),
       flush_interval: Keyword.get(opts, :flush_interval, :timer.seconds(10)),
       flush_wait_ms: Keyword.get(opts, :flush_wait_ms, :timer.seconds(60)),
+      max_messages_in_memory: Keyword.get(opts, :max_messages_in_memory, 10_000),
       persisted_mode?: Keyword.get(opts, :persisted_mode?, true),
       test_pid: Keyword.get(opts, :test_pid)
     }

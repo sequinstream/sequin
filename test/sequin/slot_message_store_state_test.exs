@@ -213,9 +213,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "messages_to_flush/1" do
+  describe "flush_messages/1" do
     setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       state = %State{
         consumer: consumer,
@@ -230,107 +230,129 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
 
     test "prioritizes never-flushed messages", %{state: state, two_minutes_ago: two_minutes_ago} do
-      never_flushed1 = ConsumersFactory.consumer_record(flushed_at: nil, dirty: true, ingested_at: two_minutes_ago)
-      never_flushed2 = ConsumersFactory.consumer_record(flushed_at: nil, dirty: true, ingested_at: two_minutes_ago)
-
-      previously_flushed =
+      never_flushed1 =
         ConsumersFactory.consumer_record(
+          record_pks: [1],
+          consumer_id: state.consumer.id,
+          flushed_at: nil,
+          dirty: true,
+          ingested_at: two_minutes_ago
+        )
+
+      never_flushed2 =
+        ConsumersFactory.consumer_record(
+          record_pks: [2],
+          consumer_id: state.consumer.id,
+          flushed_at: nil,
+          dirty: true,
+          ingested_at: two_minutes_ago
+        )
+
+      previously_flushed1 =
+        ConsumersFactory.consumer_record(
+          record_pks: [3],
+          consumer_id: state.consumer.id,
           flushed_at: DateTime.add(DateTime.utc_now(), -60, :second),
           dirty: true,
           ingested_at: two_minutes_ago
         )
 
-      messages = Map.new([never_flushed1, never_flushed2, previously_flushed], &{&1.record_pks, &1})
+      previously_flushed2 =
+        ConsumersFactory.consumer_record(
+          record_pks: [4],
+          consumer_id: state.consumer.id,
+          flushed_at: DateTime.add(DateTime.utc_now(), -60, :second),
+          dirty: true,
+          ingested_at: two_minutes_ago
+        )
+
+      messages = Map.new([never_flushed1, never_flushed2, previously_flushed1, previously_flushed2], &{&1.ack_id, &1})
       state = %{state | messages: messages}
 
-      to_flush = State.messages_to_flush(state)
+      pre_flush_datetime = DateTime.utc_now()
+      {state, more?} = State.flush_messages(state)
+      assert more?, "Should be more messages to flush"
+      messages = Map.values(state.messages)
 
-      assert length(to_flush) == 3
-      # Never flushed messages should come first
-      assert to_flush |> Enum.take(2) |> Enum.all?(&is_nil(&1.flushed_at))
+      # The unflushed message should be one of the previously flushed messages
+      assert Enum.find(messages, &DateTime.before?(&1.flushed_at, pre_flush_datetime)).record_pks in [["3"], ["4"]]
     end
 
     test "respects flush_batch_size limit", %{state: state, two_minutes_ago: two_minutes_ago} do
       messages =
         for _i <- 1..5 do
-          ConsumersFactory.consumer_record(flushed_at: nil, dirty: true, ingested_at: two_minutes_ago)
+          ConsumersFactory.consumer_record(
+            consumer_id: state.consumer.id,
+            flushed_at: nil,
+            dirty: true,
+            ingested_at: two_minutes_ago
+          )
         end
 
-      state = %{state | messages: Map.new(messages, &{&1.record_pks, &1})}
+      state = %{state | messages: Map.new(messages, &{&1.ack_id, &1})}
 
-      to_flush = State.messages_to_flush(state)
+      {state, more?} = State.flush_messages(state)
+      assert more?, "Should be more messages to flush"
+      messages = Map.values(state.messages)
 
-      # matches flush_batch_size
-      assert length(to_flush) == 3
-    end
-
-    test "sorts previously flushed messages by flushed_at", %{state: state, two_minutes_ago: two_minutes_ago} do
-      now = DateTime.utc_now()
-
-      msg1 =
-        ConsumersFactory.consumer_record(
-          flushed_at: DateTime.add(now, -30, :second),
-          dirty: true,
-          ingested_at: two_minutes_ago
-        )
-
-      msg2 =
-        ConsumersFactory.consumer_record(
-          flushed_at: DateTime.add(now, -60, :second),
-          dirty: true,
-          ingested_at: two_minutes_ago
-        )
-
-      msg3 =
-        ConsumersFactory.consumer_record(
-          flushed_at: DateTime.add(now, -15, :second),
-          dirty: true,
-          ingested_at: two_minutes_ago
-        )
-
-      messages = Map.new([msg1, msg2, msg3], &{&1.ack_id, &1})
-      state = %{state | messages: messages}
-
-      to_flush = State.messages_to_flush(state)
-
-      flushed_ats = Enum.map(to_flush, & &1.flushed_at)
-      assert flushed_ats == Enum.sort(flushed_ats, DateTime)
+      # 3 messages should have been flushed, matching flush_batch_size
+      assert Enum.count(messages, &(&1.flushed_at != nil)) == 3
     end
 
     test "excludes non-dirty messages", %{state: state, two_minutes_ago: two_minutes_ago} do
-      dirty_msg = ConsumersFactory.consumer_record(flushed_at: nil, dirty: true, ingested_at: two_minutes_ago)
-      clean_msg = ConsumersFactory.consumer_record(flushed_at: nil, dirty: false, ingested_at: two_minutes_ago)
+      dirty_msg =
+        ConsumersFactory.consumer_record(
+          record_pks: [1],
+          consumer_id: state.consumer.id,
+          flushed_at: DateTime.utc_now(),
+          dirty: true,
+          ingested_at: two_minutes_ago
+        )
+
+      clean_msg =
+        ConsumersFactory.consumer_record(
+          record_pks: [2],
+          consumer_id: state.consumer.id,
+          flushed_at: DateTime.utc_now(),
+          dirty: false,
+          ingested_at: two_minutes_ago
+        )
 
       messages = Map.new([dirty_msg, clean_msg], &{&1.ack_id, &1})
       state = %{state | messages: messages}
 
-      to_flush = State.messages_to_flush(state)
+      pre_flush_datetime = DateTime.utc_now()
+      {state, more?} = State.flush_messages(state)
+      refute more?, "Should not be more messages to flush"
+      messages = Map.values(state.messages)
 
-      assert length(to_flush) == 1
-      assert hd(to_flush).record_pks == dirty_msg.record_pks
+      assert Enum.find(messages, &DateTime.before?(&1.flushed_at, pre_flush_datetime)).record_pks == ["2"]
     end
 
-    test "excludes messages that are less than 60 seconds old", %{state: state, two_minutes_ago: two_minutes_ago} do
+    test "excludes messages that are less than flush_wait_ms old", %{state: state} do
       recent_message =
         ConsumersFactory.consumer_record(
-          last_delivered_at: DateTime.utc_now(),
+          record_pks: [1],
+          consumer_id: state.consumer.id,
           dirty: true,
           ingested_at: DateTime.utc_now()
         )
 
       old_message =
         ConsumersFactory.consumer_record(
-          last_delivered_at: DateTime.add(DateTime.utc_now(), -60, :second),
+          record_pks: [2],
+          consumer_id: state.consumer.id,
           dirty: true,
-          ingested_at: two_minutes_ago
+          ingested_at: DateTime.add(DateTime.utc_now(), -state.flush_wait_ms, :millisecond)
         )
 
       state = %{state | messages: Map.new([recent_message, old_message], &{&1.ack_id, &1})}
 
-      to_flush = State.messages_to_flush(state)
+      {state, more?} = State.flush_messages(state)
+      refute more?, "Should not be more messages to flush"
+      messages = Map.values(state.messages)
 
-      assert length(to_flush) == 1
-      assert hd(to_flush).record_pks == old_message.record_pks
+      assert Enum.find(messages, &(&1.flushed_at == nil)).record_pks == ["1"]
     end
   end
 

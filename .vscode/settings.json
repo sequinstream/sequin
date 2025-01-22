@@ -12,5 +12,6 @@
     "editor.defaultFormatter": "svelte.svelte-vscode"
   },
   "prettier.requireConfig": true,
-  "prettier.configPath": "assets/.prettierrc"
+  "prettier.configPath": "assets/.prettierrc",
+  "svelte.enable-ts-plugin": true
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Card, CardContent } from "$lib/components/ui/card";
-  import CodeWithSecret from "./CodeWithSecret.svelte";
-  import type { SequinStreamConsumer } from "../types/consumer";
+  import CodeWithSecret from "../../components/CodeWithSecret.svelte";
+  import type { SequinStreamConsumer } from "../../types/consumer";
 
   export let consumer: SequinStreamConsumer;
   export let apiBaseUrl: string;

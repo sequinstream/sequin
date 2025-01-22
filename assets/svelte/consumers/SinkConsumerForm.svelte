@@ -23,8 +23,8 @@
   import SqsSinkForm from "$lib/sinks/sqs/SqsSinkForm.svelte";
   import RedisSinkForm from "$lib/sinks/redis/RedisSinkForm.svelte";
   import KafkaSinkForm from "$lib/sinks/kafka/KafkaSinkForm.svelte";
-  import GcpPubsubSinkForm from "../sinks/gcp_pubsub/GcpPubsubSinkForm.svelte";
-  import SinkSequinStreamForm from "$lib/consumers/SinkSequinStreamForm.svelte";
+  import GcpPubsubSinkForm from "$lib/sinks/gcp_pubsub/GcpPubsubSinkForm.svelte";
+  import SequinStreamSinkForm from "$lib/sinks/sequin_stream/SequinStreamSinkForm.svelte";
   import NatsSinkForm from "$lib/sinks/nats/NatsSinkForm.svelte";
   import RabbitMqSinkForm from "$lib/sinks/rabbitmq/RabbitMqSinkForm.svelte";
   import { CircleAlert, ExternalLinkIcon, Info } from "lucide-svelte";
@@ -687,7 +687,7 @@
     {:else if consumer.type === "gcp_pubsub"}
       <GcpPubsubSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "sequin_stream"}
-      <SinkSequinStreamForm errors={errors.consumer} bind:form />
+      <SequinStreamSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "nats"}
       <NatsSinkForm errors={errors.consumer} bind:form />
     {:else if consumer.type === "rabbitmq"}

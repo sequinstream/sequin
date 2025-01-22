@@ -11,7 +11,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   require Logger
 
-  @trim_allow_consumer_id_allow_list ~w(
+  @disk_overflow_allow_list ~w(
     c4192100-f55e-4203-9836-3a00398d2876
     b4558a5c-ef60-4d4e-8950-237ac53efbee
   )
@@ -22,9 +22,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   typedstruct do
     field :consumer, SinkConsumer.t()
     field :consumer_id, String.t()
+    field :disk_overflow_mode?, boolean(), default: false
     field :flush_batch_size, non_neg_integer()
     field :flush_interval, non_neg_integer()
     field :flush_wait_ms, non_neg_integer()
+    field :max_messages_in_memory, non_neg_integer(), default: 10_000
     field :messages, %{SinkConsumer.ack_id() => ConsumerRecord.t() | ConsumerEvent.t()}, default: %{}
     # Set to false in tests to disable Postgres reads/writes (ie. load messages on boot and flush messages on interval)
     field :persisted_mode?, boolean(), default: true
@@ -32,8 +34,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
   end
-
-  def max_messages_in_memory, do: 10_000
 
   def init_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
 
@@ -43,10 +43,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         Logger.metadata(account_id: consumer.account_id)
 
         Logger.info("[SlotMessageStore] Loading messages...")
-        {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
-        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), time_ms: div(time, 1000))
+        {time, state} = :timer.tc(fn -> load_messages(%{state | consumer: consumer}) end)
+        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(state.messages), time_ms: div(time, 1000))
 
-        {:ok, %{state | consumer: consumer, messages: messages}}
+        {:ok, state}
 
       {:error, %Error.NotFoundError{entity: :consumer} = error} ->
         Logger.error("[SlotMessageStore] Consumer not found", consumer_id: state.consumer_id)
@@ -63,17 +63,45 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         %ConsumerRecord{deleted: true} -> true
         _ -> false
       end)
-      |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true, ingested_at: now} end)
-      |> Map.new(&{&1.ack_id, &1})
+      |> Enum.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), dirty: true, ingested_at: now} end)
 
-    %{state | messages: Map.merge(state.messages, messages)}
+    cond do
+      state.disk_overflow_mode? ->
+        count = flush_messages_in_batches!(state, messages)
+        Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
+        state
+
+      not state.disk_overflow_mode? and state.consumer_id in @disk_overflow_allow_list and
+          map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
+        count = flush_messages_in_batches!(state, messages)
+        Logger.debug("[SlotMessageStore] Flushed incoming messages to disk", count: count)
+        Logger.info("[SlotMessageStore] Entering disk overflow mode")
+        %{state | disk_overflow_mode?: true}
+
+      true ->
+        messages = Map.new(messages, &{&1.ack_id, &1})
+        %{state | messages: Map.merge(state.messages, messages)}
+    end
   end
 
   def put_table_reader_batch(%State{} = state, messages, batch_id) do
-    messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
-    state = put_messages(state, messages)
+    cond do
+      state.disk_overflow_mode? ->
+        count = flush_messages_in_batches!(state, messages)
+        Logger.debug("[SlotMessageStore] Flushed incoming table reader batch to disk", count: count)
+        %{state | table_reader_batch_id: batch_id}
 
-    %{state | table_reader_batch_id: batch_id}
+      not state.disk_overflow_mode? and state.consumer_id in @disk_overflow_allow_list and
+          map_size(state.messages) + length(messages) > state.max_messages_in_memory ->
+        count = flush_messages_in_batches!(state, messages)
+        Logger.debug("[SlotMessageStore] Flushed incoming table reader batch to disk", count: count)
+        Logger.info("[SlotMessageStore] Entering disk overflow mode")
+        %{state | table_reader_batch_id: batch_id, disk_overflow_mode?: true}
+
+      true ->
+        messages = Enum.map(messages, &%{&1 | table_reader_batch_id: batch_id})
+        %{put_messages(state, messages) | table_reader_batch_id: batch_id}
+    end
   end
 
   @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
@@ -104,6 +132,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   @spec reset_message_visibility(%State{}, SinkConsumer.ack_id()) :: {%State{}, ConsumerRecord.t() | ConsumerEvent.t()}
   def reset_message_visibility(%State{} = state, ack_id) do
     case Map.get(state.messages, ack_id) do
+      # TODO: handle disk overflow?
       nil ->
         {state, nil}
 
@@ -115,6 +144,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec reset_all_visibility(%State{}) :: {%State{}, list(ConsumerRecord.t() | ConsumerEvent.t())}
   def reset_all_visibility(%State{} = state) do
+    # TODO handle disk overflow?
     updated_messages =
       state.messages
       |> Stream.map(fn
@@ -143,7 +173,46 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     end
   end
 
-  def deliverable_messages(%State{} = state, count) do
+  def deliver_messages(%State{} = state, count) do
+    state =
+      if state.disk_overflow_mode? and map_size(state.messages) < div(state.max_messages_in_memory, 2) do
+        Logger.debug("[SlotMessageStore] Re-loading messages from disk for delivery")
+
+        # First we flush any dirty messages to disk
+        state.messages
+        |> Map.values()
+        |> Stream.filter(& &1.dirty)
+        |> then(&flush_messages_in_batches!(state, &1))
+
+        # Then we re-load messages from disk
+        load_messages(state)
+      else
+        state
+      end
+
+    %SinkConsumer{} = consumer = state.consumer
+    messages = deliverable_messages(state, count)
+    now = DateTime.utc_now()
+    not_visible_until = DateTime.add(now, consumer.ack_wait_ms, :millisecond)
+
+    messages =
+      Enum.map(messages, fn msg ->
+        %{
+          msg
+          | not_visible_until: not_visible_until,
+            deliver_count: msg.deliver_count + 1,
+            last_delivered_at: now,
+            state: :delivered,
+            dirty: true
+        }
+      end)
+
+    state = update_messages(state, messages)
+
+    {state, messages}
+  end
+
+  defp deliverable_messages(%State{} = state, count) do
     now = DateTime.utc_now()
 
     undeliverable_group_ids =
@@ -165,32 +234,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     end)
   end
 
-  def deliver_messages(%State{} = state, messages) do
-    %SinkConsumer{} = consumer = state.consumer
-    now = DateTime.utc_now()
-    not_visible_until = DateTime.add(now, consumer.ack_wait_ms, :millisecond)
-
-    messages =
-      Enum.map(messages, fn msg ->
-        %{
-          msg
-          | not_visible_until: not_visible_until,
-            deliver_count: msg.deliver_count + 1,
-            last_delivered_at: now,
-            state: :delivered,
-            dirty: true
-        }
-      end)
-
-    state = update_messages(state, messages)
-
-    {state, messages}
-  end
-
   def flush_messages(%State{persisted_mode?: true} = state) do
     flushed_at = DateTime.utc_now()
     {messages, more?} = messages_to_flush(state)
-    {:ok, _} = flush_messages_to_postgres(state, messages)
+    _count = flush_messages_to_postgres!(state, messages)
     messages = Enum.map(messages, fn msg -> %{msg | flushed_at: flushed_at, dirty: false} end)
 
     {update_messages(state, messages), more?}
@@ -240,36 +287,56 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     %{state | messages: Map.merge(state.messages, messages)}
   end
 
-  defp load_messages(consumer, limit \\ max_messages_in_memory())
+  defp load_messages(%State{} = state) do
+    {:ok, messages} =
+      Sequin.Repo.transaction(fn ->
+        now = DateTime.utc_now()
+        params = load_params(state)
 
-  defp load_messages(%SinkConsumer{message_kind: :event, id: id} = consumer, limit) do
-    now = DateTime.utc_now()
-    params = load_params(consumer, limit)
+        state
+        |> list_events_or_records(params, timeout: :timer.seconds(45))
+        |> Stream.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
+        |> Map.new(&{&1.ack_id, &1})
+      end)
 
-    id
-    |> Consumers.list_consumer_events_for_consumer(params, timeout: :timer.seconds(45))
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
-    |> Map.new(&{&1.ack_id, &1})
+    disk_overflow_mode? =
+      state.consumer_id in @disk_overflow_allow_list and map_size(messages) == state.max_messages_in_memory
+
+    case {state.disk_overflow_mode?, disk_overflow_mode?} do
+      {true, false} ->
+        Logger.info("[SlotMessageStore] Exiting disk overflow mode")
+
+      {false, true} ->
+        Logger.info("[SlotMessageStore] Entering disk overflow mode")
+
+      _ ->
+        :ok
+    end
+
+    %{state | messages: messages, disk_overflow_mode?: disk_overflow_mode?}
   end
 
-  defp load_messages(%SinkConsumer{message_kind: :record, id: id} = consumer, limit) do
-    now = DateTime.utc_now()
-    params = load_params(consumer, limit)
-
-    id
-    |> Consumers.list_consumer_records_for_consumer(params, timeout: :timer.seconds(45))
-    |> Enum.map(fn msg -> %{msg | flushed_at: msg.updated_at, dirty: false, ingested_at: now} end)
-    |> Map.new(&{&1.ack_id, &1})
+  defp list_events_or_records(%State{} = state, params, opts) when record_messages?(state) do
+    Consumers.stream_consumer_records_for_consumer(state.consumer.id, params, opts)
   end
 
-  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list do
-    [limit: limit, order_by: {:asc, :seq}]
+  defp list_events_or_records(%State{} = state, params, opts) when event_messages?(state) do
+    Consumers.stream_consumer_events_for_consumer(state.consumer.id, params, opts)
   end
 
-  defp load_params(%SinkConsumer{}, _limit), do: []
+  defp load_params(%State{consumer: %SinkConsumer{id: id}} = state) when id in @disk_overflow_allow_list do
+    [limit: state.max_messages_in_memory, order_by: {:asc, :seq}]
+  end
 
-  defp messages_to_flush(%State{messages: messages, flush_batch_size: flush_batch_size, flush_wait_ms: flush_wait_ms}) do
-    flush_all? = map_size(messages) > max_messages_in_memory()
+  defp load_params(%State{consumer: %SinkConsumer{}}), do: []
+
+  defp messages_to_flush(%State{
+         messages: messages,
+         flush_batch_size: flush_batch_size,
+         flush_wait_ms: flush_wait_ms,
+         max_messages_in_memory: max_messages_in_memory
+       }) do
+    flush_all? = map_size(messages) > max_messages_in_memory
 
     to_flush =
       messages
@@ -287,46 +354,24 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     {to_flush, length(to_flush) == flush_batch_size}
   end
 
-  defp flush_messages_to_postgres(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
-    {:ok, _count} = Consumers.upsert_consumer_events(messages)
+  defp flush_messages_in_batches!(%State{} = state, messages) do
+    messages
+    |> Stream.chunk_every(state.flush_batch_size)
+    |> Enum.reduce(0, fn batch, acc ->
+      count = flush_messages_to_postgres!(state, batch)
+      acc + count
+    end)
   end
 
-  defp flush_messages_to_postgres(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
-    {:ok, _count} = Consumers.upsert_consumer_records(messages)
+  defp flush_messages_to_postgres!(%State{persisted_mode?: true} = state, messages) when event_messages?(state) do
+    {:ok, count} = Consumers.upsert_consumer_events(messages)
+    count
   end
 
-  # defp trim_or_load_messages(%State{consumer_id: consumer_id} = state)
-  #      when consumer_id not in @trim_allow_consumer_id_allow_list,
-  #      do: state
-
-  # defp trim_or_load_messages(%State{persisted_mode?: false} = state), do: state
-
-  # defp trim_or_load_messages(%State{persisted_mode?: true} = state) do
-  #   cond do
-  #     map_size(state.messages) > State.max_messages_in_memory() ->
-  #       Logger.info("[SlotMessageStore] Trimming messages")
-
-  #       messages =
-  #         state.messages
-  #         |> Map.values()
-  #         |> Enum.sort_by(& &1.seq)
-  #         |> Enum.take(State.max_messages_in_memory())
-  #         |> Map.new(&{&1.ack_id, &1})
-
-  #       %{state | messages: messages}
-
-  #     map_size(state.messages) == State.max_messages_in_memory() ->
-  #       Logger.info("[SlotMessageStore] Already at max messages in memory")
-  #       state
-
-  #     true ->
-  #       limit = State.max_messages_in_memory() - map_size(state.messages)
-  #       Logger.info("[SlotMessageStore] Loading messages", count: limit)
-
-  #       messages = load_messages(state.consumer, limit)
-  #       %{state | messages: Map.merge(state.messages, messages)}
-  #   end
-  # end
+  defp flush_messages_to_postgres!(%State{persisted_mode?: true} = state, messages) when record_messages?(state) do
+    {:ok, count} = Consumers.upsert_consumer_records(messages)
+    count
+  end
 
   # Helper function to compare flushed_at values where nil is "smaller" than any DateTime
   # nil is "smaller"

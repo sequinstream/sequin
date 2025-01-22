@@ -334,27 +334,34 @@ defmodule Sequin.Consumers do
   end
 
   def list_consumer_events_for_consumer(consumer_id, params \\ [], opts \\ []) do
-    base_query = ConsumerEvent.where_consumer_id(consumer_id)
+    consumer_id
+    |> consumer_events_query(params)
+    |> Repo.all(opts)
+  end
 
-    query =
-      Enum.reduce(params, base_query, fn
-        {:is_deliverable, false}, query ->
-          ConsumerEvent.where_not_visible(query)
+  def stream_consumer_events_for_consumer(consumer_id, params \\ [], opts \\ []) do
+    consumer_id
+    |> consumer_events_query(params)
+    |> Repo.stream(opts)
+  end
 
-        {:is_deliverable, true}, query ->
-          ConsumerEvent.where_deliverable(query)
+  defp consumer_events_query(consumer_id, params) do
+    Enum.reduce(params, ConsumerEvent.where_consumer_id(consumer_id), fn
+      {:is_deliverable, false}, query ->
+        ConsumerEvent.where_not_visible(query)
 
-        {:limit, limit}, query ->
-          limit(query, ^limit)
+      {:is_deliverable, true}, query ->
+        ConsumerEvent.where_deliverable(query)
 
-        {:offset, offset}, query ->
-          offset(query, ^offset)
+      {:limit, limit}, query ->
+        limit(query, ^limit)
 
-        {:order_by, order_by}, query ->
-          order_by(query, ^order_by)
-      end)
+      {:offset, offset}, query ->
+        offset(query, ^offset)
 
-    Repo.all(query, opts)
+      {:order_by, order_by}, query ->
+        order_by(query, ^order_by)
+    end)
   end
 
   def insert_consumer_events([]), do: {:ok, 0}
@@ -456,6 +463,12 @@ defmodule Sequin.Consumers do
     consumer_id
     |> consumer_record_query(params)
     |> Repo.all(opts)
+  end
+
+  def stream_consumer_records_for_consumer(consumer_id, params \\ [], opts \\ []) do
+    consumer_id
+    |> consumer_record_query(params)
+    |> Repo.stream(opts)
   end
 
   defp consumer_record_query(consumer_id, params) do

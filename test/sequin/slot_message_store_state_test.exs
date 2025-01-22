@@ -93,16 +93,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "deliverable_messages/2" do
+  describe "deliver_messages/2" do
     setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record)
+      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
 
       state = %State{
         consumer: consumer,
         messages: %{},
         flush_interval: 1000,
         flush_batch_size: 100,
-        flush_wait_ms: 1
+        flush_wait_ms: 1,
+        max_messages_in_memory: 5
       }
 
       {:ok, %{state: state}}
@@ -123,13 +124,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
           not_visible_until: future_time
         )
 
-      messages = Map.new([visible_msg, invisible_msg], &{&1.record_pks, &1})
+      messages = Map.new([visible_msg, invisible_msg], &{&1.ack_id, &1})
       state = %{state | messages: messages}
 
-      deliverable = State.deliverable_messages(state, 10)
+      {_state, delivered} = State.deliver_messages(state, 10)
 
-      assert length(deliverable) == 1
-      assert hd(deliverable).seq == visible_msg.seq
+      assert length(delivered) == 1
+      assert hd(delivered).seq == visible_msg.seq
     end
 
     test "respects message group visibility", %{state: state} do
@@ -141,34 +142,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       msg2 = ConsumersFactory.consumer_record(seq: 2, group_id: group_id, not_visible_until: future_time)
       msg3 = ConsumersFactory.consumer_record(seq: 3, group_id: group_id)
 
-      messages = Map.new([msg1, msg2, msg3], &{&1.record_pks, &1})
+      messages = Map.new([msg1, msg2, msg3], &{&1.ack_id, &1})
       state = %{state | messages: messages}
 
-      deliverable = State.deliverable_messages(state, 10)
+      {_state, delivered} = State.deliver_messages(state, 10)
 
-      assert Enum.empty?(deliverable),
+      assert Enum.empty?(delivered),
              "Should not deliver any messages when group has pending message"
     end
-  end
 
-  describe "deliver_messages/2" do
-    setup do
-      consumer = ConsumersFactory.sink_consumer(message_kind: :record, ack_wait_ms: 30_000)
-
-      state = %State{
-        consumer: consumer,
-        messages: %{},
-        flush_interval: 1000,
-        flush_batch_size: 100,
-        flush_wait_ms: 1
-      }
-
-      {:ok, %{state: state, consumer: consumer}}
-    end
-
-    test "updates message delivery state and metadata", %{state: state, consumer: consumer} do
+    test "updates message delivery state and metadata", %{state: state} do
       now = DateTime.utc_now()
-      not_visible_until = DateTime.add(now, consumer.ack_wait_ms, :millisecond)
+      not_visible_until = DateTime.add(now, state.consumer.ack_wait_ms, :millisecond)
       # Create messages in available state
       msg1 =
         ConsumersFactory.consumer_record(
@@ -190,7 +175,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       state = %{state | messages: Map.new(messages, &{&1.ack_id, &1})}
 
       now = DateTime.utc_now()
-      {updated_state, delivered_messages} = State.deliver_messages(state, messages)
+      {updated_state, delivered_messages} = State.deliver_messages(state, 2)
 
       # Check first message
       delivered1 = updated_state.messages[msg1.ack_id]

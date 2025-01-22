@@ -301,11 +301,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:produce, count}, _from, %State{} = state) do
-    {time, {state, messages}} =
-      :timer.tc(fn ->
-        deliverable_messages = State.deliverable_messages(state, count)
-        {_state, _messages} = State.deliver_messages(state, deliverable_messages)
-      end)
+    {time, {state, messages}} = :timer.tc(fn -> State.deliver_messages(state, count) end)
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(

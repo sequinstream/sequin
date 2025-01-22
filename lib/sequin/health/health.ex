@@ -530,7 +530,11 @@ defmodule Sequin.Health do
 
         put_check_timestamps(%{base_check | status: :error, error: error}, [heartbeat_recv_event])
 
-      messages_processed_event && messages_processed_event.status == :fail ->
+      # Was there a failed message?
+      # And has a successful heartbeat not come through after that failed message?
+      messages_processed_event && messages_processed_event.status == :fail &&
+          (is_nil(heartbeat_recv_event) or
+             DateTime.after?(messages_processed_event.last_event_at, heartbeat_recv_event.last_event_at)) ->
         put_check_timestamps(%{base_check | status: :error, error: messages_processed_event.error}, [
           messages_processed_event
         ])

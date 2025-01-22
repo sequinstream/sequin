@@ -19,32 +19,6 @@ defmodule Sequin.Metrics.Store do
     end
   end
 
-  # Average functions
-  def incr_avg(key, value) do
-    [
-      ["HINCRBY", "metrics:avg:#{key}", "total", round(value)],
-      ["HINCRBY", "metrics:avg:#{key}", "count", 1]
-    ]
-    |> Redis.pipeline()
-    |> case do
-      {:ok, _} -> :ok
-      {:error, error} -> {:error, error}
-    end
-  end
-
-  def get_avg(key) do
-    case Redis.command(["HMGET", "metrics:avg:#{key}", "total", "count"]) do
-      {:ok, [total, count]} when is_binary(total) and is_binary(count) ->
-        {:ok, String.to_integer(total) / String.to_integer(count)}
-
-      {:ok, _} ->
-        {:ok, nil}
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
   # Throughput functions
   # 70 seconds of throughput telemetry is stored; 5 seconds of read telemetry is read for "instant" throughput
   # We store more than 60 seconds so we can do smoothing and then take 60 seconds of smoothed data
@@ -98,6 +72,41 @@ defmodule Sequin.Metrics.Store do
     case Redis.pipeline(commands) do
       {:ok, results} ->
         {:ok, Enum.map(results, &String.to_integer(&1 || "0"))}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  # Latency functions
+  @latency_windows 5
+  def incr_latency(key, value) do
+    [
+      ["RPUSH", "metrics:latency:#{key}", value],
+      ["LTRIM", "metrics:latency:#{key}", -@latency_windows, -1]
+    ]
+    |> Redis.pipeline()
+    |> case do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def get_latency(key) do
+    case Redis.command(["LRANGE", "metrics:latency:#{key}", "0", "-1"]) do
+      {:ok, values} ->
+        values =
+          Enum.map(values, fn str ->
+            case Float.parse(str) do
+              {float, _} -> float
+              :error -> String.to_integer(str) * 1.0
+            end
+          end)
+
+        case values do
+          [] -> {:ok, nil}
+          vals -> {:ok, Enum.sum(vals) / length(vals)}
+        end
 
       {:error, error} ->
         {:error, error}

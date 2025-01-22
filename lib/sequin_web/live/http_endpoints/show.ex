@@ -5,6 +5,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
   alias Sequin.Consumers
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Health
+  alias Sequin.Health.CheckHttpEndpointHealthWorker
   alias Sequin.Metrics
 
   @impl Phoenix.LiveView
@@ -81,6 +82,7 @@ defmodule SequinWeb.HttpEndpointsLive.Show do
 
   @impl Phoenix.LiveView
   def handle_event("refresh_health", _params, socket) do
+    CheckHttpEndpointHealthWorker.enqueue(socket.assigns.http_endpoint.id, unique: false)
     {:noreply, assign_health(socket)}
   end
 

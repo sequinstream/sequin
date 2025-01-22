@@ -60,7 +60,7 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
          :ok <- Databases.test_permissions(database) do
       after_connect = System.monotonic_time(:millisecond)
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :success})
-      Metrics.incr_database_avg_latency(database, after_connect - before_connect)
+      Metrics.measure_database_avg_latency(database, after_connect - before_connect)
       :ok
     else
       {:error, error} when is_error(error) ->

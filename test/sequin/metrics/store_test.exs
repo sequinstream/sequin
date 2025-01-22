@@ -15,20 +15,6 @@ defmodule Sequin.Metrics.StoreTest do
     end
   end
 
-  describe "average" do
-    setup do
-      [key: Factory.uuid()]
-    end
-
-    test "incr_avg", ctx do
-      assert Store.incr_avg(ctx.key, 10) == :ok
-      assert Store.get_avg(ctx.key) == {:ok, 10.0}
-
-      assert Store.incr_avg(ctx.key, 20) == :ok
-      assert Store.get_avg(ctx.key) == {:ok, 15.0}
-    end
-  end
-
   describe "throughput" do
     setup do
       [key: Factory.uuid()]
@@ -53,6 +39,26 @@ defmodule Sequin.Metrics.StoreTest do
 
       assert {:ok, throughput} = Store.get_throughput(ctx.key)
       assert Float.round(throughput, 3) == 2.0
+    end
+  end
+
+  describe "latency" do
+    setup do
+      [key: Factory.uuid()]
+    end
+
+    test "incr_latency and get_latency", ctx do
+      assert Store.incr_latency(ctx.key, 10.5) == :ok
+      assert Store.incr_latency(ctx.key, 20.5) == :ok
+      assert Store.incr_latency(ctx.key, 30.5) == :ok
+
+      assert {:ok, avg} = Store.get_latency(ctx.key)
+      # Average of 10.5, 20.5, and 30.5
+      assert_in_delta avg, 20.5, 0.1
+
+      # Test empty window
+      key = Factory.uuid()
+      assert {:ok, nil} = Store.get_latency(key)
     end
   end
 end

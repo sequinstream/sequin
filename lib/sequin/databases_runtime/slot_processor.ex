@@ -43,6 +43,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # 200MB
   @max_accumulated_bytes 200 * 1024 * 1024
 
+  @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
+  @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
+
   def ets_table, do: __MODULE__
 
   defmodule State do
@@ -243,16 +246,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     )
 
     msg = Decoder.decode_message(msg)
-    next_state = process_message(msg, state)
-    {acc_size, _acc_messages} = next_state.accumulated_messages
 
-    unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
-      # A replication message is *their* message(s), not our message.
-      Health.put_event(
-        state.replication_slot,
-        %Event{slug: :replication_message_processed, status: :success}
-      )
-    end
+    next_state =
+      if skip_message?(msg, state) do
+        state
+      else
+        msg
+        |> maybe_cast_message(state)
+        |> process_message(state)
+      end
+
+    {acc_size, _acc_messages} = next_state.accumulated_messages
 
     cond do
       is_struct(msg, Commit) ->
@@ -446,6 +450,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
   # end
 
+  defp skip_message?(%struct{} = msg, state) when struct in [Insert, Update, Delete] do
+    {_columns, schema, _table} = Map.get(state.schemas, msg.relation_id)
+    schema in [@config_schema, @stream_schema]
+  end
+
+  defp skip_message?(_, _state), do: false
+
   @spec process_message(map(), State.t()) :: State.t()
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     conn = get_cached_conn(state)
@@ -532,90 +543,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     }
   end
 
-  defp process_message(%Insert{} = msg, state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
-    ids = data_tuple_to_ids(columns, msg.tuple_data)
+  defp process_message(%Message{} = msg, state) do
+    TracerServer.message_replicated(state.postgres_database, msg)
 
-    message = %Message{
-      action: :insert,
-      commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
-      commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
-      errors: nil,
-      ids: ids,
-      table_schema: schema,
-      table_name: table,
-      table_oid: msg.relation_id,
-      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
-      trace_id: UUID.uuid4()
-    }
+    Health.put_event(
+      state.replication_slot,
+      %Event{slug: :replication_message_processed, status: :success}
+    )
 
-    TracerServer.message_replicated(state.postgres_database, message)
-
-    maybe_put_message(state, message)
-  end
-
-  defp process_message(%Update{} = msg, %State{} = state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
-    ids = data_tuple_to_ids(columns, msg.tuple_data)
-
-    old_fields =
-      if msg.old_tuple_data do
-        data_tuple_to_fields(ids, columns, msg.old_tuple_data)
-      end
-
-    message = %Message{
-      action: :update,
-      commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
-      commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
-      errors: nil,
-      ids: ids,
-      table_schema: schema,
-      table_name: table,
-      table_oid: msg.relation_id,
-      old_fields: old_fields,
-      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
-      trace_id: UUID.uuid4()
-    }
-
-    TracerServer.message_replicated(state.postgres_database, message)
-
-    maybe_put_message(state, message)
-  end
-
-  defp process_message(%Delete{} = msg, %State{} = state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
-
-    prev_tuple_data =
-      if msg.old_tuple_data do
-        msg.old_tuple_data
-      else
-        msg.changed_key_tuple_data
-      end
-
-    ids = data_tuple_to_ids(columns, prev_tuple_data)
-
-    message = %Message{
-      action: :delete,
-      commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
-      commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
-      errors: nil,
-      ids: ids,
-      table_schema: schema,
-      table_name: table,
-      table_oid: msg.relation_id,
-      old_fields: data_tuple_to_fields(ids, columns, prev_tuple_data),
-      trace_id: UUID.uuid4()
-    }
-
-    TracerServer.message_replicated(state.postgres_database, message)
-
-    maybe_put_message(state, message)
+    maybe_put_message(state, msg)
   end
 
   # Ignore type messages, we receive them before type columns:
@@ -654,6 +590,83 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Logger.error("Unknown message: #{inspect(msg)}")
     state
   end
+
+  @spec maybe_cast_message(decoded_message :: map(), State.t()) :: Message.t() | map()
+  defp maybe_cast_message(%Insert{} = msg, state) do
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    ids = data_tuple_to_ids(columns, msg.tuple_data)
+
+    %Message{
+      action: :insert,
+      commit_lsn: state.current_xaction_lsn,
+      commit_timestamp: state.current_commit_ts,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
+      errors: nil,
+      ids: ids,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
+      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
+      trace_id: UUID.uuid4()
+    }
+  end
+
+  defp maybe_cast_message(%Update{} = msg, state) do
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    ids = data_tuple_to_ids(columns, msg.tuple_data)
+
+    old_fields =
+      if msg.old_tuple_data do
+        data_tuple_to_fields(ids, columns, msg.old_tuple_data)
+      end
+
+    %Message{
+      action: :update,
+      commit_lsn: state.current_xaction_lsn,
+      commit_timestamp: state.current_commit_ts,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
+      errors: nil,
+      ids: ids,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
+      old_fields: old_fields,
+      fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
+      trace_id: UUID.uuid4()
+    }
+  end
+
+  defp maybe_cast_message(%Delete{} = msg, state) do
+    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+
+    prev_tuple_data =
+      if msg.old_tuple_data do
+        msg.old_tuple_data
+      else
+        msg.changed_key_tuple_data
+      end
+
+    ids = data_tuple_to_ids(columns, prev_tuple_data)
+
+    %Message{
+      action: :delete,
+      commit_lsn: state.current_xaction_lsn,
+      commit_timestamp: state.current_commit_ts,
+      commit_idx: state.current_commit_idx,
+      seq: state.current_xaction_lsn + state.current_commit_idx,
+      errors: nil,
+      ids: ids,
+      table_schema: schema,
+      table_name: table,
+      table_oid: msg.relation_id,
+      old_fields: data_tuple_to_fields(ids, columns, prev_tuple_data),
+      trace_id: UUID.uuid4()
+    }
+  end
+
+  defp maybe_cast_message(msg, _state), do: msg
 
   defp flush_messages(%State{accumulated_messages: {_, []}} = state), do: state
 

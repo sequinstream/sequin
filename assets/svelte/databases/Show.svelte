@@ -76,7 +76,7 @@
 <div class="min-h-screen font-sans">
   <main class="container mx-auto px-4 py-8">
     <!-- Existing overview content -->
-    <div class="grid gap-6 md:grid-cols-3 mb-6">
+    <div class="grid gap-6 lg:grid-cols-3 mb-6">
       <HealthSummary health={database.health} {pushEvent} />
 
       <Card>

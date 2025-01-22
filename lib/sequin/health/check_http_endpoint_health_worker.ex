@@ -34,6 +34,12 @@ defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
     |> Oban.insert()
   end
 
+  def enqueue(http_endpoint_id, unique: false) do
+    %{http_endpoint_id: http_endpoint_id}
+    |> new(unique: [states: [:available], period: 1])
+    |> Oban.insert()
+  end
+
   def enqueue_in(http_endpoint_id, delay_seconds) do
     %{http_endpoint_id: http_endpoint_id}
     |> new(schedule_in: delay_seconds)
@@ -46,7 +52,7 @@ defmodule Sequin.Health.CheckHttpEndpointHealthWorker do
          {:ok, :connected} <- Consumers.test_connect(endpoint) do
       after_connect_time = System.monotonic_time(:millisecond)
       Health.put_event(endpoint, %Event{slug: :endpoint_reachable, status: :success})
-      Metrics.incr_http_endpoint_avg_latency(endpoint, after_connect_time - before_connect_time)
+      Metrics.measure_http_endpoint_avg_latency(endpoint, after_connect_time - before_connect_time)
     else
       {:error, :unreachable} ->
         error = Error.service(service: :http_endpoint, message: "Endpoint unreachable")

@@ -359,9 +359,8 @@
               <div class="space-y-2">
                 <h4 class="font-medium leading-none">Confirm Redeliver All</h4>
                 <p class="text-sm text-muted-foreground">
-                  This will reset the visibility window for all messages,
-                  causing them to be redelivered. Are you sure you want to
-                  continue?
+                  This will clear the backoff for all messages, causing them to
+                  be redelivered. Are you sure you want to continue?
                 </p>
               </div>
               <div class="flex justify-end gap-2">

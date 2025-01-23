@@ -65,7 +65,6 @@ defmodule Sequin.MixProject do
       {:faker, "~> 0.18.0", only: [:dev, :test]},
       {:uuid, "~> 1.1"},
       {:mix_test_interactive, "~> 2.0", only: :dev, runtime: false},
-      {:uxid, "~> 0.2"},
       {:dogstatsd, "~> 1.0", hex: :dogstatsde},
       {:flow, "~> 1.2"},
       {:con_cache, "~> 1.1"},

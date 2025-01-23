@@ -35,7 +35,7 @@ defmodule Sequin.Databases.PostgresDatabase do
   typed_schema "postgres_databases" do
     field :database, :string
     field :hostname, :string
-    field :pool_size, :integer, default: 3
+    field :pool_size, :integer, default: 10
     # can be auto-generated when use_local_tunnel is true
     field :port, :integer, read_after_writes: true
     field :queue_interval, :integer, default: 1000

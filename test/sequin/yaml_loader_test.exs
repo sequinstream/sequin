@@ -235,7 +235,7 @@ defmodule Sequin.YamlLoaderTest do
                """)
 
       assert [%PostgresDatabase{} = db] = Repo.all(PostgresDatabase)
-      assert db.pool_size == 3
+      assert db.pool_size == 10
 
       assert :ok =
                YamlLoader.apply_from_yml!("""

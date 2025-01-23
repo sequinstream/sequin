@@ -62,3 +62,6 @@ sequin.yaml
 .aider*
 .env
 .iex.local.exs
+
+# Cursor shenanigans
+*plan.md

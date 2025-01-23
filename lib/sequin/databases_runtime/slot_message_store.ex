@@ -274,7 +274,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         "[SlotMessageStore] Put messages took longer than expected",
         count: new_count - initial_count,
         message_count: new_count,
-        time_ms: div(time, 1000)
+        duration_ms: div(time, 1000)
       )
     end
 
@@ -292,7 +292,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       Logger.info(
         "[SlotMessageStore] Put table reader batch",
         count: length(messages),
-        time_ms: div(time, 1000),
+        duration_ms: div(time, 1000),
         message_count: map_size(state.messages)
       )
     end
@@ -319,7 +319,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       Logger.warning(
         "[SlotMessageStore] Produce messages took longer than expected",
         count: length(messages),
-        time_ms: div(time, 1000),
+        duration_ms: div(time, 1000),
         message_count: map_size(state.messages)
       )
     end
@@ -350,7 +350,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     Logger.debug(
       "[SlotMessageStore] Acked messages",
       count: acked_count,
-      time_ms: div(time, 1000),
+      duration_ms: div(time, 1000),
       message_count: map_size(state.messages)
     )
 
@@ -403,7 +403,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       Logger.warning("[SlotMessageStore] Flushed messages took longer than expected",
         count: length(to_flush),
         message_count: map_size(state.messages),
-        time_ms: div(time, 1000)
+        duration_ms: div(time, 1000)
       )
     end
 
@@ -444,7 +444,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
         Logger.info("[SlotMessageStore] Loading messages...")
         {time, messages} = :timer.tc(fn -> load_messages(consumer) end)
-        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), time_ms: div(time, 1000))
+        Logger.info("[SlotMessageStore] Loaded messages", count: map_size(messages), duration_ms: div(time, 1000))
 
         {:ok, %{state | messages: messages, consumer: consumer}}
 

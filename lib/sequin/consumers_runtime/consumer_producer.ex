@@ -25,7 +25,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   @impl GenStage
   def init(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
-    Logger.info("Initializing consumer producer", consumer_id: consumer.id)
+    Logger.metadata(consumer_id: consumer.id)
+    Logger.info("Initializing consumer producer")
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Sandbox.allow(Sequin.Repo, test_pid, self())
@@ -108,7 +109,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         count: length(messages),
         demand: demand,
         batch_size: state.batch_size,
-        time_ms: div(time, 1000)
+        duration_ms: div(time, 1000)
       )
     end
 
@@ -117,7 +118,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
         "[ConsumerProducer] Handled idempotency",
-        time_ms: div(time, 1000),
+        duration_ms: div(time, 1000),
         message_count: length(messages)
       )
     end

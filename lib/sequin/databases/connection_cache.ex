@@ -53,11 +53,11 @@ defmodule Sequin.Databases.ConnectionCache do
           {:error, :not_found}
 
         is_pid(entry.conn) and !Process.alive?(entry.conn) ->
-          Logger.warning("Cached db connection was dead upon lookup", database_id: db.id)
+          Logger.warning("[ConnectionCache] Cached db connection was dead upon lookup", database_id: db.id)
           {:error, :not_found}
 
         entry.options_hash != new_hash ->
-          Logger.info("Cached db connection was stale", database_id: db.id)
+          Logger.info("[ConnectionCache] Cached db connection was stale", database_id: db.id)
           {:error, :stale}
 
         true ->
@@ -108,7 +108,7 @@ defmodule Sequin.Databases.ConnectionCache do
     @spec new([opt]) :: t()
     def new(opts) do
       start_fn = Keyword.get(opts, :start_fn, &default_start/1)
-      stop_fn = Keyword.get(opts, :stop_fn, &GenServer.stop/1)
+      stop_fn = Keyword.get(opts, :stop_fn, &default_stop/1)
 
       %__MODULE__{
         start_fn: start_fn,
@@ -161,6 +161,14 @@ defmodule Sequin.Databases.ConnectionCache do
 
     defp default_start(%PostgresDatabase{} = db) do
       Databases.start_link(db)
+    end
+
+    defp default_stop(conn) do
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        GenServer.stop(conn)
+      end)
+
+      :ok
     end
   end
 
@@ -229,6 +237,17 @@ defmodule Sequin.Databases.ConnectionCache do
   def handle_cast({:invalidate_connection, %PostgresDatabase{} = db}, %State{} = state) do
     new_state = State.invalidate_connection(state, db)
     {:noreply, new_state}
+  end
+
+  @impl GenServer
+  # We'll receive EXIT messages from the connections we've cached.
+  def handle_info({:EXIT, _pid, _reason}, %State{} = state) do
+    {:noreply, state}
+  end
+
+  # This is from the GenServer.stop/1 call in State.stop_fn.
+  def handle_info({:DOWN, _ref, :process, _pid, _reason}, %State{} = state) do
+    {:noreply, state}
   end
 
   @impl GenServer

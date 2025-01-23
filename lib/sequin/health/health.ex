@@ -756,7 +756,7 @@ defmodule Sequin.Health do
       end)
 
     """
-    #{name} (account "#{entity.account.name}") (id: #{entity.id}) is experiencing issues:
+    [sequin] #{name} (account "#{entity.account.name}") (id: #{entity.id}) is experiencing issues:
     #{check_details}
     """
   end

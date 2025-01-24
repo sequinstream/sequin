@@ -85,7 +85,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
                 {{:insert, consumer_event(consumer, message)}, consumer}
 
               consumer.message_kind == :record and message.action == :delete ->
-                {{:delete, consumer_record(consumer, message)}, consumer}
+                # We do not propagate delete messages to record consumers
+                nil
 
               consumer.message_kind == :record ->
                 {{:insert, consumer_record(consumer, message)}, consumer}

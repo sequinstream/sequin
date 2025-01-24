@@ -8,6 +8,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
     max_attempts: 3
 
   alias Sequin.Consumers
+  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.DatabasesRuntime.SlotSupervisor
@@ -80,6 +81,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
         :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(replication_slot_id)
         :ok = SlotSupervisor.stop_message_store(replication_slot_id, id)
         :ok = ConsumersSupervisor.stop_for_sink_consumer(id)
+        :ok = AtLeastOnceVerification.delete_commit_tuples(id)
     end
   end
 

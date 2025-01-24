@@ -924,6 +924,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
           consumer_id: message.consumer_id,
           ack_id: message.ack_id,
           commit_lsn: message.commit_lsn,
+          commit_idx: message.commit_idx,
           commit_timestamp: message.commit_timestamp,
           data: nil,
           deliver_count: message.deliver_count,

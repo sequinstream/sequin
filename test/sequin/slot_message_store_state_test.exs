@@ -411,4 +411,65 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert Enum.map(peeked_messages, & &1.commit_idx) == [0, 1, 2]
     end
   end
+
+  describe "safe_wal_cursor/1" do
+    setup do
+      consumer = ConsumersFactory.sink_consumer()
+      state = %State{consumer: consumer}
+      {:ok, %{state: state}}
+    end
+
+    test "returns nil when there are no messages", %{state: state} do
+      assert State.safe_wal_cursor(state) == nil
+    end
+
+    test "returns nil when no messages are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: nil)
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_wal_cursor(state) == nil
+    end
+
+    test "returns the max wal_cursor when all messages are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 1, flushed_at: DateTime.utc_now())
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_wal_cursor(state) == %{commit_lsn: 2, commit_idx: 1}
+    end
+
+    test "returns the highest wal_cursor for which all lesser or equal wal_cursors are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 0, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 0, commit_idx: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        # First unflushed wal_cursor is next, so we should return the wal_cursor above ☝️
+        ConsumersFactory.consumer_message(commit_lsn: 2, commit_idx: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 3, commit_idx: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 3, commit_idx: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 4, commit_idx: 0, flushed_at: nil)
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_wal_cursor(state) == %{commit_lsn: 2, commit_idx: 0}
+    end
+
+    test "returns nil when the first commit_lsn is unflushed and all others are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: DateTime.utc_now())
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_wal_cursor(state) == nil
+    end
+  end
 end

@@ -9,10 +9,12 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   import Sequin.Error.Guards, only: [is_error: 1]
 
   alias Sequin.Databases
+  alias Sequin.Databases.PostgresDatabase
   alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.NetworkUtils
   alias Sequin.Repo
 
   @impl Oban.Worker
@@ -53,14 +55,13 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
     |> Oban.insert()
   end
 
-  defp check_database(database) do
+  defp check_database(%PostgresDatabase{} = database) do
     with :ok <- Databases.test_tcp_reachability(database),
-         before_connect = System.monotonic_time(:millisecond),
          :ok <- Databases.test_connect(database),
-         :ok <- Databases.test_permissions(database) do
-      after_connect = System.monotonic_time(:millisecond)
+         :ok <- Databases.test_permissions(database),
+         {:ok, latency} <- NetworkUtils.measure_latency(database.hostname, database.port) do
       Health.put_event(database.replication_slot, %Event{slug: :db_connectivity_checked, status: :success})
-      Metrics.measure_database_avg_latency(database, after_connect - before_connect)
+      Metrics.measure_database_avg_latency(database, latency)
       :ok
     else
       {:error, error} when is_error(error) ->

@@ -47,10 +47,10 @@ defmodule Sequin.Metrics.StoreTest do
       [key: Factory.uuid()]
     end
 
-    test "incr_latency and get_latency", ctx do
-      assert Store.incr_latency(ctx.key, 10.5) == :ok
-      assert Store.incr_latency(ctx.key, 20.5) == :ok
-      assert Store.incr_latency(ctx.key, 30.5) == :ok
+    test "measure_latency and get_latency", ctx do
+      assert Store.measure_latency(ctx.key, 10.5) == :ok
+      assert Store.measure_latency(ctx.key, 20.5) == :ok
+      assert Store.measure_latency(ctx.key, 30.5) == :ok
 
       assert {:ok, avg} = Store.get_latency(ctx.key)
       # Average of 10.5, 20.5, and 30.5

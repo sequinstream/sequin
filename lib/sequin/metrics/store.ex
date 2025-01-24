@@ -80,7 +80,7 @@ defmodule Sequin.Metrics.Store do
 
   # Latency functions
   @latency_windows 5
-  def incr_latency(key, value) do
+  def measure_latency(key, value) do
     [
       ["RPUSH", "metrics:latency:#{key}", value],
       ["LTRIM", "metrics:latency:#{key}", -@latency_windows, -1]

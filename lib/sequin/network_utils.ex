@@ -67,4 +67,47 @@ defmodule Sequin.NetworkUtils do
 
   defp ipv6_opts(false), do: []
   defp ipv6_opts(true), do: [:inet6]
+
+  @doc """
+  Measures average TCP latency to a given endpoint.
+  Returns the average latency in milliseconds.
+
+  Options:
+  - :timeout - Connection timeout in milliseconds (default: 5000)
+  - :samples - Number of measurements to take (default: 3)
+  """
+  @spec measure_latency(String.t(), number(), keyword()) :: {:ok, float()} | {:error, Error.t()}
+  def measure_latency(host, port, opts \\ []) do
+    with :ok <- validate_port(port) do
+      timeout = Keyword.get(opts, :timeout, 5000)
+      samples = Keyword.get(opts, :samples, 3)
+
+      measurements =
+        1..samples
+        |> Enum.map(fn _ -> measure_single_latency(host, port, timeout) end)
+        |> Enum.reject(&is_nil/1)
+
+      case measurements do
+        [] ->
+          {:error, Error.validation(summary: "Failed to connect to #{host}:#{port}")}
+
+        measurements ->
+          {:ok, Enum.sum(measurements) / length(measurements)}
+      end
+    end
+  end
+
+  defp measure_single_latency(host, port, timeout) do
+    start_time = System.monotonic_time(:millisecond)
+
+    with {:ok, is_ipv6} <- check_ipv6(host),
+         {:ok, socket} <-
+           :gen_tcp.connect(to_charlist(host), port, [:binary, active: false] ++ ipv6_opts(is_ipv6), timeout) do
+      end_time = System.monotonic_time(:millisecond)
+      :gen_tcp.close(socket)
+      end_time - start_time
+    else
+      {:error, _reason} -> nil
+    end
+  end
 end

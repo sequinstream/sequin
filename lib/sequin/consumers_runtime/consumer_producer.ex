@@ -155,7 +155,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_idempotency(state, messages) do
-    seqs_to_deliver =
+    commit_tuples_to_deliver =
       messages
       |> Stream.reject(fn
         # We don't enforce idempotency for read actions
@@ -166,12 +166,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         %ConsumerRecord{data: %ConsumerRecordData{action: nil}} -> true
         _ -> false
       end)
-      |> Enum.map(&(&1.commit_lsn + &1.commit_idx))
+      |> Enum.map(&{&1.commit_lsn, &1.commit_idx})
 
-    {:ok, delivered_seqs} = ConsumerIdempotency.delivered_messages(state.consumer.id, seqs_to_deliver)
+    {:ok, delivered_commit_tuples} = ConsumerIdempotency.delivered_messages(state.consumer.id, commit_tuples_to_deliver)
 
     {delivered_messages, filtered_messages} =
-      Enum.split_with(messages, &((&1.commit_lsn + &1.commit_idx) in delivered_seqs))
+      Enum.split_with(messages, fn message ->
+        {message.commit_lsn, message.commit_idx} in delivered_commit_tuples
+      end)
 
     if delivered_messages == [] do
       {state, messages}
@@ -179,7 +181,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       Logger.info(
         "[ConsumerProducer] Rejected messages for idempotency",
         rejected_message_count: length(delivered_messages),
-        seqs: delivered_seqs,
+        commit_tuples: delivered_commit_tuples,
         message_count: length(filtered_messages)
       )
 
@@ -213,8 +215,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @exponential_backoff_max :timer.minutes(3)
   def ack({consumer, test_pid}, successful, failed) do
-    successful_seqs = successful |> Stream.flat_map(& &1.data) |> Enum.map(&(&1.commit_lsn + &1.commit_idx))
-    :ok = ConsumerIdempotency.mark_messages_delivered(consumer.id, successful_seqs)
+    successful_commit_tuples =
+      successful
+      |> Stream.flat_map(& &1.data)
+      |> Enum.map(&{&1.commit_lsn, &1.commit_idx})
+
+    :ok = ConsumerIdempotency.mark_messages_delivered(consumer.id, successful_commit_tuples)
 
     successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
     failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

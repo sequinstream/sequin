@@ -17,14 +17,16 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
   require Logger
 
   @type consumer_id :: String.t()
-  @type seq :: integer()
+  @type commit_tuple :: {integer(), integer()}
 
-  @spec mark_messages_delivered(consumer_id(), [seq()]) :: :ok | {:error, Error.t()}
+  @spec mark_messages_delivered(consumer_id(), [commit_tuple()]) :: :ok | {:error, Error.t()}
   def mark_messages_delivered(_, []), do: :ok
 
-  def mark_messages_delivered(consumer_id, seqs) do
-    seqs
-    |> Enum.map(fn seq -> ["ZADD", delivered_key(consumer_id), seq, seq] end)
+  def mark_messages_delivered(consumer_id, commit_tuples) do
+    commit_tuples
+    |> Enum.map(fn commit_tuple ->
+      ["ZADD", delivered_key(consumer_id), score_from_tuple(commit_tuple), member_from_tuple(commit_tuple)]
+    end)
     |> Redis.pipeline()
     |> case do
       {:ok, _} -> :ok
@@ -32,36 +34,42 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
     end
   end
 
-  @spec delivered_messages(consumer_id(), [seq()]) :: {:ok, [seq()]} | {:error, Error.t()}
+  @spec delivered_messages(consumer_id(), [commit_tuple()]) :: {:ok, [commit_tuple()]} | {:error, Error.t()}
   def delivered_messages(_, []), do: {:ok, []}
 
-  def delivered_messages(consumer_id, seqs) do
-    with {:ok, results} <- Redis.command(["ZMSCORE", delivered_key(consumer_id) | seqs]) do
-      # Convert results to integers, filtering out nils (non-delivered messages)
-      delivered_seqs =
-        results
-        |> Stream.reject(&is_nil/1)
-        |> Enum.map(&String.to_integer/1)
+  def delivered_messages(consumer_id, commit_tuples) do
+    encoded_commit_tuples = Enum.map(commit_tuples, &member_from_tuple/1)
 
-      {:ok, delivered_seqs}
+    with {:ok, results} <- Redis.command(["ZMSCORE", delivered_key(consumer_id) | encoded_commit_tuples]) do
+      # Convert results to integers, filtering out nils (non-delivered messages)
+      delivered_commit_tuples =
+        results
+        |> Enum.zip(commit_tuples)
+        |> Stream.reject(fn {result, _} -> is_nil(result) end)
+        |> Enum.map(fn {_result, {lsn, idx}} ->
+          {lsn, idx}
+        end)
+
+      {:ok, delivered_commit_tuples}
     end
   end
 
-  @spec trim(consumer_id(), seq()) :: :ok | {:error, Error.t()}
-  def trim(consumer_id, lsn) do
+  @spec trim(consumer_id(), commit_tuple()) :: :ok | {:error, Error.t()}
+  def trim(consumer_id, commit_tuple) do
     key = delivered_key(consumer_id)
 
     with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
-         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", lsn]),
+         {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", "(#{score_from_tuple(commit_tuple)}"]),
          {:ok, final_size} <- Redis.command(["ZCARD", key]) do
-      Logger.info("[ConsumerIdempotency] Trimmed set to LSN #{lsn}",
+      Logger.info("[ConsumerIdempotency] Trimmed set to: #{inspect(commit_tuple)}",
+        commit_tuple: inspect(commit_tuple),
         consumer_id: consumer_id,
         initial_size: initial_size,
         records_removed: trimmed,
         final_size: final_size
       )
 
-      :ok
+      {:ok, String.to_integer(trimmed)}
     else
       {:error, error} when is_exception(error) ->
         Logger.error("[ConsumerIdempotency] Error trimming set", error: error)
@@ -69,4 +77,6 @@ defmodule Sequin.ConsumersRuntime.ConsumerIdempotency do
   end
 
   defp delivered_key(consumer_id), do: "consumer:#{consumer_id}:consumer_idempotency"
+  defp member_from_tuple({lsn, idx}), do: "#{lsn}:#{idx}"
+  defp score_from_tuple({lsn, idx}), do: lsn + idx
 end

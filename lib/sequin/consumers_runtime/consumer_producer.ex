@@ -11,8 +11,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
-  alias Sequin.ConsumersRuntime.ConsumerIdempotency
+  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Postgres
   alias Sequin.Repo
@@ -89,7 +88,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         :ok
 
       {:ok, lsn} ->
-        ConsumerIdempotency.trim(state.consumer.id, %{commit_lsn: lsn, commit_idx: 0})
+        MessageLedgers.trim_delivered_cursors_set(state.consumer.id, %{commit_lsn: lsn, commit_idx: 0})
 
       {:error, error} when is_exception(error) ->
         Logger.error("Error trimming idempotency seqs", error: Exception.message(error))
@@ -156,7 +155,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_idempotency(state, messages) do
-    commits_to_deliver =
+    wal_cursors_to_deliver =
       messages
       |> Stream.reject(fn
         # We don't enforce idempotency for read actions
@@ -169,13 +168,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       end)
       |> Enum.map(fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
 
-    {:ok, delivered_commits} = ConsumerIdempotency.delivered_messages(state.consumer.id, commits_to_deliver)
-
-    :ok = AtLeastOnceVerification.remove_commit_tuples(state.consumer.id, delivered_commits)
+    {:ok, delivered_wal_cursors} =
+      MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
 
     {delivered_messages, filtered_messages} =
       Enum.split_with(messages, fn message ->
-        Enum.find(delivered_commits, fn commit ->
+        Enum.find(delivered_wal_cursors, fn commit ->
           commit.commit_lsn == message.commit_lsn and commit.commit_idx == message.commit_idx
         end)
       end)
@@ -186,7 +184,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       Logger.info(
         "[ConsumerProducer] Rejected messages for idempotency",
         rejected_message_count: length(delivered_messages),
-        commits: delivered_commits,
+        commits: delivered_wal_cursors,
         message_count: length(filtered_messages)
       )
 
@@ -220,7 +218,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   @exponential_backoff_max :timer.minutes(3)
   def ack({consumer, test_pid}, successful, failed) do
-    commits =
+    wal_cursors =
       successful
       |> Stream.flat_map(& &1.data)
       |> Enum.map(fn message ->
@@ -231,9 +229,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         }
       end)
 
-    :ok = ConsumerIdempotency.mark_messages_delivered(consumer.id, commits)
-
-    :ok = AtLeastOnceVerification.remove_commit_tuples(consumer.id, commits)
+    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
 
     successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
     failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

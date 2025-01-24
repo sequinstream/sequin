@@ -60,8 +60,8 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServerTest do
 
       # Insert some WAL events
       wal_events =
-        Enum.map(1..5, fn _ ->
-          ReplicationFactory.insert_wal_event!(wal_pipeline_id: wal_pipeline.id, commit_lsn: commit_lsn)
+        Enum.map(1..5, fn n ->
+          ReplicationFactory.insert_wal_event!(wal_pipeline_id: wal_pipeline.id, commit_lsn: commit_lsn, commit_idx: n)
         end)
 
       start_supervised!(

@@ -64,7 +64,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :message_handler_module, atom()
       field :id, String.t()
       field :last_commit_lsn, integer()
-      field :last_processed_seq, integer()
+      field :last_processed_commit_tuple, {integer(), integer()}
       field :publication, String.t()
       field :slot_name, String.t()
       field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
@@ -215,7 +215,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def handle_connect(state) do
     Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
 
-    {:ok, last_processed_seq} = Sequin.Replication.last_processed_seq(state.id)
+    {:ok, last_processed_commit_tuple} = Sequin.Replication.last_processed_commit_tuple(state.id)
 
     query =
       if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
@@ -225,7 +225,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       end
 
     {:stream, query, [],
-     %{state | step: :streaming, connect_attempts: state.connect_attempts + 1, last_processed_seq: last_processed_seq}}
+     %{
+       state
+       | step: :streaming,
+         connect_attempts: state.connect_attempts + 1,
+         last_processed_commit_tuple: last_processed_commit_tuple
+     }}
   end
 
   @impl ReplicationConnection
@@ -310,7 +315,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         lsn = safe_ack_lsn(state)
         Logger.info("Acking LSN #{lsn} (current server LSN: #{wal_end})")
 
-        Replication.put_last_processed_seq!(state.id, lsn)
+        Replication.put_last_processed_commit_tuple!(state.id, {lsn, 0})
         ack_message(lsn)
       else
         []
@@ -576,7 +581,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp process_message(%LogicalMessage{prefix: "sequin." <> _} = msg, state) do
     message_handler_ctx =
-      state.message_handler_module.handle_logical_message(state.message_handler_ctx, state.current_xaction_lsn, msg)
+      state.message_handler_module.handle_logical_message(state.message_handler_ctx, {state.current_xaction_lsn, 0}, msg)
 
     %{state | message_handler_ctx: message_handler_ctx}
   end
@@ -599,9 +604,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     %Message{
       action: :insert,
       commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
       commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -624,9 +628,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     %Message{
       action: :update,
       commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
       commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -653,9 +656,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     %Message{
       action: :delete,
       commit_lsn: state.current_xaction_lsn,
-      commit_timestamp: state.current_commit_ts,
       commit_idx: state.current_commit_idx,
-      seq: state.current_xaction_lsn + state.current_commit_idx,
+      commit_timestamp: state.current_commit_ts,
       errors: nil,
       ids: ids,
       table_schema: schema,
@@ -674,7 +676,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {_, messages} = state.accumulated_messages
     messages = Enum.reverse(messages)
 
-    next_seq = messages |> Enum.map(& &1.seq) |> Enum.max()
+    next_commit_tuple = messages |> Enum.map(&{&1.commit_lsn, &1.commit_idx}) |> Enum.max()
     # Flush accumulated messages
     {:ok, _count, message_handler_ctx} =
       state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
@@ -683,11 +685,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       send(state.test_pid, {__MODULE__, :flush_messages})
     end
 
-    %{state | accumulated_messages: {0, []}, last_processed_seq: next_seq, message_handler_ctx: message_handler_ctx}
+    %{
+      state
+      | accumulated_messages: {0, []},
+        last_processed_commit_tuple: next_commit_tuple,
+        message_handler_ctx: message_handler_ctx
+    }
   end
 
   defp maybe_put_message(%State{} = state, %Message{} = message) do
-    if message.seq > state.last_processed_seq do
+    if {message.commit_lsn, message.commit_idx} > state.last_processed_commit_tuple do
       {acc_size, acc_messages} = state.accumulated_messages
       new_size = acc_size + :erlang.external_size(message)
 

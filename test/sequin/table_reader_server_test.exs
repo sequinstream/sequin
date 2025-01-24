@@ -161,14 +161,16 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         Enum.reduce(1..2, [], fn n, messages ->
           assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-          assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: MapSet.new()})
+          assert :ok =
+                   TableReaderServer.flush_batch(pid, %{batch_id: batch_id, commit_lsn: n, drop_pks: MapSet.new()})
 
           produce_and_ack_messages(consumer, page_size) ++ messages
         end)
 
       # We expect only 5 records (the last 5 characters)
       assert length(messages) == 5
-      assert Enum.frequencies_by(messages, & &1.seq) == %{1 => 3, 2 => 2}
+
+      assert Enum.frequencies_by(messages, & &1.commit_lsn) == %{1 => 3, 2 => 2}
 
       # Verify that the records match the last 5 inserted characters
       messages = Enum.sort_by(messages, & &1.record_pks)
@@ -210,7 +212,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
         Enum.reduce(1..3, [], fn n, messages ->
           assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
 
-          assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: n, drop_pks: dropped_pks})
+          assert :ok =
+                   TableReaderServer.flush_batch(pid, %{batch_id: batch_id, commit_lsn: n, drop_pks: dropped_pks})
 
           produce_and_ack_messages(consumer, page_size) ++ messages
         end)
@@ -367,7 +370,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       Process.monitor(pid)
       assert_receive {TableReaderServer, {:batch_fetched, batch_id}}, 1000
-      assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: 0, drop_pks: MapSet.new()})
+      assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, commit_lsn: 0, drop_pks: MapSet.new()})
       assert_receive {TableReaderServer, :paused}, 1000
 
       # Now clear the messages
@@ -421,15 +424,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     end
   end
 
-  defp flush_batches(consumer, pid, seq \\ 0, message_history \\ [], messages \\ []) do
+  defp flush_batches(consumer, pid, commit_lsn \\ 0, message_history \\ [], messages \\ []) do
     Process.monitor(pid)
 
     receive do
       {TableReaderServer, {:batch_fetched, batch_id}} = msg ->
-        assert :ok = TableReaderServer.flush_batch(pid, %{batch_id: batch_id, seq: seq, drop_pks: MapSet.new()})
+        assert :ok =
+                 TableReaderServer.flush_batch(pid, %{
+                   batch_id: batch_id,
+                   commit_lsn: commit_lsn,
+                   drop_pks: MapSet.new()
+                 })
+
         new_messages = produce_and_ack_messages(consumer, 100)
 
-        flush_batches(consumer, pid, seq + 1, [msg | message_history], messages ++ new_messages)
+        flush_batches(consumer, pid, commit_lsn, [msg | message_history], messages ++ new_messages)
 
       {TableReaderServer, :paused} ->
         :paused

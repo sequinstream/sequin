@@ -12,7 +12,7 @@ defmodule Sequin.Replication.WalEvent do
              :id,
              :wal_pipeline_id,
              :commit_lsn,
-             :seq,
+             :commit_idx,
              :record_pks,
              :record,
              :changes,
@@ -24,7 +24,7 @@ defmodule Sequin.Replication.WalEvent do
     field :action, Ecto.Enum, values: [:insert, :update, :delete]
     field :changes, :map
     field :commit_lsn, :integer
-    field :seq, :integer
+    field :commit_idx, :integer
     field :committed_at, :utc_datetime_usec
     field :record_pks, {:array, :string}
     field :record, :map
@@ -45,7 +45,7 @@ defmodule Sequin.Replication.WalEvent do
     |> cast(attrs, [
       :wal_pipeline_id,
       :commit_lsn,
-      :seq,
+      :commit_idx,
       :record_pks,
       :replication_message_trace_id,
       :source_table_oid,
@@ -59,7 +59,7 @@ defmodule Sequin.Replication.WalEvent do
     |> validate_required([
       :wal_pipeline_id,
       :commit_lsn,
-      :seq,
+      :commit_idx,
       :record_pks,
       :replication_message_trace_id,
       :source_table_oid,

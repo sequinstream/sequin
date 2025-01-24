@@ -363,7 +363,8 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %ConsumerEvent{
         ack_id: Factory.uuid(),
-        commit_lsn: Enum.random(1..1_000_000),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(0..100),
         consumer_id: Factory.uuid(),
         data: consumer_event_data(action: action),
         deliver_count: Enum.random(0..10),
@@ -372,7 +373,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         not_visible_until: not_visible_until,
         record_pks: record_pks,
         replication_message_trace_id: Factory.uuid(),
-        seq: Factory.unique_integer(),
         state: state,
         ingested_at: Factory.timestamp(),
         table_oid: Enum.random(1..100_000)
@@ -451,7 +451,8 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %ConsumerRecord{
         ack_id: Factory.uuid(),
-        commit_lsn: Enum.random(1..1_000_000),
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(0..100),
         consumer_id: Factory.uuid(),
         data: consumer_record_data(),
         deliver_count: Enum.random(0..10),
@@ -460,7 +461,6 @@ defmodule Sequin.Factory.ConsumersFactory do
         not_visible_until: not_visible_until,
         record_pks: record_pks,
         replication_message_trace_id: Factory.uuid(),
-        seq: Factory.unique_integer(),
         state: state,
         ingested_at: Factory.timestamp(),
         table_oid: Enum.random(1..100_000)

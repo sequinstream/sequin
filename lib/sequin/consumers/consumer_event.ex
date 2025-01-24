@@ -26,7 +26,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :consumer_id, Ecto.UUID, primary_key: true
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
-    field :seq, :integer
+    field :commit_idx, :integer
     field :group_id, :string
     field :record_pks, {:array, :string}
     field :table_oid, :integer
@@ -56,7 +56,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     |> cast(attrs, [
       :consumer_id,
       :commit_lsn,
-      :seq,
+      :commit_idx,
       :record_pks,
       :table_oid,
       :group_id,
@@ -70,7 +70,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     |> validate_required([
       :consumer_id,
       :commit_lsn,
-      :seq,
+      :commit_idx,
       :record_pks,
       :table_oid,
       :deliver_count,

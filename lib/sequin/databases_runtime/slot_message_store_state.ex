@@ -132,7 +132,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     state.messages
     |> Map.values()
-    |> Enum.sort_by(& &1.seq)
+    |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
     |> Sequin.Enum.take_until(count, fn msg ->
       not MapSet.member?(undeliverable_group_ids, msg.group_id)
     end)
@@ -216,7 +216,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def peek_messages(%State{} = state, count) do
     state.messages
     |> Map.values()
-    |> Enum.sort_by(& &1.seq)
+    |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
     |> Enum.take(count)
   end
 

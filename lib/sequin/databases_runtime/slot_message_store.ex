@@ -510,7 +510,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         messages =
           state.messages
           |> Map.values()
-          |> Enum.sort_by(& &1.seq)
+          |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
           |> Enum.take(State.max_messages_in_memory())
           |> Map.new(&{&1.ack_id, &1})
 
@@ -561,8 +561,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     |> Map.new(&{&1.ack_id, &1})
   end
 
-  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list,
-    do: [limit: limit, order_by: {:asc, :seq}]
+  defp load_params(%SinkConsumer{id: id}, limit) when id in @trim_allow_consumer_id_allow_list do
+    [limit: limit, order_by: [asc: :commit_lsn, asc: :commit_idx]]
+  end
 
   defp load_params(%SinkConsumer{}, _limit), do: []
 

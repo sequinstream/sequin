@@ -9,7 +9,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
+  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.DatabasesRuntime.SlotMessageStore
@@ -364,9 +364,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   defp call_consumer_message_stores(messages_by_consumer) do
     Enum.each(messages_by_consumer, fn {consumer, messages} ->
-      # AtLeastOnceVerification
-      commits = Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
-      :ok = AtLeastOnceVerification.record_commit_tuples(consumer.id, commits)
+      wal_cursors = Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
+      :ok = MessageLedgers.wal_cursors_ingested(consumer.id, wal_cursors)
 
       :ok = SlotMessageStore.put_messages(consumer.id, messages)
     end)

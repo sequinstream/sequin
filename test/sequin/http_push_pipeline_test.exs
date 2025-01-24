@@ -4,9 +4,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
-  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.HttpPushPipeline
+  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
@@ -331,12 +331,17 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert diff_ms2 > diff_ms1
     end
 
-    test "commits are removed from AtLeastOnceVerification", %{consumer: consumer} do
+    test "commits are removed from MessageLedgers", %{consumer: consumer} do
       event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert, not_visible_until: nil)
 
-      commit = %{commit_lsn: event.commit_lsn, commit_idx: event.commit_idx, commit_timestamp: DateTime.utc_now()}
-      assert :ok = AtLeastOnceVerification.record_commit_tuples(consumer.id, [commit])
-      assert {:ok, 1} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
+      wal_cursor = %{
+        commit_lsn: event.commit_lsn,
+        commit_idx: event.commit_idx,
+        commit_timestamp: DateTime.utc_now()
+      }
+
+      assert :ok = MessageLedgers.wal_cursors_ingested(consumer.id, [wal_cursor])
+      assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
       SlotMessageStore.put_messages(consumer.id, [event])
@@ -349,7 +354,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
       assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 1_000
 
-      assert {:ok, 0} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
+      assert {:ok, 0} = MessageLedgers.count_commit_verification_set(consumer.id)
     end
   end
 

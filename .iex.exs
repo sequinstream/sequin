@@ -2,8 +2,8 @@ import Sequin.IexHelpers
 
 alias Sequin.Consumers
 alias Sequin.Consumers.SinkConsumer
-alias Sequin.ConsumersRuntime.ConsumerIdempotency
 alias Sequin.ConsumersRuntime.ConsumerProducer
+alias Sequin.ConsumersRuntime.MessageLedgers
 alias Sequin.Databases
 alias Sequin.Databases.PostgresDatabase
 alias Sequin.DatabasesRuntime.SlotMessageStore

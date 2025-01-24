@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
   alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
+  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.ConsumersRuntime.ConsumerProducer
   alias Sequin.ConsumersRuntime.HttpPushPipeline
   alias Sequin.Databases.ConnectionCache
@@ -328,6 +329,27 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
       # Ensure the backoff is increasing
       assert diff_ms2 > diff_ms1
+    end
+
+    test "commits are removed from AtLeastOnceVerification", %{consumer: consumer} do
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, action: :insert, not_visible_until: nil)
+
+      commit = %{commit_lsn: event.commit_lsn, commit_idx: event.commit_idx, commit_timestamp: DateTime.utc_now()}
+      assert :ok = AtLeastOnceVerification.record_commit_tuples(consumer.id, [commit])
+      assert {:ok, 1} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
+
+      start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
+      SlotMessageStore.put_messages(consumer.id, [event])
+
+      adapter = fn req -> {req, Req.Response.new(status: 200)} end
+      start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
+
+      ref = send_test_events(consumer, [event])
+
+      assert_receive {:ack, ^ref, [%{data: [%{data: %{action: :insert}}]}], []}, 1_000
+      assert_receive {ConsumerProducer, :ack_finished, [_successful], []}, 1_000
+
+      assert {:ok, 0} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
     end
   end
 

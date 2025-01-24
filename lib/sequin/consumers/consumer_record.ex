@@ -26,6 +26,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :id, :integer, primary_key: true, read_after_writes: true
     field :commit_lsn, :integer
     field :commit_idx, :integer
+    field :commit_timestamp, :utc_datetime_usec, virtual: true
     field :record_pks, {:array, :string}
     field :group_id, :string
     field :table_oid, :integer

@@ -591,10 +591,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp encode_sink(%SinkConsumer{sink: %RedisSink{} = sink}) do
+    default_host = if env() == :dev, do: "localhost"
+
     %{
       type: :redis,
-      host: sink.host,
-      port: sink.port,
+      host: sink.host || default_host,
+      port: sink.port || 6379,
       streamKey: sink.stream_key,
       database: sink.database,
       tls: sink.tls,
@@ -1123,4 +1125,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   defp maybe_augment_alert(check, _consumer), do: check
+
+  defp env do
+    Application.get_env(:sequin, :env)
+  end
 end

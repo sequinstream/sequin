@@ -213,11 +213,27 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     end
   end
 
+  @spec peek_messages(%State{}, non_neg_integer()) :: list(ConsumerRecord.t() | ConsumerEvent.t())
   def peek_messages(%State{} = state, count) do
     state.messages
     |> Map.values()
     |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx})
     |> Enum.take(count)
+  end
+
+  @spec safe_ack_lsn(%State{}) :: non_neg_integer() | nil
+  def safe_ack_lsn(%State{} = state) do
+    state.messages
+    |> Stream.map(fn {_ack_id, msg} -> Map.take(msg, [:commit_lsn, :flushed_at]) end)
+    |> Enum.group_by(& &1.commit_lsn, & &1.flushed_at)
+    |> Enum.sort_by(fn {commit_lsn, _flushed_at_values} -> commit_lsn end)
+    |> Enum.reduce_while(nil, fn {commit_lsn, flushed_at_values}, safe_ack_lsn ->
+      if Enum.any?(flushed_at_values, &is_nil/1) do
+        {:halt, safe_ack_lsn}
+      else
+        {:cont, commit_lsn}
+      end
+    end)
   end
 
   defp update_messages(%State{} = state, messages) do

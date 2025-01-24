@@ -411,4 +411,81 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert Enum.map(peeked_messages, & &1.commit_idx) == [0, 1, 2]
     end
   end
+
+  describe "safe_ack_lsn/1" do
+    setup do
+      consumer = ConsumersFactory.sink_consumer()
+      state = %State{consumer: consumer}
+      {:ok, %{state: state}}
+    end
+
+    test "returns nil when there are no messages", %{state: state} do
+      assert State.safe_ack_lsn(state) == nil
+    end
+
+    test "returns nil when no messages are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: nil)
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_ack_lsn(state) == nil
+    end
+
+    test "returns nil when no commit_lsns are fully flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: nil)
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_ack_lsn(state) == nil
+    end
+
+    test "returns the max commit_lsn when all messages are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: DateTime.utc_now())
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_ack_lsn(state) == 2
+    end
+
+    test "returns the highest commit_lsn for which all messages are flushed", %{state: state} do
+      messages = [
+        # 0 is fully flushed
+        ConsumersFactory.consumer_message(commit_lsn: 0, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 0, flushed_at: DateTime.utc_now()),
+        # 1 is fully flushed
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: DateTime.utc_now()),
+        # 2 is not fully flushed - so we should return 1
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: nil),
+        # 3 is fully flushed
+        ConsumersFactory.consumer_message(commit_lsn: 3, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 3, flushed_at: DateTime.utc_now()),
+        ConsumersFactory.consumer_message(commit_lsn: 3, flushed_at: DateTime.utc_now()),
+        # 4 is not flushed
+        ConsumersFactory.consumer_message(commit_lsn: 4, flushed_at: nil)
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_ack_lsn(state) == 1
+    end
+
+    test "returns nil when the first commit_lsn is unflushed and all others are flushed", %{state: state} do
+      messages = [
+        ConsumersFactory.consumer_message(commit_lsn: 1, flushed_at: nil),
+        ConsumersFactory.consumer_message(commit_lsn: 2, flushed_at: DateTime.utc_now())
+      ]
+
+      state = State.put_messages(state, messages)
+      assert State.safe_ack_lsn(state) == nil
+    end
+  end
 end

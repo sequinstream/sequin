@@ -178,19 +178,27 @@ defmodule Sequin.Replication do
   end
 
   # Replication runtime lifecycle
-  def put_last_processed_seq!(replication_slot_id, seq) do
-    Redis.command!(["SET", last_processed_seq_key(replication_slot_id), seq])
+  def put_last_processed_commit_tuple!(replication_slot_id, {lsn, idx}) do
+    Redis.command!(["SET", last_processed_commit_tuple_key(replication_slot_id), "#{lsn}:#{idx}"])
   end
 
-  def last_processed_seq(replication_slot_id) do
-    case Redis.command(["GET", last_processed_seq_key(replication_slot_id)]) do
-      {:ok, nil} -> {:ok, -1}
-      {:ok, seq} -> {:ok, String.to_integer(seq)}
-      error -> error
+  def last_processed_commit_tuple(replication_slot_id) do
+    case Redis.command(["GET", last_processed_commit_tuple_key(replication_slot_id)]) do
+      {:ok, nil} ->
+        {:ok, {0, 0}}
+
+      {:ok, commit_tuple} ->
+        [lsn, idx] = String.split(commit_tuple, ":")
+        {:ok, {String.to_integer(lsn), String.to_integer(idx)}}
+
+      error ->
+        error
     end
   end
 
-  defp last_processed_seq_key(replication_slot_id), do: "sequin:replication:last_processed_seq:#{replication_slot_id}"
+  defp last_processed_commit_tuple_key(replication_slot_id) do
+    "sequin:replication:last_processed_commit_tuple:#{replication_slot_id}"
+  end
 
   # WAL Pipeline
 
@@ -369,7 +377,11 @@ defmodule Sequin.Replication do
         |> Sequin.Map.from_ecto()
       end)
 
-    {count, _} = Repo.insert_all(WalEvent, events, conflict_target: [:wal_pipeline_id, :seq], on_conflict: :nothing)
+    {count, _} =
+      Repo.insert_all(WalEvent, events,
+        conflict_target: [:wal_pipeline_id, :commit_lsn, :commit_idx],
+        on_conflict: :nothing
+      )
 
     unless Repo.in_transaction?() do
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)

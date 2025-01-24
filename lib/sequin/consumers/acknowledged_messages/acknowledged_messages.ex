@@ -69,7 +69,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     %AcknowledgedMessage{
       id: record.id,
       consumer_id: record.consumer_id,
-      seq: record.seq,
+      seq: record.commit_lsn + record.commit_idx,
       commit_lsn: record.commit_lsn,
       commit_timestamp: record.data.metadata.commit_timestamp,
       ack_id: record.ack_id,
@@ -87,7 +87,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages do
     %AcknowledgedMessage{
       id: event.id,
       consumer_id: event.consumer_id,
-      seq: event.seq,
+      seq: event.commit_lsn + event.commit_idx,
       commit_lsn: event.commit_lsn,
       commit_timestamp: event.data.metadata.commit_timestamp,
       ack_id: event.ack_id,

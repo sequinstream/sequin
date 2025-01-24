@@ -35,7 +35,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       field :batch_id, String.t()
       field :table_oid, non_neg_integer()
       field :backfill_id, String.t()
-      field :seq, non_neg_integer()
+      field :commit_lsn, integer()
       field :primary_key_values, MapSet.t(list()), default: MapSet.new()
     end
   end
@@ -168,7 +168,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   @high_watermark_prefix Constants.backfill_batch_high_watermark()
 
   @impl MessageHandlerBehaviour
-  def handle_logical_message(ctx, seq, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
+  def handle_logical_message(ctx, commit_lsn, %LogicalMessage{prefix: @low_watermark_prefix} = msg) do
     %{"batch_id" => batch_id, "table_oid" => table_oid, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
 
     # Split batches into those matching the backfill_id and others
@@ -189,14 +189,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             table_oid: table_oid,
             backfill_id: backfill_id,
             primary_key_values: MapSet.new(),
-            seq: seq
+            commit_lsn: commit_lsn
           }
           | remaining_batches
         ]
     }
   end
 
-  def handle_logical_message(ctx, _seq, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
+  def handle_logical_message(ctx, _commit_lsn, %LogicalMessage{prefix: @high_watermark_prefix} = msg) do
     %{"batch_id" => batch_id, "backfill_id" => backfill_id} = Jason.decode!(msg.content)
 
     case Enum.find(ctx.table_reader_batches, &(&1.batch_id == batch_id)) do
@@ -212,7 +212,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         :ok =
           ctx.table_reader_mod.flush_batch(backfill_id, %{
             batch_id: batch_id,
-            seq: batch.seq,
+            commit_lsn: batch.commit_lsn,
             drop_pks: batch.primary_key_values
           })
 
@@ -225,7 +225,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       ctx
   end
 
-  def handle_logical_message(ctx, _seq, _msg) do
+  def handle_logical_message(ctx, _commit_lsn, _msg) do
     ctx
   end
 
@@ -256,7 +256,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     %ConsumerEvent{
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_idx: message.commit_idx,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -270,7 +270,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     %ConsumerRecord{
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_idx: message.commit_idx,
       deleted: message.action == :delete,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
@@ -379,7 +379,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     %WalEvent{
       wal_pipeline_id: pipeline.id,
       commit_lsn: message.commit_lsn,
-      seq: message.seq,
+      commit_idx: message.commit_idx,
       record_pks: Enum.map(message.ids, &to_string/1),
       record: fields_to_map(get_fields(message)),
       changes: get_changes(message),

@@ -412,7 +412,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     %{db_table | sort_column_attnum: sort_column_attnum(state.consumer)}
   end
 
-  defp process_batch(%State{} = state, %{seq: seq, drop_pks: drop_pks}) do
+  defp process_batch(%State{} = state, %{commit_lsn: commit_lsn, drop_pks: drop_pks}) do
     pk_columns =
       table(state).columns
       |> Enum.filter(& &1.is_pk?)
@@ -442,7 +442,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       Logger.info("[TableReaderServer] Dropped #{map_size_diff} rows")
     end
 
-    {:ok, consumer} = handle_records(state, seq, filtered_batch)
+    {:ok, consumer} = handle_records(state, commit_lsn, filtered_batch)
 
     # Update current_cursor with next_cursor and persist to Redis
     :ok = TableReader.update_cursor(state.consumer.active_backfill.id, state.next_cursor)
@@ -450,7 +450,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   end
 
   # Message handling
-  defp handle_records(%State{} = state, seq, records) do
+  defp handle_records(%State{} = state, commit_lsn, records) do
     Logger.info("[TableReaderServer] Handling #{length(records)} record(s)")
     table = table(state)
 
@@ -460,8 +460,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       |> Enum.filter(&Consumers.matches_record?(state.consumer, table.oid, &1))
 
     case state.consumer.message_kind do
-      :record -> handle_record_messages!(state, table, seq, matching_records)
-      :event -> handle_event_messages!(state, table, seq, matching_records)
+      :record -> handle_record_messages!(state, table, commit_lsn, matching_records)
+      :event -> handle_event_messages!(state, table, commit_lsn, matching_records)
     end
 
     {:ok, backfill} =
@@ -478,12 +478,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:ok, %{state.consumer | active_backfill: backfill}}
   end
 
-  defp handle_record_messages!(%State{} = state, table, seq, matching_records) do
+  defp handle_record_messages!(%State{} = state, table, commit_lsn, matching_records) do
     consumer_records =
       Enum.map(matching_records, fn record_attnums_to_values ->
         %ConsumerRecord{
           consumer_id: state.consumer.id,
-          seq: seq,
+          commit_lsn: commit_lsn,
+          commit_idx: 0,
           table_oid: table.oid,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
@@ -514,14 +515,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     }
   end
 
-  defp handle_event_messages!(%State{} = state, table, seq, matching_records) do
+  defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
     consumer_events =
       Enum.map(matching_records, fn record_attnums_to_values ->
         %ConsumerEvent{
           consumer_id: state.consumer.id,
-          seq: seq,
-          # You may need to get this from somewhere
-          commit_lsn: 0,
+          commit_lsn: commit_lsn,
+          commit_idx: 0,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
           table_oid: table.oid,

@@ -700,29 +700,26 @@ defmodule Sequin.PostgresReplicationTest do
       [insert1, insert2, insert3] = changes
 
       # Assert seq values increase within transaction
-      base_seq = insert1.seq
-      assert insert2.seq == base_seq + 1
-      assert insert3.seq == base_seq + 2
+      assert insert1.commit_idx == 0
+      assert insert2.commit_idx == 1
+      assert insert3.commit_idx == 2
 
       assert is_action(insert1, :insert)
       assert get_field_value(insert1.fields, "name") == "Paul Atreides"
-      assert insert1.commit_idx == 0
 
       assert is_action(insert2, :insert)
       assert get_field_value(insert2.fields, "name") == "Leto Atreides"
-      assert insert2.commit_idx == 1
 
       assert is_action(insert3, :insert)
       assert get_field_value(insert3.fields, "name") == "Chani"
-      assert insert3.commit_idx == 2
 
       # Insert another character
       CharacterFactory.insert_character!([name: "Duncan Idaho"], repo: UnboxedRepo)
 
       assert_receive {:changes, [insert4]}, :timer.seconds(1)
       # commit_idx resets but seq should be higher than previous transaction
+      assert insert4.commit_lsn > insert3.commit_lsn
       assert insert4.commit_idx == 0
-      assert insert4.seq > insert3.seq
     end
 
     @tag capture_log: true
@@ -777,8 +774,8 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert_receive {:change, [create_change]}, :timer.seconds(1)
       assert is_action(create_change, :insert)
-      assert is_integer(create_change.seq)
-      assert create_change.seq == create_change.commit_lsn + create_change.commit_idx
+      assert is_integer(create_change.commit_lsn)
+      assert create_change.commit_idx == 0
 
       assert fields_equal?(create_change.fields, record)
       assert create_change.action == :insert
@@ -789,9 +786,8 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert_receive {:change, [update_change]}, :timer.seconds(1)
       assert is_action(update_change, :update)
-      assert is_integer(update_change.seq)
-      assert update_change.seq > create_change.seq
-      assert update_change.seq == update_change.commit_lsn + update_change.commit_idx
+      assert update_change.commit_lsn > create_change.commit_lsn
+      assert update_change.commit_idx == 0
 
       assert fields_equal?(update_change.fields, record)
       refute is_nil(update_change.old_fields)
@@ -803,9 +799,8 @@ defmodule Sequin.PostgresReplicationTest do
 
       assert_receive {:change, [delete_change]}, :timer.seconds(1)
       assert is_action(delete_change, :delete)
-      assert is_integer(delete_change.seq)
-      assert delete_change.seq > update_change.seq
-      assert delete_change.seq == delete_change.commit_lsn + delete_change.commit_idx
+      assert delete_change.commit_lsn > update_change.commit_lsn
+      assert delete_change.commit_idx == 0
 
       assert fields_equal?(delete_change.old_fields, record)
       assert delete_change.action == :delete
@@ -829,7 +824,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
-      Replication.put_last_processed_seq!(server_id(), change.seq)
+      Replication.put_last_processed_commit_tuple!(server_id(), {change.commit_lsn, change.commit_idx})
 
       # Stop the replication - likely before the message was acked, but there is a race here
       stop_replication!()

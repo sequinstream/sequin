@@ -57,6 +57,7 @@ defmodule Sequin.MessageHandlerTest do
       assert event.consumer_id == consumer.id
       assert event.table_oid == 123
       assert event.commit_lsn == message.commit_lsn
+      assert event.commit_idx == message.commit_idx
       assert event.record_pks == Enum.map(message.ids, &to_string/1)
       assert event.data.action == :insert
       assert event.data.record == fields_to_map(message.fields)
@@ -65,7 +66,6 @@ defmodule Sequin.MessageHandlerTest do
       assert event.data.metadata.table_schema == message.table_schema
       assert event.data.metadata.commit_timestamp == message.commit_timestamp
       assert event.data.metadata.database_name == consumer.postgres_database.name
-      assert event.seq == message.seq
     end
 
     test "handles message_kind: record correctly" do
@@ -108,10 +108,10 @@ defmodule Sequin.MessageHandlerTest do
       assert record.consumer_id == consumer.id
       assert record.table_oid == 456
       assert record.commit_lsn == message.commit_lsn
+      assert record.commit_idx == message.commit_idx
       assert record.record_pks == Enum.map(message.ids, &to_string/1)
       assert record.group_id == Enum.find(message.fields, &(&1.column_attnum == field.column_attnum)).value
       assert record.state == :available
-      assert record.seq == message.seq
     end
 
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do
@@ -423,14 +423,14 @@ defmodule Sequin.MessageHandlerTest do
 
       assert insert_event.action == :insert
       assert insert_event.wal_pipeline_id == wal_pipeline.id
-      assert insert_event.commit_lsn == insert_message.commit_lsn
+      assert insert_message.commit_lsn == insert_event.commit_lsn
+      assert insert_message.commit_idx == insert_event.commit_idx
       assert insert_event.record_pks == Enum.map(insert_message.ids, &to_string/1)
       assert insert_event.replication_message_trace_id == insert_message.trace_id
       assert insert_event.source_table_oid == insert_message.table_oid
       assert insert_event.record == fields_to_map(insert_message.fields)
       assert insert_event.changes == nil
       assert insert_event.committed_at == insert_message.commit_timestamp
-      assert insert_event.seq == insert_message.seq
 
       assert update_event.action == :update
       assert update_event.changes == %{"name" => "old_name"}
@@ -682,7 +682,7 @@ defmodule Sequin.MessageHandlerTest do
       assert new_batch.batch_id == "new-batch"
       assert new_batch.table_oid == 123
       assert new_batch.backfill_id == "new-backfill"
-      assert new_batch.seq == 43
+      assert new_batch.commit_lsn == 43
       assert new_batch.primary_key_values == MapSet.new()
     end
 
@@ -725,11 +725,11 @@ defmodule Sequin.MessageHandlerTest do
           batch_id: "matching-batch",
           table_oid: 123,
           backfill_id: "test-backfill",
-          seq: 42,
+          commit_lsn: 42,
           primary_key_values: MapSet.new([["1"], ["2"], ["3"]])
         })
 
-      batch_info = %{batch_id: "matching-batch", seq: 42, drop_pks: MapSet.new([["1"], ["2"], ["3"]])}
+      batch_info = %{batch_id: "matching-batch", commit_lsn: 42, drop_pks: MapSet.new([["1"], ["2"], ["3"]])}
 
       context = %MessageHandler.Context{
         table_reader_batches: [
@@ -922,7 +922,7 @@ defmodule Sequin.MessageHandlerTest do
       batch_id: "batch-#{UUID.uuid4()}",
       table_oid: Factory.unique_integer(),
       backfill_id: "backfill-#{UUID.uuid4()}",
-      seq: Factory.unique_integer(),
+      commit_lsn: Factory.unique_integer(),
       primary_key_values: MapSet.new()
     }
 

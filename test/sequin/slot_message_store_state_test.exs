@@ -113,13 +113,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       visible_msg =
         ConsumersFactory.consumer_record(
-          seq: 1,
+          commit_lsn: 1,
+          commit_idx: 0,
           not_visible_until: nil
         )
 
       invisible_msg =
         ConsumersFactory.consumer_record(
-          seq: 2,
+          commit_lsn: 1,
+          commit_idx: 1,
           not_visible_until: future_time
         )
 
@@ -129,7 +131,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       deliverable = State.deliverable_messages(state, 10)
 
       assert length(deliverable) == 1
-      assert hd(deliverable).seq == visible_msg.seq
+      assert hd(deliverable).commit_lsn == visible_msg.commit_lsn
+      assert hd(deliverable).commit_idx == visible_msg.commit_idx
     end
 
     test "respects message group visibility", %{state: state} do
@@ -137,9 +140,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       future_time = DateTime.add(DateTime.utc_now(), 30, :second)
 
       # Create three messages in same group, one pending
-      msg1 = ConsumersFactory.consumer_record(seq: 1, group_id: group_id)
-      msg2 = ConsumersFactory.consumer_record(seq: 2, group_id: group_id, not_visible_until: future_time)
-      msg3 = ConsumersFactory.consumer_record(seq: 3, group_id: group_id)
+      msg1 = ConsumersFactory.consumer_record(commit_lsn: 1, commit_idx: 0, group_id: group_id)
+
+      msg2 =
+        ConsumersFactory.consumer_record(commit_lsn: 1, commit_idx: 1, group_id: group_id, not_visible_until: future_time)
+
+      msg3 = ConsumersFactory.consumer_record(commit_lsn: 1, commit_idx: 2, group_id: group_id)
 
       messages = Map.new([msg1, msg2, msg3], &{&1.record_pks, &1})
       state = %{state | messages: messages}
@@ -385,7 +391,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   end
 
   describe "peek_messages/2" do
-    test "returns messages in seq order" do
+    test "returns messages in commit_lsn, commit_idx order" do
       state = %State{
         consumer: ConsumersFactory.sink_consumer(),
         messages: %{}
@@ -393,15 +399,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       messages =
         Enum.shuffle([
-          ConsumersFactory.consumer_message(seq: 1),
-          ConsumersFactory.consumer_message(seq: 2),
-          ConsumersFactory.consumer_message(seq: 3)
+          ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0),
+          ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1),
+          ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 2)
         ])
 
       state = State.put_messages(state, messages)
 
       assert peeked_messages = State.peek_messages(state, 3)
-      assert Enum.map(peeked_messages, & &1.seq) == [1, 2, 3]
+      assert Enum.map(peeked_messages, & &1.commit_lsn) == [1, 1, 1]
+      assert Enum.map(peeked_messages, & &1.commit_idx) == [0, 1, 2]
     end
   end
 end

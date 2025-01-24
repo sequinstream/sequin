@@ -51,6 +51,7 @@ defmodule Sequin.Factory do
   def postgres_object, do: Faker.Internet.domain_word()
   def name, do: to_string(Faker.Lorem.characters(10))
   def sequence, do: :erlang.unique_integer([:positive])
+  def commit_tuple, do: {:os.system_time(:millisecond), :erlang.unique_integer([:monotonic, :positive])}
   def time, do: Time.utc_now()
   def timestamp, do: Faker.DateTime.backward(365)
 

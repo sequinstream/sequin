@@ -43,6 +43,8 @@
   let showConfirmDialog = false;
   let validating = false;
   let showEncryptedValues: Record<string, boolean> = {};
+  let showLocalhostWarningDialog = false;
+  let dismissedLocalhostWarning = false;
 
   // Map.take
   $: baseUrlErrors = Object.fromEntries(
@@ -59,8 +61,22 @@
     live.pushEventTo(`#${parent}`, event, payload, callback);
   }
 
+  function checkForLocalhost() {
+    if (
+      !dismissedLocalhostWarning &&
+      form.baseUrl.toLowerCase().includes("localhost")
+    ) {
+      showLocalhostWarningDialog = true;
+      return true;
+    }
+    return false;
+  }
+
   function handleSubmit(event: Event) {
     event.preventDefault();
+    if (checkForLocalhost()) {
+      return;
+    }
     pushEvent("form_submitted", { form }, (reply) => {
       if (reply?.ok !== true) {
         validating = false;
@@ -340,14 +356,51 @@ sequin tunnel --ports=[your-local-port]:${form.name}`;
         <CardTitle>HTTP Endpoint</CardTitle>
       </CardHeader>
       <CardContent class="space-y-4">
-        <Button type="submit" loading={validating} variant="default">
-          <span slot="loading"> Validating... </span>
-          {#if isEdit}
-            Update HTTP Endpoint
-          {:else}
-            Create HTTP Endpoint
-          {/if}
-        </Button>
+        <Popover bind:open={showLocalhostWarningDialog}>
+          <PopoverTrigger />
+          <Button type="submit" loading={validating} variant="default">
+            <span slot="loading"> Validating... </span>
+            {#if isEdit}
+              Update HTTP Endpoint
+            {:else}
+              Create HTTP Endpoint
+            {/if}
+          </Button>
+          <PopoverContent class="w-80">
+            <div class="grid gap-4">
+              <div class="space-y-2">
+                <h4 class="font-medium leading-none">
+                  Warning: localhost detected
+                </h4>
+                <p class="text-sm text-muted-foreground">
+                  Using '<code>localhost</code>' in your configuration may not
+                  work as expected. Consider using '<code
+                    >host.docker.internal</code
+                  >' instead to connect to services running on your machine.
+                </p>
+              </div>
+              <div class="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  on:click={() => (showLocalhostWarningDialog = false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  on:click={() => {
+                    dismissedLocalhostWarning = true;
+                    showLocalhostWarningDialog = false;
+                    handleSubmit(new Event("submit"));
+                  }}
+                >
+                  Continue anyway
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </CardContent>
     </Card>
   </form>

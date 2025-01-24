@@ -48,13 +48,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     %{state | table_reader_batch_id: batch_id}
   end
 
-  @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer()}
+  @spec ack(%State{}, list(SinkConsumer.ack_id())) :: {%State{}, non_neg_integer(), non_neg_integer()}
   def ack(%State{} = state, ack_ids) do
     initial_count = map_size(state.messages)
-    messages = Map.drop(state.messages, ack_ids)
+    {dropped_messages, messages} = Map.split(state.messages, ack_ids)
+    dropped_messages = Map.values(dropped_messages)
     final_count = map_size(messages)
 
-    {%{state | messages: messages}, initial_count - final_count}
+    {%{state | messages: messages}, dropped_messages, initial_count - final_count}
   end
 
   @spec nack(%State{}, %{SinkConsumer.ack_id() => SinkConsumer.not_visible_until()}) :: {%State{}, non_neg_integer()}

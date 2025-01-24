@@ -19,6 +19,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   use GenServer
 
   alias Sequin.Consumers
+  alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.SinkConsumer
@@ -28,6 +29,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -336,15 +338,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   def handle_call({:ack, ack_ids}, _from, state) do
-    {time, {state, acked_count}} =
+    consumer = state.consumer
+
+    {time, {state, dropped_messages, acked_count}} =
       :timer.tc(fn ->
-        {state, acked_count} = State.ack(state, ack_ids)
-
-        Health.put_event(state.consumer, %Event{slug: :messages_delivered, status: :success})
-        Metrics.incr_consumer_messages_processed_count(state.consumer, acked_count)
-        Metrics.incr_consumer_messages_processed_throughput(state.consumer, acked_count)
-
-        {state, acked_count}
+        State.ack(state, ack_ids)
       end)
 
     Logger.debug(
@@ -353,6 +351,40 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       duration_ms: div(time, 1000),
       message_count: map_size(state.messages)
     )
+
+    Health.put_event(state.consumer, %Event{slug: :messages_delivered, status: :success})
+    Metrics.incr_consumer_messages_processed_count(state.consumer, acked_count)
+    Metrics.incr_consumer_messages_processed_throughput(state.consumer, acked_count)
+
+    :telemetry.execute(
+      [:sequin, :posthog, :event],
+      %{event: "consumer_ack"},
+      %{
+        distinct_id: "00000000-0000-0000-0000-000000000000",
+        properties: %{
+          consumer_id: consumer.id,
+          consumer_name: consumer.name,
+          message_count: acked_count,
+          message_kind: consumer.message_kind,
+          "$groups": %{account: consumer.account_id}
+        }
+      }
+    )
+
+    TracerServer.messages_acked(consumer, ack_ids)
+
+    Enum.each(
+      dropped_messages,
+      &Sequin.Logs.log_for_consumer_message(
+        :info,
+        consumer.account_id,
+        consumer.id,
+        &1.replication_message_trace_id,
+        "Message acknowledged"
+      )
+    )
+
+    AcknowledgedMessages.store_messages(consumer.id, dropped_messages)
 
     {:reply, {:ok, acked_count}, state}
   end

@@ -1,8 +1,6 @@
 defmodule Sequin.SlotMessageStoreTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers.ConsumerEvent
-  alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Databases.ConnectionCache
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Factory.AccountsFactory
@@ -23,14 +21,16 @@ defmodule Sequin.SlotMessageStoreTest do
     test "puts, delivers, nacks, and acks messages", %{consumer: consumer} do
       # Create test events
       events = [
-        %ConsumerEvent{
+        ConsumersFactory.consumer_event(%{
           consumer_id: consumer.id,
-          record_pks: ["1"]
-        },
-        %ConsumerEvent{
+          record_pks: ["1"],
+          deliver_count: 0
+        }),
+        ConsumersFactory.consumer_event(%{
           consumer_id: consumer.id,
-          record_pks: ["2"]
-        }
+          record_pks: ["2"],
+          deliver_count: 0
+        })
       ]
 
       # Put messages in store
@@ -89,16 +89,18 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # Create test records
       records = [
-        %ConsumerRecord{
+        ConsumersFactory.consumer_record(%{
           consumer_id: consumer.id,
           record_pks: [character_1.id],
-          table_oid: character_table_oid
-        },
-        %ConsumerRecord{
+          table_oid: character_table_oid,
+          deliver_count: 0
+        }),
+        ConsumersFactory.consumer_record(%{
           consumer_id: consumer.id,
           record_pks: [character_2.id],
-          table_oid: character_table_oid
-        }
+          table_oid: character_table_oid,
+          deliver_count: 0
+        })
       ]
 
       # Put messages in store

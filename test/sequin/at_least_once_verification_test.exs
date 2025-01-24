@@ -1,5 +1,5 @@
 defmodule Sequin.ConsumersRuntime.AtLeastOnceVerificationTest do
-  use ExUnit.Case, async: true
+  use Sequin.Case, async: true
 
   alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.Factory
@@ -16,116 +16,127 @@ defmodule Sequin.ConsumersRuntime.AtLeastOnceVerificationTest do
     %{consumer_id: consumer_id}
   end
 
-  describe "record_commit/3" do
-    test "records a commit tuple with timestamp", %{consumer_id: consumer_id} do
-      commit = {123, 456}
-      timestamp = System.system_time(:second)
+  describe "record_commit_tuples/2" do
+    test "records commit tuples with timestamps", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
 
-      assert :ok = AtLeastOnceVerification.record_commit(consumer_id, commit, timestamp)
-
-      # Verify the commit was recorded with correct score
-      {:ok, commits} = AtLeastOnceVerification.all_commits(consumer_id)
-      assert length(commits) == 1
-      assert List.first(commits) == {commit, timestamp}
-    end
-
-    test "can record multiple commits", %{consumer_id: consumer_id} do
       commits = [
-        {{100, 200}, 1000},
-        {{101, 201}, 1001},
-        {{102, 202}, 1002}
+        %{commit_lsn: 123, commit_idx: 456, commit_timestamp: datetime(now, 100)},
+        %{commit_lsn: 124, commit_idx: 457, commit_timestamp: datetime(now, 200)}
       ]
 
-      Enum.each(commits, fn {commit, ts} ->
-        assert :ok = AtLeastOnceVerification.record_commit(consumer_id, commit, ts)
-      end)
+      assert :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, commits)
+
+      # Verify the commits were recorded
+      {:ok, commits} = AtLeastOnceVerification.all_commit_tuples(consumer_id)
+      assert length(commits) == 2
+      assert assert_lists_equal(commits, commits, &assert_maps_equal(&1, &2, [:commit_lsn, :commit_idx]))
+    end
+
+    test "can record multiple batches", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
+
+      commits = [
+        %{commit_lsn: 100, commit_idx: 200, commit_timestamp: datetime(now, 100)},
+        %{commit_lsn: 101, commit_idx: 201, commit_timestamp: datetime(now, 200)},
+        %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 300)}
+      ]
+
+      assert :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, commits)
 
       # Verify all commits were recorded
-      {:ok, count} = AtLeastOnceVerification.count_commits(consumer_id)
-      assert String.to_integer(count) == 3
+      {:ok, 3} = AtLeastOnceVerification.count_commit_tuples(consumer_id)
     end
   end
 
-  describe "remove_commit/2" do
-    test "removes a specific commit tuple", %{consumer_id: consumer_id} do
-      commit = {123, 456}
-      timestamp = System.system_time(:second)
+  describe "remove_commit_tuples/2" do
+    test "removes specific commit tuples", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
 
-      :ok = AtLeastOnceVerification.record_commit(consumer_id, commit, timestamp)
-      assert :ok = AtLeastOnceVerification.remove_commit(consumer_id, commit)
-
-      # Verify the commit was removed
-      {:ok, members} = Redis.command(["ZRANGE", "consumer:#{consumer_id}:commit_verification", 0, -1])
-      assert members == []
-    end
-
-    test "returns ok when removing non-existent commit", %{consumer_id: consumer_id} do
-      assert :ok = AtLeastOnceVerification.remove_commit(consumer_id, {999, 999})
-    end
-  end
-
-  describe "get_unverified_commits/2" do
-    test "returns commits older than specified timestamp", %{consumer_id: consumer_id} do
-      now = System.system_time(:second)
-
-      old_commits = [
-        {{100, 200}, now - 100},
-        {{101, 201}, now - 50}
+      commits = [
+        %{commit_lsn: 123, commit_idx: 456, commit_timestamp: datetime(now, 100)},
+        %{commit_lsn: 124, commit_idx: 457, commit_timestamp: datetime(now, 200)}
       ]
 
-      new_commit = {{102, 202}, now}
+      :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, commits)
 
-      # Record all commits
-      Enum.each(old_commits, fn {commit, ts} ->
-        :ok = AtLeastOnceVerification.record_commit(consumer_id, commit, ts)
-      end)
+      assert :ok = AtLeastOnceVerification.remove_commit_tuples(consumer_id, commits)
 
-      :ok = AtLeastOnceVerification.record_commit(consumer_id, elem(new_commit, 0), elem(new_commit, 1))
-
-      # Get commits older than (now - 25)
-      {:ok, unverified} = AtLeastOnceVerification.get_unverified_commits(consumer_id, now - 25)
-
-      assert length(unverified) == 2
-      assert Enum.all?(unverified, fn {_commit, ts} -> ts < now - 25 end)
+      # Verify the commits were removed
+      {:ok, commits} = AtLeastOnceVerification.all_commit_tuples(consumer_id)
+      assert commits == []
     end
 
-    test "returns empty list when no commits exist", %{consumer_id: consumer_id} do
-      {:ok, unverified} = AtLeastOnceVerification.get_unverified_commits(consumer_id, System.system_time(:second))
+    test "returns ok when removing non-existent commit tuples", %{consumer_id: consumer_id} do
+      assert :ok =
+               AtLeastOnceVerification.remove_commit_tuples(consumer_id, [
+                 %{commit_lsn: 999, commit_idx: 999},
+                 %{commit_lsn: 1000, commit_idx: 1000}
+               ])
+    end
+  end
+
+  describe "get_unverified_commit_tuples/2" do
+    test "returns commit tuples older than specified timestamp", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
+
+      old_commits = [
+        %{commit_lsn: 100, commit_idx: 200, commit_timestamp: datetime(now, -100)},
+        %{commit_lsn: 101, commit_idx: 201, commit_timestamp: datetime(now, -50)}
+      ]
+
+      new_commit = %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 100)}
+
+      # Record all commits
+      :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, old_commits)
+
+      :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, [new_commit])
+
+      # Get commits older than (now - 25)
+      {:ok, unverified} = AtLeastOnceVerification.get_unverified_commit_tuples(consumer_id, datetime(now, -25))
+
+      assert length(unverified) == 2
+      assert assert_lists_equal(unverified, old_commits, &assert_maps_equal(&1, &2, [:commit_lsn, :commit_idx]))
+    end
+
+    test "returns empty list when no commit tuples exist", %{consumer_id: consumer_id} do
+      {:ok, unverified} = AtLeastOnceVerification.get_unverified_commit_tuples(consumer_id, DateTime.utc_now())
       assert unverified == []
     end
   end
 
-  describe "trim_commits/2" do
-    test "removes commits older than specified timestamp", %{consumer_id: consumer_id} do
-      now = System.system_time(:second)
+  describe "trim_commit_tuples/2" do
+    test "removes commit tuples older than specified timestamp", %{consumer_id: consumer_id} do
+      now = DateTime.utc_now()
 
-      commits = [
+      commit_tuples = [
         # old
-        {{100, 200}, now - 100},
+        %{commit_lsn: 100, commit_idx: 200, commit_timestamp: datetime(now, -100)},
         # old
-        {{101, 201}, now - 50},
+        %{commit_lsn: 101, commit_idx: 201, commit_timestamp: datetime(now, -50)},
         # current
-        {{102, 202}, now}
+        %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 100)}
       ]
 
       # Record all commits
-      Enum.each(commits, fn {commit, ts} ->
-        :ok = AtLeastOnceVerification.record_commit(consumer_id, commit, ts)
-      end)
+      :ok = AtLeastOnceVerification.record_commit_tuples(consumer_id, commit_tuples)
 
       # Trim commits older than (now - 25)
-      assert :ok = AtLeastOnceVerification.trim_commits(consumer_id, now - 25)
+      assert :ok = AtLeastOnceVerification.trim_commit_tuples(consumer_id, datetime(now, -25))
 
       # Verify only newer commit remains
-      {:ok, remaining} = AtLeastOnceVerification.count_commits(consumer_id)
-      assert String.to_integer(remaining) == 1
+      {:ok, 1} = AtLeastOnceVerification.count_commit_tuples(consumer_id)
 
-      {:ok, [member]} = AtLeastOnceVerification.all_commits(consumer_id)
-      assert member == {{102, 202}, now}
+      {:ok, [commit]} = AtLeastOnceVerification.all_commit_tuples(consumer_id)
+      assert commit == %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 100)}
     end
 
     test "handles empty set gracefully", %{consumer_id: consumer_id} do
-      assert :ok = AtLeastOnceVerification.trim_commits(consumer_id, System.system_time(:second))
+      assert :ok = AtLeastOnceVerification.trim_commit_tuples(consumer_id, DateTime.utc_now())
     end
+  end
+
+  defp datetime(now, from_now) do
+    now |> DateTime.add(from_now, :second) |> DateTime.truncate(:second)
   end
 end

@@ -16,53 +16,67 @@ defmodule Sequin.ConsumersRuntime.AtLeastOnceVerification do
   require Logger
 
   @type consumer_id :: String.t()
-  # {xid, lsn}
-  @type commit_tuple :: {integer(), integer()}
-  @type commit_timestamp :: integer()
+  @type commit_timestamp :: DateTime.t()
+  @type commit :: %{commit_lsn: integer(), commit_idx: integer(), commit_timestamp: commit_timestamp()}
 
-  @spec record_commit(consumer_id(), commit_tuple(), commit_timestamp()) :: :ok | {:error, Error.t()}
-  def record_commit(consumer_id, {xid, lsn}, timestamp) do
+  @spec record_commit_tuples(consumer_id(), [commit()]) :: :ok | {:error, Error.t()}
+  def record_commit_tuples(_, []), do: :ok
+
+  def record_commit_tuples(consumer_id, commits) do
     key = commit_key(consumer_id)
-    member = "#{xid}:#{lsn}"
 
-    case Redis.command(["ZADD", key, timestamp, member]) do
-      {:ok, _} -> :ok
+    commands =
+      Enum.map(commits, fn commit ->
+        ["ZADD", key, DateTime.to_unix(commit.commit_timestamp, :second), "#{commit.commit_lsn}:#{commit.commit_idx}"]
+      end)
+
+    case Redis.pipeline(commands) do
+      {:ok, _results} -> :ok
       {:error, error} -> {:error, error}
     end
   end
 
-  @spec remove_commit(consumer_id(), commit_tuple()) :: :ok | {:error, Error.t()}
-  def remove_commit(consumer_id, {xid, lsn}) do
-    key = commit_key(consumer_id)
-    member = "#{xid}:#{lsn}"
+  @spec remove_commit_tuples(consumer_id(), [commit()]) :: :ok | {:error, Error.t()}
+  def remove_commit_tuples(_, []), do: :ok
 
-    case Redis.command(["ZREM", key, member]) do
-      {:ok, _} -> :ok
+  def remove_commit_tuples(consumer_id, commits) do
+    key = commit_key(consumer_id)
+
+    commands = Enum.map(commits, fn commit -> ["ZREM", key, "#{commit.commit_lsn}:#{commit.commit_idx}"] end)
+
+    case Redis.pipeline(commands) do
+      {:ok, _results} -> :ok
       {:error, error} -> {:error, error}
     end
   end
 
-  @spec get_unverified_commits(consumer_id(), commit_timestamp()) ::
-          {:ok, [{commit_tuple(), commit_timestamp()}]} | {:error, Error.t()}
-  def get_unverified_commits(consumer_id, older_than_timestamp) do
+  @spec get_unverified_commit_tuples(consumer_id(), commit_timestamp()) :: {:ok, [commit()]} | {:error, Error.t()}
+  def get_unverified_commit_tuples(consumer_id, older_than_timestamp) do
     key = commit_key(consumer_id)
+    older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
 
     with {:ok, results} <- Redis.command(["ZRANGEBYSCORE", key, "-inf", older_than_timestamp, "WITHSCORES"]) do
       commits =
         results
         |> Enum.chunk_every(2)
         |> Enum.map(fn [member, score] ->
-          [xid, lsn] = String.split(member, ":")
-          {{String.to_integer(xid), String.to_integer(lsn)}, String.to_integer(score)}
+          [lsn, idx] = String.split(member, ":")
+
+          %{
+            commit_lsn: String.to_integer(lsn),
+            commit_idx: String.to_integer(idx),
+            commit_timestamp: DateTime.from_unix!(String.to_integer(score), :second)
+          }
         end)
 
       {:ok, commits}
     end
   end
 
-  @spec trim_commits(consumer_id(), commit_timestamp()) :: :ok | {:error, Error.t()}
-  def trim_commits(consumer_id, older_than_timestamp) do
+  @spec trim_commit_tuples(consumer_id(), commit_timestamp()) :: :ok | {:error, Error.t()}
+  def trim_commit_tuples(consumer_id, older_than_timestamp) do
     key = commit_key(consumer_id)
+    older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
 
     with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
          {:ok, trimmed} <- Redis.command(["ZREMRANGEBYSCORE", key, "-inf", older_than_timestamp]),
@@ -82,8 +96,8 @@ defmodule Sequin.ConsumersRuntime.AtLeastOnceVerification do
     end
   end
 
-  @spec all_commits(consumer_id()) :: {:ok, [{commit_tuple(), commit_timestamp()}]} | {:error, Error.t()}
-  def all_commits(consumer_id) do
+  @spec all_commit_tuples(consumer_id()) :: {:ok, [commit()]} | {:error, Error.t()}
+  def all_commit_tuples(consumer_id) do
     key = commit_key(consumer_id)
 
     with {:ok, results} <- Redis.command(["ZRANGE", key, 0, -1, "WITHSCORES"]) do
@@ -91,18 +105,27 @@ defmodule Sequin.ConsumersRuntime.AtLeastOnceVerification do
         results
         |> Enum.chunk_every(2)
         |> Enum.map(fn [member, score] ->
-          [xid, lsn] = String.split(member, ":")
-          {{String.to_integer(xid), String.to_integer(lsn)}, String.to_integer(score)}
+          [lsn, idx] = String.split(member, ":")
+
+          %{
+            commit_lsn: String.to_integer(lsn),
+            commit_idx: String.to_integer(idx),
+            commit_timestamp: DateTime.from_unix!(String.to_integer(score), :second)
+          }
         end)
 
       {:ok, commits}
     end
   end
 
-  @spec count_commits(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
-  def count_commits(consumer_id) do
+  @spec count_commit_tuples(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def count_commit_tuples(consumer_id) do
     key = commit_key(consumer_id)
-    Redis.command(["ZCARD", key])
+
+    case Redis.command(["ZCARD", key]) do
+      {:ok, count} -> {:ok, String.to_integer(count)}
+      {:error, error} -> {:error, error}
+    end
   end
 
   defp commit_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"

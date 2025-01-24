@@ -9,6 +9,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.DatabasesRuntime.PostgresAdapter.Decoder.Messages.LogicalMessage
   alias Sequin.DatabasesRuntime.SlotMessageStore
@@ -257,6 +258,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
+      commit_timestamp: message.commit_timestamp,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
       table_oid: message.table_oid,
@@ -271,6 +273,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
       commit_idx: message.commit_idx,
+      commit_timestamp: message.commit_timestamp,
       deleted: message.action == :delete,
       record_pks: Enum.map(message.ids, &to_string/1),
       group_id: generate_group_id(consumer, message),
@@ -360,6 +363,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   defp call_consumer_message_stores(messages_by_consumer) do
     Enum.each(messages_by_consumer, fn {consumer, messages} ->
+      # AtLeastOnceVerification
+      commits = Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
+      :ok = AtLeastOnceVerification.record_commit_tuples(consumer.id, commits)
+
       :ok = SlotMessageStore.put_messages(consumer.id, messages)
     end)
 

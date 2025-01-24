@@ -4,6 +4,7 @@ defmodule Sequin.MessageHandlerTest do
   import ExUnit.CaptureLog
 
   alias Sequin.Constants
+  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandler
   alias Sequin.DatabasesRuntime.TableReaderServerMock
@@ -58,6 +59,7 @@ defmodule Sequin.MessageHandlerTest do
       assert event.table_oid == 123
       assert event.commit_lsn == message.commit_lsn
       assert event.commit_idx == message.commit_idx
+      assert event.commit_timestamp == message.commit_timestamp
       assert event.record_pks == Enum.map(message.ids, &to_string/1)
       assert event.data.action == :insert
       assert event.data.record == fields_to_map(message.fields)
@@ -66,6 +68,15 @@ defmodule Sequin.MessageHandlerTest do
       assert event.data.metadata.table_schema == message.table_schema
       assert event.data.metadata.commit_timestamp == message.commit_timestamp
       assert event.data.metadata.database_name == consumer.postgres_database.name
+
+      assert {:ok, 1} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
+      assert {:ok, [commit]} = AtLeastOnceVerification.all_commit_tuples(consumer.id)
+
+      assert commit == %{
+               commit_lsn: message.commit_lsn,
+               commit_idx: message.commit_idx,
+               commit_timestamp: DateTime.truncate(message.commit_timestamp, :second)
+             }
     end
 
     test "handles message_kind: record correctly" do
@@ -109,9 +120,19 @@ defmodule Sequin.MessageHandlerTest do
       assert record.table_oid == 456
       assert record.commit_lsn == message.commit_lsn
       assert record.commit_idx == message.commit_idx
+      assert record.commit_timestamp == message.commit_timestamp
       assert record.record_pks == Enum.map(message.ids, &to_string/1)
       assert record.group_id == Enum.find(message.fields, &(&1.column_attnum == field.column_attnum)).value
       assert record.state == :available
+
+      assert {:ok, 1} = AtLeastOnceVerification.count_commit_tuples(consumer.id)
+      assert {:ok, [commit]} = AtLeastOnceVerification.all_commit_tuples(consumer.id)
+
+      assert commit == %{
+               commit_lsn: message.commit_lsn,
+               commit_idx: message.commit_idx,
+               commit_timestamp: DateTime.truncate(message.commit_timestamp, :second)
+             }
     end
 
     test "fans out messages correctly for mixed message_kind consumers and wal_pipelines" do

@@ -11,6 +11,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.AtLeastOnceVerification
   alias Sequin.ConsumersRuntime.ConsumerIdempotency
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Postgres
@@ -88,7 +89,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         :ok
 
       {:ok, lsn} ->
-        ConsumerIdempotency.trim(state.consumer.id, lsn)
+        ConsumerIdempotency.trim(state.consumer.id, {lsn, 0})
 
       {:error, error} when is_exception(error) ->
         Logger.error("Error trimming idempotency seqs", error: Exception.message(error))
@@ -221,6 +222,19 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       |> Enum.map(&{&1.commit_lsn, &1.commit_idx})
 
     :ok = ConsumerIdempotency.mark_messages_delivered(consumer.id, successful_commit_tuples)
+
+    commits =
+      successful
+      |> Stream.flat_map(& &1.data)
+      |> Enum.map(fn message ->
+        %{
+          commit_lsn: message.commit_lsn,
+          commit_idx: message.commit_idx,
+          commit_timestamp: message.commit_timestamp
+        }
+      end)
+
+    AtLeastOnceVerification.remove_commit_tuples(consumer.id, commits)
 
     successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
     failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

@@ -795,8 +795,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       end
 
     (store_messages ++ redis_messages)
-    |> Enum.sort_by(& &1.seq, :asc)
-    |> Enum.uniq_by(& &1.seq)
+    |> Enum.sort_by(&{&1.commit_lsn, &1.commit_idx}, :asc)
+    |> Enum.uniq_by(&{&1.commit_lsn, &1.commit_idx})
     |> Enum.drop(offset)
     |> Enum.take(limit)
   end

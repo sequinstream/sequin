@@ -128,5 +128,14 @@ defmodule Sequin.ConsumersRuntime.AtLeastOnceVerification do
     end
   end
 
+  @spec delete_commit_tuples(consumer_id()) :: :ok | {:error, Error.t()}
+  def delete_commit_tuples(consumer_id) do
+    key = commit_key(consumer_id)
+
+    with {:ok, _} <- Redis.command(["DEL", key]) do
+      :ok
+    end
+  end
+
   defp commit_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"
 end

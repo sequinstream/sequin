@@ -171,6 +171,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     {:ok, delivered_commit_tuples} = ConsumerIdempotency.delivered_messages(state.consumer.id, commit_tuples_to_deliver)
 
+    commits = Enum.map(delivered_commit_tuples, fn {lsn, idx} -> %{commit_lsn: lsn, commit_idx: idx} end)
+    :ok = AtLeastOnceVerification.remove_commit_tuples(state.consumer.id, commits)
+
     {delivered_messages, filtered_messages} =
       Enum.split_with(messages, fn message ->
         {message.commit_lsn, message.commit_idx} in delivered_commit_tuples
@@ -234,7 +237,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         }
       end)
 
-    AtLeastOnceVerification.remove_commit_tuples(consumer.id, commits)
+    :ok = AtLeastOnceVerification.remove_commit_tuples(consumer.id, commits)
 
     successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
     failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

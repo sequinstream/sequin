@@ -139,7 +139,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   def monitor_message_store(id, consumer_id) do
-    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id})
+    GenServer.call(via_tuple(id), {:monitor_message_store, consumer_id}, :timer.seconds(60))
   end
 
   def demonitor_message_store(id, consumer_id) do

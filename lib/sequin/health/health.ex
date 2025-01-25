@@ -334,10 +334,16 @@ defmodule Sequin.Health do
   ## Checks ##
   ############
 
+  # Public for debugging
+  def events(entity_id) do
+    with {:ok, events} <- Redis.command(["HVALS", events_key(entity_id)]) do
+      {:ok, Enum.map(events, &Event.from_json!/1)}
+    end
+  end
+
   @spec checks(entity :: entity()) :: {:ok, [Check.t()]} | redis_error()
   defp checks(entity) do
-    with {:ok, events} <- Redis.command(["HVALS", events_key(entity.id)]) do
-      events = Enum.map(events, &Event.from_json!/1)
+    with {:ok, events} <- events(entity.id) do
       {:ok, checks(entity, events)}
     end
   end
@@ -519,7 +525,7 @@ defmodule Sequin.Health do
 
         %{base_check | status: :error, error: error}
 
-      heartbeat_recv_event && Time.before_min_ago?(heartbeat_recv_event.last_event_at, 5) ->
+      heartbeat_recv_event && Time.before_min_ago?(heartbeat_recv_event.last_event_at, 10) ->
         error =
           Error.service(
             message:

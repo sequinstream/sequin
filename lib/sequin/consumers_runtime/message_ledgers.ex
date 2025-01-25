@@ -26,8 +26,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   require Logger
 
   @type consumer_id :: String.t()
-  @type commit_timestamp :: DateTime.t()
-  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer(), commit_timestamp: commit_timestamp() | nil}
+  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
 
   @doc """
   Called when WAL cursors enter a consumer's buffer. We use these later to track/verify ALO delivery.
@@ -36,12 +35,14 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def wal_cursors_ingested(_, []), do: :ok
 
   def wal_cursors_ingested(consumer_id, wal_cursors) do
+    ingested_at = Sequin.utc_now()
+
     commands =
       Enum.map(wal_cursors, fn wal_cursor ->
         [
           "ZADD",
-          ingested_cursors_key(consumer_id),
-          DateTime.to_unix(wal_cursor.commit_timestamp, :second),
+          undelivered_cursors_key(consumer_id),
+          DateTime.to_unix(ingested_at, :second),
           member_from_wal_cursor(wal_cursor)
         ]
       end)
@@ -64,7 +65,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
     wal_cursors
     |> Enum.flat_map(fn commit ->
       [
-        ["ZREM", ingested_cursors_key(consumer_id), member_from_wal_cursor(commit)],
+        ["ZREM", undelivered_cursors_key(consumer_id), member_from_wal_cursor(commit)],
         ["ZADD", delivered_cursors_key(consumer_id), score_from_wal_cursor(commit), member_from_wal_cursor(commit)]
       ]
     end)
@@ -143,15 +144,15 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   Any remaining cursors are in bucket 3, and are undelivered because of a bug. The hope is that we can use this functionality to catch these in QA and fix before shipping to prod. Worst case, we catch them via prod monitoring, and fix ASAP.
   """
-  @spec list_undelivered_wal_cursors(consumer_id(), commit_timestamp()) :: {:ok, [wal_cursor()]} | {:error, Error.t()}
+  @spec list_undelivered_wal_cursors(consumer_id(), DateTime.t()) :: {:ok, [wal_cursor()]} | {:error, Error.t()}
   def list_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
 
     res =
-      Redis.command(["ZRANGEBYSCORE", ingested_cursors_key(consumer_id), "-inf", older_than_timestamp, "WITHSCORES"])
+      Redis.command(["ZRANGEBYSCORE", undelivered_cursors_key(consumer_id), "-inf", older_than_timestamp, "WITHSCORES"])
 
     with {:ok, results} <- res do
-      commits =
+      cursors =
         results
         |> Enum.chunk_every(2)
         |> Enum.map(fn [member, score] ->
@@ -160,11 +161,11 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
           %{
             commit_lsn: String.to_integer(lsn),
             commit_idx: String.to_integer(idx),
-            commit_timestamp: DateTime.from_unix!(String.to_integer(score), :second)
+            ingested_at: DateTime.from_unix!(String.to_integer(score), :second)
           }
         end)
 
-      {:ok, commits}
+      {:ok, cursors}
     end
   end
 
@@ -173,9 +174,9 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   See above for more about stale cursors. We can trim this set after we've audited the stale cursors with `list_undelivered_wal_cursors`.
   """
-  @spec trim_stale_ingested_wal_cursors(consumer_id(), commit_timestamp()) :: :ok | {:error, Error.t()}
-  def trim_stale_ingested_wal_cursors(consumer_id, older_than_timestamp) do
-    key = ingested_cursors_key(consumer_id)
+  @spec trim_stale_undelivered_wal_cursors(consumer_id(), DateTime.t()) :: :ok | {:error, Error.t()}
+  def trim_stale_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
+    key = undelivered_cursors_key(consumer_id)
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
 
     with {:ok, initial_size} <- Redis.command(["ZCARD", key]),
@@ -208,7 +209,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   @spec count_commit_verification_set(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def count_commit_verification_set(consumer_id) do
-    key = ingested_cursors_key(consumer_id)
+    key = undelivered_cursors_key(consumer_id)
 
     case Redis.command(["ZCARD", key]) do
       {:ok, count} -> {:ok, String.to_integer(count)}
@@ -227,7 +228,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   @spec drop_verification_set(consumer_id()) :: :ok | {:error, Error.t()}
   def drop_verification_set(consumer_id) do
-    key = ingested_cursors_key(consumer_id)
+    key = undelivered_cursors_key(consumer_id)
 
     with {:ok, _} <- Redis.command(["DEL", key]) do
       :ok
@@ -245,5 +246,5 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   defp score_from_wal_cursor(%{commit_lsn: commit_lsn, commit_idx: commit_idx}), do: commit_lsn + commit_idx
 
   defp delivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:consumer_idempotency"
-  defp ingested_cursors_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"
+  defp undelivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"
 end

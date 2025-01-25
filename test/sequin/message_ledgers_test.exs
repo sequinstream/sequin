@@ -3,6 +3,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgersTest do
 
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Factory
+  alias Sequin.TestSupport
 
   setup do
     consumer_id = Factory.uuid()
@@ -106,24 +107,31 @@ defmodule Sequin.ConsumersRuntime.MessageLedgersTest do
     end
   end
 
-  describe "trim_stale_ingested_wal_cursors/2" do
+  describe "trim_stale_undelivered_wal_cursors/2" do
     test "removes wal cursors older than specified timestamp", %{consumer_id: consumer_id} do
       now = DateTime.utc_now()
 
-      wal_cursors = [
+      old_wal_cursors = [
         # old
-        %{commit_lsn: 100, commit_idx: 200, commit_timestamp: datetime(now, -100)},
+        %{commit_lsn: 100, commit_idx: 200},
         # old
-        %{commit_lsn: 101, commit_idx: 201, commit_timestamp: datetime(now, -50)},
-        # current
-        %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 100)}
+        %{commit_lsn: 101, commit_idx: 201}
       ]
 
+      new_cursor = %{commit_lsn: 102, commit_idx: 202}
+
+      TestSupport.expect_utc_now(fn -> datetime(now, -100) end)
+
       # Record all wal cursors
-      :ok = MessageLedgers.wal_cursors_ingested(consumer_id, wal_cursors)
+      :ok = MessageLedgers.wal_cursors_ingested(consumer_id, old_wal_cursors)
+
+      TestSupport.expect_utc_now(fn -> now end)
+
+      # Record new cursor
+      :ok = MessageLedgers.wal_cursors_ingested(consumer_id, [new_cursor])
 
       # Trim wal cursors older than (now - 25)
-      assert :ok = MessageLedgers.trim_stale_ingested_wal_cursors(consumer_id, datetime(now, -25))
+      assert :ok = MessageLedgers.trim_stale_undelivered_wal_cursors(consumer_id, datetime(now, -25))
 
       # Verify only newer wal cursor remains
       {:ok, [cursor]} = MessageLedgers.list_undelivered_wal_cursors(consumer_id, datetime(now, 200))
@@ -132,7 +140,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgersTest do
     end
 
     test "handles empty set gracefully", %{consumer_id: consumer_id} do
-      assert :ok = MessageLedgers.trim_stale_ingested_wal_cursors(consumer_id, DateTime.utc_now())
+      assert :ok = MessageLedgers.trim_stale_undelivered_wal_cursors(consumer_id, DateTime.utc_now())
     end
   end
 
@@ -141,14 +149,20 @@ defmodule Sequin.ConsumersRuntime.MessageLedgersTest do
       now = DateTime.utc_now()
 
       old_cursors = [
-        %{commit_lsn: 100, commit_idx: 200, commit_timestamp: datetime(now, -100)},
-        %{commit_lsn: 101, commit_idx: 201, commit_timestamp: datetime(now, -50)}
+        %{commit_lsn: 100, commit_idx: 200},
+        %{commit_lsn: 101, commit_idx: 201}
       ]
 
-      new_cursor = %{commit_lsn: 102, commit_idx: 202, commit_timestamp: datetime(now, 100)}
+      new_cursor = %{commit_lsn: 102, commit_idx: 202}
 
-      # Record all cursors
+      # Record old cursors
+      TestSupport.expect_utc_now(fn -> datetime(now, -100) end)
+
       :ok = MessageLedgers.wal_cursors_ingested(consumer_id, old_cursors)
+
+      TestSupport.expect_utc_now(fn -> now end)
+
+      # Record new cursor
       :ok = MessageLedgers.wal_cursors_ingested(consumer_id, [new_cursor])
 
       # Get cursors older than (now - 25)

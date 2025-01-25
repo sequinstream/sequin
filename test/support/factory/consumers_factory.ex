@@ -86,6 +86,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         message_kind: message_kind,
         name: Factory.unique_word(),
         replication_slot_id: replication_slot_id,
+        safe_slot_advance_lsn: 0,
         source_tables: source_tables,
         status: :active,
         sequence_id: sequence_id,

@@ -820,7 +820,8 @@ defmodule Sequin.YamlLoader do
            group_column_attnums: group_column_attnums(consumer_attrs["group_column_names"], table),
            column_filters: column_filters(consumer_attrs["filters"], table)
          },
-         sink: sink
+         sink: sink,
+         safe_slot_advance_lsn: 0
        }}
     end
   end

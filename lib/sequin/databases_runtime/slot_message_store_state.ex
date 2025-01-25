@@ -22,11 +22,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
+    # TODO: rename pulled_lsn when we go pull based
+    field :put_lsn_high_water_mark, non_neg_integer() | nil
   end
 
   def max_messages_in_memory, do: 10_000
 
-  def put_messages(%State{} = state, messages) do
+  def put_messages(%State{} = state, messages, put_lsn_high_water_mark) do
     now = DateTime.utc_now()
 
     messages =
@@ -38,7 +40,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
       end)
       |> Map.new(&{&1.ack_id, &1})
 
-    %{state | messages: Map.merge(state.messages, messages)}
+    %{state | messages: Map.merge(state.messages, messages), put_lsn_high_water_mark: put_lsn_high_water_mark}
   end
 
   def put_table_reader_batch(%State{} = state, messages, batch_id) do
@@ -227,13 +229,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     |> Stream.map(fn {_ack_id, msg} -> Map.take(msg, [:commit_lsn, :flushed_at]) end)
     |> Enum.group_by(& &1.commit_lsn, & &1.flushed_at)
     |> Enum.sort_by(fn {commit_lsn, _flushed_at_values} -> commit_lsn end)
-    |> Enum.reduce_while(nil, fn {commit_lsn, flushed_at_values}, safe_ack_lsn ->
-      if Enum.any?(flushed_at_values, &is_nil/1) do
-        {:halt, safe_ack_lsn}
-      else
-        {:cont, commit_lsn}
-      end
-    end)
+    |> case do
+      [] ->
+        # If there are no messages in state, we return the last pulled lsn
+        # This will allow us to safely advance the slot even when there are no messages
+        # Either because there are no messages for this sink consumer, or because
+        # the sink is processing messages faster than we can flush them.
+        state.put_lsn_high_water_mark
+
+      commit_lsn_with_flushed_at_values ->
+        Enum.reduce_while(commit_lsn_with_flushed_at_values, nil, fn {commit_lsn, flushed_at_values}, safe_ack_lsn ->
+          if Enum.any?(flushed_at_values, &is_nil/1) do
+            {:halt, safe_ack_lsn}
+          else
+            {:cont, commit_lsn}
+          end
+        end)
+    end
   end
 
   defp update_messages(%State{} = state, messages) do

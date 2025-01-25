@@ -55,6 +55,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
     field :annotations, :map, default: %{}
+    field :safe_slot_advance_lsn, :integer
 
     field :type, Ecto.Enum,
       values: [:http_push, :sqs, :redis, :kafka, :sequin_stream, :gcp_pubsub, :nats, :rabbitmq, :azure_event_hub],
@@ -99,7 +100,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :replication_slot_id,
       :status,
       :sequence_id,
-      :message_kind
+      :message_kind,
+      :safe_slot_advance_lsn
     ])
     |> changeset(attrs)
     |> cast_embed(:sequence_filter, with: &SequenceFilter.create_changeset/2)
@@ -125,7 +127,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       :max_deliver,
       :backfill_completed_at,
       :status,
-      :annotations
+      :annotations,
+      :safe_slot_advance_lsn
     ])
     |> cast_polymorphic_embed(:sink, required: true)
     |> Sequin.Changeset.cast_embed(:source_tables)
@@ -133,6 +136,26 @@ defmodule Sequin.Consumers.SinkConsumer do
     |> validate_number(:ack_wait_ms, greater_than_or_equal_to: 500)
     |> validate_number(:batch_size, greater_than: 0)
     |> validate_number(:batch_size, less_than_or_equal_to: 1_000)
+    |> validate_number(:safe_slot_advance_lsn, greater_than_or_equal_to: 0)
+    |> validate_safe_slot_advance_lsn()
+  end
+
+  # Validate that a changed safe_slot_advance_lsn is greater than the
+  # current safe_slot_advance_lsn.
+  defp validate_safe_slot_advance_lsn(%Ecto.Changeset{} = changeset) do
+    case get_change(changeset, :safe_slot_advance_lsn) do
+      nil ->
+        changeset
+
+      new_safe_slot_advance_lsn ->
+        current_safe_slot_advance_lsn = get_field(changeset, :safe_slot_advance_lsn)
+
+        if new_safe_slot_advance_lsn < current_safe_slot_advance_lsn do
+          add_error(changeset, :safe_slot_advance_lsn, "must be greater than the current safe_slot_advance_lsn")
+        else
+          changeset
+        end
+    end
   end
 
   def where_account_id(query \\ base_query(), account_id) do

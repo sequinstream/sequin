@@ -444,6 +444,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:noreply, state}
     else
       Logger.info("[SlotMessageStore] Finished flushing messages")
+      state = update_safe_slot_advance_lsn(state)
       schedule_flush(state)
       {:noreply, trim_or_load_messages(state)}
     end
@@ -465,6 +466,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     schedule_process_logging()
     {:noreply, state}
+  end
+
+  defp update_safe_slot_advance_lsn(%State{consumer: consumer} = state) do
+    safe_slot_advance_lsn = State.safe_ack_lsn(state)
+
+    if not is_nil(safe_slot_advance_lsn) and safe_slot_advance_lsn > consumer.safe_slot_advance_lsn do
+      {:ok, consumer} = Consumers.update_sink_consumer(consumer, %{safe_slot_advance_lsn: safe_slot_advance_lsn})
+      %{state | consumer: consumer}
+    else
+      state
+    end
   end
 
   defp load_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}

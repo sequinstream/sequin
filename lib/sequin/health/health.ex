@@ -752,7 +752,13 @@ defmodule Sequin.Health do
 
     check_details =
       Enum.map_join(error_checks, "\n", fn check ->
-        "- #{check.slug}: #{check.status}"
+        msg = if check.error, do: Exception.message(check.error)
+
+        if msg do
+          "- #{check.slug}: (#{check.status}) #{msg}"
+        else
+          "- #{check.slug}: #{check.status}"
+        end
       end)
 
     """

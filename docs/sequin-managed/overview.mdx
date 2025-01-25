@@ -1,0 +1,29 @@
+---
+title: "Sequin Managed"
+sidebarTitle: "Sequin Managed Overview"
+description: "A single-tenant deployment of Sequin within your AWS account"
+---
+
+# What is Sequin Managed?
+
+Sequin Managed provides a single-tenant deployment of Sequin within your own AWS account. You can still enjoy the same web console and CLI features offered by Sequin Cloud, but in a dedicated environment running in your own cloud infrastructure.
+
+With Sequin Managed, we install and maintain our high-performance change data capture (CDC) system directly within your AWS sub-account. As a result, you get the convenience and simplicity of SaaS, combined with the control and privacy that come from hosting in your own environment. There are no shared resources, so you won't be affected by other users' workloads.
+
+## How does Sequin Managed work?
+
+Sequin Managed is a packaged data plane, built on Postgres and deployed to an AWS sub-account that you own and we operate. Your streaming infrastructure lives entirely inside a dedicated sub-account within your cloud organization. Sequin will not have access to other sub-accounts in your organization.
+
+At the same time, you still get to interact with your streams through the web console and Sequin CLI as you usually would with our hosted product.
+
+The service is deployed in a single-tenant environment and isolated in a sub-account in AWS from the rest of your organization's infrastructure. By default, all connections are encrypted, but public. You have the option to use private connectivity through AWS PrivateLink.
+
+## How do I get Sequin Managed?
+
+If you are interested in seeing if Sequin Managed fits your needs, [contact us](mailto:support@sequinstream.com), and we can chat more about your requirements and see if Sequin Managed is a good fit for you.
+
+<CardGroup cols={1}>
+  <Card title="Sequin Managed on Amazon Web Services" icon="aws" href="/sequin-managed/aws">
+    Learn more about Sequin Managed on AWS.
+  </Card>
+</CardGroup>

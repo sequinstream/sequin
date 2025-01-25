@@ -1,0 +1,35 @@
+---
+title: "Sequin Managed on AWS"
+sidebarTitle: "Sequin Managed on AWS"
+description: "A single-tenant deployment of Sequin within your AWS account"
+---
+
+[Sequin Managed](/sequin-managed/overview) on Amazon Web Services (AWS) creates a dedicated environment within your AWS organization. It runs in a separate sub-account that you own, but which Sequin manages on your behalf. You still access Sequin through the same web console and CLI that Sequin Cloud provides, but now the infrastructure is fully contained in your AWS environment.
+
+## Architecture
+
+In this setup, the Sequin "data plane" is installed inside a Sequin-operated sub-account in your AWS organization. We provision and manage the necessary streaming components (via Terraform and ECS) within that sub-account.
+
+We deploy two Sequin instances (on ECS Fargate) in active-passive mode, spread across different availability zones for high availability. We'll also provision a small RDS (Postgres) instance and a Redis service to support your streaming infrastructure.
+
+All core processes run in the dedicated sub-account, which is part of your AWS organization. Sequin does not gain access to your other accounts or organization-level settings. Meanwhile, the "control plane" — including the Sequin API and web app — remains external. You can reach it at [console.sequinstream.com](https://console.sequinstream.com).
+
+![Sequin Managed on AWS architecture](/images/sequin-managed/aws-architecture.png)
+
+## Security and compliance
+
+Sequin Managed is an excellent option for organizations with specific security and compliance requirements.
+
+You retain complete ownership of the AWS organization and sub-account used by Sequin.
+
+### AWS PrivateLink
+
+By default, connections to and from your Sequin environment use encryption but will be public. You can optionally configure AWS PrivateLink for fully private connectivity to your sub-account.
+
+### Fully private network isolation
+
+You can also turn off public access with a dual AWS PrivateLink setup. Sequin's control plane will talk to your sub-account over AWS PrivateLink, and your VPCs will also communicate with your streaming infrastructure over AWS PrivateLink.
+
+### Third-account customer-controlled public key infrastructure
+
+Sequin Managed on AWS supports public key infrastructure (PKI) services. Sequin Managed customers can provide Sequin the use of a set of customer-managed keys in a third AWS account inside your organization. This third account is controlled by you, the customer. Sequin has no administrative access. Your organization is the custodian for this key material. Sequin uses the customer-managed keys to encrypt EBS volumes, RDS backups, Redis backups, and S3 buckets.

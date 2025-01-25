@@ -73,6 +73,13 @@
       ]
     },
     {
+      "group": "Sequin Managed",
+      "pages": [
+        "sequin-managed/overview",
+        "sequin-managed/aws"
+      ]
+    },
+    {
       "group": "Sink setup guides",
       "pages": [
         "how-to/stream-postgres-to-a-webhook-endpoint",
@@ -131,6 +138,7 @@
         }
       ]
     },
+  
     {
       "group": "Database setup guides",
       "pages": [

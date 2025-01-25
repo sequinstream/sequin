@@ -15,6 +15,7 @@ defmodule Sequin.MessageHandlerTest do
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Replication
+  alias Sequin.TestSupport
 
   describe "handle_messages/2" do
     test "handles message_kind: event correctly" do
@@ -52,6 +53,9 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
+      now = DateTime.utc_now()
+      TestSupport.expect_utc_now(3, fn -> now end)
+
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [event] = list_messages(consumer.id)
@@ -75,7 +79,7 @@ defmodule Sequin.MessageHandlerTest do
       assert wal_cursor == %{
                commit_lsn: message.commit_lsn,
                commit_idx: message.commit_idx,
-               commit_timestamp: DateTime.truncate(message.commit_timestamp, :second)
+               ingested_at: DateTime.truncate(now, :second)
              }
     end
 
@@ -113,6 +117,9 @@ defmodule Sequin.MessageHandlerTest do
       consumer = Repo.preload(consumer, [:postgres_database, :sequence])
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
+      now = DateTime.utc_now()
+      TestSupport.expect_utc_now(3, fn -> now end)
+
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
       [record] = list_messages(consumer.id)
@@ -131,7 +138,7 @@ defmodule Sequin.MessageHandlerTest do
       assert wal_cursor == %{
                commit_lsn: message.commit_lsn,
                commit_idx: message.commit_idx,
-               commit_timestamp: DateTime.truncate(message.commit_timestamp, :second)
+               ingested_at: DateTime.truncate(now, :second)
              }
     end
 

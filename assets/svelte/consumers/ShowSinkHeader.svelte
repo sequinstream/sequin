@@ -24,6 +24,7 @@
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
   import StopSinkModal from "./StopSinkModal.svelte";
+  import S2Icon from "../sinks/s2/S2Icon.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -135,6 +136,8 @@
             <RabbitMqIcon class="h-6 w-6 mr-2" />
           {:else if consumer.sink.type === "azure_event_hub"}
             <AzureEventHubIcon class="h-6 w-6 mr-2" />
+          {:else if consumer.sink.type === "s2"}
+            <S2Icon class="h-6 w-6 mr-2" />
           {/if}
           <h1 class="text-xl font-semibold">
             {consumer.name}

@@ -16,6 +16,8 @@
     GcpPubsubConsumer,
     NatsConsumer,
     RabbitMqConsumer,
+    S2Consumer,
+    AzureEventHubConsumer,
   } from "../types/consumer";
   import SinkCardHttpPush from "../components/SinkCardHttpPush.svelte";
   import SqsSinkCard from "../sinks/sqs/SqsSinkCard.svelte";
@@ -25,6 +27,8 @@
   import GcpPubsubSinkCard from "../sinks/gcp_pubsub/GcpPubsubSinkCard.svelte";
   import NatsSinkCard from "../sinks/nats/NatsSinkCard.svelte";
   import RabbitMqSinkCard from "../sinks/rabbitmq/RabbitMqSinkCard.svelte";
+  import S2SinkCard from "../sinks/s2/S2SinkCard.svelte";
+  import AzureEventHubSinkCard from "../sinks/azure_event_hub/AzureEventHubSinkCard.svelte";
   import * as d3 from "d3";
   import { onMount } from "svelte";
   import HealthAlerts from "$lib/health/HealthAlerts.svelte";
@@ -100,6 +104,16 @@
     consumer: Consumer,
   ): consumer is RabbitMqConsumer {
     return consumer.sink.type === "rabbitmq";
+  }
+
+  function isS2Consumer(consumer: Consumer): consumer is S2Consumer {
+    return consumer.sink.type === "s2";
+  }
+
+  function isAzureEventHubConsumer(
+    consumer: Consumer,
+  ): consumer is AzureEventHubConsumer {
+    return consumer.sink.type === "azure_event_hub";
   }
 
   let chartElement;
@@ -838,6 +852,10 @@
         <NatsSinkCard {consumer} />
       {:else if isRabbitMqConsumer(consumer)}
         <RabbitMqSinkCard {consumer} />
+      {:else if isAzureEventHubConsumer(consumer)}
+        <AzureEventHubSinkCard {consumer} />
+      {:else if isS2Consumer(consumer)}
+        <S2SinkCard {consumer} />
       {/if}
 
       <ShowSequence {consumer} />

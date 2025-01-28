@@ -26,6 +26,7 @@
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import { Badge } from "$lib/components/ui/badge";
+  import S2Icon from "../sinks/s2/S2Icon.svelte";
 
   export let consumers: Array<{
     id: string;
@@ -99,6 +100,11 @@
       id: "azure_event_hub",
       name: "Azure EventHub",
       icon: AzureEventHubIcon,
+    },
+    {
+      id: "s2",
+      name: "S2",
+      icon: S2Icon,
     },
   ];
 

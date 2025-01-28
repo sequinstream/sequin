@@ -175,6 +175,16 @@ destination:
   password: "redis-pass"        # Optional, for authentication
 ```
 
+#### S2 sink
+For publishing changes to S2:
+```yaml
+destination:
+  type: "s2"                    # Required
+  token: "your-token"           # Required, S2 authentication token
+  basin: "my-basin"             # Required, S2 basin name
+  stream: "my-stream"           # Required, S2 stream name
+```
+
 #### GCP PubSub sink
 For publishing changes to Google Cloud Pub/Sub topics:
 ```yaml

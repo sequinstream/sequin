@@ -1,0 +1,12 @@
+version: v2
+managed:
+  enabled: true
+plugins:
+  - local: protoc-gen-elixir
+    out: lib/proto
+    opt:
+      - elixir_out=gen_descriptors=true,one_file_per_module=true,plugins=grpc
+
+inputs:
+  - git_repo: https://github.com/s2-streamstore/s2-protos
+    branch: main

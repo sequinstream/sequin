@@ -12,6 +12,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Consumers.NatsSink
   alias Sequin.Consumers.RabbitMqSink
   alias Sequin.Consumers.RedisSink
+  alias Sequin.Consumers.S2Sink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
@@ -36,6 +37,7 @@ defmodule SequinWeb.Components.ConsumerForm do
   alias Sequin.Sinks.Nats
   alias Sequin.Sinks.RabbitMq
   alias Sequin.Sinks.Redis
+  alias Sequin.Sinks.S2
   alias SequinWeb.RouteHelpers
 
   require Logger
@@ -269,6 +271,12 @@ defmodule SequinWeb.Components.ConsumerForm do
           :ok -> {:reply, %{ok: true}, socket}
           {:error, error} -> {:reply, %{ok: false, error: error}, socket}
         end
+
+      :s2 ->
+        case test_s2_connection(socket) do
+          :ok -> {:reply, %{ok: true}, socket}
+          {:error, error} -> {:reply, %{ok: false, error: error}, socket}
+        end
     end
   end
 
@@ -425,6 +433,27 @@ defmodule SequinWeb.Components.ConsumerForm do
     end
   end
 
+  defp test_s2_connection(socket) do
+    sink_changeset =
+      socket.assigns.changeset
+      |> Ecto.Changeset.get_field(:sink)
+      |> case do
+        %Ecto.Changeset{} = changeset -> changeset
+        %S2Sink{} = sink -> S2Sink.changeset(sink, %{})
+      end
+
+    if sink_changeset.valid? do
+      sink = Ecto.Changeset.apply_changes(sink_changeset)
+
+      case S2.test_connection(sink) do
+        :ok -> :ok
+        {:error, error} -> {:error, Exception.message(error)}
+      end
+    else
+      {:error, encode_errors(sink_changeset)}
+    end
+  end
+
   defp decode_params(form, socket) do
     params =
       %{
@@ -568,6 +597,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "event_hub_name" => sink["event_hub_name"],
       "shared_access_key_name" => sink["shared_access_key_name"],
       "shared_access_key" => sink["shared_access_key"]
+    }
+  end
+
+  defp decode_sink(:s2, sink) do
+    %{
+      "type" => "s2",
+      "token" => sink["token"],
+      "stream" => sink["stream"],
+      "basin" => sink["basin"]
     }
   end
 
@@ -735,6 +773,15 @@ defmodule SequinWeb.Components.ConsumerForm do
       "event_hub_name" => sink.event_hub_name,
       "shared_access_key_name" => sink.shared_access_key_name,
       "shared_access_key" => sink.shared_access_key
+    }
+  end
+
+  defp encode_sink(%S2Sink{} = sink) do
+    %{
+      "type" => "s2",
+      "token" => sink.token,
+      "stream" => sink.stream,
+      "basin" => sink.basin
     }
   end
 
@@ -1019,6 +1066,7 @@ defmodule SequinWeb.Components.ConsumerForm do
       :nats -> "NATS Sink"
       :rabbitmq -> "RabbitMQ Sink"
       :azure_event_hub -> "Azure Event Hub Sink"
+      :s2 -> "S2 Sink"
     end
   end
 

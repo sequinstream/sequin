@@ -36,6 +36,14 @@ defmodule Sequin.Error do
         nil ->
           "Not found: No `#{render_entity(error.entity)}` found matching the provided ID or name"
 
+        params when is_map(params) ->
+          params_string =
+            Enum.map_join(params, ", ", fn {key, value} ->
+              "#{key}=#{value}"
+            end)
+
+          "Not found: No `#{render_entity(error.entity)}` found matching params: `#{params_string}`"
+
         params ->
           "Not found: No `#{render_entity(error.entity)}` found matching params: `#{inspect(params, pretty: true)}`"
       end

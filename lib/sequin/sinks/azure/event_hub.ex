@@ -43,21 +43,38 @@ defmodule Sequin.Sinks.Azure.EventHub do
         :ok
 
       error ->
-        handle_error(error, "publish messages")
+        handle_error(client, error, "publish messages")
     end
   end
 
+  @doc """
+  Tests if the connection to the Event Hub is valid. This tests for a valid namespace and auth token.
+
+  We choose a non-deleterious operation that is OK with limited (send-only) permissions.
+  """
   @spec test_connection(Client.t()) :: :ok | {:error, any()}
   def test_connection(%Client{} = client) do
-    path = client.event_hub_name
+    path = "#{client.event_hub_name}/does-not-exist"
     req = base_req(client, path, method: :get)
 
     case Req.request(req) do
+      {:ok, %{status: 400, body: body}} = error ->
+        if body =~ "The requested HTTP operation is not supported in an EventHub" do
+          :ok
+        else
+          handle_error(client, error, "test connection")
+        end
+
+      # This means the namespace is vaild, but not the event hub name
       {:ok, %{status: 200}} ->
-        :ok
+        {:error,
+         Error.not_found(
+           entity: :event_hub,
+           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+         )}
 
       error ->
-        handle_error(error, "test connection")
+        handle_error(client, error, "test connection")
     end
   end
 
@@ -98,10 +115,21 @@ defmodule Sequin.Sinks.Azure.EventHub do
     |> Keyword.get(:req_opts, [])
   end
 
-  defp handle_error(error, req_desc) do
+  defp handle_error(%Client{} = client, error, req_desc) do
     case error do
       {:ok, %{status: 404}} ->
-        {:error, Error.not_found(entity: :event_hub)}
+        {:error,
+         Error.not_found(
+           entity: :event_hub,
+           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+         )}
+
+      {:error, %Req.TransportError{reason: :nxdomain}} ->
+        {:error,
+         Error.not_found(
+           entity: :event_hub,
+           params: %{namespace: client.namespace, event_hub_name: client.event_hub_name}
+         )}
 
       {:error, error} when is_error(error) ->
         {:error, error}

@@ -480,11 +480,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp handle_record_messages!(%State{} = state, table, commit_lsn, matching_records) do
     consumer_records =
-      Enum.map(matching_records, fn record_attnums_to_values ->
+      matching_records
+      |> Enum.with_index()
+      |> Enum.map(fn {record_attnums_to_values, idx} ->
         %ConsumerRecord{
           consumer_id: state.consumer.id,
           commit_lsn: commit_lsn,
-          commit_idx: 0,
+          commit_idx: idx,
           table_oid: table.oid,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
@@ -517,11 +519,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
 
   defp handle_event_messages!(%State{} = state, table, commit_lsn, matching_records) do
     consumer_events =
-      Enum.map(matching_records, fn record_attnums_to_values ->
+      matching_records
+      |> Enum.with_index()
+      |> Enum.map(fn {record_attnums_to_values, idx} ->
         %ConsumerEvent{
           consumer_id: state.consumer.id,
           commit_lsn: commit_lsn,
-          commit_idx: 0,
+          commit_idx: idx,
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
           table_oid: table.oid,

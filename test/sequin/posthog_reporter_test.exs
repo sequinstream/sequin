@@ -30,7 +30,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
   end
 
   test "buffers and flushes events in batches" do
-    start_reporter(publish_interval: 3)
+    start_reporter(publish_interval: 50)
 
     # Send a few events
     :telemetry.execute(

@@ -52,11 +52,17 @@ Event Hubs has a [maximum message size of 1MB](https://learn.microsoft.com/en-us
 
 Event Hubs ensures message ordering within individual partitions. When messages are sent to the same partition, they are guaranteed to be delivered in the order they were published.
 
-When you configure an Event Hubs sink in Sequin, you can specify message grouping behavior. This will be used to determine which partition messages are sent to.
+When you configure an Event Hubs sink in Sequin, you can specify message grouping behavior. This will be used to determine how to order messages to send to Event Hubs.
 
 The default message group for a message is the source row's primary key(s). You can override this by specifying one or more columns to use for message grouping.
 
 Sequin will order the delivery of messages with the same group according to their commit timestamp.
+
+**However**, Sequin does not set the partition key on each message. That means that if you're using multiple partitions in Event Hubs, messages with the same group can be sent to different partitions.
+
+<Info>
+  If you want to see support for setting the partition key on each message, please [comment on the corresponding issue](https://github.com/sequinstream/sequin/issues/928).
+</Info>
 
 ## Debugging
 

@@ -79,7 +79,7 @@ defmodule Sequin.Sinks.Azure.EventHub do
   end
 
   defp to_encoded_message(msg) do
-    %{"Body" => Base.encode64(Jason.encode!(msg))}
+    %{"Body" => Jason.encode!(msg)}
   end
 
   defp base_req(client, path, opts) do

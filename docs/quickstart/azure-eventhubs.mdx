@@ -114,15 +114,7 @@ While it's recommended to create a dedicated Shared Access Policy for Sequin, yo
         3. Select "Data Explorer" in the left sidebar
         4. Click "View events"
 
-        You should see a list of events. The events each contain a body that is base64 encoded JSON.
-
-        To view the contents of a message, copy one of the event bodies and decode it with `base64 --decode` in your terminal:
-
-        ```bash
-        echo "eyJhdHRyaWJ1dGVzIjp7InRyYWNlX2lkIjoiZWE..." | base64 --decode
-        ```
-
-        The messages are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
+        You should see a list of events. Click on any event to view its details, including its body. The messages are [`read` events](/reference/messages#change-messages) from the initial backfill of the `products` table.
 
         <Check>
           Messages are flowing from Sequin to your Event Hub.

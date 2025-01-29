@@ -96,7 +96,13 @@ In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "Azure E
   </Step>
 
   <Step title="Specify message grouping">
-    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to the same partition in Event Hubs. This ensures your consumers will receive events in order.
+    Under "Message grouping", you can specify how messages should be grouped for ordering. Messages in the same group will be delivered in order according to their commit timestamp.
+
+    By default, Sequin uses the source row's primary key(s) for message grouping. You can override this by specifying one or more columns.
+
+    <Note>
+      Currently, Sequin does not set the partition key when sending messages to Event Hubs. This means that even messages with the same group may be sent to different partitions. If you need partition key support, please [upvote the feature request](https://github.com/sequinstream/sequin/issues/928).
+    </Note>
   </Step>
 </Steps>
 

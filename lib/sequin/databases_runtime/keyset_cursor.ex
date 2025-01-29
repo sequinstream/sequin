@@ -56,6 +56,10 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   defp min_for_type("timestamp"), do: ~N[0001-01-01 00:00:00]
   defp min_for_type("timestamp without time zone"), do: ~N[0001-01-01 00:00:00]
   defp min_for_type("timestamp with time zone"), do: ~U[0001-01-01 00:00:00Z]
+  defp min_for_type("date"), do: ~D[0001-01-01]
+  defp min_for_type("time"), do: ~T[00:00:00]
+  defp min_for_type("time without time zone"), do: ~T[00:00:00]
+  defp min_for_type("time with time zone"), do: ~T[00:00:00]
 
   defp min_for_type(numeric_type)
        when numeric_type in ["smallint", "integer", "bigint", "decimal", "numeric", "real", "double precision"],
@@ -107,6 +111,22 @@ defmodule Sequin.DatabasesRuntime.KeysetCursor do
   defp cast_value(%Table.Column{type: "timestamp with time zone"}, val) when is_binary(val) do
     {:ok, dt, _offset} = DateTime.from_iso8601(val)
     dt
+  end
+
+  defp cast_value(%Table.Column{type: "date"}, val) when is_binary(val) do
+    Date.from_iso8601!(val)
+  end
+
+  defp cast_value(%Table.Column{type: type}, val) when type in ["time", "time without time zone"] and is_binary(val) do
+    Time.from_iso8601!(val)
+  end
+
+  defp cast_value(%Table.Column{type: "time with time zone"}, val) when is_binary(val) do
+    # Strip timezone info as we don't need it for ordering
+    val
+    |> String.split("+")
+    |> List.first()
+    |> Time.from_iso8601!()
   end
 
   defp cast_value(%Table.Column{type: type}, val)

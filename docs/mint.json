@@ -130,6 +130,7 @@
         "reference/sinks/nats",
         "reference/sinks/rabbitmq",
         "reference/sinks/sequin-stream",
+        "reference/sinks/azure-eventhubs",
         {
           "group": "Sequin Stream API",
           "pages": [

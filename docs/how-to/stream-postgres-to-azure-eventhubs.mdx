@@ -1,0 +1,161 @@
+---
+title: "How to stream Postgres to Azure Event Hubs"
+sidebarTitle: "Azure Event Hubs"
+description: "Receive Postgres changes in Azure Event Hubs in real-time"
+---
+
+This guide shows you how to set up Postgres change data capture (CDC) and stream changes to Azure Event Hubs using Sequin.
+
+With Postgres data streaming to Event Hubs, you can trigger workflows, keep services in sync, [build audit logs](/how-to/create-audit-logs), [maintain caches](/how-to/maintain-caches), and more.
+
+By the end of this how-to, you'll have database changes flowing to an Event Hub.
+
+## Prerequisites
+
+If you're self-hosting Sequin, you'll need:
+
+1. [Sequin installed](/quickstart/webhooks)
+2. [A database connected](/connect-postgres)
+3. An Azure account
+
+If you're using Sequin Cloud, you'll need:
+
+1. [A Sequin Cloud account](https://console.sequinstream.com)
+2. [A database connected](/connect-postgres)
+3. An Azure account
+
+## Basic setup
+
+### Create an Event Hubs namespace
+
+If you don't already have an Event Hubs namespace:
+
+1. Navigate to the [Create Event Hubs namespace](https://portal.azure.com/#create/Microsoft.EventHub) page in Azure Portal
+3. Fill in the required details:
+   - Subscription
+   - Resource group
+   - Namespace name
+   - Location
+   - Pricing tier (Basic is fine for getting started)
+4. Click "Review + create"
+5. Click "Create"
+
+### Create an Event Hub
+
+1. Once your namespace is created, navigate to it in the Azure Portal
+2. Click "+ Event Hub" at the top
+3. Enter a name for your Event Hub
+4. Leave the default settings or adjust as needed
+5. Click "Create"
+
+### Create a Shared Access Policy
+
+While you can use the default RootManageSharedAccessKey policy, it's recommended to create a dedicated policy for Sequin:
+
+1. In your Event Hubs namespace, click "Shared access policies"
+2. Click "+ Add"
+3. Enter a name (e.g., "sequin-publisher")
+4. Select only the "Send" permission
+5. Click "Create"
+6. Click on the new policy
+7. Copy either the "Primary key" or "Secondary key"
+
+Make note of your:
+- Event Hubs namespace (e.g., "my-namespace")
+- Event Hub name (e.g., "postgres-changes")
+- Shared Access Policy name (e.g., "sequin-publisher")
+- Shared Access Key
+
+## Create Event Hub sink
+
+In Sequin, navigate to the "Sinks" tab, click "Create Sink", and select "Azure Event Hub".
+
+### Configure the source
+
+<Steps>
+  <Step title="Select source table">
+    Under "Source", select the table you want to stream data from.
+  </Step>
+
+  <Step title="Choose message type">
+    Specify whether you want to receive [changes or rows](/reference/messages) from the table.
+
+    If you're not sure which to choose, you can leave the default option "Changes" selected.
+  </Step>
+
+  <Step title="Specify filters">
+    If you selected changes, in "Records to process", you can indicate whether you want to receive `insert`, `update`, and/or `delete` changes.
+
+    You can also specify [SQL filters](/reference/filters) to narrow down the events you want to receive. For example, if you only want to receive events for `subscriptions` that currently have an `mrr` greater than $100, you can add a filter on `mrr > 100`.
+  </Step>
+
+  <Step title="Specify backfill">
+    You can optionally indicate if you want Event Hubs to receive a [backfill](reference/backfills) of all or a portion of the table's existing data. Backfills are useful if you want to use Event Hubs to process historical data.
+
+    You can backfill at any time. If you don't want to backfill, toggle "Backfill" off.
+  </Step>
+
+  <Step title="Specify message grouping">
+    Under "Message grouping", you'll most likely want to leave the default option selected to ensure events for the same row are sent to the same partition in Event Hubs. This ensures your consumers will receive events in order.
+  </Step>
+</Steps>
+
+### Configure Event Hub
+
+<Steps>
+  <Step title="Enter Event Hub details">
+    Fill in your Event Hub connection details:
+
+    - **Namespace** (required): Your Event Hubs namespace (e.g., "my-namespace")
+    - **Event Hub Name** (required): The name of your Event Hub (e.g., "postgres-changes")
+    - **Shared Access Key Name** (required): The name of your Shared Access Policy (e.g., "sequin-publisher")
+    - **Shared Access Key** (required): The primary or secondary key from your Shared Access Policy
+  </Step>
+
+  <Step title="Test the connection">
+    Click "Test Connection" to verify that Sequin can connect to your Event Hub.
+  </Step>
+
+  <Step title="Create the sink">
+    Give your sink a name, then click "Create Event Hub Sink".
+  </Step>
+</Steps>
+
+## Verify & debug
+
+To verify that your Event Hub sink is working:
+
+1. Make some changes in your source table
+2. Verify that the count of messages for your sink increases in the Sequin web console
+3. In the Azure Portal:
+   - Navigate to your Event Hub
+   - Click "Process Data"
+   - Select "Data Explorer" in the left sidebar
+   - Click "View events"
+   - You should see the messages from Sequin appear
+
+If messages don't seem to be flowing:
+
+1. Click the "Messages" tab to view the state of messages for your sink
+2. Click any failed message
+3. Check the delivery logs for error details, including any Event Hubs API errors
+
+Common issues to check:
+- Shared Access Key is valid and not expired
+- Shared Access Policy has "Send" permission
+- Namespace and Event Hub name match exactly
+- Event Hub exists in the specified namespace
+
+## Next steps
+
+- **Setup a processor**
+
+   Now that your Postgres data is flowing into Event Hubs, you can setup a consumer to read from the Event Hub and process the data. See the [Event Hubs documentation](https://docs.microsoft.com/en-us/azure/event-hubs/event-hubs-features) for details on consuming events.
+
+- **Deploy your implementation**
+
+   When you're ready to deploy your implementation, see "[How to deploy to production](/how-to/deploy-to-production)".
+
+- **Advanced configuration**
+
+   For more about how Event Hub sinks work, see the [Event Hub sink reference](/reference/sinks/azure-eventhubs).

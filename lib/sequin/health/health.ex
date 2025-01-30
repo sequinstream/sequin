@@ -371,7 +371,7 @@ defmodule Sequin.Health do
           %Check{slug: :replication_messages, status: :initializing}
         ]
 
-      connected_check.status == :error ->
+      connected_check.status == :error or connected_check.status == :notice ->
         [
           reachable_check,
           config_check,
@@ -486,6 +486,7 @@ defmodule Sequin.Health do
   defp check(:replication_connected, %PostgresReplicationSlot{} = slot, events) do
     base_check = %Check{slug: :replication_connected, status: :initializing}
     connected_event = find_event(events, :replication_connected)
+    memory_limit_exceeded_event = find_event(events, :replication_memory_limit_exceeded)
 
     cond do
       is_nil(connected_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
@@ -503,6 +504,19 @@ defmodule Sequin.Health do
       connected_event.status == :fail ->
         put_check_timestamps(%{base_check | status: :error, error: connected_event.error}, [
           connected_event
+        ])
+
+      not is_nil(memory_limit_exceeded_event) and
+          DateTime.after?(memory_limit_exceeded_event.last_event_at, connected_event.last_event_at) ->
+        error =
+          Error.service(
+            service: :postgres_replication_slot,
+            message:
+              "Sequin is backing off the slot due to hitting a memory limit. This will happen if downstream sinks are processing slower than Sequin is receiving messages from the database."
+          )
+
+        put_check_timestamps(%{base_check | status: :notice, error: error}, [
+          memory_limit_exceeded_event
         ])
 
       true ->

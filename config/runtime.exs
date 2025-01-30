@@ -147,7 +147,8 @@ if config_env() == :prod and self_hosted do
     config_file_path: System.get_env("CONFIG_FILE_PATH"),
     config_file_yaml: System.get_env("CONFIG_FILE_YAML"),
     release_version: System.get_env("RELEASE_VERSION"),
-    backfill_max_pending_messages: backfill_max_pending_messages
+    backfill_max_pending_messages: backfill_max_pending_messages,
+    max_memory_bytes: ConfigParser.max_memory_bytes(env_vars)
 end
 
 if config_env() == :prod and not self_hosted do
@@ -191,7 +192,9 @@ if config_env() == :prod and not self_hosted do
   config :sequin, :koala, public_key: "pk_ec2e6140b3d56f5eb1735350eb20e92b8002"
 
   config :sequin,
-    api_base_url: "https://api.sequinstream.com"
+    api_base_url: "https://api.sequinstream.com",
+    # Arbitrarily high memory limit in prod of 100GB
+    max_memory_bytes: 100 * 1024 * 1024 * 1024
 end
 
 if config_env() == :prod do

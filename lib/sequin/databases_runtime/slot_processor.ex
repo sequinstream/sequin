@@ -78,6 +78,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :connect_attempts, non_neg_integer(), default: 0
       field :dirty, boolean(), default: false
       field :heartbeat_interval, non_neg_integer()
+      field :max_memory_bytes, non_neg_integer()
+      field :bytes_between_limit_checks, non_neg_integer()
+      field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
+      field :check_memory_fn, nil | (-> non_neg_integer())
     end
   end
 
@@ -91,6 +95,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     test_pid = Keyword.get(opts, :test_pid)
     message_handler_ctx = Keyword.get(opts, :message_handler_ctx)
     message_handler_module = Keyword.fetch!(opts, :message_handler_module)
+    max_memory_bytes = Keyword.get_lazy(opts, :max_memory_bytes, &default_max_memory_bytes/0)
+    bytes_between_limit_checks = Keyword.get(opts, :bytes_between_limit_checks, div(max_memory_bytes, 100))
 
     rep_conn_opts =
       [auto_reconnect: true, name: via_tuple(id)]
@@ -110,7 +116,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       message_handler_module: message_handler_module,
       connection: connection,
       last_commit_lsn: nil,
-      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1))
+      heartbeat_interval: Keyword.get(opts, :heartbeat_interval, :timer.minutes(1)),
+      max_memory_bytes: max_memory_bytes,
+      bytes_between_limit_checks: bytes_between_limit_checks,
+      check_memory_fn: Keyword.get(opts, :check_memory_fn, &default_check_memory_fn/0)
     }
 
     ReplicationConnection.start_link(SlotProcessor, init, rep_conn_opts)
@@ -197,17 +206,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       %Event{slug: :replication_connected, status: :fail, error: Error.service(service: :replication, message: error_msg)}
     )
 
-    # No way to stop by returning a {:stop, reason} tuple from handle_connect
-    %Task{ref: ref} =
-      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
-        if env() == :test and not is_nil(state.test_pid) do
-          send(state.test_pid, {:stop_replication, state.id})
-        else
-          DatabasesRuntime.Supervisor.stop_replication(state.id)
-        end
-      end)
-
-    Process.demonitor(ref, [:flush])
+    launch_stop(state)
 
     {:noreply, state}
   end
@@ -223,6 +222,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       else
         "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}', messages 'true')"
       end
+
+    current_memory = state.check_memory_fn.()
+
+    if current_memory > state.max_memory_bytes do
+      Logger.warning("[SlotProcessor] System at memory limit, shutting down",
+        limit: state.max_memory_bytes,
+        current_memory: current_memory
+      )
+
+      launch_stop(state)
+    end
 
     {:stream, query, [],
      %{
@@ -261,9 +271,39 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         |> process_message(state)
       end
 
+    {prev_acc_size, _} = state.accumulated_messages
     {acc_size, _acc_messages} = next_state.accumulated_messages
 
+    # Calculate bytes processed in this message
+    bytes_processed = acc_size - prev_acc_size
+
+    # Update bytes processed and check limits
+    {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
+
+    unless match?(%LogicalMessage{prefix: "sequin.heartbeat.0"}, msg) do
+      # A replication message is *their* message(s), not our message.
+      Health.put_event(
+        state.replication_slot,
+        %Event{slug: :replication_message_processed, status: :success}
+      )
+    end
+
     cond do
+      limit_status == :over_limit ->
+        Health.put_event(
+          state.replication_slot,
+          %Event{slug: :replication_memory_limit_exceeded, status: :info}
+        )
+
+        Logger.warning("[SlotProcessor] System hit memory limit, shutting down",
+          limit: next_state.max_memory_bytes,
+          current_memory: next_state.check_memory_fn.()
+        )
+
+        flush_messages(next_state)
+        launch_stop(next_state)
+        {:noreply, next_state}
+
       is_struct(msg, Commit) ->
         if next_state.dirty or state.dirty, do: Logger.warning("Got a commit message while DIRTY")
 
@@ -370,7 +410,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_info({:DOWN, ref, :process, _pid, reason}, %State{} = state) do
-    if env() == :test and reason == :shutdown do
+    if Application.get_env(:sequin, :env) == :test and reason == :shutdown do
       {:noreply, state}
     else
       {consumer_id, ^ref} = Enum.find(state.message_store_refs, fn {_, r} -> r == ref end)
@@ -973,7 +1013,44 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     conn
   end
 
-  defp env do
-    Application.get_env(:sequin, :env)
+  defp handle_limit_check(%State{} = state, bytes_processed) do
+    # Check if it's been a while since we last checked the limit
+    if state.bytes_processed_since_last_limit_check + bytes_processed >= state.bytes_between_limit_checks do
+      current_memory = state.check_memory_fn.()
+
+      status =
+        if current_memory >= state.max_memory_bytes do
+          :over_limit
+        else
+          :ok
+        end
+
+      {status, %{state | bytes_processed_since_last_limit_check: 0}}
+    else
+      new_bytes = state.bytes_processed_since_last_limit_check + bytes_processed
+      {:ok, %{state | bytes_processed_since_last_limit_check: new_bytes}}
+    end
+  end
+
+  defp default_check_memory_fn do
+    :erlang.memory(:total)
+  end
+
+  defp default_max_memory_bytes do
+    Application.get_env(:sequin, :max_memory_bytes)
+  end
+
+  defp launch_stop(state) do
+    # Returning :stop tuple results in an error that looks like a crash
+    task =
+      Task.Supervisor.async_nolink(Sequin.TaskSupervisor, fn ->
+        if Application.get_env(:sequin, :env) == :test and not is_nil(state.test_pid) do
+          send(state.test_pid, {:stop_replication, state.id})
+        else
+          DatabasesRuntime.Supervisor.stop_replication(state.id)
+        end
+      end)
+
+    Process.demonitor(task.ref, [:flush])
   end
 end

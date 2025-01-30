@@ -89,7 +89,9 @@ config :sequin,
   ],
   redis_module: Sequin.Sinks.RedisMock,
   kafka_module: Sequin.Sinks.KafkaMock,
-  nats_module: Sequin.Sinks.NatsMock
+  nats_module: Sequin.Sinks.NatsMock,
+  # Arbitrarily high memory limit for testing
+  max_memory_bytes: 100 * 1024 * 1024 * 1024
 
 # In AES.GCM, it is important to specify 12-byte IV length for
 # interoperability with other encryption software. See this GitHub

@@ -423,7 +423,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{ok: true},
          socket
          |> load_consumer_messages()
-         |> put_flash(:toast, %{kind: :success, title: "All messages redelivery scheduled"})}
+         |> put_flash(:toast, %{kind: :success, title: "Scheduled redelivery for all messages"})}
 
       {:error, reason} ->
         {:reply, %{ok: false},

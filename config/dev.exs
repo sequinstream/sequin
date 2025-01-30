@@ -78,7 +78,9 @@ config :sequin,
     provision_default_user: :disabled
   ],
   backfill_max_pending_messages: 100_000,
-  release_version: System.get_env("RELEASE_VERSION")
+  release_version: System.get_env("RELEASE_VERSION"),
+  # Arbitrarily high memory limit in dev
+  max_memory_bytes: ("MAX_MEMORY_MB" |> System.get_env("100000") |> String.to_integer()) * 1024 * 1024
 
 # esbuild: {Esbuild, :install_and_run, [:sequin, ~w(--sourcemap=inline --watch)]},
 

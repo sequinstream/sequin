@@ -12,6 +12,8 @@ defmodule Sequin.PostgresReplicationTest do
   """
   use Sequin.DataCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Sequin.Consumers
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SinkConsumer
@@ -851,7 +853,7 @@ defmodule Sequin.PostgresReplicationTest do
       # Attempt to start replication with the non-existent slot
       start_replication!(slot_name: non_existent_slot)
 
-      assert_receive {:stop_replication, _id}, 2000
+      assert_receive {:stop_replication, _}, 2000
 
       # Verify that the Health status was updated
       {:ok, health} = Sequin.Health.health(%PostgresReplicationSlot{id: "test_slot_id", inserted_at: DateTime.utc_now()})
@@ -874,6 +876,44 @@ defmodule Sequin.PostgresReplicationTest do
 
       check = Enum.find(health.checks, &(&1.slug == :replication_messages))
       assert check.status == :healthy
+    end
+
+    @tag capture_log: true
+    test "shuts down when memory limit is exceeded" do
+      test_pid = self()
+      # Create an atomic counter starting at 0
+      memory_counter = :atomics.new(1, signed: false)
+
+      check_memory_fn = fn ->
+        :atomics.get(memory_counter, 1)
+      end
+
+      stub(MessageHandlerMock, :handle_messages, fn ctx, msgs ->
+        {:ok, length(msgs), ctx}
+      end)
+
+      # Start with very low limits to trigger checks frequently
+      log =
+        capture_log(fn ->
+          start_replication!(
+            message_handler_module: MessageHandlerMock,
+            max_memory_bytes: 1000,
+            bytes_between_limit_checks: 100,
+            test_pid: test_pid,
+            check_memory_fn: check_memory_fn
+          )
+
+          # Set memory above limit
+          :atomics.put(memory_counter, 1, 2000)
+
+          # Insert record to trigger memory check
+          CharacterFactory.insert_character!([], repo: UnboxedRepo)
+
+          # Process should shut down due to memory limit
+          assert_receive {:stop_replication, _}, 1000
+        end)
+
+      assert log =~ "[SlotProcessor] System hit memory limit"
     end
   end
 

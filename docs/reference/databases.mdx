@@ -187,6 +187,38 @@ Create the [publication](#publications) **before** creating the replication slot
 ```sql
 select pg_drop_replication_slot('sequin_slot');
 ```
+
+## Replica identity
+
+Sequin uses `REPLICA IDENTITY` for two purposes:
+
+1. To determine the old values of an updated row. These values are used to create the `changes` field for [change messages](/reference/messages#change-messages).
+2. To load unchanged TOAST columns for updates of both [change](/reference/messages#change-messages) and [row](/reference/messages#row-messages) sink consumers.
+
+### Changes
+
+With `REPLICA IDENTITY` set to `FULL`, Sequin receives new and old values for all columns during updates. For columns that have changed values, Sequin includes the old values in the `changes` field.
+
+### TOAST columns
+
+PostgreSQL uses TOAST (The Oversized-Attribute Storage Technique) to store large column values. Here's how Sequin handles TOAST columns:
+
+- TOAST columns are always included for INSERT operations
+- For UPDATE operations:
+  - Changed TOAST columns are included in rows and changes
+  - Unchanged TOAST columns will appear as `"unchanged_toast"` unless `REPLICA IDENTITY` is set to `FULL`
+  - If `REPLICA IDENTITY` is `FULL`, all TOAST columns are included regardless of changes
+- For DELETE operations:
+  - TOAST columns are included only if `REPLICA IDENTITY` is set to `FULL`
+
+This behavior applies to both changes and rows in Sequin.
+
+To set `REPLICA IDENTITY` to `FULL` for a table:
+
+```sql
+ALTER TABLE your_table REPLICA IDENTITY FULL;
+```
+
 ## Monitoring
 
 Sequin will run health checks against your database connection automatically. You can view the status of the connection at any time in your database's "Overview" page.

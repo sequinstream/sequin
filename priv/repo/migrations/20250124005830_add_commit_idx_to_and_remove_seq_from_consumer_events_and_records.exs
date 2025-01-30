@@ -8,7 +8,14 @@ defmodule Sequin.Repo.Migrations.AddCommitIdxToAndRemoveSeqFromConsumerEventsAnd
       add :commit_idx, :integer
     end
 
-    execute "UPDATE #{@stream_schema}.consumer_events SET commit_idx = COALESCE(seq - commit_lsn, 0);",
+    execute """
+              update #{@stream_schema}.consumer_events
+              set commit_idx = case
+                when seq - commit_lsn < 0 then 0
+                when seq - commit_lsn > 2147483647 then 0
+                else seq - commit_lsn
+              end;
+            """,
             ""
 
     alter table(:consumer_events, prefix: @stream_schema) do
@@ -20,7 +27,14 @@ defmodule Sequin.Repo.Migrations.AddCommitIdxToAndRemoveSeqFromConsumerEventsAnd
       add :commit_idx, :integer
     end
 
-    execute "UPDATE #{@stream_schema}.consumer_records SET commit_idx = COALESCE(seq - commit_lsn, 0);",
+    execute """
+              update #{@stream_schema}.consumer_records
+              set commit_idx = case
+                when seq - commit_lsn < 0 then 0
+                when seq - commit_lsn > 2147483647 then 0
+                else seq - commit_lsn
+              end;
+            """,
             ""
 
     alter table(:consumer_records, prefix: @stream_schema) do
@@ -32,7 +46,14 @@ defmodule Sequin.Repo.Migrations.AddCommitIdxToAndRemoveSeqFromConsumerEventsAnd
       add :commit_idx, :integer
     end
 
-    execute "UPDATE #{@stream_schema}.wal_events SET commit_idx = COALESCE(commit_lsn - commit_idx, 0);",
+    execute """
+              update #{@stream_schema}.wal_events
+              set commit_idx = case
+                when commit_lsn - commit_idx < 0 then 0
+                when commit_lsn - commit_idx > 2147483647 then 0
+                else commit_lsn - commit_idx
+              end;
+            """,
             ""
 
     alter table(:wal_events, prefix: @stream_schema) do

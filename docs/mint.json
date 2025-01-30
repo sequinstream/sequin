@@ -62,7 +62,7 @@
             "quickstart/nats",
             "quickstart/rabbitmq",
             "quickstart/sequin-stream",
-            "quickstart/azure-eventhubs",
+            "quickstart/azure-event-hubs",
             "quickstart/redpanda"
           ],
           "icon": "gauge-max"
@@ -91,7 +91,7 @@
         "how-to/stream-postgres-to-gcp-pubsub",
         "how-to/stream-postgres-to-nats",
         "how-to/stream-postgres-to-rabbitmq",
-        "how-to/stream-postgres-to-azure-eventhubs"
+        "how-to/stream-postgres-to-azure-event-hubs"
       ]
     },
     {
@@ -130,7 +130,7 @@
         "reference/sinks/nats",
         "reference/sinks/rabbitmq",
         "reference/sinks/sequin-stream",
-        "reference/sinks/azure-eventhubs",
+        "reference/sinks/azure-event-hubs",
         {
           "group": "Sequin Stream API",
           "pages": [

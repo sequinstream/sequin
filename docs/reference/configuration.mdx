@@ -49,6 +49,20 @@ The `PG_POOL_SIZE` variable controls the maximum number of concurrent connection
 ### Runtime configuration
 
 - `BACKFILL_MAX_PENDING_MESSAGES`: When backfilling, the maximum number of pending messages to accumulate in the sink's outbox before pausing the backfill. When messages start draining to the sink, the backfill will automatically resume. The default is 1M messages.
+- `MAX_MEMORY_MB`: Maximum memory limit in megabytes
+  - If not set, Sequin will use available system memory
+  - Example: `2048` for 2GB limit
+- `MEMORY_BUFFER_PERCENT`: Percentage of memory to reserve as buffer (default: 20)
+  - Sequin will use (100 - MEMORY_BUFFER_PERCENT)% of either the system memory or MAX_MEMORY_MB
+  - Example: `20` reserves 20% as buffer, using 80% of available memory
+
+<Warning>
+  Sequin will actively work to keep memory usage below these configured limits. While these settings help manage memory utilization, there is [ongoing development](https://github.com/sequinstream/sequin/issues/930) to further optimize memory usage.
+</Warning>
+
+<Note>
+  If you're running Sequin outside of our provided Docker images and on a non-Linux system, you must manually set `MAX_MEMORY_MB`.
+</Note>
 
 ### Redis configuration
 

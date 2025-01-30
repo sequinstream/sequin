@@ -63,10 +63,8 @@ defmodule Sequin.Tracer.Server do
     end
   end
 
-  if Mix.env() == :dev do
-    def reset_state(account_id) do
-      GenServer.call(via_tuple(account_id), :reset_state)
-    end
+  def reset_state(account_id) do
+    GenServer.call(via_tuple(account_id), :reset_state)
   end
 
   # Server Callbacks
@@ -74,6 +72,7 @@ defmodule Sequin.Tracer.Server do
   def init(account_id) do
     Logger.metadata(account_id: account_id)
     Logger.info("Starting Tracer.Server for account #{account_id}")
+    schedule_memory_check()
     {:ok, State.new(account_id)}
   end
 
@@ -105,13 +104,42 @@ defmodule Sequin.Tracer.Server do
     {:reply, state, state}
   end
 
-  if Mix.env() == :dev do
-    def handle_call(:reset_state, _from, state) do
-      {:reply, :ok, State.reset(state)}
-    end
+  def handle_call(:reset_state, _from, state) do
+    {:reply, :ok, State.reset(state)}
   end
 
-  # Remove handle_info(:check_heartbeat, ...)
+  def handle_info(:check_memory, state) do
+    total_memory = :erlang.memory(:total)
+    max_memory = Application.get_env(:sequin, :max_memory_bytes, 2_147_483_648)
+    threshold = trunc(max_memory * 0.8)
+
+    {:memory, process_memory} = Process.info(self(), :memory)
+    # Convert bytes to MB
+    process_memory_mb = process_memory / 1_048_576
+
+    state =
+      cond do
+        process_memory_mb > 100 ->
+          Logger.warning(
+            "[Tracer.Server] Process memory usage (#{process_memory_mb} MB) exceeds 100MB. Evicting tracer state."
+          )
+
+          State.reset(state)
+
+        total_memory > threshold and state.message_traces != [] ->
+          Logger.info(
+            "[Tracer.Server] System memory usage (#{total_memory}) exceeds threshold (#{threshold}). Evicting tracer state."
+          )
+
+          State.reset(state)
+
+        true ->
+          state
+      end
+
+    schedule_memory_check()
+    {:noreply, state}
+  end
 
   def handle_info({:EXIT, _pid, reason}, state) do
     Logger.error("Tracer.Server exited: #{inspect(reason)}")
@@ -119,6 +147,10 @@ defmodule Sequin.Tracer.Server do
   end
 
   # Helper Functions
+
+  defp schedule_memory_check do
+    Process.send_after(self(), :check_memory, 15_000)
+  end
 
   defp via_tuple(account_id) do
     {:via, :syn, {:replication, {account_id, :tracer}}}

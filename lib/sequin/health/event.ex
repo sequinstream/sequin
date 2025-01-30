@@ -30,7 +30,8 @@ defmodule Sequin.Health.Event do
     :replication_slot_checked,
     :replication_connected,
     :replication_message_processed,
-    :replication_heartbeat_received
+    :replication_heartbeat_received,
+    :replication_memory_limit_exceeded
   ]
 
   @sink_consumer_event_slugs [

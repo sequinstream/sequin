@@ -112,6 +112,7 @@ WORKDIR /home/app
 COPY --from=builder --chown=app /app/_build .
 
 COPY .iex.exs .
+RUN ln -s /home/app/prod/rel/sequin/bin/sequin /usr/local/bin/sequin
 COPY scripts/start_commands.sh /scripts/start_commands.sh
 RUN chmod +x /scripts/start_commands.sh
 

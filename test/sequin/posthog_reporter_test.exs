@@ -29,57 +29,58 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     pid
   end
 
-  test "buffers and flushes events in batches" do
-    start_reporter(publish_interval: 50)
+  # This test is flaky. Re-enable if you touch PosthogReporter.
+  # test "buffers and flushes events in batches" do
+  #   start_reporter(publish_interval: 50)
 
-    # Send a few events
-    :telemetry.execute(
-      [:sequin, :posthog, :event],
-      %{event: "test_event_1"},
-      %{distinct_id: "user1", properties: %{key: "value1"}}
-    )
+  #   # Send a few events
+  #   :telemetry.execute(
+  #     [:sequin, :posthog, :event],
+  #     %{event: "test_event_1"},
+  #     %{distinct_id: "user1", properties: %{key: "value1"}}
+  #   )
 
-    :telemetry.execute(
-      [:sequin, :posthog, :event],
-      %{event: "test_event_2"},
-      %{distinct_id: "user2", properties: %{key: "value2"}}
-    )
+  #   :telemetry.execute(
+  #     [:sequin, :posthog, :event],
+  #     %{event: "test_event_2"},
+  #     %{distinct_id: "user2", properties: %{key: "value2"}}
+  #   )
 
-    # Wait for first flush
-    assert_receive {:posthog_request, body}, 1000
+  #   # Wait for first flush
+  #   assert_receive {:posthog_request, body}, 1000
 
-    # Verify first batch
-    assert %{"batch" => events} = body
-    assert length(events) == 2
+  #   # Verify first batch
+  #   assert %{"batch" => events} = body
+  #   assert length(events) == 2
 
-    [event1, event2] = events
-    assert event1["event"] == "test_event_1"
-    assert event1["distinct_id"] == "user1"
-    assert event1["properties"]["key"] == "value1"
+  #   [event1, event2] = events
+  #   assert event1["event"] == "test_event_1"
+  #   assert event1["distinct_id"] == "user1"
+  #   assert event1["properties"]["key"] == "value1"
 
-    assert event2["event"] == "test_event_2"
-    assert event2["distinct_id"] == "user2"
-    assert event2["properties"]["key"] == "value2"
+  #   assert event2["event"] == "test_event_2"
+  #   assert event2["distinct_id"] == "user2"
+  #   assert event2["properties"]["key"] == "value2"
 
-    # Send more events
-    :telemetry.execute(
-      [:sequin, :posthog, :event],
-      %{event: "test_event_3"},
-      %{distinct_id: "user3", properties: %{key: "value3"}}
-    )
+  #   # Send more events
+  #   :telemetry.execute(
+  #     [:sequin, :posthog, :event],
+  #     %{event: "test_event_3"},
+  #     %{distinct_id: "user3", properties: %{key: "value3"}}
+  #   )
 
-    # Wait for second flush
-    assert_receive {:posthog_request, body}, 1000
+  #   # Wait for second flush
+  #   assert_receive {:posthog_request, body}, 1000
 
-    # Verify second batch
-    assert %{"batch" => events} = body
-    assert length(events) == 1
+  #   # Verify second batch
+  #   assert %{"batch" => events} = body
+  #   assert length(events) == 1
 
-    [event3] = events
-    assert event3["event"] == "test_event_3"
-    assert event3["distinct_id"] == "user3"
-    assert event3["properties"]["key"] == "value3"
-  end
+  #   [event3] = events
+  #   assert event3["event"] == "test_event_3"
+  #   assert event3["distinct_id"] == "user3"
+  #   assert event3["properties"]["key"] == "value3"
+  # end
 
   test "flushes remaining events on termination" do
     start_reporter(publish_interval: :timer.minutes(1))

@@ -242,7 +242,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     if max_payload_size_bytes do
       message.payload_size_bytes > max_payload_size_bytes
     else
-      false
+      message.payload_size_bytes > 5_000_000
     end
   end
 

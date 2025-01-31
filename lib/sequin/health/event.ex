@@ -52,6 +52,8 @@ defmodule Sequin.Health.Event do
   @wal_pipeline_event_slugs [
     :messages_filtered,
     :messages_ingested,
+    :messages_fetch,
+    :messages_delete,
     :destination_insert
   ]
 

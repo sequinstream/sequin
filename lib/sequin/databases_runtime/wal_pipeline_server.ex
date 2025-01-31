@@ -164,6 +164,10 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
     Process.demonitor(ref, [:flush])
     state = %{state | task_ref: nil, successive_failure_count: 0}
 
+    Enum.each(state.wal_pipelines, fn wal_pipeline ->
+      Health.put_event(wal_pipeline, %Event{slug: :messages_fetch, status: :success})
+    end)
+
     if wal_events == [] do
       if state.test_pid do
         send(state.test_pid, {__MODULE__, :no_events})
@@ -249,6 +253,10 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
     Process.demonitor(ref, [:flush])
     has_more? = length(state.wal_events) == state.batch_size
 
+    Enum.each(state.wal_pipelines, fn wal_pipeline ->
+      Health.put_event(wal_pipeline, %Event{slug: :messages_delete, status: :success})
+    end)
+
     if state.test_pid do
       send(state.test_pid, {__MODULE__, :wrote_events, length(state.wal_events)})
     end
@@ -271,11 +279,18 @@ defmodule Sequin.DatabasesRuntime.WalPipelineServer do
   def handle_event(:info, {:DOWN, ref, _, _, reason}, state_name, %State{task_ref: ref} = state) do
     Logger.error("[WalPipelineServer] Task for #{state_name} failed with reason #{inspect(reason)}")
 
+    event_slug =
+      case state_name do
+        :fetching_wal_events -> :messages_fetch
+        :deleting_wal_events -> :messages_delete
+        :writing_to_destination -> :destination_insert
+      end
+
     Enum.each(state.wal_pipelines, fn wal_pipeline ->
       Health.put_event(
         wal_pipeline,
         %Event{
-          slug: :destination_insert,
+          slug: event_slug,
           status: :fail,
           error: Error.service(service: __MODULE__, message: "Unknown error")
         }

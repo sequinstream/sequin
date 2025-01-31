@@ -444,6 +444,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:noreply, state}
     else
       Logger.info("[SlotMessageStore] Finished flushing messages")
+      commit_flushed_wal_cursor(state)
       schedule_flush(state)
       {:noreply, trim_or_load_messages(state)}
     end
@@ -467,10 +468,23 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
+  defp commit_flushed_wal_cursor(%State{} = state) do
+    case State.safe_wal_cursor(state) do
+      nil ->
+        :ok
+
+      wal_cursor ->
+        Consumers.update_flushed_wal_cursor(state.consumer.flushed_wal_cursor, %{
+          commit_lsn: wal_cursor.commit_lsn,
+          commit_idx: wal_cursor.commit_idx
+        })
+    end
+  end
+
   defp load_from_postgres(%State{persisted_mode?: false} = state), do: {:ok, state}
 
   defp load_from_postgres(%State{persisted_mode?: true} = state) do
-    case Consumers.get_sink_consumer(state.consumer_id) do
+    case Consumers.get_sink_consumer(state.consumer_id, [:flushed_wal_cursor]) do
       {:ok, consumer} ->
         Logger.metadata(account_id: consumer.account_id)
 

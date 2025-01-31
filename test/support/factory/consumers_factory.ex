@@ -124,8 +124,9 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     case Consumers.create_sink_consumer(account_id, attrs, skip_lifecycle: true) do
       {:ok, consumer} ->
+        Consumers.create_flushed_wal_cursor(%{sink_consumer_id: consumer.id})
         Consumers.create_consumer_partition(consumer)
-        consumer
+        Repo.preload(consumer, [:flushed_wal_cursor])
 
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
         insert_sink_consumer!(attrs)

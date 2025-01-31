@@ -16,6 +16,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SinkConsumerFlushedWalCursor
   alias Sequin.Consumers.SourceTable
   alias Sequin.ConsumersRuntime.LifecycleEventWorker
   alias Sequin.Databases
@@ -195,17 +196,26 @@ defmodule Sequin.Consumers do
   end
 
   def create_sink_consumer(account_id, attrs, _opts) do
-    Repo.transact(fn ->
-      res =
+    Repo.transaction(fn ->
+      # Create the sink consumer
+      sink_consumer_result =
         %SinkConsumer{account_id: account_id}
         |> SinkConsumer.create_changeset(attrs)
         |> Repo.insert()
 
-      with {:ok, consumer} <- res,
-           consumer = Repo.reload!(consumer),
-           :ok <- create_consumer_partition(consumer),
-           {:ok, _} <- LifecycleEventWorker.enqueue(:create, :sink_consumer, consumer.id) do
-        {:ok, consumer}
+      case sink_consumer_result do
+        {:ok, sink_consumer} ->
+          # Initialize the WAL cursor
+          create_flushed_wal_cursor(%{
+            sink_consumer_id: sink_consumer.id,
+            commit_lsn: 0,
+            commit_idx: 0
+          })
+
+          Repo.preload(sink_consumer, [:flushed_wal_cursor])
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
       end
     end)
   end
@@ -248,10 +258,10 @@ defmodule Sequin.Consumers do
 
   # SinkConsumer
 
-  def get_sink_consumer(consumer_id) do
+  def get_sink_consumer(consumer_id, preload \\ []) do
     case Repo.get(SinkConsumer, consumer_id) do
       nil -> {:error, Error.not_found(entity: :sink_consumer, params: %{id: consumer_id})}
-      consumer -> {:ok, consumer}
+      consumer -> {:ok, Repo.preload(consumer, preload)}
     end
   end
 
@@ -302,6 +312,20 @@ defmodule Sequin.Consumers do
       true ->
         []
     end
+  end
+
+  # SinkConsumerFlushedWalCursor
+
+  def create_flushed_wal_cursor(attrs) do
+    %SinkConsumerFlushedWalCursor{}
+    |> SinkConsumerFlushedWalCursor.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_flushed_wal_cursor(%SinkConsumerFlushedWalCursor{} = cursor, attrs) do
+    cursor
+    |> SinkConsumerFlushedWalCursor.update_changeset(attrs)
+    |> Repo.update()
   end
 
   # ConsumerEvent

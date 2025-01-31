@@ -45,7 +45,7 @@ defmodule Sequin.Consumers.ConsumerRecord do
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
     field :table_reader_batch_id, :string, virtual: true
-
+    field :payload_size_bytes, :integer, virtual: true
     # Used to track if the record has been deleted from MessageHandler -> Store
     field :deleted, :boolean, virtual: true
 

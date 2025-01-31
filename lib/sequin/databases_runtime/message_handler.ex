@@ -255,6 +255,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   defp consumer_event(consumer, message) do
+    data = event_data_from_message(message, consumer)
+    payload_size = :erlang.external_size(data)
+
     %ConsumerEvent{
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
@@ -265,11 +268,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       table_oid: message.table_oid,
       deliver_count: 0,
       data: event_data_from_message(message, consumer),
-      replication_message_trace_id: message.trace_id
+      replication_message_trace_id: message.trace_id,
+      payload_size_bytes: payload_size
     }
   end
 
   defp consumer_record(consumer, message) do
+    data = record_data_from_message(message, consumer)
+    payload_size = :erlang.external_size(data)
+
     %ConsumerRecord{
       consumer_id: consumer.id,
       commit_lsn: message.commit_lsn,
@@ -281,7 +288,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       table_oid: message.table_oid,
       deliver_count: 0,
       data: record_data_from_message(message, consumer),
-      replication_message_trace_id: message.trace_id
+      replication_message_trace_id: message.trace_id,
+      payload_size_bytes: payload_size
     }
   end
 

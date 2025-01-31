@@ -28,6 +28,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   require Logger
 
+  @max_payload_sizes_by_replication_slot_id %{
+    "42df29fa-d2ba-4ef3-9c36-6525af31e598" => 1024 * 1024
+  }
+
   defmodule BatchState do
     @moduledoc false
     use TypedStruct
@@ -97,6 +101,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
           end
         end)
         |> Enum.reject(&is_nil/1)
+        |> Enum.reject(&violates_payload_size?(ctx.replication_slot_id, &1))
       end)
 
     wal_events =
@@ -229,6 +234,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   def handle_logical_message(ctx, _commit_lsn, _msg) do
     ctx
+  end
+
+  defp violates_payload_size?(replication_slot_id, message) do
+    max_payload_size_bytes = Map.get(@max_payload_sizes_by_replication_slot_id, replication_slot_id)
+
+    if max_payload_size_bytes do
+      message.payload_size_bytes > max_payload_size_bytes
+    else
+      false
+    end
   end
 
   # Track primary key values that match a backfill batch (a current backfill with an open low watermark)

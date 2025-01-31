@@ -236,13 +236,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     ctx
   end
 
-  defp violates_payload_size?(replication_slot_id, message) do
+  defp violates_payload_size?(replication_slot_id, {{_action, event_or_record}, _consumer}) do
     max_payload_size_bytes = Map.get(@max_payload_sizes_by_replication_slot_id, replication_slot_id)
 
     if max_payload_size_bytes do
-      message.payload_size_bytes > max_payload_size_bytes
+      event_or_record.payload_size_bytes > max_payload_size_bytes
     else
-      message.payload_size_bytes > 5_000_000
+      event_or_record.payload_size_bytes > 5_000_000
     end
   end
 

@@ -412,7 +412,7 @@ defmodule Sequin.Health do
     [
       basic_check(:messages_filtered, events),
       basic_check(:messages_ingested, events),
-      basic_check(:destination_insert, events)
+      check(:destination_insert, %WalPipeline{}, events)
     ]
   end
 
@@ -614,6 +614,36 @@ defmodule Sequin.Health do
 
       true ->
         put_check_timestamps(%{base_check | status: :healthy}, [config_checked_event])
+    end
+  end
+
+  defp check(:destination_insert, %WalPipeline{}, events) do
+    base_check = %Check{slug: :destination_insert, status: :initializing}
+    insert_event = find_event(events, :destination_insert)
+    fetch_event = find_event(events, :messages_fetch)
+    delete_event = find_event(events, :messages_delete)
+
+    cond do
+      not is_nil(insert_event) and insert_event.status == :fail ->
+        put_check_timestamps(%{base_check | status: :error, error: insert_event.error}, [insert_event])
+
+      (not is_nil(fetch_event) and fetch_event.status == :fail) or
+          (not is_nil(delete_event) and delete_event.status == :fail) ->
+        put_check_timestamps(
+          %{
+            base_check
+            | status: :error,
+              error: Error.service(service: :wal_pipeline, message: "Failed to fetch messages (internal error)")
+          },
+          [fetch_event || delete_event]
+        )
+
+      not is_nil(insert_event) ->
+        status = if insert_event.status == :success, do: :healthy, else: :initializing
+        put_check_timestamps(%{base_check | status: status}, [insert_event])
+
+      true ->
+        base_check
     end
   end
 

@@ -46,7 +46,7 @@ defmodule Sequin.Consumers.ConsumerEvent do
     field :flushed_at, :utc_datetime_usec, virtual: true
     field :dirty, :boolean, virtual: true
     field :table_reader_batch_id, :string, virtual: true
-
+    field :payload_size_bytes, :integer, virtual: true
     timestamps(type: :utc_datetime_usec)
   end
 

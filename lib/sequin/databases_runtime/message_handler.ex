@@ -68,7 +68,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   @impl MessageHandlerBehaviour
-  def handle_messages(%Context{} = ctx, messages) do
+  def handle_messages(%Context{} = ctx, messages, wal_cursor) do
     Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
     ctx = update_table_reader_batch_pks(ctx, messages)
@@ -110,6 +110,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     matching_pipeline_ids = wal_events |> Enum.map(& &1.wal_pipeline_id) |> Enum.uniq()
 
+    # instantiate a map of consumers to messages with empty message lists
+    empty_messages_by_consumer =
+      Map.new(ctx.consumers, fn %SinkConsumer{} = consumer ->
+        {consumer, []}
+      end)
+
     messages_by_consumer =
       Enum.group_by(
         messages_with_consumer,
@@ -119,9 +125,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         fn {{_action, event_or_record}, _consumer} -> event_or_record end
       )
 
+    # merge the grouped messages with the empty message lists so that every consumer has a list of messages
+    messages_by_consumer = Map.merge(empty_messages_by_consumer, messages_by_consumer)
+
     res =
       Repo.transact(fn ->
-        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer),
+        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer, wal_cursor),
              {:ok, wal_event_count} <- insert_wal_events(wal_events) do
           # Update Consumer Health
           messages_by_consumer
@@ -362,12 +371,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     |> Map.new()
   end
 
-  defp call_consumer_message_stores(messages_by_consumer) do
+  defp call_consumer_message_stores(messages_by_consumer, wal_cursor) do
     Enum.each(messages_by_consumer, fn {consumer, messages} ->
       wal_cursors = Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
       :ok = MessageLedgers.wal_cursors_ingested(consumer.id, wal_cursors)
 
-      :ok = SlotMessageStore.put_messages(consumer.id, messages)
+      :ok = SlotMessageStore.put_messages(consumer.id, messages, wal_cursor)
     end)
 
     {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}

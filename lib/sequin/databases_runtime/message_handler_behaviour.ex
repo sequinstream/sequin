@@ -18,7 +18,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
 
     The return value is an updated context.
   """
-  @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
+  @callback handle_messages(context :: any(), messages :: [Message.t()], wal_cursor :: SlotMessageStore.wal_cursor()) ::
               {:ok, count :: non_neg_integer(), context :: any()} | {:error, reason :: any()}
 
   @doc """

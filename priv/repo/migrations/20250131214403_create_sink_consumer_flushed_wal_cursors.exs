@@ -47,5 +47,23 @@ defmodule Sequin.Repo.Migrations.CreateSinkConsumerFlushedWalCursors do
             """
             DROP TRIGGER IF EXISTS ensure_wal_cursor_advance ON #{@config_schema}.sink_consumer_flushed_wal_cursors;
             """
+
+    # Insert a record for each existing sink consumer
+    execute """
+            INSERT INTO #{@config_schema}.sink_consumer_flushed_wal_cursors
+            (sink_consumer_id, commit_lsn, commit_idx, inserted_at, updated_at)
+            SELECT
+              id,
+              0,
+              0,
+              NOW(),
+              NOW()
+            FROM #{@config_schema}.sink_consumers
+            ON CONFLICT (sink_consumer_id) DO NOTHING;
+            """,
+            """
+            DELETE FROM #{@config_schema}.sink_consumer_flushed_wal_cursors
+            WHERE sink_consumer_id IN (SELECT id FROM #{@config_schema}.sink_consumers);
+            """
   end
 end

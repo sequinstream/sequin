@@ -717,9 +717,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     messages = Enum.reverse(messages)
 
     next_commit_tuple = messages |> Enum.map(&{&1.commit_lsn, &1.commit_idx}) |> Enum.max()
+
     # Flush accumulated messages
+    {commit_lsn, commit_idx} = next_commit_tuple
+    wal_cursor = %{commit_lsn: commit_lsn, commit_idx: commit_idx}
+
     {:ok, _count, message_handler_ctx} =
-      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+      state.message_handler_module.handle_messages(state.message_handler_ctx, messages, wal_cursor)
 
     if state.test_pid do
       send(state.test_pid, {__MODULE__, :flush_messages})

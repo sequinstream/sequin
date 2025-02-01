@@ -64,9 +64,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   Should raise so SlotProcessor cannot continue if this fails.
   """
-  @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok
-  def put_messages(consumer_id, messages) do
-    GenServer.call(via_tuple(consumer_id), {:put_messages, messages})
+  @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), State.wal_cursor()) :: :ok
+  def put_messages(consumer_id, messages, wal_cursor) do
+    GenServer.call(via_tuple(consumer_id), {:put_messages, messages, wal_cursor})
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
@@ -266,9 +266,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_call({:put_messages, messages}, _from, %State{} = state) do
+  def handle_call({:put_messages, messages, wal_cursor}, _from, %State{} = state) do
     initial_count = map_size(state.messages)
-    {time, state} = :timer.tc(fn -> State.put_messages(state, messages) end)
+    {time, state} = :timer.tc(fn -> State.put_messages(state, messages, wal_cursor) end)
     new_count = map_size(state.messages)
 
     if div(time, 1000) > @min_log_time_ms do

@@ -10,6 +10,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   require Logger
 
+  @type wal_cursor() :: %{commit_lsn: non_neg_integer(), commit_idx: non_neg_integer()}
+
   typedstruct do
     field :consumer, SinkConsumer.t()
     field :consumer_id, String.t()
@@ -22,11 +24,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :slot_processor_monitor_ref, reference() | nil
     field :table_reader_batch_id, String.t() | nil
     field :test_pid, pid() | nil
+    field :last_ingested_wal_cursor, wal_cursor() | nil
   end
 
   def max_messages_in_memory, do: 10_000
 
-  def put_messages(%State{} = state, messages) do
+  @spec put_messages(%State{}, list(ConsumerRecord.t() | ConsumerEvent.t()), wal_cursor()) :: %State{}
+  def put_messages(%State{} = state, messages, wal_cursor) do
+    %{put_messages(state, messages) | last_ingested_wal_cursor: wal_cursor}
+  end
+
+  defp put_messages(%State{} = state, messages) do
     now = DateTime.utc_now()
 
     messages =
@@ -230,6 +238,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
       %{flushed_at: nil}, safe_wal_cursor -> {:halt, safe_wal_cursor}
       msg, _ -> {:cont, Map.take(msg, [:commit_lsn, :commit_idx])}
     end)
+    |> case do
+      nil -> state.last_ingested_wal_cursor
+      wal_cursor -> wal_cursor
+    end
   end
 
   defp update_messages(%State{} = state, messages) do

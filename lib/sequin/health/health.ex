@@ -680,9 +680,10 @@ defmodule Sequin.Health do
     active_replications =
       Replication.all_active_pg_replications()
       |> Repo.preload([:postgres_database, :account])
-      |> Enum.filter(&(&1.postgres_database.use_local_tunnel == false))
-      |> Enum.filter(&(&1.annotations["ignore_health"] != true))
-      |> Enum.filter(&(&1.account.annotations["ignore_health"] != true))
+      |> Enum.reject(&(&1.postgres_database.use_local_tunnel == true))
+      |> Enum.reject(&(&1.account.annotations["ignore_health"] == true))
+      |> Enum.reject(&(&1.postgres_database.annotations["ignore_health"] == true))
+      |> Enum.reject(&(&1.annotations["ignore_health"] == true))
 
     active_replication_ids = Enum.map(active_replications, & &1.id)
 

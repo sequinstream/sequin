@@ -177,7 +177,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
     case Req.post(req) do
       {:ok, response} ->
-        ensure_status(response)
+        ensure_status(response, consumer)
 
       {:error, %Mint.TransportError{reason: reason} = error} ->
         Logger.error(
@@ -213,7 +213,22 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
     end
   end
 
-  defp ensure_status(%Req.Response{} = response) do
+  # TODO: Temp fix for flaky sink consumer
+  defp ensure_status(%Req.Response{} = response, %SinkConsumer{id: "52f95f90-4e22-4b44-96d6-438d9b29661d"}) do
+    if response.status in 200..299 or response.status == 413 do
+      :ok
+    else
+      {:error,
+       Error.service(
+         service: :http_endpoint,
+         code: "bad_status",
+         message: "Unexpected status code: #{response.status}",
+         details: %{status: response.status, body: response.body}
+       )}
+    end
+  end
+
+  defp ensure_status(%Req.Response{} = response, _consumer) do
     if response.status in 200..299 do
       :ok
     else

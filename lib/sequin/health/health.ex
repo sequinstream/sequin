@@ -757,9 +757,8 @@ defmodule Sequin.Health do
       case new_status do
         status when status in [:error] ->
           summary = build_error_summary(name, entity)
-          severity = if status == :error, do: :critical, else: :warning
 
-          Pagerduty.alert(dedup_key, summary, severity: severity)
+          Pagerduty.alert(dedup_key, summary, severity: :warning)
 
         _ ->
           Pagerduty.resolve(dedup_key, "#{name} is healthy")

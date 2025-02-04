@@ -9,7 +9,7 @@ defmodule SequinWeb.DatabasesLive.Show do
   alias Sequin.Metrics
   alias Sequin.Replication
   alias Sequin.Repo
-  alias Sequin.Tracer
+  # alias Sequin.Tracer
   alias Sequin.Tracer.Server
   alias Sequin.Tracer.State, as: TracerState
   alias SequinWeb.RouteHelpers
@@ -49,7 +49,7 @@ defmodule SequinWeb.DatabasesLive.Show do
           )
 
         if connected?(socket) do
-          Tracer.DynamicSupervisor.start_for_account(account_id)
+          # Tracer.DynamicSupervisor.start_for_account(account_id)
 
           Process.send_after(self(), :update_health, 1000)
           Process.send_after(self(), :update_metrics, 1000)

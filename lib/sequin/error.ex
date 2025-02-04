@@ -208,13 +208,18 @@ defmodule Sequin.Error do
     @moduledoc false
     @derive Jason.Encoder
     @enforce_keys [:message]
-    defexception [:message]
+    defexception [:message, :code]
 
     @type t :: %__MODULE__{
-            message: String.t()
+            message: String.t(),
+            code: atom()
           }
 
-    def from_json(json), do: JSON.struct(json, __MODULE__)
+    def from_json(json) do
+      json
+      |> JSON.decode_atom("code")
+      |> JSON.struct(__MODULE__)
+    end
   end
 
   defmodule Guards do
@@ -277,7 +282,7 @@ defmodule Sequin.Error do
   def validation(opts), do: ValidationError.exception(opts)
 
   @spec invariant([opt]) :: InvariantError.t()
-        when opt: {:message, String.t()}
+        when opt: {:message, String.t()} | {:code, atom()}
   def invariant(opts), do: InvariantError.exception(opts)
 
   @doc """

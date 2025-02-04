@@ -15,7 +15,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Postgres
   alias Sequin.Repo
-  alias Sequin.Time
+  # alias Sequin.Time
   alias Sequin.Tracer
 
   require Logger
@@ -48,8 +48,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       scheduled_handle_demand: false
     }
 
-    state = schedule_receive_messages(state)
-    state = schedule_trim_idempotency(state)
+    state =
+      state
+      |> schedule_receive_messages()
+      |> schedule_trim_idempotency()
 
     {:producer, state}
   end
@@ -144,14 +146,19 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp produce_messages(%SinkConsumer{} = consumer, count) do
-    case SlotMessageStore.produce(consumer.id, count) do
-      {:ok, messages} ->
-        Tracer.Server.messages_received(consumer, messages)
-        messages
-
+    with {:ok, messages} <- produce_persisted_messages(consumer, count),
+         remaining_count = count - length(messages),
+         {:ok, messages} <- SlotMessageStore.produce(consumer.id, remaining_count, self()) do
+      Tracer.Server.messages_received(consumer, messages)
+      messages
+    else
       {:error, _error} ->
         []
     end
+  end
+
+  defp produce_persisted_messages(_consumer, _count) do
+    {:ok, []}
   end
 
   defp handle_idempotency(state, messages) do
@@ -216,8 +223,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
-  @exponential_backoff_max :timer.minutes(3)
+  # @exponential_backoff_max :timer.minutes(3)
+  @spec ack({SinkConsumer.t(), pid()}, list(Message.t()), list(Message.t())) :: :ok
   def ack({consumer, test_pid}, successful, failed) do
+    # First, handle the WAL cursors for successful messages
     wal_cursors =
       successful
       |> Stream.flat_map(& &1.data)
@@ -231,34 +240,41 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
 
-    successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-    failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
-
     if test_pid do
       Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
-    if length(successful_ids) > 0 do
-      SlotMessageStore.ack(consumer, successful_ids)
-    end
+    # Process failed messages - update their state and write to table
+    # failed_messages =
+    #   Enum.flat_map(failed, fn message ->
+    #     Enum.map(message.data, fn record ->
+    #       deliver_count = record.deliver_count
+    #       backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+    #       not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
 
-    failed
-    |> Enum.flat_map(fn message ->
-      Enum.map(message.data, fn record ->
-        deliver_count = record.deliver_count
-        backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
-        not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
+    #       %{
+    #         record
+    #         | deliver_count: deliver_count + 1,
+    #           last_delivered_at: DateTime.utc_now(),
+    #           not_visible_until: not_visible_until
+    #       }
+    #     end)
+    #   end)
 
-        {record.ack_id, not_visible_until}
-      end)
-    end)
-    |> Enum.chunk_every(1000)
-    |> Enum.each(fn chunk ->
-      ack_ids_with_not_visible_until = Map.new(chunk)
-      SlotMessageStore.nack(consumer.id, ack_ids_with_not_visible_until)
-    end)
+    # Write failed messages to table if there are any
+    # {:ok, _count} = Sequin.Consumers.upsert_consumer_messages(consumer, failed_messages)
+
+    # Ack all messages in SlotMessageStore to remove from buffer
+    all_ack_ids =
+      (successful ++ failed)
+      |> Stream.flat_map(& &1.data)
+      |> Enum.map(& &1.ack_id)
+
+    {:ok, _count} = SlotMessageStore.ack(consumer, all_ack_ids)
 
     if test_pid do
+      successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
+      failed_ids = failed |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)
       send(test_pid, {__MODULE__, :ack_finished, successful_ids, failed_ids})
     end
 

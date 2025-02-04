@@ -95,9 +95,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
               consumer.message_kind == :record ->
                 {{:insert, consumer_record(consumer, message)}, consumer}
             end
-          else
-            TracerServer.message_filtered(consumer, message)
-            nil
           end
         end)
         |> Enum.reject(&is_nil/1)

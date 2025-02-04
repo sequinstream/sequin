@@ -712,12 +712,17 @@
               data-1p-ignore
               data-lpignore="true"
               data-form-type="other"
-              disabled={isEditMode}
             />
             <p class="text-xs font-light">
               Must contain only alphanumeric characters, underscores, hyphens,
-              or dots..
+              or dots.
             </p>
+            {#if isEditMode && form.name !== initialForm.name}
+              <p class="text-amber-500 text-sm mt-1">
+                If you're using YAML to configure Sequin, you may need to change
+                the name for this sink in your YAML config file.
+              </p>
+            {/if}
           </div>
           {#if errors.consumer.name}
             <p class="text-destructive text-sm">{errors.consumer.name}</p>

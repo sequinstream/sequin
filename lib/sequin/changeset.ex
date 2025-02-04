@@ -19,7 +19,7 @@ defmodule Sequin.Changeset do
         Ecto.Changeset.add_error(
           changeset,
           :name,
-          "Can only contain alphanumeric characters, underscores, hyphens, or dots."
+          "Can only contain alphanumeric characters, underscores, hyphens, or dots"
         )
     end
   end

@@ -439,6 +439,30 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Repo.insert!()
   end
 
+  def deliverable_consumer_message(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:event, :record]) end)
+
+    case message_kind do
+      :event -> deliverable_consumer_event(attrs)
+      :record -> deliverable_consumer_record(attrs)
+    end
+  end
+
+  def deliverable_consumer_event(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.merge(%{state: :available, not_visible_until: nil})
+    |> consumer_event()
+  end
+
+  def insert_deliverable_consumer_event!(attrs \\ []) do
+    attrs
+    |> Map.new()
+    |> Map.merge(%{state: :available, not_visible_until: nil})
+    |> insert_consumer_event!()
+  end
+
   # ConsumerRecord
   def consumer_record(attrs \\ []) do
     attrs = Map.new(attrs)
@@ -570,6 +594,26 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.update!(:metadata, fn metadata ->
       Sequin.Map.from_ecto(metadata)
     end)
+  end
+
+  def insert_consumer_message!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
+
+    case message_kind do
+      :record -> insert_consumer_record!(attrs)
+      :event -> insert_consumer_event!(attrs)
+    end
+  end
+
+  def insert_deliverable_consumer_message!(attrs \\ []) do
+    attrs = Map.new(attrs)
+    {message_kind, attrs} = Map.pop_lazy(attrs, :message_kind, fn -> Enum.random([:record, :event]) end)
+
+    case message_kind do
+      :record -> insert_deliverable_consumer_record!(attrs)
+      :event -> insert_deliverable_consumer_event!(attrs)
+    end
   end
 
   def consumer_message(attrs \\ []) do

@@ -138,12 +138,20 @@ defmodule Sequin.Consumers.ConsumerEvent do
     where(query, [consumer_event: ce], ce.ack_id in ^ack_ids)
   end
 
+  def where_group_ids(query \\ base_query(), group_ids) do
+    from([consumer_event: ce] in query, where: ce.group_id in ^group_ids)
+  end
+
   def where_deliverable(query \\ base_query()) do
     now = DateTime.utc_now()
 
     from([consumer_event: ce] in query,
       where: is_nil(ce.not_visible_until) or ce.not_visible_until <= ^now
     )
+  end
+
+  def min_not_visible_until(query \\ base_query()) do
+    from([consumer_event: ce] in query, select: min(ce.not_visible_until))
   end
 
   def where_not_visible(query \\ base_query()) do

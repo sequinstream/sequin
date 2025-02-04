@@ -6,17 +6,19 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.ConsumerProducerCache
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.DatabasesRuntime.SlotMessageStore
+  alias Sequin.Health
+  alias Sequin.Health.Event
   alias Sequin.Postgres
   alias Sequin.Repo
-  # alias Sequin.Time
-  alias Sequin.Tracer
 
   require Logger
 
@@ -25,17 +27,18 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   @impl GenStage
   def init(opts) do
     consumer = Keyword.fetch!(opts, :consumer)
+    slot_message_store_mod = Keyword.get(opts, :slot_message_store_mod, SlotMessageStore)
     Logger.metadata(consumer_id: consumer.id)
     Logger.info("Initializing consumer producer")
 
     if test_pid = Keyword.get(opts, :test_pid) do
       Sandbox.allow(Sequin.Repo, test_pid, self())
       Mox.allow(Sequin.TestSupport.DateTimeMock, test_pid, self())
+      Mox.allow(Sequin.DatabasesRuntime.SlotMessageStoreMock, test_pid, self())
     end
 
-    consumer = Repo.lazy_preload(consumer, postgres_database: [:replication_slot])
-
     :syn.join(:consumers, {:messages_ingested, consumer.id}, self())
+    :syn.join(:consumers, {:messages_changed, consumer.id}, self())
 
     state = %{
       demand: 0,
@@ -45,13 +48,12 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       batch_size: Keyword.get(opts, :batch_size, 10),
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
-      scheduled_handle_demand: false
+      scheduled_handle_demand: false,
+      persisted_message_cache: nil,
+      slot_message_store_mod: slot_message_store_mod
     }
 
-    state =
-      state
-      |> schedule_receive_messages()
-      |> schedule_trim_idempotency()
+    Process.send_after(self(), :init, 0)
 
     {:producer, state}
   end
@@ -62,6 +64,38 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     new_state = %{new_state | demand: demand + incoming_demand}
 
     {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_call({:persisted_messages_changed, removed, upserted}, _ref, state) do
+    cache =
+      state.persisted_message_cache
+      |> ConsumerProducerCache.remove_messages(removed)
+      |> ConsumerProducerCache.upsert_messages(upserted)
+
+    {:reply, :ok, [], %{state | persisted_message_cache: cache}}
+  end
+
+  @impl GenStage
+  def handle_info(:init, state) do
+    consumer = Repo.lazy_preload(state.consumer, postgres_database: [:replication_slot])
+
+    messages = Consumers.list_consumer_messages_for_consumer(consumer, select: [:ack_id, :group_id, :not_visible_until])
+
+    persisted_message_cache = ConsumerProducerCache.init(messages)
+
+    state =
+      state
+      |> schedule_receive_messages()
+      |> schedule_trim_idempotency()
+
+    state = %{
+      state
+      | consumer: consumer,
+        persisted_message_cache: persisted_message_cache
+    }
+
+    {:noreply, [], state}
   end
 
   @impl GenStage
@@ -79,6 +113,17 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   def handle_info(:messages_ingested, state) do
     new_state = maybe_schedule_demand(state)
     {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_info(:messages_changed, state) do
+    messages =
+      Consumers.list_consumer_messages_for_consumer(state.consumer, select: [:ack_id, :group_id, :not_visible_until])
+
+    persisted_message_cache = ConsumerProducerCache.init(messages)
+    new_state = %{state | persisted_message_cache: persisted_message_cache}
+
+    handle_receive_messages(new_state)
   end
 
   @impl GenStage
@@ -103,7 +148,9 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
-    {time, messages} = :timer.tc(fn -> produce_messages(state.consumer, demand * state.batch_size * 10) end)
+    desired_count = demand * state.batch_size * 10
+    {time, messages} = :timer.tc(fn -> produce_messages(state, desired_count) end)
+    more_upstream_messages? = length(messages) == desired_count
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
@@ -115,11 +162,21 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       )
     end
 
-    {time, {state, messages}} = :timer.tc(fn -> handle_idempotency(state, messages) end)
+    {time, messages} = :timer.tc(fn -> reject_delivered_messages(state, messages) end)
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
-        "[ConsumerProducer] Handled idempotency",
+        "[ConsumerProducer] Rejected delivered messages",
+        duration_ms: div(time, 1000),
+        message_count: length(messages)
+      )
+    end
+
+    {time, messages} = :timer.tc(fn -> reject_blocked_messages(state, messages) end)
+
+    if div(time, 1000) > @min_log_time_ms do
+      Logger.warning(
+        "[ConsumerProducer] Handled blocked messages",
         duration_ms: div(time, 1000),
         message_count: length(messages)
       )
@@ -131,25 +188,47 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       |> Enum.map(fn batch ->
         %Message{
           data: batch,
-          acknowledger: {__MODULE__, {state.consumer, state.test_pid}, nil}
+          acknowledger: {__MODULE__, {state.consumer, state.test_pid, self(), state.slot_message_store_mod}, nil}
         }
       end)
 
     new_demand = demand - length(broadway_messages)
     new_demand = if new_demand < 0, do: 0, else: new_demand
+    state = %{state | demand: new_demand}
 
-    {:noreply, broadway_messages, %{state | demand: new_demand}}
+    if new_demand > 0 and more_upstream_messages? do
+      {:noreply, broadway_messages, maybe_schedule_demand(state)}
+    else
+      {:noreply, broadway_messages, state}
+    end
   end
 
   defp handle_receive_messages(state) do
     {:noreply, [], state}
   end
 
-  defp produce_messages(%SinkConsumer{} = consumer, count) do
-    with {:ok, messages} <- produce_persisted_messages(consumer, count),
-         remaining_count = count - length(messages),
-         {:ok, messages} <- SlotMessageStore.produce(consumer.id, remaining_count, self()) do
-      Tracer.Server.messages_received(consumer, messages)
+  defp produce_messages(state, count) do
+    consumer = state.consumer
+
+    with {:ok, persisted_messages} <- produce_persisted_messages(state, count),
+         remaining_count = count - length(persisted_messages),
+         {:ok, slot_messages} <- state.slot_message_store_mod.produce(consumer.id, remaining_count, self()) do
+      messages = persisted_messages ++ slot_messages
+
+      unless messages == [] do
+        Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
+      end
+
+      Enum.each(
+        messages,
+        &Sequin.Logs.log_for_consumer_message(
+          :info,
+          consumer.account_id,
+          &1.replication_message_trace_id,
+          "Consumer produced message"
+        )
+      )
+
       messages
     else
       {:error, _error} ->
@@ -157,11 +236,15 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     end
   end
 
-  defp produce_persisted_messages(_consumer, _count) do
-    {:ok, []}
+  defp produce_persisted_messages(state, count) do
+    if ConsumerProducerCache.any_available_persisted_messages?(state.persisted_message_cache) do
+      Consumers.receive_for_consumer(state.consumer, batch_size: count)
+    else
+      {:ok, []}
+    end
   end
 
-  defp handle_idempotency(state, messages) do
+  defp reject_delivered_messages(state, messages) do
     wal_cursors_to_deliver =
       messages
       |> Stream.reject(fn
@@ -186,7 +269,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       end)
 
     if delivered_messages == [] do
-      {state, messages}
+      filtered_messages
     else
       Logger.info(
         "[ConsumerProducer] Rejected messages for idempotency",
@@ -195,15 +278,25 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         message_count: length(filtered_messages)
       )
 
-      SlotMessageStore.ack(state.consumer, Enum.map(delivered_messages, & &1.ack_id))
+      state.slot_message_store_mod.ack(state.consumer.id, Enum.map(delivered_messages, & &1.ack_id))
 
-      # If we filtered out any messages due to idempotency, we will have additional
-      # demand that we need to handle. So we schedule an immediate :receive_messages
-      if state.receive_timer, do: Process.cancel_timer(state.receive_timer)
-      receive_timer = Process.send_after(self(), :receive_messages, 10)
-
-      {%{state | receive_timer: receive_timer}, filtered_messages}
+      filtered_messages
     end
+  end
+
+  defp reject_blocked_messages(state, messages) do
+    {blocked_messages, unblocked_messages} =
+      Enum.split_with(messages, fn message ->
+        is_nil(message.id) and ConsumerProducerCache.group_id_persisted?(state.persisted_message_cache, message.group_id)
+      end)
+
+    {:ok, _} = Consumers.upsert_consumer_messages(state.consumer, blocked_messages)
+
+    unless blocked_messages == [] do
+      state.slot_message_store_mod.ack(state.consumer.id, Enum.map(blocked_messages, & &1.ack_id))
+    end
+
+    unblocked_messages
   end
 
   defp schedule_receive_messages(state) do
@@ -223,54 +316,63 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
-  # @exponential_backoff_max :timer.minutes(3)
-  @spec ack({SinkConsumer.t(), pid()}, list(Message.t()), list(Message.t())) :: :ok
-  def ack({consumer, test_pid}, successful, failed) do
-    # First, handle the WAL cursors for successful messages
-    wal_cursors =
-      successful
-      |> Stream.flat_map(& &1.data)
-      |> Enum.map(fn message ->
-        %{
-          commit_lsn: message.commit_lsn,
-          commit_idx: message.commit_idx,
-          commit_timestamp: message.commit_timestamp
-        }
-      end)
+  @spec ack({SinkConsumer.t(), pid(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) ::
+          :ok
+  def ack({consumer, test_pid, producer_pid, slot_message_store_mod}, successful, failed) do
+    successful_messages = Enum.flat_map(successful, & &1.data)
+    failed_messages = Enum.flat_map(failed, & &1.data)
 
-    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
-
+    # TODO: Can we remove, this should be happening in the processor?
     if test_pid do
       Sandbox.allow(Sequin.Repo, test_pid, self())
     end
 
-    # Process failed messages - update their state and write to table
-    # failed_messages =
-    #   Enum.flat_map(failed, fn message ->
-    #     Enum.map(message.data, fn record ->
-    #       deliver_count = record.deliver_count
-    #       backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
-    #       not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
+    # First, handle the WAL cursors for successful messages
+    wal_cursors =
+      Enum.map(successful_messages, fn message ->
+        %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx, commit_timestamp: message.commit_timestamp}
+      end)
 
-    #       %{
-    #         record
-    #         | deliver_count: deliver_count + 1,
-    #           last_delivered_at: DateTime.utc_now(),
-    #           not_visible_until: not_visible_until
-    #       }
-    #     end)
-    #   end)
+    :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
+
+    successful_persisted_message_metadatas =
+      successful_messages
+      # ConsumerProducer only cares about persisted messages
+      |> Stream.filter(& &1.id)
+      |> Enum.map(fn message ->
+        %{
+          ack_id: message.ack_id,
+          group_id: message.group_id,
+          not_visible_until: message.not_visible_until
+        }
+      end)
+
+    successful_persisted_message_ack_ids = Enum.map(successful_persisted_message_metadatas, & &1.ack_id)
+
+    all_ack_ids = Enum.map(successful_messages ++ failed_messages, & &1.ack_id)
+
+    # Ack successful persisted messages
+    {:ok, _count} = Consumers.ack_messages(consumer, successful_persisted_message_ack_ids)
 
     # Write failed messages to table if there are any
-    # {:ok, _count} = Sequin.Consumers.upsert_consumer_messages(consumer, failed_messages)
+    {:ok, failed_messages} = Consumers.upsert_failed_messages(consumer, failed_messages)
+
+    failed_message_metadatas =
+      Enum.map(failed_messages, fn message ->
+        %{ack_id: message.ack_id, group_id: message.group_id, not_visible_until: message.not_visible_until}
+      end)
+
+    # Tell the ConsumerProducer about persisted successful messages and all failed messages
+    # Important to do this before acking the messages in SlotMessageStore,
+    # because we need to get failed message group_ids into the cache
+    :ok =
+      GenStage.call(
+        producer_pid,
+        {:persisted_messages_changed, successful_persisted_message_metadatas, failed_message_metadatas}
+      )
 
     # Ack all messages in SlotMessageStore to remove from buffer
-    all_ack_ids =
-      (successful ++ failed)
-      |> Stream.flat_map(& &1.data)
-      |> Enum.map(& &1.ack_id)
-
-    {:ok, _count} = SlotMessageStore.ack(consumer, all_ack_ids)
+    {:ok, _count} = slot_message_store_mod.ack(consumer.id, all_ack_ids)
 
     if test_pid do
       successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

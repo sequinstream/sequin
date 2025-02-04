@@ -15,19 +15,590 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SequenceFilter.StringValue
   alias Sequin.Databases
   alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.Sequence
-  alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Test.UnboxedRepo
   alias Sequin.TestSupport.Models.Character
   alias Sequin.TestSupport.Models.CharacterDetailed
   alias Sequin.TestSupport.Models.CharacterMultiPK
+
+  describe "receive_for_consumer/2 with event message kind" do
+    setup do
+      consumer = ConsumersFactory.insert_sink_consumer!(max_ack_pending: 1_000, message_kind: :event)
+      %{consumer: consumer}
+    end
+
+    test "returns nothing if consumer_events is empty", %{consumer: consumer} do
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "delivers available outstanding events", %{consumer: consumer} do
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil, deliver_count: 0)
+      ack_wait_ms = consumer.ack_wait_ms
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
+      assert delivered_event.ack_id == event.ack_id
+      assert delivered_event.id == event.id
+      updated_event = Repo.get_by(ConsumerEvent, id: event.id)
+      assert DateTime.after?(updated_event.not_visible_until, not_visible_until)
+      assert updated_event.deliver_count == 1
+      assert updated_event.last_delivered_at
+    end
+
+    test "redelivers expired outstanding events", %{consumer: consumer} do
+      event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), -1, :second),
+          deliver_count: 1,
+          last_delivered_at: DateTime.add(DateTime.utc_now(), -30, :second)
+        )
+
+      assert {:ok, [redelivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert redelivered_event.id == event.id
+      assert redelivered_event.ack_id == event.ack_id
+      updated_event = Repo.get_by(ConsumerEvent, id: event.id)
+      assert DateTime.compare(updated_event.not_visible_until, event.not_visible_until) != :eq
+      assert updated_event.deliver_count == 2
+      assert DateTime.compare(updated_event.last_delivered_at, event.last_delivered_at) != :eq
+    end
+
+    test "does not redeliver unexpired outstanding events", %{consumer: consumer} do
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+      )
+
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "delivers only up to batch_size", %{consumer: consumer} do
+      for _ <- 1..3 do
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+      end
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
+      assert length(Repo.all(ConsumerEvent)) == 3
+    end
+
+    test "does not deliver outstanding events for another consumer", %{consumer: consumer} do
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
+      ConsumersFactory.insert_consumer_event!(consumer_id: other_consumer.id, not_visible_until: nil)
+
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "with a mix of available and unavailable events, delivers only available outstanding events", %{
+      consumer: consumer
+    } do
+      available =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+        end
+
+      redeliver =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_event!(
+            consumer_id: consumer.id,
+            not_visible_until: DateTime.add(DateTime.utc_now(), -30, :second)
+          )
+        end
+
+      for _ <- 1..3 do
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        )
+      end
+
+      assert {:ok, events} = Consumers.receive_for_consumer(consumer)
+      assert length(events) == length(available ++ redeliver)
+      assert_lists_equal(events, available ++ redeliver, &assert_maps_equal(&1, &2, [:consumer_id, :id]))
+    end
+
+    test "does not deliver events if there is an outstanding event with same record_pks and table_oid", %{
+      consumer: consumer
+    } do
+      # Create an outstanding event
+      outstanding_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+          record_pks: [1],
+          group_id: nil,
+          table_oid: 12_345
+        )
+
+      # Create an event with the same record_pks and table_oid
+      same_combo_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          record_pks: outstanding_event.record_pks,
+          group_id: outstanding_event.group_id,
+          table_oid: outstanding_event.table_oid
+        )
+
+      # Create a different event
+      different_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          record_pks: [2],
+          table_oid: 67_890
+        )
+
+      # Attempt to receive events
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+
+      # Check that only the different event was delivered
+      assert length(delivered_events) == 1
+      assert hd(delivered_events).id == different_event.id
+
+      # Verify that the same_combo_event was not delivered
+      refute Repo.get_by(ConsumerEvent, id: same_combo_event.id).not_visible_until
+    end
+
+    test "delivers events according to id asc", %{consumer: consumer} do
+      event1 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+      event2 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+      _event3 = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
+      delivered_ids = Enum.map(delivered, & &1.id)
+      assert_lists_equal(delivered_ids, [event1.id, event2.id])
+    end
+
+    test "respects a consumer's max_ack_pending", %{consumer: consumer} do
+      max_ack_pending = 3
+      consumer = %{consumer | max_ack_pending: max_ack_pending}
+
+      event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+
+      for _ <- 1..2 do
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        )
+      end
+
+      for _ <- 1..2 do
+        ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id, not_visible_until: nil)
+      end
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered) == 1
+      assert List.first(delivered).id == event.id
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "delivers event when it does not share a group_id with outstanding events", %{consumer: consumer} do
+      # Insert an outstanding event
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "group_1"
+      )
+
+      # Insert a deliverable event with a different group_id
+      deliverable_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "group_2"
+        )
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.id == deliverable_event.id
+      assert delivered_event.group_id == "group_2"
+    end
+
+    test "delivers only the first of multiple available events with a shared group_id", %{consumer: consumer} do
+      event_attrs = [
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: "shared_group",
+        table_oid: Character.table_oid()
+      ]
+
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+      ConsumersFactory.insert_consumer_event!(event_attrs)
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.group_id == "shared_group"
+    end
+
+    test "does not deliver event when it shares a group_id with an outstanding event", %{consumer: consumer} do
+      # Insert an outstanding event
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "shared_group",
+        table_oid: 12_345
+      )
+
+      # Insert a deliverable event with the same group_id
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: "shared_group",
+        table_oid: 12_345
+      )
+
+      # Insert another deliverable event with a different group_id
+      different_group_event =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "different_group",
+          table_oid: 12_345
+        )
+
+      assert {:ok, [delivered_event]} = Consumers.receive_for_consumer(consumer)
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+      assert delivered_event.id == different_group_event.id
+      assert delivered_event.group_id == "different_group"
+
+      # Verify that the event with the shared group_id was not delivered
+      events = ConsumerEvent |> Repo.all() |> Enum.filter(&(&1.group_id == "shared_group"))
+      assert length(events) == 2
+      assert Enum.any?(events, &is_nil(&1.not_visible_until))
+    end
+
+    test "delivers multiple events with null group_ids unless they share record_pks and table_oid", %{consumer: consumer} do
+      # Create events with null group_ids but different record_pks/table_oid
+      event1 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [1],
+          table_oid: 12_345
+        )
+
+      event2 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [2],
+          table_oid: 12_345
+        )
+
+      # Create an event with same record_pks/table_oid as event1
+      ConsumersFactory.insert_consumer_event!(
+        consumer_id: consumer.id,
+        not_visible_until: nil,
+        group_id: nil,
+        record_pks: event1.record_pks,
+        table_oid: event1.table_oid
+      )
+
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered_events) == 2
+
+      delivered_ids = delivered_events |> Enum.map(& &1.id) |> Enum.sort()
+      expected_ids = Enum.sort([event1.id, event2.id])
+      assert delivered_ids == expected_ids
+    end
+
+    test "delivers events with null group_ids alongside events with non-null group_ids", %{consumer: consumer} do
+      # Create an event with a group_id
+      event1 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: "group_1"
+        )
+
+      # Create an event with null group_id
+      event2 =
+        ConsumersFactory.insert_consumer_event!(
+          consumer_id: consumer.id,
+          not_visible_until: nil,
+          group_id: nil,
+          record_pks: [1],
+          table_oid: 12_345
+        )
+
+      assert {:ok, delivered_events} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered_events) == 2
+
+      delivered_ids = delivered_events |> Enum.map(& &1.id) |> Enum.sort()
+      expected_ids = Enum.sort([event1.id, event2.id])
+      assert delivered_ids == expected_ids
+    end
+  end
+
+  describe "receive_for_consumer/2 with message_kind: :record" do
+    setup do
+      database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
+      # Load tables from actual database
+      {:ok, _tables} = Databases.tables(database)
+
+      slot =
+        ReplicationFactory.insert_postgres_replication!(
+          postgres_database_id: database.id,
+          account_id: database.account_id
+        )
+
+      source_tables = [
+        ConsumersFactory.source_table(
+          oid: Character.table_oid(),
+          column_filters: []
+        ),
+        ConsumersFactory.source_table(
+          oid: CharacterDetailed.table_oid(),
+          column_filters: []
+        ),
+        ConsumersFactory.source_table(
+          oid: CharacterMultiPK.table_oid(),
+          column_filters: []
+        )
+      ]
+
+      consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          message_kind: :record,
+          max_ack_pending: 1_000,
+          account_id: database.account_id,
+          replication_slot_id: slot.id,
+          source_tables: source_tables
+        )
+
+      consumer = Repo.preload(consumer, [:postgres_database, :sequence])
+
+      ConnectionCache.cache_connection(consumer.postgres_database, Repo)
+
+      %{consumer: consumer, database: database}
+    end
+
+    test "returns nothing if consumer_records is empty", %{consumer: consumer} do
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "delivers available outstanding records", %{consumer: consumer} do
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available, deliver_count: 0)
+      ack_wait_ms = consumer.ack_wait_ms
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      not_visible_until = DateTime.add(DateTime.utc_now(), ack_wait_ms - 1000, :millisecond)
+      assert delivered_record.ack_id == record.ack_id
+      assert delivered_record.id == record.id
+      updated_record = Repo.get_by(ConsumerRecord, id: record.id)
+      assert DateTime.after?(updated_record.not_visible_until, not_visible_until)
+      assert updated_record.deliver_count == 1
+      assert updated_record.last_delivered_at
+      assert updated_record.state == :delivered
+    end
+
+    test "redelivers expired outstanding records", %{consumer: consumer} do
+      record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), -1, :second),
+          deliver_count: 1,
+          last_delivered_at: DateTime.add(DateTime.utc_now(), -30, :second)
+        )
+
+      assert {:ok, [redelivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert redelivered_record.id == record.id
+      assert redelivered_record.ack_id == record.ack_id
+      updated_record = Repo.get_by(ConsumerRecord, id: record.id)
+      assert DateTime.compare(updated_record.not_visible_until, record.not_visible_until) != :eq
+      assert updated_record.deliver_count == 2
+      assert DateTime.compare(updated_record.last_delivered_at, record.last_delivered_at) != :eq
+      assert updated_record.state == :delivered
+    end
+
+    test "does not redeliver unexpired outstanding records", %{consumer: consumer} do
+      ConsumersFactory.insert_consumer_record!(
+        consumer_id: consumer.id,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+      )
+
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "delivers only up to batch_size", %{consumer: consumer} do
+      for _ <- 1..3 do
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+      end
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
+      assert length(Repo.all(ConsumerRecord)) == 3
+    end
+
+    test "does not deliver outstanding records for another consumer", %{consumer: consumer} do
+      other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
+      ConsumersFactory.insert_consumer_record!(consumer_id: other_consumer.id, state: :available)
+
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "with a mix of available and unavailable records, delivers only available outstanding records", %{
+      consumer: consumer
+    } do
+      available =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+        end
+
+      redeliver =
+        for _ <- 1..3 do
+          ConsumersFactory.insert_consumer_record!(
+            consumer_id: consumer.id,
+            state: :delivered,
+            not_visible_until: DateTime.add(DateTime.utc_now(), -30, :second)
+          )
+        end
+
+      for _ <- 1..3 do
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        )
+      end
+
+      assert {:ok, records} = Consumers.receive_for_consumer(consumer)
+      assert length(records) == length(available ++ redeliver)
+      assert_lists_equal(records, available ++ redeliver, &assert_maps_equal(&1, &2, [:consumer_id, :id]))
+    end
+
+    test "delivers only the first of multiple records with shared group_id", %{consumer: consumer} do
+      record_attrs = [
+        consumer_id: consumer.id,
+        state: :available,
+        group_id: "shared_group",
+        table_oid: Factory.integer()
+      ]
+
+      ConsumersFactory.insert_consumer_record!(record_attrs)
+      ConsumersFactory.insert_consumer_record!(record_attrs)
+      ConsumersFactory.insert_consumer_record!(record_attrs)
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.group_id == "shared_group"
+    end
+
+    test "delivers records according to id asc", %{consumer: consumer} do
+      record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+      _record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer, batch_size: 2)
+      assert length(delivered) == 2
+      delivered_ids = Enum.map(delivered, & &1.id)
+      assert_lists_equal(delivered_ids, [record1.id, record2.id])
+    end
+
+    test "respects a consumer's max_ack_pending", %{consumer: consumer} do
+      max_ack_pending = 3
+      consumer = %{consumer | max_ack_pending: max_ack_pending}
+
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+
+      for _ <- 1..2 do
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          state: :delivered,
+          not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
+        )
+      end
+
+      for _ <- 1..2 do
+        ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+      end
+
+      assert {:ok, delivered} = Consumers.receive_for_consumer(consumer)
+      assert length(delivered) == 1
+      assert List.first(delivered).id == record.id
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+    end
+
+    test "fetches source data for delivered records", %{consumer: consumer} do
+      record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.id == record.id
+      assert delivered_record.data.record == record.data.record
+      assert delivered_record.data.metadata.table_name == record.data.metadata.table_name
+      assert delivered_record.data.metadata.table_schema == record.data.metadata.table_schema
+      assert delivered_record.data.metadata.database_name == record.data.metadata.database_name
+    end
+
+    test "delivers record when it does not share a group_id with outstanding records", %{consumer: consumer} do
+      # Insert an outstanding record
+      ConsumersFactory.insert_consumer_record!(
+        consumer_id: consumer.id,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "group_1"
+      )
+
+      # Insert a deliverable record with a different group_id
+      deliverable_record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          state: :available,
+          group_id: "group_2"
+        )
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.id == deliverable_record.id
+      assert delivered_record.group_id == "group_2"
+    end
+
+    test "does not deliver record when it shares a group_id with an outstanding record", %{consumer: consumer} do
+      table_oid = Factory.integer()
+      # Insert an outstanding record
+      ConsumersFactory.insert_consumer_record!(
+        consumer_id: consumer.id,
+        state: :delivered,
+        not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second),
+        group_id: "shared_group",
+        table_oid: table_oid
+      )
+
+      # Insert a deliverable record with the same group_id
+      ConsumersFactory.insert_consumer_record!(
+        consumer_id: consumer.id,
+        state: :available,
+        group_id: "shared_group",
+        table_oid: table_oid
+      )
+
+      # Insert another deliverable record with a different group_id
+      different_group_record =
+        ConsumersFactory.insert_consumer_record!(
+          consumer_id: consumer.id,
+          state: :available,
+          group_id: "different_group",
+          table_oid: table_oid
+        )
+
+      assert {:ok, [delivered_record]} = Consumers.receive_for_consumer(consumer)
+      assert {:ok, []} = Consumers.receive_for_consumer(consumer)
+      assert delivered_record.id == different_group_record.id
+      assert delivered_record.group_id == "different_group"
+
+      # Verify that the record with the shared group_id was not delivered
+      records = ConsumerRecord |> Repo.all() |> Enum.filter(&(&1.group_id == "shared_group"))
+      assert length(records) == 2
+      assert Enum.any?(records, &(&1.state == :available))
+    end
+  end
 
   describe "ack_messages/2" do
     setup do
@@ -108,222 +679,6 @@ defmodule Sequin.ConsumersTest do
       assert {:ok, messages} = AcknowledgedMessages.fetch_messages(consumer.id)
       assert length(messages) == 2
       assert Enum.all?(messages, &(&1.consumer_id == consumer.id))
-    end
-  end
-
-  describe "put_source_data/3" do
-    setup do
-      database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
-      # Load tables from actual database
-      {:ok, _tables} = Databases.tables(database)
-
-      slot =
-        ReplicationFactory.insert_postgres_replication!(
-          postgres_database_id: database.id,
-          account_id: database.account_id
-        )
-
-      source_tables = [
-        ConsumersFactory.source_table(
-          oid: Character.table_oid(),
-          column_filters: []
-        ),
-        ConsumersFactory.source_table(
-          oid: CharacterDetailed.table_oid(),
-          column_filters: []
-        ),
-        ConsumersFactory.source_table(
-          oid: CharacterMultiPK.table_oid(),
-          column_filters: []
-        )
-      ]
-
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
-          account_id: database.account_id,
-          replication_slot_id: slot.id,
-          source_tables: source_tables
-        )
-
-      consumer = Repo.preload(consumer, :postgres_database)
-
-      ConnectionCache.cache_connection(consumer.postgres_database, Repo)
-
-      {:ok, consumer: consumer}
-    end
-
-    test "fetches multiple records from the same table with single PK", %{consumer: consumer} do
-      characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
-      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
-      records = Enum.map(characters, &build_consumer_record(consumer, &1))
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-      fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id"])
-
-      assert length(fetched_records) == 3
-
-      for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert_maps_equal(
-          record.data.record,
-          Map.from_struct(character),
-          ["id", "name", "house", "planet", "is_active", "tags"],
-          indifferent_keys: true
-        )
-
-        assert record.data.metadata.table_name == "Characters"
-        assert record.data.metadata.table_schema == "public"
-      end
-    end
-
-    test "fetches multiple records from the same table with compound PK", %{consumer: consumer} do
-      characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
-      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
-      records = Enum.map(characters, &build_consumer_record(consumer, &1, :multi_pk))
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-      fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id_integer"])
-
-      assert length(fetched_records) == 3
-
-      for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert_maps_equal(record.data.record, Map.from_struct(character), ["id_integer", "id_string", "id_uuid", "name"],
-          indifferent_keys: true
-        )
-
-        assert record.data.metadata.table_name == "characters_multi_pk"
-        assert record.data.metadata.table_schema == "public"
-      end
-    end
-
-    test "handles different primary key data types", %{consumer: consumer} do
-      character = CharacterFactory.insert_character_multi_pk!()
-      record = build_consumer_record(consumer, character, :multi_pk)
-
-      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
-
-      assert fetched_record.data.record["id_integer"] == character.id_integer
-      assert fetched_record.data.record["id_string"] == character.id_string
-      assert fetched_record.data.record["id_uuid"] == character.id_uuid
-    end
-
-    test "casts different column types appropriately", %{consumer: consumer} do
-      character = CharacterFactory.insert_character_detailed!()
-      record = build_consumer_record(consumer, character, :detailed)
-
-      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
-
-      assert fetched_record.data.record["age"] == character.age
-      assert fetched_record.data.record["height"] == character.height
-      assert fetched_record.data.record["is_hero"] == character.is_hero
-      assert fetched_record.data.record["birth_date"] == character.birth_date
-
-      assert Time.truncate(fetched_record.data.record["last_seen"], :second) ==
-               character.last_seen
-
-      assert NaiveDateTime.truncate(fetched_record.data.record["inserted_at"], :second) ==
-               NaiveDateTime.truncate(character.inserted_at, :second)
-
-      assert NaiveDateTime.truncate(fetched_record.data.record["updated_at"], :second) ==
-               NaiveDateTime.truncate(character.updated_at, :second)
-
-      assert fetched_record.data.record["powers"] == character.powers
-      assert fetched_record.data.record["metadata"] == character.metadata
-      assert Decimal.equal?(fetched_record.data.record["rating"], character.rating)
-      assert fetched_record.data.record["avatar"] == "\\x" <> Base.encode16(character.avatar, case: :lower)
-    end
-
-    @tag capture_log: true
-    test "errors when the source table is not in PostgresDatabase", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      record = %{record | table_oid: 999_999}
-
-      assert {:error, %NotFoundError{}} = Consumers.put_source_data(consumer, [record])
-    end
-
-    test "errors when the source table is listed in PostgresDatabase but not in the database", %{
-      consumer: consumer
-    } do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      record = %{record | table_oid: 999_999}
-
-      # Simulate the table being listed but not in the database
-      column = DatabasesFactory.column(%{name: "id", type: "integer", is_pk?: true})
-
-      fake_table =
-        DatabasesFactory.table(%{oid: 999_999, name: "non_existent_table", schema: "public", columns: [column]})
-
-      consumer = %{consumer | postgres_database: %{consumer.postgres_database | tables: [fake_table]}}
-
-      assert {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} =
-               Consumers.put_source_data(consumer, [record])
-    end
-
-    test "returns error when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-
-      # Add a non-existent column to the table definition
-      fake_column = DatabasesFactory.column(%{name: "non_existent_column", type: "text", is_pk?: false})
-
-      consumer =
-        update_in(consumer.postgres_database.tables, fn tables ->
-          Enum.map(tables, fn table ->
-            if table.name == "Characters", do: %{table | columns: [fake_column | table.columns]}, else: table
-          end)
-        end)
-
-      {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = Consumers.put_source_data(consumer, [record])
-
-      assert_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: consumer.postgres_database.id})
-    end
-
-    @tag capture_log: true
-    test "errors when the source database is unreachable", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      config = Keyword.merge(UnboxedRepo.config(), hostname: "unreachable_host", queue_target: 25, queue_interval: 25)
-      {:ok, conn} = Postgrex.start_link(config)
-      ConnectionCache.cache_connection(consumer.postgres_database, conn)
-
-      assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(consumer, [record])
-
-      GenServer.stop(conn)
-    end
-
-    test "deletes consumer records when they are missing from the source table", %{consumer: consumer} do
-      # Insert characters into the database
-      existing_character = CharacterFactory.insert_character!()
-      deleted_record_id = Factory.unique_integer()
-
-      # Create consumer records for both characters
-      existing_record =
-        ConsumersFactory.insert_consumer_record!(
-          consumer_id: consumer.id,
-          table_oid: Character.table_oid(),
-          record_pks: [existing_character.id]
-        )
-
-      deleted_record =
-        ConsumersFactory.insert_consumer_record!(
-          consumer_id: consumer.id,
-          table_oid: Character.table_oid(),
-          record_pks: [deleted_record_id]
-        )
-
-      # Call put_source_data with both records
-      records = [deleted_record, existing_record]
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-
-      # Assert that only the existing record is returned
-      assert length(fetched_records) == 2
-      records_with_data = Enum.filter(fetched_records, &(&1.data.record != nil))
-      assert length(records_with_data) == 1
-      assert hd(records_with_data).data.record["id"] == existing_character.id
-      assert hd(records_with_data).record_pks == [to_string(existing_character.id)]
     end
   end
 
@@ -2463,80 +2818,57 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
-  # Helper function to create a consumer record from a character
-  defp build_consumer_record(consumer, character, type \\ :default) do
-    table_oid =
-      case type do
-        :default -> Character.table_oid()
-        :multi_pk -> CharacterMultiPK.table_oid()
-        :detailed -> CharacterDetailed.table_oid()
-      end
+  describe "upsert_failed_messages/2" do
+    test "inserts a new failed message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-    record_pks =
-      case type do
-        :default -> [character.id]
-        :multi_pk -> [character.id_integer, character.id_string, character.id_uuid]
-        :detailed -> [character.id]
-      end
+      assert {:ok, [inserted_msg]} = Consumers.upsert_failed_messages(consumer, [msg])
 
-    ConsumersFactory.consumer_record(consumer_id: consumer.id, table_oid: table_oid, record_pks: record_pks)
-  end
-
-  describe "upsert_consumer_events/1" do
-    test "inserts a new consumer event" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      event = ConsumersFactory.consumer_event(consumer_id: consumer.id)
-
-      assert {:ok, 1} = Consumers.upsert_consumer_events([event])
-
-      inserted_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
-      assert inserted_event
-      assert inserted_event.ack_id == event.ack_id
+      assert inserted_msg.ack_id == msg.ack_id
+      assert DateTime.after?(inserted_msg.not_visible_until, DateTime.utc_now())
     end
 
-    test "updates existing consumer event" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      existing_event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+    test "updates existing failed message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
-      updated_attrs = %ConsumerEvent{
-        existing_event
+      existing_msg =
+        ConsumersFactory.insert_consumer_message!(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          not_visible_until: DateTime.add(DateTime.utc_now(), -30, :second)
+        )
+
+      assert {:ok, [updated_msg]} = Consumers.upsert_failed_messages(consumer, [existing_msg])
+
+      assert DateTime.after?(updated_msg.not_visible_until, existing_msg.not_visible_until)
+    end
+  end
+
+  describe "upsert_consumer_messages/1" do
+    test "inserts a new message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+
+      assert {:ok, [inserted_msg]} = Consumers.upsert_consumer_messages(consumer, [msg])
+
+      assert inserted_msg.ack_id == msg.ack_id
+    end
+
+    test "updates existing message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+
+      existing_msg =
+        ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
+
+      updated_attrs = %{
+        existing_msg
         | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       }
 
-      assert {:ok, 1} = Consumers.upsert_consumer_events([updated_attrs])
+      assert {:ok, [updated_msg]} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
 
-      updated_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
-      assert updated_event
-      refute updated_event.not_visible_until == existing_event.not_visible_until
-    end
-  end
-
-  describe "upsert_consumer_records/1" do
-    test "inserts a new consumer record" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      record = ConsumersFactory.consumer_record(consumer_id: consumer.id)
-
-      assert {:ok, 1} = Consumers.upsert_consumer_records([record])
-
-      inserted_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
-      assert inserted_record
-      assert inserted_record.ack_id == record.ack_id
-    end
-
-    test "updates existing consumer record" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
-
-      updated_record = %ConsumerRecord{
-        existing_record
-        | state: :delivered
-      }
-
-      assert {:ok, 1} = Consumers.upsert_consumer_records([updated_record])
-
-      updated_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
-      assert updated_record
-      assert updated_record.state == :delivered
+      refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
   end
 end

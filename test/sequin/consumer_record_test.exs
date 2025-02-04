@@ -91,24 +91,18 @@ defmodule Sequin.ConsumersTest.ConsumerRecordTest do
       assert second.id == record1.id
     end
 
-    test "ack_messages/2 deletes non-pending_redelivery records and marks pending_redelivery as available" do
+    test "ack_messages/2 deletes non-pending_redelivery records" do
       consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
       record1 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :delivered)
-      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
-      record3 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
-      record4 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :pending_redelivery)
+      record2 = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
 
-      assert {:ok, 3} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id, record3.ack_id])
+      assert {:ok, 2} = Consumers.ack_messages(consumer, [record1.ack_id, record2.ack_id])
 
       assert Repo.get_by(ConsumerRecord, id: record1.id) == nil
-      assert Repo.get_by(ConsumerRecord, id: record3.id) == nil
+      assert Repo.get_by(ConsumerRecord, id: record2.id) == nil
 
-      updated_record2 = Consumers.reload(record2)
-      assert updated_record2.state == :available
-
-      # record4 should remain unchanged
-      updated_record4 = Consumers.reload(record4)
-      assert updated_record4.state == :pending_redelivery
+      refute Consumers.reload(record1)
+      refute Consumers.reload(record2)
     end
   end
 end

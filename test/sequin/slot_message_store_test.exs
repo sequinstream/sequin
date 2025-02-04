@@ -30,7 +30,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
       # For acks
       ack_ids = Enum.map(delivered, & &1.ack_id)
-      {:ok, 2} = SlotMessageStore.ack(consumer, ack_ids)
+      {:ok, 2} = SlotMessageStore.ack(consumer.id, ack_ids)
 
       # Produce messages, none should be delivered
       {:ok, []} = SlotMessageStore.produce(consumer.id, 2, self())

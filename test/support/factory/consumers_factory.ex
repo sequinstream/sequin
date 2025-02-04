@@ -373,6 +373,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         not_visible_until: not_visible_until,
         record_pks: record_pks,
         replication_message_trace_id: Factory.uuid(),
+        payload_size_bytes: Enum.random(1..1000),
         state: state,
         ingested_at: Factory.timestamp(),
         table_oid: Enum.random(1..100_000)
@@ -461,6 +462,7 @@ defmodule Sequin.Factory.ConsumersFactory do
         not_visible_until: not_visible_until,
         record_pks: record_pks,
         replication_message_trace_id: Factory.uuid(),
+        payload_size_bytes: Enum.random(1..1000),
         state: state,
         ingested_at: Factory.timestamp(),
         table_oid: Enum.random(1..100_000)

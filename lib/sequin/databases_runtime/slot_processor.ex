@@ -319,7 +319,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   rescue
     e ->
-      Logger.error("Error processing message: #{inspect(e)}")
+      if match?(%Error.ServiceError{code: :payload_size_limit_exceeded}, e) do
+        Logger.warning(Exception.message(e))
+      else
+        Logger.error("Error processing message: #{inspect(e)}")
+      end
 
       error = if is_error(e), do: e, else: Error.service(service: :replication, message: Exception.message(e))
 
@@ -718,19 +722,35 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     next_commit_tuple = messages |> Enum.map(&{&1.commit_lsn, &1.commit_idx}) |> Enum.max()
     # Flush accumulated messages
-    {:ok, _count, message_handler_ctx} =
-      state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+    res = state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
 
-    if state.test_pid do
-      send(state.test_pid, {__MODULE__, :flush_messages})
+    case res do
+      {:ok, _count, message_handler_ctx} ->
+        if state.test_pid do
+          send(state.test_pid, {__MODULE__, :flush_messages})
+        end
+
+        %{
+          state
+          | accumulated_messages: {0, []},
+            last_processed_commit_tuple: next_commit_tuple,
+            message_handler_ctx: message_handler_ctx
+        }
+
+      {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
+        error =
+          Error.service(
+            message:
+              "One or more of your sinks has exceeded memory limitations for buffered messages. Sequin has stopped processing new messages from your replication slot until the sink(s) drain messages.",
+            service: :postgres_replication_slot,
+            code: :payload_size_limit_exceeded
+          )
+
+        raise error
+
+      {:error, error} ->
+        raise error
     end
-
-    %{
-      state
-      | accumulated_messages: {0, []},
-        last_processed_commit_tuple: next_commit_tuple,
-        message_handler_ctx: message_handler_ctx
-    }
   end
 
   defp maybe_put_message(%State{} = state, %Message{} = message) do
@@ -755,7 +775,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       :ok ->
         state.message_store_refs
         |> Enum.map(fn {consumer_id, ref} ->
-          SlotMessageStore.min_unflushed_commit_lsn(consumer_id, ref)
+          SlotMessageStore.min_wal_cursor(consumer_id, ref)
         end)
         |> Enum.filter(& &1)
         |> case do

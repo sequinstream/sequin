@@ -348,16 +348,18 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      |> push_patch(to: RouteHelpers.consumer_path(socket.assigns.consumer, "/messages?showAcked=#{show_acked}"))}
   end
 
-  def handle_event("reset_message_visibility", %{"ack_id" => ack_id}, socket) do
-    consumer = socket.assigns.consumer
+  def handle_event("reset_message_visibility", %{"ack_id" => _ack_id}, socket) do
+    # consumer = socket.assigns.consumer
 
-    case SlotMessageStore.reset_message_visibility(consumer.id, ack_id) do
-      {:ok, updated_message} ->
-        {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
+    # TODO
+    # case Consumers.reset_message_visibility(consumer, ack_id) do
+    #   {:ok, updated_message} ->
+    #     {:reply, %{updated_message: encode_message(consumer, updated_message)}, load_consumer_messages(socket)}
 
-      {:error, reason} ->
-        {:reply, %{error: reason}, socket}
-    end
+    #   {:error, reason} ->
+    #     {:reply, %{error: reason}, socket}
+    # end
+    {:reply, %{ok: true}, socket}
   end
 
   def handle_event("disable", _params, socket) do
@@ -416,19 +418,20 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("reset_all_visibility", _params, socket) do
-    consumer = socket.assigns.consumer
+    # consumer = socket.assigns.consumer
 
-    case SlotMessageStore.reset_all_visibility(consumer.id) do
-      :ok ->
-        {:reply, %{ok: true},
-         socket
-         |> load_consumer_messages()
-         |> put_flash(:toast, %{kind: :success, title: "Scheduled redelivery for all messages"})}
+    # case Consumers.reset_all_message_visibilities(consumer) do
+    #   :ok ->
+    #     {:reply, %{ok: true},
+    #      socket
+    #      |> load_consumer_messages()
+    #      |> put_flash(:toast, %{kind: :success, title: "Scheduled redelivery for all messages"})}
 
-      {:error, reason} ->
-        {:reply, %{ok: false},
-         put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
-    end
+    #   {:error, reason} ->
+    #     {:reply, %{ok: false},
+    #      put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
+    # end
+    {:reply, %{ok: true}, socket}
   end
 
   defp handle_edit_finish(updated_consumer) do
@@ -1120,6 +1123,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       For more information on publications, <a href="https://sequinstream.com/docs/reference/databases#publications" target="_blank">see the docs</a>.
       """,
       refreshable: true,
+      dismissable: false
+    })
+  end
+
+  defp maybe_augment_alert(%{error: %{code: :payload_size_limit_exceeded}} = check, _consumer) do
+    Map.merge(check, %{
+      alertTitle: "Error: Buffer size limit exceeded",
+      alertMessage: """
+      This sink has reached the maximum number of messages it can buffer. Sinks buffer messages when (1) they can't deliver messages fast enough to the sink, (2) they are paused, or (3) the sink is failing to deliver messages to the sink.
+
+      When a sink reaches its buffer limit, Sequin stops processing new messages from the replication slot. This will impact other sinks that are using the same replication slot.
+      """,
+      refreshable: false,
       dismissable: false
     })
   end

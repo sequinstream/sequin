@@ -157,12 +157,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)
     end)
 
-    case res do
-      {:ok, count} ->
-        {:ok, count, ctx}
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, count} <- res do
+      {:ok, count, ctx}
     end
   end
 
@@ -371,14 +367,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   defp call_consumer_message_stores(messages_by_consumer) do
-    Enum.each(messages_by_consumer, fn {consumer, messages} ->
-      wal_cursors = Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
-      :ok = MessageLedgers.wal_cursors_ingested(consumer.id, wal_cursors)
+    res =
+      Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
+        wal_cursors =
+          Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
 
-      :ok = SlotMessageStore.put_messages(consumer.id, messages)
-    end)
+        :ok = MessageLedgers.wal_cursors_ingested(consumer.id, wal_cursors)
 
-    {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}
+        case SlotMessageStore.put_messages(consumer.id, messages) do
+          :ok -> {:cont, :ok}
+          {:error, _} = error -> {:halt, error}
+        end
+      end)
+
+    with :ok <- res do
+      {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}
+    end
   end
 
   defp insert_wal_events(wal_events) do

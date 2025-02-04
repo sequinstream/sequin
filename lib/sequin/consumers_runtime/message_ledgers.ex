@@ -22,16 +22,16 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   alias Sequin.Error
   alias Sequin.Redis
+  alias Sequin.Replication
 
   require Logger
 
   @type consumer_id :: String.t()
-  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
 
   @doc """
   Called when WAL cursors enter a consumer's buffer. We use these later to track/verify ALO delivery.
   """
-  @spec wal_cursors_ingested(consumer_id(), [wal_cursor()]) :: :ok | {:error, Error.t()}
+  @spec wal_cursors_ingested(consumer_id(), [Replication.wal_cursor()]) :: :ok | {:error, Error.t()}
   def wal_cursors_ingested(_, []), do: :ok
 
   def wal_cursors_ingested(consumer_id, wal_cursors) do
@@ -58,7 +58,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   - Remove the WAL cursor from the ingested set
   - Add the WAL cursor to the delivered set
   """
-  @spec wal_cursors_delivered(consumer_id(), [wal_cursor()]) :: :ok | {:error, Error.t()}
+  @spec wal_cursors_delivered(consumer_id(), [Replication.wal_cursor()]) :: :ok | {:error, Error.t()}
   def wal_cursors_delivered(_, []), do: :ok
 
   def wal_cursors_delivered(consumer_id, wal_cursors) do
@@ -82,7 +82,8 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   The point of maintaining the delivered wal cursors set is to power this function.
   This function is what gives us idempotency / ~exactly-once delivery.
   """
-  @spec filter_delivered_wal_cursors(consumer_id(), [wal_cursor()]) :: {:ok, [wal_cursor()]} | {:error, Error.t()}
+  @spec filter_delivered_wal_cursors(consumer_id(), [Replication.wal_cursor()]) ::
+          {:ok, [Replication.wal_cursor()]} | {:error, Error.t()}
   def filter_delivered_wal_cursors(_, []), do: {:ok, []}
 
   def filter_delivered_wal_cursors(consumer_id, wal_cursors) do
@@ -107,7 +108,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   - Messages *after* that LSN
   - Older messages before that LSN, but are undelivered and flushed to disk (and therefore, as they are undelivered, are safe to deliver!)
   """
-  @spec trim_delivered_cursors_set(consumer_id(), wal_cursor()) :: :ok | {:error, Error.t()}
+  @spec trim_delivered_cursors_set(consumer_id(), Replication.wal_cursor()) :: :ok | {:error, Error.t()}
   def trim_delivered_cursors_set(consumer_id, wal_cursor) do
     key = delivered_cursors_key(consumer_id)
 
@@ -144,7 +145,8 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   Any remaining cursors are in bucket 3, and are undelivered because of a bug. The hope is that we can use this functionality to catch these in QA and fix before shipping to prod. Worst case, we catch them via prod monitoring, and fix ASAP.
   """
-  @spec list_undelivered_wal_cursors(consumer_id(), DateTime.t()) :: {:ok, [wal_cursor()]} | {:error, Error.t()}
+  @spec list_undelivered_wal_cursors(consumer_id(), DateTime.t()) ::
+          {:ok, [Replication.wal_cursor()]} | {:error, Error.t()}
   def list_undelivered_wal_cursors(consumer_id, older_than_timestamp) do
     older_than_timestamp = DateTime.to_unix(older_than_timestamp, :second)
 

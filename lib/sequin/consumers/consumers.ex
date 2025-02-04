@@ -255,6 +255,13 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def get_sink_consumer!(consumer_id) do
+    case get_sink_consumer(consumer_id) do
+      {:ok, consumer} -> consumer
+      {:error, error} -> raise error
+    end
+  end
+
   def get_sink_consumer_for_account(account_id, consumer_id) do
     account_id
     |> SinkConsumer.where_account_id()
@@ -370,7 +377,7 @@ defmodule Sequin.Consumers do
           inserted_at: now
         })
         |> ConsumerEvent.from_map()
-        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp])
+        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp, :payload_size_bytes])
         # insert_all expects a plain outer-map, but struct embeds
         |> Sequin.Map.from_ecto()
       end)
@@ -397,7 +404,7 @@ defmodule Sequin.Consumers do
       Enum.map(consumer_events, fn %ConsumerEvent{} = event ->
         %ConsumerEvent{event | updated_at: now, inserted_at: now}
         |> Sequin.Map.from_ecto()
-        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp])
+        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp, :payload_size_bytes])
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
@@ -542,7 +549,17 @@ defmodule Sequin.Consumers do
       end)
       # insert_all expects a plain outer-map, but struct embeds
       |> Stream.map(&Sequin.Map.from_ecto/1)
-      |> Enum.map(&Map.drop(&1, [:deleted, :dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp]))
+      |> Enum.map(
+        &Map.drop(&1, [
+          :deleted,
+          :dirty,
+          :flushed_at,
+          :table_reader_batch_id,
+          :ingested_at,
+          :commit_timestamp,
+          :payload_size_bytes
+        ])
+      )
 
     conflict_target = [:consumer_id, :ack_id]
 
@@ -909,6 +926,130 @@ defmodule Sequin.Consumers do
     AcknowledgedMessages.store_messages(consumer.id, deleted_records ++ updated_records)
 
     {:ok, count_deleted + count_updated}
+  end
+
+  @doc """
+  For Sequin Stream SinkConsumer only.
+
+  Nack messages with backoff allows us to both nack a message and set its not_visible_until to some time in the future.
+  This is easy to do in Postgres with a single entry. When we want to perform an update
+  for multiple messages, cleanest thing to do is to craft an upsert query.
+  """
+  def nack_messages_with_backoff(%{message_kind: :event} = consumer, ack_ids_with_not_visible_until) do
+    nack_messages_with_backoff(ConsumerEvent, consumer, ack_ids_with_not_visible_until)
+  end
+
+  def nack_messages_with_backoff(%{message_kind: :record} = consumer, ack_ids_with_not_visible_until) do
+    nack_messages_with_backoff(ConsumerRecord, consumer, ack_ids_with_not_visible_until)
+  end
+
+  def nack_messages_with_backoff(model, consumer, ack_ids_with_not_visible_until) do
+    Repo.transaction(fn ->
+      # Get the list of ack_ids
+      ack_ids = Map.keys(ack_ids_with_not_visible_until)
+
+      # Select existing records and lock them
+      # This will let us do an upsert on conflict to update each row individually
+      # We don't want to insert a message that was already acked, hence the select
+      # before the upsert
+      existing_records =
+        consumer.id
+        |> model.where_consumer_id()
+        |> model.where_ack_ids(ack_ids)
+        |> lock("FOR UPDATE")
+        |> Repo.all()
+
+      # Prepare updates only for existing records
+      updates =
+        Enum.map(existing_records, fn existing_record ->
+          not_visible_until = Map.fetch!(ack_ids_with_not_visible_until, existing_record.ack_id)
+
+          existing_record
+          |> Sequin.Map.from_ecto()
+          |> Map.put(:not_visible_until, not_visible_until)
+        end)
+
+      # Perform the upsert
+      Repo.insert_all(model, updates,
+        on_conflict: [set: [not_visible_until: dynamic([cr], fragment("EXCLUDED.not_visible_until")), state: :available]],
+        conflict_target: [:consumer_id, :ack_id]
+      )
+    end)
+  end
+
+  @doc """
+  Resets visibility timeout for all messages, making them immediately available for redelivery.
+  """
+  def reset_all_message_visibilities(%SinkConsumer{message_kind: :record} = consumer) do
+    now = DateTime.utc_now()
+
+    {count, _} =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      # TODO: Do we need the state filter/check?
+      |> ConsumerRecord.where_state_not(:acked)
+      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
+
+    if count > 0 do
+      publish_persisted_messages_available(consumer.id)
+    end
+
+    :ok
+  end
+
+  def reset_all_message_visibilities(%SinkConsumer{message_kind: :event} = consumer) do
+    now = DateTime.utc_now()
+
+    {count, _} =
+      consumer.id
+      |> ConsumerEvent.where_consumer_id()
+      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
+
+    if count > 0 do
+      publish_persisted_messages_available(consumer.id)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Resets visibility timeout for a specific message, making it immediately available for redelivery.
+  """
+  def reset_message_visibility(%SinkConsumer{message_kind: :record} = consumer, ack_id) do
+    now = DateTime.utc_now()
+
+    {count, _} =
+      consumer.id
+      |> ConsumerRecord.where_consumer_id()
+      |> ConsumerRecord.where_ack_ids([ack_id])
+      |> ConsumerRecord.where_state_not(:acked)
+      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
+
+    if count > 0 do
+      publish_persisted_messages_available(consumer.id)
+    end
+
+    :ok
+  end
+
+  def reset_message_visibility(%SinkConsumer{message_kind: :event} = consumer, ack_id) do
+    now = DateTime.utc_now()
+
+    {count, _} =
+      consumer.id
+      |> ConsumerEvent.where_consumer_id()
+      |> ConsumerEvent.where_ack_ids([ack_id])
+      |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
+
+    if count > 0 do
+      publish_persisted_messages_available(consumer.id)
+    end
+
+    :ok
+  end
+
+  defp publish_persisted_messages_available(consumer_id) do
+    :syn.publish(:consumers, {:persisted_messages_available, consumer_id}, :persisted_messages_available)
   end
 
   @doc """

@@ -18,6 +18,8 @@ defmodule Sequin.Replication do
 
   require Logger
 
+  @type wal_cursor :: %{commit_lsn: integer(), commit_idx: integer()}
+
   # PostgresReplicationSlot
 
   def all_pg_replications do

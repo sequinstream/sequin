@@ -483,6 +483,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       matching_records
       |> Enum.with_index()
       |> Enum.map(fn {record_attnums_to_values, idx} ->
+        data = build_record_data(table, state.consumer, record_attnums_to_values)
+        payload_size_bytes = :erlang.external_size(data)
+
         %ConsumerRecord{
           consumer_id: state.consumer.id,
           commit_lsn: commit_lsn,
@@ -491,7 +494,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           record_pks: record_pks(table, record_attnums_to_values),
           group_id: generate_group_id(state.consumer, table, record_attnums_to_values),
           replication_message_trace_id: UUID.uuid4(),
-          data: build_record_data(table, state.consumer, record_attnums_to_values)
+          data: data,
+          payload_size_bytes: payload_size_bytes
         }
       end)
 
@@ -522,6 +526,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       matching_records
       |> Enum.with_index()
       |> Enum.map(fn {record_attnums_to_values, idx} ->
+        data = build_event_data(table, state.consumer, record_attnums_to_values)
+        payload_size_bytes = :erlang.external_size(data)
+
         %ConsumerEvent{
           consumer_id: state.consumer.id,
           commit_lsn: commit_lsn,
@@ -531,7 +538,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
           table_oid: table.oid,
           deliver_count: 0,
           replication_message_trace_id: UUID.uuid4(),
-          data: build_event_data(table, state.consumer, record_attnums_to_values)
+          data: data,
+          payload_size_bytes: payload_size_bytes
         }
       end)
 

@@ -172,7 +172,7 @@
       >
         Overview
       </a>
-      <a
+      <!-- <a
         href="/databases/{database.id}/messages"
         class={`py-2 px-4 font-medium border-b-2 ${
           activeTab === "messages"
@@ -183,7 +183,7 @@
         data-phx-link-state="push"
       >
         Messages
-      </a>
+      </a> -->
     </div>
   </div>
 </div>

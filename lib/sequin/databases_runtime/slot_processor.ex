@@ -64,7 +64,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :message_handler_module, atom()
       field :id, String.t()
       field :last_commit_lsn, integer()
-      field :last_processed_commit_tuple, {integer(), integer()}
+      field :low_watermark_wal_cursor, Replication.wal_cursor()
       field :publication, String.t()
       field :slot_name, String.t()
       field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
@@ -153,6 +153,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   def demonitor_message_store(id, consumer_id) do
     GenServer.call(via_tuple(id), {:demonitor_message_store, consumer_id})
+  catch
+    :exit, {:noproc, _} ->
+      :ok
   end
 
   def via_tuple(id) do
@@ -214,7 +217,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def handle_connect(state) do
     Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
 
-    {:ok, last_processed_commit_tuple} = Sequin.Replication.last_processed_commit_tuple(state.id)
+    {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
 
     query =
       if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
@@ -239,7 +242,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
        state
        | step: :streaming,
          connect_attempts: state.connect_attempts + 1,
-         last_processed_commit_tuple: last_processed_commit_tuple
+         low_watermark_wal_cursor: low_watermark_wal_cursor
      }}
   end
 
@@ -356,11 +359,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       if reply == 1 and not is_nil(state.last_commit_lsn) do
         # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
         # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-        lsn = safe_ack_lsn(state)
-        Logger.info("Acking LSN #{lsn} (current server LSN: #{wal_end})")
+        wal_cursor = safe_wal_cursor(state)
+        Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
 
-        Replication.put_last_processed_commit_tuple!(state.id, {lsn, 0})
-        ack_message(lsn)
+        Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+        ack_message(wal_cursor.commit_lsn)
       else
         []
       end
@@ -721,10 +724,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     messages = Enum.reverse(messages)
 
     next_commit_tuple = messages |> Enum.map(&{&1.commit_lsn, &1.commit_idx}) |> Enum.max()
-    # Flush accumulated messages
-    res = state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+    {lsn, idx} = next_commit_tuple
+    next_wal_cursor = %{commit_lsn: lsn, commit_idx: idx}
 
-    case res do
+    # Flush accumulated messages
+    case state.message_handler_module.handle_messages(state.message_handler_ctx, messages) do
       {:ok, _count, message_handler_ctx} ->
         if state.test_pid do
           send(state.test_pid, {__MODULE__, :flush_messages})
@@ -733,7 +737,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         %{
           state
           | accumulated_messages: {0, []},
-            last_processed_commit_tuple: next_commit_tuple,
+            low_watermark_wal_cursor: next_wal_cursor,
             message_handler_ctx: message_handler_ctx
         }
 
@@ -754,7 +758,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp maybe_put_message(%State{} = state, %Message{} = message) do
-    if {message.commit_lsn, message.commit_idx} > state.last_processed_commit_tuple do
+    low_watermark_commit_tuple = {state.low_watermark_wal_cursor.commit_lsn, state.low_watermark_wal_cursor.commit_idx}
+
+    if {message.commit_lsn, message.commit_idx} > low_watermark_commit_tuple do
       {acc_size, acc_messages} = state.accumulated_messages
       new_size = acc_size + :erlang.external_size(message)
 
@@ -768,9 +774,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  defp safe_ack_lsn(%State{last_commit_lsn: nil}), do: raise("Unsafe to call safe_ack_lsn when last_commit_lsn is nil")
+  defp safe_wal_cursor(%State{last_commit_lsn: nil}),
+    do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
 
-  defp safe_ack_lsn(%State{} = state) do
+  defp safe_wal_cursor(%State{} = state) do
     case verify_monitor_refs(state) do
       :ok ->
         state.message_store_refs

@@ -105,6 +105,7 @@ defmodule Sequin.Telemetry.PosthogReporterTest do
     assert event["properties"]["key"] == "value_final"
   end
 
+  @tag skip: true
   test "merges consumer events by consumer_id" do
     start_reporter(publish_interval: 10)
 

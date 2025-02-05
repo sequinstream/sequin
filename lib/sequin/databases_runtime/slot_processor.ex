@@ -782,7 +782,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       :ok ->
         state.message_store_refs
         |> Enum.map(fn {consumer_id, ref} ->
-          SlotMessageStore.min_wal_cursor(consumer_id, ref)
+          SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
         end)
         |> Enum.filter(& &1)
         |> case do

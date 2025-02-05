@@ -363,6 +363,9 @@ defmodule Sequin.Consumers do
 
         {:select, select}, query ->
           select(query, ^select)
+
+        {:ids, ids}, query ->
+          ConsumerEvent.where_ids(query, ids)
       end)
 
     Repo.all(query, opts)
@@ -469,6 +472,9 @@ defmodule Sequin.Consumers do
 
       {:select, select}, query ->
         select(query, ^select)
+
+      {:ids, ids}, query ->
+        ConsumerRecord.where_ids(query, ids)
     end)
   end
 

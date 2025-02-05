@@ -311,7 +311,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
-    SlotMessageStore.ack(consumer, [ack_id])
+    SlotMessageStore.ack(consumer.id, [ack_id])
 
     updated_socket =
       socket
@@ -838,23 +838,8 @@ defmodule SequinWeb.SinkConsumersLive.Show do
      """}
   end
 
-  defp fetch_message_data(%ConsumerRecord{} = record, %{message_kind: :record} = consumer) do
-    case Consumers.put_source_data(consumer, [record]) do
-      {:ok, [record]} ->
-        {:ok, record.data}
-
-      {:error, error} when is_exception(error) ->
-        {:error, Exception.message(error)}
-
-      {:error, error} when is_atom(error) ->
-        {:error, Atom.to_string(error)}
-
-      {:error, error} when is_binary(error) ->
-        {:error, error}
-
-      {:error, error} ->
-        {:error, inspect(error)}
-    end
+  defp fetch_message_data(%ConsumerRecord{} = record, %{message_kind: :record}) do
+    {:ok, record.data}
   end
 
   defp fetch_message_data(%ConsumerEvent{} = event, %{message_kind: :event}) do

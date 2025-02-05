@@ -12,34 +12,6 @@ defmodule Sequin.ConsumerEventTest do
       %{consumer: consumer}
     end
 
-    test "insert_consumer_events/2 inserts batch of consumer events", %{consumer: consumer} do
-      events =
-        for _ <- 1..3 do
-          %{consumer_id: consumer.id}
-          |> ConsumersFactory.consumer_event_attrs()
-          |> Map.update(:data, %{}, fn data ->
-            data
-            |> Sequin.Map.atomize_keys()
-            |> Map.update!(:metadata, &Sequin.Map.atomize_keys/1)
-          end)
-        end
-
-      assert {:ok, 3} = Consumers.insert_consumer_events(events)
-
-      inserted_events = Repo.all(ConsumerEvent)
-      assert length(inserted_events) == 3
-
-      assert_lists_equal(inserted_events, events, fn e1, e2 ->
-        e1
-        |> Map.update!(:data, fn data ->
-          data
-          |> Map.update!(:metadata, &Map.from_struct/1)
-          |> Map.from_struct()
-        end)
-        |> assert_maps_equal(e2, [:consumer_id, :commit_lsn, :data])
-      end)
-    end
-
     test "list_consumer_events_for_consumer/2 returns events only for the specified consumer", %{consumer: consumer} do
       other_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
 

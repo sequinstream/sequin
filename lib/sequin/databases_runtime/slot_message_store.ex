@@ -25,14 +25,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Note: Failed message handling is managed by ConsumerProducer, not SlotMessageStore. ConsumerProducer writes failed
   messages to persistent storage and handles redelivery attempts.
   """
+  @behaviour Sequin.DatabasesRuntime.SlotMessageStoreBehaviour
+
   use GenServer
 
   alias Sequin.Consumers
   alias Sequin.Consumers.AcknowledgedMessages
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.SinkConsumer
   alias Sequin.DatabasesRuntime.SlotMessageStore.State
+  alias Sequin.DatabasesRuntime.SlotMessageStoreBehaviour
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
   alias Sequin.Health
@@ -109,8 +111,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Produces the next batch of deliverable messages, up to the specified count.
   Returns `{:ok, messages}` where messages is a list of deliverable messages.
   """
-  @spec produce(consumer_id(), pos_integer(), pid()) ::
-          {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}
+  @impl SlotMessageStoreBehaviour
   def produce(consumer_id, count, producer_pid) do
     GenServer.call(via_tuple(consumer_id), {:produce, count, producer_pid})
   catch
@@ -121,9 +122,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Acknowledges messages as successfully processed using their ack_ids.
   """
-  @spec ack(SinkConsumer.t(), list(ack_id())) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
-  def ack(consumer, ack_ids) do
-    GenServer.call(via_tuple(consumer.id), {:ack, ack_ids})
+  @impl SlotMessageStoreBehaviour
+  def ack(consumer_id, ack_ids) do
+    GenServer.call(via_tuple(consumer_id), {:ack, ack_ids})
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}

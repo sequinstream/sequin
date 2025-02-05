@@ -377,7 +377,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       # Now clear the messages
       {:ok, messages} = SlotMessageStore.produce(consumer.id, 100, self())
-      SlotMessageStore.ack(consumer, Enum.map(messages, & &1.ack_id))
+      SlotMessageStore.ack(consumer.id, Enum.map(messages, & &1.ack_id))
 
       # We can continue more, and then may get paused again
       flush_batches(consumer, pid)
@@ -470,7 +470,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
   defp produce_and_ack_messages(consumer, page_size) do
     {:ok, messages} = SlotMessageStore.produce(consumer.id, page_size, self())
-    SlotMessageStore.ack(consumer, Enum.map(messages, & &1.ack_id))
+    SlotMessageStore.ack(consumer.id, Enum.map(messages, & &1.ack_id))
     messages
   end
 end

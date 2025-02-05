@@ -111,8 +111,6 @@ defmodule SequinWeb.Router do
 
       get "/easter-egg", EasterEggController, :home
 
-      live "/outbox", OutboxLive, :index
-
       live "/settings/accounts", Settings.AccountSettingsLive, :index
 
       live "/accept-invite/:token", AcceptInviteLive, :accept_invite

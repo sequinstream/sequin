@@ -32,7 +32,7 @@ defmodule SequinWeb.PullController do
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, message_ids} <- parse_ack_ids(params),
-         {:ok, _count} <- SlotMessageStore.ack(consumer, message_ids) do
+         {:ok, _count} <- SlotMessageStore.ack(consumer.id, message_ids) do
       json(conn, %{success: true})
     end
   end
@@ -46,7 +46,7 @@ defmodule SequinWeb.PullController do
          {:ok, ack_ids} <- parse_ack_ids(params),
          #  ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, now}),
          #  {:ok, _count} <- Consumers.nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until),
-         {:ok, _count} <- SlotMessageStore.ack(consumer, ack_ids) do
+         {:ok, _count} <- SlotMessageStore.ack(consumer.id, ack_ids) do
       json(conn, %{success: true})
     end
   end

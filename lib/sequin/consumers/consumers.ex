@@ -7,7 +7,6 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.Backfill
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
-  alias Sequin.Consumers.ConsumerRecordData
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Consumers.LifecycleEventWorker
   alias Sequin.Consumers.SequenceFilter
@@ -18,16 +17,13 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Consumers.SourceTable
   alias Sequin.ConsumersRuntime.LifecycleEventWorker
-  alias Sequin.Databases
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Databases.PostgresDatabaseTable
   alias Sequin.Databases.Sequence
   alias Sequin.Error
-  alias Sequin.Error.NotFoundError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
-  alias Sequin.Postgres
   alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
 
@@ -38,9 +34,7 @@ defmodule Sequin.Consumers do
 
   @type consumer :: SinkConsumer.t()
 
-  def posthog_ets_table do
-    :consumer_ack_events
-  end
+  def posthog_ets_table, do: :consumer_ack_events
 
   def stream_schema, do: @stream_schema
   def config_schema, do: @config_schema
@@ -340,6 +334,13 @@ defmodule Sequin.Consumers do
     end
   end
 
+  def list_consumer_messages_for_consumer(%SinkConsumer{} = consumer, params \\ [], opts \\ []) do
+    case consumer.message_kind do
+      :event -> list_consumer_events_for_consumer(consumer.id, params, opts)
+      :record -> list_consumer_records_for_consumer(consumer.id, params, opts)
+    end
+  end
+
   def list_consumer_events_for_consumer(consumer_id, params \\ [], opts \\ []) do
     base_query = ConsumerEvent.where_consumer_id(consumer_id)
 
@@ -359,45 +360,24 @@ defmodule Sequin.Consumers do
 
         {:order_by, order_by}, query ->
           order_by(query, ^order_by)
+
+        {:select, select}, query ->
+          select(query, ^select)
       end)
 
     Repo.all(query, opts)
   end
 
-  def insert_consumer_events([]), do: {:ok, 0}
-
-  def insert_consumer_events(consumer_events) do
-    now = DateTime.utc_now()
-
-    events =
-      Enum.map(consumer_events, fn event ->
-        event
-        |> Map.merge(%{
-          updated_at: now,
-          inserted_at: now
-        })
-        |> ConsumerEvent.from_map()
-        |> Map.drop([:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp, :payload_size_bytes])
-        # insert_all expects a plain outer-map, but struct embeds
-        |> Sequin.Map.from_ecto()
-      end)
-
-    {count, _} = Repo.insert_all(ConsumerEvent, events)
-
-    # Broadcast messages ingested to consumers for ie. push consumers
-    consumer_events
-    |> Stream.map(& &1.consumer_id)
-    |> Enum.uniq()
-    |> Enum.each(fn consumer_id ->
-      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
-    end)
-
-    {:ok, count}
+  def upsert_consumer_messages(%SinkConsumer{} = consumer, messages) do
+    case consumer.message_kind do
+      :event -> upsert_consumer_events(messages)
+      :record -> upsert_consumer_records(messages)
+    end
   end
 
-  def upsert_consumer_events([]), do: {:ok, 0}
+  defp upsert_consumer_events([]), do: {:ok, []}
 
-  def upsert_consumer_events(consumer_events) do
+  defp upsert_consumer_events(consumer_events) do
     now = DateTime.utc_now()
 
     events =
@@ -408,7 +388,7 @@ defmodule Sequin.Consumers do
       end)
 
     # insert_all expects a plain outer-map, but struct embeds
-    {count, _} =
+    {count, _events} =
       Repo.insert_all(
         ConsumerEvent,
         events,
@@ -486,6 +466,9 @@ defmodule Sequin.Consumers do
 
       {:order_by, order_by}, query ->
         order_by(query, ^order_by)
+
+      {:select, select}, query ->
+        select(query, ^select)
     end)
   end
 
@@ -537,9 +520,9 @@ defmodule Sequin.Consumers do
     |> Repo.aggregate(:count, :id)
   end
 
-  def upsert_consumer_records([]), do: {:ok, 0}
+  defp upsert_consumer_records([]), do: {:ok, []}
 
-  def upsert_consumer_records(consumer_records) do
+  defp upsert_consumer_records(consumer_records) do
     now = DateTime.utc_now()
 
     records =
@@ -582,24 +565,6 @@ defmodule Sequin.Consumers do
     {:ok, count}
   end
 
-  def delete_consumer_records([]), do: {:ok, 0}
-
-  def delete_consumer_records(consumer_records) do
-    delete_query =
-      Enum.reduce(consumer_records, ConsumerRecord, fn record, query ->
-        or_where(
-          query,
-          [cr],
-          cr.consumer_id == ^record.consumer_id and
-            cr.table_oid == ^record.table_oid and
-            cr.record_pks == ^record.record_pks
-        )
-      end)
-
-    {count, _} = Repo.delete_all(delete_query)
-    {:ok, count}
-  end
-
   # Consumer Lifecycle
 
   # Convert the string to 16-bit int
@@ -630,196 +595,23 @@ defmodule Sequin.Consumers do
     end
   end
 
-  def maybe_put_source_data(consumer, records) do
-    case Enum.filter(records, &is_nil(&1.data)) do
-      [] ->
-        {:ok, records}
-
-      records_without_data ->
-        with {:ok, records_with_data} <- put_source_data(consumer, records_without_data) do
-          records =
-            Enum.map(records, fn record ->
-              if record.data do
-                record
-              else
-                Enum.find(records_with_data, &(&1.id == record.id))
-              end
-            end)
-
-          {:ok, records}
-        end
-    end
-  end
-
-  def put_source_data(consumer, records) do
-    # I can't reproduce this behaviour outside of the test suite. But it appears that without assoc_loaded?,
-    # Ecto preloads the association regardless of whether it's loaded or not.
-    # This messes up tests, which modify the postgres_database directly before passing in.
-    consumer =
-      if Ecto.assoc_loaded?(consumer.postgres_database),
-        do: consumer,
-        else: Repo.preload(consumer, :postgres_database)
-
-    postgres_db = consumer.postgres_database
-
-    # Fetch the tables for the database
-    {:ok, tables} = Databases.tables(postgres_db)
-
-    # Group records by table_oid
-    records_by_oid = Enum.group_by(records, & &1.table_oid)
-
-    # Fetch data for each group of records
-    Enum.reduce_while(records_by_oid, {:ok, []}, fn {table_oid, oid_records}, {:ok, acc} ->
-      table = Enum.find(tables, &(&1.oid == table_oid))
-
-      if table do
-        case fetch_records_data(postgres_db, table, oid_records, consumer) do
-          {:ok, fetched_records} -> {:cont, {:ok, acc ++ fetched_records}}
-          {:error, _} = error -> {:halt, error}
-        end
-      else
-        Logger.error("Table not found for table_oid: #{table_oid}")
-
-        error =
-          Error.not_found(
-            entity: :table,
-            params: %{table_oid: table_oid, consumer_id: consumer.id}
-          )
-
-        {:halt, {:error, error}}
-      end
-    end)
-  end
-
-  defp fetch_records_data(%PostgresDatabase{} = postgres_db, %PostgresDatabaseTable{} = table, records, consumer) do
-    record_count = length(records)
-    # Get the primary key columns and their types
-    pk_columns =
-      if Postgres.is_event_table?(table) do
-        [Sequin.Enum.find!(table.columns, &(&1.name == "id"))]
-      else
-        Enum.filter(table.columns, & &1.is_pk?)
-      end
-
-    ordered_pk_columns = Enum.sort_by(pk_columns, & &1.attnum)
-    pk_column_count = length(pk_columns)
-    pk_types = Enum.map(pk_columns, & &1.type)
-
-    # Cast record_pks to the correct types
-    casted_pks =
-      records
-      |> Enum.map(fn record ->
-        record.record_pks
-        |> Enum.zip(pk_types)
-        |> Enum.map(fn {value, type} -> Postgres.cast_value(value, type) end)
-      end)
-      |> List.flatten()
-
-    where_clause =
-      if pk_column_count == 1 do
-        # This one needs to not use a row tuple on the left- or right-hand sides
-        # pk_column_name = Postgres.quote_name(List.first(pk_columns).name)
-        pk_column_name = "id"
-        "where #{pk_column_name} in #{Postgres.parameterized_tuple(record_count)}"
-      else
-        # the where clause is (col1, col2) IN ((val1, val2), (val3, val4))
-        # which is too challenging to pull off with Ecto fragments
-        pk_column_names =
-          pk_columns |> Enum.map(& &1.name) |> Enum.map_join(", ", &Postgres.quote_name/1)
-
-        value_params =
-          Enum.map_join(1..record_count, ", ", fn n ->
-            Postgres.parameterized_tuple(pk_column_count, (n - 1) * pk_column_count)
-          end)
-
-        "where (#{pk_column_names}) in (#{value_params})"
-      end
-
-    select_columns = Postgres.safe_select_columns(table)
-
-    query =
-      "select #{select_columns} from #{Postgres.quote_name(table.schema, table.name)} #{where_clause}"
-
-    # Execute the query
-    with {:ok, result} <- Postgres.query(postgres_db, query, casted_pks) do
-      # Convert result to map
-      rows = Postgres.result_to_maps(result)
-
-      rows = Postgres.load_rows(table, rows)
-
-      # Match the results with the original records
-      updated_records =
-        Enum.map(records, fn record ->
-          metadata = %ConsumerRecordData.Metadata{
-            consumer: %{
-              id: consumer.id,
-              name: consumer.name
-            },
-            database_name: postgres_db.name,
-            table_name: table.name,
-            table_schema: table.schema
-          }
-
-          source_row =
-            if Postgres.is_event_table?(table) do
-              # Don't use `committed_at`/timestamp column to match records in the event table,
-              # as timestamp comparisons are fraught.
-              Enum.find(rows, fn row ->
-                to_string(Map.fetch!(row, "id")) == to_string(List.first(record.record_pks))
-              end)
-            else
-              Enum.find(rows, fn row ->
-                # Using ordered pk_columns is important to ensure it lines up with `record_pks`
-                pk_values =
-                  ordered_pk_columns
-                  |> Enum.map(fn column -> Map.fetch!(row, column.name) end)
-                  |> Enum.map(&to_string/1)
-
-                pk_values == Enum.map(record.record_pks, &to_string/1)
-              end)
-            end
-
-          if source_row do
-            %{record | data: %ConsumerRecordData{record: source_row, metadata: metadata}}
-          else
-            %{record | data: %ConsumerRecordData{record: nil, metadata: metadata}}
-          end
-        end)
-
-      {:ok, updated_records}
-    end
-  end
-
-  # If they deleted a record from the source table, but that hasn't propagated to ConsumerRecord yet,
-  # this function will clean those records out.
-  def filter_and_delete_records(consumer_id, records) do
-    {valid_records, nil_records} = Enum.split_with(records, &(&1.data.record != nil))
-
-    if Enum.any?(nil_records) do
-      nil_record_ids = Enum.map(nil_records, & &1.id)
-
-      {deleted_count, _} =
-        ConsumerRecord
-        |> where([cr], cr.id in ^nil_record_ids)
-        |> where([cr], cr.consumer_id == ^consumer_id)
-        |> Repo.delete_all()
-
-      Logger.info("Deleted #{deleted_count} ConsumerRecords with nil data.record")
-    end
-
-    {:ok, valid_records}
-  end
-
-  @spec ack_messages(consumer(), [integer()]) :: :ok
+  # Acking Messages
+  @spec ack_messages(consumer(), [String.t()]) :: {:ok, non_neg_integer()}
   def ack_messages(_consumer, []) do
     {:ok, 0}
   end
 
-  def ack_messages(%{message_kind: :event} = consumer, ack_ids) do
-    {count, events} =
+  def ack_messages(%SinkConsumer{} = consumer, ack_ids) do
+    msg_module =
+      case consumer.message_kind do
+        :event -> ConsumerEvent
+        :record -> ConsumerRecord
+      end
+
+    {count, msgs} =
       consumer.id
-      |> ConsumerEvent.where_consumer_id()
-      |> ConsumerEvent.where_ack_ids(ack_ids)
+      |> msg_module.where_consumer_id()
+      |> msg_module.where_ack_ids(ack_ids)
       |> select([ce], ce)
       |> Repo.delete_all()
 
@@ -832,7 +624,7 @@ defmodule Sequin.Consumers do
           consumer_id: consumer.id,
           consumer_name: consumer.name,
           message_count: count,
-          message_kind: :event,
+          message_kind: consumer.message_kind,
           "$groups": %{account: consumer.account_id}
         }
       }
@@ -845,87 +637,19 @@ defmodule Sequin.Consumers do
     TracerServer.messages_acked(consumer, ack_ids)
 
     Enum.each(
-      events,
+      msgs,
       &Sequin.Logs.log_for_consumer_message(
         :info,
         consumer.account_id,
         consumer.id,
         &1.replication_message_trace_id,
-        "Event acknowledged"
+        "Message acknowledged"
       )
     )
 
-    AcknowledgedMessages.store_messages(consumer.id, events)
+    AcknowledgedMessages.store_messages(consumer.id, msgs)
 
     {:ok, count}
-  end
-
-  @spec ack_messages(consumer(), [String.t()]) :: :ok
-  def ack_messages(%{message_kind: :record} = consumer, ack_ids) do
-    {count_deleted, deleted_records} =
-      consumer.id
-      |> ConsumerRecord.where_consumer_id()
-      |> ConsumerRecord.where_ack_ids(ack_ids)
-      |> ConsumerRecord.where_state_not(:pending_redelivery)
-      |> select([cr], cr)
-      |> Repo.delete_all()
-
-    {count_updated, updated_records} =
-      consumer.id
-      |> ConsumerRecord.where_consumer_id()
-      |> ConsumerRecord.where_ack_ids(ack_ids)
-      |> select([cr], cr)
-      |> Repo.update_all(set: [state: :available, not_visible_until: nil])
-
-    total_count = count_deleted + count_updated
-
-    :telemetry.execute(
-      [:sequin, :posthog, :event],
-      %{event: "consumer_ack"},
-      %{
-        distinct_id: "00000000-0000-0000-0000-000000000000",
-        properties: %{
-          consumer_id: consumer.id,
-          consumer_name: consumer.name,
-          message_count: total_count,
-          message_kind: :record,
-          "$groups": %{account: consumer.account_id}
-        }
-      }
-    )
-
-    Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-    Metrics.incr_consumer_messages_processed_count(consumer, count_deleted + count_updated)
-    Metrics.incr_consumer_messages_processed_throughput(consumer, count_deleted + count_updated)
-
-    TracerServer.messages_acked(consumer, ack_ids)
-
-    Enum.each(
-      deleted_records,
-      &Sequin.Logs.log_for_consumer_message(
-        :info,
-        consumer.account_id,
-        consumer.id,
-        &1.replication_message_trace_id,
-        "Record acknowledged"
-      )
-    )
-
-    Enum.each(
-      updated_records,
-      &Sequin.Logs.log_for_consumer_message(
-        :info,
-        consumer.account_id,
-        consumer.id,
-        &1.replication_message_trace_id,
-        "Record acknowledged"
-      )
-    )
-
-    AcknowledgedMessages.store_messages(consumer.id, deleted_records ++ updated_records)
-
-    {:ok, count_deleted + count_updated}
   end
 
   @doc """
@@ -991,7 +715,7 @@ defmodule Sequin.Consumers do
       |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
 
     if count > 0 do
-      publish_persisted_messages_available(consumer.id)
+      publish_messages_changed(consumer.id)
     end
 
     :ok
@@ -1006,7 +730,7 @@ defmodule Sequin.Consumers do
       |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
 
     if count > 0 do
-      publish_persisted_messages_available(consumer.id)
+      publish_messages_changed(consumer.id)
     end
 
     :ok
@@ -1026,7 +750,7 @@ defmodule Sequin.Consumers do
       |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
 
     if count > 0 do
-      publish_persisted_messages_available(consumer.id)
+      publish_messages_changed(consumer.id)
     end
 
     :ok
@@ -1042,148 +766,14 @@ defmodule Sequin.Consumers do
       |> Repo.update_all(set: [not_visible_until: now, state: :available, updated_at: now])
 
     if count > 0 do
-      publish_persisted_messages_available(consumer.id)
+      publish_messages_changed(consumer.id)
     end
 
     :ok
   end
 
-  defp publish_persisted_messages_available(consumer_id) do
-    :syn.publish(:consumers, {:persisted_messages_available, consumer_id}, :persisted_messages_available)
-  end
-
-  @doc """
-  Min active cursor: the value of the sort_key column for the sequence row that corresponds to the min value of id in the consumer records table
-  Max active cursor: the value of the sort_key column for the sequence row that corresponds to the max value of id in the consumer records table for delivered records
-  Min/max possible cursors: the min and max values of the sort_key column from the underlying sequences table
-  """
-  def cursors(consumer) do
-    consumer = Repo.preload(consumer, [:postgres_database, :sequence])
-
-    with {:ok, min_active_cursor} <- get_min_active_cursor(consumer),
-         {:ok, max_active_cursor} <- get_max_active_cursor(consumer),
-         {:ok, next_active_cursor} <- get_next_active_cursor(consumer),
-         {:ok, min_possible_cursor} <- get_min_possible_cursor(consumer),
-         {:ok, max_possible_cursor} <- get_max_possible_cursor(consumer),
-         processing_count = fast_count_messages_for_consumer(consumer, is_delivered: true),
-         {:ok, to_process_count} <- fast_count_to_process_count(consumer, max_active_cursor || next_active_cursor) do
-      {:ok,
-       %{
-         min_active_cursor: min_active_cursor,
-         max_active_cursor: max_active_cursor,
-         next_active_cursor: next_active_cursor,
-         min_possible_cursor: min_possible_cursor,
-         max_possible_cursor: max_possible_cursor,
-         processing_count: processing_count,
-         to_process_count: to_process_count
-       }}
-    end
-  end
-
-  defp get_min_active_cursor(consumer) do
-    get_active_cursor(consumer, [order_by: [asc: :id], is_delivered: true, limit: 1], :min_active_cursor)
-  end
-
-  defp get_max_active_cursor(consumer) do
-    get_active_cursor(consumer, [order_by: [desc: :id], limit: 1, is_delivered: true], :max_active_cursor)
-  end
-
-  defp get_next_active_cursor(consumer) do
-    get_active_cursor(consumer, [order_by: [asc: :id], is_deliverable: true, limit: 1], :next_active_cursor)
-  end
-
-  defp get_active_cursor(consumer, params, entity_name) do
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-
-    with {:ok, %ConsumerRecord{} = consumer_record} <- get_consumer_record(consumer.id, params),
-         {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: record}}]} when not is_nil(record) <-
-           fetch_records_data(consumer.postgres_database, table, [consumer_record], consumer) do
-      {:ok, record[consumer.sequence.sort_column_name]}
-    else
-      {:error, %NotFoundError{entity: :consumer_record}} ->
-        {:ok, nil}
-
-      {:ok, [%ConsumerRecord{data: %ConsumerRecordData{record: nil}}]} ->
-        {:error, Error.not_found(entity: entity_name, params: params)}
-
-      {:error, error} when is_exception(error) ->
-        {:error, error}
-    end
-  end
-
-  defp get_min_possible_cursor(consumer) do
-    get_possible_cursor(consumer, "MIN", :min_possible_cursor)
-  end
-
-  defp get_max_possible_cursor(consumer) do
-    get_possible_cursor(consumer, "MAX", :max_possible_cursor)
-  end
-
-  defp get_possible_cursor(consumer, aggregate_function, entity_name) do
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == consumer.sequence.sort_column_attnum))
-
-    table_name = Postgres.quote_name(table.name)
-    sort_column_name = Postgres.quote_name(column.name)
-
-    sql = "SELECT #{aggregate_function}(#{sort_column_name}) FROM #{table_name}"
-
-    case Postgres.query(consumer.postgres_database, sql, []) do
-      {:ok, %Postgrex.Result{rows: [[possible_cursor]]}} ->
-        {:ok, possible_cursor}
-
-      {:ok, %Postgrex.Result{rows: []}} ->
-        {:error, Error.not_found(entity: entity_name)}
-
-      {:error, error} when is_exception(error) ->
-        {:error, error}
-    end
-  end
-
-  defp fast_count_to_process_count(consumer, max_active_cursor) do
-    table = Sequin.Enum.find!(consumer.postgres_database.tables, &(&1.oid == consumer.sequence.table_oid))
-    column = Sequin.Enum.find!(table.columns, &(&1.attnum == consumer.sequence.sort_column_attnum))
-    table_name = Postgres.quote_name(table.name)
-    sort_column_name = Postgres.quote_name(column.name)
-
-    sql = """
-    EXPLAIN SELECT COUNT(*)
-    FROM #{table_name}
-    WHERE #{sort_column_name} >= $1
-    """
-
-    case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do
-      {:ok, %Postgrex.Result{rows: rows}} ->
-        case extract_row_count(rows) do
-          {:ok, count} when count > @fast_count_threshold ->
-            {:ok, count}
-
-          _ ->
-            # If the count is small or couldn't be extracted, run the actual query
-            sql = """
-            SELECT COUNT(*)
-            FROM #{table_name}
-            WHERE #{sort_column_name} >= $1
-            """
-
-            case Postgres.query(consumer.postgres_database, sql, [max_active_cursor]) do
-              {:ok, %Postgrex.Result{rows: [[count]]}} -> {:ok, count}
-              {:error, error} -> {:error, error}
-            end
-        end
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
-  defp extract_row_count(rows) do
-    Enum.reduce_while(rows, :error, fn [row], acc ->
-      case Regex.run(~r/rows=(\d+)/, row) do
-        [_, count_str] -> {:halt, {:ok, String.to_integer(count_str)}}
-        _ -> {:cont, acc}
-      end
-    end)
+  defp publish_messages_changed(consumer_id) do
+    :syn.publish(:consumers, {:messages_changed, consumer_id}, :messages_changed)
   end
 
   # HttpEndpoint

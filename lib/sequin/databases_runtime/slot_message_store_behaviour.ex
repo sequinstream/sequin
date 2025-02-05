@@ -8,7 +8,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreBehaviour do
   @type consumer_id :: String.t()
   @type ack_id :: String.t()
 
-  @callback ack(consumer_id(), list(ack_id())) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+  @callback messages_succeeded(consumer_id(), list(ack_id())) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
+
+  @callback messages_already_succeeded(consumer_id(), list(ack_id())) ::
+              {:ok, non_neg_integer()} | {:error, Exception.t()}
+
+  @callback messages_failed(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Exception.t()}
 
   @callback produce(consumer_id(), pos_integer(), pid()) ::
               {:ok, list(ConsumerRecord.t() | ConsumerEvent.t())} | {:error, Exception.t()}

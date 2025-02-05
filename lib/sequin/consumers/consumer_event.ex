@@ -138,6 +138,14 @@ defmodule Sequin.Consumers.ConsumerEvent do
     where(query, [consumer_event: ce], ce.ack_id in ^ack_ids)
   end
 
+  def where_group_ids(query \\ base_query(), group_ids) do
+    from([consumer_event: ce] in query, where: ce.group_id in ^group_ids)
+  end
+
+  def where_ids(query \\ base_query(), ids) do
+    from([consumer_event: ce] in query, where: ce.id in ^ids)
+  end
+
   def where_deliverable(query \\ base_query()) do
     now = DateTime.utc_now()
 

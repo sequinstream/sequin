@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
 
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -24,7 +25,7 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
     Broadway.start_link(__MODULE__,
       name: via_tuple(consumer.id),
       producer: [
-        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 20]}
+        module: {producer, [consumer: consumer, test_pid: test_pid, batch_size: 100]}
       ],
       processors: [
         default: [
@@ -63,12 +64,15 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
       consumer_id: consumer.id
     )
 
+    messages
+    |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
+    |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.handle_message", &1))
+
     redis_messages = Enum.map(messages, & &1.data)
 
     case Redis.send_messages(sink, redis_messages) do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-        # Metrics.incr_sqs_throughput(consumer.sink)
 
         Enum.each(messages, fn msg ->
           Sequin.Logs.log_for_consumer_message(
@@ -79,6 +83,10 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
             "Pushed message to Redis successfully"
           )
         end)
+
+        messages
+        |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
+        |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.sent", &1))
 
         message
 

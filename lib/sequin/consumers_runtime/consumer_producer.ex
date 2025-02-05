@@ -6,6 +6,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   alias Broadway.Message
   alias Ecto.Adapters.SQL.Sandbox
+  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerEventData
   alias Sequin.Consumers.ConsumerRecord
@@ -205,11 +206,11 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:ok, delivered_wal_cursors} =
       MessageLedgers.filter_delivered_wal_cursors(state.consumer.id, wal_cursors_to_deliver)
 
+    delivered_cursor_set = MapSet.new(delivered_wal_cursors)
+
     {delivered_messages, filtered_messages} =
       Enum.split_with(messages, fn message ->
-        Enum.find(delivered_wal_cursors, fn commit ->
-          commit.commit_lsn == message.commit_lsn and commit.commit_idx == message.commit_idx
-        end)
+        MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
       end)
 
     if delivered_messages == [] do
@@ -222,7 +223,10 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         message_count: length(filtered_messages)
       )
 
-      state.slot_message_store_mod.ack(state.consumer.id, Enum.map(delivered_messages, & &1.ack_id))
+      state.slot_message_store_mod.messages_already_succeeded(
+        state.consumer.id,
+        Enum.map(delivered_messages, & &1.ack_id)
+      )
 
       filtered_messages
     end
@@ -245,7 +249,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
     {:noreply, [], %{state | receive_timer: nil, trim_timer: nil}}
   end
 
-  @spec ack({SinkConsumer.t(), pid(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) ::
+  @spec ack({SinkConsumer.t(), pid(), slot_message_store_mod :: atom()}, list(Message.t()), list(Message.t())) ::
           :ok
   def ack({consumer, test_pid, slot_message_store_mod}, successful, failed) do
     successful_messages = Enum.flat_map(successful, & &1.data)
@@ -258,16 +262,27 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     # First, handle the WAL cursors for successful messages
     wal_cursors =
-      Enum.map(successful_messages, fn message ->
-        %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx, commit_timestamp: message.commit_timestamp}
-      end)
+      Enum.map(successful_messages, fn message -> %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx} end)
+
+    MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "consumer_producer.ack", wal_cursors)
 
     :ok = MessageLedgers.wal_cursors_delivered(consumer.id, wal_cursors)
 
-    all_ack_ids = Enum.map(successful_messages ++ failed_messages, & &1.ack_id)
+    successful_ack_ids = Enum.map(successful_messages, & &1.ack_id)
 
     # Ack all messages in SlotMessageStore to remove from buffer
-    {:ok, _count} = slot_message_store_mod.ack(consumer.id, all_ack_ids)
+    unless successful_ack_ids == [] do
+      {:ok, _count} = slot_message_store_mod.messages_succeeded(consumer.id, successful_ack_ids)
+    end
+
+    failed_message_metadatas =
+      failed_messages
+      |> Stream.map(&Consumers.advance_delivery_state_for_failure/1)
+      |> Enum.map(&%{&1 | data: nil})
+
+    unless failed_message_metadatas == [] do
+      :ok = slot_message_store_mod.messages_failed(consumer.id, failed_message_metadatas)
+    end
 
     if test_pid do
       successful_ids = successful |> Stream.flat_map(& &1.data) |> Enum.map(& &1.ack_id)

@@ -311,7 +311,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
 
   def handle_event("acknowledge_message", %{"ack_id" => ack_id}, socket) do
     consumer = socket.assigns.consumer
-    SlotMessageStore.ack(consumer.id, [ack_id])
+    SlotMessageStore.messages_succeeded(consumer.id, [ack_id])
 
     updated_socket =
       socket
@@ -526,7 +526,7 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     smoothed_throughput_timeseries =
       smoothed_throughput_timeseries |> Enum.take(@timeseries_window_count) |> Enum.reverse()
 
-    messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 2)
+    messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
 
     metrics = %{
       messages_processed_count: messages_processed_count,

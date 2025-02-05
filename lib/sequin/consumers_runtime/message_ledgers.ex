@@ -249,4 +249,64 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
 
   defp delivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:consumer_idempotency"
   defp undelivered_cursors_key(consumer_id), do: "consumer:#{consumer_id}:commit_verification"
+
+  @doc """
+  Called when WAL cursors reach a specific checkpoint in processing. Similar to wal_cursors_ingested,
+  but allows tracking cursors at arbitrary checkpoints.
+  """
+  @spec wal_cursors_reached_checkpoint(consumer_id(), String.t(), [Replication.wal_cursor()]) :: :ok | {:error, Error.t()}
+  def wal_cursors_reached_checkpoint(_, _, []), do: :ok
+
+  def wal_cursors_reached_checkpoint(consumer_id, checkpoint, wal_cursors) do
+    if env() == :dev and auditing?() do
+      reached_at = Sequin.utc_now()
+
+      commands =
+        Enum.map(wal_cursors, fn wal_cursor ->
+          [
+            "ZADD",
+            checkpoint_key(consumer_id, checkpoint),
+            DateTime.to_unix(reached_at, :second),
+            member_from_wal_cursor(wal_cursor)
+          ]
+        end)
+
+      case Redis.pipeline(commands) do
+        {:ok, _results} -> :ok
+        {:error, error} -> {:error, error}
+      end
+    else
+      :ok
+    end
+  end
+
+  @doc """
+  Returns the count of WAL cursors at a specific checkpoint for a consumer.
+  """
+  @spec count_in_checkpoint(consumer_id(), String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def count_in_checkpoint(consumer_id, checkpoint) do
+    key = checkpoint_key(consumer_id, checkpoint)
+
+    case Redis.command(["ZCARD", key]) do
+      {:ok, nil} -> {:ok, Error.not_found(entity: "checkpoint", id: checkpoint)}
+      {:ok, count} -> {:ok, String.to_integer(count)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def clear_checkpoint_set(consumer_id, checkpoint) do
+    key = checkpoint_key(consumer_id, checkpoint)
+
+    with {:ok, _} <- Redis.command(["DEL", key]) do
+      :ok
+    end
+  end
+
+  def wal_cursor_from_message(message), do: Map.take(message, [:commit_lsn, :commit_idx])
+
+  defp checkpoint_key(consumer_id, checkpoint), do: "consumer:#{consumer_id}:checkpoint:#{checkpoint}"
+
+  # set to true to enable verbose ledger checkpoints (dev only)
+  defp auditing?, do: false
+  defp env, do: Application.get_env(:sequin, :env)
 end

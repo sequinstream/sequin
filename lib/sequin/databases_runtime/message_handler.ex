@@ -381,12 +381,27 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   defp call_consumer_message_stores(messages_by_consumer) do
     res =
       Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
-        wal_cursors =
-          Enum.map(messages, fn message -> Map.take(message, [:commit_lsn, :commit_idx, :commit_timestamp]) end)
+        all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
 
-        :ok = MessageLedgers.wal_cursors_ingested(consumer.id, wal_cursors)
+        # Step 1: Mark all WAL cursors as ingested first
+        :ok = MessageLedgers.wal_cursors_ingested(consumer.id, all_wal_cursors)
 
-        case SlotMessageStore.put_messages(consumer.id, messages) do
+        # Step 2: Check which ones were already delivered
+        {:ok, delivered_wal_cursors} = MessageLedgers.filter_delivered_wal_cursors(consumer.id, all_wal_cursors)
+
+        # Step 3: Re-mark delivered wal cursors as delivered
+        :ok = MessageLedgers.wal_cursors_delivered(consumer.id, delivered_wal_cursors)
+
+        # Step 4: Filter out already delivered messages before sending downstream
+        delivered_wal_cursors = MapSet.new(delivered_wal_cursors)
+
+        messages_to_ingest =
+          Enum.reject(messages, fn message ->
+            wal_cursor = Map.take(message, [:commit_lsn, :commit_idx])
+            MapSet.member?(delivered_wal_cursors, wal_cursor)
+          end)
+
+        case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
           :ok -> {:cont, :ok}
           {:error, _} = error -> {:halt, error}
         end

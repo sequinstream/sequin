@@ -1,13 +1,11 @@
 defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
   use Sequin.DataCase, async: true
 
-  alias Sequin.Consumers
   alias Sequin.ConsumersRuntime.ConsumerProducer
+  alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.DatabasesRuntime.SlotMessageStoreMock
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.TestSupport.DateTimeMock
-
-  @moduletag skip: true
 
   defmodule Forwarder do
     @moduledoc false
@@ -26,6 +24,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
       Mox.allow(SlotMessageStoreMock, test_pid, self())
       Mox.allow(DateTimeMock, test_pid, self())
 
+      send(test_pid, {:messages_failed, broadway_message.data})
       Message.failed(broadway_message, "failed")
     end
 
@@ -33,7 +32,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
       Mox.allow(SlotMessageStoreMock, test_pid, self())
       Mox.allow(DateTimeMock, test_pid, self())
 
-      send(test_pid, {:messages_handled, broadway_message.data})
+      send(test_pid, {:messages_succeeded, broadway_message.data})
       broadway_message
     end
 
@@ -42,7 +41,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
     end
   end
 
-  describe "producing messages when messages persisted" do
+  describe "ConsumerProducer produces and acks messages end-to-end" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
@@ -50,181 +49,80 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducerTest do
         {:ok, []}
       end)
 
-      stub(SlotMessageStoreMock, :ack, fn _consumer_id, ack_ids ->
+      stub(SlotMessageStoreMock, :messages_succeeded, fn _consumer_id, ack_ids ->
         {:ok, length(ack_ids)}
       end)
 
       %{consumer: consumer}
     end
 
-    test "produces messages that were already in the database", %{consumer: consumer} do
-      msg1 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+    test "successful messages are succeeded to sms", %{consumer: consumer} do
+      msg1 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      msg2 = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      msg2 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
+      # only the first call produces messages
+      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg1, msg2]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+
+      expect(SlotMessageStoreMock, :messages_succeeded, fn _consumer_id, ack_ids ->
+        assert length(ack_ids) == 2
+        {:ok, 2}
+      end)
 
       start_broadway(consumer: consumer)
-      assert_receive {:messages_handled, messages}, 1_000
 
-      assert_lists_equal(messages, [msg1, msg2], &(&1.id == &2.id))
+      assert_receive {:messages_succeeded, messages}, 1_000
+      assert length(messages) == 2
+
       stop_broadway()
     end
 
-    test "produces messages that are added to the database after boot", %{consumer: consumer} do
+    test "failed messages are failed to sms", %{consumer: consumer} do
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+
+      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+
+      expect(SlotMessageStoreMock, :messages_failed, fn _consumer_id, message_metas ->
+        assert length(message_metas) == 1
+        assert Enum.all?(message_metas, &is_map/1)
+        :ok
+      end)
+
+      start_broadway(consumer: consumer, context: %{fail?: true})
+
+      # No message received since it failed
+      assert_receive {:messages_failed, _messages}, 1_000
+
+      stop_broadway()
+    end
+
+    test "produced messages are rejected due to idempotency", %{consumer: consumer} do
       test_pid = self()
-      start_broadway(consumer: consumer)
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid ->
-        send(test_pid, :produce_called)
-        {:ok, []}
+      wal_cursor = %{commit_lsn: msg.commit_lsn, commit_idx: msg.commit_idx, commit_timestamp: msg.commit_timestamp}
+      MessageLedgers.wal_cursors_delivered(consumer.id, [wal_cursor])
+
+      expect(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, [msg]} end)
+      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid -> {:ok, []} end)
+
+      expect(SlotMessageStoreMock, :messages_already_succeeded, fn _consumer_id, ack_ids ->
+        send(test_pid, {:ack_ids, ack_ids})
+        {:ok, 0}
       end)
-
-      assert_receive :produce_called, 1_000
-
-      msg1 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg2 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      :syn.publish(:consumers, {:messages_changed, consumer.id}, :messages_changed)
-      assert_receive {:messages_handled, messages}, 1_000
-
-      assert_lists_equal(messages, [msg1, msg2], &(&1.id == &2.id))
-      stop_broadway()
-    end
-
-    test "mix postgres and sms messages are interleaved", %{consumer: consumer} do
-      test_pid = self()
-
-      msg1 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg2 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg3 =
-        ConsumersFactory.deliverable_consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg4 =
-        ConsumersFactory.deliverable_consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
 
       start_broadway(consumer: consumer)
 
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid ->
-        send(test_pid, :produce_called)
-        {:ok, [msg3, msg4]}
-      end)
+      assert_receive {:ack_ids, ack_ids}, 1_000
+      assert length(ack_ids) == 1
 
-      assert_receive :produce_called, 1_000
-
-      :syn.publish(:consumers, {:messages_changed, consumer.id}, :messages_changed)
-      assert_receive {:messages_handled, messages}, 1_000
-
-      assert_lists_equal(messages, [msg1, msg2, msg3, msg4], &(&1.id == &2.id))
-      stop_broadway()
-
-      refute Consumers.reload(msg1)
-      refute Consumers.reload(msg2)
-    end
-
-    test "failed messages are upserted to postgres", %{consumer: consumer} do
-      test_pid = self()
-
-      msg1 =
-        ConsumersFactory.deliverable_consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg2 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      start_broadway(consumer: consumer, context: %{test_pid: test_pid, fail?: true})
-
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid ->
-        send(test_pid, :produce_called)
-        {:ok, [msg1]}
-      end)
-
-      assert_receive :produce_called, 1_000
-
-      assert_receive {ConsumerProducer, :ack_finished, [], failed_ack_ids}, 1_000
-      assert_lists_equal(failed_ack_ids, [msg1.ack_id, msg2.ack_id])
-
-      failed_messages = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert_lists_equal(failed_messages, [msg1, msg2], &(&1.ack_id == &2.ack_id))
+      # No message received since it was rejected
+      refute_receive {:messages_succeeded, []}, 200
 
       stop_broadway()
-    end
-
-    test "sms message with a blocked group_id is removed from sms and upserted to postgres", %{consumer: consumer} do
-      msg1 =
-        ConsumersFactory.deliverable_consumer_message(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id
-        )
-
-      msg2 =
-        ConsumersFactory.insert_deliverable_consumer_message!(
-          message_kind: consumer.message_kind,
-          consumer_id: consumer.id,
-          group_id: msg1.group_id
-        )
-
-      start_broadway(consumer: consumer)
-
-      stub(SlotMessageStoreMock, :produce, fn _consumer_id, _count, _producer_pid ->
-        {:ok, [msg1]}
-      end)
-
-      expect(SlotMessageStoreMock, :ack, 2, fn _consumer_id, ack_ids ->
-        {:ok, length(ack_ids)}
-      end)
-
-      assert_receive {ConsumerProducer, :ack_finished, [successful_ack_id], []}, 1_000
-      assert successful_ack_id == msg2.ack_id
-
-      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
-      assert inserted_msg.ack_id == msg1.ack_id
     end
   end
-
-  # - Are there still races?
-  # - We're not doing any filtering by group_id after pulling from SMS
-  #    - And writing back to SMS
-  # - tests to add
-  #   - blow up in handle_message
-  #   - idempotency, both trimming and applying
-  #   - demand?
 
   defp start_broadway(opts) do
     opts =

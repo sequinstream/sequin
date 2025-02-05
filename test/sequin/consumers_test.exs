@@ -13,21 +13,12 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.NumberValue
   alias Sequin.Consumers.SequenceFilter.StringValue
-  alias Sequin.Databases
-  alias Sequin.Databases.ConnectionCache
-  alias Sequin.Databases.DatabaseUpdateWorker
   alias Sequin.Databases.Sequence
-  alias Sequin.Error.NotFoundError
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
-  alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
-  alias Sequin.Test.UnboxedRepo
-  alias Sequin.TestSupport.Models.Character
-  alias Sequin.TestSupport.Models.CharacterDetailed
-  alias Sequin.TestSupport.Models.CharacterMultiPK
 
   describe "ack_messages/2" do
     setup do
@@ -108,222 +99,6 @@ defmodule Sequin.ConsumersTest do
       assert {:ok, messages} = AcknowledgedMessages.fetch_messages(consumer.id)
       assert length(messages) == 2
       assert Enum.all?(messages, &(&1.consumer_id == consumer.id))
-    end
-  end
-
-  describe "put_source_data/3" do
-    setup do
-      database = DatabasesFactory.insert_configured_postgres_database!(tables: [])
-      # Load tables from actual database
-      {:ok, _tables} = Databases.tables(database)
-
-      slot =
-        ReplicationFactory.insert_postgres_replication!(
-          postgres_database_id: database.id,
-          account_id: database.account_id
-        )
-
-      source_tables = [
-        ConsumersFactory.source_table(
-          oid: Character.table_oid(),
-          column_filters: []
-        ),
-        ConsumersFactory.source_table(
-          oid: CharacterDetailed.table_oid(),
-          column_filters: []
-        ),
-        ConsumersFactory.source_table(
-          oid: CharacterMultiPK.table_oid(),
-          column_filters: []
-        )
-      ]
-
-      consumer =
-        ConsumersFactory.insert_sink_consumer!(
-          message_kind: :record,
-          account_id: database.account_id,
-          replication_slot_id: slot.id,
-          source_tables: source_tables
-        )
-
-      consumer = Repo.preload(consumer, :postgres_database)
-
-      ConnectionCache.cache_connection(consumer.postgres_database, Repo)
-
-      {:ok, consumer: consumer}
-    end
-
-    test "fetches multiple records from the same table with single PK", %{consumer: consumer} do
-      characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
-      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character!()
-      records = Enum.map(characters, &build_consumer_record(consumer, &1))
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-      fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id"])
-
-      assert length(fetched_records) == 3
-
-      for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert_maps_equal(
-          record.data.record,
-          Map.from_struct(character),
-          ["id", "name", "house", "planet", "is_active", "tags"],
-          indifferent_keys: true
-        )
-
-        assert record.data.metadata.table_name == "Characters"
-        assert record.data.metadata.table_schema == "public"
-      end
-    end
-
-    test "fetches multiple records from the same table with compound PK", %{consumer: consumer} do
-      characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
-      _other_characters = for _ <- 1..3, do: CharacterFactory.insert_character_multi_pk!()
-      records = Enum.map(characters, &build_consumer_record(consumer, &1, :multi_pk))
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-      fetched_records = Enum.sort_by(fetched_records, & &1.data.record["id_integer"])
-
-      assert length(fetched_records) == 3
-
-      for {record, character} <- Enum.zip(fetched_records, characters) do
-        assert_maps_equal(record.data.record, Map.from_struct(character), ["id_integer", "id_string", "id_uuid", "name"],
-          indifferent_keys: true
-        )
-
-        assert record.data.metadata.table_name == "characters_multi_pk"
-        assert record.data.metadata.table_schema == "public"
-      end
-    end
-
-    test "handles different primary key data types", %{consumer: consumer} do
-      character = CharacterFactory.insert_character_multi_pk!()
-      record = build_consumer_record(consumer, character, :multi_pk)
-
-      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
-
-      assert fetched_record.data.record["id_integer"] == character.id_integer
-      assert fetched_record.data.record["id_string"] == character.id_string
-      assert fetched_record.data.record["id_uuid"] == character.id_uuid
-    end
-
-    test "casts different column types appropriately", %{consumer: consumer} do
-      character = CharacterFactory.insert_character_detailed!()
-      record = build_consumer_record(consumer, character, :detailed)
-
-      {:ok, [fetched_record]} = Consumers.put_source_data(consumer, [record])
-
-      assert fetched_record.data.record["age"] == character.age
-      assert fetched_record.data.record["height"] == character.height
-      assert fetched_record.data.record["is_hero"] == character.is_hero
-      assert fetched_record.data.record["birth_date"] == character.birth_date
-
-      assert Time.truncate(fetched_record.data.record["last_seen"], :second) ==
-               character.last_seen
-
-      assert NaiveDateTime.truncate(fetched_record.data.record["inserted_at"], :second) ==
-               NaiveDateTime.truncate(character.inserted_at, :second)
-
-      assert NaiveDateTime.truncate(fetched_record.data.record["updated_at"], :second) ==
-               NaiveDateTime.truncate(character.updated_at, :second)
-
-      assert fetched_record.data.record["powers"] == character.powers
-      assert fetched_record.data.record["metadata"] == character.metadata
-      assert Decimal.equal?(fetched_record.data.record["rating"], character.rating)
-      assert fetched_record.data.record["avatar"] == "\\x" <> Base.encode16(character.avatar, case: :lower)
-    end
-
-    @tag capture_log: true
-    test "errors when the source table is not in PostgresDatabase", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      record = %{record | table_oid: 999_999}
-
-      assert {:error, %NotFoundError{}} = Consumers.put_source_data(consumer, [record])
-    end
-
-    test "errors when the source table is listed in PostgresDatabase but not in the database", %{
-      consumer: consumer
-    } do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      record = %{record | table_oid: 999_999}
-
-      # Simulate the table being listed but not in the database
-      column = DatabasesFactory.column(%{name: "id", type: "integer", is_pk?: true})
-
-      fake_table =
-        DatabasesFactory.table(%{oid: 999_999, name: "non_existent_table", schema: "public", columns: [column]})
-
-      consumer = %{consumer | postgres_database: %{consumer.postgres_database | tables: [fake_table]}}
-
-      assert {:error, %Postgrex.Error{postgres: %{code: :undefined_table}}} =
-               Consumers.put_source_data(consumer, [record])
-    end
-
-    test "returns error when PostgresDatabase.tables lists a non-existent column", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-
-      # Add a non-existent column to the table definition
-      fake_column = DatabasesFactory.column(%{name: "non_existent_column", type: "text", is_pk?: false})
-
-      consumer =
-        update_in(consumer.postgres_database.tables, fn tables ->
-          Enum.map(tables, fn table ->
-            if table.name == "Characters", do: %{table | columns: [fake_column | table.columns]}, else: table
-          end)
-        end)
-
-      {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = Consumers.put_source_data(consumer, [record])
-
-      assert_enqueued(worker: DatabaseUpdateWorker, args: %{postgres_database_id: consumer.postgres_database.id})
-    end
-
-    @tag capture_log: true
-    test "errors when the source database is unreachable", %{consumer: consumer} do
-      character = CharacterFactory.insert_character!()
-      record = build_consumer_record(consumer, character)
-      config = Keyword.merge(UnboxedRepo.config(), hostname: "unreachable_host", queue_target: 25, queue_interval: 25)
-      {:ok, conn} = Postgrex.start_link(config)
-      ConnectionCache.cache_connection(consumer.postgres_database, conn)
-
-      assert {:error, %DBConnection.ConnectionError{}} = Consumers.put_source_data(consumer, [record])
-
-      GenServer.stop(conn)
-    end
-
-    test "deletes consumer records when they are missing from the source table", %{consumer: consumer} do
-      # Insert characters into the database
-      existing_character = CharacterFactory.insert_character!()
-      deleted_record_id = Factory.unique_integer()
-
-      # Create consumer records for both characters
-      existing_record =
-        ConsumersFactory.insert_consumer_record!(
-          consumer_id: consumer.id,
-          table_oid: Character.table_oid(),
-          record_pks: [existing_character.id]
-        )
-
-      deleted_record =
-        ConsumersFactory.insert_consumer_record!(
-          consumer_id: consumer.id,
-          table_oid: Character.table_oid(),
-          record_pks: [deleted_record_id]
-        )
-
-      # Call put_source_data with both records
-      records = [deleted_record, existing_record]
-
-      {:ok, fetched_records} = Consumers.put_source_data(consumer, records)
-
-      # Assert that only the existing record is returned
-      assert length(fetched_records) == 2
-      records_with_data = Enum.filter(fetched_records, &(&1.data.record != nil))
-      assert length(records_with_data) == 1
-      assert hd(records_with_data).data.record["id"] == existing_character.id
-      assert hd(records_with_data).record_pks == [to_string(existing_character.id)]
     end
   end
 
@@ -2463,80 +2238,32 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
-  # Helper function to create a consumer record from a character
-  defp build_consumer_record(consumer, character, type \\ :default) do
-    table_oid =
-      case type do
-        :default -> Character.table_oid()
-        :multi_pk -> CharacterMultiPK.table_oid()
-        :detailed -> CharacterDetailed.table_oid()
-      end
+  describe "upsert_consumer_messages/1" do
+    test "inserts a new message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
+      msg = ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
 
-    record_pks =
-      case type do
-        :default -> [character.id]
-        :multi_pk -> [character.id_integer, character.id_string, character.id_uuid]
-        :detailed -> [character.id]
-      end
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [msg])
 
-    ConsumersFactory.consumer_record(consumer_id: consumer.id, table_oid: table_oid, record_pks: record_pks)
-  end
-
-  describe "upsert_consumer_events/1" do
-    test "inserts a new consumer event" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      event = ConsumersFactory.consumer_event(consumer_id: consumer.id)
-
-      assert {:ok, 1} = Consumers.upsert_consumer_events([event])
-
-      inserted_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
-      assert inserted_event
-      assert inserted_event.ack_id == event.ack_id
+      assert [inserted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert inserted_msg.ack_id == msg.ack_id
     end
 
-    test "updates existing consumer event" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
-      existing_event = ConsumersFactory.insert_consumer_event!(consumer_id: consumer.id)
+    test "updates existing message" do
+      consumer = ConsumersFactory.insert_sink_consumer!()
 
-      updated_attrs = %ConsumerEvent{
-        existing_event
+      existing_msg =
+        ConsumersFactory.insert_consumer_message!(message_kind: consumer.message_kind, consumer_id: consumer.id)
+
+      updated_attrs = %{
+        existing_msg
         | not_visible_until: DateTime.add(DateTime.utc_now(), 30, :second)
       }
 
-      assert {:ok, 1} = Consumers.upsert_consumer_events([updated_attrs])
+      assert {:ok, 1} = Consumers.upsert_consumer_messages(consumer, [updated_attrs])
 
-      updated_event = Repo.get_by(ConsumerEvent, consumer_id: consumer.id)
-      assert updated_event
-      refute updated_event.not_visible_until == existing_event.not_visible_until
-    end
-  end
-
-  describe "upsert_consumer_records/1" do
-    test "inserts a new consumer record" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      record = ConsumersFactory.consumer_record(consumer_id: consumer.id)
-
-      assert {:ok, 1} = Consumers.upsert_consumer_records([record])
-
-      inserted_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
-      assert inserted_record
-      assert inserted_record.ack_id == record.ack_id
-    end
-
-    test "updates existing consumer record" do
-      consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :record)
-      existing_record = ConsumersFactory.insert_consumer_record!(consumer_id: consumer.id, state: :available)
-
-      updated_record = %ConsumerRecord{
-        existing_record
-        | state: :delivered
-      }
-
-      assert {:ok, 1} = Consumers.upsert_consumer_records([updated_record])
-
-      updated_record = Repo.get_by(ConsumerRecord, consumer_id: consumer.id)
-      assert updated_record
-      assert updated_record.state == :delivered
+      assert [updated_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
+      refute updated_msg.not_visible_until == existing_msg.not_visible_until
     end
   end
 end

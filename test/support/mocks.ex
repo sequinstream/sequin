@@ -21,3 +21,7 @@ Mox.defmock(Sequin.TestSupport.DateTimeMock,
 Mox.defmock(Sequin.TestSupport.UUIDMock,
   for: Sequin.TestSupport.UUID
 )
+
+Mox.defmock(Sequin.DatabasesRuntime.SlotMessageStoreMock,
+  for: Sequin.DatabasesRuntime.SlotMessageStoreBehaviour
+)

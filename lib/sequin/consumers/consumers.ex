@@ -25,6 +25,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.Repo
+  alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
@@ -363,6 +364,9 @@ defmodule Sequin.Consumers do
 
         {:select, select}, query ->
           select(query, ^select)
+
+        {:ids, ids}, query ->
+          ConsumerEvent.where_ids(query, ids)
       end)
 
     Repo.all(query, opts)
@@ -405,6 +409,15 @@ defmodule Sequin.Consumers do
     end)
 
     {:ok, count}
+  end
+
+  @exponential_backoff_max :timer.minutes(10)
+  def advance_delivery_state_for_failure(message) do
+    deliver_count = message.deliver_count + 1
+    backoff_time = Time.exponential_backoff(:timer.seconds(1), deliver_count, @exponential_backoff_max)
+    not_visible_until = DateTime.add(DateTime.utc_now(), backoff_time, :millisecond)
+
+    %{message | deliver_count: deliver_count, not_visible_until: not_visible_until}
   end
 
   # ConsumerRecord
@@ -469,6 +482,9 @@ defmodule Sequin.Consumers do
 
       {:select, select}, query ->
         select(query, ^select)
+
+      {:ids, ids}, query ->
+        ConsumerRecord.where_ids(query, ids)
     end)
   end
 

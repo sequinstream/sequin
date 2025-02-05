@@ -574,6 +574,7 @@ defmodule Sequin.Factory.ConsumersFactory do
     merge_attributes(
       %ConsumerRecordData{
         record: %{"column" => Factory.word()},
+        action: Enum.random([:insert, :update, :delete]),
         metadata: %ConsumerRecordData.Metadata{
           database_name: Factory.postgres_object(),
           table_schema: Factory.postgres_object(),

@@ -19,7 +19,8 @@ defmodule SequinWeb.PullController do
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, batch_size} <- parse_batch_size(params),
          :ok <- maybe_wait(params, consumer),
-         {:ok, messages} <- SlotMessageStore.produce(consumer.id, batch_size, self()) do
+         :ok <- SlotMessageStore.nack_stale_produced_messages(consumer.id),
+         {:ok, messages} <- SlotMessageStore.produce(consumer.id, batch_size, :consistent_pid) do
       Logger.metadata(batch_size: batch_size)
       Tracer.Server.messages_received(consumer, messages)
       render(conn, "receive.json", messages: messages)
@@ -31,8 +32,8 @@ defmodule SequinWeb.PullController do
     account_id = conn.assigns.account_id
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
-         {:ok, message_ids} <- parse_ack_ids(params),
-         {:ok, _count} <- SlotMessageStore.ack(consumer.id, message_ids) do
+         {:ok, ack_ids} <- parse_ack_ids(params),
+         {:ok, _count} <- SlotMessageStore.messages_succeeded(consumer.id, ack_ids) do
       json(conn, %{success: true})
     end
   end
@@ -40,13 +41,10 @@ defmodule SequinWeb.PullController do
   def nack(conn, %{"id_or_name" => id_or_name} = params) do
     Logger.metadata(consumer_id: id_or_name)
     account_id = conn.assigns.account_id
-    # now = DateTime.utc_now()
 
     with {:ok, consumer} <- Consumers.find_sink_consumer(account_id, id_or_name: id_or_name, type: :sequin_stream),
          {:ok, ack_ids} <- parse_ack_ids(params),
-         #  ack_ids_with_not_visible_until = Map.new(ack_ids, &{&1, now}),
-         #  {:ok, _count} <- Consumers.nack_messages_with_backoff(consumer, ack_ids_with_not_visible_until),
-         {:ok, _count} <- SlotMessageStore.ack(consumer.id, ack_ids) do
+         :ok <- SlotMessageStore.reset_message_visibility(consumer.id, ack_ids) do
       json(conn, %{success: true})
     end
   end

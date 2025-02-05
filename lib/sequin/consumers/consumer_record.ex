@@ -142,6 +142,14 @@ defmodule Sequin.Consumers.ConsumerRecord do
     where(query, [consumer_record: cr], cr.ack_id in ^ack_ids)
   end
 
+  def where_ids(query \\ base_query(), ids) do
+    from([consumer_record: cr] in query, where: cr.id in ^ids)
+  end
+
+  def where_group_ids(query \\ base_query(), group_ids) do
+    from([consumer_record: cr] in query, where: cr.group_id in ^group_ids)
+  end
+
   def where_state_not(query \\ base_query(), state) do
     from([consumer_record: cr] in query, where: cr.state != ^state)
   end

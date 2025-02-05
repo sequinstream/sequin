@@ -40,8 +40,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   require Logger
 
-  # 200MB
-  @max_accumulated_bytes 200 * 1024 * 1024
+  # 10MB
+  @max_accumulated_bytes 10 * 1024 * 1024
+  @max_accumulated_messages 200
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -271,11 +272,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         |> process_message(state)
       end
 
-    {prev_acc_size, _} = state.accumulated_messages
-    {acc_size, _acc_messages} = next_state.accumulated_messages
+    {prev_acc_size_bytes, _} = state.accumulated_messages
+    {acc_size_bytes, acc_messages} = next_state.accumulated_messages
+    acc_size_count = length(acc_messages)
 
     # Calculate bytes processed in this message
-    bytes_processed = acc_size - prev_acc_size
+    bytes_processed = acc_size_bytes - prev_acc_size_bytes
 
     # Update bytes processed and check limits
     {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
@@ -310,7 +312,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         next_state = flush_messages(next_state)
         {:noreply, next_state}
 
-      acc_size > @max_accumulated_bytes ->
+      acc_size_count > @max_accumulated_messages or acc_size_bytes > @max_accumulated_bytes ->
         next_state = flush_messages(next_state)
         {:noreply, next_state}
 
@@ -431,7 +433,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @impl ReplicationConnection
   def handle_info(:emit_heartbeat, %State{} = state) do
-    schedule_heartbeat(state)
     conn = get_cached_conn(state)
 
     case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '')") do
@@ -615,6 +616,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Logger.info("[SlotProcessor] Heartbeat received")
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
+    schedule_heartbeat(state)
+
     if state.test_pid do
       # TODO: Decouple
       send(state.test_pid, {__MODULE__, :heartbeat_received})
@@ -782,7 +785,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       :ok ->
         state.message_store_refs
         |> Enum.map(fn {consumer_id, ref} ->
-          SlotMessageStore.min_wal_cursor(consumer_id, ref)
+          SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
         end)
         |> Enum.filter(& &1)
         |> case do

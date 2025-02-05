@@ -180,25 +180,27 @@ defmodule Sequin.Replication do
   end
 
   # Replication runtime lifecycle
-  def put_last_processed_commit_tuple!(replication_slot_id, {lsn, idx}) do
-    Redis.command!(["SET", last_processed_commit_tuple_key(replication_slot_id), "#{lsn}:#{idx}"])
+  @spec put_low_watermark_wal_cursor!(replication_slot_id :: String.t(), wal_cursor :: wal_cursor()) :: :ok
+  def put_low_watermark_wal_cursor!(replication_slot_id, %{commit_lsn: lsn, commit_idx: idx}) do
+    Redis.command!(["SET", low_watermark_wal_cursor_key(replication_slot_id), "#{lsn}:#{idx}"])
   end
 
-  def last_processed_commit_tuple(replication_slot_id) do
-    case Redis.command(["GET", last_processed_commit_tuple_key(replication_slot_id)]) do
+  @spec low_watermark_wal_cursor(replication_slot_id :: String.t()) :: {:ok, wal_cursor()} | {:error, Error.t()}
+  def low_watermark_wal_cursor(replication_slot_id) do
+    case Redis.command(["GET", low_watermark_wal_cursor_key(replication_slot_id)]) do
       {:ok, nil} ->
-        {:ok, {0, 0}}
+        {:ok, %{commit_lsn: 0, commit_idx: 0}}
 
       {:ok, commit_tuple} ->
         [lsn, idx] = String.split(commit_tuple, ":")
-        {:ok, {String.to_integer(lsn), String.to_integer(idx)}}
+        {:ok, %{commit_lsn: String.to_integer(lsn), commit_idx: String.to_integer(idx)}}
 
       error ->
         error
     end
   end
 
-  defp last_processed_commit_tuple_key(replication_slot_id) do
+  defp low_watermark_wal_cursor_key(replication_slot_id) do
     "sequin:replication:last_processed_commit_tuple:#{replication_slot_id}"
   end
 

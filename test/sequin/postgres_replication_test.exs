@@ -826,7 +826,10 @@ defmodule Sequin.PostgresReplicationTest do
       assert is_action(change, :insert)
       assert get_field_value(change.fields, "id") == character1.id
 
-      Replication.put_last_processed_commit_tuple!(server_id(), {change.commit_lsn, change.commit_idx})
+      Replication.put_low_watermark_wal_cursor!(server_id(), %{
+        commit_lsn: change.commit_lsn,
+        commit_idx: change.commit_idx
+      })
 
       # Stop the replication - likely before the message was acked, but there is a race here
       stop_replication!()

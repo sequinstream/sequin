@@ -83,6 +83,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :bytes_between_limit_checks, non_neg_integer()
       field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
+      field :heartbeat_timer, nil | reference()
     end
   end
 
@@ -174,7 +175,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       Sandbox.allow(Sequin.Repo, state.test_pid, self())
     end
 
-    Process.send_after(self(), :emit_heartbeat, 0)
+    state = schedule_heartbeat(state, 0)
     schedule_process_logging()
 
     {:ok, %{state | step: :disconnected}}
@@ -435,15 +436,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def handle_info(:emit_heartbeat, %State{} = state) do
     conn = get_cached_conn(state)
 
-    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '')") do
+    emitted_at = Sequin.utc_now()
+
+    case Postgres.query(conn, "SELECT pg_logical_emit_message(true, 'sequin.heartbeat.0', '#{emitted_at}')") do
       {:ok, _res} ->
-        :ok
+        Logger.info("Emitted heartbeat", emitted_at: emitted_at)
 
       {:error, error} ->
         Logger.error("Error emitting heartbeat: #{inspect(error)}")
     end
 
-    {:noreply, state}
+    {:noreply, %{state | heartbeat_timer: nil}}
   end
 
   @impl ReplicationConnection
@@ -469,8 +472,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     Process.send_after(self(), :process_logging, :timer.seconds(30))
   end
 
-  defp schedule_heartbeat(%State{} = state) do
-    Process.send_after(self(), :emit_heartbeat, state.heartbeat_interval)
+  defp schedule_heartbeat(state, interval \\ nil)
+
+  defp schedule_heartbeat(%State{heartbeat_timer: nil} = state, interval) do
+    ref = Process.send_after(self(), :emit_heartbeat, interval || state.heartbeat_interval)
+    %{state | heartbeat_timer: ref}
+  end
+
+  defp schedule_heartbeat(%State{heartbeat_timer: ref} = state, _interval) when is_reference(ref) do
+    state
   end
 
   defp maybe_recreate_slot(%State{connection: connection} = state) do
@@ -612,11 +622,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0"}, state) do
-    Logger.info("[SlotProcessor] Heartbeat received")
+  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}, state) do
+    Logger.info("[SlotProcessor] Heartbeat received", emitted_at: emitted_at)
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
-    schedule_heartbeat(state)
+    state = schedule_heartbeat(state)
 
     if state.test_pid do
       # TODO: Decouple

@@ -140,9 +140,11 @@ Example:
 
 ## Response format
 
-Your webhook endpoint must return a `200 OK` response after successfully processing a batch of messages. Sequin will consider any other response code a failure, and will [mark the message for re-delivery](#retry-behavior).
+Your webhook endpoint must return a `2XX OK` response after successfully processing a batch of messages. Sequin will consider any response code outside the range of `200` to `299` a failure, and will [mark the message for re-delivery](#retry-behavior).
 
-Note all messages in a batch are either acknowledged together or fail together. There is no way to send Sequin a response that partially acknowledges a batch.
+<Note>
+  All messages in a batch are either acknowledged together or fail together. There is no way to send Sequin a response that partially acknowledges a batch.
+</Note>
 
 ## Authentication
 

@@ -1213,6 +1213,14 @@ defmodule Sequin.Consumers do
   end
 
   defp drop_virtual_fields(message) when is_map(message) do
-    Map.drop(message, [:dirty, :flushed_at, :table_reader_batch_id, :ingested_at, :commit_timestamp, :payload_size_bytes])
+    Map.drop(message, [
+      :dirty,
+      :flushed_at,
+      :table_reader_batch_id,
+      :ingested_at,
+      :commit_timestamp,
+      :payload_size_bytes,
+      :deleted
+    ])
   end
 end

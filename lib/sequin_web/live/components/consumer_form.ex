@@ -489,7 +489,8 @@ defmodule SequinWeb.Components.ConsumerForm do
       "sasl_mechanism" => sink["sasl_mechanism"],
       "aws_access_key_id" => sink["aws_access_key_id"],
       "aws_secret_access_key" => sink["aws_secret_access_key"],
-      "aws_region" => sink["aws_region"]
+      "aws_region" => sink["aws_region"],
+      "batch_size" => sink["batch_size"] && String.to_integer(sink["batch_size"])
     }
   end
 

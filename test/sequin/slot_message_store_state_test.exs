@@ -419,6 +419,30 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       group1_msg = Enum.find(produced_messages, &(&1.group_id == "group1"))
       assert group1_msg.commit_idx == 0
     end
+
+    test "delivers messages without group_ids independently", %{state: state} do
+      # This test ensures backwards compatibility with messages that don't have a group_id
+      # Create messages with nil group_ids
+      msg1 = ConsumersFactory.consumer_message(group_id: nil, commit_lsn: 1)
+      msg2 = ConsumersFactory.consumer_message(group_id: nil, commit_lsn: 2)
+      msg3 = ConsumersFactory.consumer_message(group_id: nil, commit_lsn: 3)
+      msg4 = ConsumersFactory.consumer_message(group_id: "group1", commit_lsn: 4)
+
+      {:ok, state} = State.put_messages(state, [msg1, msg2, msg3, msg4])
+
+      # Should be able to produce first message
+      assert {[produced1, produced2], state} = State.produce_messages(state, 2)
+      assert produced1.commit_lsn == msg1.commit_lsn
+      assert produced2.commit_lsn == msg2.commit_lsn
+
+      # Should be able to produce third message
+      assert {[produced3], state} = State.produce_messages(state, 1)
+      assert produced3.commit_lsn == msg3.commit_lsn
+
+      # Should be able to produce fourth message
+      assert {[produced4], _state} = State.produce_messages(state, 1)
+      assert produced4.commit_lsn == msg4.commit_lsn
+    end
   end
 
   describe "batch_progress/2" do

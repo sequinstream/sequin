@@ -3,6 +3,7 @@ defmodule Sequin.SlotMessageStoreTest do
 
   alias Sequin.Consumers
   alias Sequin.DatabasesRuntime.SlotMessageStore
+  alias Sequin.DatabasesRuntime.SlotMessageStore.State
   alias Sequin.Error.InvariantError
   alias Sequin.Factory
   alias Sequin.Factory.ConsumersFactory
@@ -66,10 +67,10 @@ defmodule Sequin.SlotMessageStoreTest do
   describe "SlotMessageStore message handling" do
     setup do
       consumer = ConsumersFactory.insert_sink_consumer!()
-
+      event_consumer = ConsumersFactory.insert_sink_consumer!(message_kind: :event)
       start_supervised!({SlotMessageStore, consumer_id: consumer.id, test_pid: self()})
-
-      %{consumer: consumer}
+      start_supervised!({SlotMessageStore, consumer_id: event_consumer.id, test_pid: self()})
+      %{consumer: consumer, event_consumer: event_consumer}
     end
 
     test "puts, delivers, and acks in-memory messages", %{consumer: consumer} do
@@ -268,6 +269,114 @@ defmodule Sequin.SlotMessageStoreTest do
 
       {:ok, delivered} = SlotMessageStore.produce(consumer.id, 2, Factory.pid())
       assert length(delivered) == 2
+    end
+
+    test "messages with nil group_ids are not blocked when other nil group_id messages are persisted", %{
+      # Only event_consumer has nil group_ids
+      event_consumer: consumer
+    } do
+      # Create a message with nil group_id that will be persisted
+      message1 =
+        ConsumersFactory.consumer_message(
+          group_id: nil,
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          commit_lsn: 1
+        )
+
+      # Create another message with nil group_id that should not be blocked
+      message2 =
+        ConsumersFactory.consumer_message(
+          group_id: nil,
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id,
+          commit_lsn: 2
+        )
+
+      # Put first message and fail it to persist it
+      :ok = SlotMessageStore.put_messages(consumer.id, [message1])
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 1, self())
+
+      meta = %{
+        ack_id: delivered.ack_id,
+        deliver_count: 1,
+        last_delivered_at: DateTime.utc_now(),
+        not_visible_until: DateTime.add(DateTime.utc_now(), 60)
+      }
+
+      :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
+
+      # Put second message - it should not be blocked or persisted
+      :ok = SlotMessageStore.put_messages(consumer.id, [message2])
+      [persisted_msg] = Consumers.list_consumer_messages_for_consumer(consumer)
+      assert persisted_msg.commit_lsn == message1.commit_lsn
+      {:ok, [message]} = SlotMessageStore.produce(consumer.id, 1, self())
+      assert message.commit_lsn == message2.commit_lsn
+    end
+
+    test "is_message_group_persisted? returns false for nil group_ids", %{event_consumer: consumer} do
+      # Create and persist a message with nil group_id
+      message =
+        ConsumersFactory.consumer_message(
+          group_id: nil,
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer.id, [message])
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 1, self())
+
+      meta = %{
+        ack_id: delivered.ack_id,
+        deliver_count: 1,
+        last_delivered_at: DateTime.utc_now(),
+        not_visible_until: DateTime.add(DateTime.utc_now(), 60)
+      }
+
+      :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
+
+      # Peek at state to verify is_message_group_persisted? returns false
+      state = SlotMessageStore.peek(consumer.id)
+      refute State.is_message_group_persisted?(state, nil)
+    end
+
+    test "pop_blocked_messages does not block messages with nil group_ids", %{event_consumer: consumer} do
+      # Create messages - one with group_id and one without
+      message1 =
+        ConsumersFactory.consumer_message(
+          group_id: "test-group",
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      message2 =
+        ConsumersFactory.consumer_message(
+          group_id: nil,
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      # Put and fail first message to persist it
+      :ok = SlotMessageStore.put_messages(consumer.id, [message1])
+      {:ok, [delivered]} = SlotMessageStore.produce(consumer.id, 1, self())
+
+      meta = %{
+        ack_id: delivered.ack_id,
+        deliver_count: 1,
+        last_delivered_at: DateTime.utc_now(),
+        not_visible_until: DateTime.add(DateTime.utc_now(), 60)
+      }
+
+      :ok = SlotMessageStore.messages_failed(consumer.id, [meta])
+
+      # Put second message (nil group_id)
+      :ok = SlotMessageStore.put_messages(consumer.id, [message2])
+
+      # Verify only messages with non-nil group_ids are blocked
+      state = SlotMessageStore.peek(consumer.id)
+      {blocked_messages, _state} = State.pop_blocked_messages(state)
+
+      assert length(blocked_messages) == 0
     end
   end
 

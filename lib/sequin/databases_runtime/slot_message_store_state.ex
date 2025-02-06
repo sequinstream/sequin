@@ -139,7 +139,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     blocked_message_ack_ids =
       state.messages
       |> Stream.filter(fn {ack_id, msg} ->
-        Multiset.member?(state.persisted_message_groups, msg.group_id) and
+        is_message_group_persisted?(state, msg.group_id) and
           not Multiset.value_member?(state.persisted_message_groups, msg.group_id, ack_id)
       end)
       |> Stream.map(fn {ack_id, _msg} -> ack_id end)
@@ -149,6 +149,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   end
 
   @spec is_message_group_persisted?(State.t(), String.t()) :: boolean()
+  # Messages without group_ids do not belong to any group
+  def is_message_group_persisted?(%State{}, nil) do
+    false
+  end
+
   def is_message_group_persisted?(%State{} = state, group_id) do
     Multiset.member?(state.persisted_message_groups, group_id)
   end
@@ -318,10 +323,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         msg, {acc_count, delivered_message_group_ids, deliverable_messages} ->
           deliverable? =
             cond do
-              Multiset.member?(state.produced_message_groups, msg.group_id) ->
+              # Messages without group_id are delivered independently
+              not is_nil(msg.group_id) and Multiset.member?(state.produced_message_groups, msg.group_id) ->
                 false
 
-              MapSet.member?(delivered_message_group_ids, msg.group_id) ->
+              is_nil(msg.group_id) and Multiset.value_member?(state.produced_message_groups, msg.group_id, msg.ack_id) ->
+                false
+
+              not is_nil(msg.group_id) and MapSet.member?(delivered_message_group_ids, msg.group_id) ->
                 false
 
               is_nil(msg.not_visible_until) ->

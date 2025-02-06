@@ -195,16 +195,33 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     %{state | produced_message_groups: produced_message_groups}
   end
 
-  @spec reset_message_visibility(State.t(), list(SinkConsumer.ack_id())) :: State.t()
-  def reset_message_visibility(%State{} = state, ack_ids) do
-    messages = state.messages |> Map.take(ack_ids) |> Map.values()
+  @spec reset_message_visibilities(State.t(), list(SinkConsumer.ack_id())) :: State.t()
+  def reset_message_visibilities(%State{} = state, []) do
+    state
+  end
 
-    produced_message_groups =
-      Enum.reduce(messages, state.produced_message_groups, fn msg, acc ->
-        Multiset.delete(acc, msg.group_id, msg.ack_id)
-      end)
+  def reset_message_visibilities(%State{} = state, [ack_id | ack_ids]) do
+    case Map.get(state.messages, ack_id) do
+      nil ->
+        reset_message_visibilities(state, ack_ids)
 
-    %{state | produced_message_groups: produced_message_groups}
+      msg ->
+        msg = %{msg | not_visible_until: nil}
+
+        state = %{
+          state
+          | messages: Map.put(state.messages, ack_id, msg),
+            produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, ack_id)
+        }
+
+        reset_message_visibilities(state, ack_ids)
+    end
+  end
+
+  @spec reset_all_message_visibilities(State.t()) :: State.t()
+  def reset_all_message_visibilities(%State{} = state) do
+    ack_ids = Map.keys(state.messages)
+    reset_message_visibilities(state, ack_ids)
   end
 
   @spec min_unpersisted_wal_cursor(State.t()) :: Replication.wal_cursor() | nil

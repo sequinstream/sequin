@@ -563,7 +563,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
     end
   end
 
-  describe "reset_message_visibility/2" do
+  describe "reset_message_visibilities/2" do
     test "allows redelivery of messages after resetting visibility", %{state: state} do
       # Set up test messages
       msg1 = ConsumersFactory.consumer_message()
@@ -576,7 +576,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 2)
 
       # Reset visibility
-      state = State.reset_message_visibility(state, [produced1.ack_id, produced2.ack_id])
+      state = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
 
       # Messages should be available for delivery again
       assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
@@ -596,7 +596,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 3)
 
       # Reset visibility only for msg1 and msg2
-      state = State.reset_message_visibility(state, [produced1.ack_id, produced2.ack_id])
+      state = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
 
       # Only msg1 and msg2 should be available for redelivery
       assert {[redelivered1, redelivered2], state} = State.produce_messages(state, 3)
@@ -618,11 +618,36 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       # Reset visibility with mix of valid and invalid ack_ids
       non_existent_ack_id = "non-existent-ack-id"
-      state = State.reset_message_visibility(state, [produced1.ack_id, non_existent_ack_id])
+      state = State.reset_message_visibilities(state, [produced1.ack_id, non_existent_ack_id])
 
       # Should still work for the valid message
       assert {[redelivered1], _state} = State.produce_messages(state, 1)
       assert_commit_tuple_matches(produced1, redelivered1)
+    end
+  end
+
+  describe "reset_all_message_visibilities/1" do
+    test "handles empty state gracefully", %{state: state} do
+      assert State.reset_all_message_visibilities(state)
+    end
+
+    test "resets message visibilities for all produced messages", %{state: state} do
+      # Set up test messages
+      msg1 = ConsumersFactory.consumer_message()
+      msg2 = ConsumersFactory.consumer_message()
+      {:ok, state} = State.put_messages(state, [msg1, msg2])
+
+      # Deliver messages
+      assert {[produced1, produced2], state} = State.produce_messages(state, 2)
+      assert {[], state} = State.produce_messages(state, 2)
+
+      # Reset all visibilities
+      state = State.reset_all_message_visibilities(state)
+
+      # Should be able to produce all messages again
+      assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
+      assert_commit_tuple_matches(produced1, redelivered1)
+      assert_commit_tuple_matches(produced2, redelivered2)
     end
   end
 

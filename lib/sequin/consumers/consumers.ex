@@ -400,14 +400,6 @@ defmodule Sequin.Consumers do
         conflict_target: [:consumer_id, :ack_id]
       )
 
-    # Broadcast messages ingested to consumers for ie. push consumers
-    consumer_events
-    |> Stream.map(& &1.consumer_id)
-    |> Enum.uniq()
-    |> Enum.each(fn consumer_id ->
-      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
-    end)
-
     {:ok, count}
   end
 
@@ -550,23 +542,13 @@ defmodule Sequin.Consumers do
       |> Stream.map(&Sequin.Map.from_ecto/1)
       |> Enum.map(&drop_virtual_fields/1)
 
-    conflict_target = [:consumer_id, :ack_id]
-
     {count, _records} =
       Repo.insert_all(
         ConsumerRecord,
         records,
         on_conflict: {:replace, [:state, :updated_at, :deliver_count, :last_delivered_at, :not_visible_until]},
-        conflict_target: conflict_target
+        conflict_target: [:consumer_id, :ack_id]
       )
-
-    # Broadcast messages ingested to consumers for ie. push consumers
-    consumer_records
-    |> Stream.map(& &1.consumer_id)
-    |> Enum.uniq()
-    |> Enum.each(fn consumer_id ->
-      :syn.publish(:consumers, {:messages_ingested, consumer_id}, :messages_ingested)
-    end)
 
     {:ok, count}
   end

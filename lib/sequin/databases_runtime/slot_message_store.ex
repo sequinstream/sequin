@@ -163,8 +163,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
       {:error, exit_to_sequin_error(e)}
   end
 
-  def reset_message_visibility(consumer_id, ack_ids) do
-    GenServer.call(via_tuple(consumer_id), {:reset_message_visibility, ack_ids})
+  def reset_message_visibilities(consumer_id, ack_ids) do
+    GenServer.call(via_tuple(consumer_id), {:reset_message_visibilities, ack_ids})
+  catch
+    :exit, e ->
+      {:error, exit_to_sequin_error(e)}
+  end
+
+  def reset_all_message_visibilities(consumer_id) do
+    GenServer.call(via_tuple(consumer_id), :reset_all_message_visibilities)
   catch
     :exit, e ->
       {:error, exit_to_sequin_error(e)}
@@ -461,8 +468,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:reply, :ok, State.nack_stale_produced_messages(state)}
   end
 
-  def handle_call({:reset_message_visibility, ack_ids}, _from, state) do
-    {:reply, :ok, State.reset_message_visibility(state, ack_ids)}
+  def handle_call({:reset_message_visibilities, ack_ids}, _from, state) do
+    :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+    {:reply, :ok, State.reset_message_visibilities(state, ack_ids)}
+  end
+
+  def handle_call(:reset_all_message_visibilities, _from, state) do
+    :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
+    {:reply, :ok, State.reset_all_message_visibilities(state)}
   end
 
   def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do

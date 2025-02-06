@@ -418,20 +418,19 @@ defmodule SequinWeb.SinkConsumersLive.Show do
   end
 
   def handle_event("reset_all_visibility", _params, socket) do
-    # consumer = socket.assigns.consumer
+    consumer = socket.assigns.consumer
 
-    # case Consumers.reset_all_message_visibilities(consumer) do
-    #   :ok ->
-    #     {:reply, %{ok: true},
-    #      socket
-    #      |> load_consumer_messages()
-    #      |> put_flash(:toast, %{kind: :success, title: "Scheduled redelivery for all messages"})}
+    case SlotMessageStore.reset_all_message_visibilities(consumer.id) do
+      :ok ->
+        {:reply, %{ok: true},
+         socket
+         |> load_consumer_messages()
+         |> put_flash(:toast, %{kind: :success, title: "Scheduled redelivery for all messages"})}
 
-    #   {:error, reason} ->
-    #     {:reply, %{ok: false},
-    #      put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
-    # end
-    {:reply, %{ok: true}, socket}
+      {:error, reason} ->
+        {:reply, %{ok: false},
+         put_flash(socket, :toast, %{kind: :error, title: "Failed to reset message visibility: #{inspect(reason)}"})}
+    end
   end
 
   defp handle_edit_finish(updated_consumer) do

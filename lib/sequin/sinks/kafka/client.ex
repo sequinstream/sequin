@@ -2,7 +2,6 @@ defmodule Sequin.Sinks.Kafka.Client do
   @moduledoc false
   @behaviour Sequin.Sinks.Kafka
 
-  alias Sequin.Consumers
   alias Sequin.Consumers.ConsumerEvent
   alias Sequin.Consumers.ConsumerRecord
   alias Sequin.Consumers.KafkaSink
@@ -14,11 +13,9 @@ defmodule Sequin.Sinks.Kafka.Client do
   require Logger
 
   @impl Kafka
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record), do: do_publish(consumer, record)
-  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event), do: do_publish(consumer, event)
-
-  defp do_publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, record_or_event) do
-    message_key = message_key(consumer, record_or_event)
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, message)
+      when is_struct(message, ConsumerRecord) or is_struct(message, ConsumerEvent) do
+    message_key = Kafka.message_key(consumer, message)
 
     with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
          :ok <-
@@ -27,7 +24,26 @@ defmodule Sequin.Sinks.Kafka.Client do
              consumer.sink.topic,
              :hash,
              message_key,
-             Jason.encode!(record_or_event.data)
+             Jason.encode!(message.data)
+           ) do
+      :ok
+    else
+      {:error, reason} -> {:error, to_sequin_error(reason)}
+    end
+  end
+
+  @impl Kafka
+  def publish(%SinkConsumer{sink: %KafkaSink{}} = consumer, partition, messages) when is_list(messages) do
+    with {:ok, connection} <- ConnectionCache.connection(consumer.sink),
+         :ok <-
+           :brod.produce_sync(
+             connection,
+             consumer.sink.topic,
+             partition,
+             "unused_key",
+             Enum.map(messages, fn message ->
+               %{key: Kafka.message_key(consumer, message), value: Jason.encode!(message.data)}
+             end)
            ) do
       :ok
     else
@@ -71,6 +87,16 @@ defmodule Sequin.Sinks.Kafka.Client do
     :brod.get_metadata(hosts, topics, config)
   end
 
+  @impl Kafka
+  def get_partition_count(%KafkaSink{} = sink) do
+    with {:ok, metadata} <- get_metadata(sink) do
+      case Enum.find(metadata.topics, fn t -> t.name == sink.topic end) do
+        %{error_code: :no_error, partitions: partitions} -> {:ok, length(partitions)}
+        _ -> {:error, Sequin.Error.service(service: :kafka, message: "Topic '#{sink.topic}' does not exist")}
+      end
+    end
+  end
+
   defp to_sequin_error(error) do
     case error do
       :leader_not_available ->
@@ -105,17 +131,5 @@ defmodule Sequin.Sinks.Kafka.Client do
     else
       {:error, Sequin.Error.validation(summary: "Unable to reach Kafka hosts")}
     end
-  end
-
-  defp message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerRecord{} = record) do
-    consumer
-    |> Consumers.group_column_values(record.data)
-    |> Enum.join(":")
-  end
-
-  defp message_key(%SinkConsumer{sink: %KafkaSink{}} = consumer, %ConsumerEvent{} = event) do
-    consumer
-    |> Consumers.group_column_values(event.data)
-    |> Enum.join(":")
   end
 end

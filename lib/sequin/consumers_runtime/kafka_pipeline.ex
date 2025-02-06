@@ -4,6 +4,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
   alias Sequin.Consumers.KafkaSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Error
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -28,14 +29,21 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       ],
       processors: [
         default: [
-          concurrency: consumer.max_waiting,
+          concurrency: 40,
           max_demand: 1
         ]
       ],
       context: %{
         consumer: consumer,
         test_pid: test_pid
-      }
+      },
+      batchers: [
+        default: [
+          concurrency: 20,
+          batch_size: consumer.batch_size,
+          batch_timeout: 10
+        ]
+      ]
     )
   end
 
@@ -52,7 +60,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
   @impl Broadway
   # `data` is either a [ConsumerRecord] or a [ConsumerEvent]
   @spec handle_message(any(), Broadway.Message.t(), map()) :: Broadway.Message.t()
-  def handle_message(_, %Broadway.Message{data: [consumer_record_or_event]} = message, %{
+  def handle_message(_, %Broadway.Message{data: [message]} = broadway_message, %{
         consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer,
         test_pid: test_pid
       }) do
@@ -63,34 +71,89 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       consumer_id: consumer.id
     )
 
-    case Kafka.publish(consumer, consumer_record_or_event) do
+    partition = partition_from_message(consumer, message)
+    Broadway.Message.put_batch_key(broadway_message, partition)
+  end
+
+  @impl Broadway
+  def handle_batch(:default, broadway_messages, %{batch_key: partition}, %{
+        consumer: %SinkConsumer{sink: %KafkaSink{}} = consumer,
+        test_pid: test_pid
+      }) do
+    setup_allowances(test_pid)
+
+    Logger.metadata(
+      account_id: consumer.account_id,
+      consumer_id: consumer.id
+    )
+
+    messages = Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} -> message end)
+
+    case Kafka.publish(consumer, partition, messages) do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        Sequin.Logs.log_for_consumer_message(
-          :info,
-          consumer.account_id,
-          consumer.id,
-          consumer_record_or_event.replication_message_trace_id,
-          "Published message to Kafka successfully"
-        )
+        Enum.each(messages, fn message ->
+          Sequin.Logs.log_for_consumer_message(
+            :info,
+            consumer.account_id,
+            consumer.id,
+            message.replication_message_trace_id,
+            "Published message to Kafka successfully"
+          )
+        end)
 
-        message
+        broadway_messages
 
       {:error, error} when is_exception(error) ->
         Logger.warning("Failed to publish message to Kafka: #{Exception.message(error)}")
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
-        Sequin.Logs.log_for_consumer_message(
-          :error,
-          consumer.account_id,
-          consumer.id,
-          consumer_record_or_event.replication_message_trace_id,
-          "Failed to publish message to Kafka: #{Exception.message(error)}"
-        )
+        Enum.each(broadway_messages, fn message ->
+          Sequin.Logs.log_for_consumer_message(
+            :error,
+            consumer.account_id,
+            consumer.id,
+            message.data.replication_message_trace_id,
+            "Failed to publish message to Kafka: #{Exception.message(error)}"
+          )
+        end)
 
-        Broadway.Message.failed(message, error)
+        Enum.map(broadway_messages, &Broadway.Message.failed(&1, error))
+    end
+  end
+
+  defp partition_from_message(%SinkConsumer{sink: %KafkaSink{}} = consumer, message) do
+    partition_count = get_cached_partition_count!(consumer)
+
+    case Kafka.message_key(consumer, message) do
+      "" -> Enum.random(1..partition_count)
+      group_id when is_binary(group_id) -> :erlang.phash2(group_id, partition_count)
+    end
+  end
+
+  defp get_cached_partition_count!(%SinkConsumer{sink: %KafkaSink{}} = consumer) do
+    case Process.get(:cached_partition_count) do
+      nil ->
+        partition_count = get_partition_count!(consumer)
+        Process.put(:cached_partition_count, partition_count)
+        partition_count
+
+      partition_count when is_integer(partition_count) ->
+        partition_count
+    end
+  end
+
+  defp get_partition_count!(%SinkConsumer{sink: %KafkaSink{} = sink}) do
+    case Kafka.get_partition_count(sink) do
+      {:ok, partition_count} ->
+        partition_count
+
+      {:error, error} ->
+        error = Error.invariant(message: "Failed to get partition count for Kafka sink: #{Exception.message(error)}")
+        Logger.warning("[KafkaPipeline] #{Exception.message(error)}")
+        raise error
     end
   end
 

@@ -14,7 +14,8 @@
     AccordionItem,
     AccordionTrigger,
   } from "$lib/components/ui/accordion";
-  import { Eye, EyeOff } from "lucide-svelte";
+  import { Eye, EyeOff, Info } from "lucide-svelte";
+  import * as Tooltip from "$lib/components/ui/tooltip";
 
   export let form;
   export let errors: any = {};
@@ -221,6 +222,27 @@
           {errors.sink.aws_secret_access_key}
         </p>
       {/if}
+    </div>
+
+    <!-- Batch Size field -->
+    <div class="space-y-2">
+      <Label for="batchSize">Batch Size</Label>
+      <Input
+        id="batchSize"
+        type="number"
+        min="1"
+        bind:value={form.batchSize}
+        placeholder="10"
+      />
+      {#if errors.batch_size}
+        <p class="text-destructive text-sm">{errors.batch_size}</p>
+      {/if}
+      <p class="text-xs">
+        Number of messages to batch together in a single request to Kafka. We
+        recommend starting with a batch size of at least 10. You might try
+        experimenting with even larger batch sizes to see if it improves
+        throughput.
+      </p>
     </div>
 
     <!-- TLS Switch -->

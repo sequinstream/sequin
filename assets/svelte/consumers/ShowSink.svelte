@@ -38,9 +38,10 @@
   }
 
   export let metrics = {
+    messages_failing_count: 0,
+    messages_pending_count: 0,
     messages_processed_count: 0,
     messages_processed_throughput: 0,
-    messages_failing_count: 0,
     messages_processed_throughput_timeseries: [],
   };
   export let cursor_position: {
@@ -249,25 +250,30 @@
           </div>
           <div class="flex justify-between items-center space-x-4">
             <span>
-              <span class="text-2xl font-bold">
+              <div class="text-md font-bold">
+                {metrics.messages_pending_count
+                  ? formatNumberWithCommas(metrics.messages_pending_count)
+                  : "0"}
+              </div>
+              <div class="text-xs text-gray-500">pending</div>
+            </span>
+            <span>
+              <div class="text-md font-bold">
                 {metrics.messages_processed_count
                   ? formatNumberWithCommas(metrics.messages_processed_count)
                   : "0"}
-              </span>
-              <span class="text-xs font-medium ml-1 text-gray-500"
-                >delivered</span
-              >
+              </div>
+              <div class="text-xs text-gray-500">processed</div>
             </span>
             <span>
-              <span
-                class="text-2xl font-bold {metrics.messages_failing_count > 0
+              <div
+                class="text-md font-bold {metrics.messages_failing_count > 0
                   ? 'text-red-500'
                   : 'text-black'}"
               >
                 {formatNumberWithCommas(metrics.messages_failing_count)}
-              </span>
-              <span class="text-xs font-medium ml-1 text-gray-500">failing</span
-              >
+              </div>
+              <div class="text-xs text-gray-500">failing</div>
             </span>
           </div>
         </CardContent>

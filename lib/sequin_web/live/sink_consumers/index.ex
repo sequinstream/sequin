@@ -151,7 +151,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%SinkConsumer{type: :kafka, sink: %KafkaSink{tls: false}}}
+      consumer={%SinkConsumer{type: :kafka, batch_size: 10, sink: %KafkaSink{tls: false}}}
     />
     """
   end

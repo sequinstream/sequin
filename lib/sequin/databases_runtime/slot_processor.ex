@@ -767,7 +767,12 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     messages = Enum.reverse(messages)
 
     # Flush accumulated messages
-    res = state.message_handler_module.handle_messages(state.message_handler_ctx, messages)
+    {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+    time_ms = time / 1000
+
+    if time_ms > 100 do
+      Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms", duration_ms: time_ms)
+    end
 
     case res do
       {:ok, _count, message_handler_ctx} ->

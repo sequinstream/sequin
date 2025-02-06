@@ -254,7 +254,9 @@
                   ? formatNumberWithCommas(metrics.messages_processed_count)
                   : "0"}
               </span>
-              <span class="font-medium ml-1 text-gray-500">delivered</span>
+              <span class="text-xs font-medium ml-1 text-gray-500"
+                >delivered</span
+              >
             </span>
             <span>
               <span
@@ -264,22 +266,27 @@
               >
                 {formatNumberWithCommas(metrics.messages_failing_count)}
               </span>
-              <span class="font-medium ml-1 text-gray-500">failing</span>
+              <span class="text-xs font-medium ml-1 text-gray-500">failing</span
+              >
             </span>
           </div>
         </CardContent>
       </Card>
       <Card>
-        <CardContent class="p-6 relative h-32">
+        <CardContent class="p-6 relative h-full">
           <div bind:this={chartElement} class="absolute inset-0" />
           <div class="relative z-10">
             <div class="flex justify-between items-center mb-4">
-              <span class="text-sm font-medium text-gray-500">Throughput</span>
+              <span class="text-sm font-medium mb-auto text-gray-500"
+                >Throughput</span
+              >
               <div>
                 <span class="text-2xl font-bold"
                   >{metrics.messages_processed_throughput ?? "N/A"}</span
                 >
-                <span class="font-medium ml-1 text-gray-500">msgs/sec</span>
+                <span class="text-xs font-medium ml-1 text-gray-500"
+                  >msgs/sec</span
+                >
               </div>
             </div>
           </div>

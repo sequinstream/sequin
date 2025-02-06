@@ -84,6 +84,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :bytes_processed_since_last_limit_check, non_neg_integer(), default: 0
       field :check_memory_fn, nil | (-> non_neg_integer())
       field :heartbeat_timer, nil | reference()
+      field :counters, %{atom() => non_neg_integer()}, default: %{}
     end
   end
 
@@ -280,6 +281,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     # Calculate bytes processed in this message
     bytes_processed = acc_size_bytes - prev_acc_size_bytes
 
+    next_state =
+      next_state
+      |> incr_counter(:bytes_processed, bytes_processed)
+      |> incr_counter(:messages_processed)
+
     # Update bytes processed and check limits
     {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
 
@@ -461,7 +467,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     Logger.info("[SlotProcessor] Process metrics",
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len]
+      message_queue_len: info[:message_queue_len],
+      accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
+      accumulated_message_count: length(elem(state.accumulated_messages, 1)),
+      last_commit_lsn: state.last_commit_lsn,
+      low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor.commit_lsn,
+      low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor.commit_idx,
+      bytes_processed: state.counters[:bytes_processed] || 0,
+      messages_processed: state.counters[:messages_processed] || 0
     )
 
     schedule_process_logging()
@@ -1078,6 +1091,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp default_max_memory_bytes do
     Application.get_env(:sequin, :max_memory_bytes)
+  end
+
+  defp incr_counter(%State{} = state, name, amount \\ 1) do
+    %{state | counters: Map.update(state.counters, name, amount, fn count -> count + amount end)}
   end
 
   defp launch_stop(state) do

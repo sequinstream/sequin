@@ -503,7 +503,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @impl GenServer
-  def handle_info(:process_logging, state) do
+  def handle_info(:process_logging, %State{} = state) do
     info =
       Process.info(self(), [
         # Total memory used by process in bytes
@@ -514,7 +514,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     Logger.info("[SlotMessageStore] Process metrics",
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
-      message_queue_len: info[:message_queue_len]
+      message_queue_len: info[:message_queue_len],
+      message_count: map_size(state.messages),
+      payload_size_bytes: state.payload_size_bytes,
+      produced_message_groups: map_size(state.produced_message_groups)
     )
 
     schedule_process_logging()

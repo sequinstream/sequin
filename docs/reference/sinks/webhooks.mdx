@@ -26,13 +26,15 @@ The webhook sink sends messages to a webhook endpoint. This can be a webhook end
 
 - **Batch size**
 
-    The maximum number of messages to include in a single HTTP request.
+    The maximum number of messages to include in a single HTTP request. Default is 1.
 
-    You should try to process the full batch atomically.
+    When batching is enabled, multiple messages will be included in the request body's `data` array. Your webhook handler should process all messages in the batch atomically.
+
+    For side effects like sending emails, you should probably set this to `1`. Otherwise, you risk your handler partially processing a batch then crashing. Then, when Sequin retries the batch, your handler will re-process the beginning of the batch.
 
     For upserting to a database or store, set this to the number of rows you want to upsert in a single transaction.
 
-    For side effects like sending an email, you should probably set this to `1`. Otherwise, you risk your handler partially processing a batch then crashing. Then, when Sequin retries the batch, your handler will re-process the beginning of the batch.
+    Batching can increase throughput, but increases the payload size of each request.
 
 - **Max ack pending (advanced)**
 
@@ -179,7 +181,7 @@ What's more, Sequin will order the delivery of messages with the same group acco
 
 ### Batch behavior
 
-When you specify a "Batch size" greater than `1`, Sequin may include more than one message for the same group in a single request.
+When you specify a "Batch size" greater than `1`, Sequin may include more than one message for the same group in a single request. For clarity, Sequin will never include more than the specified "Batch size" messages in a single request, but may include fewer.
 
 ## Debugging
 

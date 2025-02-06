@@ -81,8 +81,10 @@ Create a webhook sink that captures changes to your database and sends them to y
         Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
     </Step>
 
-    <Step title="Configure delivery settings">
-        Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1 since we're just sending data to Tinybird.
+    <Step title="Configure sink settings">
+        Under "Webhook Sink configuration" leave the defaults:
+        - Leave the default value of `30000 ms` for "Request timeout" as this is more than enough time for Tinybird to process the request
+        - Leave the default value of `1` for "Batch size" for now.
     </Step>
 
     <Step title="Configure HTTP endpoint">

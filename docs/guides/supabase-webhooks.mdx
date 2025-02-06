@@ -103,8 +103,11 @@ To replicate this exact webhook in Sequin, you'll create a webhook sink on the `
     Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
   </Step>
 
-  <Step title="Configure delivery settings">
-    Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1.
+  <Step title="Configure sink settings">
+    Under "Webhook Sink configuration" leave the defaults:
+
+    - Leave the default value of `30000 ms` for "Request timeout" as this is more than enough time for your function to process the request
+    - Leave the default value of `1` for "Batch size" for now to mimic the behavior of the Supabase webhook.
   </Step>
 
   <Step title="Configure HTTP endpoint">

@@ -4,11 +4,15 @@ defmodule Sequin.Databases.DatabaseUpdateWorker do
 
   alias Sequin.Databases
 
+  require Logger
+
   # 5 minutes in seconds
   @default_unique_period 5 * 60
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"postgres_database_id" => postgres_database_id}}) do
+    Logger.metadata(database_id: postgres_database_id)
+
     with {:ok, database} <- Databases.get_db(postgres_database_id),
          {:ok, updated_database} <- Databases.update_tables(database) do
       :syn.publish(
@@ -18,6 +22,16 @@ defmodule Sequin.Databases.DatabaseUpdateWorker do
       )
 
       {:ok, updated_database}
+    else
+      {:error, %DBConnection.ConnectionError{}} ->
+        Logger.error(
+          "[DatabaseUpdateWorker] Database update worker failed to connect to database #{postgres_database_id}"
+        )
+
+        :ok
+
+      error ->
+        error
     end
   end
 

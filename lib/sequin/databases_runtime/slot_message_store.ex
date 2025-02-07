@@ -276,6 +276,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     Logger.metadata(account_id: consumer.account_id, replication_id: consumer.replication_slot_id)
 
+    :ok = State.setup_ets(consumer)
+
     persisted_messages =
       consumer
       |> Consumers.list_consumer_messages_for_consumer()

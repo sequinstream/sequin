@@ -9,7 +9,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
   alias Sequin.Multiset
 
   setup do
-    state = %State{consumer: %SinkConsumer{}}
+    state = %State{consumer: %SinkConsumer{seq: Factory.unique_integer()}}
+    State.setup_ets(state.consumer)
     {:ok, %{state: state}}
   end
 

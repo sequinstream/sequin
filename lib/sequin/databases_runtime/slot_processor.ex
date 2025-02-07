@@ -445,7 +445,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     conn = get_cached_conn(state)
 
     # We can schedule right away, as we'll not be receiving a heartbeat message
-    state = schedule_heartbeat(state)
+    state = schedule_heartbeat(%{state | heartbeat_timer: nil})
     q = "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
 
     case Postgres.query(conn, q) do

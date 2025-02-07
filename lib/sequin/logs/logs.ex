@@ -70,12 +70,30 @@ defmodule Sequin.Logs do
   def log_for_consumer_message(_, _, _, nil, _), do: raise(ArgumentError, "Invalid trace_id: nil")
   def log_for_consumer_message(_, _, _, _, nil), do: raise(ArgumentError, "Invalid message: nil")
 
+  def log_for_consumer_message(level, account_id, consumer_id, trace_ids, message) when is_list(trace_ids) do
+    if datadog_enabled() do
+      Enum.each(trace_ids, &log_to_logger(level, account_id, consumer_id, &1, message))
+    else
+      log_to_file(level, account_id, consumer_id, trace_ids, message)
+    end
+  end
+
   def log_for_consumer_message(level, account_id, consumer_id, trace_id, message) do
     if datadog_enabled() do
       log_to_logger(level, account_id, consumer_id, trace_id, message)
     else
       log_to_file(level, account_id, consumer_id, trace_id, message)
     end
+  end
+
+  defp log_to_file(level, account_id, consumer_id, trace_ids, message) when is_list(trace_ids) do
+    entries =
+      trace_ids
+      |> Enum.map(&log_entry(level, account_id, consumer_id, &1, message))
+      |> Enum.map_join("\n", &Jason.encode!/1)
+
+    File.mkdir_p!(Path.dirname(log_file_path()))
+    File.write!(log_file_path(), entries, [:append])
   end
 
   defp log_to_file(level, account_id, consumer_id, trace_id, message) do
@@ -92,6 +110,18 @@ defmodule Sequin.Logs do
     log_line = Jason.encode!(log_entry) <> "\n"
     File.mkdir_p!(Path.dirname(log_file_path()))
     File.write!(log_file_path(), log_line, [:append])
+  end
+
+  defp log_entry(level, account_id, consumer_id, trace_id, message) do
+    %{
+      timestamp: DateTime.to_iso8601(DateTime.utc_now()),
+      level: to_string(level),
+      account_id: account_id,
+      consumer_id: consumer_id,
+      trace_id: trace_id,
+      message: message,
+      console_logs: "consumer_message"
+    }
   end
 
   defp log_file_path do

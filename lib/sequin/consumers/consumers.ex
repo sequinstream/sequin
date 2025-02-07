@@ -624,17 +624,6 @@ defmodule Sequin.Consumers do
 
     TracerServer.messages_acked(consumer, ack_ids)
 
-    Enum.each(
-      msgs,
-      &Sequin.Logs.log_for_consumer_message(
-        :info,
-        consumer.account_id,
-        consumer.id,
-        &1.replication_message_trace_id,
-        "Message acknowledged"
-      )
-    )
-
     AcknowledgedMessages.store_messages(consumer.id, msgs)
 
     {:ok, count}

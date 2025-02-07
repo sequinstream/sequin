@@ -39,14 +39,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
   def setup_ets(consumer) do
-    table_name = table_name(consumer)
+    table_name = ordered_ack_ids_table(consumer)
 
-    :ets.new(table_name, [:ordered_set, :named_table, :public])
+    :ets.new(table_name, [:ordered_set, :named_table, :private])
     :ok
   end
 
-  @spec table_name(Sequin.Consumers.SinkConsumer.t()) :: atom()
-  defp table_name(consumer) do
+  @spec ordered_ack_ids_table(Sequin.Consumers.SinkConsumer.t()) :: atom()
+  defp ordered_ack_ids_table(consumer) do
     :"slot_message_store_state_ordered_ack_ids_consumer_#{consumer.seq}"
   end
 
@@ -76,7 +76,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
           |> Map.new(&{&1.ack_id, &1})
 
         # Insert into ETS
-        table = table_name(state.consumer)
+        table = ordered_ack_ids_table(state.consumer)
 
         Enum.each(messages, fn {ack_id, msg} ->
           :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
@@ -99,7 +99,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     messages = Map.new(messages, &{&1.ack_id, &1})
 
     # Insert into ETS
-    table = table_name(state.consumer)
+    table = ordered_ack_ids_table(state.consumer)
 
     Enum.each(messages, fn {ack_id, msg} ->
       :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
@@ -140,7 +140,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     messages = Map.drop(state.messages, ack_ids)
 
     # Remove from ETS
-    table = table_name(state.consumer)
+    table = ordered_ack_ids_table(state.consumer)
 
     Enum.each(popped_messages, fn msg ->
       :ets.delete(table, {msg.commit_lsn, msg.commit_idx})
@@ -402,7 +402,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   # This function provides an optimized way to take the first N messages from a map,
   # using ETS ordered set to maintain sort order
   defp sorted_message_stream(%State{} = state) do
-    table = table_name(state.consumer)
+    table = ordered_ack_ids_table(state.consumer)
 
     Stream.unfold(:ets.first(table), fn
       :"$end_of_table" ->

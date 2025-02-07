@@ -42,7 +42,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   # 10MB
   @max_accumulated_bytes 10 * 1024 * 1024
-  @max_accumulated_messages 1000
+  @max_accumulated_messages 500
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -524,7 +524,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
      |> reset_counter(:messages_processed_since_last_log)}
   end
 
-  defp schedule_process_logging(interval \\ :timer.seconds(2)) do
+  defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
   end
 

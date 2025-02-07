@@ -37,6 +37,19 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :test_pid, pid() | nil
   end
 
+  @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
+  def setup_ets(consumer) do
+    table_name = table_name(consumer)
+
+    :ets.new(table_name, [:ordered_set, :named_table, :public])
+    :ok
+  end
+
+  @spec table_name(Sequin.Consumers.SinkConsumer.t()) :: atom()
+  defp table_name(consumer) do
+    :"slot_message_store_state_ordered_ack_ids_consumer_#{consumer.seq}"
+  end
+
   @spec put_messages(State.t(), list(message()) | Enumerable.t()) ::
           {:ok, State.t()} | {:error, Error.t()}
   def put_messages(%State{} = state, messages) do
@@ -62,6 +75,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
           |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), ingested_at: now} end)
           |> Map.new(&{&1.ack_id, &1})
 
+        # Insert into ETS
+        table = table_name(state.consumer)
+
+        Enum.each(messages, fn {ack_id, msg} ->
+          :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
+        end)
+
         state =
           %{
             state
@@ -77,6 +97,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def put_persisted_messages(%State{} = state, messages) do
     incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
     messages = Map.new(messages, &{&1.ack_id, &1})
+
+    # Insert into ETS
+    table = table_name(state.consumer)
+
+    Enum.each(messages, fn {ack_id, msg} ->
+      :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
+    end)
 
     persisted_message_groups =
       Enum.reduce(messages, state.persisted_message_groups, fn {_ack_id, msg}, acc ->
@@ -111,6 +138,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def pop_messages(%State{} = state, ack_ids) do
     popped_messages = state.messages |> Map.take(ack_ids) |> Map.values()
     messages = Map.drop(state.messages, ack_ids)
+
+    # Remove from ETS
+    table = table_name(state.consumer)
+
+    Enum.each(popped_messages, fn msg ->
+      :ets.delete(table, {msg.commit_lsn, msg.commit_idx})
+    end)
 
     persisted_message_groups =
       Enum.reduce(popped_messages, state.persisted_message_groups, fn msg, acc ->
@@ -314,7 +348,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     now = Sequin.utc_now()
 
     {_, _, deliverable_messages} =
-      state.messages
+      state
       |> sorted_message_stream()
       |> Enum.reduce_while({0, MapSet.new(), []}, fn
         _msg, {acc_count, _, deliverable_messages} when acc_count >= count ->
@@ -354,7 +388,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   end
 
   def peek_messages(%State{} = state, count) when is_integer(count) do
-    state.messages
+    state
     |> sorted_message_stream()
     |> Enum.take(count)
   end
@@ -366,14 +400,18 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   end
 
   # This function provides an optimized way to take the first N messages from a map,
-  # without blowing up memory consumption.
-  defp sorted_message_stream(messages) do
-    ack_ids =
-      messages
-      |> Stream.map(fn {ack_id, message} -> {ack_id, {message.commit_lsn, message.commit_idx}} end)
-      |> Enum.sort_by(fn {_ack_id, {commit_lsn, commit_idx}} -> {commit_lsn, commit_idx} end)
-      |> Enum.map(fn {ack_id, {_commit_lsn, _commit_idx}} -> ack_id end)
+  # using ETS ordered set to maintain sort order
+  defp sorted_message_stream(%State{} = state) do
+    table = table_name(state.consumer)
 
-    Stream.map(ack_ids, fn ack_id -> Map.get(messages, ack_id) end)
+    Stream.unfold(:ets.first(table), fn
+      :"$end_of_table" ->
+        nil
+
+      key ->
+        [{_key, ack_id}] = :ets.lookup(table, key)
+        next_key = :ets.next(table, key)
+        {Map.get(state.messages, ack_id), next_key}
+    end)
   end
 end

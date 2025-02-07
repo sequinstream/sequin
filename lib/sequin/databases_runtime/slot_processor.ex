@@ -42,7 +42,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   # 10MB
   @max_accumulated_bytes 10 * 1024 * 1024
-  @max_accumulated_messages 200
+  @max_accumulated_messages 1000
 
   @config_schema Application.compile_env(:sequin, [Sequin.Repo, :config_schema_prefix])
   @stream_schema Application.compile_env(:sequin, [Sequin.Repo, :stream_schema_prefix])
@@ -177,7 +177,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
 
     state = schedule_heartbeat(state, 0)
-    schedule_process_logging()
+    schedule_process_logging(0)
 
     {:ok, %{state | step: :disconnected}}
   end
@@ -284,7 +284,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     next_state =
       next_state
       |> incr_counter(:bytes_processed, bytes_processed)
+      |> incr_counter(:bytes_processed_since_last_log, bytes_processed)
       |> incr_counter(:messages_processed)
+      |> incr_counter(:messages_processed_since_last_log)
 
     # Update bytes processed and check limits
     {limit_status, next_state} = handle_limit_check(next_state, bytes_processed)
@@ -485,6 +487,20 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         :message_queue_len
       ])
 
+    last_logged_at = Process.get(:last_logged_at)
+    bytes_processed_since_last_log = state.counters[:bytes_processed_since_last_log]
+    messages_processed_since_last_log = state.counters[:messages_processed_since_last_log]
+    seconds_diff = if last_logged_at, do: DateTime.diff(Sequin.utc_now(), last_logged_at, :second), else: 0
+
+    {messages_per_second, bytes_per_second} =
+      if is_integer(bytes_processed_since_last_log) and is_integer(messages_processed_since_last_log) and seconds_diff > 0 do
+        {messages_processed_since_last_log / seconds_diff, bytes_processed_since_last_log / seconds_diff}
+      else
+        {0, 0}
+      end
+
+    Logger.info("[SlotProcessor] #{messages_per_second} messages/s, #{Sequin.String.format_bytes(bytes_per_second)}/s")
+
     Logger.info("[SlotProcessor] Process metrics",
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
       message_queue_len: info[:message_queue_len],
@@ -494,15 +510,22 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor.commit_lsn,
       low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor.commit_idx,
       bytes_processed: state.counters[:bytes_processed] || 0,
-      messages_processed: state.counters[:messages_processed] || 0
+      messages_processed: state.counters[:messages_processed] || 0,
+      bytes_per_second: bytes_per_second,
+      messages_per_second: messages_per_second
     )
 
+    Process.put(:last_logged_at, Sequin.utc_now())
     schedule_process_logging()
-    {:noreply, state}
+
+    {:noreply,
+     state
+     |> reset_counter(:bytes_processed_since_last_log)
+     |> reset_counter(:messages_processed_since_last_log)}
   end
 
-  defp schedule_process_logging do
-    Process.send_after(self(), :process_logging, :timer.seconds(30))
+  defp schedule_process_logging(interval \\ :timer.seconds(2)) do
+    Process.send_after(self(), :process_logging, interval)
   end
 
   defp schedule_heartbeat(state, interval \\ nil)
@@ -1148,6 +1171,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp incr_counter(%State{} = state, name, amount \\ 1) do
     %{state | counters: Map.update(state.counters, name, amount, fn count -> count + amount end)}
+  end
+
+  defp reset_counter(%State{} = state, name) do
+    %{state | counters: Map.delete(state.counters, name)}
   end
 
   defp launch_stop(state) do

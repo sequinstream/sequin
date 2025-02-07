@@ -15,20 +15,26 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
   alias Sequin.Health.Event
   alias Sequin.Metrics
   alias Sequin.NetworkUtils
+  alias Sequin.Replication
   alias Sequin.Repo
+
+  require Logger
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"postgres_database_id" => postgres_database_id}}) do
     with {:ok, database} <- Databases.get_db(postgres_database_id),
          database = Repo.preload(database, :replication_slot),
+         Logger.metadata(database_id: database.id, replication_id: database.replication_slot.id),
          :ok <- check_database(database) do
       check_replication_slot(database)
+      measure_replication_lag(database.replication_slot)
 
       :syn.publish(:replication, {:postgres_replication_slot_checked, database.id}, :postgres_replication_slot_checked)
 
       :ok
     else
       {:error, %Error.NotFoundError{}} ->
+        Logger.warning("Database not found: #{postgres_database_id}")
         :ok
 
       :error ->
@@ -94,6 +100,22 @@ defmodule Sequin.Health.CheckPostgresReplicationSlotWorker do
         error = Error.service(service: :postgres_database, message: Exception.message(error))
         Health.put_event(database.replication_slot, %Event{slug: :replication_slot_checked, status: :fail, error: error})
         :error
+    end
+  end
+
+  defp measure_replication_lag(slot) do
+    case Replication.measure_replication_lag(slot) do
+      {:ok, lag_bytes} ->
+        lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
+
+        if lag_bytes > Replication.lag_bytes_alert_threshold() do
+          Logger.warning("Replication lag is #{lag_mb}MB")
+        else
+          Logger.info("Replication lag is #{lag_mb}MB")
+        end
+
+      {:error, error} ->
+        Logger.error("Failed to measure replication lag: #{inspect(error)}")
     end
   end
 end

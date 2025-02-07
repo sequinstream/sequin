@@ -8,6 +8,7 @@
     ArrowRightToLine,
     ArrowLeftFromLine,
     Loader2,
+    CircleGauge,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import { Card, CardContent } from "$lib/components/ui/card";
@@ -17,6 +18,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { writable } from "svelte/store";
   import { formatRelativeTimestamp } from "$lib/utils";
+  import HealthAlerts from "$lib/health/HealthAlerts.svelte";
 
   interface Table {
     schema_name: string;
@@ -57,6 +59,7 @@
   export let parent: string;
   export let metrics: {
     avg_latency: number;
+    replication_lag_bytes: number;
   };
 
   let refreshingTables = writable(false);
@@ -110,20 +113,40 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
-            <span class="text-sm font-medium text-gray-500">Avg. Latency</span>
-            <Clock class="h-5 w-5 text-blue-500" />
+            <span class="text-sm font-medium text-gray-500">Performance</span>
+            <CircleGauge class="h-5 w-5 text-blue-500" />
           </div>
-          {#if metrics.avg_latency}
-            <div class="text-4xl font-bold">{metrics.avg_latency} ms</div>
-          {:else}
-            <div class="flex items-center">
-              <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
-              <span class="text-4xl font-bold text-gray-500">ms</span>
+          <div class="space-y-4">
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Avg. Latency</div>
+              {#if metrics.avg_latency}
+                <div class="text-l font-bold">{metrics.avg_latency} ms</div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <span class="text-l font-bold text-gray-500">ms</span>
+                </div>
+              {/if}
             </div>
-          {/if}
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Replication Lag</div>
+              {#if metrics.replication_lag_bytes !== null}
+                <div class="text-l font-bold">
+                  {Math.round(metrics.replication_lag_bytes / 1024 / 1024)} mb
+                </div>
+              {:else}
+                <div class="flex items-center">
+                  <Loader2 class="h-8 w-8 text-gray-400 animate-spin mr-2" />
+                  <span class="text-l font-bold text-gray-500">mb</span>
+                </div>
+              {/if}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
+
+    <HealthAlerts checks={database.health.checks} {pushEvent} />
 
     <Card class="mb-6">
       <CardContent class="p-6">

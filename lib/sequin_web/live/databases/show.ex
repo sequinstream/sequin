@@ -272,13 +272,19 @@ defmodule SequinWeb.DatabasesLive.Show do
 
     avg_latency =
       case Metrics.get_database_avg_latency(database) do
-        {:ok, nil} -> nil
         {:ok, avg_latency} -> round(avg_latency)
-        {:error, _} -> nil
+        _ -> nil
+      end
+
+    replication_lag_bytes =
+      case Metrics.get_postgres_replication_slot_lag(database.replication_slot) do
+        {:ok, replication_lag_bytes} -> replication_lag_bytes
+        _ -> nil
       end
 
     metrics = %{
-      avg_latency: avg_latency
+      avg_latency: avg_latency,
+      replication_lag_bytes: replication_lag_bytes
     }
 
     assign(socket, :metrics, metrics)
@@ -316,7 +322,7 @@ defmodule SequinWeb.DatabasesLive.Show do
       inserted_at: database.inserted_at,
       updated_at: database.updated_at,
       consumers: encode_consumers(database.replication_slot.sink_consumers, database),
-      health: Health.to_external(database.health)
+      health: encode_health(database.health)
     }
   end
 
@@ -461,6 +467,45 @@ defmodule SequinWeb.DatabasesLive.Show do
 
   defp encode_table(nil), do: nil
   defp encode_table(%{name: name}), do: name
+
+  defp encode_health(%Health{} = health) do
+    health
+    |> Health.to_external()
+    |> Map.update!(:checks, fn checks ->
+      Enum.map(checks, fn check ->
+        maybe_augment_alert(check)
+      end)
+    end)
+  end
+
+  defp maybe_augment_alert(%{slug: :replication_messages, error: %{code: :replication_lag_high} = error} = check) do
+    lag_bytes = error.details.lag_bytes
+    lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
+
+    Map.merge(
+      check,
+      %{
+        alertTitle: "Notice: Replication Slot Size is High",
+        alertMessage: """
+        Sequin is processing messages, but the replication slot has grown to #{lag_mb}MB in size.
+
+        This could mean:
+
+        1. Sequin is processing a very large transaction. Large transactions cause the replication slot to grow quickly, and the slot won't shrink until Sequin has fully ingested the transaction.
+
+        2. Sequin has fallen behind in processing messages.
+
+        3. Sequin is applying back-pressure because the message buffer for one or more sinks is full. If this is the case, you'll see an error on the corresponding sink.
+
+        Note: A temporarily high replication slot size is normal. However, if it grows too large, you risk running out of storage on your Postgres database.
+        """,
+        refreshable: false,
+        dismissable: false
+      }
+    )
+  end
+
+  defp maybe_augment_alert(check), do: check
 
   defp get_trace_state(account_id) do
     case Server.get_state(account_id) do

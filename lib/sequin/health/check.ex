@@ -41,12 +41,13 @@ defmodule Sequin.Health.Check do
 
   def to_external(%Check{} = check) do
     error_code = if check.error && Map.has_key?(check.error, :code), do: check.error.code
+    error_details = if check.error && Map.has_key?(check.error, :details), do: check.error.details
 
     %{
       slug: check.slug,
       name: check_name(check),
       status: if(check.status == :waiting, do: :initializing, else: check.status),
-      error: if(check.error, do: %{message: Exception.message(check.error), code: error_code}),
+      error: if(check.error, do: %{message: Exception.message(check.error), code: error_code, details: error_details}),
       error_slug: check.error_slug
     }
   end

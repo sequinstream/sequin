@@ -755,14 +755,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
           send(state.test_pid, {__MODULE__, :flush_messages})
         end
 
-        next_commit_tuple = messages |> Stream.map(&{&1.commit_lsn, &1.commit_idx}) |> Enum.max()
-        {lsn, idx} = next_commit_tuple
-        next_wal_cursor = %{commit_lsn: lsn, commit_idx: idx}
-
         %{
           state
           | accumulated_messages: {0, []},
-            low_watermark_wal_cursor: next_wal_cursor,
             message_handler_ctx: message_handler_ctx
         }
 
@@ -806,19 +801,52 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp safe_wal_cursor(%State{} = state) do
     case verify_monitor_refs(state) do
       :ok ->
-        state.message_store_refs
-        |> Enum.map(fn {consumer_id, ref} ->
-          SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
-        end)
-        |> Enum.filter(& &1)
-        |> case do
-          [] -> state.low_watermark_wal_cursor
-          cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
+        low_for_message_stores =
+          state.message_store_refs
+          |> Enum.map(fn {consumer_id, ref} ->
+            SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
+          end)
+          |> Enum.filter(& &1)
+          |> case do
+            [] -> nil
+            cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
+          end
+
+        cond do
+          not is_nil(low_for_message_stores) ->
+            # Use the minimum unpersisted WAL cursor from the message stores.
+            low_for_message_stores
+
+          accumulated_messages?(state) ->
+            # When there are messages that the SlotProcessor has not flushed yet,
+            # we need to fallback on the last low_watermark_wal_cursor (not safe to use
+            # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
+            state.low_watermark_wal_cursor
+
+          true ->
+            # The SlotProcessor has processed messages beyond what the message stores have.
+            # This might be due to health messages or messages for tables that do not belong
+            # to any sinks.
+            # We want to advance the slot to the last_commit_lsn in that case because:
+            # 1. It's safe to do.
+            # 2. If the tables in this slot are dormant, the slot will continue to accumulate
+            # WAL unless we advance it. (This is the secondary purpose of the health message,
+            # to allow us to advance the slot even if tables are dormant.)
+            %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
         end
 
       {:error, error} ->
         raise error
     end
+  end
+
+  defp accumulated_messages?(%State{accumulated_messages: {0, []}}) do
+    false
+  end
+
+  defp accumulated_messages?(%State{accumulated_messages: {num_bytes, acc}})
+       when is_integer(num_bytes) and is_list(acc) do
+    true
   end
 
   defp verify_monitor_refs(%State{} = state) do

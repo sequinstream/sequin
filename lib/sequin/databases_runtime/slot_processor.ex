@@ -439,6 +439,26 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   @impl ReplicationConnection
+  def handle_info(:emit_heartbeat, %State{id: "dcfba45f-d503-4fef-bb11-9221b9efa70a"} = state) do
+    # Carve out for individual cloud customer who still needs to upgrade to Postgres 14+
+    # This heartbeat is not used for health, but rather to advance the slot even if tables are dormant.
+    conn = get_cached_conn(state)
+
+    # We can schedule right away, as we'll not be receiving a heartbeat message
+    state = schedule_heartbeat(state)
+    q = "insert into sequin_heartbeat(id, updated_at) values (1, now()) on conflict (id) do update set updated_at = now()"
+
+    case Postgres.query(conn, q) do
+      {:ok, _res} ->
+        Logger.info("Emitted heartbeat", emitted_at: Sequin.utc_now())
+
+      {:error, error} ->
+        Logger.error("Error emitting heartbeat: #{inspect(error)}")
+    end
+
+    {:noreply, state}
+  end
+
   def handle_info(:emit_heartbeat, %State{} = state) do
     conn = get_cached_conn(state)
 

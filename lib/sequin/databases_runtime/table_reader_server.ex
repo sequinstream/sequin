@@ -15,6 +15,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.Error
+  alias Sequin.Error.ServiceError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Repo
@@ -104,6 +105,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       field :batch_id, TableReader.batch_id() | nil
       field :batch_lsn, integer()
       field :fetch_slot_lsn, (PostgresDatabase.t(), String.t() -> {:ok, term()} | {:error, term()})
+      field :fetch_batch, (pid(), PostgresDatabaseTable.t(), map(), Keyword.t() -> {:ok, term()} | {:error, term()})
       field :batch_check_count, integer(), default: 0
     end
   end
@@ -134,7 +136,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       max_pending_messages: max_pending_messages,
       count_pending_messages: 0,
       check_state_timeout: Keyword.get(opts, :check_state_timeout, :timer.seconds(30)),
-      fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2)
+      fetch_slot_lsn: Keyword.get(opts, :fetch_slot_lsn, &TableReader.fetch_slot_lsn/2),
+      fetch_batch: Keyword.get(opts, :fetch_batch, &TableReader.fetch_batch/4)
     }
 
     actions = [
@@ -177,7 +180,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
     {:keep_state_and_data, actions}
   end
 
-  def handle_event(:state_timeout, :fetch_batch, :fetch_batch, state) do
+  def handle_event(:state_timeout, :fetch_batch, :fetch_batch, %State{} = state) do
     include_min = state.current_cursor == initial_min_cursor(state.consumer)
     batch_id = UUID.uuid4()
     Logger.metadata(current_batch_id: batch_id)
@@ -189,7 +192,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         batch_id,
         table_oid(state.consumer),
         fn t_conn ->
-          TableReader.fetch_batch(
+          state.fetch_batch.(
             t_conn,
             table(state),
             state.current_cursor,
@@ -220,14 +223,21 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
       {:error, error} ->
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
 
-        state = %{state | successive_failure_count: state.successive_failure_count + 1}
-        backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
+        if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) and state.page_size > 1000 do
+          page_size = state.page_size / 2
+          Logger.info("[TableReaderServer] Reducing page size to #{page_size} and retrying")
+          state = %{state | page_size: page_size}
+          {:repeat_state, state}
+        else
+          state = %{state | successive_failure_count: state.successive_failure_count + 1}
+          backoff = Sequin.Time.exponential_backoff(1000, state.successive_failure_count, :timer.minutes(5))
 
-        actions = [
-          {:state_timeout, backoff, :retry}
-        ]
+          actions = [
+            {:state_timeout, backoff, :retry}
+          ]
 
-        {:next_state, :awaiting_retry, state, actions}
+          {:next_state, :awaiting_retry, state, actions}
+        end
     end
   end
 

@@ -31,6 +31,8 @@ defmodule Sequin.Postgres do
     %{name: "committed_at", type: "timestamp with time zone"},
     %{name: "inserted_at", type: "timestamp with time zone"}
   ]
+  @timeout_error "tcp recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)"
+  @default_postgrex_timeout :timer.seconds(15)
 
   @doc """
   Checks if the given table is an event table by verifying it has all the required columns.
@@ -112,6 +114,17 @@ defmodule Sequin.Postgres do
           {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = error ->
             DatabaseUpdateWorker.enqueue(db.id)
             error
+
+          {:error, %DBConnection.ConnectionError{message: @timeout_error}} ->
+            timeout = Keyword.get(opts, :timeout, @default_postgrex_timeout)
+
+            {:error,
+             Error.service(
+               message: "Query timed out",
+               service: :postgres,
+               details: %{timeout: timeout},
+               code: :query_timeout
+             )}
 
           error ->
             error

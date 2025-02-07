@@ -8,6 +8,7 @@ defmodule Sequin.Metrics do
   alias Sequin.Consumers.HttpEndpoint
   alias Sequin.Databases.PostgresDatabase
   alias Sequin.Metrics.Store
+  alias Sequin.Replication.PostgresReplicationSlot
 
   # Consumer Messages Processed
   def incr_consumer_messages_processed_count(%{id: id}, count \\ 1) do
@@ -55,5 +56,13 @@ defmodule Sequin.Metrics do
 
   def get_http_endpoint_avg_latency(%HttpEndpoint{id: id}) do
     Store.get_latency("http_endpoint_avg_latency:#{id}")
+  end
+
+  def measure_postgres_replication_slot_lag(%PostgresReplicationSlot{id: id}, lag_bytes) do
+    Store.measure_gauge("postgres_replication_slot_lag:#{id}", lag_bytes)
+  end
+
+  def get_postgres_replication_slot_lag(%PostgresReplicationSlot{id: id}) do
+    Store.get_gauge("postgres_replication_slot_lag:#{id}")
   end
 end

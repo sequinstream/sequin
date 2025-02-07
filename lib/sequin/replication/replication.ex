@@ -9,6 +9,8 @@ defmodule Sequin.Replication do
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Error
   alias Sequin.Error.NotFoundError
+  alias Sequin.Health
+  alias Sequin.Metrics
   alias Sequin.Postgres
   alias Sequin.Redis
   alias Sequin.Replication.PostgresReplicationSlot
@@ -451,6 +453,35 @@ defmodule Sequin.Replication do
     |> list_wal_events_query()
     |> Repo.aggregate(:count, :id)
   end
+
+  def measure_replication_lag(%PostgresReplicationSlot{} = slot, measure_fn \\ &replication_lag_bytes/1) do
+    with {:ok, lag_bytes} <- measure_fn.(slot) do
+      if lag_bytes > lag_bytes_alert_threshold() do
+        Health.put_event(slot, %Health.Event{
+          slug: :replication_lag_checked,
+          status: :warning,
+          data: %{lag_bytes: lag_bytes}
+        })
+      else
+        Health.put_event(slot, %Health.Event{
+          slug: :replication_lag_checked,
+          status: :success,
+          data: %{lag_bytes: lag_bytes}
+        })
+      end
+
+      Metrics.measure_postgres_replication_slot_lag(slot, lag_bytes)
+
+      {:ok, lag_bytes}
+    end
+  end
+
+  def replication_lag_bytes(%PostgresReplicationSlot{} = slot) do
+    slot = Repo.preload(slot, :postgres_database)
+    Postgres.replication_lag_bytes(slot.postgres_database, slot.slot_name)
+  end
+
+  def lag_bytes_alert_threshold, do: 1024 * 1024
 
   defp env do
     Application.get_env(:sequin, :env)

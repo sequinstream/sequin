@@ -528,6 +528,7 @@ defmodule Sequin.Health do
     base_check = %Check{slug: :replication_messages, status: :initializing}
     messages_processed_event = find_event(events, :replication_message_processed)
     heartbeat_recv_event = find_event(events, :replication_heartbeat_received)
+    replication_lag_checked_event = find_event(events, :replication_lag_checked)
 
     cond do
       is_nil(heartbeat_recv_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
@@ -557,6 +558,20 @@ defmodule Sequin.Health do
         put_check_timestamps(%{base_check | status: :error, error: messages_processed_event.error}, [
           messages_processed_event
         ])
+
+      not is_nil(replication_lag_checked_event) and replication_lag_checked_event.status == :warning ->
+        lag_bytes = replication_lag_checked_event.data["lag_bytes"]
+        lag_mb = Float.round(lag_bytes / 1024 / 1024, 0)
+
+        error =
+          Error.service(
+            service: :postgres_replication_slot,
+            code: :replication_lag_high,
+            details: %{lag_bytes: lag_bytes},
+            message: "Replication lag is high (#{lag_mb}MB)"
+          )
+
+        put_check_timestamps(%{base_check | status: :warning, error: error}, [replication_lag_checked_event])
 
       not is_nil(messages_processed_event) ->
         put_check_timestamps(%{base_check | status: :healthy}, [messages_processed_event])

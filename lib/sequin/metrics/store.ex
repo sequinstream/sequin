@@ -112,4 +112,19 @@ defmodule Sequin.Metrics.Store do
         {:error, error}
     end
   end
+
+  def measure_gauge(key, value) do
+    case Redis.command(["SET", "metrics:gauge:#{key}", value]) do
+      {:ok, _} -> :ok
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  def get_gauge(key) do
+    case Redis.command(["GET", "metrics:gauge:#{key}"]) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, value} -> {:ok, String.to_integer(value)}
+      {:error, error} -> {:error, error}
+    end
+  end
 end

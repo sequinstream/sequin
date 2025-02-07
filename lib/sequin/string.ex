@@ -114,4 +114,9 @@ defmodule Sequin.String do
 
   def downcase(nil), do: nil
   def downcase(string) when is_binary(string), do: String.downcase(string)
+
+  def format_bytes(bytes) when bytes < 1024, do: "#{bytes} bytes"
+  def format_bytes(bytes) when bytes < 1024 * 1024, do: "#{Float.round(bytes / 1024, 2)} KB"
+  def format_bytes(bytes) when bytes < 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024, 2)} MB"
+  def format_bytes(bytes) when bytes < 1024 * 1024 * 1024 * 1024, do: "#{Float.round(bytes / 1024 / 1024 / 1024, 2)} GB"
 end

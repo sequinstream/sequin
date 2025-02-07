@@ -405,6 +405,14 @@ defmodule Sequin.Databases do
     end)
   end
 
+  def replication_lag_bytes(%PostgresDatabase{} = database) do
+    database = Repo.preload(database, :replication_slot)
+
+    with_connection(database, fn conn ->
+      Postgres.replication_lag_bytes(conn, database.replication_slot.slot_name)
+    end)
+  end
+
   defp create_replication_slot(conn, slot_name) do
     # First, check if the slot already exists
     check_query = "SELECT 1 FROM pg_replication_slots WHERE slot_name = $1"

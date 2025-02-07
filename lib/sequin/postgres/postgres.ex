@@ -910,4 +910,24 @@ defmodule Sequin.Postgres do
          )}
     end
   end
+
+  @doc """
+  Gets the replication lag in bytes for the database's replication slot.
+  Returns {:ok, bytes} on success, where bytes is a Decimal,
+  or {:error, error} on failure.
+  """
+  @spec replication_lag_bytes(db_conn(), String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def replication_lag_bytes(conn, slot_name) do
+    query = """
+    select pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) as replication_lag_bytes
+    from pg_replication_slots
+    where slot_name = $1;
+    """
+
+    case query(conn, query, [slot_name]) do
+      {:ok, %{rows: [[bytes]]}} -> {:ok, Decimal.to_integer(bytes)}
+      {:ok, %{rows: []}} -> {:error, Error.not_found(entity: :replication_slot)}
+      {:error, error} -> {:error, error}
+    end
+  end
 end

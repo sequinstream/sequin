@@ -114,6 +114,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
   def fetch_batch(db_or_conn, %Table{} = table, min_cursor, opts \\ []) do
     limit = Keyword.get(opts, :limit, 1000)
     include_min = Keyword.get(opts, :include_min, false)
+    timeout = Keyword.get(opts, :timeout, :timer.minutes(1))
 
     order_by = KeysetCursor.order_by_sql(table)
     min_where_clause = KeysetCursor.where_sql(table, if(include_min, do: ">=", else: ">"))
@@ -132,7 +133,7 @@ defmodule Sequin.DatabasesRuntime.TableReader do
     sql = Postgres.parameterize_sql(sql)
     params = cursor_values ++ [limit]
 
-    case Postgres.query(db_or_conn, sql, params) do
+    case Postgres.query(db_or_conn, sql, params, timeout: timeout) do
       {:ok, %Postgrex.Result{num_rows: 0}} ->
         {:ok, %{rows: [], next_cursor: nil}}
 

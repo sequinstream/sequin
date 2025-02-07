@@ -12,6 +12,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.TableReader
   alias Sequin.DatabasesRuntime.TableReaderServer
+  alias Sequin.Error
   alias Sequin.Factory.CharacterFactory
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
@@ -424,6 +425,58 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       # Should get a new batch with a different ID
       assert_receive {TableReaderServer, {:batch_fetched, _batch_id}}, 1000
+    end
+
+    @tag :capture_log
+    test "reduces page size and retries on query timeout when page size > 1000", %{
+      backfill: backfill,
+      table_oid: table_oid,
+      consumer: consumer
+    } do
+      initial_page_size = 2000
+      test_pid = self()
+      call_count = :atomics.new(1, [])
+
+      fetch_batch = fn _conn, _table, _cursor, opts ->
+        count = :atomics.add_get(call_count, 1, 1)
+
+        case count do
+          1 ->
+            send(test_pid, {:fetch_batch, 1})
+            # First call - return timeout error
+            {:error,
+             Error.service(
+               message: "Query timed out",
+               service: :postgres,
+               details: %{timeout: 5000},
+               code: :query_timeout
+             )}
+
+          2 ->
+            # Second call - verify reduced page size and return success
+            assert opts[:limit] == 1000
+            send(test_pid, {:fetch_batch, 2})
+            {:ok, %{rows: [], next_cursor: nil}}
+
+          _ ->
+            raise "Unexpected call count #{count}"
+        end
+      end
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+
+      pid =
+        start_table_reader_server(backfill, table_oid,
+          page_size: initial_page_size,
+          fetch_batch: fetch_batch
+        )
+
+      Process.monitor(pid)
+
+      assert_receive {:fetch_batch, 1}, 1000
+      assert_receive {:fetch_batch, 2}, 1000
+
+      assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
     end
   end
 

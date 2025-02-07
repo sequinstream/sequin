@@ -15,7 +15,7 @@ Audit logs are an essential tool for tracking and recording changes in your data
 If you're self-hosting Sequin, you'll need:
 
 1. [Sequin installed](/running-sequin)
-2. [A database connected](/connect-postgres) 
+2. [A database connected](/connect-postgres)
 3. A destination database ready to receive audit logs
 4. A sink destination (like SQS, Kafka, Redis, or HTTP)
 
@@ -55,7 +55,7 @@ First, create a sink to the queue, stream, or webhook endpoint that you want to 
 
   <Step title="Leave message grouping default">
     If your sink supports message grouping, leave the default option selected for "Message grouping".
-    
+
     This will ensure that messages are [grouped by primary key](/reference/sinks/overview#message-grouping-and-ordering), helping eliminate race conditions as you write audit logs.
   </Step>
 
@@ -144,12 +144,12 @@ def process_change(change):
 
     db.execute("""
         insert into audit_logs (
-            event_id, table_name, record_id, 
+            event_id, table_name, record_id,
             action, old_values, new_values, created_at, updated_at
         )
         values (
             %(event_id)s, %(table_name)s, %(record_id)s,
-            %(action)s, %(old_values)s, %(new_values)s, 
+            %(action)s, %(old_values)s, %(new_values)s,
             %(created_at)s, %(updated_at)s
         )
         on conflict (event_id) do update set
@@ -197,7 +197,7 @@ def process_change(change):
         change.action,
         change.record
     )
-    
+
     activity = {
         'event_id': uuid.UUID(change.id),
         'user_id': uuid.UUID(change.record['user_id']),

@@ -152,9 +152,12 @@ You'll need the following:
     Under "Message grouping", leave the default option selected to ensure events for the same row are sent to your webhook endpoint in order.
   </Step>
 
-  <Step title="Configure delivery settings">
-    Under "Delivery configuration", choose a conservative value for "Request timeout" and set "Batch size" to 1.
-  </Step>
+ <Step title="Configure sink settings">
+        Under "Webhook Sink configuration" leave the defaults:
+
+        - Leave the default value of `30000 ms` for "Request timeout" as this is more than enough time for your function to process the request
+        - Leave the default value of `1` for "Batch size" for now to ensure each change is processed individually.
+    </Step>
 
   <Step title="Configure HTTP endpoint">
     Add your Supabase edge function URL and add an `Authorization` header with the value `Bearer YOUR_SUPABASE_ANON_KEY`.

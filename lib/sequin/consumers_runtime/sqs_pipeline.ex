@@ -74,17 +74,6 @@ defmodule Sequin.ConsumersRuntime.SqsPipeline do
     case SQS.send_messages(sqs_client, consumer.sink.queue_url, sqs_messages) do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-        # Metrics.incr_sqs_throughput(consumer.sink)
-
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            consumer.id,
-            msg.replication_message_trace_id,
-            "Pushed message to SQS successfully"
-          )
-        end)
 
         message
 

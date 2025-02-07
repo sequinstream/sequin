@@ -120,7 +120,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
-        "[ConsumerProducer] Produced messages",
+        "[ConsumerProducer] produce_messages took longer than expected",
         count: length(messages),
         demand: demand,
         batch_size: state.batch_size,
@@ -132,7 +132,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     if div(time, 1000) > @min_log_time_ms do
       Logger.warning(
-        "[ConsumerProducer] Rejected delivered messages",
+        "[ConsumerProducer] reject_delivered_messages took longer than expected",
         duration_ms: div(time, 1000),
         message_count: length(messages)
       )
@@ -171,16 +171,6 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
         unless messages == [] do
           Health.put_event(consumer, %Event{slug: :messages_pending_delivery, status: :success})
         end
-
-        Enum.each(
-          messages,
-          &Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            &1.replication_message_trace_id,
-            "Consumer produced message"
-          )
-        )
 
         messages
 

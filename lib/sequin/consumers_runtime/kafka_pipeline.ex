@@ -29,7 +29,7 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
       ],
       processors: [
         default: [
-          concurrency: 40,
+          concurrency: 100,
           max_demand: 1
         ]
       ],
@@ -89,19 +89,11 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
     messages = Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} -> message end)
 
+    if Enum.random(0..100) == 0, do: raise("test error")
+
     case Kafka.publish(consumer, partition, messages) do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
-
-        Enum.each(messages, fn message ->
-          Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            consumer.id,
-            message.replication_message_trace_id,
-            "Published message to Kafka successfully"
-          )
-        end)
 
         broadway_messages
 
@@ -110,15 +102,13 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
 
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :fail, error: error})
 
-        Enum.each(broadway_messages, fn message ->
-          Sequin.Logs.log_for_consumer_message(
-            :error,
-            consumer.account_id,
-            consumer.id,
-            message.data.replication_message_trace_id,
-            "Failed to publish message to Kafka: #{Exception.message(error)}"
-          )
-        end)
+        Sequin.Logs.log_for_consumer_message(
+          :error,
+          consumer.account_id,
+          consumer.id,
+          Enum.map(broadway_messages, & &1.data.replication_message_trace_id),
+          "Failed to publish message to Kafka: #{Exception.message(error)}"
+        )
 
         Enum.map(broadway_messages, &Broadway.Message.failed(&1, error))
     end

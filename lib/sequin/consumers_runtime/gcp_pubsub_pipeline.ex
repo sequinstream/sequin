@@ -71,16 +71,6 @@ defmodule Sequin.ConsumersRuntime.GcpPubsubPipeline do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            consumer.id,
-            msg.replication_message_trace_id,
-            "Published message to Pub/Sub successfully"
-          )
-        end)
-
         message
 
       {:error, error} ->

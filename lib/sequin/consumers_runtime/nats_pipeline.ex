@@ -58,17 +58,6 @@ defmodule Sequin.ConsumersRuntime.NatsPipeline do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        Enum.each(
-          messages,
-          &Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            consumer.id,
-            &1.replication_message_trace_id,
-            "Pushed message to NATS successfully"
-          )
-        )
-
         message
 
       {:error, error} ->

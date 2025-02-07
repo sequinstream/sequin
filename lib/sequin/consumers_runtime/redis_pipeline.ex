@@ -74,16 +74,6 @@ defmodule Sequin.ConsumersRuntime.RedisPipeline do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-        Enum.each(messages, fn msg ->
-          Sequin.Logs.log_for_consumer_message(
-            :info,
-            consumer.account_id,
-            consumer.id,
-            msg.replication_message_trace_id,
-            "Pushed message to Redis successfully"
-          )
-        end)
-
         messages
         |> Enum.map(&MessageLedgers.wal_cursor_from_message/1)
         |> then(&MessageLedgers.wal_cursors_reached_checkpoint(consumer.id, "redis_pipeline.sent", &1))

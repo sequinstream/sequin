@@ -137,9 +137,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       msg1 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 0, payload_size_bytes: 100)
       msg2 = ConsumersFactory.consumer_message(commit_lsn: 1, commit_idx: 1, payload_size_bytes: 200)
 
-      expect_uuid4(fn -> msg1.ack_id end)
-      expect_uuid4(fn -> msg2.ack_id end)
-
       {:ok, state} = State.put_messages(state, [msg1, msg2])
 
       assert {[_msg1], state} = State.pop_messages(state, [msg1.ack_id])
@@ -178,9 +175,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       # Add two messages with different group_ids
       msg1 = ConsumersFactory.consumer_message(group_id: "group1")
       msg2 = ConsumersFactory.consumer_message(group_id: "group2")
-
-      expect_uuid4(fn -> msg1.ack_id end)
-      expect_uuid4(fn -> msg2.ack_id end)
 
       {:ok, state} = State.put_messages(state, [msg1, msg2])
 
@@ -475,9 +469,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       batch_id = "test-batch-123"
       msg1 = ConsumersFactory.consumer_message()
       msg2 = ConsumersFactory.consumer_message()
-
-      expect_uuid4(fn -> msg1.ack_id end)
-      expect_uuid4(fn -> msg2.ack_id end)
 
       # Put messages in batch
       {:ok, state} = State.put_table_reader_batch(state, [msg1, msg2], batch_id)

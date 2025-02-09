@@ -255,7 +255,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         {:stop, :normal}
 
       %SinkConsumer{} = consumer ->
-        message_count = SlotMessageStore.count_messages(consumer.id)
+        {:ok, message_count} = SlotMessageStore.count_messages(consumer.id)
         actions = [check_state_timeout(state.check_state_timeout)]
         state = %{state | count_pending_messages: message_count, consumer: consumer}
         current_slot_lsn = fetch_slot_lsn(state)

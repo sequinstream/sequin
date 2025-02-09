@@ -197,7 +197,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   @doc """
   Counts the number of messages in the message store.
   """
-  @spec count_messages(consumer_id()) :: non_neg_integer() | {:error, Exception.t()}
+  @spec count_messages(consumer_id()) :: {:ok, non_neg_integer()} | {:error, Exception.t()}
   def count_messages(consumer_id) do
     GenServer.call(via_tuple(consumer_id), :count_messages)
   catch
@@ -505,7 +505,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call(:count_messages, _from, state) do
     execute_timed(:count_messages, fn ->
-      {:reply, map_size(state.messages), state}
+      {:reply, {:ok, map_size(state.messages)}, state}
     end)
   end
 

@@ -526,7 +526,12 @@ defmodule SequinWeb.SinkConsumersLive.Show do
       smoothed_throughput_timeseries |> Enum.take(@timeseries_window_count) |> Enum.reverse()
 
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
-    messages_pending_count = SlotMessageStore.count_messages(consumer.id)
+
+    messages_pending_count =
+      case SlotMessageStore.count_messages(consumer.id) do
+        {:ok, count} -> count
+        {:error, _} -> 0
+      end
 
     metrics = %{
       messages_processed_count: messages_processed_count,

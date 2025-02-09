@@ -114,7 +114,13 @@ defmodule SequinWeb.PullController do
   defp maybe_wait(_params, _consumer), do: :ok
 
   defp wait(consumer, wait_for) do
-    {duration_us, count} = :timer.tc(fn -> SlotMessageStore.count_messages(consumer.id) end)
+    {duration_us, res} = :timer.tc(fn -> SlotMessageStore.count_messages(consumer.id) end)
+
+    count =
+      case res do
+        {:ok, count} -> count
+        {:error, _} -> 0
+      end
 
     duration = round(duration_us / 1000)
     wait_for = Enum.max([wait_for - duration, 0])

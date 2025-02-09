@@ -414,4 +414,28 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         {Map.get(state.messages, ack_id), next_key}
     end)
   end
+
+  @doc """
+  Counts messages that exist in state.messages but not in ordered_ack_ids_table.
+  Returns count of unsynced messages.
+  """
+  def count_unsynced_messages(%State{} = state) do
+    # Get all ack_ids from ordered_ack_ids_table
+    ordered_ack_ids =
+      state.consumer
+      |> ordered_ack_ids_table()
+      |> :ets.match({:"$1", :"$2", :"$3"})
+      |> MapSet.new(fn [_commit_lsn, _commit_idx, ack_id] -> ack_id end)
+
+    # Get all ack_ids from messages map
+    message_ack_ids =
+      state.messages
+      |> Map.keys()
+      |> MapSet.new()
+
+    # Find messages that are in messages but not in ordered_ack_ids_table
+    message_ack_ids
+    |> MapSet.difference(ordered_ack_ids)
+    |> MapSet.size()
+  end
 end

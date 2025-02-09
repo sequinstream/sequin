@@ -224,7 +224,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServer do
         Logger.error("[TableReaderServer] Failed to fetch batch: #{inspect(error)}", error: error)
 
         if match?(%ServiceError{service: :postgres, code: :query_timeout}, error) and state.page_size > 1000 do
-          page_size = state.page_size / 2
+          page_size = round(state.page_size / 2)
           Logger.info("[TableReaderServer] Reducing page size to #{page_size} and retrying")
           state = %{state | page_size: page_size}
           {:repeat_state, state}

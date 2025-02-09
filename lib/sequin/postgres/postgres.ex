@@ -31,7 +31,10 @@ defmodule Sequin.Postgres do
     %{name: "committed_at", type: "timestamp with time zone"},
     %{name: "inserted_at", type: "timestamp with time zone"}
   ]
-  @timeout_error "tcp recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)"
+  @timeout_errors [
+    "tcp recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)",
+    "ssl recv: closed (the connection was closed by the pool, possibly due to a timeout or because the pool has been terminated)"
+  ]
   @default_postgrex_timeout :timer.seconds(15)
 
   @doc """
@@ -91,13 +94,26 @@ defmodule Sequin.Postgres do
   """
   def query(pid, query, params \\ [], opts \\ [])
 
-  def query(pid, query, params, opts) when is_pid(pid) do
-    Postgrex.query(pid, query, params, opts)
-  end
+  # When a transaction is open, the conn is a DBConnection struct
+  def query(pid_or_struct, query, params, opts) when is_pid(pid_or_struct) or is_struct(pid_or_struct, DBConnection) do
+    case Postgrex.query(pid_or_struct, query, params, opts) do
+      {:ok, result} ->
+        {:ok, result}
 
-  # When a transaction is open, this is the conn
-  def query(%DBConnection{} = conn, query, params, opts) do
-    Postgrex.query(conn, query, params, opts)
+      {:error, %DBConnection.ConnectionError{message: message}} when message in @timeout_errors ->
+        timeout = Keyword.get(opts, :timeout, @default_postgrex_timeout)
+
+        {:error,
+         Error.service(
+           message: "Query timed out",
+           service: :postgres,
+           details: %{timeout: timeout},
+           code: :query_timeout
+         )}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   def query(mod, query, params, opts) when is_atom(mod) do
@@ -114,17 +130,6 @@ defmodule Sequin.Postgres do
           {:error, %Postgrex.Error{postgres: %{code: :undefined_column}}} = error ->
             DatabaseUpdateWorker.enqueue(db.id)
             error
-
-          {:error, %DBConnection.ConnectionError{message: @timeout_error}} ->
-            timeout = Keyword.get(opts, :timeout, @default_postgrex_timeout)
-
-            {:error,
-             Error.service(
-               message: "Query timed out",
-               service: :postgres,
-               details: %{timeout: timeout},
-               code: :query_timeout
-             )}
 
           error ->
             error

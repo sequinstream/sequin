@@ -41,7 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def setup_ets(consumer) do
     table_name = ordered_ack_ids_table(consumer)
 
-    :ets.new(table_name, [:ordered_set, :named_table, :private])
+    :ets.new(table_name, [:ordered_set, :named_table, :protected])
     :ok
   end
 

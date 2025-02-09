@@ -564,9 +564,9 @@ defmodule Sequin.Postgres do
 
   def check_replica_identity(conn, oid) do
     query = """
-    SELECT relreplident
-    FROM pg_class
-    WHERE oid = $1;
+    select relreplident
+    from pg_class
+    where oid = $1;
     """
 
     case query(conn, query, [oid]) do
@@ -581,6 +581,9 @@ defmodule Sequin.Postgres do
 
       {:ok, %{rows: [["i"]]}} ->
         {:ok, :index}
+
+      {:ok, %{rows: []}} ->
+        {:error, Error.not_found(entity: :table, params: %{oid: oid})}
 
       {:error, error} ->
         Logger.error("Failed to check replica identity for oid #{oid}: #{inspect(error)}")

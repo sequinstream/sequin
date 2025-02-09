@@ -13,6 +13,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   require Logger
 
   @type message :: ConsumerRecord.t() | ConsumerEvent.t()
+  @type cursor_tuple :: {commit_lsn :: non_neg_integer(), commit_idx :: non_neg_integer()}
 
   # 1GB
   @default_setting_max_accumulated_payload_bytes 1 * 1024 * 1024 * 1024
@@ -22,7 +23,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :consumer, SinkConsumer.t()
     field :consumer_id, String.t()
     field :last_consumer_producer_pid, pid() | nil
-    field :messages, %{SinkConsumer.ack_id() => message()}, default: %{}
+    field :messages, %{cursor_tuple() => message()}, default: %{}
+    field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
 
@@ -39,22 +41,21 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec setup_ets(Sequin.Consumers.SinkConsumer.t()) :: :ok
   def setup_ets(consumer) do
-    table_name = ordered_ack_ids_table(consumer)
+    table_name = ordered_cursors_table(consumer)
 
     :ets.new(table_name, [:ordered_set, :named_table, :protected])
     :ok
   end
 
-  @spec ordered_ack_ids_table(Sequin.Consumers.SinkConsumer.t()) :: atom()
-  defp ordered_ack_ids_table(consumer) do
-    :"slot_message_store_state_ordered_ack_ids_consumer_#{consumer.seq}"
+  @spec ordered_cursors_table(Sequin.Consumers.SinkConsumer.t()) :: atom()
+  defp ordered_cursors_table(consumer) do
+    :"slot_message_store_state_ordered_cursors_consumer_#{consumer.seq}"
   end
 
   @spec put_messages(State.t(), list(message()) | Enumerable.t()) ::
           {:ok, State.t()} | {:error, Error.t()}
   def put_messages(%State{} = state, messages, opts \\ []) do
     skip_limit_check? = Keyword.get(opts, :skip_limit_check?, false)
-    now = DateTime.utc_now()
 
     incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
 
@@ -71,22 +72,22 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         {:error, Error.invariant(message: "Message count limit exceeded", code: :payload_size_limit_exceeded)}
 
       true ->
-        messages =
-          messages
-          |> Stream.map(fn msg -> %{msg | ack_id: msg.ack_id || Sequin.uuid4(), ingested_at: now} end)
-          |> Map.new(&{&1.ack_id, &1})
+        messages = Map.new(messages, &{{&1.commit_lsn, &1.commit_idx}, &1})
 
         # Insert into ETS
-        table = ordered_ack_ids_table(state.consumer)
+        ets_keys = messages |> Map.keys() |> Enum.map(&{&1})
 
-        Enum.each(messages, fn {ack_id, msg} ->
-          :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
-        end)
+        state.consumer
+        |> ordered_cursors_table()
+        |> :ets.insert(ets_keys)
+
+        ack_ids_to_cursor_tuples = messages |> Map.values() |> Map.new(&{&1.ack_id, {&1.commit_lsn, &1.commit_idx}})
 
         state =
           %{
             state
             | messages: Map.merge(state.messages, messages),
+              ack_ids_to_cursor_tuples: Map.merge(state.ack_ids_to_cursor_tuples, ack_ids_to_cursor_tuples),
               payload_size_bytes: state.payload_size_bytes + incoming_payload_size_bytes
           }
 
@@ -98,7 +99,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def put_persisted_messages(%State{} = state, messages) do
     persisted_message_groups =
       Enum.reduce(messages, state.persisted_message_groups, fn msg, acc ->
-        Multiset.put(acc, msg.group_id, msg.ack_id)
+        Multiset.put(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
     put_messages(%{state | persisted_message_groups: persisted_message_groups}, messages, skip_limit_check?: true)
@@ -118,13 +119,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     end
   end
 
-  @spec pop_messages(State.t(), list(SinkConsumer.ack_id())) :: {list(message()), State.t()}
-  def pop_messages(%State{} = state, ack_ids) do
-    popped_messages = state.messages |> Map.take(ack_ids) |> Map.values()
-    messages = Map.drop(state.messages, ack_ids)
+  @spec pop_messages(State.t(), list(cursor_tuple())) :: {list(message()), State.t()}
+  def pop_messages(%State{} = state, cursor_tuples) do
+    popped_messages = state.messages |> Map.take(cursor_tuples) |> Map.values()
+    messages = Map.drop(state.messages, cursor_tuples)
 
     # Remove from ETS
-    table = ordered_ack_ids_table(state.consumer)
+    table = ordered_cursors_table(state.consumer)
 
     Enum.each(popped_messages, fn msg ->
       :ets.delete(table, {msg.commit_lsn, msg.commit_idx})
@@ -132,13 +133,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     persisted_message_groups =
       Enum.reduce(popped_messages, state.persisted_message_groups, fn msg, acc ->
-        Multiset.delete(acc, msg.group_id, msg.ack_id)
+        Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
     produced_message_groups =
       Enum.reduce(popped_messages, state.produced_message_groups, fn msg, acc ->
-        Multiset.delete(acc, msg.group_id, msg.ack_id)
+        Multiset.delete(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
+
+    popped_message_ack_ids = Enum.map(popped_messages, & &1.ack_id)
 
     popped_messages_bytes = Enum.sum_by(popped_messages, & &1.payload_size_bytes)
 
@@ -146,6 +149,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
      %{
        state
        | messages: messages,
+         ack_ids_to_cursor_tuples: Map.drop(state.ack_ids_to_cursor_tuples, popped_message_ack_ids),
          payload_size_bytes: state.payload_size_bytes - popped_messages_bytes,
          produced_message_groups: produced_message_groups,
          persisted_message_groups: persisted_message_groups
@@ -154,16 +158,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec pop_blocked_messages(State.t()) :: {list(message()), State.t()}
   def pop_blocked_messages(%State{} = state) do
-    blocked_message_ack_ids =
+    blocked_cursor_tuples =
       state.messages
-      |> Stream.filter(fn {ack_id, msg} ->
+      |> Stream.filter(fn {cursor_tuple, msg} ->
         is_message_group_persisted?(state, msg.group_id) and
-          not Multiset.value_member?(state.persisted_message_groups, msg.group_id, ack_id)
+          not Multiset.value_member?(state.persisted_message_groups, msg.group_id, cursor_tuple)
       end)
-      |> Stream.map(fn {ack_id, _msg} -> ack_id end)
+      |> Stream.map(fn {cursor_tuple, _msg} -> cursor_tuple end)
       |> Enum.to_list()
 
-    pop_messages(state, blocked_message_ack_ids)
+    pop_messages(state, blocked_cursor_tuples)
   end
 
   @spec is_message_group_persisted?(State.t(), String.t()) :: boolean()
@@ -178,7 +182,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec is_message_persisted?(State.t(), message()) :: boolean()
   def is_message_persisted?(%State{} = state, msg) do
-    Multiset.value_member?(state.persisted_message_groups, msg.group_id, msg.ack_id)
+    Multiset.value_member?(state.persisted_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx})
   end
 
   @doc """
@@ -200,61 +204,61 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   def nack_stale_produced_messages(%State{} = state) do
     ack_wait_ms_ago = DateTime.add(Sequin.utc_now(), -state.consumer.ack_wait_ms, :millisecond)
 
-    stale_ack_ids =
+    stale_cursor_tuples =
       state.messages
-      |> Stream.filter(fn {ack_id, msg} ->
-        Multiset.value_member?(state.produced_message_groups, msg.group_id, ack_id) and
+      |> Stream.filter(fn {cursor_tuple, msg} ->
+        Multiset.value_member?(state.produced_message_groups, msg.group_id, cursor_tuple) and
           not is_nil(msg.last_delivered_at) and
           DateTime.before?(msg.last_delivered_at, ack_wait_ms_ago)
       end)
-      |> Stream.map(fn {ack_id, msg} -> {msg.group_id, ack_id} end)
+      |> Stream.map(fn {cursor_tuple, msg} -> {msg.group_id, cursor_tuple} end)
       |> Enum.to_list()
 
     produced_message_groups =
-      Enum.reduce(stale_ack_ids, state.produced_message_groups, fn {group_id, ack_id}, acc ->
-        Multiset.delete(acc, group_id, ack_id)
+      Enum.reduce(stale_cursor_tuples, state.produced_message_groups, fn {group_id, cursor_tuple}, acc ->
+        Multiset.delete(acc, group_id, cursor_tuple)
       end)
 
     %{state | produced_message_groups: produced_message_groups}
   end
 
-  @spec reset_message_visibilities(State.t(), list(SinkConsumer.ack_id())) :: State.t()
+  @spec reset_message_visibilities(State.t(), list(cursor_tuple())) :: State.t()
   def reset_message_visibilities(%State{} = state, []) do
     state
   end
 
-  def reset_message_visibilities(%State{} = state, [ack_id | ack_ids]) do
-    case Map.get(state.messages, ack_id) do
+  def reset_message_visibilities(%State{} = state, [cursor_tuple | cursor_tuples]) do
+    case Map.get(state.messages, cursor_tuple) do
       nil ->
-        reset_message_visibilities(state, ack_ids)
+        reset_message_visibilities(state, cursor_tuples)
 
       msg ->
         msg = %{msg | not_visible_until: nil}
 
         state = %{
           state
-          | messages: Map.put(state.messages, ack_id, msg),
-            produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, ack_id)
+          | messages: Map.put(state.messages, cursor_tuple, msg),
+            produced_message_groups: Multiset.delete(state.produced_message_groups, msg.group_id, cursor_tuple)
         }
 
-        reset_message_visibilities(state, ack_ids)
+        reset_message_visibilities(state, cursor_tuples)
     end
   end
 
   @spec reset_all_message_visibilities(State.t()) :: State.t()
   def reset_all_message_visibilities(%State{} = state) do
-    ack_ids = Map.keys(state.messages)
-    reset_message_visibilities(state, ack_ids)
+    cursor_tuples = Map.keys(state.messages)
+    reset_message_visibilities(state, cursor_tuples)
   end
 
   @spec min_unpersisted_wal_cursor(State.t()) :: Replication.wal_cursor() | nil
   def min_unpersisted_wal_cursor(%State{} = state) do
-    persisted_message_ack_ids = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
+    persisted_message_cursor_tuples = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
 
     min_messages_wal_cursor =
       state.messages
-      |> Stream.reject(fn {ack_id, _msg} ->
-        MapSet.member?(persisted_message_ack_ids, ack_id)
+      |> Stream.reject(fn {cursor_tuple, _msg} ->
+        MapSet.member?(persisted_message_cursor_tuples, cursor_tuple)
       end)
       |> Stream.map(fn {_k, msg} -> {msg.commit_lsn, msg.commit_idx} end)
       |> Enum.min(fn -> nil end)
@@ -263,6 +267,13 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
       nil -> nil
       {commit_lsn, commit_idx} -> %{commit_lsn: commit_lsn, commit_idx: commit_idx}
     end
+  end
+
+  @spec ack_ids_to_cursor_tuples(State.t(), list(SinkConsumer.ack_id())) :: list(cursor_tuple())
+  def ack_ids_to_cursor_tuples(%State{} = state, ack_ids) do
+    ack_ids
+    |> Enum.map(&Map.get(state.ack_ids_to_cursor_tuples, &1))
+    |> Enum.filter(& &1)
   end
 
   @spec produce_messages(State.t(), non_neg_integer()) :: {list(message()), State.t()}
@@ -278,7 +289,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
     produced_message_groups =
       Enum.reduce(messages, state.produced_message_groups, fn msg, acc ->
-        Multiset.put(acc, msg.group_id, msg.ack_id)
+        Multiset.put(acc, msg.group_id, {msg.commit_lsn, msg.commit_idx})
       end)
 
     {messages,
@@ -286,7 +297,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
        state
        | produced_message_groups: produced_message_groups,
          # Replace messages in state to set last_delivered_at
-         messages: Map.merge(state.messages, Map.new(messages, &{&1.ack_id, &1}))
+         messages: Map.merge(state.messages, Map.new(messages, &{{&1.commit_lsn, &1.commit_idx}, &1}))
      }}
   end
 
@@ -320,10 +331,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   end
 
   defp has_unpersisted_batch_messages?(%State{} = state, batch_id) do
-    persisted_message_ack_ids = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
+    persisted_message_cursor_tuples = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
 
     state.messages
-    |> Stream.reject(fn {_k, msg} -> MapSet.member?(persisted_message_ack_ids, msg.ack_id) end)
+    |> Stream.reject(fn {_k, msg} ->
+      MapSet.member?(persisted_message_cursor_tuples, {msg.commit_lsn, msg.commit_idx})
+    end)
     |> Stream.map(fn {_k, v} -> v end)
     |> Enum.any?(&(&1.table_reader_batch_id == batch_id))
   end
@@ -345,7 +358,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
               not is_nil(msg.group_id) and Multiset.member?(state.produced_message_groups, msg.group_id) ->
                 false
 
-              is_nil(msg.group_id) and Multiset.value_member?(state.produced_message_groups, msg.group_id, msg.ack_id) ->
+              is_nil(msg.group_id) and
+                  Multiset.value_member?(state.produced_message_groups, msg.group_id, {msg.commit_lsn, msg.commit_idx}) ->
                 false
 
               not is_nil(msg.group_id) and MapSet.member?(delivered_message_group_ids, msg.group_id) ->
@@ -377,49 +391,56 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     |> Enum.take(count)
   end
 
-  def peek_messages(%State{} = state, ack_ids) when is_list(ack_ids) do
+  def peek_messages(%State{} = state, cursor_tuples) when is_list(cursor_tuples) do
     state.messages
-    |> Map.take(ack_ids)
+    |> Map.take(cursor_tuples)
     |> Map.values()
   end
 
   # This function provides an optimized way to take the first N messages from a map,
   # using ETS ordered set to maintain sort order
   defp sorted_message_stream(%State{} = state) do
-    table = ordered_ack_ids_table(state.consumer)
+    table = ordered_cursors_table(state.consumer)
 
     Stream.unfold(:ets.first(table), fn
       :"$end_of_table" ->
         nil
 
-      key ->
-        [{_key, ack_id}] = :ets.lookup(table, key)
-        next_key = :ets.next(table, key)
-        {Map.get(state.messages, ack_id), next_key}
+      cursor_tuple ->
+        next_cursor_tuple = :ets.next(table, cursor_tuple)
+        {Map.get(state.messages, cursor_tuple), next_cursor_tuple}
     end)
   end
 
   @doc """
-  Counts messages that exist in state.messages but not in ordered_ack_ids_table.
-  Returns count of unsynced messages.
+  Counts messages that are out of sync between state.messages and ordered_cursors_table.
+  This includes both messages that exist in state.messages but not in the ETS table,
+  and vice versa.
   """
   def count_unsynced_messages(%State{} = state) do
-    # Get all ack_ids from ordered_ack_ids_table
-    ordered_ack_ids =
-      state.consumer
-      |> ordered_ack_ids_table()
-      |> :ets.match({:"$1", :"$2", :"$3"})
-      |> MapSet.new(fn [_commit_lsn, _commit_idx, ack_id] -> ack_id end)
+    table = ordered_cursors_table(state.consumer)
+    message_keys = Map.keys(state.messages)
 
-    # Get all ack_ids from messages map
-    message_ack_ids =
-      state.messages
-      |> Map.keys()
-      |> MapSet.new()
+    # Count keys in messages that aren't in ETS
+    messages_not_in_ets =
+      Enum.count(message_keys, fn {commit_lsn, commit_idx} ->
+        not :ets.member(table, {commit_lsn, commit_idx})
+      end)
 
-    # Find messages that are in messages but not in ordered_ack_ids_table
-    message_ack_ids
-    |> MapSet.difference(ordered_ack_ids)
-    |> MapSet.size()
+    # Count keys in ETS that aren't in messages
+    ets_not_in_messages =
+      :ets.foldl(
+        fn {commit_lsn, commit_idx} = _cursor_tuple, acc ->
+          if Map.has_key?(state.messages, {commit_lsn, commit_idx}) do
+            acc
+          else
+            acc + 1
+          end
+        end,
+        0,
+        table
+      )
+
+    messages_not_in_ets + ets_not_in_messages
   end
 end

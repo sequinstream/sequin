@@ -272,7 +272,7 @@ defmodule SequinWeb.DatabasesLive.Show do
 
     avg_latency =
       case Metrics.get_database_avg_latency(database) do
-        {:ok, avg_latency} -> round(avg_latency)
+        {:ok, avg_latency} -> avg_latency && round(avg_latency)
         _ -> nil
       end
 

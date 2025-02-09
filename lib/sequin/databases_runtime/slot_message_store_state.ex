@@ -52,7 +52,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec put_messages(State.t(), list(message()) | Enumerable.t()) ::
           {:ok, State.t()} | {:error, Error.t()}
-  def put_messages(%State{} = state, messages) do
+  def put_messages(%State{} = state, messages, opts \\ []) do
+    skip_limit_check? = Keyword.get(opts, :skip_limit_check?, false)
     now = DateTime.utc_now()
 
     incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
@@ -63,16 +64,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     messages_exceeded? = length(messages) + map_size(state.messages) > state.setting_max_messages
 
     cond do
-      bytes_exceeded? ->
+      not skip_limit_check? and bytes_exceeded? ->
         {:error, Error.invariant(message: "Payload size limit exceeded", code: :payload_size_limit_exceeded)}
 
-      messages_exceeded? ->
+      not skip_limit_check? and messages_exceeded? ->
         {:error, Error.invariant(message: "Message count limit exceeded", code: :payload_size_limit_exceeded)}
 
       true ->
         messages =
           messages
-          |> Stream.map(fn msg -> %{msg | ack_id: Sequin.uuid4(), ingested_at: now} end)
+          |> Stream.map(fn msg -> %{msg | ack_id: msg.ack_id || Sequin.uuid4(), ingested_at: now} end)
           |> Map.new(&{&1.ack_id, &1})
 
         # Insert into ETS
@@ -95,29 +96,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
   @spec put_persisted_messages(State.t(), list(message()) | Enumerable.t()) :: {:ok, State.t()} | {:error, Error.t()}
   def put_persisted_messages(%State{} = state, messages) do
-    incoming_payload_size_bytes = Enum.sum_by(messages, & &1.payload_size_bytes)
-    messages = Map.new(messages, &{&1.ack_id, &1})
-
-    # Insert into ETS
-    table = ordered_ack_ids_table(state.consumer)
-
-    Enum.each(messages, fn {ack_id, msg} ->
-      :ets.insert(table, {{msg.commit_lsn, msg.commit_idx}, ack_id})
-    end)
-
     persisted_message_groups =
-      Enum.reduce(messages, state.persisted_message_groups, fn {_ack_id, msg}, acc ->
+      Enum.reduce(messages, state.persisted_message_groups, fn msg, acc ->
         Multiset.put(acc, msg.group_id, msg.ack_id)
       end)
 
-    state = %{
-      state
-      | messages: Map.merge(state.messages, messages),
-        persisted_message_groups: persisted_message_groups,
-        payload_size_bytes: state.payload_size_bytes + incoming_payload_size_bytes
-    }
-
-    {:ok, state}
+    put_messages(%{state | persisted_message_groups: persisted_message_groups}, messages, skip_limit_check?: true)
   end
 
   @spec put_table_reader_batch(State.t(), list(message()), String.t()) ::

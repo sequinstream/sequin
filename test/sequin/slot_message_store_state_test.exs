@@ -77,8 +77,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert_message_in_state(msg2, state)
 
       # Verify persisted_message_groups tracking
-      assert Multiset.value_member?(state.persisted_message_groups, "group1", msg1.ack_id)
-      assert Multiset.value_member?(state.persisted_message_groups, "group1", msg2.ack_id)
+      assert Multiset.value_member?(state.persisted_message_groups, "group1", {msg1.commit_lsn, msg1.commit_idx})
+      assert Multiset.value_member?(state.persisted_message_groups, "group1", {msg2.commit_lsn, msg2.commit_idx})
       assert Multiset.count(state.persisted_message_groups, "group1") == 2
     end
 
@@ -139,7 +139,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       {:ok, state} = State.put_messages(state, [msg1, msg2])
 
-      assert {[_msg1], state} = State.pop_messages(state, [msg1.ack_id])
+      assert {[_msg1], state} = State.pop_messages(state, [{msg1.commit_lsn, msg1.commit_idx}])
 
       assert state.payload_size_bytes == 200
     end
@@ -153,7 +153,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert Multiset.count(state.produced_message_groups, "group1") == 1
 
       # Pop the message and verify it's removed from produced_message_groups
-      assert {[_msg], state} = State.pop_messages(state, [produced_msg.ack_id])
+      assert {[_msg], state} = State.pop_messages(state, [{produced_msg.commit_lsn, produced_msg.commit_idx}])
       assert Multiset.count(state.produced_message_groups, "group1") == 0
     end
 
@@ -165,7 +165,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert Multiset.count(state.persisted_message_groups, "group1") == 1
 
       # Pop the message and verify it's removed from persisted_message_groups
-      assert {[_msg], state} = State.pop_messages(state, [msg.ack_id])
+      assert {[_msg], state} = State.pop_messages(state, [{msg.commit_lsn, msg.commit_idx}])
       assert Multiset.count(state.persisted_message_groups, "group1") == 0
     end
   end
@@ -188,7 +188,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       # Verify we get back only msg1 which shares group_id with the persisted message
       assert length(popped_messages) == 1
       [popped_msg] = popped_messages
-      assert popped_msg.ack_id == msg1.ack_id
+      assert_cursor_tuple_matches(msg1, popped_msg)
       assert popped_msg.group_id == "group1"
 
       # Verify msg2 is still in state since it wasn't blocked
@@ -208,10 +208,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       {:ok, state} = State.put_messages(state, [msg1, msg2, msg3])
       assert {[produced1, produced2], state} = State.produce_messages(state, 2)
 
-      assert {[_msg1, _msg2], state} = State.pop_messages(state, [produced1.ack_id, produced2.ack_id])
+      assert {[_msg1, _msg2], state} =
+               State.pop_messages(state, [
+                 {produced1.commit_lsn, produced1.commit_idx},
+                 {produced2.commit_lsn, produced2.commit_idx}
+               ])
 
       assert {[produced3], state} = State.produce_messages(state, 1)
-      assert {[_msg3], state} = State.pop_messages(state, [produced3.ack_id])
+      assert {[_msg3], state} = State.pop_messages(state, [{produced3.commit_lsn, produced3.commit_idx}])
 
       assert {[], state} = State.produce_messages(state, 1)
       assert state.payload_size_bytes == 0
@@ -226,7 +230,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[produced1], state} = State.produce_messages(state, 1)
       assert {[], state} = State.produce_messages(state, 1)
 
-      assert {[_msg1], state} = State.pop_messages(state, [produced1.ack_id])
+      assert {[_msg1], state} = State.pop_messages(state, [{produced1.commit_lsn, produced1.commit_idx}])
 
       assert {[produced2], _state} = State.produce_messages(state, 1)
 
@@ -246,32 +250,37 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       {:ok, state} = State.put_messages(state, [msg3, msg4])
 
-      assert {[acked1], state} = State.pop_messages(state, [produced1.ack_id])
+      assert {[acked1], state} = State.pop_messages(state, [{produced1.commit_lsn, produced1.commit_idx}])
 
       assert {[], state} = State.pop_messages(state, [Factory.uuid()])
 
       assert {[produced3, produced4], state} = State.produce_messages(state, 2)
 
-      assert {acked_34, state} = State.pop_messages(state, [produced3.ack_id, produced4.ack_id])
+      assert {acked_34, state} =
+               State.pop_messages(state, [
+                 {produced3.commit_lsn, produced3.commit_idx},
+                 {produced4.commit_lsn, produced4.commit_idx}
+               ])
+
       assert {[], state} = State.produce_messages(state, 1)
-      assert {[acked2], _state} = State.pop_messages(state, [produced2.ack_id])
+      assert {[acked2], _state} = State.pop_messages(state, [{produced2.commit_lsn, produced2.commit_idx}])
 
-      assert_commit_tuple_matches(msg1, produced1)
-      assert_commit_tuple_matches(msg1, acked1)
+      assert_cursor_tuple_matches(msg1, produced1)
+      assert_cursor_tuple_matches(msg1, acked1)
 
-      assert_commit_tuple_matches(msg2, produced2)
-      assert_commit_tuple_matches(msg2, acked2)
+      assert_cursor_tuple_matches(msg2, produced2)
+      assert_cursor_tuple_matches(msg2, acked2)
 
-      assert_commit_tuple_matches(msg3, produced3)
-      assert_commit_tuple_matches(msg4, produced4)
+      assert_cursor_tuple_matches(msg3, produced3)
+      assert_cursor_tuple_matches(msg4, produced4)
 
       # These acked messages can arrive in any order
       assert length(acked_34) == 2
       acked3 = Enum.find(acked_34, fn msg -> produced3.ack_id == msg.ack_id end)
       acked4 = Enum.find(acked_34, fn msg -> produced4.ack_id == msg.ack_id end)
 
-      assert_commit_tuple_matches(msg3, acked3)
-      assert_commit_tuple_matches(msg4, acked4)
+      assert_cursor_tuple_matches(msg3, acked3)
+      assert_cursor_tuple_matches(msg4, acked4)
     end
   end
 
@@ -461,7 +470,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
 
       # Ack messages and verify completed
-      assert {[_msg1, _msg2], state} = State.pop_messages(state, [produced1.ack_id, produced2.ack_id])
+      assert {[_msg1, _msg2], state} =
+               State.pop_messages(state, [
+                 {produced1.commit_lsn, produced1.commit_idx},
+                 {produced2.commit_lsn, produced2.commit_idx}
+               ])
+
       assert {:ok, :completed} = State.batch_progress(state, batch_id)
     end
 
@@ -481,7 +495,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {:ok, :in_progress} = State.batch_progress(state, batch_id)
 
       # Persist the second message
-      assert {[_msg2], state} = State.pop_messages(state, [msg2.ack_id])
+      assert {[_msg2], state} = State.pop_messages(state, [{msg2.commit_lsn, msg2.commit_idx}])
       {:ok, state} = State.put_persisted_messages(state, [msg2])
 
       # Verify batch is now completed since all messages are persisted
@@ -592,12 +606,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 2)
 
       # Reset visibility
-      state = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
+      state =
+        State.reset_message_visibilities(state, [
+          {produced1.commit_lsn, produced1.commit_idx},
+          {produced2.commit_lsn, produced2.commit_idx}
+        ])
 
       # Messages should be available for delivery again
       assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
-      assert_commit_tuple_matches(produced1, redelivered1)
-      assert_commit_tuple_matches(produced2, redelivered2)
+      assert_cursor_tuple_matches(produced1, redelivered1)
+      assert_cursor_tuple_matches(produced2, redelivered2)
     end
 
     test "only resets visibility for specified messages", %{state: state} do
@@ -612,12 +630,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 3)
 
       # Reset visibility only for msg1 and msg2
-      state = State.reset_message_visibilities(state, [produced1.ack_id, produced2.ack_id])
+      state =
+        State.reset_message_visibilities(state, [
+          {produced1.commit_lsn, produced1.commit_idx},
+          {produced2.commit_lsn, produced2.commit_idx}
+        ])
 
       # Only msg1 and msg2 should be available for redelivery
       assert {[redelivered1, redelivered2], state} = State.produce_messages(state, 3)
-      assert_commit_tuple_matches(produced1, redelivered1)
-      assert_commit_tuple_matches(produced2, redelivered2)
+      assert_cursor_tuple_matches(produced1, redelivered1)
+      assert_cursor_tuple_matches(produced2, redelivered2)
 
       # No more messages should be available
       assert {[], _state} = State.produce_messages(state, 1)
@@ -633,12 +655,15 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
       assert {[], state} = State.produce_messages(state, 1)
 
       # Reset visibility with mix of valid and invalid ack_ids
-      non_existent_ack_id = "non-existent-ack-id"
-      state = State.reset_message_visibilities(state, [produced1.ack_id, non_existent_ack_id])
+      state =
+        State.reset_message_visibilities(state, [
+          {produced1.commit_lsn, produced1.commit_idx},
+          {Factory.uuid(), Factory.uuid()}
+        ])
 
       # Should still work for the valid message
       assert {[redelivered1], _state} = State.produce_messages(state, 1)
-      assert_commit_tuple_matches(produced1, redelivered1)
+      assert_cursor_tuple_matches(produced1, redelivered1)
     end
   end
 
@@ -662,17 +687,17 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStoreStateTest do
 
       # Should be able to produce all messages again
       assert {[redelivered1, redelivered2], _state} = State.produce_messages(state, 2)
-      assert_commit_tuple_matches(produced1, redelivered1)
-      assert_commit_tuple_matches(produced2, redelivered2)
+      assert_cursor_tuple_matches(produced1, redelivered1)
+      assert_cursor_tuple_matches(produced2, redelivered2)
     end
   end
 
-  defp assert_commit_tuple_matches(msg1, msg2) do
+  defp assert_cursor_tuple_matches(msg1, msg2) do
     assert msg1.commit_lsn == msg2.commit_lsn
     assert msg1.commit_idx == msg2.commit_idx
   end
 
   defp assert_message_in_state(message, state) do
-    assert Enum.find(state.messages, fn {_ack_id, msg} -> msg.id == message.id end)
+    assert Enum.find(state.messages, fn {_cursor_tuple, msg} -> msg.id == message.id end)
   end
 end

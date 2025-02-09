@@ -41,7 +41,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
-  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -297,6 +296,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_messages, messages}, _from, %State{} = state) do
+    now = Sequin.utc_now()
+
+    messages =
+      messages
+      |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+      # We may be receiving messages that we've already ingested and persisted, filter out
+      |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
+
     execute_timed(:put_messages, fn ->
       {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
 
@@ -317,7 +324,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
+    now = Sequin.utc_now()
+
     execute_timed(:put_table_reader_batch, fn ->
+      messages = Enum.map(messages, &%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+
       {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
 
       with {:ok, state} <- State.put_table_reader_batch(state, to_put, batch_id),
@@ -386,12 +397,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     execute_timed(:messages_succeeded, fn ->
       consumer = state.consumer
 
+      cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
+
       persisted_messages_to_drop =
         state
-        |> State.peek_messages(ack_ids)
+        |> State.peek_messages(cursor_tuples)
         |> Enum.filter(&State.is_message_persisted?(state, &1))
 
-      {dropped_messages, state} = State.pop_messages(state, ack_ids)
+      {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
       count = length(dropped_messages)
 
@@ -416,8 +429,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         }
       )
 
-      TracerServer.messages_acked(consumer, ack_ids)
-
       {:reply, {:ok, {dropped_messages, consumer}}, state}
     end)
   end
@@ -428,12 +439,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call({:messages_already_succeeded, ack_ids}, _from, state) do
     execute_timed(:messages_already_succeeded, fn ->
+      cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
+
       persisted_messages_to_drop =
         state
-        |> State.peek_messages(ack_ids)
+        |> State.peek_messages(cursor_tuples)
         |> Enum.filter(&State.is_message_persisted?(state, &1))
 
-      {dropped_messages, state} = State.pop_messages(state, ack_ids)
+      {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
       count = length(dropped_messages)
 
@@ -445,8 +458,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call({:messages_failed, message_metadatas}, _from, state) do
     execute_timed(:messages_failed, fn ->
+      cursor_tuples = State.ack_ids_to_cursor_tuples(state, Enum.map(message_metadatas, & &1.ack_id))
+
       message_metas_by_ack_id = Map.new(message_metadatas, &{&1.ack_id, &1})
-      {messages, state} = State.pop_messages(state, Map.keys(message_metas_by_ack_id))
+      {messages, state} = State.pop_messages(state, cursor_tuples)
 
       messages =
         Enum.map(messages, fn msg ->
@@ -564,7 +579,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
           :ok
 
         unsynced_count ->
-          Logger.warning("[SlotMessageStore] Found #{unsynced_count} messages not in ordered_ack_ids_table",
+          Logger.warning("[SlotMessageStore] Found #{unsynced_count} messages not in both sets",
             count: unsynced_count,
             consumer_id: state.consumer_id
           )

@@ -54,7 +54,7 @@ defmodule Sequin.MessageHandlerTest do
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(3, fn -> now end)
+      TestSupport.expect_utc_now(4, fn -> now end)
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 
@@ -118,7 +118,7 @@ defmodule Sequin.MessageHandlerTest do
       context = %MessageHandler.Context{consumers: [consumer], replication_slot_id: UUID.uuid4()}
 
       now = DateTime.utc_now()
-      TestSupport.expect_utc_now(3, fn -> now end)
+      TestSupport.expect_utc_now(4, fn -> now end)
 
       {:ok, 1, _} = MessageHandler.handle_messages(context, [message])
 

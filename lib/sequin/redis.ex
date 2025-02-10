@@ -57,9 +57,12 @@ defmodule Sequin.Redis do
       {:error, :no_connection} ->
         {:error, Error.service(service: :redis, code: "no_connection", message: "No connection to Redis")}
 
-      {:error, error} when is_binary(error) ->
+      {:error, :timeout} ->
+        {:error, Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")}
+
+      {:error, error} when is_binary(error) or is_atom(error) ->
         Logger.error("Redis command failed: #{error}", error: error)
-        {:error, Error.service(service: :redis, code: :command_failed, message: error)}
+        {:error, Error.service(service: :redis, code: :command_failed, message: to_string(error))}
     end
   end
 

@@ -91,7 +91,11 @@ defmodule Sequin.Sinks.Redis.Client do
     Error.service(service: :redis, code: :no_connection, message: "No connection to Redis")
   end
 
-  defp to_sequin_error(error) when is_binary(error) do
-    Error.service(service: :redis, message: error, code: :command_failed)
+  defp to_sequin_error(:timeout) do
+    Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")
+  end
+
+  defp to_sequin_error(error) when is_binary(error) or is_atom(error) do
+    Error.service(service: :redis, message: to_string(error), code: :command_failed)
   end
 end

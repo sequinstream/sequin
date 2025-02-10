@@ -430,7 +430,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     # Count keys in ETS that aren't in messages
     ets_not_in_messages =
       :ets.foldl(
-        fn {commit_lsn, commit_idx} = _cursor_tuple, acc ->
+        fn {{commit_lsn, commit_idx}} = _cursor_tuple, acc ->
           if Map.has_key?(state.messages, {commit_lsn, commit_idx}) do
             acc
           else

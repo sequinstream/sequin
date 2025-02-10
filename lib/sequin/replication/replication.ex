@@ -481,7 +481,7 @@ defmodule Sequin.Replication do
     Postgres.replication_lag_bytes(slot.postgres_database, slot.slot_name)
   end
 
-  def lag_bytes_alert_threshold, do: 1024 * 1024
+  def lag_bytes_alert_threshold, do: 2.5 * 1024 * 1024 * 1024
 
   defp env do
     Application.get_env(:sequin, :env)

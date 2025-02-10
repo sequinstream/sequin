@@ -593,52 +593,62 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       case Postgres.query(conn, partition_query, [id]) do
         {:ok, %{rows: [[parent_id, parent_schema, parent_name]]}} ->
           # It's a partition, use the parent info
-          {parent_id, parent_schema, parent_name}
+          %{id: parent_id, schema: parent_schema, name: parent_name}
 
         {:ok, %{rows: []}} ->
           # Not a partition, use its own info
-          {id, schema, table}
+          %{id: id, schema: schema, name: table}
       end
-
-    # Get primary keys for the actual table (partition or parent)
-    pk_query = """
-    SELECT a.attname
-    FROM pg_index i
-    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
-    WHERE i.indrelid = $1
-    AND i.indisprimary;
-    """
-
-    {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [id])
-    primary_keys = List.flatten(pk_rows)
 
     # Get attnums for the actual table
     attnum_query = """
-    SELECT attname, attnum
-    FROM pg_attribute
-    WHERE attrelid = $1
-    AND attnum > 0
-    AND NOT attisdropped;
+    with pk_columns as (
+      select a.attname
+      from pg_index i
+      join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
+      where i.indrelid = $1
+      and i.indisprimary
+    ),
+    column_info as (
+      select a.attname, a.attnum,
+             (select typname
+              from pg_type
+              where oid = case when t.typtype = 'd'
+                              then t.typbasetype
+                              else t.oid
+                         end) as base_type
+      from pg_attribute a
+      join pg_type t on t.oid = a.atttypid
+      where a.attrelid = $1
+      and a.attnum > 0
+      and not a.attisdropped
+    )
+    select c.attname, c.attnum, c.base_type, (pk.attname is not null) as is_pk
+    from column_info c
+    left join pk_columns pk on pk.attname = c.attname;
     """
 
-    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [id])
-    attnum_map = Map.new(attnum_rows, fn [name, num] -> {name, num} end)
+    {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [parent_info.id])
 
     # Enrich columns with primary key information and attnums
     enriched_columns =
       Enum.map(columns, fn %{name: name} = column ->
-        %{column | pk?: name in primary_keys, attnum: Map.get(attnum_map, name)}
-      end)
+        case Enum.find(attnum_rows, fn [col_name, _, _, _] -> col_name == name end) do
+          [_, attnum, base_type, is_pk] ->
+            %{column | pk?: is_pk, attnum: attnum, type: base_type}
 
-    {parent_id, parent_schema, parent_name} = parent_info
+          nil ->
+            column
+        end
+      end)
 
     # Store using the actual relation_id but with parent table info
     updated_schemas =
       Map.put(state.schemas, id, %{
         columns: enriched_columns,
-        schema: parent_schema,
-        table: parent_name,
-        parent_table_id: parent_id
+        schema: parent_info.schema,
+        table: parent_info.name,
+        parent_table_id: parent_info.id
       })
 
     %{state | schemas: updated_schemas}
@@ -1044,6 +1054,20 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
         {:error, wrapped_error}
     end
+  end
+
+  defp cast_value("vector", value_str) do
+    list =
+      value_str
+      |> String.trim("[")
+      |> String.trim("]")
+      |> String.split(",")
+      |> Enum.map(fn num ->
+        {float, ""} = Float.parse(num)
+        float
+      end)
+
+    {:ok, list}
   end
 
   defp cast_value(type, value) do

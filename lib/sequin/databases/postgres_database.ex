@@ -176,6 +176,7 @@ defmodule Sequin.Databases.PostgresDatabase do
       ])
       |> Enum.to_list()
       |> Keyword.put_new(:connect_timeout, @default_connect_timeout)
+      |> Keyword.put(:types, Sequin.Postgres.PostgrexTypes)
 
     # TODO: Remove this when we have CA certs for the cloud providers
     # We likely need a bundle that covers many different database providers

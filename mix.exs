@@ -90,7 +90,8 @@ defmodule Sequin.MixProject do
       {:aws_signature, "~> 0.3.2"},
       {:eredis_cluster, "~> 0.9"},
       {:eredis, github: "acco/eredis", override: true},
-      {:benchee, "~> 1.0", only: :dev}
+      {:benchee, "~> 1.0", only: :dev},
+      {:pgvector, "~> 0.3.0"}
     ]
   end
 

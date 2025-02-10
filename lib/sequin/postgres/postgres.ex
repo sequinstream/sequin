@@ -717,6 +717,9 @@ defmodule Sequin.Postgres do
             is_nil(value) ->
               nil
 
+            is_struct(value, Pgvector) ->
+              Pgvector.to_list(value)
+
             # Binary data types
             col.type in ["bytea", "bit", "varbit"] and String.starts_with?(value, "\\x") ->
               value
@@ -789,6 +792,7 @@ defmodule Sequin.Postgres do
     "uuid",
     "varchar",
     "varbit",
+    "vector",
     "void"
   ]
 

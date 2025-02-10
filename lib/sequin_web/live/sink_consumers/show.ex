@@ -368,11 +368,25 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         {:reply, %{ok: true},
          socket
          |> assign(:consumer, updated_consumer)
-         |> put_flash(:toast, %{kind: :success, title: "Consumer paused"})}
+         |> put_flash(:toast, %{kind: :success, title: "Consumer disabled"})}
 
       {:error, error} ->
         Logger.error("Failed to disable consumer: #{inspect(error)}", error: error)
         {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to disable consumer"})}
+    end
+  end
+
+  def handle_event("pause", _params, socket) do
+    case Consumers.update_sink_consumer(socket.assigns.consumer, %{status: :paused}) do
+      {:ok, updated_consumer} ->
+        {:reply, %{ok: true},
+         socket
+         |> assign(:consumer, updated_consumer)
+         |> put_flash(:toast, %{kind: :success, title: "Consumer paused"})}
+
+      {:error, error} ->
+        Logger.error("Failed to pause consumer: #{inspect(error)}", error: error)
+        {:reply, %{ok: false}, put_flash(socket, :toast, %{kind: :error, title: "Failed to pause consumer"})}
     end
   end
 

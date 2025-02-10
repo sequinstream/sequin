@@ -12,6 +12,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
   alias Sequin.DatabasesRuntime.SlotMessageStore
+  alias Sequin.DatabasesRuntime.SlotProcessor
   alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Health.CheckHttpEndpointHealthWorker
@@ -68,9 +69,16 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
             :active ->
               ConsumersSupervisor.restart_for_sink_consumer(consumer)
               :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+              :ok = SlotProcessor.monitor_message_store(consumer.replication_slot_id, consumer.id)
+              :ok
+
+            :paused ->
+              :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
+              ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok
 
             :disabled ->
+              :ok = SlotProcessor.demonitor_message_store(consumer.replication_slot_id, consumer.id)
               :ok = DatabasesRuntimeSupervisor.refresh_message_handler_ctx(consumer.replication_slot_id)
               ConsumersSupervisor.stop_for_sink_consumer(consumer)
               :ok

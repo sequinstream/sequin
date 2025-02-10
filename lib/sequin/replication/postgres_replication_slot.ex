@@ -6,6 +6,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
   import Ecto.Query
 
   alias Ecto.Queryable
+  alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
 
   defmodule Info do
@@ -36,7 +37,13 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
     belongs_to :account, Sequin.Accounts.Account
     belongs_to :postgres_database, PostgresDatabase
 
-    has_many :sink_consumers, Sequin.Consumers.SinkConsumer, foreign_key: :replication_slot_id
+    has_many :sink_consumers, SinkConsumer, foreign_key: :replication_slot_id
+
+    has_many :not_disabled_sink_consumers,
+             SinkConsumer,
+             foreign_key: :replication_slot_id,
+             where: [status: {:in, [:active, :paused]}]
+
     has_many :wal_pipelines, Sequin.Replication.WalPipeline, foreign_key: :replication_slot_id
 
     field :info, :map, virtual: true

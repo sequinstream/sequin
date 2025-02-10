@@ -1,6 +1,6 @@
 <script lang="ts">
   import HealthIcon from "./HealthIcon.svelte";
-  import { MoreHorizontal, RotateCw } from "lucide-svelte";
+  import { MoreHorizontal, RotateCw, Pause, StopCircle } from "lucide-svelte";
   import type { Health, Check } from "./Types";
   import * as Popover from "$lib/components/ui/popover";
   import { Button } from "$lib/components/ui/button";
@@ -11,6 +11,7 @@
     data: any,
     cb: (val: any) => void,
   ) => void;
+  export let status: "active" | "paused" | "disabled" = "active";
 
   let healthRefreshing = false;
 
@@ -20,6 +21,7 @@
     warning: "border-yellow-500",
     initializing: "border-blue-500",
     paused: "border-gray-400",
+    disabled: "border-gray-400",
     notice: "border-blue-400",
   };
 
@@ -28,7 +30,8 @@
     error: "text-red-600",
     warning: "text-yellow-600",
     initializing: "text-blue-600",
-    paused: "text-gray-500",
+    paused: "text-amber-600",
+    disabled: "text-gray-600",
     notice: "text-blue-500",
   };
 
@@ -62,6 +65,14 @@
   );
 
   $: statusMessage = (() => {
+    // Add status checks first
+    if (status === "paused") {
+      return "Sink is paused - messages are being buffered";
+    } else if (status === "disabled") {
+      return "Sink is disabled - no messages are being processed";
+    }
+
+    // Then continue with existing health status logic
     if (health.status === "paused") return "Paused";
 
     const count = checkCounts[health.status];
@@ -84,6 +95,13 @@
       return `${count} health check${count > 1 ? "s are" : " is"} ${health.status}`;
     }
   })();
+
+  $: displayStatus =
+    status === "paused"
+      ? "paused"
+      : status === "disabled"
+        ? "disabled"
+        : health.status;
 </script>
 
 <div
@@ -91,7 +109,13 @@
 >
   <div class="flex items-center justify-between mb-2">
     <div class="flex items-center">
-      <HealthIcon status={health.status} />
+      {#if status === "paused"}
+        <Pause class="h-4 w-4 text-amber-600 mr-2" />
+      {:else if status === "disabled"}
+        <StopCircle class="h-4 w-4 text-gray-600 mr-2" />
+      {:else}
+        <HealthIcon status={health.status} />
+      {/if}
       <h2 class="text-lg font-medium ml-2">Health</h2>
     </div>
     <div class="flex items-center gap-2">
@@ -139,7 +163,7 @@
       </Popover.Root>
     </div>
   </div>
-  <p class="text-xs {checkStatusColor[health.status]}">
+  <p class="text-xs {checkStatusColor[displayStatus]}">
     {statusMessage}
   </p>
 </div>

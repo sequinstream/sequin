@@ -12,7 +12,7 @@
   import { Label } from "$lib/components/ui/label";
   import { RadioGroup, RadioGroupItem } from "$lib/components/ui/radio-group";
   import { ChevronRight } from "lucide-svelte";
-  import { Database, Plug, Webhook } from "lucide-svelte";
+  import { Database, Plug, Webhook, Pause, StopCircle } from "lucide-svelte";
   import { formatRelativeTimestamp } from "$lib/utils";
   import HealthPill from "../health/HealthPill.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
@@ -25,6 +25,7 @@
   import SequinStreamIcon from "../sinks/sequin_stream/SequinStreamIcon.svelte";
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
+  import { Badge } from "$lib/components/ui/badge";
 
   export let consumers: Array<{
     id: string;
@@ -39,7 +40,7 @@
       | "sequin_stream"
       | "nats"
       | "rabbitmq";
-    status: "active" | "disabled";
+    status: "active" | "disabled" | "paused";
     database_name: string;
     health: {
       status: "healthy" | "warning" | "error" | "initializing";
@@ -173,7 +174,21 @@
             </Table.Cell>
             <Table.Cell>{consumer.name}</Table.Cell>
             <Table.Cell>
-              <HealthPill status={consumer.health.status} />
+              <div class="flex items-center gap-2">
+                {#if consumer.status === "paused"}
+                  <Badge variant="warning">
+                    <Pause class="h-4 w-4 mr-1" />
+                    <span>Paused</span>
+                  </Badge>
+                {:else if consumer.status === "disabled"}
+                  <Badge variant="secondary">
+                    <StopCircle class="h-4 w-4 mr-1" />
+                    <span>Disabled</span>
+                  </Badge>
+                {:else}
+                  <HealthPill status={consumer.health.status} />
+                {/if}
+              </div>
             </Table.Cell>
             <Table.Cell>{consumer.database_name}</Table.Cell>
             <Table.Cell

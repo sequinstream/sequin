@@ -21,7 +21,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
   require Logger
 
-  @min_log_time_ms 200
+  @min_log_time_ms 100
 
   @impl GenStage
   def init(opts) do

@@ -75,13 +75,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         messages = Map.new(messages, &{{&1.commit_lsn, &1.commit_idx}, &1})
 
         # Insert into ETS
-        ets_keys = messages |> Map.keys() |> Enum.map(&{&1})
+        ets_keys = Enum.map(messages, fn {commit_tuple, _msg} -> {commit_tuple} end)
 
         state.consumer
         |> ordered_cursors_table()
         |> :ets.insert(ets_keys)
 
-        ack_ids_to_cursor_tuples = messages |> Map.values() |> Map.new(&{&1.ack_id, {&1.commit_lsn, &1.commit_idx}})
+        ack_ids_to_cursor_tuples =
+          Map.new(messages, fn {_commit_tuple, msg} -> {msg.ack_id, {msg.commit_lsn, msg.commit_idx}} end)
 
         state =
           %{
@@ -272,7 +273,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
   @spec ack_ids_to_cursor_tuples(State.t(), list(SinkConsumer.ack_id())) :: list(cursor_tuple())
   def ack_ids_to_cursor_tuples(%State{} = state, ack_ids) do
     ack_ids
-    |> Enum.map(&Map.get(state.ack_ids_to_cursor_tuples, &1))
+    |> Stream.map(&Map.get(state.ack_ids_to_cursor_tuples, &1))
     |> Enum.filter(& &1)
   end
 

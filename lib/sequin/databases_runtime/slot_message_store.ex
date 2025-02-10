@@ -127,9 +127,30 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def messages_succeeded(consumer_id, ack_ids) do
     with {:ok, {dropped_messages, consumer}} <- GenServer.call(via_tuple(consumer_id), {:messages_succeeded, ack_ids}) do
-      AcknowledgedMessages.store_messages(consumer.id, dropped_messages)
+      count = length(dropped_messages)
+      Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
 
-      {:ok, length(dropped_messages)}
+      AcknowledgedMessages.store_messages(consumer_id, dropped_messages)
+
+      Metrics.incr_consumer_messages_processed_count(consumer, count)
+      Metrics.incr_consumer_messages_processed_throughput(consumer, count)
+
+      :telemetry.execute(
+        [:sequin, :posthog, :event],
+        %{event: "consumer_ack"},
+        %{
+          distinct_id: "00000000-0000-0000-0000-000000000000",
+          properties: %{
+            consumer_id: consumer.id,
+            consumer_name: consumer.name,
+            message_count: count,
+            message_kind: consumer.message_kind,
+            "$groups": %{account: consumer.account_id}
+          }
+        }
+      )
+
+      {:ok, count}
     end
   catch
     :exit, e ->
@@ -296,15 +317,16 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_messages, messages}, _from, %State{} = state) do
-    now = Sequin.utc_now()
-
-    messages =
-      messages
-      |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
-      # We may be receiving messages that we've already ingested and persisted, filter out
-      |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
-
     execute_timed(:put_messages, fn ->
+      now = Sequin.utc_now()
+
+      messages =
+        messages
+        |> Stream.map(&%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
+        # We may be receiving messages that we've already ingested and persisted, filter out
+        # Do we receive messages that we have ingested but not persisted?
+        |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
+
       {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
 
       with {:ok, state} <- State.put_messages(state, to_put),
@@ -324,9 +346,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   @impl GenServer
   def handle_call({:put_table_reader_batch, messages, batch_id}, _from, %State{} = state) do
-    now = Sequin.utc_now()
-
     execute_timed(:put_table_reader_batch, fn ->
+      now = Sequin.utc_now()
+
       messages = Enum.map(messages, &%{&1 | ack_id: Sequin.uuid4(), ingested_at: now})
 
       {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
@@ -395,8 +417,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
   def handle_call({:messages_succeeded, ack_ids}, _from, state) do
     execute_timed(:messages_succeeded, fn ->
-      consumer = state.consumer
-
       cursor_tuples = State.ack_ids_to_cursor_tuples(state, ack_ids)
 
       persisted_messages_to_drop =
@@ -406,30 +426,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       {dropped_messages, state} = State.pop_messages(state, cursor_tuples)
 
-      count = length(dropped_messages)
-
       :ok = delete_messages(state, Enum.map(persisted_messages_to_drop, & &1.ack_id))
 
-      Health.put_event(state.consumer, %Event{slug: :messages_delivered, status: :success})
-      Metrics.incr_consumer_messages_processed_count(state.consumer, count)
-      Metrics.incr_consumer_messages_processed_throughput(state.consumer, count)
-
-      :telemetry.execute(
-        [:sequin, :posthog, :event],
-        %{event: "consumer_ack"},
-        %{
-          distinct_id: "00000000-0000-0000-0000-000000000000",
-          properties: %{
-            consumer_id: consumer.id,
-            consumer_name: consumer.name,
-            message_count: count,
-            message_kind: consumer.message_kind,
-            "$groups": %{account: consumer.account_id}
-          }
-        }
-      )
-
-      {:reply, {:ok, {dropped_messages, consumer}}, state}
+      {:reply, {:ok, {dropped_messages, state.consumer}}, state}
     end)
   end
 

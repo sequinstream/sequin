@@ -940,7 +940,7 @@ defmodule Sequin.Postgres do
   @spec replication_lag_bytes(db_conn(), String.t()) :: {:ok, non_neg_integer()} | {:error, Error.t()}
   def replication_lag_bytes(conn, slot_name) do
     query = """
-    select pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) as replication_lag_bytes
+    select pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) as replication_lag_bytes
     from pg_replication_slots
     where slot_name = $1;
     """

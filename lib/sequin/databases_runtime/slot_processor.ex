@@ -567,7 +567,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # end
 
   defp skip_message?(%struct{} = msg, state) when struct in [Insert, Update, Delete] do
-    {_columns, schema, _table} = Map.get(state.schemas, msg.relation_id)
+    {_columns, schema, _table, _parent_table_id} = Map.get(state.schemas, msg.relation_id)
     schema in [@config_schema, @stream_schema]
   end
 
@@ -577,29 +577,48 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp process_message(%Relation{id: id, columns: columns, namespace: schema, name: table}, %State{} = state) do
     conn = get_cached_conn(state)
 
-    # Query to get primary keys
-    # We can't trust the `flags` when replica identity is set to full - all columns are indicated
-    # as primary keys.
+    # First, determine if this is a partition and get its parent table info
+    partition_query = """
+    SELECT
+      p.inhparent as parent_id,
+      n.nspname as parent_schema,
+      c.relname as parent_name
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN pg_inherits p ON p.inhrelid = c.oid
+    WHERE c.oid = $1;
+    """
+
+    parent_info =
+      case Postgres.query(conn, partition_query, [id]) do
+        {:ok, %{rows: [[parent_id, parent_schema, parent_name]]}} ->
+          # It's a partition, use the parent info
+          {parent_id, parent_schema, parent_name}
+
+        {:ok, %{rows: []}} ->
+          # Not a partition, use its own info
+          {id, schema, table}
+      end
+
+    # Get primary keys for the actual table (partition or parent)
     pk_query = """
-    select a.attname
-    from pg_index i
-    join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any(i.indkey)
-    where i.indrelid = $1
-    and i.indisprimary;
+    SELECT a.attname
+    FROM pg_index i
+    JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+    WHERE i.indrelid = $1
+    AND i.indisprimary;
     """
 
     {:ok, %{rows: pk_rows}} = Postgres.query(conn, pk_query, [id])
     primary_keys = List.flatten(pk_rows)
 
-    # Query to get attnums
-    # The Relation message does not include the attnums, so we need to query the pg_attribute
-    # table to get them.
+    # Get attnums for the actual table
     attnum_query = """
-    select attname, attnum
-    from pg_attribute
-      where attrelid = $1
-    and attnum > 0
-    and not attisdropped;
+    SELECT attname, attnum
+    FROM pg_attribute
+    WHERE attrelid = $1
+    AND attnum > 0
+    AND NOT attisdropped;
     """
 
     {:ok, %{rows: attnum_rows}} = Postgres.query(conn, attnum_query, [id])
@@ -611,7 +630,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         %{column | pk?: name in primary_keys, attnum: Map.get(attnum_map, name)}
       end)
 
-    updated_schemas = Map.put(state.schemas, id, {enriched_columns, schema, table})
+    {parent_id, parent_schema, parent_name} = parent_info
+
+    # Store using the actual relation_id but with parent table info
+    updated_schemas = Map.put(state.schemas, id, {enriched_columns, parent_schema, parent_name, parent_id})
     %{state | schemas: updated_schemas}
   end
 
@@ -711,7 +733,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @spec maybe_cast_message(decoded_message :: map(), State.t()) :: Message.t() | map()
   defp maybe_cast_message(%Insert{} = msg, state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
+    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
+    {msg.relation_id, parent_table_id, table, schema}
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     %Message{
@@ -723,14 +747,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       ids: ids,
       table_schema: schema,
       table_name: table,
-      table_oid: msg.relation_id,
+      table_oid: parent_table_id,
       fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
       trace_id: UUID.uuid4()
     }
   end
 
   defp maybe_cast_message(%Update{} = msg, state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
+    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
+    {msg.relation_id, parent_table_id, table, schema}
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     old_fields =
@@ -747,7 +773,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       ids: ids,
       table_schema: schema,
       table_name: table,
-      table_oid: msg.relation_id,
+      table_oid: parent_table_id,
       old_fields: old_fields,
       fields: data_tuple_to_fields(ids, columns, msg.tuple_data),
       trace_id: UUID.uuid4()
@@ -755,7 +781,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp maybe_cast_message(%Delete{} = msg, state) do
-    {columns, schema, table} = Map.get(state.schemas, msg.relation_id)
+    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
+    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
+    {msg.relation_id, parent_table_id, table, schema}
 
     prev_tuple_data =
       if msg.old_tuple_data do
@@ -775,7 +803,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       ids: ids,
       table_schema: schema,
       table_name: table,
-      table_oid: msg.relation_id,
+      table_oid: parent_table_id,
       old_fields: data_tuple_to_fields(ids, columns, prev_tuple_data),
       trace_id: UUID.uuid4()
     }

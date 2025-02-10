@@ -28,6 +28,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.Factory.ConsumersFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
+  alias Sequin.Factory.TestEventLogFactory
   alias Sequin.Replication
   alias Sequin.Replication.PostgresReplicationSlot
   alias Sequin.Test.UnboxedRepo
@@ -35,6 +36,7 @@ defmodule Sequin.PostgresReplicationTest do
   alias Sequin.TestSupport.Models.CharacterDetailed
   alias Sequin.TestSupport.Models.CharacterIdentFull
   alias Sequin.TestSupport.Models.CharacterMultiPK
+  alias Sequin.TestSupport.Models.TestEventLogPartitioned
   alias Sequin.TestSupport.ReplicationSlots
 
   @moduletag :unboxed
@@ -85,6 +87,13 @@ defmodule Sequin.PostgresReplicationTest do
           account_id: account_id,
           postgres_database_id: source_db.id,
           table_oid: CharacterMultiPK.table_oid()
+        )
+
+      test_event_log_partitioned_sequence =
+        DatabasesFactory.insert_sequence!(
+          account_id: account_id,
+          postgres_database_id: source_db.id,
+          table_oid: TestEventLogPartitioned.table_oid()
         )
 
       # Create consumers for each table type (event)
@@ -193,6 +202,22 @@ defmodule Sequin.PostgresReplicationTest do
             )
         )
 
+      test_event_log_partitioned_consumer =
+        ConsumersFactory.insert_sink_consumer!(
+          name: "test_event_log_partitioned_consumer",
+          message_kind: :event,
+          replication_slot_id: pg_replication.id,
+          account_id: account_id,
+          source_tables: [],
+          sequence_id: test_event_log_partitioned_sequence.id,
+          sequence_filter:
+            ConsumersFactory.sequence_filter_attrs(
+              actions: [:insert, :update, :delete],
+              column_filters: [],
+              group_column_attnums: [TestEventLogPartitioned.column_attnum("id")]
+            )
+        )
+
       event_character_consumer = Repo.preload(event_character_consumer, :postgres_database)
       event_character_ident_consumer = Repo.preload(event_character_ident_consumer, :postgres_database)
       event_character_multi_pk_consumer = Repo.preload(event_character_multi_pk_consumer, :postgres_database)
@@ -200,7 +225,7 @@ defmodule Sequin.PostgresReplicationTest do
       record_character_consumer = Repo.preload(record_character_consumer, :postgres_database)
       record_character_ident_consumer = Repo.preload(record_character_ident_consumer, :postgres_database)
       record_character_multi_pk_consumer = Repo.preload(record_character_multi_pk_consumer, :postgres_database)
-
+      test_event_log_partitioned_consumer = Repo.preload(test_event_log_partitioned_consumer, :postgres_database)
       sup = Module.concat(__MODULE__, DatabasesRuntime.Supervisor)
       start_supervised!(Sequin.DynamicSupervisor.child_spec(name: sup))
       {:ok, _} = DatabasesRuntime.Supervisor.start_replication(sup, pg_replication, test_pid: self())
@@ -213,7 +238,8 @@ defmodule Sequin.PostgresReplicationTest do
         event_character_multi_pk_consumer: event_character_multi_pk_consumer,
         record_character_consumer: record_character_consumer,
         record_character_ident_consumer: record_character_ident_consumer,
-        record_character_multi_pk_consumer: record_character_multi_pk_consumer
+        record_character_multi_pk_consumer: record_character_multi_pk_consumer,
+        test_event_log_partitioned_consumer: test_event_log_partitioned_consumer
       }
     end
 
@@ -647,6 +673,29 @@ defmodule Sequin.PostgresReplicationTest do
 
       # Check that the record field shows the new empty array
       assert data.record["tags"] == [], "Expected empty array in record, got: #{inspect(data.record["tags"])}"
+    end
+
+    test "changes to partitioned tables are replicated", %{test_event_log_partitioned_consumer: consumer} do
+      # Insert a record into the partitioned table
+      TestEventLogFactory.insert_test_event_log_partitioned!(
+        [
+          seq: 1,
+          source_table_name: "test_table",
+          action: "insert",
+          record: %{"field1" => "test value"}
+        ],
+        repo: UnboxedRepo
+      )
+
+      # Wait for the message to be handled
+      assert_receive {SlotProcessor, :flush_messages}, 500
+
+      # Fetch consumer events
+      [consumer_event] = list_messages(consumer.id)
+
+      # Assert the consumer event details
+      assert consumer_event.consumer_id == consumer.id
+      assert consumer_event.table_oid == TestEventLogPartitioned.table_oid()
     end
   end
 

@@ -35,21 +35,25 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def wal_cursors_ingested(_, []), do: :ok
 
   def wal_cursors_ingested(consumer_id, wal_cursors) do
-    ingested_at = Sequin.utc_now()
+    if subsample?() do
+      ingested_at = Sequin.utc_now()
 
-    commands =
-      Enum.map(wal_cursors, fn wal_cursor ->
-        [
-          "ZADD",
-          undelivered_cursors_key(consumer_id),
-          DateTime.to_unix(ingested_at, :second),
-          member_from_wal_cursor(wal_cursor)
-        ]
-      end)
+      commands =
+        Enum.map(wal_cursors, fn wal_cursor ->
+          [
+            "ZADD",
+            undelivered_cursors_key(consumer_id),
+            DateTime.to_unix(ingested_at, :second),
+            member_from_wal_cursor(wal_cursor)
+          ]
+        end)
 
-    case Redis.pipeline(commands) do
-      {:ok, _results} -> :ok
-      {:error, error} -> {:error, error}
+      case Redis.pipeline(commands) do
+        {:ok, _results} -> :ok
+        {:error, error} -> {:error, error}
+      end
+    else
+      :ok
     end
   end
 
@@ -288,7 +292,7 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
     key = checkpoint_key(consumer_id, checkpoint)
 
     case Redis.command(["ZCARD", key]) do
-      {:ok, nil} -> {:ok, Error.not_found(entity: "checkpoint", id: checkpoint)}
+      {:ok, nil} -> {:ok, Error.not_found(entity: "checkpoint", params: %{checkpoint: checkpoint})}
       {:ok, count} -> {:ok, String.to_integer(count)}
       {:error, error} -> {:error, error}
     end
@@ -305,6 +309,8 @@ defmodule Sequin.ConsumersRuntime.MessageLedgers do
   def wal_cursor_from_message(message), do: Map.take(message, [:commit_lsn, :commit_idx])
 
   defp checkpoint_key(consumer_id, checkpoint), do: "consumer:#{consumer_id}:checkpoint:#{checkpoint}"
+
+  defp subsample?, do: env() != :prod or Enum.random(1..10) == 1
 
   # set to true to enable verbose ledger checkpoints (dev only)
   defp auditing?, do: false

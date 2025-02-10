@@ -11,6 +11,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
   alias Sequin.ConsumersRuntime.MessageLedgers
   alias Sequin.ConsumersRuntime.Supervisor, as: ConsumersSupervisor
   alias Sequin.Databases
+  alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.DatabasesRuntime.SlotSupervisor
   alias Sequin.DatabasesRuntime.Supervisor, as: DatabasesRuntimeSupervisor
   alias Sequin.Health.CheckHttpEndpointHealthWorker
@@ -61,6 +62,7 @@ defmodule Sequin.ConsumersRuntime.LifecycleEventWorker do
       "update" ->
         with {:ok, consumer} <- Consumers.get_consumer(id) do
           CheckSinkConfigurationWorker.enqueue(consumer.id, unique: false)
+          :ok = SlotMessageStore.consumer_updated(consumer)
 
           case consumer.status do
             :active ->

@@ -171,6 +171,11 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     pop_messages(state, blocked_cursor_tuples)
   end
 
+  @spec pop_all_messages(State.t()) :: {list(message()), State.t()}
+  def pop_all_messages(%State{} = state) do
+    pop_messages(state, Map.keys(state.messages))
+  end
+
   @spec is_message_group_persisted?(State.t(), String.t()) :: boolean()
   # Messages without group_ids do not belong to any group
   def is_message_group_persisted?(%State{}, nil) do

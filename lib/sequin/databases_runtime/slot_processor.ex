@@ -567,7 +567,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   # end
 
   defp skip_message?(%struct{} = msg, state) when struct in [Insert, Update, Delete] do
-    {_columns, schema, _table, _parent_table_id} = Map.get(state.schemas, msg.relation_id)
+    %{schema: schema} = Map.get(state.schemas, msg.relation_id)
     schema in [@config_schema, @stream_schema]
   end
 
@@ -633,7 +633,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     {parent_id, parent_schema, parent_name} = parent_info
 
     # Store using the actual relation_id but with parent table info
-    updated_schemas = Map.put(state.schemas, id, {enriched_columns, parent_schema, parent_name, parent_id})
+    updated_schemas =
+      Map.put(state.schemas, id, %{
+        columns: enriched_columns,
+        schema: parent_schema,
+        table: parent_name,
+        parent_table_id: parent_id
+      })
+
     %{state | schemas: updated_schemas}
   end
 
@@ -733,9 +740,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   @spec maybe_cast_message(decoded_message :: map(), State.t()) :: Message.t() | map()
   defp maybe_cast_message(%Insert{} = msg, state) do
-    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
-    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
-    {msg.relation_id, parent_table_id, table, schema}
+    %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
+      Map.get(state.schemas, msg.relation_id)
+
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     %Message{
@@ -754,9 +761,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp maybe_cast_message(%Update{} = msg, state) do
-    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
-    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
-    {msg.relation_id, parent_table_id, table, schema}
+    %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
+      Map.get(state.schemas, msg.relation_id)
+
     ids = data_tuple_to_ids(columns, msg.tuple_data)
 
     old_fields =
@@ -781,9 +788,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp maybe_cast_message(%Delete{} = msg, state) do
-    # parent_table_id is the root table for partition tables or same as relation_id for non-partitioned tables
-    {columns, schema, table, parent_table_id} = Map.get(state.schemas, msg.relation_id)
-    {msg.relation_id, parent_table_id, table, schema}
+    %{columns: columns, schema: schema, table: table, parent_table_id: parent_table_id} =
+      Map.get(state.schemas, msg.relation_id)
 
     prev_tuple_data =
       if msg.old_tuple_data do

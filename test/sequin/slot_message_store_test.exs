@@ -378,6 +378,43 @@ defmodule Sequin.SlotMessageStoreTest do
 
       assert length(blocked_messages) == 0
     end
+
+    test "persists all messages when consumer is disabled", %{consumer: consumer} do
+      # Put initial message in store while active
+      initial_message =
+        ConsumersFactory.consumer_message(
+          message_kind: consumer.message_kind,
+          consumer_id: consumer.id
+        )
+
+      :ok = SlotMessageStore.put_messages(consumer.id, [initial_message])
+
+      # Verify message is not persisted yet
+      assert [] == Consumers.list_consumer_messages_for_consumer(consumer)
+
+      # Update consumer to disabled state
+      disabled_consumer = %{consumer | status: :disabled}
+      :ok = SlotMessageStore.consumer_updated(disabled_consumer)
+
+      # This will cause an async flush, wait for it by making any other call
+      SlotMessageStore.peek_messages(consumer.id, 1)
+
+      # Verify existing message was persisted
+      persisted_messages = Consumers.list_consumer_messages_for_consumer(disabled_consumer)
+      assert length(persisted_messages) == 1
+
+      # Put new messages in store while disabled
+      new_messages = [
+        ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id),
+        ConsumersFactory.consumer_message(message_kind: consumer.message_kind, consumer_id: consumer.id)
+      ]
+
+      :ok = SlotMessageStore.put_messages(consumer.id, new_messages)
+
+      # Verify all messages are persisted
+      persisted_messages = Consumers.list_consumer_messages_for_consumer(disabled_consumer)
+      assert length(persisted_messages) == 3
+    end
   end
 
   describe "SlotMessageStore table reader batch handling" do

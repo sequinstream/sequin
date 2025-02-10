@@ -246,6 +246,14 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   end
 
   @doc """
+  Updates the consumer in state when its configuration changes.
+  """
+  @spec consumer_updated(SinkConsumer.t()) :: :ok | {:error, Error.t()}
+  def consumer_updated(consumer) do
+    GenServer.call(via_tuple(consumer.id), {:consumer_updated, consumer})
+  end
+
+  @doc """
   Set the monitor reference for the SlotMessageStore into State
 
   We use `pid` to call here because we want to confirm the `ref` is generated
@@ -327,7 +335,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         # Do we receive messages that we have ingested but not persisted?
         |> Stream.filter(&(not State.is_message_persisted?(state, &1)))
 
-      {to_persist, to_put} = Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+      {to_persist, to_put} =
+        if state.consumer.status == :disabled do
+          {Enum.to_list(messages), []}
+        else
+          Enum.split_with(messages, &State.is_message_group_persisted?(state, &1.group_id))
+        end
 
       with {:ok, state} <- State.put_messages(state, to_put),
            :ok <- upsert_messages(state, to_persist),
@@ -541,6 +554,27 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
+  def handle_call({:consumer_updated, consumer}, from, state) do
+    old_consumer = state.consumer
+    state = %{state | consumer: consumer}
+
+    # Reply early as to not block. Could take a moment to upsert messages
+    GenServer.reply(from, :ok)
+
+    if old_consumer.status == :active and consumer.status == :disabled do
+      # Get all messages from memory
+      {messages, state} = State.pop_all_messages(state)
+
+      # Persist them all to disk
+      with :ok <- upsert_messages(state, messages),
+           {:ok, state} <- State.put_persisted_messages(state, messages) do
+        {:noreply, state}
+      end
+    else
+      {:noreply, state}
+    end
+  end
+
   @impl GenServer
   def handle_info(:process_logging, %State{} = state) do
     info =
@@ -599,15 +633,21 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   defp upsert_messages(%State{}, []), do: :ok
 
   defp upsert_messages(%State{} = state, messages) do
-    {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, messages)
-    :ok
+    messages
+    |> Enum.chunk_every(10_000)
+    |> Enum.each(fn chunk ->
+      {:ok, _count} = Consumers.upsert_consumer_messages(state.consumer, chunk)
+    end)
   end
 
   defp delete_messages(%State{}, []), do: :ok
 
   defp delete_messages(%State{} = state, messages) do
-    {:ok, _count} = Consumers.ack_messages(state.consumer, messages)
-    :ok
+    messages
+    |> Enum.chunk_every(10_000)
+    |> Enum.each(fn chunk ->
+      {:ok, _count} = Consumers.ack_messages(state.consumer, chunk)
+    end)
   end
 
   defp incr_counter(name, amount) do

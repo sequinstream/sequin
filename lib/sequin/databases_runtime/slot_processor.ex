@@ -499,7 +499,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         {0, 0}
       end
 
-    Logger.info("[SlotProcessor] #{messages_per_second} messages/s, #{Sequin.String.format_bytes(bytes_per_second)}/s")
+    Logger.info(
+      "[SlotProcessor] #{Float.round(messages_per_second, 1)} messages/s, #{Sequin.String.format_bytes(bytes_per_second)}/s"
+    )
 
     Logger.info("[SlotProcessor] Process metrics",
       memory_mb: Float.round(info[:memory] / 1_024 / 1_024, 2),
@@ -794,7 +796,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     time_ms = time / 1000
 
     if time_ms > 100 do
-      Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms", duration_ms: time_ms)
+      Logger.warning("[SlotProcessor] Flushed messages took longer than 100ms",
+        duration_ms: time_ms,
+        message_count: length(messages)
+      )
     end
 
     case res do

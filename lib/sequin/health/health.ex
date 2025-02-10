@@ -211,7 +211,7 @@ defmodule Sequin.Health do
   end
 
   defp paused?(%SinkConsumer{status: status}) do
-    status == :disabled
+    status in [:disabled, :paused]
   end
 
   defp paused?(%WalPipeline{status: status}) do

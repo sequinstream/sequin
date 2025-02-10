@@ -27,9 +27,14 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
   end
 
   def start_children(%PostgresReplicationSlot{} = pg_replication, opts) do
-    pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
+    pg_replication =
+      Repo.preload(pg_replication, [
+        :postgres_database,
+        sink_consumers: [:sequence],
+        not_disabled_sink_consumers: [:sequence]
+      ])
 
-    # First start all message stores
+    # First start all message stores for consumers
     Enum.each(pg_replication.sink_consumers, &start_message_store_only!(&1, opts))
 
     # Then start the slot processor
@@ -37,13 +42,21 @@ defmodule Sequin.DatabasesRuntime.SlotSupervisor do
 
     case Sequin.DynamicSupervisor.start_child(via_tuple(pg_replication.id), slot_processor_spec) do
       {:ok, slot_processor_pid} ->
-        # Register all message stores after processor is started
-        Enum.each(pg_replication.sink_consumers, &SlotProcessor.monitor_message_store(pg_replication.id, &1.id))
+        # Register all active message stores after processor is started
+        Enum.each(
+          pg_replication.not_disabled_sink_consumers,
+          &SlotProcessor.monitor_message_store(pg_replication.id, &1.id)
+        )
+
         {:ok, slot_processor_pid}
 
       {:error, {:already_started, slot_processor_pid}} ->
-        # Register all message stores with existing processor
-        Enum.each(pg_replication.sink_consumers, &SlotProcessor.monitor_message_store(pg_replication.id, &1.id))
+        # Register all active message stores with existing processor
+        Enum.each(
+          pg_replication.not_disabled_sink_consumers,
+          &SlotProcessor.monitor_message_store(pg_replication.id, &1.id)
+        )
+
         {:ok, slot_processor_pid}
 
       {:error, error} ->

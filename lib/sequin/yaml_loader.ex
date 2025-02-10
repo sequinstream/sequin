@@ -940,9 +940,10 @@ defmodule Sequin.YamlLoader do
   defp parse_status(nil), do: :active
   defp parse_status("active"), do: :active
   defp parse_status("disabled"), do: :disabled
+  defp parse_status("paused"), do: :paused
 
   defp parse_status(invalid_status) do
-    raise "Invalid status '#{invalid_status}' for webhook subscription. Must be either 'active' or 'disabled'"
+    raise "Invalid status '#{invalid_status}' for sink. Must be one of 'active', 'disabled', or 'paused'"
   end
 
   defp column_filters(nil, _table), do: []

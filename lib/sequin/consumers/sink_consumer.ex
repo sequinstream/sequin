@@ -51,7 +51,7 @@ defmodule Sequin.Consumers.SinkConsumer do
     field :max_deliver, :integer
     field :max_waiting, :integer, default: 20
     field :message_kind, Ecto.Enum, values: [:event, :record], default: :event
-    field :status, Ecto.Enum, values: [:active, :disabled], default: :active
+    field :status, Ecto.Enum, values: [:active, :disabled, :paused], default: :active
     field :seq, :integer, read_after_writes: true
     field :batch_size, :integer, default: 1
     field :annotations, :map, default: %{}

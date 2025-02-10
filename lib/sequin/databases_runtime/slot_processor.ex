@@ -949,8 +949,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp verify_monitor_refs(%State{} = state) do
     sink_consumer_ids =
       state.replication_slot
-      |> Sequin.Repo.preload(:sink_consumers, force: true)
-      |> Map.fetch!(:sink_consumers)
+      |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
+      |> Map.fetch!(:not_disabled_sink_consumers)
       |> Enum.map(& &1.id)
       |> Enum.sort()
 

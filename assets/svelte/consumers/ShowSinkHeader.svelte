@@ -8,6 +8,8 @@
     Webhook,
     AlertCircle,
     Pause,
+    AlertTriangle,
+    StopCircle,
   } from "lucide-svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -21,6 +23,7 @@
   import NatsIcon from "../sinks/nats/NatsIcon.svelte";
   import RabbitMqIcon from "../sinks/rabbitmq/RabbitMqIcon.svelte";
   import AzureEventHubIcon from "../sinks/azure_event_hub/AzureEventHubIcon.svelte";
+  import StopSinkModal from "./StopSinkModal.svelte";
 
   export let consumer;
   export let consumerTitle;
@@ -30,7 +33,7 @@
   export let messages_failing;
 
   let showDeleteConfirmDialog = false;
-  let showPauseConfirmDialog = false;
+  let showStopModal = false;
   let deleteConfirmDialogLoading = false;
 
   let statusTransitioning = false;
@@ -74,11 +77,11 @@
     });
   }
 
-  function confirmPause() {
-    displayStatus = "disabled";
+  function confirmStop(action: "pause" | "disable") {
+    displayStatus = action === "pause" ? "paused" : "disabled";
     statusTransitioning = true;
-    live.pushEventTo("#" + parent, "disable", {}, () => {
-      showPauseConfirmDialog = false;
+    live.pushEventTo("#" + parent, action, {}, () => {
+      showStopModal = false;
       handleStatusTransition();
     });
   }
@@ -158,20 +161,27 @@
                 <CirclePlay class="h-4 w-4 mr-1" />
                 Resuming...
               </Button>
-            {:else}
+            {:else if displayStatus === "paused"}
               <Button variant="outline" size="sm" disabled>
                 <Pause class="h-4 w-4 mr-1" />
                 Pausing...
+              </Button>
+            {:else}
+              <Button variant="outline" size="sm" disabled>
+                <StopCircle class="h-4 w-4 mr-1" />
+                Disabling...
               </Button>
             {/if}
           {:else if displayStatus === "active"}
             <Button
               variant="outline"
               size="sm"
-              on:click={() => (showPauseConfirmDialog = true)}
+              on:click={() => {
+                showStopModal = true;
+              }}
             >
               <Pause class="h-4 w-4 mr-1" />
-              Pause
+              Stop
             </Button>
           {:else}
             <Button variant="outline" size="sm" on:click={enableConsumer}>
@@ -251,30 +261,10 @@
   </Dialog.Content>
 </Dialog.Root>
 
-<Dialog.Root bind:open={showPauseConfirmDialog}>
-  <Dialog.Content>
-    <Dialog.Header>
-      <Dialog.Title class="leading-6">Pause {consumerTitle}?</Dialog.Title>
-      <Dialog.Description class="mb-6">
-        The sink will stop receiving new messages until resumed.
-      </Dialog.Description>
-    </Dialog.Header>
-    <Dialog.Footer class="mt-4">
-      <Button
-        variant="outline"
-        on:click={() => (showPauseConfirmDialog = false)}>Cancel</Button
-      >
-      <Button
-        variant="secondary"
-        on:click={confirmPause}
-        disabled={statusTransitioning}
-      >
-        {#if statusTransitioning}
-          Pausing...
-        {:else}
-          Pause
-        {/if}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
+<StopSinkModal
+  bind:open={showStopModal}
+  consumerName={consumer.name}
+  loading={statusTransitioning}
+  onClose={() => (showStopModal = false)}
+  onConfirm={confirmStop}
+/>

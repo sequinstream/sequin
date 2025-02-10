@@ -237,7 +237,11 @@
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
     <div class="grid gap-6 lg:grid-cols-3 mb-8">
-      <HealthSummary health={consumer.health} {pushEvent} />
+      <HealthSummary
+        health={consumer.health}
+        {pushEvent}
+        status={consumer.status}
+      />
       <Card>
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">

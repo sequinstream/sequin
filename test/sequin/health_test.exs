@@ -385,30 +385,32 @@ defmodule Sequin.HealthTest do
     end
   end
 
-  describe "health status when disabled" do
+  describe "health status when disabled or paused" do
     test "health is paused when entity is disabled regardless of health events" do
-      entity = sink_consumer(status: :disabled)
+      for status <- [:disabled, :paused] do
+        entity = sink_consumer(status: status)
 
-      assert {:ok, %Health{} = health} = Health.health(entity)
-      assert health.status == :paused
+        assert {:ok, %Health{} = health} = Health.health(entity)
+        assert health.status == :paused
 
-      # Even successful health events don't change the paused status
-      assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
-      assert :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :success})
+        # Even successful health events don't change the paused status
+        assert :ok = Health.put_event(entity, %Event{slug: :messages_filtered, status: :success})
+        assert :ok = Health.put_event(entity, %Event{slug: :messages_ingested, status: :success})
 
-      assert {:ok, %Health{} = health} = Health.health(entity)
-      assert health.status == :paused
+        assert {:ok, %Health{} = health} = Health.health(entity)
+        assert health.status == :paused
 
-      # Error events also don't change the paused status
-      assert :ok =
-               Health.put_event(entity, %Event{
-                 slug: :messages_delivered,
-                 status: :fail,
-                 error: ErrorFactory.random_error()
-               })
+        # Error events also don't change the paused status
+        assert :ok =
+                 Health.put_event(entity, %Event{
+                   slug: :messages_delivered,
+                   status: :fail,
+                   error: ErrorFactory.random_error()
+                 })
 
-      assert {:ok, %Health{} = health} = Health.health(entity)
-      assert health.status == :paused
+        assert {:ok, %Health{} = health} = Health.health(entity)
+        assert health.status == :paused
+      end
     end
   end
 

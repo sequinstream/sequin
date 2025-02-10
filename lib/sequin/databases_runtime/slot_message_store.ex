@@ -572,20 +572,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
     Logger.info("[SlotMessageStore] Process metrics", metadata)
 
-    # Check for message/ordered_ack_ids sync issues
-    unless Application.get_env(:sequin, :env) == :test do
-      case State.count_unsynced_messages(state) do
-        0 ->
-          :ok
-
-        unsynced_count ->
-          Logger.warning("[SlotMessageStore] Found #{unsynced_count} messages not in both sets",
-            count: unsynced_count,
-            consumer_id: state.consumer_id
-          )
-      end
-    end
-
     # Clear timing metrics after logging
     timing_metrics
     |> Keyword.keys()

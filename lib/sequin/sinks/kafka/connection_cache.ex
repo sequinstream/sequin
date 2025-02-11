@@ -20,7 +20,6 @@ defmodule Sequin.Sinks.Kafka.ConnectionCache do
   use GenServer
 
   alias Sequin.Consumers.KafkaSink
-  alias Sequin.Error.NotFoundError
 
   require Logger
 
@@ -180,11 +179,6 @@ defmodule Sequin.Sinks.Kafka.ConnectionCache do
   @spec connection(GenServer.server(), sink()) :: start_result()
   def connection(server \\ __MODULE__, %KafkaSink{} = sink) do
     GenServer.call(server, {:connection, sink, true})
-  end
-
-  @spec existing_connection(GenServer.server(), sink()) :: start_result() | {:error, NotFoundError.t()}
-  def existing_connection(server \\ __MODULE__, %KafkaSink{} = sink) do
-    GenServer.call(server, {:connection, sink, false})
   end
 
   @spec invalidate_connection(GenServer.server(), sink()) :: :ok

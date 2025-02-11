@@ -1,5 +1,6 @@
 import Config
 
+alias Sequin.Postgres.PostgrexTypes
 alias Sequin.Test.UnboxedRepo
 
 # Only in tests, remove the complexity from the password hashing algorithm
@@ -45,7 +46,8 @@ config :sequin, Sequin.Repo,
   port: 5432,
   queue_target: 100,
   queue_interval: 1000,
-  ssl: false
+  ssl: false,
+  types: PostgrexTypes
 
 config :sequin, Sequin.Sinks.AzureEventHub.Client, req_opts: [plug: {Req.Test, Sequin.Sinks.Azure.EventHub}]
 
@@ -72,7 +74,8 @@ config :sequin, UnboxedRepo,
   queue_target: 100,
   queue_interval: 1000,
   ssl: false,
-  priv: "test/support/unboxed_repo"
+  priv: "test/support/unboxed_repo",
+  types: PostgrexTypes
 
 config :sequin,
   ecto_repos: [Sequin.Repo, UnboxedRepo],

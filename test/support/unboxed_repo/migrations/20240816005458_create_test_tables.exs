@@ -38,6 +38,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
     end
 
     execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+    execute "CREATE EXTENSION IF NOT EXISTS vector"
     execute "CREATE TYPE character_status AS ENUM ('active', 'inactive', 'retired')"
 
     # Add a domain type for positive integers
@@ -66,6 +67,7 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
       add :binary_data, :bytea
       add :related_houses, {:array, :uuid}
       add :active_period, :daterange
+      add :embedding, :vector, size: 3
 
       timestamps()
     end

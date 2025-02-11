@@ -19,6 +19,7 @@ defmodule Sequin.Consumers.SinkConsumer do
   alias Sequin.Consumers.RedisSink
   alias Sequin.Consumers.SequenceFilter
   alias Sequin.Consumers.SequinStreamSink
+  alias Sequin.Consumers.SinkConsumerFlushedWalCursor
   alias Sequin.Consumers.SourceTable
   alias Sequin.Consumers.SqsSink
   alias Sequin.Databases.Sequence
@@ -88,6 +89,8 @@ defmodule Sequin.Consumers.SinkConsumer do
       on_replace: :update,
       type_field_name: :type
     )
+
+    has_one :flushed_wal_cursor, SinkConsumerFlushedWalCursor
 
     timestamps()
   end

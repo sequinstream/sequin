@@ -18,7 +18,9 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Repo
-  alias Sequin.TestSupport.Models.Character
+  alias Sequin.TestSupport.Models.CharacterDetailed
+
+  @filter_name "Stilgar"
 
   setup do
     # Set up the database and consumer
@@ -32,29 +34,30 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
     {:ok, database} = Databases.update_tables(database)
 
-    table_oid = Character.table_oid()
+    table_oid = CharacterDetailed.table_oid()
     table = Sequin.Enum.find!(database.tables, &(&1.oid == table_oid))
-    table = %{table | sort_column_attnum: Character.column_attnum("updated_at")}
+    table = %{table | sort_column_attnum: CharacterDetailed.column_attnum("updated_at")}
 
     sequence =
       DatabasesFactory.insert_sequence!(
         account_id: database.account_id,
         postgres_database_id: database.id,
         table_oid: table_oid,
-        sort_column_attnum: Character.column_attnum("updated_at")
+        sort_column_attnum: CharacterDetailed.column_attnum("updated_at")
       )
 
-    sequence_filter = ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: Character.pk_attnums())
+    sequence_filter =
+      ConsumersFactory.sequence_filter(column_filters: [], group_column_attnums: CharacterDetailed.pk_attnums())
 
     filtered_sequence_filter =
       ConsumersFactory.sequence_filter(
-        group_column_attnums: Character.pk_attnums(),
+        group_column_attnums: CharacterDetailed.pk_attnums(),
         column_filters: [
           Map.from_struct(
             ConsumersFactory.sequence_filter_column_filter(
-              column_attnum: Character.column_attnum("house"),
+              column_attnum: CharacterDetailed.column_attnum("name"),
               operator: :==,
-              value: %{__type__: :string, value: "Stark"}
+              value: %{__type__: :string, value: @filter_name}
             )
           )
         ]
@@ -63,14 +66,14 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     # Insert initial 8 records
     characters =
       1..8
-      |> Enum.map(fn _ -> CharacterFactory.insert_character!() end)
+      |> Enum.map(fn _ -> CharacterFactory.insert_character_detailed!() end)
       |> Enum.sort_by(& &1.updated_at, NaiveDateTime)
 
     ConnectionCache.cache_connection(database, Repo)
 
     initial_min_cursor = %{
-      Character.column_attnum("updated_at") => ~U[1970-01-01 00:00:00Z],
-      Character.column_attnum("id") => 0
+      CharacterDetailed.column_attnum("updated_at") => ~U[1970-01-01 00:00:00Z],
+      CharacterDetailed.column_attnum("id") => 0
     }
 
     consumer =
@@ -146,8 +149,8 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       # Use the 4th character as the initial_min_cursor
       initial_min_cursor = %{
-        Character.column_attnum("updated_at") => Enum.at(characters, 3).updated_at,
-        Character.column_attnum("id") => Enum.at(characters, 3).id
+        CharacterDetailed.column_attnum("updated_at") => Enum.at(characters, 3).updated_at,
+        CharacterDetailed.column_attnum("id") => Enum.at(characters, 3).id
       }
 
       backfill
@@ -257,7 +260,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       page_size = 3
 
-      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [Character.column_attnum("name")]}
+      sequence_filter = %SequenceFilter{sequence_filter | group_column_attnums: [CharacterDetailed.column_attnum("name")]}
       {:ok, _} = Consumers.update_sink_consumer(consumer, %{sequence_filter: Map.from_struct(sequence_filter)})
 
       start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
@@ -277,13 +280,13 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
     } do
       # Insert characters that match and don't match the filter
       matching_characters = [
-        CharacterFactory.insert_character!(house: "Stark"),
-        CharacterFactory.insert_character!(house: "Stark")
+        CharacterFactory.insert_character_detailed!(name: @filter_name),
+        CharacterFactory.insert_character_detailed!(name: @filter_name)
       ]
 
       non_matching_characters = [
-        CharacterFactory.insert_character!(house: "Lannister"),
-        CharacterFactory.insert_character!(house: "Targaryen")
+        CharacterFactory.insert_character_detailed!(name: "Not Stilgar"),
+        CharacterFactory.insert_character_detailed!(name: "Not Stilgar")
       ]
 
       page_size = 10
@@ -296,7 +299,7 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
       # We expect only 2 records (the matching characters)
       assert length(messages) == 2
 
-      # Verify that the records match only the characters with house "Stark"
+      # Verify that the records match only the characters with status "active"
       messages = Enum.sort_by(messages, & &1.record_pks)
 
       for {message, character} <- Enum.zip(messages, matching_characters) do

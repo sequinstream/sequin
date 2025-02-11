@@ -45,6 +45,10 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
     |> Map.new()
   end
 
+  def pk_attnums do
+    [column_attnum("id")]
+  end
+
   def record_pks(%__MODULE__{} = character_detailed) do
     [character_detailed.id]
   end

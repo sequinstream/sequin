@@ -530,17 +530,14 @@ defmodule Sequin.Health do
     heartbeat_recv_event = find_event(events, :replication_heartbeat_received)
     replication_lag_checked_event = find_event(events, :replication_lag_checked)
 
+    no_recent_heartbeats? =
+      is_nil(heartbeat_recv_event) or Time.before_min_ago?(heartbeat_recv_event.last_event_at, 10)
+
+    no_recent_messages? =
+      is_nil(messages_processed_event) or Time.before_min_ago?(messages_processed_event.last_event_at, 10)
+
     cond do
-      is_nil(heartbeat_recv_event) and Time.before_min_ago?(slot.inserted_at, 5) ->
-        error =
-          Error.invariant(
-            message:
-              "Sequin is connected, but has not received a heartbeat from the database's replication slot. Either Sequin is crashing or the replication process has stalled for some reason."
-          )
-
-        %{base_check | status: :error, error: error}
-
-      heartbeat_recv_event && Time.before_min_ago?(heartbeat_recv_event.last_event_at, 10) ->
+      no_recent_heartbeats? and no_recent_messages? and Time.before_min_ago?(slot.inserted_at, 5) ->
         error =
           Error.service(
             message:

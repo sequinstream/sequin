@@ -481,6 +481,53 @@ defmodule Sequin.DatabasesRuntime.TableReaderServerTest do
 
       assert_receive {:DOWN, _ref, :process, ^pid, :normal}, 1000
     end
+
+    test "correctly handles all column types in backfill", %{
+      backfill: backfill,
+      consumer: consumer,
+      table_oid: table_oid
+    } do
+      # Insert a character with specific values for fringe column types
+      character =
+        CharacterFactory.insert_character_detailed!(
+          status: :retired,
+          embedding: [1.1, 2.2, 3.3],
+          house_id: "550e8400-e29b-41d4-a716-446655440000",
+          related_houses: [
+            "550e8400-e29b-41d4-a716-446655440001",
+            "550e8400-e29b-41d4-a716-446655440002"
+          ],
+          active_period: [~D[2020-01-01], ~D[2025-12-31]],
+          power_level: 9001
+        )
+
+      start_supervised({SlotMessageStore, consumer: consumer, test_pid: self()})
+      pid = start_table_reader_server(backfill, table_oid, page_size: 10)
+
+      {:ok, messages} = flush_batches(consumer, pid)
+
+      # Find the message corresponding to our test character
+      message = Enum.find(messages, &(List.first(&1.record_pks) == to_string(character.id)))
+      assert message, "Character message not found in backfill"
+
+      # Verify fringe column types are correctly preserved
+      record = message.data.record
+      assert record["status"] == "retired"
+
+      assert Enum.zip_with(record["embedding"], [1.1, 2.2, 3.3], fn actual, expected ->
+               assert_in_delta actual, expected, 0.0001
+             end)
+
+      assert record["house_id"] == "550e8400-e29b-41d4-a716-446655440000"
+
+      assert record["related_houses"] == [
+               "550e8400-e29b-41d4-a716-446655440001",
+               "550e8400-e29b-41d4-a716-446655440002"
+             ]
+
+      assert record["active_period"] == "[2020-01-01,2025-12-31)"
+      assert record["power_level"] == 9001
+    end
   end
 
   defp flush_batches(consumer, pid, commit_lsn \\ 0, message_history \\ [], messages \\ []) do

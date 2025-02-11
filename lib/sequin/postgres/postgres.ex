@@ -734,6 +734,10 @@ defmodule Sequin.Postgres do
             col.type in ["uuid[]", "_uuid"] and is_list(value) ->
               Enum.map(value, &Sequin.String.binary_to_string!/1)
 
+            # Range type handling
+            is_struct(value, Postgrex.Range) ->
+              format_range(value)
+
             # This is the catch-all when encode is not implemented
             Jason.Encoder.impl_for(value) == Jason.Encoder.Any ->
               Logger.info("[Postgres] No Jason.Encoder for #{inspect(value)}", column: col.name, table: table.name)
@@ -746,6 +750,18 @@ defmodule Sequin.Postgres do
         {col.name, casted_val}
       end)
     end)
+  end
+
+  # Helper function to format ranges consistently
+  defp format_range(%Postgrex.Range{
+         lower: lower,
+         upper: upper,
+         lower_inclusive: lower_inclusive,
+         upper_inclusive: upper_inclusive
+       }) do
+    left_bracket = if lower_inclusive, do: "[", else: "("
+    right_bracket = if upper_inclusive, do: "]", else: ")"
+    "#{left_bracket}#{lower},#{upper}#{right_bracket}"
   end
 
   @safe_types [

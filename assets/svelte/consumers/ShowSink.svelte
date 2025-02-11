@@ -43,6 +43,8 @@
     messages_processed_count: 0,
     messages_processed_throughput: 0,
     messages_processed_throughput_timeseries: [],
+    messages_processed_bytes: 0,
+    messages_processed_bytes_timeseries: [],
   };
   export let cursor_position: {
     is_backfilling: boolean;
@@ -103,6 +105,9 @@
   let chartElement;
   let updateChart;
   let resizeObserver;
+  let bytesChartElement;
+  let updateBytesChart;
+  let resizeBytesObserver;
 
   onMount(() => {
     if (metrics.messages_processed_throughput_timeseries.length > 0) {
@@ -140,10 +145,48 @@
       resizeObserver.observe(chartElement);
     }
 
+    if (metrics.messages_processed_bytes_timeseries.length > 0) {
+      updateBytesChart = createBytesChart(
+        bytesChartElement,
+        metrics.messages_processed_bytes_timeseries,
+        {
+          lineColor: "rgb(59, 130, 246)", // blue-500
+          lineOpacity: 0.75,
+          areaColor: "rgb(59, 130, 246)",
+          areaOpacity: 0.05,
+        },
+      );
+
+      // Create resize observer
+      resizeBytesObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === bytesChartElement) {
+            // Recreate the chart with new dimensions
+            updateBytesChart = createBytesChart(
+              bytesChartElement,
+              metrics.messages_processed_bytes_timeseries,
+              {
+                lineColor: "rgb(59, 130, 246)",
+                lineOpacity: 0.75,
+                areaColor: "rgb(59, 130, 246)",
+                areaOpacity: 0.05,
+              },
+            );
+          }
+        }
+      });
+
+      // Start observing the chart element
+      resizeBytesObserver.observe(bytesChartElement);
+    }
+
     // Cleanup on component destruction
     return () => {
       if (resizeObserver) {
         resizeObserver.disconnect();
+      }
+      if (resizeBytesObserver) {
+        resizeBytesObserver.disconnect();
       }
     };
   });
@@ -154,6 +197,13 @@
     metrics.messages_processed_throughput_timeseries.length > 0
   ) {
     updateChart(metrics.messages_processed_throughput_timeseries);
+  }
+
+  $: if (
+    updateBytesChart &&
+    metrics.messages_processed_bytes_timeseries.length > 0
+  ) {
+    updateBytesChart(metrics.messages_processed_bytes_timeseries);
   }
 
   function createThroughputChart(element, data, options = {}) {
@@ -231,18 +281,114 @@
         .attr("d", line);
     };
   }
+
+  function createBytesChart(element, data, options = {}) {
+    const config = {
+      width: element.clientWidth,
+      height: element.clientHeight,
+      margin: { top: 50, right: 0, bottom: 0, left: 0 },
+      lineColor: "#3b82f6",
+      areaColor: "#3b82f6",
+      areaOpacity: 0.1,
+      ...options,
+    };
+
+    // Clear existing SVG
+    d3.select(element).selectAll("svg").remove();
+
+    const svg = d3
+      .select(element)
+      .append("svg")
+      .attr("width", config.width)
+      .attr("height", config.height)
+      .style("overflow", "visible");
+
+    const x = d3
+      .scaleLinear()
+      .domain([0, data.length - 1])
+      .range([config.margin.left, config.width - config.margin.right]);
+
+    const y = d3
+      .scaleLinear()
+      .domain([0, d3.max(data) * 1.1])
+      .range([config.height - config.margin.bottom, config.margin.top]);
+
+    const line = d3
+      .line()
+      .x((d, i) => x(i))
+      .y((d) => y(d));
+
+    const area = d3
+      .area()
+      .x((d, i) => x(i))
+      .y0(config.height)
+      .y1((d) => y(d));
+
+    svg
+      .append("path")
+      .datum(data)
+      .attr("fill", config.areaColor)
+      .attr("fill-opacity", config.areaOpacity)
+      .attr("d", area);
+
+    svg
+      .append("path")
+      .datum(data)
+      .attr("fill", "none")
+      .attr("stroke", config.lineColor)
+      .attr("stroke-width", 1.5)
+      .attr("d", line);
+
+    return function update(newData) {
+      y.domain([0, d3.max(newData) * 1.1]);
+
+      svg
+        .select("path[fill]")
+        .datum(newData)
+        .transition()
+        .duration(0)
+        .attr("d", area);
+
+      svg
+        .select("path[stroke]")
+        .datum(newData)
+        .transition()
+        .duration(0)
+        .attr("d", line);
+    };
+  }
+
+  function formatBytes(bytes: number): { value: string; unit: string } {
+    const units = ["bytes", "KB", "MB", "GB", "TB"];
+    let value = bytes;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex++;
+    }
+
+    // Round to 1 decimal place if we've converted to a larger unit
+    const formattedValue =
+      unitIndex === 0 ? Math.round(value).toString() : value.toFixed(1);
+
+    return {
+      value: formattedValue,
+      unit: units[unitIndex],
+    };
+  }
 </script>
 
 <div class="flex flex-col flex-1">
   <!-- Content container with overflow handling -->
   <div class="container mx-auto px-4 py-8 flex-1 overflow-y-auto">
-    <div class="grid gap-6 lg:grid-cols-3 mb-8">
+    <div class="grid gap-4 lg:grid-cols-2 mb-8">
       <HealthSummary
         health={consumer.health}
         {pushEvent}
         status={consumer.status}
       />
-      <Card>
+      <Card class="h-32">
         <CardContent class="p-6">
           <div class="flex justify-between items-center mb-4">
             <span class="text-sm font-medium text-gray-500">Messages</span>
@@ -282,13 +428,13 @@
           </div>
         </CardContent>
       </Card>
-      <Card>
+      <Card class="h-32">
         <CardContent class="p-6 relative h-full">
           <div bind:this={chartElement} class="absolute inset-0" />
           <div class="relative z-10">
             <div class="flex justify-between items-center mb-4">
               <span class="text-sm font-medium mb-auto text-gray-500"
-                >Throughput</span
+                >Message Throughput</span
               >
               <div>
                 <span class="text-2xl font-bold"
@@ -297,6 +443,34 @@
                 <span class="text-xs font-medium ml-1 text-gray-500"
                   >msgs/sec</span
                 >
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card class="h-32">
+        <CardContent class="p-6 relative h-full">
+          <div bind:this={bytesChartElement} class="absolute inset-0" />
+          <div class="relative z-10">
+            <div class="flex justify-between items-center mb-4">
+              <span class="text-sm font-medium mb-auto text-gray-500"
+                >Bytes Throughput</span
+              >
+              <div>
+                {#if metrics.messages_processed_bytes !== null && metrics.messages_processed_bytes !== undefined}
+                  {@const formatted = formatBytes(
+                    metrics.messages_processed_bytes,
+                  )}
+                  <span class="text-2xl font-bold">{formatted.value}</span>
+                  <span class="text-xs font-medium ml-1 text-gray-500"
+                    >{formatted.unit}/sec</span
+                  >
+                {:else}
+                  <span class="text-2xl font-bold">0</span>
+                  <span class="text-xs font-medium ml-1 text-gray-500"
+                    >bytes/sec</span
+                  >
+                {/if}
               </div>
             </div>
           </div>

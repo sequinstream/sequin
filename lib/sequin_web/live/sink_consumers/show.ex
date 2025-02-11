@@ -526,18 +526,14 @@ defmodule SequinWeb.SinkConsumersLive.Show do
         @timeseries_window_count + @smoothing_window
       )
 
-    {smoothed_throughput_timeseries, _} =
-      Enum.reduce(messages_processed_throughput_timeseries, {[], []}, fn throughput, {smoothed_acc, rolling_acc} ->
-        rolling_acc = Enum.take([throughput | rolling_acc], @smoothing_window)
-        smoothed = Enum.sum(rolling_acc) / length(rolling_acc)
-        {[smoothed | smoothed_acc], rolling_acc}
-      end)
+    {messages_processed_throughput, smoothed_throughput_timeseries} =
+      smooth_timeseries_and_extract_latest(messages_processed_throughput_timeseries, @timeseries_window_count)
 
-    # Use last smoothed value as instantaneous throughput
-    [messages_processed_throughput | _] = smoothed_throughput_timeseries
-    # Take the last 60 seconds of smoothed throughput
-    smoothed_throughput_timeseries =
-      smoothed_throughput_timeseries |> Enum.take(@timeseries_window_count) |> Enum.reverse()
+    {:ok, messages_processed_bytes_timeseries} =
+      Metrics.get_consumer_messages_processed_bytes_timeseries(consumer, @timeseries_window_count + @smoothing_window)
+
+    {messages_processed_bytes, smoothed_bytes_timeseries} =
+      smooth_timeseries_and_extract_latest(messages_processed_bytes_timeseries, @timeseries_window_count)
 
     messages_failing_count = Consumers.count_messages_for_consumer(consumer, delivery_count_gte: 1)
 
@@ -550,12 +546,27 @@ defmodule SequinWeb.SinkConsumersLive.Show do
     metrics = %{
       messages_processed_count: messages_processed_count,
       messages_processed_throughput: Float.round(messages_processed_throughput, 1),
+      messages_processed_bytes: messages_processed_bytes,
       messages_processed_throughput_timeseries: smoothed_throughput_timeseries,
+      messages_processed_bytes_timeseries: smoothed_bytes_timeseries,
       messages_failing_count: messages_failing_count,
       messages_pending_count: messages_pending_count
     }
 
     assign(socket, :metrics, metrics)
+  end
+
+  defp smooth_timeseries_and_extract_latest(timeseries, window_count) do
+    {smoothed_timeseries, _} =
+      Enum.reduce(timeseries, {[], []}, fn throughput, {smoothed_acc, rolling_acc} ->
+        rolling_acc = Enum.take([throughput | rolling_acc], @smoothing_window)
+        smoothed = Enum.sum(rolling_acc) / length(rolling_acc)
+        {[smoothed | smoothed_acc], rolling_acc}
+      end)
+
+    [latest | _] = smoothed_timeseries
+
+    {latest, smoothed_timeseries |> Enum.take(window_count) |> Enum.reverse()}
   end
 
   defp encode_consumer(%SinkConsumer{type: _} = consumer) do

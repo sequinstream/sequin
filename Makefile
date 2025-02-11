@@ -22,12 +22,10 @@ dev2: ## Run a second node locally
 	SERVER_PORT=4001 elixir --sname sequin-stream-dev2 --cookie sequin-stream-dev -S mix phx.server
 
 deviex: ## Open an IEx session on the running local app. If entr is installed, also watch files and auto-recompile on changes.
-	@if command -v entr >/dev/null 2>&1; then \
-		( git ls-files | entr mix compile & \
-		iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev ) \
-	else \
-		iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev; \
-	fi
+	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev --cookie sequin-stream-dev
+
+watch: ## Watch files and auto-recompile on changes using entr
+	git ls-files | entr mix compile
 
 deviex2: ## Open a second IEx session on the running local app
 	iex --sname console-$$(openssl rand -hex 4) --remsh sequin-stream-dev2 --cookie sequin-stream-dev

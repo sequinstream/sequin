@@ -40,10 +40,15 @@ defmodule Sequin.Test.UnboxedRepo.Migrations.CreateTestTables do
     execute "CREATE EXTENSION IF NOT EXISTS pg_trgm"
     execute "CREATE TYPE character_status AS ENUM ('active', 'inactive', 'retired')"
 
+    # Add a domain type for positive integers
+    execute "CREATE DOMAIN positive_int AS integer CHECK (VALUE > 0)"
+
     # New table with all possible column types
     create table(:characters_detailed) do
       add :name, :string
       add :status, :character_status
+      # Using our domain type
+      add :power_level, :positive_int
       add :age, :integer
       add :height, :float
       add :is_hero, :boolean

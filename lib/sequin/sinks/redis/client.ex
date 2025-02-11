@@ -10,6 +10,8 @@ defmodule Sequin.Sinks.Redis.Client do
   alias Sequin.Sinks.Redis
   alias Sequin.Sinks.Redis.ConnectionCache
 
+  require Logger
+
   @impl Redis
   def send_messages(%RedisSink{} = sink, messages) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
@@ -42,19 +44,23 @@ defmodule Sequin.Sinks.Redis.Client do
             ]
         end)
 
-      case :eredis.qp(connection, commands) do
-        {:error, error} -> {:error, to_sequin_error(error)}
-        _res -> :ok
+      {time, res} = :timer.tc(fn -> qp(connection, commands) end)
+      time = round(time / 1000)
+
+      if time > 100 do
+        Logger.warning("[Sequin.Sinks.Redis] Slow command execution", duration_ms: time)
       end
+
+      res
     end
   end
 
   @impl Redis
   def message_count(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      case :eredis.q(connection, ["XLEN", sink.stream_key]) do
+      case q(connection, ["XLEN", sink.stream_key]) do
         {:ok, count} -> {:ok, String.to_integer(count)}
-        {:error, error} -> {:error, to_sequin_error(error)}
+        {:error, error} -> {:error, error}
       end
     end
   end
@@ -62,10 +68,7 @@ defmodule Sequin.Sinks.Redis.Client do
   @impl Redis
   def client_info(%RedisSink{} = sink) do
     with {:ok, connection} <- ConnectionCache.connection(sink) do
-      case :eredis.q(connection, ["INFO"]) do
-        {:ok, info} -> {:ok, info}
-        {:error, error} -> {:error, to_sequin_error(error)}
-      end
+      q(connection, ["INFO"])
     end
   end
 
@@ -75,27 +78,56 @@ defmodule Sequin.Sinks.Redis.Client do
          :ok <-
            NetworkUtils.test_tcp_reachability(sink.host, sink.port, ipv6, :timer.seconds(10)),
          {:ok, connection} <- ConnectionCache.connection(sink) do
-      case :eredis.q(connection, ["PING"]) do
+      case q(connection, ["PING"]) do
         {:ok, "PONG"} ->
           :ok
 
         {:error, error} ->
           # Clear the cache
           ConnectionCache.invalidate_connection(sink)
-          {:error, to_sequin_error(error)}
+          {:error, error}
       end
     end
   end
 
-  defp to_sequin_error(:no_connection) do
-    Error.service(service: :redis, code: :no_connection, message: "No connection to Redis")
+  defp qp(connection, commands) do
+    case :eredis.qp(connection, commands) do
+      {:error, error} -> {:error, handle_error(error)}
+      _res -> :ok
+    end
+  catch
+    :exit, {error, _} ->
+      {:error, handle_error(error)}
   end
 
-  defp to_sequin_error(:timeout) do
-    Error.service(service: :redis, code: :timeout, message: "Timeout connecting to Redis")
+  defp q(connection, command) do
+    case :eredis.q(connection, command) do
+      {:ok, res} -> {:ok, res}
+      {:error, error} -> {:error, handle_error(error)}
+    end
+  catch
+    :exit, {error, _} ->
+      {:error, handle_error(error)}
   end
 
-  defp to_sequin_error(error) when is_binary(error) or is_atom(error) do
-    Error.service(service: :redis, message: to_string(error), code: :command_failed)
+  defp handle_error(:no_connection) do
+    Logger.error("[Sequin.Sinks.Redis] No connection to Redis")
+    Error.service(service: :redis_sink, code: :no_connection, message: "No connection to Redis")
+  end
+
+  defp handle_error(:timeout) do
+    Logger.error("[Sequin.Sinks.Redis] Timeout sending messages to Redis")
+    Error.timeout(source: :redis_sink, timeout_ms: :timer.seconds(5))
+  end
+
+  # Not sure if we hit this clause
+  defp handle_error(error) when is_exception(error) do
+    Logger.error("[Sequin.Sinks.Redis] Error sending messages to Redis", error: error)
+    Error.service(service: :redis_sink, code: :command_failed, message: Exception.message(error))
+  end
+
+  defp handle_error(error) do
+    Logger.error("[Sequin.Sinks.Redis] Unknown error", error: error)
+    Error.service(service: :redis_sink, code: :command_failed, message: inspect(error))
   end
 end

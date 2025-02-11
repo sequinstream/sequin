@@ -76,7 +76,8 @@ defmodule Sequin.Redis do
 
     case res do
       {:ok, result} -> result
-      {:error, error} -> raise error
+      {:error, error} when is_exception(error) -> raise error
+      {:error, error} -> raise Error.service(service: :redis, code: :command_failed, message: error)
     end
   end
 

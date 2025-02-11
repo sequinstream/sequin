@@ -47,7 +47,7 @@ defmodule Sequin.Sinks.Redis.Client do
       {time, res} = :timer.tc(fn -> qp(connection, commands) end)
       time = round(time / 1000)
 
-      if time > 100 do
+      if time > 200 do
         Logger.warning("[Sequin.Sinks.Redis] Slow command execution", duration_ms: time)
       end
 
@@ -91,7 +91,7 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   defp qp(connection, commands) do
-    case :eredis.qp(connection, commands) do
+    case :eredis.qp(connection, commands, :timer.seconds(15)) do
       {:error, error} -> {:error, handle_error(error)}
       _res -> :ok
     end
@@ -101,7 +101,7 @@ defmodule Sequin.Sinks.Redis.Client do
   end
 
   defp q(connection, command) do
-    case :eredis.q(connection, command) do
+    case :eredis.q(connection, command, :timer.seconds(15)) do
       {:ok, res} -> {:ok, res}
       {:error, error} -> {:error, handle_error(error)}
     end

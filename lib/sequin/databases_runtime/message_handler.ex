@@ -123,38 +123,42 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
       )
 
     res =
-      Repo.transact(fn ->
-        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer),
-             {:ok, wal_event_count} <- insert_wal_events(wal_events) do
-          # Update Consumer Health
-          messages_by_consumer
-          |> Map.keys()
-          |> Enum.uniq_by(& &1.id)
-          |> Enum.each(fn %SinkConsumer{} = consumer ->
-            Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
+      with {:ok, count} <- call_consumer_message_stores(messages_by_consumer) do
+        {:ok, wal_event_count} =
+          Repo.transact(fn ->
+            {:ok, wal_event_count} = insert_wal_events(wal_events)
+
+            # Update WAL Pipeline Health
+            ctx.wal_pipelines
+            |> Stream.filter(&(&1.id in matching_pipeline_ids))
+            |> Enum.each(fn %WalPipeline{} = pipeline ->
+              Health.put_event(pipeline, %Event{slug: :messages_ingested, status: :success})
+            end)
+
+            {:ok, wal_event_count}
           end)
 
-          # Update WAL Pipeline Health
-          ctx.wal_pipelines
-          |> Stream.filter(&(&1.id in matching_pipeline_ids))
-          |> Enum.each(fn %WalPipeline{} = pipeline ->
-            Health.put_event(pipeline, %Event{slug: :messages_ingested, status: :success})
-          end)
+        # Update Consumer Health
+        messages_by_consumer
+        |> Map.keys()
+        |> Enum.uniq_by(& &1.id)
+        |> Enum.each(fn %SinkConsumer{} = consumer ->
+          Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
+        end)
 
-          # Trace Messages
-          messages_with_consumer
-          |> Enum.group_by(
-            fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
-            fn {{_action, event_or_record}, _consumer} -> event_or_record end
-          )
-          |> Enum.each(fn
-            {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
-            {{:delete, _consumer}, _messages} -> :ok
-          end)
+        # Trace Messages
+        messages_with_consumer
+        |> Enum.group_by(
+          fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
+          fn {{_action, event_or_record}, _consumer} -> event_or_record end
+        )
+        |> Enum.each(fn
+          {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
+          {{:delete, _consumer}, _messages} -> :ok
+        end)
 
-          {:ok, count + wal_event_count}
-        end
-      end)
+        {:ok, count + wal_event_count}
+      end
 
     Enum.each(matching_pipeline_ids, fn wal_pipeline_id ->
       :syn.publish(:replication, {:wal_event_inserted, wal_pipeline_id}, :wal_event_inserted)

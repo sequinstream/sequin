@@ -25,7 +25,7 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
     field :binary_data, :binary
     field :related_houses, {:array, Ecto.UUID}
     field :active_period, Daterange
-
+    field :power_level, :integer
     timestamps()
   end
 
@@ -77,7 +77,8 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
       :rating,
       :related_houses,
       :status,
-      :active_period
+      :active_period,
+      :power_level
     ])
   end
 end

@@ -134,6 +134,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       Metrics.incr_consumer_messages_processed_count(consumer, count)
       Metrics.incr_consumer_messages_processed_throughput(consumer, count)
+      Metrics.incr_consumer_messages_processed_bytes(consumer, Enum.sum_by(dropped_messages, & &1.payload_size_bytes))
 
       :telemetry.execute(
         [:sequin, :posthog, :event],

@@ -27,8 +27,18 @@ defmodule Sequin.Metrics do
     Store.incr_throughput("consumer_messages_processed_throughput:#{id}", count)
   end
 
+  def incr_consumer_messages_processed_bytes(_consumer, 0), do: :ok
+
+  def incr_consumer_messages_processed_bytes(%{id: id}, bytes) do
+    Store.incr_throughput("consumer_messages_processed_bytes:#{id}", bytes)
+  end
+
   def get_consumer_messages_processed_throughput_timeseries(%{id: id}, window_count \\ 60) do
     Store.get_throughput_timeseries("consumer_messages_processed_throughput:#{id}", window_count)
+  end
+
+  def get_consumer_messages_processed_bytes_timeseries(%{id: id}, window_count \\ 60) do
+    Store.get_throughput_timeseries("consumer_messages_processed_bytes:#{id}", window_count)
   end
 
   # Database Average Latency

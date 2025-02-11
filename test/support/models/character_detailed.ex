@@ -26,6 +26,8 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
     field :related_houses, {:array, Ecto.UUID}
     field :active_period, Daterange
     field :power_level, :integer
+    field :embedding, {:array, :float}
+
     timestamps()
   end
 
@@ -78,7 +80,8 @@ defmodule Sequin.TestSupport.Models.CharacterDetailed do
       :related_houses,
       :status,
       :active_period,
-      :power_level
+      :power_level,
+      :embedding
     ])
   end
 end

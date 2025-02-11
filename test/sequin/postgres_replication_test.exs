@@ -1374,7 +1374,8 @@ defmodule Sequin.PostgresReplicationTest do
             status: :retired,
             active_period: [~D[2010-01-01], ~D[2020-12-31]],
             # It's over 9000!
-            power_level: 9001
+            power_level: 9001,
+            embedding: [1.0, 2.0, 3.0]
           ],
           repo: UnboxedRepo
         )
@@ -1392,6 +1393,7 @@ defmodule Sequin.PostgresReplicationTest do
       assert message.data.record["status"] == "retired"
       assert message.data.record["active_period"] == "[2010-01-01,2020-12-31)"
       assert message.data.record["power_level"] == 9001
+      assert message.data.record["embedding"] == [1.0, 2.0, 3.0]
     end
 
     test "consumer with JSONB column filter only receives relevant messages", %{

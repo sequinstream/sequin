@@ -1061,7 +1061,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  defp cast_value("vector", value_str) do
+  defp cast_value("vector", nil), do: {:ok, nil}
+
+  defp cast_value("vector", value_str) when is_binary(value_str) do
     list =
       value_str
       |> String.trim("[")

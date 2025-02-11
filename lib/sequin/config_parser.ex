@@ -3,7 +3,7 @@ defmodule Sequin.ConfigParser do
   require Logger
 
   def redis_config(env) do
-    [socket_options: []]
+    [socket_options: [], pool_size: parse_pool_size(env)]
     |> put_redis_url(env)
     |> put_redis_opts_ssl(env)
     |> put_redis_opts_ipv6(env)
@@ -95,5 +95,17 @@ defmodule Sequin.ConfigParser do
 
   defp apply_buffer(bytes, buffer_percent) do
     trunc(bytes * (1 - buffer_percent))
+  end
+
+  defp parse_pool_size(env) do
+    pool_size = Map.get(env, "REDIS_POOL_SIZE", "5")
+
+    case Integer.parse(pool_size) do
+      {size, ""} when size > 0 ->
+        size
+
+      _ ->
+        raise "REDIS_POOL_SIZE must be a positive integer. Got: #{inspect(pool_size)}."
+    end
   end
 end

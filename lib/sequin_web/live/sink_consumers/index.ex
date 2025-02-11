@@ -163,7 +163,7 @@ defmodule SequinWeb.SinkConsumersLive.Index do
       module={ConsumerForm}
       id="new-consumer"
       action={:new}
-      consumer={%SinkConsumer{type: :redis, batch_size: 100, sink: %RedisSink{}}}
+      consumer={%SinkConsumer{type: :redis, batch_size: 10, sink: %RedisSink{}}}
     />
     """
   end

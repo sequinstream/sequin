@@ -118,6 +118,25 @@
       {/if}
     </div>
 
+    <div class="space-y-2">
+      <Label for="batchSize">Batch Size</Label>
+      <Input
+        id="batchSize"
+        type="number"
+        min="1"
+        bind:value={form.batchSize}
+        placeholder="10"
+      />
+      {#if errors.batch_size}
+        <p class="text-destructive text-sm">{errors.batch_size}</p>
+      {/if}
+      <p class="text-xs">
+        Number of messages to batch together in a single pipeline to Redis. We
+        recommend starting with a batch size of 10. You might try experimenting
+        with larger or smaller batch sizes to see if it improves throughput.
+      </p>
+    </div>
+
     <div class="flex items-center gap-2">
       <Switch
         id="tls"

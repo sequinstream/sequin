@@ -274,6 +274,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         |> process_message(state)
       end
 
+    next_state =
+      if is_struct(msg, Insert) or is_struct(msg, Update) or is_struct(msg, Delete) do
+        %{next_state | current_commit_idx: next_state.current_commit_idx + 1}
+      else
+        next_state
+      end
+
     {prev_acc_size_bytes, _} = state.accumulated_messages
     {acc_size_bytes, acc_messages} = next_state.accumulated_messages
     acc_size_count = length(acc_messages)
@@ -568,9 +575,15 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   #   {lsn >>> 32, lsn &&& 0xFFFFFFFF}
   # end
 
-  defp skip_message?(%struct{} = msg, state) when struct in [Insert, Update, Delete] do
+  defp skip_message?(%struct{} = msg, %State{} = state) when struct in [Insert, Update, Delete] do
+    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
+    {message_lsn, message_idx} = {state.current_xaction_lsn, state.current_commit_idx}
     %{schema: schema} = Map.get(state.schemas, msg.relation_id)
-    schema in [@config_schema, @stream_schema]
+
+    lte_watermark? =
+      message_lsn < low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx <= low_watermark_idx)
+
+    lte_watermark? or schema in [@config_schema, @stream_schema]
   end
 
   defp skip_message?(_, _state), do: false
@@ -708,7 +721,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       %Event{slug: :replication_message_processed, status: :success}
     )
 
-    maybe_put_message(state, msg)
+    {acc_size, acc_messages} = state.accumulated_messages
+    new_size = acc_size + :erlang.external_size(msg)
+
+    %{state | accumulated_messages: {new_size, [msg | acc_messages]}}
   end
 
   # Ignore type messages, we receive them before type columns:
@@ -871,24 +887,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
       {:error, error} ->
         raise error
-    end
-  end
-
-  defp maybe_put_message(%State{} = state, %Message{} = message) do
-    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
-    {message_lsn, message_idx} = {message.commit_lsn, message.commit_idx}
-
-    if message_lsn > low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx > low_watermark_idx) do
-      {acc_size, acc_messages} = state.accumulated_messages
-      new_size = acc_size + :erlang.external_size(message)
-
-      %{
-        state
-        | accumulated_messages: {new_size, [message | acc_messages]},
-          current_commit_idx: state.current_commit_idx + 1
-      }
-    else
-      %{state | current_commit_idx: state.current_commit_idx + 1}
     end
   end
 

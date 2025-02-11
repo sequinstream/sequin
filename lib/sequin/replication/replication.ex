@@ -14,6 +14,7 @@ defmodule Sequin.Replication do
   alias Sequin.Postgres
   alias Sequin.Redis
   alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.ReplicationSlotWatermarkWalCursor
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
@@ -59,20 +60,25 @@ defmodule Sequin.Replication do
     end
   end
 
-  def create_pg_replication(account_id, attrs) do
+  def create_pg_replication(account_id, attrs, opts \\ []) do
     attrs = Sequin.Map.atomize_keys(attrs)
     attrs = Map.put(attrs, :status, :active)
 
     Repo.transact(fn ->
       with {:ok, postgres_database} <- get_or_build_postgres_database(account_id, attrs),
-           :ok <- validate_replication_config(postgres_database, attrs) do
+           :ok <- validate_replication_config(postgres_database, attrs, opts) do
         pg_replication =
           %PostgresReplicationSlot{account_id: account_id}
           |> PostgresReplicationSlot.create_changeset(attrs)
           |> Repo.insert()
 
         with {:ok, pg_replication} <- pg_replication do
-          LifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
+          create_watermarks!(pg_replication)
+
+          unless opts[:skip_lifecycle_event] do
+            LifecycleEventWorker.enqueue(:create, :postgres_replication_slot, pg_replication.id)
+          end
+
           {:ok, pg_replication}
         end
       else
@@ -141,12 +147,16 @@ defmodule Sequin.Replication do
     end
   end
 
-  def validate_replication_config(%PostgresDatabase{} = db, attrs) do
-    Databases.with_connection(db, fn conn ->
-      with :ok <- validate_slot(conn, attrs.slot_name) do
-        validate_publication(conn, attrs.publication_name)
-      end
-    end)
+  def validate_replication_config(%PostgresDatabase{} = db, attrs, opts \\ []) do
+    if opts[:skip_slot_validation] do
+      :ok
+    else
+      Databases.with_connection(db, fn conn ->
+        with :ok <- validate_slot(conn, attrs.slot_name) do
+          validate_publication(conn, attrs.publication_name)
+        end
+      end)
+    end
   end
 
   defp validate_slot(conn, slot_name) do
@@ -179,6 +189,36 @@ defmodule Sequin.Replication do
         {:error,
          Error.validation(summary: "Error connecting to the database to verify the existence of the publication.")}
     end
+  end
+
+  def find_watermark(replication_slot_id, boundary) do
+    replication_slot_id
+    |> ReplicationSlotWatermarkWalCursor.where_replication_slot()
+    |> ReplicationSlotWatermarkWalCursor.where_boundary(boundary)
+    |> Repo.one()
+    |> case do
+      nil -> {:error, Error.not_found(entity: :replication_slot_watermark_wal_cursor)}
+      watermark -> {:ok, watermark}
+    end
+  end
+
+  def create_watermarks!(%PostgresReplicationSlot{} = pg_replication) do
+    Repo.transact(fn ->
+      Enum.each(~w(high low)a, fn boundary ->
+        Repo.insert!(%ReplicationSlotWatermarkWalCursor{
+          replication_slot_id: pg_replication.id,
+          boundary: boundary,
+          commit_lsn: 0,
+          commit_idx: 0
+        })
+      end)
+    end)
+  end
+
+  def update_watermark(%ReplicationSlotWatermarkWalCursor{} = watermark, attrs) do
+    watermark
+    |> ReplicationSlotWatermarkWalCursor.changeset(attrs)
+    |> Repo.update()
   end
 
   # Replication runtime lifecycle

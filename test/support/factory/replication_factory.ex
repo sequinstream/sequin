@@ -311,4 +311,36 @@ defmodule Sequin.Factory.ReplicationFactory do
     |> then(&WalEvent.create_changeset(%WalEvent{}, &1))
     |> Repo.insert!()
   end
+
+  def replication_slot_watermark_wal_cursor(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    merge_attributes(
+      %Sequin.Replication.ReplicationSlotWatermarkWalCursor{
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Enum.random(0..100),
+        boundary: Factory.one_of([:high, :low]),
+        replication_slot_id: Factory.uuid()
+      },
+      attrs
+    )
+  end
+
+  def replication_slot_watermark_wal_cursor_attrs(attrs \\ []) do
+    attrs
+    |> replication_slot_watermark_wal_cursor()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_replication_slot_watermark_wal_cursor!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {replication_slot_id, attrs} =
+      Map.pop_lazy(attrs, :replication_slot_id, fn -> insert_postgres_replication!().id end)
+
+    attrs
+    |> Map.put(:replication_slot_id, replication_slot_id)
+    |> replication_slot_watermark_wal_cursor()
+    |> Repo.insert!()
+  end
 end

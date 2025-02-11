@@ -80,7 +80,14 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   end
 
   def start_replication(supervisor, %PostgresReplicationSlot{} = pg_replication, opts) do
-    pg_replication = Repo.preload(pg_replication, [:postgres_database, sink_consumers: [:sequence]])
+    pg_replication =
+      Repo.preload(pg_replication, [
+        :postgres_database,
+        :high_watermark_wal_cursor,
+        :low_watermark_wal_cursor,
+        sink_consumers: [:sequence]
+      ])
+
     opts = Keyword.put(opts, :pg_replication, pg_replication)
     test_pid = Keyword.get(opts, :test_pid)
 
@@ -215,6 +222,7 @@ defmodule Sequin.DatabasesRuntime.Supervisor do
   defp children do
     [
       Sequin.DatabasesRuntime.Starter,
+      Sequin.DatabasesRuntime.ReplicationSlotAdvanceWorker,
       Sequin.DynamicSupervisor.child_spec(name: table_reader_supervisor()),
       Sequin.DynamicSupervisor.child_spec(name: slot_supervisor()),
       Sequin.DynamicSupervisor.child_spec(name: wal_event_supervisor())

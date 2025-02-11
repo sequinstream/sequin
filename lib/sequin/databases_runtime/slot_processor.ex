@@ -35,6 +35,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   alias Sequin.Postgres
   alias Sequin.Postgres.ReplicationConnection
   alias Sequin.Replication
+  alias Sequin.Replication.ReplicationSlotWatermarkWalCursor
+  alias Sequin.Repo
   alias Sequin.Tracer.Server, as: TracerServer
   alias Sequin.Workers.CreateReplicationSlotWorker
 
@@ -65,7 +67,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       field :message_handler_module, atom()
       field :id, String.t()
       field :last_commit_lsn, integer()
-      field :low_watermark_wal_cursor, Replication.wal_cursor()
+      field :next_high_watermark_wal_cursor, Replication.wal_cursor() | nil
       field :publication, String.t()
       field :slot_name, String.t()
       field :message_store_refs, %{SinkConsumer.id() => reference()}, default: %{}
@@ -178,6 +180,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
     state = schedule_heartbeat(state, 0)
     schedule_process_logging(0)
+    schedule_update_high_watermark()
 
     {:ok, %{state | step: :disconnected}}
   end
@@ -217,8 +220,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   def handle_connect(state) do
     Logger.debug("[SlotProcessor] Handling connect (attempt #{state.connect_attempts + 1})")
 
-    {:ok, low_watermark_wal_cursor} = Sequin.Replication.low_watermark_wal_cursor(state.id)
-
     query =
       if state.id in ["59d70fc1-e6a2-4c0e-9f4d-c5ced151cec1", "dcfba45f-d503-4fef-bb11-9221b9efa70a"] do
         "START_REPLICATION SLOT #{state.slot_name} LOGICAL 0/0 (proto_version '1', publication_names '#{state.publication}')"
@@ -237,13 +238,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       launch_stop(state)
     end
 
-    {:stream, query, [],
-     %{
-       state
-       | step: :streaming,
-         connect_attempts: state.connect_attempts + 1,
-         low_watermark_wal_cursor: low_watermark_wal_cursor
-     }}
+    {:stream, query, [], %{state | step: :streaming, connect_attempts: state.connect_attempts + 1}}
   end
 
   @impl ReplicationConnection
@@ -363,20 +358,21 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       )
     end
 
+    # Force update from the database so we advance the low watermark for acknowledgement
+    replication_slot = Repo.preload(state.replication_slot, [:low_watermark_wal_cursor], force: true)
+
     messages =
-      if reply == 1 and not is_nil(state.last_commit_lsn) do
+      if reply == 1 and not is_nil(replication_slot.low_watermark_wal_cursor) do
         # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
         # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-        wal_cursor = safe_wal_cursor(state)
-        Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
+        Logger.info("Acking LSN #{inspect(replication_slot.low_watermark_wal_cursor)} (current server LSN: #{wal_end})")
 
-        Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
-        ack_message(wal_cursor.commit_lsn)
+        ack_message(replication_slot.low_watermark_wal_cursor.commit_lsn)
       else
         []
       end
 
-    {:noreply, messages, state}
+    {:noreply, messages, %{state | replication_slot: replication_slot}}
   end
 
   def handle_data(data, %State{} = state) do
@@ -478,6 +474,28 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   @impl ReplicationConnection
+  def handle_info(:update_high_watermark, state) do
+    case state.next_high_watermark_wal_cursor do
+      nil ->
+        Logger.debug("[SlotProcessor] No high watermark to update")
+
+      %{commit_lsn: lsn, commit_idx: idx} ->
+        Logger.debug("[SlotProcessor] Updating high watermark to #{inspect(lsn)}:#{inspect(idx)}")
+
+        {:ok, %ReplicationSlotWatermarkWalCursor{}} =
+          Replication.update_watermark(state.replication_slot.high_watermark_wal_cursor, %{
+            commit_lsn: lsn,
+            commit_idx: idx
+          })
+    end
+
+    schedule_update_high_watermark()
+    replication_slot = Repo.preload(state.replication_slot, [:high_watermark_wal_cursor])
+
+    {:noreply, %{state | replication_slot: replication_slot}}
+  end
+
+  @impl ReplicationConnection
   def handle_info(:process_logging, state) do
     info =
       Process.info(self(), [
@@ -509,8 +527,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       accumulated_payload_size_bytes: elem(state.accumulated_messages, 0),
       accumulated_message_count: length(elem(state.accumulated_messages, 1)),
       last_commit_lsn: state.last_commit_lsn,
-      low_watermark_wal_cursor_lsn: state.low_watermark_wal_cursor[:commit_lsn],
-      low_watermark_wal_cursor_idx: state.low_watermark_wal_cursor[:commit_idx],
+      low_watermark_wal_cursor_lsn: state.replication_slot.low_watermark_wal_cursor.commit_lsn,
+      low_watermark_wal_cursor_idx: state.replication_slot.low_watermark_wal_cursor.commit_idx,
       bytes_processed: state.counters[:bytes_processed] || 0,
       messages_processed: state.counters[:messages_processed] || 0,
       bytes_per_second: bytes_per_second,
@@ -528,6 +546,10 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
 
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
+  end
+
+  defp schedule_update_high_watermark do
+    Process.send_after(self(), :update_high_watermark, :timer.seconds(10))
   end
 
   defp schedule_heartbeat(state, interval \\ nil)
@@ -719,7 +741,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
-  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at}, state) do
+  defp process_message(%LogicalMessage{prefix: "sequin.heartbeat.0", content: emitted_at, lsn: heartbeat_lsn}, state) do
     Logger.info("[SlotProcessor] Heartbeat received", emitted_at: emitted_at)
     Health.put_event(state.replication_slot, %Event{slug: :replication_heartbeat_received, status: :success})
 
@@ -730,7 +752,13 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       send(state.test_pid, {__MODULE__, :heartbeat_received})
     end
 
-    state
+    if accumulated_messages?(state) do
+      state
+    else
+      # If we have no accumulated messages, we can use the heartbeat LSN as the next high watermark
+      heartbeat_lsn = Postgres.lsn_to_int(heartbeat_lsn)
+      %{state | next_high_watermark_wal_cursor: %{commit_lsn: heartbeat_lsn, commit_idx: 0}}
+    end
   end
 
   defp process_message(%LogicalMessage{prefix: "sequin." <> _} = msg, state) do
@@ -832,11 +860,19 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   defp flush_messages(%State{accumulated_messages: {_, []}} = state), do: state
 
   defp flush_messages(%State{} = state) do
+    verify_monitor_refs!(state)
+
     {_, messages} = state.accumulated_messages
     messages = Enum.reverse(messages)
 
+    next_high_watermark_wal_cursor = %{commit_lsn: state.current_xaction_lsn, commit_idx: state.current_commit_idx}
+
     # Flush accumulated messages
-    {time, res} = :timer.tc(fn -> state.message_handler_module.handle_messages(state.message_handler_ctx, messages) end)
+    {time, res} =
+      :timer.tc(fn ->
+        state.message_handler_module.handle_messages(state.message_handler_ctx, messages, next_high_watermark_wal_cursor)
+      end)
+
     time_ms = time / 1000
 
     if time_ms > 100 do
@@ -855,7 +891,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
         %{
           state
           | accumulated_messages: {0, []},
-            message_handler_ctx: message_handler_ctx
+            message_handler_ctx: message_handler_ctx,
+            next_high_watermark_wal_cursor: next_high_watermark_wal_cursor
         }
 
       {:error, %Error.InvariantError{code: :payload_size_limit_exceeded}} ->
@@ -875,7 +912,9 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
   end
 
   defp maybe_put_message(%State{} = state, %Message{} = message) do
-    %{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} = state.low_watermark_wal_cursor
+    %ReplicationSlotWatermarkWalCursor{commit_lsn: low_watermark_lsn, commit_idx: low_watermark_idx} =
+      state.replication_slot.low_watermark_wal_cursor
+
     {message_lsn, message_idx} = {message.commit_lsn, message.commit_idx}
 
     if message_lsn > low_watermark_lsn or (message_lsn == low_watermark_lsn and message_idx > low_watermark_idx) do
@@ -892,97 +931,23 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
   end
 
-  defp safe_wal_cursor(%State{last_commit_lsn: nil}),
-    do: raise("Unsafe to call safe_wal_cursor when last_commit_lsn is nil")
-
-  defp safe_wal_cursor(%State{} = state) do
-    case verify_monitor_refs(state) do
-      :ok ->
-        low_for_message_stores =
-          state.message_store_refs
-          |> Enum.map(fn {consumer_id, ref} ->
-            SlotMessageStore.min_unpersisted_wal_cursor(consumer_id, ref)
-          end)
-          |> Enum.filter(& &1)
-          |> case do
-            [] -> nil
-            cursors -> Enum.min_by(cursors, &{&1.commit_lsn, &1.commit_idx})
-          end
-
-        cond do
-          not is_nil(low_for_message_stores) ->
-            # Use the minimum unpersisted WAL cursor from the message stores.
-            low_for_message_stores
-
-          accumulated_messages?(state) ->
-            # When there are messages that the SlotProcessor has not flushed yet,
-            # we need to fallback on the last low_watermark_wal_cursor (not safe to use
-            # the last_commit_lsn, as it has not been flushed or processed by SlotMessageStores yet)
-            state.low_watermark_wal_cursor
-
-          true ->
-            # The SlotProcessor has processed messages beyond what the message stores have.
-            # This might be due to health messages or messages for tables that do not belong
-            # to any sinks.
-            # We want to advance the slot to the last_commit_lsn in that case because:
-            # 1. It's safe to do.
-            # 2. If the tables in this slot are dormant, the slot will continue to accumulate
-            # WAL unless we advance it. (This is the secondary purpose of the health message,
-            # to allow us to advance the slot even if tables are dormant.)
-            %{commit_lsn: state.last_commit_lsn, commit_idx: 0}
-        end
-
-      {:error, error} ->
-        raise error
-    end
-  end
-
-  defp accumulated_messages?(%State{accumulated_messages: {0, []}}) do
-    false
-  end
-
-  defp accumulated_messages?(%State{accumulated_messages: {num_bytes, acc}})
-       when is_integer(num_bytes) and is_list(acc) do
-    true
-  end
-
-  defp verify_monitor_refs(%State{} = state) do
-    sink_consumer_ids =
-      state.replication_slot
-      |> Sequin.Repo.preload(:not_disabled_sink_consumers, force: true)
-      |> Map.fetch!(:not_disabled_sink_consumers)
-      |> Enum.map(& &1.id)
-      |> Enum.sort()
-
+  defp verify_monitor_refs!(%State{} = state) do
     monitored_sink_consumer_ids = Enum.sort(Map.keys(state.message_store_refs))
 
     %MessageHandler.Context{consumers: message_handler_consumers} = state.message_handler_ctx
     message_handler_sink_consumer_ids = Enum.sort(Enum.map(message_handler_consumers, & &1.id))
 
-    cond do
-      sink_consumer_ids != message_handler_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match message handler sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Message handler: #{inspect(message_handler_sink_consumer_ids)}
-           """
-         )}
-
-      sink_consumer_ids != monitored_sink_consumer_ids ->
-        {:error,
-         Error.invariant(
-           message: """
-           Sink consumer IDs do not match monitored sink consumer IDs.
-           Sink consumers: #{inspect(sink_consumer_ids)}.
-           Monitored: #{inspect(monitored_sink_consumer_ids)}
-           """
-         )}
-
-      true ->
-        :ok
+    unless monitored_sink_consumer_ids == message_handler_sink_consumer_ids do
+      raise Error.invariant(
+              message: """
+              Monitored sink consumer IDs do not match message handler sink consumer IDs.
+              Monitored: #{inspect(monitored_sink_consumer_ids)}.
+              Message handler: #{inspect(message_handler_sink_consumer_ids)}
+              """
+            )
     end
+
+    :ok
   end
 
   def data_tuple_to_ids(columns, tuple_data) do
@@ -1254,5 +1219,14 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
       end)
 
     Process.demonitor(task.ref, [:flush])
+  end
+
+  defp accumulated_messages?(%State{accumulated_messages: {0, []}}) do
+    false
+  end
+
+  defp accumulated_messages?(%State{accumulated_messages: {num_bytes, acc}})
+       when is_integer(num_bytes) and is_list(acc) do
+    true
   end
 end

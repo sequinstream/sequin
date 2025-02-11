@@ -533,6 +533,17 @@ defmodule Sequin.Postgres do
     high <<< 32 ||| low
   end
 
+  @doc """
+  Converts an integer LSN to Postgres' string format (e.g., "0/16B1B58")
+  """
+  @spec lsn_from_int(integer()) :: String.t()
+  def lsn_from_int(lsn) do
+    # Split into upper and lower 32 bits
+    upper = lsn >>> 32
+    lower = lsn &&& 0xFFFFFFFF
+    "#{Integer.to_string(upper, 16)}/#{Integer.to_string(lower, 16)}"
+  end
+
   def list_tables(conn, schema) do
     with {:ok, %{rows: rows}} <-
            query(conn, "SELECT table_name FROM information_schema.tables WHERE table_schema = $1", [schema]) do

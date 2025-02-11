@@ -19,6 +19,7 @@ defmodule Sequin.Factory.ConsumersFactory do
   alias Sequin.Consumers.SequenceFilter.ColumnFilter
   alias Sequin.Consumers.SequinStreamSink
   alias Sequin.Consumers.SinkConsumer
+  alias Sequin.Consumers.SinkConsumerHighWatermarkWalCursor
   alias Sequin.Consumers.SqsSink
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -124,9 +125,8 @@ defmodule Sequin.Factory.ConsumersFactory do
 
     case Consumers.create_sink_consumer(account_id, attrs, skip_lifecycle: true) do
       {:ok, consumer} ->
-        Consumers.create_flushed_wal_cursor(%{sink_consumer_id: consumer.id})
         Consumers.create_consumer_partition(consumer)
-        Repo.preload(consumer, [:flushed_wal_cursor])
+        Repo.preload(consumer, [:high_watermark_wal_cursor])
 
       {:error, %Postgrex.Error{postgres: %{code: :deadlock_detected}}} ->
         insert_sink_consumer!(attrs)
@@ -753,5 +753,45 @@ defmodule Sequin.Factory.ConsumersFactory do
     |> Map.put(:state, :cancelled)
     |> Map.put(:canceled_at, DateTime.utc_now())
     |> insert_backfill!()
+  end
+
+  def high_watermark_wal_cursor(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {sink_consumer_id, attrs} =
+      Map.pop_lazy(attrs, :sink_consumer_id, fn -> insert_sink_consumer!().id end)
+
+    merge_attributes(
+      %SinkConsumerHighWatermarkWalCursor{
+        commit_lsn: Factory.unique_integer(),
+        commit_idx: Factory.unique_integer(),
+        sink_consumer_id: sink_consumer_id
+      },
+      attrs
+    )
+  end
+
+  def high_watermark_wal_cursor_attrs(attrs \\ []) do
+    attrs
+    |> high_watermark_wal_cursor()
+    |> Sequin.Map.from_ecto()
+  end
+
+  def insert_high_watermark_wal_cursor!(attrs \\ []) do
+    attrs = Map.new(attrs)
+
+    {sink_consumer_id, attrs} =
+      Map.pop_lazy(attrs, :sink_consumer_id, fn -> insert_sink_consumer!().id end)
+
+    attrs
+    |> Map.put(:sink_consumer_id, sink_consumer_id)
+    |> high_watermark_wal_cursor_attrs()
+    |> then(
+      &SinkConsumerHighWatermarkWalCursor.create_changeset(
+        %SinkConsumerHighWatermarkWalCursor{},
+        &1
+      )
+    )
+    |> Repo.insert!()
   end
 end

@@ -13,12 +13,17 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour do
 
     * `context` - Any context passed by the caller to SlotProcessor.
     * `messages` - A list of Record types (InsertedRecord, UpdatedRecord, or DeletedRecord) that SlotProcessor handles.
+    * `high_watermark_wal_cursor` - The highest WAL cursor that is flushed to MessageHandler.
 
   ## Returns
 
     The return value is an updated context.
   """
-  @callback handle_messages(context :: any(), messages :: [Message.t()]) ::
+  @callback handle_messages(
+              context :: any(),
+              messages :: [Message.t()],
+              high_watermark_wal_cursor :: Replication.wal_cursor()
+            ) ::
               {:ok, count :: non_neg_integer(), context :: any()} | {:error, reason :: any()}
 
   @doc """

@@ -15,7 +15,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Consumers.SequenceFilter.DateTimeValue
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SinkConsumer
-  alias Sequin.Consumers.SinkConsumerFlushedWalCursor
+  alias Sequin.Consumers.SinkConsumerHighWatermarkWalCursor
   alias Sequin.Consumers.SourceTable
   alias Sequin.ConsumersRuntime.LifecycleEventWorker
   alias Sequin.Databases.PostgresDatabase
@@ -25,6 +25,7 @@ defmodule Sequin.Consumers do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Replication
   alias Sequin.Repo
   alias Sequin.Time
   alias Sequin.Tracer.Server, as: TracerServer
@@ -200,14 +201,16 @@ defmodule Sequin.Consumers do
 
       case sink_consumer_result do
         {:ok, sink_consumer} ->
-          # Initialize the WAL cursor
-          create_flushed_wal_cursor(%{
+          # Initialize the WAL cursor to current low watermark for the slot
+          {:ok, wal_cursor} = Replication.find_watermark(sink_consumer.replication_slot_id, :low)
+
+          create_high_watermark_wal_cursor(%{
             sink_consumer_id: sink_consumer.id,
-            commit_lsn: 0,
-            commit_idx: 0
+            commit_lsn: wal_cursor.commit_lsn,
+            commit_idx: wal_cursor.commit_idx
           })
 
-          Repo.preload(sink_consumer, [:flushed_wal_cursor])
+          Repo.preload(sink_consumer, [:high_watermark_wal_cursor])
 
         {:error, changeset} ->
           Repo.rollback(changeset)
@@ -316,17 +319,17 @@ defmodule Sequin.Consumers do
     end
   end
 
-  # SinkConsumerFlushedWalCursor
+  # SinkConsumerHighWatermarkWalCursor
 
-  def create_flushed_wal_cursor(attrs) do
-    %SinkConsumerFlushedWalCursor{}
-    |> SinkConsumerFlushedWalCursor.create_changeset(attrs)
+  def create_high_watermark_wal_cursor(attrs) do
+    %SinkConsumerHighWatermarkWalCursor{}
+    |> SinkConsumerHighWatermarkWalCursor.create_changeset(attrs)
     |> Repo.insert()
   end
 
-  def update_flushed_wal_cursor(%SinkConsumerFlushedWalCursor{} = cursor, attrs) do
+  def update_high_watermark_wal_cursor(%SinkConsumerHighWatermarkWalCursor{} = cursor, attrs) do
     cursor
-    |> SinkConsumerFlushedWalCursor.update_changeset(attrs)
+    |> SinkConsumerHighWatermarkWalCursor.update_changeset(attrs)
     |> Repo.update()
   end
 

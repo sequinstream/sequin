@@ -1,4 +1,4 @@
-defmodule Sequin.Consumers.SinkConsumerFlushedWalCursor do
+defmodule Sequin.Consumers.SinkConsumerHighWatermarkWalCursor do
   @moduledoc false
   use Sequin.ConfigSchema
 
@@ -6,7 +6,7 @@ defmodule Sequin.Consumers.SinkConsumerFlushedWalCursor do
 
   alias Sequin.Consumers.SinkConsumer
 
-  schema "sink_consumer_flushed_wal_cursors" do
+  schema "sink_consumer_high_watermark_wal_cursors" do
     field :commit_lsn, :integer, default: 0
     field :commit_idx, :integer, default: 0
 

@@ -27,6 +27,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     field :ack_ids_to_cursor_tuples, %{SinkConsumer.ack_id() => cursor_tuple()}, default: %{}
     field :produced_message_groups, Multiset.t(), default: %{}
     field :persisted_message_groups, Multiset.t(), default: %{}
+    field :high_watermark_wal_cursor, Replication.wal_cursor() | nil
 
     field :setting_max_accumulated_payload_bytes, non_neg_integer(),
       default: @default_setting_max_accumulated_payload_bytes
@@ -117,6 +118,24 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
 
       error ->
         error
+    end
+  end
+
+  @spec put_high_watermark_wal_cursor(State.t(), Replication.wal_cursor()) :: {:ok, State.t()}
+  def put_high_watermark_wal_cursor(%State{} = state, wal_cursor) do
+    cond do
+      state.high_watermark_wal_cursor == nil ->
+        {:ok, %{state | high_watermark_wal_cursor: wal_cursor}}
+
+      state.high_watermark_wal_cursor.commit_lsn < wal_cursor.commit_lsn ->
+        {:ok, %{state | high_watermark_wal_cursor: wal_cursor}}
+
+      state.high_watermark_wal_cursor.commit_lsn == wal_cursor.commit_lsn and
+          state.high_watermark_wal_cursor.commit_idx < wal_cursor.commit_idx ->
+        {:ok, %{state | high_watermark_wal_cursor: wal_cursor}}
+
+      true ->
+        raise "High watermark wal cursor is behind the current wal cursor"
     end
   end
 
@@ -257,8 +276,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
     reset_message_visibilities(state, cursor_tuples)
   end
 
-  @spec min_unpersisted_wal_cursor(State.t()) :: Replication.wal_cursor() | nil
-  def min_unpersisted_wal_cursor(%State{} = state) do
+  @spec safe_advance_wal_cursor(State.t()) :: Replication.wal_cursor() | nil
+  def safe_advance_wal_cursor(%State{} = state) do
     persisted_message_cursor_tuples = state.persisted_message_groups |> Multiset.values() |> MapSet.new()
 
     min_messages_wal_cursor =
@@ -270,7 +289,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
       |> Enum.min(fn -> nil end)
 
     case min_messages_wal_cursor do
-      nil -> nil
+      nil -> state.high_watermark_wal_cursor
       {commit_lsn, commit_idx} -> %{commit_lsn: commit_lsn, commit_idx: commit_idx}
     end
   end
@@ -447,6 +466,9 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore.State do
         table
       )
 
-    messages_not_in_ets + ets_not_in_messages
+    %{
+      messages_not_in_ets: messages_not_in_ets,
+      ets_not_in_messages: ets_not_in_messages
+    }
   end
 end

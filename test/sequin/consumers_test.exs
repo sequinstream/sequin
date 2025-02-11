@@ -13,7 +13,7 @@ defmodule Sequin.ConsumersTest do
   alias Sequin.Consumers.SequenceFilter.NullValue
   alias Sequin.Consumers.SequenceFilter.NumberValue
   alias Sequin.Consumers.SequenceFilter.StringValue
-  alias Sequin.Consumers.SinkConsumerFlushedWalCursor
+  alias Sequin.Consumers.SinkConsumerHighWatermarkWalCursor
   alias Sequin.Databases.Sequence
   alias Sequin.Factory
   alias Sequin.Factory.AccountsFactory
@@ -2268,20 +2268,21 @@ defmodule Sequin.ConsumersTest do
     end
   end
 
-  describe "update_flushed_wal_cursor/2" do
+  describe "update_high_watermark_wal_cursor/2" do
     test "updates a flushed wal cursor" do
       consumer = ConsumersFactory.insert_sink_consumer!()
 
-      %SinkConsumerFlushedWalCursor{} = cursor = consumer.flushed_wal_cursor
+      %SinkConsumerHighWatermarkWalCursor{} = cursor = consumer.high_watermark_wal_cursor
       assert cursor.commit_lsn == 0
       assert cursor.commit_idx == 0
 
-      {:ok, updated_cursor} = Consumers.update_flushed_wal_cursor(cursor, %{commit_lsn: 1, commit_idx: 1})
+      {:ok, updated_cursor} = Consumers.update_high_watermark_wal_cursor(cursor, %{commit_lsn: 1, commit_idx: 1})
 
       assert updated_cursor.commit_lsn == 1
       assert updated_cursor.commit_idx == 1
 
-      assert {:error, changeset} = Consumers.update_flushed_wal_cursor(updated_cursor, %{commit_lsn: 0, commit_idx: 0})
+      assert {:error, changeset} =
+               Consumers.update_high_watermark_wal_cursor(updated_cursor, %{commit_lsn: 0, commit_idx: 0})
 
       assert "Cannot move WAL cursor backwards. New values must be greater than or equal to old values." in errors_on(
                changeset

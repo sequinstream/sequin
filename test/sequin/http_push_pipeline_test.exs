@@ -233,7 +233,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       start_supervised({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_event])
+      SlotMessageStore.put_messages(consumer.id, [consumer_event], watermark(consumer_event))
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -293,7 +293,9 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       expect_uuid4(fn -> event1.ack_id end)
       expect_uuid4(fn -> event2.ack_id end)
 
-      SlotMessageStore.put_messages(consumer.id, [event1, event2])
+      messages = [event1, event2]
+      watermark = highest_watermark(messages)
+      SlotMessageStore.put_messages(consumer.id, messages, watermark)
 
       # Start the pipeline with the failing adapter
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -343,7 +345,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
       assert {:ok, 1} = MessageLedgers.count_commit_verification_set(consumer.id)
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [event])
+      SlotMessageStore.put_messages(consumer.id, [event], watermark(event))
 
       adapter = fn req -> {req, Req.Response.new(status: 200)} end
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: self()]})
@@ -414,7 +416,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_record])
+      SlotMessageStore.put_messages(consumer.id, [consumer_record], watermark(consumer_record))
 
       # Start the pipeline
       start_supervised!({HttpPushPipeline, [consumer: consumer, req_opts: [adapter: adapter], test_pid: test_pid]})
@@ -469,7 +471,7 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
         )
 
       start_supervised!({SlotMessageStore, [consumer: consumer, test_pid: self(), persisted_mode?: false]})
-      SlotMessageStore.put_messages(consumer.id, [consumer_event])
+      SlotMessageStore.put_messages(consumer.id, [consumer_event], watermark(consumer_event))
 
       # Start the pipeline with legacy_event_transform feature enabled
       start_supervised!(
@@ -529,5 +531,17 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipelineTest do
 
   defp broadway(consumer) do
     HttpPushPipeline.via_tuple(consumer.id)
+  end
+
+  defp watermark(message) do
+    %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx}
+  end
+
+  defp highest_watermark(messages) do
+    messages
+    |> Enum.max_by(fn message ->
+      {message.commit_lsn, message.commit_idx}
+    end)
+    |> watermark()
   end
 end

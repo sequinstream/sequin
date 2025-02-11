@@ -16,7 +16,7 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   alias Sequin.DatabasesRuntime.SlotMessageStore
   alias Sequin.Health
   alias Sequin.Health.Event
-  alias Sequin.Postgres
+  alias Sequin.Replication
   alias Sequin.Repo
 
   require Logger
@@ -47,7 +47,8 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
       batch_timeout: Keyword.get(opts, :batch_timeout, :timer.seconds(10)),
       test_pid: test_pid,
       scheduled_handle_demand: false,
-      slot_message_store_mod: slot_message_store_mod
+      slot_message_store_mod: slot_message_store_mod,
+      low_watermark: nil
     }
 
     Process.send_after(self(), :init, 0)
@@ -66,13 +67,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   @impl GenStage
   def handle_info(:init, state) do
     consumer = Repo.lazy_preload(state.consumer, postgres_database: [:replication_slot])
+    {:ok, low_watermark} = Replication.find_watermark(consumer.replication_slot_id, :low)
 
     state =
       state
       |> schedule_receive_messages()
       |> schedule_trim_idempotency()
 
-    {:noreply, [], %{state | consumer: consumer}}
+    {:noreply, [], %{state | consumer: consumer, low_watermark: low_watermark}}
   end
 
   @impl GenStage
@@ -96,21 +98,15 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
   def handle_info(:trim_idempotency, state) do
     %SinkConsumer{} = consumer = state.consumer
 
-    case Postgres.confirmed_flush_lsn(consumer.postgres_database) do
-      {:ok, nil} ->
-        :ok
-
-      {:ok, lsn} ->
-        MessageLedgers.trim_delivered_cursors_set(state.consumer.id, %{commit_lsn: lsn, commit_idx: 0})
+    case Replication.find_watermark(consumer.replication_slot_id, :low) do
+      {:ok, %{commit_lsn: lsn, commit_idx: idx}} = low_watermark ->
+        MessageLedgers.trim_delivered_cursors_set(state.consumer.id, %{commit_lsn: lsn, commit_idx: idx})
+        {:noreply, [], %{schedule_trim_idempotency(state) | low_watermark: low_watermark}}
 
       {:error, error} when is_exception(error) ->
         Logger.error("Error trimming idempotency seqs", error: Exception.message(error))
-
-      {:error, error} ->
-        Logger.error("Error trimming idempotency seqs", error: inspect(error))
+        {:noreply, [], schedule_trim_idempotency(state)}
     end
-
-    {:noreply, [], schedule_trim_idempotency(state)}
   end
 
   defp handle_receive_messages(%{demand: demand} = state) when demand > 0 do
@@ -200,7 +196,14 @@ defmodule Sequin.ConsumersRuntime.ConsumerProducer do
 
     {delivered_messages, filtered_messages} =
       Enum.split_with(messages, fn message ->
-        MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
+        less_than_low_watermark =
+          message.commit_lsn < state.low_watermark.commit_lsn or
+            (message.commit_lsn == state.low_watermark.commit_lsn and message.commit_idx < state.low_watermark.commit_idx)
+
+        already_delivered? =
+          MapSet.member?(delivered_cursor_set, %{commit_lsn: message.commit_lsn, commit_idx: message.commit_idx})
+
+        less_than_low_watermark or already_delivered?
       end)
 
     if delivered_messages == [] do

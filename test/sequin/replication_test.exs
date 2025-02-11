@@ -1,11 +1,14 @@
 defmodule Sequin.ReplicationTest do
   use Sequin.DataCase, async: true
 
+  alias Sequin.Factory.AccountsFactory
   alias Sequin.Factory.DatabasesFactory
   alias Sequin.Factory.ReplicationFactory
   alias Sequin.Health
   alias Sequin.Metrics
   alias Sequin.Replication
+  alias Sequin.Replication.PostgresReplicationSlot
+  alias Sequin.Replication.ReplicationSlotWatermarkWalCursor
 
   describe "list_wal_events/2" do
     setup do
@@ -164,6 +167,44 @@ defmodule Sequin.ReplicationTest do
       assert event.status == :warning
       assert {:ok, health} = Health.health(slot)
       assert health.status == :warning
+    end
+  end
+
+  describe "watermarks" do
+    test "creating a replication slot creates watermarks" do
+      account = AccountsFactory.insert_account!()
+      database = DatabasesFactory.insert_postgres_database!(account_id: account.id)
+      replication_slot_attrs = ReplicationFactory.postgres_replication_attrs(postgres_database_id: database.id)
+
+      assert {:ok, %PostgresReplicationSlot{} = slot} =
+               Replication.create_pg_replication(account.id, replication_slot_attrs,
+                 skip_lifecycle_event: true,
+                 skip_slot_validation: true
+               )
+
+      slot = Repo.preload(slot, [:high_watermark_wal_cursor, :low_watermark_wal_cursor])
+
+      assert slot.high_watermark_wal_cursor.commit_lsn == 0
+      assert slot.low_watermark_wal_cursor.commit_lsn == 0
+    end
+
+    test "update_watermark/2 updates watermarks" do
+      watermark =
+        ReplicationFactory.insert_replication_slot_watermark_wal_cursor!(
+          boundary: :high,
+          commit_lsn: 100,
+          commit_idx: 100
+        )
+
+      assert {:ok, %ReplicationSlotWatermarkWalCursor{} = watermark} =
+               Replication.update_watermark(watermark, %{commit_lsn: 200, commit_idx: 200})
+
+      assert watermark.commit_lsn == 200
+      assert watermark.commit_idx == 200
+
+      assert_raise Postgrex.Error, fn ->
+        Replication.update_watermark(watermark, %{commit_lsn: 99, commit_idx: 99})
+      end
     end
   end
 end

@@ -73,7 +73,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   end
 
   @impl MessageHandlerBehaviour
-  def handle_messages(%Context{} = ctx, messages) do
+  def handle_messages(%Context{} = ctx, messages, high_watermark_wal_cursor) do
     Logger.debug("[MessageHandler] Handling #{length(messages)} message(s)")
 
     ctx = update_table_reader_batch_pks(ctx, messages)
@@ -124,7 +124,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     res =
       Repo.transact(fn ->
-        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer),
+        with {:ok, count} <- call_consumer_message_stores(messages_by_consumer, high_watermark_wal_cursor),
              {:ok, wal_event_count} <- insert_wal_events(wal_events) do
           # Update Consumer Health
           messages_by_consumer
@@ -379,7 +379,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
     |> Map.new()
   end
 
-  defp call_consumer_message_stores(messages_by_consumer) do
+  defp call_consumer_message_stores(messages_by_consumer, high_watermark_wal_cursor) do
     res =
       Enum.reduce_while(messages_by_consumer, :ok, fn {consumer, messages}, :ok ->
         all_wal_cursors = Enum.map(messages, &MessageLedgers.wal_cursor_from_message/1)
@@ -402,7 +402,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             MapSet.member?(delivered_wal_cursors, wal_cursor)
           end)
 
-        case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
+        case SlotMessageStore.put_messages(consumer.id, messages_to_ingest, high_watermark_wal_cursor) do
           :ok -> {:cont, :ok}
           {:error, _} = error -> {:halt, error}
         end

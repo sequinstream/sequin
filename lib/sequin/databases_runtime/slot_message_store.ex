@@ -41,6 +41,7 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Metrics
+  alias Sequin.Repo
 
   require Logger
 
@@ -68,9 +69,10 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
   Should raise so SlotProcessor cannot continue if this fails.
   """
 
-  @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t())) :: :ok | {:error, Error.t()}
-  def put_messages(consumer_id, messages) do
-    GenServer.call(via_tuple(consumer_id), {:put_messages, messages})
+  @spec put_messages(consumer_id(), list(ConsumerRecord.t() | ConsumerEvent.t()), Replication.wal_cursor()) ::
+          :ok | {:error, Error.t()}
+  def put_messages(consumer_id, messages, high_watermark_wal_cursor) do
+    GenServer.call(via_tuple(consumer_id), {:put_messages, messages, high_watermark_wal_cursor})
   catch
     :exit, e ->
       error = exit_to_sequin_error(e)
@@ -321,11 +323,12 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:ok, state} = State.put_persisted_messages(%{state | consumer: consumer}, persisted_messages)
 
     schedule_process_logging(0)
+    schedule_commit_high_watermark_wal_cursor()
     {:noreply, state}
   end
 
   @impl GenServer
-  def handle_call({:put_messages, messages}, _from, %State{} = state) do
+  def handle_call({:put_messages, messages, high_watermark_wal_cursor}, _from, %State{} = state) do
     execute_timed(:put_messages, fn ->
       now = Sequin.utc_now()
 
@@ -345,7 +348,8 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
 
       with {:ok, state} <- State.put_messages(state, to_put),
            :ok <- upsert_messages(state, to_persist),
-           {:ok, state} <- State.put_persisted_messages(state, to_persist) do
+           {:ok, state} <- State.put_persisted_messages(state, to_persist),
+           {:ok, state} <- State.put_high_watermark_wal_cursor(state, high_watermark_wal_cursor) do
         Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :success})
         :syn.publish(:consumers, {:messages_ingested, state.consumer.id}, :messages_ingested)
 
@@ -521,16 +525,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     end)
   end
 
-  def handle_call({:min_unpersisted_wal_cursor, monitor_ref}, _from, state) do
-    execute_timed(:min_unpersisted_wal_cursor, fn ->
-      if monitor_ref == state.slot_processor_monitor_ref do
-        {:reply, State.min_unpersisted_wal_cursor(state), state}
-      else
-        raise "Monitor ref mismatch. Expected #{inspect(state.slot_processor_monitor_ref)} but got #{inspect(monitor_ref)}"
-      end
-    end)
-  end
-
   def handle_call(:count_messages, _from, state) do
     execute_timed(:count_messages, fn ->
       {:reply, {:ok, map_size(state.messages)}, state}
@@ -615,8 +609,33 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
     {:noreply, state}
   end
 
+  def handle_info(:commit_high_watermark_wal_cursor, %State{} = state) do
+    execute_timed(:commit_high_watermark_wal_cursor, fn ->
+      case State.safe_advance_wal_cursor(state) do
+        nil ->
+          :ok
+
+        high_watermark_wal_cursor ->
+          {:ok, _} =
+            Consumers.update_high_watermark_wal_cursor(state.consumer.high_watermark_wal_cursor, %{
+              commit_lsn: high_watermark_wal_cursor.commit_lsn,
+              commit_idx: high_watermark_wal_cursor.commit_idx
+            })
+      end
+
+      schedule_commit_high_watermark_wal_cursor()
+
+      consumer = Repo.preload(state.consumer, :high_watermark_wal_cursor, force: true)
+      {:noreply, %{state | consumer: consumer}}
+    end)
+  end
+
   defp schedule_process_logging(interval \\ :timer.seconds(30)) do
     Process.send_after(self(), :process_logging, interval)
+  end
+
+  defp schedule_commit_high_watermark_wal_cursor do
+    Process.send_after(self(), :commit_high_watermark_wal_cursor, :timer.seconds(10))
   end
 
   defp exit_to_sequin_error({:noproc, _}) do

@@ -8,6 +8,7 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
   alias Ecto.Queryable
   alias Sequin.Consumers.SinkConsumer
   alias Sequin.Databases.PostgresDatabase
+  alias Sequin.Replication.ReplicationSlotWatermarkWalCursor
 
   defmodule Info do
     @moduledoc false
@@ -45,6 +46,16 @@ defmodule Sequin.Replication.PostgresReplicationSlot do
              where: [status: {:in, [:active, :paused]}]
 
     has_many :wal_pipelines, Sequin.Replication.WalPipeline, foreign_key: :replication_slot_id
+
+    has_one :high_watermark_wal_cursor,
+            ReplicationSlotWatermarkWalCursor,
+            where: [boundary: :high],
+            foreign_key: :replication_slot_id
+
+    has_one :low_watermark_wal_cursor,
+            ReplicationSlotWatermarkWalCursor,
+            where: [boundary: :low],
+            foreign_key: :replication_slot_id
 
     field :info, :map, virtual: true
 

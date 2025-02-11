@@ -89,10 +89,6 @@ defmodule Sequin.ConsumersRuntime.HttpPushPipeline do
 
     case push_message(http_endpoint, consumer, message_data, req_opts) do
       :ok ->
-        # Temporary extended logging
-        # Delete after webhook batch migration
-        Logger.info("Pushed message successfully", message_data: message_data)
-
         Health.put_event(consumer, %Event{slug: :messages_delivered, status: :success})
         Metrics.incr_http_endpoint_throughput(http_endpoint)
 

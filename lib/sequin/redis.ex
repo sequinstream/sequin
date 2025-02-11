@@ -1,5 +1,6 @@
 defmodule Sequin.Redis do
   @moduledoc false
+  alias __MODULE__
   alias Sequin.Error
   alias Sequin.Error.ServiceError
 
@@ -37,7 +38,10 @@ defmodule Sequin.Redis do
           |> Keyword.put(:password, password)
       end
 
-    :ok = :eredis_cluster.connect(__MODULE__, cluster_nodes, opts)
+    # Start connections for each pool member
+    for index <- 0..(pool_size() - 1) do
+      :ok = :eredis_cluster.connect(connection(index), cluster_nodes, opts)
+    end
   rescue
     error ->
       raise "Failed to connect to Redis: #{inspect(error)}"
@@ -46,7 +50,7 @@ defmodule Sequin.Redis do
   @spec command(command()) :: {:ok, redis_value()} | {:error, ServiceError.t()}
   def command(command) do
     res =
-      __MODULE__
+      connection()
       |> :eredis_cluster.q(command)
       |> parse_result()
 
@@ -68,7 +72,7 @@ defmodule Sequin.Redis do
 
   @spec command!(command()) :: redis_value()
   def command!(command) do
-    res = __MODULE__ |> :eredis_cluster.q(command) |> parse_result()
+    res = connection() |> :eredis_cluster.q(command) |> parse_result()
 
     case res do
       {:ok, result} -> result
@@ -78,7 +82,7 @@ defmodule Sequin.Redis do
 
   @spec pipeline([command()]) :: {:ok, [pipeline_return_value()]} | {:error, ServiceError.t()}
   def pipeline(commands) do
-    case :eredis_cluster.q(__MODULE__, commands) do
+    case :eredis_cluster.q(connection(), commands) do
       results when is_list(results) ->
         # Convert eredis results to Redix-style results
         {:ok,
@@ -114,5 +118,17 @@ defmodule Sequin.Redis do
     :sequin
     |> Application.get_env(__MODULE__, [])
     |> Sequin.Keyword.reject_nils()
+  end
+
+  defp connection(index \\ random_index()) do
+    :"#{Redis}_#{index}"
+  end
+
+  defp random_index do
+    Enum.random(0..(pool_size() - 1))
+  end
+
+  defp pool_size do
+    :sequin |> Application.fetch_env!(Redis) |> Keyword.fetch!(:pool_size)
   end
 end

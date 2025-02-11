@@ -17,6 +17,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.DatabasesRuntime.SlotProcessor.Message
   alias Sequin.DatabasesRuntime.SlotProcessor.MessageHandlerBehaviour
   alias Sequin.DatabasesRuntime.TableReaderServer
+  alias Sequin.Error.InvariantError
   alias Sequin.Health
   alias Sequin.Health.Event
   alias Sequin.Replication
@@ -406,7 +407,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             MapSet.member?(delivered_wal_cursors, wal_cursor)
           end)
 
-        case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
+        case put_messages(consumer.id, messages_to_ingest) do
           :ok -> {:cont, :ok}
           {:error, _} = error -> {:halt, error}
         end
@@ -414,6 +415,29 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
     with :ok <- res do
       {:ok, Enum.sum_by(messages_by_consumer, fn {_, messages} -> length(messages) end)}
+    end
+  end
+
+  @max_backoff_ms :timer.seconds(1)
+  @max_attempts 5
+  defp put_messages(consumer_id, messages_to_ingest, attempt \\ 1) do
+    case SlotMessageStore.put_messages(consumer_id, messages_to_ingest) do
+      :ok ->
+        :ok
+
+      {:error, %InvariantError{code: :payload_size_limit_exceeded}} when attempt <= @max_attempts ->
+        backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
+
+        Logger.debug(
+          "[MessageHandler] Slot message store for consumer #{consumer_id} is full. " <>
+            "Backing off for #{backoff}ms before retry #{attempt + 1}/#{@max_attempts}..."
+        )
+
+        Process.sleep(backoff)
+        put_messages(consumer_id, messages_to_ingest, attempt + 1)
+
+      {:error, _} = error ->
+        error
     end
   end
 

@@ -761,7 +761,8 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     state
   end
 
-  defp process_message(msg, state) do
+  # It's important we assert this message is not a message that we *should* have a handler for
+  defp process_message(%struct{} = msg, state) when struct not in [Begin, Commit, Message, LogicalMessage, Relation] do
     Logger.error("Unknown message: #{inspect(msg)}")
     state
   end

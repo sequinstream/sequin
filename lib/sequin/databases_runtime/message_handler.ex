@@ -411,7 +411,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   @max_backoff_ms :timer.seconds(1)
   @max_attempts 5
-  defp put_messages(consumer, messages_to_ingest, attempt \\ 1) do
+  defp put_messages(%SinkConsumer{} = consumer, messages_to_ingest, attempt \\ 1) do
     case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
       :ok ->
         Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
@@ -426,11 +426,11 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
         )
 
         Process.sleep(backoff)
-        put_messages(consumer.id, messages_to_ingest, attempt + 1)
+        put_messages(consumer, messages_to_ingest, attempt + 1)
 
-      {:error, _} = error ->
+      {:error, error} ->
         Health.put_event(consumer, %Event{slug: :messages_ingested, status: :fail, error: error})
-        error
+        {:error, error}
     end
   end
 

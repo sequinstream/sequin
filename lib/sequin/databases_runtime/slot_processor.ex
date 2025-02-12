@@ -371,16 +371,24 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor do
     end
 
     messages =
-      if reply == 1 and not is_nil(state.last_commit_lsn) do
-        # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
-        # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
-        wal_cursor = safe_wal_cursor(state)
-        Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
+      cond do
+        reply == 1 and not is_nil(state.last_commit_lsn) ->
+          # With our current LSN increment strategy, we'll always replay the last record on boot. It seems
+          # safe to increment the last_commit_lsn by 1 (Commit also contains the next LSN)
+          wal_cursor = safe_wal_cursor(state)
+          Logger.info("Acking LSN #{inspect(wal_cursor)} (current server LSN: #{wal_end})")
 
-        Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
-        ack_message(wal_cursor.commit_lsn)
-      else
-        []
+          Replication.put_low_watermark_wal_cursor!(state.id, wal_cursor)
+          ack_message(wal_cursor.commit_lsn)
+
+        reply == 1 ->
+          # If we don't have a last_commit_lsn, we're still processing the first xaction
+          # we received on boot. This can happen if we're processing a very large xaction.
+          # It is therefore safe to send an ack with the current_xaction_lsn
+          ack_message(state.current_xaction_lsn)
+
+        true ->
+          []
       end
 
     {:noreply, messages, state}

@@ -48,7 +48,7 @@ defmodule Sequin.Consumers.AcknowledgedMessages.AcknowledgedMessage do
   # We can safely drop seq from this data structure in the future.
   defp migrate_from_seq(%__MODULE__{} = message) do
     Map.update!(message, :commit_idx, fn commit_idx ->
-      if is_nil(commit_idx) and not is_nil(message.seq) do
+      if is_nil(commit_idx) and not is_nil(message.seq) and not is_nil(message.commit_lsn) do
         message.seq - message.commit_lsn
       else
         commit_idx

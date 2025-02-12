@@ -71,6 +71,7 @@ defmodule Sequin.Application do
       Sequin.Sinks.Nats.ConnectionCache,
       Sequin.Sinks.RabbitMq.ConnectionCache,
       SequinWeb.Presence,
+      Sequin.SystemMetricsServer,
       # Sequin.Tracer.DynamicSupervisor,
       {Cluster.Supervisor, [topologies]},
       {Task, fn -> enqueue_workers() end},

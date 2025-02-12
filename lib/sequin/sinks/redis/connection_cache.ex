@@ -115,23 +115,18 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
 
     @spec find_or_create_connection(t(), sink(), boolean()) :: {:ok, pid(), t()} | {:error, term()}
     def find_or_create_connection(%__MODULE__{} = state, sink, create_on_miss) do
-      pool_index = Enum.random(0..4)
-      pooled_sink = %{sink | connection_id: "#{sink.connection_id}_#{pool_index}"}
-
-      case Cache.lookup(state.cache, pooled_sink) do
+      case Cache.lookup(state.cache, sink) do
         {:ok, conn} ->
           {:ok, conn, state}
 
         {:error, :stale} ->
           state
-          |> invalidate_connection(pooled_sink)
-          # Need to pass the original sink, not the pooled one, otherwise we'll keep appending suffixes
-          # to its connection_id
+          |> invalidate_connection(sink)
           |> find_or_create_connection(sink, create_on_miss)
 
         {:error, :not_found} when create_on_miss ->
-          with {:ok, conn} <- state.start_fn.(pooled_sink) do
-            new_cache = Cache.store(state.cache, pooled_sink, conn)
+          with {:ok, conn} <- state.start_fn.(sink) do
+            new_cache = Cache.store(state.cache, sink, conn)
             new_state = %{state | cache: new_cache}
             {:ok, conn, new_state}
           end
@@ -150,15 +145,11 @@ defmodule Sequin.Sinks.Redis.ConnectionCache do
 
     @spec invalidate_connection(t(), sink()) :: t()
     def invalidate_connection(%__MODULE__{} = state, sink) do
-      # Invalidate all connections in the pool (0-4)
-      Enum.reduce(0..4, state, fn pool_index, acc_state ->
-        pooled_sink = %{sink | connection_id: "#{sink.connection_id}_#{pool_index}"}
-        {conn, new_cache} = Cache.pop(acc_state.cache, pooled_sink)
+      {conn, new_cache} = Cache.pop(state.cache, sink)
 
-        if conn, do: acc_state.stop_fn.(conn)
+      if conn, do: state.stop_fn.(conn)
 
-        %{acc_state | cache: new_cache}
-      end)
+      %{state | cache: new_cache}
     end
 
     defp default_start(%RedisSink{} = sink) do

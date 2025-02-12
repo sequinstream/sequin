@@ -338,15 +338,26 @@ defmodule Sequin.Databases do
 
   # This query checks on db $1, if user has grant $2
   @db_privilege_query "select has_database_privilege($1, $2);"
+  @role_permissions_query """
+  SELECT rolsuper, rolreplication
+  FROM pg_roles
+  WHERE rolname = current_user;
+  """
 
   @spec test_permissions(%PostgresDatabase{}) :: :ok | {:error, Error.ValidationError.t()} | {:error, Postgrex.Error.t()}
   def test_permissions(%PostgresDatabase{} = db) do
     with_uncached_connection(db, fn conn ->
-      with {:ok, %{rows: [[result]]}} <- Postgres.query(conn, @db_privilege_query, [db.database, "connect"]) do
-        if result do
-          :ok
-        else
-          {:error, Error.validation(summary: "User does not have connect permission on database")}
+      with {:ok, %{rows: [[connect_result]]}} <- Postgres.query(conn, @db_privilege_query, [db.database, "connect"]),
+           {:ok, %{rows: [[is_super, is_replication]]}} <- Postgres.query(conn, @role_permissions_query, []) do
+        cond do
+          not connect_result ->
+            {:error, Error.validation(summary: "User does not have connect permission on database")}
+
+          not (is_super or is_replication) ->
+            {:error, Error.validation(summary: "User must have either superuser or replication permissions")}
+
+          true ->
+            :ok
         end
       end
     end)

@@ -493,7 +493,7 @@ defmodule Sequin.Health do
         error =
           Error.invariant(
             message:
-              "Sequin seems to be having trouble connecting to the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the database's replication slot."
+              "Sequin is unable to connect to the database's replication slot. Either Sequin is crashing or Sequin is not receiving messages from the replication slot."
           )
 
         %{base_check | status: :error, error: error}

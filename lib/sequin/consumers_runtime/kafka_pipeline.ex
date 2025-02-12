@@ -104,7 +104,9 @@ defmodule Sequin.ConsumersRuntime.KafkaPipeline do
           :error,
           consumer.account_id,
           consumer.id,
-          Enum.map(broadway_messages, & &1.data.replication_message_trace_id),
+          Enum.map(broadway_messages, fn %Broadway.Message{data: [message]} ->
+            message.replication_message_trace_id
+          end),
           "Failed to publish message to Kafka: #{Exception.message(error)}"
         )
 

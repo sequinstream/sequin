@@ -20,7 +20,17 @@ defmodule Sequin.Logs do
     |> File.stream!()
     |> Stream.map(&String.trim/1)
     |> Stream.filter(&(&1 != ""))
-    |> Stream.map(&Jason.decode!/1)
+    |> Stream.map(fn entry ->
+      case Jason.decode(entry) do
+        {:ok, log} ->
+          log
+
+        {:error, error} ->
+          Logger.error("Failed to decode log entry", entry: entry, error: error)
+          nil
+      end
+    end)
+    |> Stream.filter(& &1)
     |> Stream.filter(fn log ->
       log["account_id"] == account_id and log["consumer_id"] == consumer_id and log["trace_id"] == trace_id and
         log["console_logs"] == "consumer_message"
@@ -93,7 +103,7 @@ defmodule Sequin.Logs do
       |> Enum.map_join("\n", &Jason.encode!/1)
 
     File.mkdir_p!(Path.dirname(log_file_path()))
-    File.write!(log_file_path(), entries, [:append])
+    File.write!(log_file_path(), [entries, "\n"], [:append])
   end
 
   defp log_to_file(level, account_id, consumer_id, trace_id, message) do

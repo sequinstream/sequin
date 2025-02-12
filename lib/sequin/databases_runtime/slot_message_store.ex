@@ -352,7 +352,6 @@ defmodule Sequin.DatabasesRuntime.SlotMessageStore do
         {:reply, :ok, state}
       else
         {:error, error} ->
-          Health.put_event(state.consumer, %Event{slug: :messages_ingested, status: :fail, error: error})
           {:reply, {:error, error}, state}
       end
     end)

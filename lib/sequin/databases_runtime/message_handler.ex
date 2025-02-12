@@ -25,7 +25,6 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
   alias Sequin.Replication.WalEvent
   alias Sequin.Replication.WalPipeline
   alias Sequin.Repo
-  alias Sequin.Tracer.Server, as: TracerServer
 
   require Logger
 
@@ -139,24 +138,16 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             {:ok, wal_event_count}
           end)
 
-        # Update Consumer Health
-        messages_by_consumer
-        |> Map.keys()
-        |> Enum.uniq_by(& &1.id)
-        |> Enum.each(fn %SinkConsumer{} = consumer ->
-          Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
-        end)
-
-        # Trace Messages
-        messages_with_consumer
-        |> Enum.group_by(
-          fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
-          fn {{_action, event_or_record}, _consumer} -> event_or_record end
-        )
-        |> Enum.each(fn
-          {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
-          {{:delete, _consumer}, _messages} -> :ok
-        end)
+        # # Trace Messages
+        # messages_with_consumer
+        # |> Enum.group_by(
+        #   fn {{action, _event_or_record}, consumer} -> {action, consumer} end,
+        #   fn {{_action, event_or_record}, _consumer} -> event_or_record end
+        # )
+        # |> Enum.each(fn
+        #   {{:insert, consumer}, messages} -> TracerServer.messages_ingested(consumer, messages)
+        #   {{:delete, _consumer}, _messages} -> :ok
+        # end)
 
         {:ok, count + wal_event_count}
       end
@@ -407,7 +398,7 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
             MapSet.member?(delivered_wal_cursors, wal_cursor)
           end)
 
-        case put_messages(consumer.id, messages_to_ingest) do
+        case put_messages(consumer, messages_to_ingest) do
           :ok -> {:cont, :ok}
           {:error, _} = error -> {:halt, error}
         end
@@ -420,23 +411,25 @@ defmodule Sequin.DatabasesRuntime.SlotProcessor.MessageHandler do
 
   @max_backoff_ms :timer.seconds(1)
   @max_attempts 5
-  defp put_messages(consumer_id, messages_to_ingest, attempt \\ 1) do
-    case SlotMessageStore.put_messages(consumer_id, messages_to_ingest) do
+  defp put_messages(consumer, messages_to_ingest, attempt \\ 1) do
+    case SlotMessageStore.put_messages(consumer.id, messages_to_ingest) do
       :ok ->
+        Health.put_event(consumer, %Event{slug: :messages_ingested, status: :success})
         :ok
 
       {:error, %InvariantError{code: :payload_size_limit_exceeded}} when attempt <= @max_attempts ->
         backoff = Sequin.Time.exponential_backoff(50, attempt, @max_backoff_ms)
 
         Logger.debug(
-          "[MessageHandler] Slot message store for consumer #{consumer_id} is full. " <>
+          "[MessageHandler] Slot message store for consumer #{consumer.id} is full. " <>
             "Backing off for #{backoff}ms before retry #{attempt + 1}/#{@max_attempts}..."
         )
 
         Process.sleep(backoff)
-        put_messages(consumer_id, messages_to_ingest, attempt + 1)
+        put_messages(consumer.id, messages_to_ingest, attempt + 1)
 
       {:error, _} = error ->
+        Health.put_event(consumer, %Event{slug: :messages_ingested, status: :fail, error: error})
         error
     end
   end
